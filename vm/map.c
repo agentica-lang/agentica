@@ -431,6 +431,8 @@ static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t
    the dead cells outnumber the live ones, which keeps the list under twice
    the size. Only the block's first cell is pointed to from outside it. */
 static void compact_keys(agc_vm *vm, agc_map *m) {
+  /* The rebuild grows with the map: a persisted map at the threshold rebuilds on every derived delete. */
+  agc_charge(vm, m->size + m->dead);
   seq_set dead;
   dead_begin(vm, m, &dead);
   agc_keys *block = agc_alloc(agc_size_mul(m->size, sizeof(agc_keys)));

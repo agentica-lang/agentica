@@ -371,7 +371,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   a key lookup). Once dead cells outnumber live ones, the delete rebuilds the
   list without them in one block. A missing key returns the same map. It is
   O(log32 n) amortized along one line of versions, so it is `AGC_COST_NONE`
-  like `Map.put`. `List.sort`
+  like `Map.put`; the rebuild charges the list length as turn cost. `List.sort`
   reuses `agc_sort_by_keys` (`vm/interp.c`) with the items as their own
   keys. `MAP` and `Map.put` share
   `agc_map_put`; HAMT recursion is bounded by 14 levels, printing nested
@@ -390,9 +390,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `Map.delete`. `agc_equal` compares sets by size and membership (for
   `Test.eq`; there is no `==`) and charges the size. Set builtins are
   `AGC_COST_SIZE` when they walk or copy a set or a list and
-  `AGC_COST_NONE` for `add`, `delete`, `include?`, `size` and `empty?`. A hostile `.agcb`
-  that puts a non-Int, non-String in a set stops in `agc_key_hash`
-  (`agc_wrong_tag`).
+  `AGC_COST_NONE` for `add`, `delete`, `include?`, `size` and `empty?`. A
+  hostile `.agcb` that puts a non-Int, non-String in a set stops in
+  `agc_key_hash` (`agc_wrong_tag`).
 - Lists can share items, so a list's text can be exponential in the code that
   built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the
   out-of-memory exit, as the trust model allows. Never print or compare nested
