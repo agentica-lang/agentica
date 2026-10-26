@@ -12,6 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
+- `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.
 - `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`: `Float#to_s` reads back.
 
 ## [0.10.0] - 2026-10-25
