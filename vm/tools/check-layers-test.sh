@@ -50,6 +50,8 @@ plant http_body.c '#include "port.h"'
 fails "an adapter that includes port.h" 'an adapter includes the port'
 plant input.c '#include <uv.h>'
 fails "uv.h in input.c" 'include of uv\\.h outside'
+plant jit/jit.c '#include <uv.h>'
+fails "uv.h in jit/jit.c" 'include of uv\\.h outside'
 plant text.c '#include "list_impl.h"'
 fails "list_impl.h in text.c" 'only list\.c, interp\.c and tests/list_test\.c may include list_impl\.h'
 fresh
