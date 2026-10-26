@@ -32,21 +32,25 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   end
 end
 
-# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets. The owning form also hands
-# over a handle, a channel or an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is
-# RUNTIME-HANDLE-NOT-OWNED).
+# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
+# the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or
+# an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED).
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  if !T.is?(callback.type, "Fn") or T.params(callback.type).size != 1
+  wanted = site.args.size - 1
+  if !T.is?(callback.type, "Fn") or T.params(callback.type).size != wanted
     return error(
       State.fail(
         cx,
         callback.st,
         "CHECK-TYPE-MISMATCH",
-        "#{site.selected.name} requires a function with one parameter",
+        "#{site.selected.name} with #{wanted} argument(s) requires a function with #{wanted} parameter(s)",
         Ast.expr_span(site.args[0]),
       ),
     )
+  end
+  if wanted == 0
+    return ok(State.Out(st: callback.st, type: T.Type.Task(T.result(callback.type))))
   end
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
   if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel") and !c_pointer?(handed.type)

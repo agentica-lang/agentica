@@ -2,6 +2,7 @@
 
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
+Task.spawn(f: Fn[R]) -> Task[R]
 Task.spawn_owning(f: Fn[A, R], handle: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]

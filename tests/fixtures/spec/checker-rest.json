@@ -2562,6 +2562,65 @@
         "  return n",
         "end",
         "",
+        "def bare() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: Task[Int] = Task.spawn(&bare)",
+        "  Task.await(t)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def bare() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn(&identity)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 14],
+      "covers": "&identity"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def bare() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn(&bare, 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 14],
+      "covers": "&bare"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
         "def main() -> Void",
         "  JSON.encode(Task.spawn(&identity, 0))",
         "end",

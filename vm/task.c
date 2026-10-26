@@ -1022,6 +1022,11 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], &args[1], 1, span));
 }
 
+/* Task.spawn(f): the function takes no parameter. */
+static agc_value builtin_spawn_bare(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], NULL, 0, span));
+}
+
 static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_owning(vm, vm->task, args[0], args[1], span));
 }
@@ -1171,6 +1176,7 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
 }
 
 const agc_builtin agc_task_builtins[] = {
+  {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.await", 2, builtin_await_timeout, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},

@@ -10,7 +10,7 @@ Signatures are in
 [`library/concurrency/task.md`](../../site/content/library/concurrency/task.md).
 
 `Task.spawn` starts a function at once with one argument; use a struct for
-several values. A block works when it is passed through an `Fn` variable or
+several values. `Task.spawn(&f)` starts a function of no parameter. A block works when it is passed through an `Fn` variable or
 parameter. Each task has its own scopes, call depth and return handling.
 `Task.await` returns the cached result and may be repeated; `false`, `nil` and
 `error` are normal results. Tasks have no constructor, equality, fields,
