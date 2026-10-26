@@ -18,6 +18,7 @@ import Rewrite from "rewrite"
 ## declaration and with it the `##` doc that sits on the export, so the docs of a file (`agentica type-at`) are read
 ## from here. named maps each local name of an import list (`create` of `import {make as create} from "models"`) to
 ## the linked name of what it stands for (`@2::make`), so a query can tell which declaration an imported name selects.
+## reexported does the same for the names the file re-exports (`export Url.parse`): the linked name of the original.
 ## watched are the files of its package that its extern functions may open (the bytecode cache watches them).
 ## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`
 ## (check_style.agc).
@@ -32,6 +33,7 @@ export struct LinkedModule
   declarations: List[Ast.Decl]
   aliases: Map[String, String]
   named: Map[String, String]
+  reexported: Map[String, String]
   parsed: Ast.Program
   watched: List[String]
   blank_line_after_end: Bool
@@ -295,6 +297,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       declarations: declarations,
       aliases: module.aliases,
       named: linked_names(module, loaded.modules),
+      reexported: reexported_names(module, loaded.modules),
       parsed: module.program,
       watched: module.origin.watched,
       blank_line_after_end: module.origin.blank_line_after_end,
@@ -307,8 +310,18 @@ def linked_names(module: Modules.Module, modules: Map[String, Modules.Module]) -
   out: Map[String, String] = {}
   for local in module.named.keys
     entry = module.named[local]
-    out = out.put(local, modules[entry.target].prefix + entry.name)
+    out = out.put(local, Modules.linked_name(modules, modules[entry.target], entry.name))
   end
+  return out
+end
+
+# Each name the file re-exports and the linked name of the declaration it stands for.
+def reexported_names(module: Modules.Module, modules: Map[String, Modules.Module]) -> Map[String, String]
+  out: Map[String, String] = {}
+  for name in module.reexports.keys
+    out = out.put(name, Modules.linked_name(modules, module, name))
+  end
+
   return out
 end
 
@@ -316,18 +329,24 @@ end
 # `visible` predicate as data). A file imported by name counts as imported, with all its exported
 # structs: an alias import of it would allow them too.
 def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]) -> List[String]
-  names = structs_of(module.prefix, module.names)
+  names = structs_of(modules, module, module.names)
   for target in module.aliases.values
-    names = names.concat(structs_of(modules[target].prefix, modules[target].public))
+    names = names.concat(structs_of(modules, modules[target], modules[target].public))
   end
   for entry in module.named.values
-    names = names.concat(structs_of(modules[entry.target].prefix, modules[entry.target].public))
+    names = names.concat(structs_of(modules, modules[entry.target], modules[entry.target].public))
   end
   return Set.new(names).to_a.sort
 end
 
-def structs_of(prefix: String, kinds: Map[String, Declarations.Kind]) -> List[String]
-  return kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end.map do |name| prefix + name end
+# The linked names of the structs among `kinds`, which are names of `module` (a re-exported struct is the original's).
+def structs_of(
+  modules: Map[String, Modules.Module],
+  module: Modules.Module,
+  kinds: Map[String, Declarations.Kind],
+) -> List[String]
+  structs = kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end
+  return structs.map do |name| Modules.linked_name(modules, module, name) end
 end
 
 # Like `link_file`, with the trees of `parses` for the files whose text is the same (Modules.load_with).

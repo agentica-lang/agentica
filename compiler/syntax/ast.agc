@@ -52,6 +52,7 @@ end
 ## A top-level declaration.
 export enum Decl
   Import(ImportDecl)
+  Reexport(ReexportDecl)
   Export(ExportDecl)
   Function(FunctionDecl)
   Struct(StructDecl)
@@ -78,6 +79,17 @@ export struct ImportName
   local: String
   span: Source.Span
   local_span: Source.Span
+end
+
+## A re-export: `export Alias.name` or `export Alias.TypeName` passes on a name that the file imports under `alias`.
+## The spans are of the whole line, of the alias and of the name.
+export struct ReexportDecl
+  id: Int
+  alias: String
+  name: String
+  alias_span: Source.Span
+  name_span: Source.Span
+  span: Source.Span
 end
 
 ## export before a def, struct or enum; its doc is the doc of the declaration.

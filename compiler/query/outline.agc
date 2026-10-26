@@ -36,6 +36,7 @@ def imports_of(program: Ast.Program) -> List[Ast.ImportDecl]
   for declaration in program.declarations
     case declaration
       Ast.Decl.Import(node) -> imports = imports.push(node)
+      Ast.Decl.Reexport(_) -> imports = imports
       Ast.Decl.Export(_) -> imports = imports
       Ast.Decl.Function(_) -> imports = imports
       Ast.Decl.Struct(_) -> imports = imports

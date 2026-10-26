@@ -84,6 +84,9 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
   child = deeper(at)
   case decl
     Ast.Decl.Import(node) -> return out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
+    Ast.Decl.Reexport(node) ->
+      attrs = " alias=#{Text.quote(node.alias)} name=#{Text.quote(node.name)}"
+      return out.push(head(at, role, "reexport-decl", node.id, node.span, attrs))
     Ast.Decl.Export(node) ->
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       return print_decl(lines, child, "declaration", node.declaration)

@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 135,
+  "stdout": [
+    "home at at Point(x: 1, y: 2)",
+    "dot 5",
+    "nothing",
+    "at Point(x: 0, y: 0)",
+    "true",
+    "12",
+    "[12, 12]",
+    "tight",
+    ""
+  ],
+  "stderr": []
+}
