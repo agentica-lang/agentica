@@ -46,7 +46,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## Lightweight I/O tasks
 
-- Task.spawn takes Fn[A, R] and one argument and returns Task[R] and moves no
+- Task.spawn takes Fn[A, R] and one argument, or an Fn[R] and none (a block
+  works too: `Task.spawn do ... end`), and returns Task[R] and moves no
   handle; Task.spawn_owning takes a handle type as the argument (the handle
   types of the catalog, `compiler/catalog/builtins_data.agc`, else
   `CHECK-NOT-A-HANDLE`; keep it in step with the tag list of `agc_owned_of` in

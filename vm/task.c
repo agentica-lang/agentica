@@ -1025,6 +1025,11 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], &args[1], 1, span));
 }
 
+/* Task.spawn(f): the function takes no parameter. */
+static agc_value builtin_spawn_bare(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], NULL, 0, span));
+}
+
 static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_owning(vm, vm->task, args[0], args[1], span));
 }
@@ -1187,6 +1192,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

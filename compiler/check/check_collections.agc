@@ -32,22 +32,20 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   end
 end
 
-# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets. The owning form also hands
-# over a handle, a channel or an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is
-# RUNTIME-HANDLE-NOT-OWNED).
+# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
+# the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or
+# an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED).
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  if !T.is?(callback.type, "Fn") or T.params(callback.type).size != 1
-    return error(
-      State.fail(
-        cx,
-        callback.st,
-        "CHECK-TYPE-MISMATCH",
-        "#{site.selected.name} requires a function with one parameter",
-        Ast.expr_span(site.args[0]),
-      ),
-    )
+  wanted = site.args.size - 1
+  if !T.is?(callback.type, "Fn") or T.params(callback.type).size != wanted
+    return error(spawn_mismatch(cx, callback, site, owning, wanted))
   end
+
+  if wanted == 0
+    return ok(State.Out(st: callback.st, type: T.Type.Task(T.result(callback.type))))
+  end
+
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
   if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel") and !c_pointer?(handed.type)
     return error(
@@ -63,6 +61,42 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     )
   end
   return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
+end
+
+# CHECK-TYPE-MISMATCH of a spawn whose function does not take as many parameters as the call has arguments after it.
+# The 0-argument form belongs to Task.spawn alone. A one-parameter function without its argument gets a help.
+def spawn_mismatch(cx: State.Cx, callback: State.Out, site: State.Site, owning: Bool, wanted: Int) -> String
+  needs = "Task.spawn(&f) needs 0 parameters, Task.spawn(&f, arg) needs 1, a block needs 0: Task.spawn do ... end"
+  if owning
+    needs = "Task.spawn_owning(&f, handle) needs 1 parameter"
+  end
+  message = (
+    "#{site.selected.name} expects a function that takes #{wanted} parameter(s), " +
+    "found #{spawn_found(callback.type)}; #{needs}"
+  )
+  span = Ast.expr_span(site.args[0])
+  if wanted == 0 and T.is?(callback.type, "Fn") and T.params(callback.type).size == 1
+    return State.fail_help(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span, spawn_argument_help(site.args[0]))
+  end
+
+  return State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span)
+end
+
+# The help of a one-parameter function given to Task.spawn alone: a reference gets its argument, a block loses its.
+def spawn_argument_help(callback: Ast.Expr) -> String
+  case callback
+    Ast.Expr.BlockLit(block) ->
+      return "a block with a parameter needs an argument: pass it through an Fn variable, or drop the parameter"
+    _ -> return "pass its argument: Task.spawn(&f, x)"
+  end
+end
+
+# What a spawn was given in place of its function, for the message.
+def spawn_found(type: T.Type) -> String
+  if T.is?(type, "Fn")
+    return "a function with #{T.params(type).size} parameter(s)"
+  end
+  return T.to_text(type)
 end
 
 def c_pointer?(type: T.Type) -> Bool
