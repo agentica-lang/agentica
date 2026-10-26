@@ -84,9 +84,6 @@ async function servers() {
   for (const [name, handler] of Object.entries(handlers)) {
     ports[name] = (await listen(handler)).address().port;
   }
-  const closed = await listen(() => {});
-  ports.refused = closed.address().port;
-  await new Promise(resolve => closed.close(resolve));
   say(JSON.stringify(ports));
 }
 
