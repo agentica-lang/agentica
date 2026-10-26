@@ -32,6 +32,9 @@ EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
 # Where the tests are when no path is given.
 DEFAULT_PATHS = ["specs/", "test/"]
 
+# The file that is the step program when --steps is not given and a searched folder holds it.
+DEFAULT_STEPS_FILE = "steps.agc"
+
 # The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
 # default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
 # and the diagnostic that the runner reports in place of the steps ("" when it compiled).
@@ -117,7 +120,6 @@ end
 def prepare_and_run(
   directory: String, options: Opts.Options, settings: Env.Settings, runner: Runner.Program
 ) -> Result[Report.Ending]
-  steps = try compile_steps(directory, options, settings)
   given = options.paths
   if given.size == 0
     given = DEFAULT_PATHS.filter do |path: String|
@@ -125,6 +127,7 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
+  steps = try compile_steps(directory, with_default_steps(options, given), settings)
   entries = try compile_tests(Discover.discover(given), directory, settings, !options.no_cache)
   config = Runner.Config(
     vm: options.vm,
@@ -150,6 +153,22 @@ def prepare_and_run(
     Runner.Ran.Reported(code, text) -> return ok(Report.Ending(code: code, text: "#{text}\n"))
     Runner.Ran.Failed(message) -> return ok(Report.infrastructure(message, options.vm, options))
   end
+end
+
+# Without --steps, the `steps.agc` of the first searched folder that has one is the step program, as if the user had
+# passed it. Only a folder counts (the given ones, or specs/ and test/), never a subfolder or a file path.
+def with_default_steps(options: Opts.Options, searched: List[String]) -> Opts.Options
+  if options.steps.size > 0
+    return options
+  end
+  for folder in searched
+    file = Path.join([folder, DEFAULT_STEPS_FILE]).unwrap_or(DEFAULT_STEPS_FILE)
+    found = File.stat(file, IO_TIMEOUT)
+    if found.ok? and found.unwrap!.kind == "file"
+      return options.with(steps: [file])
+    end
+  end
+  return options
 end
 
 # The paths of the empty-run report: the first path given, or the first default folder.

@@ -124,6 +124,9 @@ are registered in `stdlib/MODULES`.
     given.
   - In the runner, the seed is `--seed` or one drawn with `Random.int` and
     passed to every child (`--seed` always) and to the report.
+  - Without `--steps`, `with_default_steps` (`bdd_driver.agc`) takes the
+    `steps.agc` of the first searched folder that has one, so the config is the
+    same as for `--steps`
   - The steps are listed only when there is a feature (a `--steps` program that
     does not compile is still a file error without one)
   - a broken step program is one `steps` file error, and the test files still

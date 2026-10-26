@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica test` without `--steps` uses the `steps.agc` of the first searched folder that has one (`specs/steps.agc` by default).
+
 ### Fixed
 
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.

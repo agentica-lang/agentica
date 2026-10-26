@@ -356,6 +356,35 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
                         "no .feature or *_test.agc files found"]
 
 
+def test_a_steps_agc_in_the_searched_folder_is_the_step_program_unless_steps_names_another(bdd):
+    feature = "Feature: Answer\nScenario: right\nThen the answer is 4\n"
+
+    def answer(passes):
+        return steps_program(main_running(
+            'BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, %s, "no") end' % passes))
+
+    project = bdd.suite({"other.agc": answer("false")})
+    bare = bdd.suite({})
+    for directory in (project, bare):
+        (directory / "specs").mkdir()
+        (directory / "specs" / "a.feature").write_text(feature, encoding="utf-8")
+    (project / "specs" / "steps.agc").write_text(answer("true"), encoding="utf-8")
+
+    def statuses(*args, cwd):
+        status, report = bdd.json_test(*args, cwd=cwd)
+        return status, [item["status"] for item in report_cases(report)], report
+
+    # The default folders, then a folder named on the command line (from another working folder).
+    assert statuses(cwd=project)[:2] == (0, ["passed"])
+    assert statuses(joined(project, "specs"), cwd=bare)[:2] == (0, ["passed"])
+    # --steps wins, and it is the same one-program rule.
+    assert statuses("--steps", joined(project, "other.agc"), cwd=project)[:2] == (1, ["failed"])
+    # No steps.agc: every step is undefined, as before.
+    status, cases, report = statuses(cwd=bare)
+    assert (status, cases) == (1, ["failed"])
+    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+
+
 def test_a_report_of_several_mib_arrives_whole(bdd):
     # The runner is a captured child, and a captured stream keeps 1 MiB: the report travels in a file instead.
     names = ["case %d %s" % (number, "x" * 40000) for number in range(40)]
