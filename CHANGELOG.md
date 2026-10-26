@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call).
+
 ### Fixed
 
 - Linux shutdown skips a standard C stream already locked by native compute code.

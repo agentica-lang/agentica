@@ -1,7 +1,7 @@
 /*
- * The timers of a task (docs/vm/16-architecture.md §16.9, "Timers"): the heap orders by deadline and arming order, a
- * disarm from the middle keeps the order, a fire wakes exactly the due tasks once, and a fire on one scheduler races a
- * wake and resume on another under rt->sync with exactly one queueing and no wake after the resume.
+ * The timers of a task (docs/vm/16-architecture.md §16.9, "Timers"): heap order, disarm from the middle, a fire wakes
+ * exactly the due tasks once, a wait parked without a clock starts or drops at the right step, and a fire or a start
+ * on one scheduler races a wake and resume on another under rt->sync with no wake or entry left after the resume.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -24,6 +24,17 @@ static agc_task *parked_on_timer(agc_vm *scheduler, uint64_t deadline) {
   atomic_store(&t->state, AGC_TASK_RUNNING);
   agc_task_parking(scheduler);
   agc_task_park_until(scheduler, deadline, true);
+  t->parking = false;
+  assert(agc_task_commit_park(t));
+  return t;
+}
+
+static agc_task *parked_within(agc_vm *scheduler, int64_t ms) {
+  agc_task *t = agc_new_task(scheduler);
+  scheduler->task = t;
+  atomic_store(&t->state, AGC_TASK_RUNNING);
+  agc_task_parking(scheduler);
+  agc_task_park_within(scheduler, ms, true);
   t->parking = false;
   assert(agc_task_commit_park(t));
   return t;
@@ -126,6 +137,47 @@ static void test_disarm_and_future(void) {
   assert(vm.timers.count == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
 }
 
+static bool pending_slot(const agc_task *t) {
+  return t->timer.pending && t->timer.heap == &vm.timers && atomic_load(&vm.timers.pending) == t;
+}
+
+/* agc_task_park_within reads no clock: the wait stays pending through the boundary of its own turn, starts at the end
+   of the next turn, at the next such park or before the scheduler sleeps, and a task woken first drops it. A disarm
+   (resume or cancel) empties the slot. rt->timers_armed counts a pending wait and ends where it began. */
+static void test_pending(void) {
+  uint64_t armed = atomic_load(&vm.rt->timers_armed);
+  agc_task *a = parked_within(&vm, 60000);
+  assert(pending_slot(a) && vm.timers.count == 0 && a->timer.deadline == 60000);
+  assert(atomic_load(&vm.rt->timers_armed) == armed + 1);
+  assert(!agc_timers_run(&vm));
+  assert(pending_slot(a) && agc_timers_next_due(&vm) == UINT64_MAX);
+  vm.task = vm.rt->main;
+  uint64_t before = agc_clock_ms();
+  assert(!agc_timers_run(&vm));
+  assert(!a->timer.pending && a->timer.heap == &vm.timers && !atomic_load(&vm.timers.pending));
+  assert(a->timer.deadline >= before + 60000 && a->timer.deadline <= agc_clock_ms() + 60000);
+  assert(vm.timers.count == 1 && agc_timers_next_due(&vm) == a->timer.deadline);
+  agc_task *b = parked_within(&vm, 60000);
+  agc_task *c = parked_within(&vm, 60000);
+  assert(pending_slot(c) && !b->timer.pending && b->timer.heap == &vm.timers && vm.timers.count == 2);
+  agc_task_wake(&vm, c, "test");
+  vm.task = vm.rt->main;
+  assert(!agc_timers_run(&vm));
+  assert(!c->timer.heap && !c->timer.pending && !atomic_load(&vm.timers.pending) && vm.timers.count == 2);
+  assert(pop_ready() == c && !pop_ready());
+  agc_task *d = parked_within(&vm, 60000);
+  agc_timers_settle(&vm);
+  assert(!d->timer.pending && d->timer.heap == &vm.timers && vm.timers.count == 3);
+  agc_task *e = parked_within(&vm, 60000);
+  agc_timers_disarm(&vm, e);
+  assert(!e->timer.heap && !e->timer.pending && !atomic_load(&vm.timers.pending));
+  agc_timers_disarm(&vm, a);
+  agc_timers_disarm(&vm, b);
+  agc_timers_disarm(&vm, d);
+  assert(vm.timers.count == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
+  assert(atomic_load(&vm.rt->timers_armed) == armed);
+}
+
 static agc_task *racing;
 static _Atomic int go;
 static _Atomic int finished;
@@ -153,15 +205,20 @@ static void wake_and_resume(void *arg) {
   agc_gc_thread_leave();
 }
 
-/* The owner fires a due timer while another scheduler wakes the task and resumes it. Each round queues the task
-   exactly once (one wake wins the state CAS, the other finds it READY or RUNNING), the resume leaves no entry behind,
-   and a later fire finds nothing to wake. Without the rt->sync take in agc_timers_run the fire and the disarm change
-   the heap at once, which make vm-tsan reports (checked by hand when this test was written). */
-static void test_fire_against_wake(void) {
-  agc_share(&vm);
+/* The owner runs its turn boundary while another scheduler wakes the task and resumes it, with a due timer (PENDING
+   false) or a wait whose clock has not started (PENDING true). A due timer: each round queues the task exactly once
+   (one wake wins the state CAS, the other finds it READY or RUNNING), and a later fire finds nothing to wake; without
+   the rt->sync take in agc_timers_run the fire and the disarm change the heap at once, which make vm-tsan reports
+   (checked by hand when this test was written). A pending wait: the owner finds the task parked (it starts the clock,
+   and the resume takes the entry out of the heap), woken (it drops the entry), or gone from the slot. Every round ends
+   with no entry, an empty slot and the armed count back. */
+static void race_against_wake(bool pending) {
   agc_vm other = vm;
   other.sync_depth = 0;
   racing = agc_new_task(&vm);
+  atomic_store(&go, 0);
+  atomic_store(&finished, 0);
+  uint64_t armed = atomic_load(&vm.rt->timers_armed);
   uv_thread_t thread;
   assert(uv_thread_create(&thread, wake_and_resume, &other) == 0);
   for (int round = 1; round <= ROUNDS; round++) {
@@ -169,7 +226,10 @@ static void test_fire_against_wake(void) {
     atomic_store(&racing->state, AGC_TASK_RUNNING);
     agc_task_parking(&vm);
     agc_sync_take(&vm);
-    agc_task_park_until(&vm, agc_clock_ms(), true);
+    if (pending)
+      agc_task_park_within(&vm, 60000, true);
+    else
+      agc_task_park_until(&vm, agc_clock_ms(), true);
     agc_sync_drop(&vm);
     racing->parking = false;
     assert(agc_task_commit_park(racing));
@@ -180,7 +240,8 @@ static void test_fire_against_wake(void) {
     while (atomic_load_explicit(&finished, memory_order_acquire) < round) agc_test_yield();
     assert(agc_runq_pop(vm.rt->runq) == NULL);
     assert(atomic_load(&racing->state) == AGC_TASK_RUNNING);
-    assert(!racing->timer.heap && vm.timers.count == 0);
+    assert(!racing->timer.heap && !racing->timer.pending && vm.timers.count == 0);
+    assert(!atomic_load(&vm.timers.pending) && atomic_load(&vm.rt->timers_armed) == armed);
     assert(!agc_timers_run(&vm));
     racing->timer.timed = false;
   }
@@ -194,7 +255,10 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_order();
   test_disarm_and_future();
-  test_fire_against_wake();
+  test_pending();
+  agc_share(&vm);
+  race_against_wake(false);
+  race_against_wake(true);
   puts("timers tests passed");
   return 0;
 }

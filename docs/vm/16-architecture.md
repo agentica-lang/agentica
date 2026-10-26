@@ -454,6 +454,13 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   scheduler that runs the task (`vm->timers`, `vm/timers.c`, ordered by deadline
   and then by arming order), and the task parks (`agc_task_park_until`). There
   is no job, no registry slot and no count, so no START, CLOSE_TIMER or RELEASE.
+  A channel wait parks with `agc_task_park_within` instead, which reads no
+  clock: the entry waits in the scheduler's one `pending` slot, and the
+  scheduler starts its clock at the end of its next turn, at its next such
+  park, or before it sleeps. A task woken before then drops the entry, so a
+  wait that the peer ends in its next turn never reads the clock (a system
+  call on a host with an HPET clock source, #629). The timeout is then late by
+  at most that turn.
   The scheduler fires its due timers at its turn boundary and when its run queue
   is empty (`agc_timers_run`), by waking the task like any waker. Every change
   to a heap is made with `rt->sync` held. So any scheduler can remove the entry

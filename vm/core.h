@@ -323,12 +323,20 @@ uint64_t agc_clock_ms(void);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
  * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,
- * except agc_timers_run, which takes it itself, and agc_timers_next_due and agc_timers_strong, which only read. */
+ * except agc_timers_run and agc_timers_settle, which take it themselves, and agc_timers_next_due and
+ * agc_timers_strong, which only read. */
 void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
+/* The same for a wait that another task usually ends soon: it reads no clock, and the deadline is TIMEOUT_MS after the
+ * moment the scheduler starts the clock, at the end of its next turn or before it goes idle. Once the task resumes,
+ * t->timer.deadline is that deadline, or 0 if the wait ended before the clock started. */
+void agc_task_park_within(agc_vm *vm, int64_t timeout_ms, bool retry);
 void agc_timers_disarm(agc_vm *vm, agc_task *t);
-/* Wakes the tasks whose deadline has passed in this scheduler's heap. Called at the turn boundary and when the run
- * queue is empty; true when it woke any. A heap with no timer costs one relaxed load. */
+/* Wakes the tasks whose deadline has passed in this scheduler's heap, after it starts the clock of a wait parked before
+ * the turn that just ran. Called at the turn boundary and when the run queue is empty; true when it woke any. With no
+ * timer it costs two relaxed loads. */
 bool agc_timers_run(agc_vm *vm);
+/* Starts the clock of the wait that agc_task_park_within left pending. Called before the scheduler sleeps. */
+void agc_timers_settle(agc_vm *vm);
 /* The earliest deadline of this scheduler's heap, or UINT64_MAX. */
 uint64_t agc_timers_next_due(const agc_vm *vm);
 /* True when an armed timer of any heap is not a service task's (agc_task_service). */

@@ -150,9 +150,10 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
-  uint64_t now = agc_clock_ms();
-  if (!t->channel.deadline) t->channel.deadline = now + (uint64_t)timeout;
-  if (t->channel.deadline <= now) {
+  /* The first park starts no clock (agc_task_park_within). A retry follows a wake with no reservation, which only the
+     timer gives, so its deadline is the one the scheduler started; a timer dropped before it started (0) waits anew. */
+  uint64_t deadline = resumed(t, c) ? t->timer.deadline : 0;
+  if (deadline && deadline <= agc_clock_ms()) {
     stop_waiting(t);
     return timed_out_error();
   }
@@ -165,7 +166,10 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_task_park_until(vm, t->channel.deadline, true);
+  if (deadline)
+    agc_task_park_until(vm, deadline, true);
+  else
+    agc_task_park_within(vm, timeout, true);
   return agc_void();
 }
 

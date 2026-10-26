@@ -351,11 +351,11 @@ section says how the scheduler and the loop keep them.
   doubles up to the capacity, so `Channel.new(1048576)` allocates little.
   Copying a growing ring charges one turn-cost unit per slot. Other calls charge
   nothing, and a value is one pointer. A call that must wait parks with retry on
-  a timer of the task, ending at the call's deadline (`agc_task_park_until`,
-  `vm/timers.c`). There is no job, so no `io` trace line. The `sched` trace
-  shows `timer_arm` and `timer_fire`. The deadline is set at the first wait and
-  kept in the task (`channel.deadline`), as `agc_handle_wait` does. A timeout of
-  0 tries once and never parks.
+  a timer of the task whose clock starts late (`agc_task_park_within`,
+  `vm/timers.c`, §16.9 "Timers"). There is no job, so no `io` trace line. The
+  `sched` trace shows `timer_arm` when the clock starts and `timer_fire`. A
+  retry after the timer fired keeps the deadline that the clock started
+  (`timer.deadline`). A timeout of 0 tries once and never parks.
   - **Reservations.** A value that arrives while receivers wait is not put in
     the ring. The head receiver is popped, the value is stored in the task
     (`channel.value`), and the task is woken. This is a direct hand-off, so no

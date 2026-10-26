@@ -122,8 +122,9 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   outcome decides between the timeout and the completion.
 - **A wait with only a deadline is a task timer.** `Task.sleep`, the timed
   await, a channel deadline, `Task.map`'s oldest deadline and a handle lock's
-  deadline arm the task's own timer (`agc_task_park_until`, `vm/timers.c`) in
-  the scheduler's heap. Such a wait has no I/O, so it needs no job, no registry
+  deadline arm the task's own timer (`agc_task_park_until`, `vm/timers.c`; a
+  channel's starts its clock late, `agc_task_park_within`) in the scheduler's
+  heap. Such a wait has no I/O, so it needs no job, no registry
   slot and no request to the I/O thread (§16.9, "Timers").
 
 No builtin starts its own timer for a timeout. As built, a few timers are not
