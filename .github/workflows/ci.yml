@@ -141,8 +141,6 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
-      - name: The product command line tests on the single binary
-        run: make test-cli
       - name: Slow tests
         run: make test-slow
       - run: make vm-latency

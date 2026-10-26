@@ -35,6 +35,7 @@ comment), then a step that calls it. Targets that are not obvious:
 - `cli`, `bdd-driver`, `exe` and `vm` stop with a message (`make vm` would
   otherwise find the `vm/` folder and do nothing).
 - `test-cli` runs `CLI_TESTS` on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`).
+  CI does not run it: `make test` runs the same modules on the same binary.
   The option and diagnostic forms of the CLI are one golden of the whole
   output, messages included: `tests/fixtures/cli/forms.json`
   (`tests/test_cli_forms.py`; `make goldens` rewrites it, the diff is the
@@ -184,7 +185,7 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
 
 - `test` runs `vm-test test-bdd`, `test-remove-actions`, the whole suite,
   `test-shared`, `test-multicore-modules`, `vm-jit-test`, `fixed-point`,
-  `stage0-check`, `test-cli`, `test-slow`, `vm-latency` and `vm-task-map` alone,
+  `stage0-check`, `test-slow`, `vm-latency` and `vm-task-map` alone,
   `smoke`, the vendored check, then `dup-check`. The vendored check is the last
   step that builds: it rebuilds `build/vm/release/obj` with other flags, so
   nothing that builds may run beside it. `dup-check` runs even when an earlier
