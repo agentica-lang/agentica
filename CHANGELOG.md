@@ -14,9 +14,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
   takes no argument.
+- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`).
+- `BDD.skip(ctx, reason)` ends a scenario as skipped; the exit code stays 0. **Breaking:** the text summary line now has `S skipped`, and `--json` has a `skipped` total, a scenario `reason` and the status `"skipped"`.
 
 ### Changed
 
+- **Breaking:** `agentica test` without `--steps` uses the `steps.agc` found
+  in or above the folder of each path that holds a feature
+  (`specs/steps.agc` by default); two different ones are a usage error.
 - `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system

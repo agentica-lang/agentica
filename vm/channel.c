@@ -165,7 +165,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_task_park_within(vm, timeout);
+  agc_task_park_within(vm, agc_timeout_length(vm, timeout));
   return agc_void();
 }
 

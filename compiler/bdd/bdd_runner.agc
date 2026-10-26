@@ -51,9 +51,15 @@ export enum Ran
   Failed(String)
 end
 
-## The text of the configuration file: the settings, then one line for each entry.
-export def config_text(config: Config, entries: List[Discover.Entry]) -> String
+## The text of the configuration file: the settings, one line for each entry, then the `--tags` expression as a JSON
+## string when there is one. That last line is not a field of `Config` because the runner decodes `Config` with no
+## optional fields, and a driver that does not write it (stage0) must keep working with the runner.
+export def config_text(config: Config, entries: List[Discover.Entry], tags: String) -> String
   lines = [JSON.encode(config)].concat(entries.map do |entry: Discover.Entry| JSON.encode(entry) end)
+  if tags != ""
+    lines = lines.push(JSON.encode(tags))
+  end
+
   return "#{lines.join("\n")}\n"
 end
 

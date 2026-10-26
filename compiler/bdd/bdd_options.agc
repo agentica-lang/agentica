@@ -5,8 +5,10 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in
-## front of `test`).
+## `--only TEXT`, `--tags EXPR`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the
+## ones in front of `test`).
+
+import Tags from "std/bdd/tags"
 
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
@@ -22,6 +24,7 @@ export struct Options
   seed: Int
   test_timeout_ms: Int
   only: String
+  tags: String
   steps: List[String]
   paths: List[String]
   deny: List[String]
@@ -47,6 +50,7 @@ export def parse(arguments: List[String]) -> Parsed
     seed: 0,
     test_timeout_ms: 30_000,
     only: "",
+    tags: "",
     steps: [],
     paths: [],
     deny: [],
@@ -103,7 +107,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
   at = 0
   while at < words.size
     word = words[at]
-    if word == "--steps" or word == "--only"
+    if word == "--steps" or word == "--only" or word == "--tags"
       if at + 1 >= words.size
         return Parsed.Usage("option needs a value", shown)
       end
@@ -111,6 +115,20 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       value = words[at + 1]
       if word == "--steps"
         shown = shown.with(steps: shown.steps.push(value))
+      elsif word == "--tags"
+        if shown.tags != ""
+          return Parsed.Usage("one --tags EXPR", shown)
+        end
+
+        checked = Tags.compile(value)
+        if !checked.ok?
+          return Parsed.Usage("invalid --tags: #{checked.message}", shown)
+        elsif !Tags.filters?(checked.unwrap!)
+          # Only white space, which `compile` splits on, including the Unicode spaces that `strip` keeps.
+          return Parsed.Usage("--tags needs a non-empty EXPR", shown)
+        end
+
+        shown = shown.with(tags: value)
       elsif shown.only != ""
         return Parsed.Usage("one --only TEXT", shown)
       elsif value == ""

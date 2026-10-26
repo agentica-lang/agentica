@@ -9,8 +9,9 @@ User docs and the runner protocol are in `docs/bdd.md`.
 
 `agentica test` runs on the VM and is written in Agentica. `std/bdd` is the
 public step API; `std/bdd/gherkin` and `std/bdd/match` (Gherkin parsing and
-step matching) and `std/test/runner` and `std/test/report` (the runner and
-report, shared by BDD and unit tests) are internal (importable through `std/`
+step matching), `std/bdd/tags` (`--tags` expressions), `std/test/runner` and
+`std/test/report` (the runner and report, shared by BDD and unit tests) are
+internal (importable through `std/`
 like any registered module, but not in the programming skill or the site). All
 are registered in `stdlib/MODULES`.
 
@@ -119,11 +120,23 @@ are registered in `stdlib/MODULES`.
     that `std/bdd` starts as `agentica FILE.agc` use the cache like any run
   - the config gains `only`, `test_timeout_ms`, `steps_given` and
     `empty_message`
+  - `--tags EXPR` is not a field of the config (`JSON.decode` has no optional
+    fields, and the stage0 driver must still work): when given, `config_text`
+    adds a last line with the expression as a JSON string, which the runner
+    reads after the entries (a missing line is no filter). The runner compiles
+    it with `Tags.compile` (the driver checks it first, in `Opts.parse`, with
+    the same function; a line the runner cannot read or a bad expression is a
+    `RUNTIME-BDD-USAGE` file error at `<arguments>` and nothing runs), keeps
+    the scenarios `Tags.selects?` and leaves the unit test files out
   - the runner VM's stdin is closed at once, since nothing is read from it
   - a usage or infrastructure report from the driver carries `--seed` when
     given.
   - In the runner, the seed is `--seed` or one drawn with `Random.int` and
     passed to every child (`--seed` always) and to the report.
+  - Without `--steps`, `default_steps` (`bdd_driver.agc`) takes the nearest
+    `steps.agc` from each path that holds a feature up to the working
+    directory, only when the run has one (two different files are a usage
+    report), so the config is the same as for `--steps`
   - The steps are listed only when there is a feature (a `--steps` program that
     does not compile is still a file error without one)
   - a broken step program is one `steps` file error, and the test files still
@@ -198,6 +211,9 @@ are registered in `stdlib/MODULES`.
     `RUNTIME-BDD-OUTPUT-LIMIT` when the stdout or stderr cap was hit.
   - An `end` whose `index` is not the current step is a `RUNTIME-BDD-INFRA`
     protocol error
+  - a `skip` record (`BDD.skip`: the child sends it and exits 0) ends the
+    scenario as `Verdict.Skipped(reason)`: that step is `StepStatus.Skipped`,
+    the later ones `NotExecuted`, and the child is closed
   - a failed `Process.channel_send` of a line fails the step at once (`send
     exceeds` is `RUNTIME-BDD-IO`, anything else goes through `read_failure`)
   - `read_failure`, and `failure` in `units`, treat the messages `Child.gone?`
@@ -278,7 +294,9 @@ are registered in `stdlib/MODULES`.
   the module).
   - A `Verdict` is `Pass` or `Fail(Error)`: a file's own error (parse error,
     step program), or a scenario's first failure; it can also be
-    `NotExecuted`, a test that never ran.
+    `Skipped(reason)`, a scenario ended by `BDD.skip` (not a failure: the exit
+    code stays 0, and the totals have `skipped`), or `NotExecuted`, a test that
+    never ran.
   - An `Error` is the diagnostic as the VM's `--json` writes it, with
     `expected` and `actual` as `Detail` (`Unknown` or `Known(String)`), and
     `original`, `JSON.null()` or the whole object `from_json` parsed.
@@ -292,17 +310,18 @@ are registered in `stdlib/MODULES`.
     fields; it returns an error with a non-null `original` unchanged);
     `file_error(path, kind, error)` builds a file entry.
   - `json(files, seed)` builds the report with `JSON.object` (keys come out
-    sorted, the canonical form; the statuses, totals, `ok` and `not_executed`
-    are derived, not passed in; a file has `kind`, a scenario `output`);
-    `text(files, ai, seed)` is the plain or `--ai` text (a test file's lines
-    name its path where a feature name goes, `SKIP` for a test not run, a failed
-    test's output indented below it or after ` | output`, and `, seed N` on the
-    last line when the exit code is not 0) without the final newline
-    (`expected` and `actual` as they are: a BDD or `Test` assertion already
-    wrote them in the inspect form, once, so the report does not quote them
-    again); `exit_code(files)` is 0 when at least one scenario ran and nothing
-    failed, 2 when a file or scenario error is `RUNTIME-BDD-INFRA` or
-    `RUNTIME-BDD-USAGE`, else 1.
+    sorted, the canonical form; the statuses, totals, `ok`, `skipped` and
+    `not_executed` are derived, not passed in; a file has `kind`, a scenario
+    `output`); `text(files, ai, seed)` is the plain or `--ai` text (a test
+    file's lines name its path where a feature name goes, `SKIP` for a skipped
+    scenario (its reason on one line, below it or after ` | ` with `--ai`), `NOT
+    RUN` for a test not run, a failed test's output indented below it or after `
+    | output`, and `, seed N` on the last line when the exit code is not 0)
+    without the final newline (`expected` and `actual` as they are: a BDD or
+    `Test` assertion already wrote them in the inspect form, once, so the report
+    does not quote them again); `exit_code(files)` is 0 when at least one
+    scenario ran and nothing failed, 2 when a file or scenario error is
+    `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
   - Every list is built with `List.map` and joined once, so a report costs
     linear time.
   - Goldens: `test-report-run` and `test-report-exit`.
