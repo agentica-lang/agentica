@@ -248,6 +248,19 @@ def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop)
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
 
 
+# The library of Native.load is a string literal with the rule of an extern library, so the front end can resolve it
+# like one; anything else is CHECK-NATIVE-LOAD at the argument.
+@pytest.mark.parametrize("library, code, stop", [
+    ('"libm.so.6"', None, None),
+    ("name", "CHECK-NATIVE-LOAD", 24),
+    ('"lib/m.so"', "CHECK-NATIVE-LOAD", 30),
+    ('"m#{1}"', "CHECK-NATIVE-LOAD", 27),
+])
+def test_native_load_takes_a_library_literal(tmp_path, library, code, stop):
+    text = 'def main() -> Void\n  name = "x"\n  puts(Native.load(%s).ok? or name == "")\nend\n' % library
+    assert_checks(check(source(tmp_path, text)), code, (3, 20), (3, stop))
+
+
 def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
     params = ", ".join("p%d: C.Int32" % k for k in range(64))
     ok = 'extern "libc.so.6"\n  def f(%s) -> Void\nend\n' % params

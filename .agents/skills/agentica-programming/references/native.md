@@ -34,6 +34,12 @@ end
   (SIP drops them).
 - A package picks its library per system in its `agentica.toml`
   (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it.
+- `Native.load("NAME") -> Result[Void]` opens the library now: `ok` (it stays
+  open for the extern functions) or `error("cannot open ...")`, so a package
+  can report a missing library or fall back before any side effect
+  (`try Native.load("pq")`). The argument is a string literal resolved like
+  `extern "NAME"` (manifest included), else `CHECK-NATIVE-LOAD`. A missing
+  function is still `RUNTIME-NATIVE-LOAD` at its call.
 - An integer argument takes the bits of its type read as signed or unsigned,
   as `put_int32` does (`C.Int32` -2^31 to 2^32 - 1, `C.UInt8` -128 to 255), and
   C gets the low bits; outside is `RUNTIME-INTEGER-OVERFLOW`. Unsigned results

@@ -1,8 +1,8 @@
 /*
  * Native calls (docs/grammar/06d-io-and-network.md, "Native code"): Native.call, which every extern function lowers
- * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
- * converts values to C and back, calls a C function by name or through a function pointer, runs a fast call on the
- * scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
+ * to, Native.load, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per
+ * signature, converts values to C and back, calls a C function by name or through a function pointer, runs a fast call
+ * on the scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
  * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
  * null?, Native.pointer, the owned buffers of Native.memory_pointer (and its block form) and Native.free, the reads and
  * writes of memory (Native.get_string, get_bytes, get_*, put_*, the array forms), and Native.wait_readable and
@@ -1752,6 +1752,27 @@ static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t spa
   return native_wait_on(vm, args, span, true);
 }
 
+/* Native.load(library): opens the library that the front end resolved like the one of an extern block, so a program
+   can handle a missing one (error with the loader's text) before its first call. The library stays open
+   (agc_ffi_open), and the calls prepared later find it loaded; a missing function is still RUNTIME-NATIVE-LOAD at its
+   call. Refused at load like any Native.* builtin (agc_ffi_refusal). */
+static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  char *library = agc_cstr(agc_as_string(vm, args[0]));
+  char error[512];
+  bool opened = false;
+  if (!library || !*library) {
+    snprintf(error, sizeof error, "cannot open the library: its name is empty or holds a NUL character");
+  } else {
+    opened = agc_ffi_open(library, error, sizeof error);
+  }
+  free(library);
+  agc_charge(vm, FFI_CALL_COST);
+  if (opened) return agc_result_value(true, agc_void());
+  agc_string *text = agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
+  return agc_result_value(false, agc_string_value(text));
+}
+
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {
   if (program->native_import == UINT32_MAX) return NULL;
   *span = program->native_function == UINT32_MAX ? 0 : program->functions[program->native_function].span;
@@ -1770,6 +1791,7 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 
 const agc_builtin agc_ffi_builtins[] = {
   {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},

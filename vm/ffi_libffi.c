@@ -257,6 +257,9 @@ static void library_close(void *lib) { dlclose(lib); }
 
 bool agc_ffi_supported(void) { return true; }
 
+/* The hold is never given back: the system loader counts it, and a library opened again shares the one copy. */
+bool agc_ffi_open(const char *library, char *error, size_t size) { return library_open(library, error, size) != NULL; }
+
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, uint32_t fixed, agc_c_struct *result_struct,
                               agc_c_struct *const *structs, char *error, size_t size) {

@@ -10,8 +10,10 @@
 import {ENUMS} from "../catalog/builtins"
 import NativeLibrary from "../packages/native_library"
 import Ast from "../syntax/ast"
+import Parser from "../syntax/parser"
 import Source from "../syntax/source"
 import Declarations from "declarations"
+import Failure from "link_failure"
 import Resolve from "resolve"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
@@ -65,18 +67,23 @@ end
 def rewrite_native(cx: Resolve.Context, native: Ast.Optional[Ast.Native]) -> Result[Ast.Optional[Ast.Native]]
   case native
     Ast.Optional.Present(found) ->
-      natives = cx.me.origin.natives
-      if !natives.has_key?(found.library)
-        return ok(native)
-      end
-
-      case natives[found.library]
-        NativeLibrary.Target.File(path) -> return ok(Ast.Optional.Present(found.with(library: path)))
-        NativeLibrary.Target.System(name) -> return ok(Ast.Optional.Present(found.with(library: name)))
-        NativeLibrary.Target.Unusable(failure) -> return error(failure)
-      end
-
+      return ok(Ast.Optional.Present(found.with(library: try native_target(cx, found.library))))
     Ast.Optional.Absent -> return ok(native)
+  end
+end
+
+# The library that `library` means in this file: the file or system name of this system when the manifest declares it,
+# else the name as written.
+def native_target(cx: Resolve.Context, library: String) -> Result[String]
+  natives = cx.me.origin.natives
+  if !natives.has_key?(library)
+    return ok(library)
+  end
+
+  case natives[library]
+    NativeLibrary.Target.File(path) -> return ok(path)
+    NativeLibrary.Target.System(name) -> return ok(name)
+    NativeLibrary.Target.Unusable(failure) -> return error(failure)
   end
 end
 
@@ -278,7 +285,42 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
 
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
   args = try rewrite_exprs(cx, node.args)
+  if name == "Native.load" and args.size == 1
+    args = [try native_load_library(cx, args[0])]
+  end
+
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
+end
+
+# The library of Native.load is a string literal that means what it means in `extern "NAME"`: a name or an absolute
+# path, which the manifest's [native.NAME] turns into the file or the system name of this system (rewrite_native).
+# Anything else is CHECK-NATIVE-LOAD at the argument. A call with another number of arguments is left to the checker.
+def native_load_library(cx: Resolve.Context, arg: Ast.Expr) -> Result[Ast.Expr]
+  case arg
+    Ast.Expr.Literal(node) ->
+      case node.value
+        Ast.LitValue.Text(library) ->
+          if !Parser.library_name?(library)
+            message = "\"#{library}\" is not a library name or an absolute path"
+            return error(native_load_failure(cx, arg, message, Parser.EXTERN_LIBRARY_HELP))
+          end
+
+          return ok(Ast.Expr.Literal(node.with(value: Ast.LitValue.Text(try native_target(cx, library)))))
+        _ -> return error(not_literal(cx, arg))
+      end
+
+    _ -> return error(not_literal(cx, arg))
+  end
+end
+
+def not_literal(cx: Resolve.Context, arg: Ast.Expr) -> String
+  help = "write the library as a \"...\" string, such as Native.load(\"libm.so.6\")"
+  return native_load_failure(cx, arg, "the library of Native.load is a string literal", help)
+end
+
+def native_load_failure(cx: Resolve.Context, arg: Ast.Expr, message: String, help: String) -> String
+  site = Failure.Site(file: cx.me.file, span: Ast.expr_span(arg))
+  return Failure.fail_at(site, "CHECK-NATIVE-LOAD", message, Failure.hint(help))
 end
 
 # NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a
