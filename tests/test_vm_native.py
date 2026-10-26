@@ -548,8 +548,9 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker, released
         while not main_marker.exists() and process.poll() is None and time.monotonic() < deadline:
             stdout_done = capture_stdio_ready(read_streams, process, captured) or stdout_done
         assert main_marker.exists(), "main did not reach the file marker after puts"
+        # The VM may write done and exit before this reads it, so read until done or the end of stdout, not the exit.
         deadline = time.monotonic() + scaled(3)
-        while not stdout_done and process.poll() is None and time.monotonic() < deadline:
+        while not stdout_done and process.stdout in read_streams and time.monotonic() < deadline:
             stdout_done = capture_stdio_ready(read_streams, process, captured)
         assert stdout_done, f"VM stdout did not deliver done: {bytes(captured['stdout'])!r}"
         deadline = time.monotonic() + scaled(3)
