@@ -380,6 +380,23 @@ def test_a_manifest_that_appears_is_seen_by_the_next_question_though_the_root_is
     assert counted(out, "roots", "checks") == [(1, 1)]
 
 
+def test_a_style_rule_is_kept_with_the_root_and_a_manifest_that_changes_it_is_seen(driver, project):
+    bare = "def main() -> Void\n  if true\n    puts(\"a\")\n  end\n  puts(\"b\")\nend\n"
+    on = "[style]\nblank_line_after_end = true\n"
+    write_files(project, {"styled.agc": bare, "on.toml": on, "off.toml": "[style]\nblank_line_after_end = false\n"})
+    out, err = library(
+        driver, project, "refresh", "styled.agc", "write", "agentica.toml", "on.toml", "refresh", "styled.agc", "stats",
+        "check", "styled.agc", "stats", "refresh", "styled.agc", "stats", "write", "agentica.toml", "off.toml",
+        "check", "styled.agc",
+    )
+    # The manifest changes what the modules are, so the refresh after it is a new program (two checks). The check and
+    # the refresh that follow take that root from the cache (no new check) and report its stored problem; with the
+    # manifest off again the root is no longer the cached one and the program passes.
+    assert [json.loads(line)["code"] for line in err.splitlines()] == ["CHECK-BLANK-LINE-AFTER-END"]
+    assert out.splitlines()[-1] == '{"ok":true}'
+    assert counted(out, "roots", "checks") == [(1, 2), (1, 2), (1, 2)]
+
+
 def test_two_spellings_of_one_file_keep_their_own_name_in_a_cached_diagnostic(driver, project):
     """real.agc and its link have one key; a root cached under one spelling must not answer for the other."""
     (project / "link.agc").symlink_to(project / "type_error.agc")
