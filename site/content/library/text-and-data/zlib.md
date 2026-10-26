@@ -15,7 +15,7 @@ Zlib.deflate(data: List[Int], level: Int, max_out_bytes: Int) -> Result[List[Int
 Zlib.inflate(data: List[Int], max_out_bytes: Int) -> Result[List[Int]]
 Zlib.gzip(data: List[Int], level: Int, max_out_bytes: Int) -> Result[List[Int]]
 Zlib.gunzip(data: List[Int], max_out_bytes: Int) -> Result[List[Int]]
-Zlib.crc32(data: List[Int], seed: Int) -> Result[Int]
+Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int]
 ```
 
 `Zlib.deflate` compresses bytes to the zlib wrapper and `Zlib.gzip` to gzip, with `level` 0 to 9; empty input is valid and gives the empty stream or member. `Zlib.inflate` and `Zlib.gunzip` decompress one stream or member, checking the Adler checksum (zlib) or the CRC and size (gzip). Empty compressed input fails.
@@ -37,7 +37,7 @@ ok()
 
 - One-shot `data` is at most 1048576 bytes and `max_out_bytes` is 1 to 1048576, otherwise a contract error. Output past the cap is an error.
 - Bytes are a `List[Int]` from 0 to 255, as `Crypto.sha256`, `IO.read_bytes` and `File.read_bytes` use.
-- `Zlib.crc32` is the CRC32 (RFC 1952) of `data` chained after `seed`: pass 0 first, then each next chunk with the previous result, so gzip members and ZIP entries can be checksummed piece by piece. Empty input returns `seed` unchanged. `data` is at most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
+- `Zlib.crc32` is the CRC32 (RFC 1952) of `data` chained after `seed`: leave the seed out first (it is 0), then pass each next chunk the previous result, so gzip members and ZIP entries can be checksummed piece by piece. Empty input returns `seed` unchanged. `data` is at most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
 
 ```agentica {mode="check"}
 def main() -> Void

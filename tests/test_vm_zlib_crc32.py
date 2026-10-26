@@ -2,12 +2,13 @@
 
 The checksum is the zlib CRC32 (RFC 1952, the ZIP polynomial): a pure
 function of its byte list and seed, with no handle and no shared state.
-The peer hashes what it reads on stdin with the seed of argv[0], so the
-empty input, NUL bytes, binary bytes and 1 MiB inputs all go through the
-same path as the fixed check vector ("123456789" from seed 0 is
-3421780262). Incremental calls chain the previous result as the next seed;
-empty input returns the seed unchanged, even 0xFFFFFFFF (zlib would reset
-an empty call to zero, so the VM never hands it one).
+The peer hashes what it reads on stdin with the seed of argv[0] ("none"
+leaves the seed out, so the default of 0 applies), so the empty input, NUL
+bytes, binary bytes and 1 MiB inputs all go through the same path as the
+fixed check vector ("123456789" from seed 0 is 3421780262). Incremental
+calls chain the previous result as the next seed; empty input returns the
+seed unchanged, even 0xFFFFFFFF (zlib would reset an empty call to zero, so
+the VM never hands it one).
 
 The refusals are the call's error Result (bad bytes, a seed outside
 0..4294967295, more than 1 MiB of input), while a wrong type or arity is
@@ -26,14 +27,18 @@ from tests.spec_support import check_diagnostic as problem
 # The peer of every value case: argv[0] is the seed, stdin is the bytes.
 CRC_PEER = (
     "def main() -> Void\n"
-    "  seed: Int = System.args()[0].to_i!\n"
+    "  seed_text = System.args()[0]\n"
     "  data: List[Int] = []\n"
     "  chunk = IO.read_bytes(1048576).unwrap!\n"
     "  while chunk.size > 0\n"
     "    data = data.concat(chunk)\n"
     "    chunk = IO.read_bytes(1048576).unwrap!\n"
     "  end\n"
-    "  puts(Zlib.crc32(data, seed).unwrap!)\n"
+    "  if seed_text == \"none\"\n"
+    "    puts(Zlib.crc32(data).unwrap!)\n"
+    "  else\n"
+    "    puts(Zlib.crc32(data, seed_text.to_i!).unwrap!)\n"
+    "  end\n"
     "end\n"
 )
 
@@ -52,6 +57,12 @@ def crc_of(peer, data, seed):
     result = run_vm(peer, args=[str(seed)], stdin=data)
     assert result.code == 0, result.stderr
     return int(result.stdout.strip())
+
+
+def test_crc32_without_a_seed_starts_from_zero(peer):
+    data = bytes(range(256)) * 3
+    assert crc_of(peer, data, "none") == binascii.crc32(data)
+    assert crc_of(peer, b"", "none") == 0
 
 
 def test_crc32_of_the_check_vector(peer):
@@ -148,7 +159,7 @@ def test_crc32_checks_the_types_of_both_arguments(tmp_path):
 
 
 def test_crc32_checks_the_arity(tmp_path):
-    found = check_code("def main() -> Void\n  puts(Zlib.crc32([1]))\nend\n", "CHECK-ARITY", tmp_path)
+    found = check_code("def main() -> Void\n  puts(Zlib.crc32())\nend\n", "CHECK-ARITY", tmp_path)
     assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 8), found
     found = check_code("def main() -> Void\n  puts(Zlib.crc32([1], 0, 0))\nend\n", "CHECK-ARITY", tmp_path)
     assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 8), found
@@ -159,4 +170,9 @@ def test_crc32_has_the_catalog_signature():
     assert result.code == 0, result.stderr
     entry = json.loads(result.stdout)
     assert entry["name"] == "Zlib.crc32"
-    assert entry["signature"] == "Zlib.crc32(data: List[Int], seed: Int) -> Result[Int]", entry
+    assert entry["signature"] == "Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int]", entry
+    assert entry["arity"] == 2
+    assert entry["parameters"] == [
+        {"name": "data", "type": "List[Int]"},
+        {"name": "seed", "type": "Int", "default": "0"},
+    ], entry

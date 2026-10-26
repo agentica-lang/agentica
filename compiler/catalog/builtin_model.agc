@@ -71,15 +71,34 @@ export enum Rule
   TestResult
 end
 
-## A name with a type: a parameter of a builtin, or a field of a struct.
+## The default value of a builtin parameter, a constant the call site can build with no code of its own (the same
+## constants as the default of a user function). Absent is no default. Whole, Real, Text and Flag are the literals of
+## those types, Nothing is nil, and Variant holds "Enum.Variant" of a builtin enum whose variant has no payload.
+export enum Default
+  Absent
+  Whole(Int)
+  Real(Float)
+  Text(String)
+  Flag(Bool)
+  Nothing
+  EmptyList
+  EmptyMap
+  Variant(String)
+end
+
+## A name with a type: a parameter of a builtin, or a field of a struct. Only a parameter of a builtin has a default;
+## the lowering of a call that leaves out the trailing arguments with a default puts the default in their place, so the
+## VM always gets every argument.
 export struct Named
   name: String
   type: Types.Type
+  default: Default = Default.Absent
 end
 
 ## One builtin. A name may have alternatives: other forms with a different number of parameters (ok(), Task.await with
-## a timeout, Map.get with a default). implementation is the name of the VM builtin; effects are the capabilities it
-## needs (stdout, network, ...).
+## a timeout, Map.get with a default). A Plain builtin with no alternative may instead give a default to its last
+## parameters, as a user function does (builtins.agc `default_problem` lists the rules). implementation is the name of
+## the VM builtin; effects are the capabilities it needs (stdout, network, ...).
 export struct Builtin
   name: String
   parameters: List[Named]

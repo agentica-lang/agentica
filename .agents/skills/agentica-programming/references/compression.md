@@ -24,15 +24,14 @@ Zlib.deflate_finish(enc: ZlibEncoder, max_out: Int) -> Result[ZlibProgress]
 Zlib.inflate_finish(dec: ZlibDecoder) -> Result[Void]
 Zlib.encoder_close(enc: ZlibEncoder) -> Result[Void]
 Zlib.decoder_close(dec: ZlibDecoder) -> Result[Void]
-Zlib.crc32(data: List[Int], seed: Int) -> Result[Int]
+Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int]
 ```
 
 - One-shot `data` is at most 1048576 bytes (empty input is valid for
   encoding); `max_out_bytes` is 1..1048576; `level` is 0..9.
-- `Zlib.crc32` chains the CRC32 (RFC 1952) after `seed`: pass 0 first,
-  then each next chunk with the previous result; empty input returns
-  `seed` unchanged. `data` is at most 1048576 bytes, `seed` is
-  0..4294967295.
+- `Zlib.crc32` chains the CRC32 (RFC 1952) after `seed`: leave it out first (0),
+  then pass each next chunk the previous result; empty input returns `seed`
+  unchanged. `data` is at most 1048576 bytes, `seed` is 0..4294967295.
 - File functions return the bytes written. The raw input of compression caps
   at 1073741824 bytes, the compressed input of decompression at 268435456
   bytes; `max_out_bytes` is 1..1073741824 and output past it is cut with the

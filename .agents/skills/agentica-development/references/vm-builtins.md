@@ -10,8 +10,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    any other builtin is `LOWER-UNSUPPORTED`), and a builtin record the VM
    builds to `BUILTIN_STRUCTS` (`STRUCT_NEEDS` for the records it contains).
    Lowering emits `call-builtin` with the catalog's implementation key and
-   arity. The import table carries the implementation key, not the written
-   name: `puts` and `IO.puts` both import `"puts"`. List and map literals above
+   arity (the full one: a call that leaves out a defaulted parameter gets the
+   default filled in, so the C entry never sees a short call). The import
+   table carries the implementation key, not the written name: `puts` and
+   `IO.puts` both import `"puts"`. List and map literals above
    255 elements (`MAX_CHUNK`) lower to `List.concat` and `Map.put`; the loader
    rejects `MAP` with more than 255 pairs. The type argument of `JSON.decode`
    and `JSON.schema` lowers to a String constant with the struct's linked name;

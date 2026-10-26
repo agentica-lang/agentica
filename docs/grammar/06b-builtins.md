@@ -391,8 +391,10 @@ and `JSON.encode` give its text. Signatures are in
 
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
-use, and `ruby`: the signature in the Ruby method form (`s.strip() -> String`
-for `String.trim`), or null for a builtin with no method form. The help text
+use. A parameter with a default also has `default`, its source text (`"0"`),
+and the arity counts every parameter. `ruby` is the signature in the Ruby
+method form (`s.strip() -> String` for `String.trim`), or null for a builtin
+with no method form. The help text
 and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
 while both names stay accepted. Effects are informational (I/O, tasks, or
 `test`). An unknown target exits 2, with a hint when the name is a close

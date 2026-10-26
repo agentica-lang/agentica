@@ -6,6 +6,7 @@
 
 import Types from "../syntax/types"
 import Model from "../catalog/builtin_model"
+import Builtins from "../catalog/builtins"
 import {ENTRIES} from "../catalog/builtins"
 import Tables from "check_tables"
 
@@ -66,9 +67,7 @@ export def signature_as(form: Model.Builtin, method: String) -> String
     return ""
   end
 
-  rest = form.parameters.drop(1).map do |parameter: Model.Named|
-    "#{parameter.name}: #{Types.to_text(parameter.type)}"
-  end
+  rest = form.parameters.drop(1).map do |parameter: Model.Named| Builtins.parameter_text(parameter) end
 
   return "#{form.parameters[0].name}.#{method}(#{rest.join(", ")}) -> #{Types.to_text(form.result)}"
 end

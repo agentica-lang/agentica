@@ -11,6 +11,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
+- Builtins can have default arguments, with the rules of a default parameter of
+  a function: a call may leave out the trailing ones, and `agentica help` shows
+  them (`seed: Int = 0`). `Zlib.crc32(data)` starts from seed 0.
 - Extern types `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32` and
   `C.Long` (C `long`, 32 bits on Windows) for parameters, results, out
   parameters and struct fields; unsigned results are never negative.
