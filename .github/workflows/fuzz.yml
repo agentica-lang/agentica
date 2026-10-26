@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       seconds:
-        description: Seconds of coverage-guided fuzzing (libFuzzer)
+        description: Seconds of coverage-guided fuzzing (libFuzzer), at most 6000 (the job stops at 120 minutes)
         type: number
         default: 3600
 
@@ -26,8 +26,10 @@ jobs:
       - run: |
           clang --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
+      - run: test "$SECONDS_TO_FUZZ" -le 6000 || { echo "seconds must be at most 6000 (timeout-minutes is 120)" >&2; exit 1; }
       - run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME="$SECONDS_TO_FUZZ" LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS="-seed=$LIBFUZZ_SEED"
-      - if: failure()
+      # Also on success: timeout-* files do not fail the run while timed waits are unbounded (mk/vm-test.mk).
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: libfuzz-crashes

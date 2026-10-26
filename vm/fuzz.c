@@ -39,6 +39,8 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   vm->rt->no_files = true;
   // A mutant must not start programs: its strings are mutated shell commands, and a child waits outside --max-steps.
   vm->rt->deny_run = true;
+  // Nor read the host's environment, which differs between machines, so an input would not reproduce elsewhere.
+  vm->rt->deny_env = true;
   agc_outcome outcome = agc_vm_run(vm);
   if (outcome.kind == AGC_FAILED)
     for (int style = AGC_STYLE_PLAIN; style <= AGC_STYLE_JSON; style++)

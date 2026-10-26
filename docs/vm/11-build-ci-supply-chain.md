@@ -92,11 +92,18 @@
   ASan's quarantine.
 - Steps bound instructions, not bytes, so a mutant can still grow a value to
   gigabytes. `agc_set_alloc_limit` gives each mutant 256 MB (each block counted
-  with 64 bytes of overhead). An allocation past the limit longjmps back to
-  `agc_fuzz_one`, which frees the mutant and returns 2 (a mutant that counts as
-  run). Under `AGC_NO_GC` yyjson allocates through `agc_alloc_atomic`
-  (`vm/json.c`), so its documents count toward this limit too. The VM itself
-  sets no limit. `agc_fuzz_one` is linked only into the fuzz and test binaries.
+  with 64 bytes of overhead). The limit is soft: an allocation past it still
+  succeeds and marks the run, and the next step (`step_slow`, which the mark
+  forces) longjmps back to `agc_fuzz_one`. That frees the mutant and returns 2
+  (a mutant that counts as run). A builtin that holds `malloc`'d memory across
+  an allocation so never loses it to the jump, which the leak check would
+  report. Past twice the limit an allocation jumps at once. Under `AGC_NO_GC`
+  yyjson allocates through `agc_alloc_atomic` (`vm/json.c`), so its documents
+  count toward this limit too. The VM itself sets no limit. `agc_fuzz_one` is
+  linked only into the fuzz and test binaries.
+- In the libFuzzer build (`AGC_FUZZ`), `agc_out_of_memory` aborts instead of
+  exiting with 70, libFuzzer's timeout code, so a size overflow or a failed
+  `malloc` is a crash with a saved input.
 - The fuzzer is libFuzzer (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
   calls `agc_fuzz_one`, so AFL++, honggfuzz and Centipede can drive it too.
   `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
@@ -109,24 +116,31 @@
   (`LIBFUZZ_RSS_MB`). New inputs go to `build/vm/libfuzz/corpus/`, failures to
   `build/vm/libfuzz/crashes/`. `LIBFUZZ_FLAGS` adds libFuzzer flags, such as
   `-seed=N`.
-- A crash, a leak or an input past the RSS limit ends the run. The run turns
+- A crash, a leak or an input past the RSS limit fails the run. The run turns
   on the leak check (`ASAN_OPTIONS`) that `vm/value.c` turns off in the other
   ASan builds, since `agc_fuzz_one` frees every block of an input.
-- A timeout does not end the run. A timed wait (a channel or await timeout)
-  parks without counting steps, so a mutant with a large timeout can wait for
-  minutes. Fork mode saves it as `timeout-*` and goes on.
-- `agc_fuzz_one` also sets `deny_run`: a mutant's strings are shell commands
-  with mutated bytes, and a child process waits outside `--max-steps`.
+- A timeout does not fail the run yet (`-ignore_timeouts=1`, and the run maps
+  exit code 70, a timeout, to success). A timed wait (a channel or await timeout) parks
+  without counting steps, so a mutant with a large timeout can wait for
+  minutes. The run saves it as `timeout-*` and lists those files at the end.
+  TODO: both go once timed waits are bounded by steps.
+- `agc_fuzz_one` sets `deny_run` and `deny_env`. A mutant's strings are shell
+  commands with mutated bytes, and a child process waits outside
+  `--max-steps`. The environment differs between machines, so an input that
+  reads it would not reproduce elsewhere.
 - There is no dictionary. The format has no section tags, and libFuzzer learns
   the magic, the format version and the builtin names from its `memcmp` and
   comparison hooks.
-- The sanitizer job of each C PR runs it for 60 s with `-seed=1` on every core
-  and uploads the crash files on failure.
-- `.github/workflows/fuzz.yml` runs by hand. It builds the libFuzzer target,
-  fuzzes for the given number of seconds (default 3600) with a random seed,
-  prints the commit and seed first, and uploads `build/vm/libfuzz/crashes/` on
-  failure. `build/vm/libfuzz/agentica-vm-libfuzz crash-<sha>` or `agentica run
-  --` on that file reproduces it.
+- The sanitizer job of each C PR runs it for 60 s on every core. Fork mode
+  does not make a run repeatable from its seed: the saved file reproduces a
+  failure. `.github/workflows/fuzz.yml` runs it by hand for the given number
+  of seconds (default 3600, at most 6000) and prints the commit and seed
+  first.
+  Both upload `build/vm/libfuzz/crashes/` whenever it has files, including
+  `timeout-*` files after a green run.
+- To reproduce, run `ASAN_OPTIONS=detect_leaks=1
+  build/vm/libfuzz/agentica-vm-libfuzz <file>` on the saved file
+  (`detect_leaks=1` because `vm/value.c` turns the leak check off by default).
 
 ### Tests in make
 

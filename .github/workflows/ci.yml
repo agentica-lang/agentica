@@ -238,10 +238,11 @@ jobs:
         run: make vm-trace-off
       - if: ${{ steps.changes.outputs.c != 'false' }}
         run: make -j"$(nproc)" vm-test
-      - name: vm-libfuzz-run, 60 s of libFuzzer with a fixed seed (a crash, leak or RSS overrun fails it)
+      - name: vm-libfuzz-run, 60 s of libFuzzer (a crash, leak or RSS overrun fails it; the saved file reproduces it)
         if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}
         run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
-      - if: ${{ failure() && steps.changes.outputs.c != 'false' }}
+      # Also on success: timeout-* files do not fail the run while timed waits are unbounded (mk/vm-test.mk).
+      - if: ${{ always() && steps.changes.outputs.c != 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: libfuzz-crashes

@@ -119,9 +119,11 @@ VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSIO
 DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
 ifeq ($(LIBFUZZ),1)
 # The sanitizer flags plus libFuzzer's coverage hooks on every VM object; only agentica-vm-libfuzz links the runtime.
-# First in the chain, so LIBFUZZ=1 wins over a SANITIZE=1 in the environment (the CI sanitizer job sets it).
+# First in the chain, so LIBFUZZ=1 wins over a SANITIZE=1 in the environment (the CI sanitizer job sets it). The
+# vendored libraries (YY_CFLAGS: yyjson, picohttpparser, libuv, libffi) get no coverage hooks on purpose: they are
+# fuzzed upstream, and their edges would only dilute the VM's. AGC_FUZZ makes agc_out_of_memory abort (vm/value.c).
 VM_CC := clang
-VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
+VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -DAGC_NO_GC -DAGC_FUZZ
 VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)
 GC_MODE := none
 VM_BUILD := build/vm/libfuzz
