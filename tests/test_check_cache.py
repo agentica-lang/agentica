@@ -25,7 +25,7 @@ HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
 GIT = "https://github.com/owner/greeter.git"
 
 # A module two levels down: a struct, a constant long enough to be blanked in the stub, one that is not, a multi-line
-# one, non-ASCII text, a heredoc and a function with a body.
+# one, non-ASCII text, a heredoc, a function with a body and a private function, which the stub leaves out.
 DEEP = '''import Shapes from "shapes"
 
 export SIZE = 7
@@ -53,7 +53,11 @@ export def make(name: String) -> Item
     héllo #{name}
     second line
   TEXT
-  return Item(name: name + note, count: total)
+  return Item(name: tidy(name) + note, count: total)
+end
+
+def tidy(name: String) -> String
+  return name.strip
 end
 '''
 
@@ -197,6 +201,9 @@ EDITS = [
     ("mid", "Deep.make(name)", "Deep.make(1)"),
     ("main", "size: Int = Deep.SIZE", "size: String = Deep.SIZE"),
     ("deep", "export def make(name: String)", "export def make(name: Int)"),
+    # A private name of a module is not something the root can import, whether or not the stub has it.
+    ("main", 'import Deep from "deep"', 'import {tidy} from "deep"\nimport Deep from "deep"'),
+    ("deep", "def tidy(name: String) -> String", "def tidy(name: Int) -> String"),
     ("shapes", "x: Int", "x: Float"),
     ("shapes", "Flat\n", "Flat\n  Third\n"),
     ("greeter", 'return "hello " + name', "return 1 + name"),
@@ -217,6 +224,36 @@ def test_an_edit_gives_the_answers_of_a_run_without_the_cache(ws, name, old, new
     else:
         edit(ws, name, old, new)
     assert settled(ws)[0][0] in (0, 1)
+
+
+def test_the_stub_leaves_out_private_functions_and_keeps_the_exported_ones(ws):
+    settled(ws)
+    stubs = [path.read_bytes() for path in entries(ws) if b"export struct Item" in path.read_bytes()]
+    assert len(stubs) == 1
+    assert b"export def make(name: String) -> Item" in stubs[0]
+    assert b"tidy" not in stubs[0]
+
+
+def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
+    ws = build(tmp_path, extra="\n[style]\nblank_line_after_end = true\n")
+    assert settled(ws)[0] == (0, '{"ok":true}\n', "")
+    # A module that follows the rule is marked, and its text is not lexed for the rule again.
+    assert any(b"\nstyle 1\n" in path.read_bytes() for path in entries(ws))
+    broken = "  if SIZE > 100\n    puts(\"big\")\n  end\n  total = SIZE * 2"
+    edit(ws, "deep", "  total = SIZE * 2", broken)
+    refused = settled(ws)
+    assert refused[0][0] == 1
+    problem = json.loads(refused[0][2])
+    assert (problem["code"], problem["file"].endswith("deep.agc")) == ("CHECK-BLANK-LINE-AFTER-END", True)
+    # The entry of the broken text says it is not marked. One that said so would be taken for true, which shows that
+    # a marked module is not looked at: only a run that read the entry gives a different answer.
+    flagged = [path for path in entries(ws) if b"\nstyle 0\n" in path.read_bytes() and b"export struct Item" in path.read_bytes()]
+    assert len(flagged) == 1
+    flagged[0].write_bytes(flagged[0].read_bytes().replace(b"\nstyle 0\n", b"\nstyle 1\n", 1))
+    assert answers(ws)[0][0] == 0
+    assert answers(ws, "--no-cache")[0][0] == 1
+    edit(ws, "deep", "  end\n  total", "  end\n\n  total")
+    assert settled(ws)[0][0] == 0
 
 
 def test_a_package_changed_behind_its_lock_is_refused_with_entries_in_place(ws):
@@ -262,6 +299,7 @@ def corrupt_cases(head):
         "constant line wrong": lambda good: good + b"\nconst",
         "constant type wrong": lambda good: good.replace(b"\nconst SIZE i", b"\nconst SIZE T9:no", 1),
         "constant type deep": lambda good: good.replace(b"\nconst SIZE i", b"\nconst SIZE " + b"L" * 500 + b"i", 1),
+        "style flag wrong": lambda good: re.sub(rb"\nstyle [01]\n", b"\nstyle 2\n", good, count=1),
         "tree not hex": lambda good: good.replace(b"\ntree ", b"\ntree zz", 1),
         "text digest of another": lambda good: good.replace(b"\ntext ", b"\ntext 0", 1),
         "trailing text": lambda good: good + b"\nstray",

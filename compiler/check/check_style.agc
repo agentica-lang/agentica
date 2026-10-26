@@ -18,11 +18,16 @@ import Tokens from "../syntax/token"
 FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "right-brace"])
 
 ## The first `end` of `linked` that breaks the rule, among the files whose project asks for it, as a problem at that
-## `end` (there is no empty line to point at). The files are taken in program order. Absent when none does.
-export def blank_line_after_end(linked: Linker.Linked) -> Ast.Optional[Failure.Problem]
+## `end` (there is no empty line to point at). The files are taken in program order. Absent when none does. A file of
+## `styled`, which an earlier check found to follow the rule in this very text (modules/check_cache.agc), is not lexed.
+export def blank_line_after_end(
+  linked: Linker.Linked,
+  styled: List[String] = [],
+) -> Ast.Optional[Failure.Problem]
+  skipped = Set.new(styled)
   for module in linked.modules
-    if module.blank_line_after_end
-      case in_module(module)
+    if module.blank_line_after_end and !skipped.include?(module.file)
+      case problem_in(module.file, module.text)
         Ast.Optional.Present(problem) -> return Ast.Optional.Present(problem)
         Ast.Optional.Absent -> next
       end
@@ -32,9 +37,17 @@ export def blank_line_after_end(linked: Linker.Linked) -> Ast.Optional[Failure.P
   return Ast.Optional.Absent
 end
 
-def in_module(module: Linker.LinkedModule) -> Ast.Optional[Failure.Problem]
-  case Lexer.lex(module.text)
-    Diag.Outcome.Done(tokens) -> return first_missing(module.file, module.text, tokens)
+## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
+export def follows_rule?(file: String, text: String) -> Bool
+  case problem_in(file, text)
+    Ast.Optional.Present(_) -> return false
+    Ast.Optional.Absent -> return true
+  end
+end
+
+def problem_in(file: String, text: String) -> Ast.Optional[Failure.Problem]
+  case Lexer.lex(text)
+    Diag.Outcome.Done(tokens) -> return first_missing(file, text, tokens)
     # A file that linked lexes again, so this arm does not happen.
     Diag.Outcome.Failed(_) -> return Ast.Optional.Absent
   end

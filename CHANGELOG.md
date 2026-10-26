@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A warm `agentica check` and `agentica type-at` do less work: the cache of
+  checked modules leaves out the private functions of the imports and does not
+  lex a file again for `blank_line_after_end` (2.3 times faster on
+  `compiler/`).
+
 ### Fixed
 
 - `agentica doc` and `agentica outline` list the re-exports of a facade file

@@ -234,11 +234,27 @@ def skipped(
       end
 
       return Outcome.Rejected(problem)
-    Checker.Checking.Done(checked) -> enter_checked(loaded, checked, settings)
+    Checker.Checking.Done(checked) ->
+      # A module read from its stub keeps its text, so the style rules see every file; one whose entry says its text
+      # follows the rule is not lexed again.
+      styled = styled_files(loaded)
+      enter_checked(loaded, checked, settings, Set.new(styled))
+      return checked_outcome(program, checking, styled)
+  end
+end
+
+# The files of the walk whose text follows the style rule blank_line_after_end: those whose entry says so, and those of
+# a project that asks for the rule which are looked at now.
+def styled_files(loaded: Modules.Loaded) -> List[String]
+  files: List[String] = []
+  for key in loaded.order
+    module = loaded.modules[key]
+    if module.styled or (module.origin.blank_line_after_end and Style.follows_rule?(module.file, module.text))
+      files = files.push(module.file)
+    end
   end
 
-  # A module read from its stub keeps its text, so the style rules see every file.
-  return checked_outcome(program, checking)
+  return files
 end
 
 # Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be
@@ -256,7 +272,12 @@ end
 
 # Enters in the cache every module of a program that checked, but the root, whose entry does not vouch for its tree
 # yet. A module that is clean has its entry already.
-def enter_checked(loaded: Modules.Loaded, checked: Checker.Checked, settings: Env.Settings) -> Void
+def enter_checked(
+  loaded: Modules.Loaded,
+  checked: Checker.Checked,
+  settings: Env.Settings,
+  styled: Set[String],
+) -> Void
   keys: Map[String, String] = {}
   for key in loaded.order
     keys = keys.put(loaded.modules[key].prefix, key)
@@ -281,7 +302,12 @@ def enter_checked(loaded: Modules.Loaded, checked: Checker.Checked, settings: En
         settings.workspace.check_cache,
         key,
         module.digest,
-        CheckCache.Entry(tree: module.tree, stub: stub, constants: constants.unwrap!),
+        CheckCache.Entry(
+          tree: module.tree,
+          styled: styled.include?(module.file),
+          stub: stub,
+          constants: constants.unwrap!,
+        ),
       )
     end
   end
@@ -316,8 +342,12 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
 end
 
 # A program that checked still has to follow the style rules of its project (check_style.agc).
-def checked_outcome(linked: Linker.Linked, checking: Checker.Checking) -> Outcome
-  return finished(linked, checking, style_after(checking, linked))
+def checked_outcome(
+  linked: Linker.Linked,
+  checking: Checker.Checking,
+  styled: List[String] = [],
+) -> Outcome
+  return finished(linked, checking, style_after(checking, linked, styled))
 end
 
 # The outcome for a root that the cache holds: its style problem was found when it was made, from the same texts and
@@ -327,10 +357,14 @@ def stored_outcome(root: Cache.Root) -> Outcome
 end
 
 # The style problem of `linked`, looked for only when it checked: a type error is reported first.
-def style_after(checking: Checker.Checking, linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+def style_after(
+  checking: Checker.Checking,
+  linked: Linker.Linked,
+  styled: List[String] = [],
+) -> Ast.Optional[Problems.Problem]
   case checking
     Checker.Checking.Failed(_) -> return Ast.Optional.Absent
-    Checker.Checking.Done(_) -> return style_problem(linked)
+    Checker.Checking.Done(_) -> return Style.blank_line_after_end(linked, styled)
   end
 end
 
