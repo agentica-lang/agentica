@@ -1,12 +1,13 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode:
- * ring growth and its turn cost, wrap-around, capacity and waiter order, and
- * when a channel counts as abandoned by its receiver.
+ * ring growth and its turn cost, wrap-around, capacity and waiter order, when a
+ * channel counts as abandoned by its receiver, and when a wait's clock starts.
  */
 #include "../core.h"
 #include "test_support.h"
 
 #include <assert.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <time.h>
 
@@ -431,6 +432,7 @@ static void test_reservation_beats_deadline(void) {
   agc_value ch = make_channel(2);
   agc_task *a = make_task();
   wait_recv(a, ch, 20);
+  agc_timers_settle(&vm);
   send(main_task, ch, 4, 0);
   struct timespec delay = {0, 80000000L};
   while (nanosleep(&delay, &delay) != 0) {}
@@ -439,6 +441,52 @@ static void test_reservation_beats_deadline(void) {
   settle();
   agc_value args[2] = {ch, agc_int(20)};
   assert(got(now(a, RECV, args), 4));
+}
+
+/* A wait reads no clock when it parks (agc_task_park_within, #629). A peer that answers before the clock starts, even
+   after the timeout has passed (a long turn of the peer), hands over its value and the timer is dropped unfired. A
+   wait still parked at the end of the next turn starts its clock there and fires at the deadline, the first moment
+   the clock reaches it; the retry then times out without parking again. */
+static void test_clock_starts_late(void) {
+  agc_value ch = make_channel(1);
+  agc_task *a = make_task();
+  wait_recv(a, ch, 20);
+  assert(a->timer.pending && a->timer.deadline == 20);
+  struct timespec delay = {0, 40000000L};
+  while (nanosleep(&delay, &delay) != 0) {}
+  send(main_task, ch, 5, 0);
+  assert(!agc_timers_run(&vm));
+  assert(!a->timer.heap && !a->timer.pending && next_ready() == a);
+  settle();
+  agc_value args[2] = {ch, agc_int(20)};
+  assert(got(now(a, RECV, args), 5));
+  wait_recv(a, ch, 20);
+  assert(!agc_timers_run(&vm) && !a->timer.pending && a->timer.heap == &vm.timers);
+  uint64_t deadline = a->timer.deadline;
+  while (agc_clock_ms() < deadline) {
+    struct timespec tick = {0, 2000000L};
+    while (nanosleep(&tick, &tick) != 0) {}
+  }
+  assert(agc_timers_run(&vm) && next_ready() == a);
+  assert(agc_clock_ms() >= deadline);
+  settle();
+  assert(failed(now(a, RECV, args), "channel: timed out"));
+  assert(!a->channel.channel && !a->timer.heap);
+}
+
+/* A task cancelled while its wait is pending leaves the slot empty: nothing starts or fires for it later. */
+static void test_cancel_pending_wait(void) {
+  agc_value ch = make_channel(1);
+  agc_task *a = make_task();
+  uint64_t armed = atomic_load(&vm.rt->timers_armed);
+  wait_recv(a, ch, 5000);
+  assert(a->timer.pending && atomic_load(&vm.rt->timers_armed) == armed + 1);
+  agc_task_cancel(&vm, a);
+  assert(!a->timer.heap && !a->timer.pending && !atomic_load(&vm.timers.pending));
+  assert(atomic_load(&vm.rt->timers_armed) == armed);
+  agc_timers_settle(&vm);
+  (void)agc_timers_run(&vm);
+  assert(!a->timer.heap && !ready_head());
 }
 
 /* Abandoned (HttpWire.awaited? is its negation): only a receiver that parked and left without a value sets it. A
@@ -466,6 +514,7 @@ static void test_abandoned(void) {
   agc_value timed = make_channel(1);
   agc_task *d = make_task();
   wait_recv(d, timed, 20);
+  agc_timers_settle(&vm);
   struct timespec delay = {0, 80000000L};
   while (nanosleep(&delay, &delay) != 0) {}
   assert(agc_timers_run(&vm));
@@ -509,6 +558,8 @@ int main(void) {
   test_timeout_before_reservation();
   test_reservation_beats_deadline();
   test_abandoned();
+  test_clock_starts_late();
+  test_cancel_pending_wait();
   assert(agc_io_close(&vm));
   puts("channel tests passed");
   return 0;

@@ -8,11 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call); the timeout may start up to one turn late.
+
 ### Fixed
 
 - `agentica test` points a failed step at its keyword (column included), and each `Scenario Outline` row has its own name: the outline name plus the row's values, such as `Name (sqlite, 42)`.
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
+- `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.
 - `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`: `Float#to_s` reads back.
 
 ## [0.10.0] - 2026-10-25

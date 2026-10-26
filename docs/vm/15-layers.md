@@ -39,8 +39,8 @@ A new `vm/*.c` file goes in one of them.
     `agc_size_mul`, `agc_out_of_memory`)
 
 - **Layer:** **Driver** (not a layer: it wires them)
-  - **What:** `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), the fuzz
-    mains
+  - **What:** `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), the
+    fuzz harness and the libFuzzer entry point
   - **May use:** everything
 
 `vm/tests/*.c` may use everything. `trace.h` is shared by every layer but the
