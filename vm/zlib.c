@@ -349,12 +349,32 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   return AGC_ZSTEP_INPUT;
 }
 
+/* The rows the stage0 before the Lazy Zlib API names, kept so the new VM still loads it for `make stage0-check`. No
+   catalog row lowers to them, so a program never reaches one. Follow-up: remove these rows (and removed_builtin)
+   after the next stage0 refresh. */
+static agc_value removed_builtin(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  agc_fail(vm, "RUNTIME-INTERNAL", "a removed Zlib builtin was called", span);
+}
+
 const agc_builtin agc_zlib_builtins[] = {
   {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate_file", 5, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.inflate_file", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.gzip_file", 5, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.gunzip_file", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate_init", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.inflate_init", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate_next", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.inflate_next", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate_finish", 2, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.inflate_finish", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.encoder_close", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.decoder_close", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];

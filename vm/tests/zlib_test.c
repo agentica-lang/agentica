@@ -98,8 +98,12 @@ static void test_table(void) {
     {"Zlib.deflate", 3, false}, {"Zlib.inflate", 2, false}, {"Zlib.gzip", 3, false}, {"Zlib.gunzip", 2, false},
     {"Zlib.crc32", 2, false},
   };
-  assert(agc_zlib_builtin_count == sizeof expected / sizeof expected[0]);
-  for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
+  /* The 12 rows past these are the stubs of the removed calls that the old stage0 names; they share one function. */
+  size_t count = sizeof expected / sizeof expected[0];
+  assert(agc_zlib_builtin_count == count + 12);
+  for (size_t k = count + 1; k < agc_zlib_builtin_count; k++)
+    assert(agc_zlib_builtins[k].fn == agc_zlib_builtins[count].fn);
+  for (size_t k = 0; k < count; k++) {
     const agc_builtin *b = &agc_zlib_builtins[k];
     if (strcmp(b->name, expected[k].name) != 0 || b->arity != expected[k].arity || b->shared != expected[k].shared ||
         b->cost != AGC_COST_SIZE || b->leaf || b->native != AGC_NATIVE_NONE || !b->fn)
