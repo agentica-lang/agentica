@@ -162,6 +162,35 @@ against 0.041 s in CPython.
   lookups only, and return the first set itself when none is dropped: 150 ms
   instead of 3,455 ms on two equal sets of 300,000.
 
+## Maps: dead key cells and compact nodes
+
+Without `perf` on the host, the profiler showed `Map.delete` at 1.8 ms a call
+on 20,000 keys: it copied the key list up to the key, so deleting half the map
+was quadratic. A C loop over `agc_map_put` showed the rest: 2.5 us a put on
+20,000 Int keys, nearly all copying, because every slot of a node, child links
+too, was a 48-byte entry, and a put copies a 32-slot root and a full second
+level. Two changes in `vm/map.c`, with the same output and steps:
+
+- A delete counts its key's cell as dead and leaves the list as it is; a cell
+  is live while the table holds its key with the cell's insertion number, and
+  the list is rebuilt once the dead cells outnumber the live ones.
+- A node keeps its leaves, then its child pointers (8 bytes each), with a
+  `datamap` and a `nodemap`; a child left with one key is pulled up.
+
+The C loop went from 2,500 to 1,050 ns a put (get 120 to 110 ns, delete 300,000
+to 1,300 ns). Size 8, five rounds, median, two link layouts (`map.o` in place
+and last), under load at times:
+
+| Program | Before s | After s | Ratio |
+|---|---:|---:|---:|
+| maps | 1.247 / 1.178 | 0.500 / 0.457 | 0.40 / 0.39 |
+| sets | 0.620 / 0.633 | 0.251 / 0.261 | 0.40 / 0.41 |
+| maze-bfs | 0.413 / 0.416 | 0.261 / 0.264 | 0.63 / 0.64 |
+| small-values | 0.804 / 0.812 | 0.710 / 0.717 | 0.88 / 0.88 |
+
+The other programs, which use no Map or Set, moved between 0.70 and 1.14 in
+one layout and between 0.97 and 1.11 in the other: layout noise.
+
 ## Struct update (15c)
 
 `value.with(f: x)` lowers to one `STRUCT_WITH` instruction (a `memcpy` of the

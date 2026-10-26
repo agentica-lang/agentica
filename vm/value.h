@@ -85,17 +85,23 @@ typedef struct {
 
 typedef struct agc_hamt agc_hamt;
 
+/* A cell of a map's key list. seq is the insertion number of the key and hash
+   its hash: the cell is live while the table holds the key with the same seq. */
 typedef struct agc_keys {
   agc_value key;
   struct agc_keys *next;
+  uint64_t seq, hash;
 } agc_keys;
 
 /* A Map. A Set is the same struct under AGC_T_SET with every value nil, so it
-   shares the HAMT, the first-insertion order and the persistence of map.c. */
+   shares the HAMT, the first-insertion order and the persistence of map.c.
+   reversed holds size live cells and dead cells of deleted keys (dead never
+   exceeds size); next_seq numbers the next new key. */
 typedef struct {
-  size_t size;
+  size_t size, dead;
   agc_hamt *table;
   agc_keys *reversed;
+  uint64_t next_seq;
 } agc_map;
 
 typedef struct {

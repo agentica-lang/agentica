@@ -1,7 +1,7 @@
 /*
  * The HAMT: 20,000 keys, order, replacement, persistence, full hash
  * collisions, add that leaves a member alone (and the Set text), delete down to
- * an empty map, and deep nesting.
+ * an empty map, dead key cells (put back, subset, churn), and deep nesting.
  */
 #include "../core.h"
 
@@ -214,6 +214,23 @@ int main(void) {
   assert(removed->size == 0 && removed->table == NULL && removed->reversed == NULL);
   removed = agc_map_put(&vm, removed, agc_int(3), agc_int(4));
   assert(removed->size == 1 && get_int(removed, agc_int(3)) == 4);
+
+  /* A delete leaves a dead cell in the key list: a key put back goes last, a
+     replaced value keeps its place, and a subset test skips dead cells. */
+  agc_map *order = agc_new_map();
+  for (int64_t k = 0; k < 5; k++) order = agc_map_put(&vm, order, agc_int(k), agc_int(k));
+  agc_map *back = agc_map_put(&vm, agc_map_delete(&vm, order, agc_int(1)), agc_int(1), agc_int(9));
+  back = agc_map_put(&vm, agc_map_delete(&vm, back, agc_int(4)), agc_int(2), agc_int(8));
+  assert(back->size == 4 && back->dead == 2 && get_int(back, agc_int(1)) == 9 && get_int(order, agc_int(1)) == 1);
+  debug_is(agc_map_value(back), "{0: 0, 2: 8, 3: 3, 1: 9}");
+  debug_is(agc_map_value(order), "{0: 0, 1: 1, 2: 2, 3: 3, 4: 4}");
+  agc_map *small = agc_map_delete(&vm, order, agc_int(4));
+  assert(agc_set_subset(&vm, small, back) && agc_set_subset(&vm, back, small) && !agc_set_subset(&vm, order, back));
+  agc_map *churn = order;
+  for (int64_t k = 0; k < 1000; k++)
+    churn = agc_map_put(&vm, agc_map_delete(&vm, churn, agc_int(k % 5)), agc_int(k % 5), agc_int(k));
+  assert(churn->size == 5 && churn->dead <= churn->size);
+  debug_is(agc_map_value(churn), "{0: 995, 1: 996, 2: 997, 3: 998, 4: 999}");
 
   agc_map *thin = collide;
   for (int64_t k = 0; k < 39; k++) thin = agc_map_delete_hash(&vm, thin, same, agc_int(k));
