@@ -46,15 +46,16 @@ def pytest_configure(config):
     make test runs one pytest per module in parallel. With a shared root, every run replaces the same
     pytest-of-<user>/pytest-current link, and the cleanup of another run can fail on it at the end of the session
     (FileNotFoundError in cleanup_dead_symlinks after all cases passed). A root per user, checkout and module set keeps
-    the links apart and still keeps pytest's last three numbered folders for debugging; `rm -rf` of the agc-pytest-*
+    the links apart and still keeps pytest's last three numbered folders for debugging; `rm -rf` of the agc-*
     folders in the temp dir is safe. pytest reads the variable only at the first tmp_path, so setting it here is early
     enough, and child pytest runs inherit it on purpose.
     """
     if config.option.basetemp is not None or "PYTEST_DEBUG_TEMPROOT" in os.environ:
         return
-    user = str(os.getuid()) if hasattr(os, "getuid") else "user"
+    # Short names: a Windows case builds a 100-character folder under tmp_path and needs it below MAX_PATH.
+    owner = f"agc-{os.getuid()}" if hasattr(os, "getuid") else "agc"
     key = "\0".join([str(config.rootpath), *sorted(map(str, config.args))])
-    root = Path(tempfile.gettempdir()) / f"agc-pytest-{user}" / hashlib.sha256(key.encode()).hexdigest()[:10]
+    root = Path(tempfile.gettempdir()) / owner / hashlib.sha256(key.encode()).hexdigest()[:6]
     root.parent.mkdir(mode=0o700, exist_ok=True)
     root.mkdir(mode=0o700, exist_ok=True)
     os.environ["PYTEST_DEBUG_TEMPROOT"] = str(root)
