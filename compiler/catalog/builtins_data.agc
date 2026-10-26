@@ -4982,8 +4982,8 @@ ROWS_56: List[Model.Builtin] = [
       implementation: "Zlib.deflate",
       effects: [],
       description: (
-        "Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data and the " +
-        "output at most max_bytes, 1 to 1048576; VM only."
+        "Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data at most " +
+        "1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
       ),
       alternatives: [],
     ),

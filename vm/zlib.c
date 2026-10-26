@@ -349,7 +349,6 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   return AGC_ZSTEP_INPUT;
 }
 
-
 const agc_builtin agc_zlib_builtins[] = {
   {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
