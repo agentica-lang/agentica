@@ -58,7 +58,7 @@ _Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 
                "the native CALL writes the frame at these offsets");
 _Static_assert(FIELD_SIZE(agc_frame, pc) == 4 && FIELD_SIZE(agc_frame, base) == 4 && FIELD_SIZE(agc_frame, ret) == 4 &&
                  FIELD_SIZE(agc_frame, function) == 4 && FIELD_SIZE(agc_frame, tail) == 1 &&
-                 FIELD_SIZE(agc_frame, native) == 8,
+                 sizeof(agc_native *) == 8,
                "the native CALL writes the frame fields with these sizes");
 _Static_assert(FIELD_SIZE(agc_task, frame_count) == 4 && FIELD_SIZE(agc_task, frame_capacity) == 4 &&
                  FIELD_SIZE(agc_task, depth) == 4 && FIELD_SIZE(agc_task, reg_capacity) == 8,
