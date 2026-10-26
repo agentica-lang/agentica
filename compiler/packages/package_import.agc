@@ -29,13 +29,17 @@ DEPS_FOLDER = "deps"
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
-## files that the bytecode cache must watch because of it.
+## files that the bytecode cache must watch because of it. blank_line_after_end is true for a file of a project whose
+## manifest turns on `[style] blank_line_after_end`; no other file has it. library is true for a file of a std/ or pkg/
+## library and for what such a file imports by a relative path: those files keep the style answer of their origin.
 export struct Origin
   package: String
   root: String
   label: String
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  blank_line_after_end: Bool
+  library: Bool
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
@@ -52,7 +56,9 @@ end
 ## names the project declares, the system the build runs on (`os`, for the native libraries), the lock, the workspace
 ## of the project (none when it is in no workspace), the names that the manifests of the locked packages declare (by
 ## package name; check_manifests reads them before any file is loaded), the packages loaded so far (by name), and
-## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none).
+## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none), and
+## `style_dir`, the folder of the manifest when it turns on `[style] blank_line_after_end` ("" when it does not, or
+## when there is no manifest).
 export struct Scope
   deps: String
   os: String
@@ -64,6 +70,7 @@ export struct Scope
   declared: Map[String, List[String]]
   opened: Map[String, Opened]
   native_root: String
+  style_dir: String
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -103,6 +110,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        style_dir: "",
       )
     Project.Project.Declared(found) ->
       return Scope(
@@ -116,6 +124,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        style_dir: style_folder(found),
       )
   end
 end
@@ -134,14 +143,36 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
   end
 end
 
-## The origin of a file of the project: its folder's native libraries are the scope's.
+## The origin of the root file of the project: its folder's native libraries are the scope's. The root file is in the
+## folder of the manifest or below it, with no nearer manifest, so it has the style rule when the manifest asks for it.
 export def project_origin(scope: Scope) -> Origin
-  return Origin(package: "", root: "", label: "", natives: scope.natives, watched: scope.watched)
+  return Origin(
+    package: "",
+    root: "",
+    label: "",
+    natives: scope.natives,
+    watched: scope.watched,
+    blank_line_after_end: scope.style_dir != "",
+    library: false,
+  )
+end
+
+## The origin of the file `key` that a file with origin `importer` imports by a relative path: the same, except for the
+## style rule. A file has it only when the manifest of the root asks for it and the file is below the folder of that
+## manifest with no agentica.toml of its own nearer (the manifest of a folder inside is another project, and its keys
+## are not read), so a file outside that folder never has it, whoever imports it. A library file is not a file of the
+## project, wherever its folder is: what it imports keeps its origin.
+export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: Origin, key: String) -> Origin
+  if importer.library
+    return importer
+  end
+
+  return importer.with(blank_line_after_end: Project.styled?(workspace, scope.style_dir, key))
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
-  return Origin(package: "", root: "", label: "", natives: {}, watched: [])
+  return Origin(package: "", root: "", label: "", natives: {}, watched: [], blank_line_after_end: false, library: true)
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -199,6 +230,8 @@ export def open_package(
         label: package.label,
         natives: package.natives,
         watched: package.watched,
+        blank_line_after_end: false,
+        library: false,
       ),
       name: stored_name(package.label, inner),
       opened: opened,
@@ -449,4 +482,13 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
     return []
   end
   return scope.opened[origin.package].names
+end
+
+# The folder of the manifest when it asks for the style rule, else "".
+def style_folder(found: Project.Found) -> String
+  if found.manifest.blank_line_after_end
+    return found.dir
+  end
+
+  return ""
 end

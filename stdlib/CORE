@@ -27,6 +27,7 @@ check/check_reuse.agc
 check/check_rules.agc
 check/check_state.agc
 check/check_stmt.agc
+check/check_style.agc
 check/check_tables.agc
 check/check_types.agc
 check/check_unused.agc
