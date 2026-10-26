@@ -40,3 +40,8 @@ jobs:
           dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
       - run: make vm-diff-build
       - run: make sweep-full
+      - name: The 20x soak of the two heavy multicore race cases (the slow tier of CI runs them 5x)
+        env:
+          AGENTICA_TEST_SLOW: '1'
+          AGENTICA_HEAVY_RACE_REPEATS: '20'
+        run: poetry run python -m pytest tests/test_vm_multicore.py -q -k 'spawns_racing_the_end or held_by_cancelled_descendants'

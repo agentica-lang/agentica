@@ -664,7 +664,7 @@ def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retri
     fixed.write_text("not a certificate")
     trace, env = trace_env(tmp_path)
     # The first call times out after `timeout`; the two others then have half of theirs left.
-    timeout = str(scaled(8000))
+    timeout = str(scaled(2000))
     bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
     vm = adopt(start_vm(bytecode, CERTS, ca_pipe.path, fixed, port, timeout, env=env))
     try:
