@@ -308,6 +308,40 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
     assert report_cases(crashed) == []
 
 
+def test_a_service_keeps_a_native_resource_across_the_steps_of_one_scenario_and_not_into_the_next(bdd):
+    """A socket pair (not JSON) opened by one step is used by the next ones through the closure kept with `keep`."""
+    steps = steps_program(
+        "def open_pair(ctx: BDD.Context, args: List[String]) -> BDD.Context\n"
+        '  listener = TCP.listen("127.0.0.1", 0).unwrap!\n'
+        '  client = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!\n'
+        "  server = TCP.accept(listener, 5000).unwrap!\n"
+        '  return BDD.keep(ctx, "pair") do |request|\n'
+        '    try TCP.send(client, JSON.encode(request) + "\\n", 5000)\n'
+        "    JSON.parse(try TCP.read_line(server, 5000))\n"
+        "  end\n"
+        "end\n",
+        main_running(
+            'BDD.step("a socket pair") do |ctx, args| open_pair(ctx, args) end',
+            'BDD.step("a broken service") do |ctx, args|\n'
+            '      BDD.keep(ctx, "broken") do |request| error("broken") end\n    end',
+            'BDD.step("the broken service fails") do |ctx, args|\n'
+            '      BDD.assert(ctx, not BDD.call(ctx, "broken", JSON.null()).ok?, "the error was lost")\n    end',
+            'BDD.step("the pair carries {int}") do |ctx, args|\n'
+            '      reply = BDD.call(ctx, "pair", JSON.from(args[0].to_i!))\n'
+            "      BDD.assert(ctx, reply.ok? and JSON.int(reply.unwrap!).unwrap! == args[0].to_i!, \"wrong reply\")\n    end",
+            'BDD.step("there is no pair") do |ctx, args|\n'
+            '      BDD.assert(ctx, not BDD.call(ctx, "pair", JSON.null()).ok?, "service leaked between scenarios")\n    end'))
+    directory = bdd.suite({
+        "steps.agc": steps,
+        "services.feature": ("Feature: Services\nBackground:\nGiven a socket pair\nAnd a broken service\n"
+                             "Scenario: kept\nThen the pair carries 1\nAnd the pair carries 2\n"
+                             "Scenario: error\nThen the broken service fails\n"),
+        "fresh.feature": "Feature: Fresh\nScenario: fresh\nThen there is no pair\n"})
+    status, report = bdd.json_test(joined(directory, "fresh.feature"), joined(directory, "services.feature"),
+                                   "--steps", joined(directory, "steps.agc"))
+    assert (status, report["passed"]) == (0, 3), str(report)
+
+
 def test_a_step_program_with_invalid_utf8_is_one_file_error_at_the_bad_byte(bdd):
     directory = bdd.suite({"steps.feature": "Feature: Steps\nScenario: small\nThen 3 is small\n"})
     steps = joined(directory, "bad.agc")
