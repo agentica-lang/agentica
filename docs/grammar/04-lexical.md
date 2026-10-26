@@ -140,8 +140,9 @@ number bases. An exponent follows the digits or the fraction, as in Ruby:
 `1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are Floats, and `Float#to_s` writes
 `1e+300`, which reads back. The `e` needs a digit before it and a digit after
 the optional sign, so `1.e5` is the call `1.e5` and `1e` is the Int `1` next to
-the name `e`. A string literal cannot span lines; text of two or more
-lines is a heredoc (below).
+the name `e`. An exponent too large gives infinity (`1e999` is `+inf.0`). A
+string literal cannot span lines; text of two or more lines is a heredoc
+(below).
 
 A `_` may separate digits in `INTEGER` and in both parts of `FLOAT`: `1_000`,
 `1_000.000_5`, `1e1_0`. It is only visual: `1_000` is the same `Int` as `1000`,

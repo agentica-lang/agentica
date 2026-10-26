@@ -35,5 +35,7 @@ def main() -> Void
   puts(1e5)
   puts(1.0e300 == 1e300)
   puts(1_0.5e1_0)
+  puts(1e999)
+  puts(-1e999)
   puts("1.5e-3".to_f! == 1.5e-3)
 end

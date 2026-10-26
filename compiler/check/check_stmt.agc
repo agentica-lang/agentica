@@ -90,8 +90,8 @@ end
 ##
 ## A block whose result is not known and that gives an error(...) call (Flow.gives_error?) is checked twice: a first
 ## run (State.St.probe) learns the Result type from the other paths, such as an ok(...), and the second run checks the
-## block against it. When the first run finds no Result type, the block is checked as usual and the error(...) is
-## refused.
+## block against it. The first run is the more lenient one, so a problem it finds is real and is the one reported. When
+## it finds no Result type, the block is checked as usual and the error(...) is refused.
 export def check_block_in(
   cx: State.Cx,
   st: State.St,
@@ -110,9 +110,8 @@ export def check_block_in(
           return check_block_run(cx, st, block, known_params, learned, each_receiver, step)
         end
 
-      error(problem) -> return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+      error(problem) -> return error(problem)
     end
-
   end
 
   return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)

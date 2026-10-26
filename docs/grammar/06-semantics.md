@@ -486,9 +486,8 @@ puts(seen)
   result type is not known (`map`, `Native.memory_pointer`, `Task.map`) takes
   it from its other `ok(...)` returns, so `return error("bad")` before the last
   `ok(x)` checks; a block with only `error(...)` still needs the annotation.
-  Container
-  inference uses the first element, so `[ok(1), error("bad")]` infers and the
-  reverse order needs an annotation.
+  Container inference uses the first element, so `[ok(1), error("bad")]` infers
+  and the reverse order needs an annotation.
 - `Result.unwrap!` passes `Result[T]` to its operand. On an error it halts with
   `RUNTIME-UNWRAP-ERROR`, the stored message, at the call. `Result.unwrap_or`
   evaluates both arguments, left to right, even on success.
