@@ -52,6 +52,8 @@
 #define PROFILE_SAMPLE 1000
 #define PROFILE_SAMPLE_MAX 1000000000
 
+typedef enum { LAUNCH_FLUSHED, LAUNCH_FLUSH_BUSY, LAUNCH_FLUSH_FAILED } launch_flush_result;
+
 #ifndef _WIN32
 static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -142,12 +144,29 @@ const char *agc_launch_self_path(int argc, char **argv, const char *fallback, ch
   return buffer;
 }
 
-static bool flush_stream(FILE *stream) {
+/* A compute call may still own a C stream at exit. Linux skips it rather than waiting for that call. */
+static launch_flush_result flush_stdio(FILE *stream) {
+#ifdef __linux__
+  int saved_errno = errno;
+  if (ftrylockfile(stream) != 0) {
+    errno = saved_errno;
+    return LAUNCH_FLUSH_BUSY;
+  }
+#endif
+  bool ok = true;
   while (fflush(stream) != 0) {
-    if (errno != EINTR) return false;
+    if (errno != EINTR) {
+      ok = false;
+      break;
+    }
     clearerr(stream);
   }
-  return true;
+#ifdef __linux__
+  saved_errno = errno;
+  funlockfile(stream);
+  errno = saved_errno;
+#endif
+  return ok ? LAUNCH_FLUSHED : LAUNCH_FLUSH_FAILED;
 }
 
 static void flush_files(agc_vm *vm) {
@@ -195,8 +214,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
-  bool stdout_ok = flush_stream(stdout);
-  flush_stream(stderr);
+  bool stdout_ok = flush_stdio(stdout) != LAUNCH_FLUSH_FAILED;
+  flush_stdio(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
@@ -208,7 +227,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
-    if (!stdout_ok || !flush_stream(stdout))
+    if (!stdout_ok || flush_stdio(stdout) == LAUNCH_FLUSH_FAILED)
       write_error = "cannot write to standard output";
     else if (agc_output_failed(&vm->rt->err))
       write_error = "cannot write to standard error";
@@ -229,8 +248,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
     code = (int)outcome->exit_code;
   }
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
-  flush_stream(stdout);
-  flush_stream(stderr);
+  flush_stdio(stdout);
+  flush_stdio(stderr);
   return code;
 }
 

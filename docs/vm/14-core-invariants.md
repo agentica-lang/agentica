@@ -86,7 +86,10 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   the handler has no `SA_RESTART`) and ends the run (§14.4). Otherwise a child's
   stderr goes through the same buffer (`agc_output_forward`). In the fallback it
   takes the blocking `fwrite` on the I/O thread, under the stream's lock. With N
-  > 1 the streams are locked per stream (§16.8).
+  > 1 the streams are locked per stream (§16.8). At settlement on Linux, a
+  final C stdio flush skips a stream whose lock is busy; its buffered native
+  bytes may be lost. If the lock is acquired, `fflush` may still block on the
+  descriptor. macOS and Windows retain the blocking final C stdio flush.
 - **Notices (text the VM writes to stderr by itself).** Crash diagnostics and
   the unobserved-task summary are queued (at most 1 MiB) ahead of waiting
   writers, never inside a print. The diagnostic of a failed run is queued after
@@ -176,8 +179,8 @@ full buffer's FIFO.
 
 ### 14.4 Ending
 
-**Rule.** One exit path. Every step of it is bounded, the file flush included.
-The file flush has a limit that is always on, 30 seconds by default, set with
+**Rule.** One exit path. The file flush has a limit that is always on, 30
+seconds by default, set with
 `--flush-timeout MS` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS`
 (the flag wins), with no way to turn it off. The owner decided this on
 2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
@@ -189,8 +192,11 @@ flush. **When `main` ends, the program ends.** The steps are:
 3. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush
-   or the DLLs' detach code, which could wait for it. Step 2 still waits for
-   a call that holds the lock of stdout or stderr (#616).
+   or the DLLs' detach code, which could wait for it. On Linux, each final C
+   stdio flush skips a stream whose lock is busy and may lose its buffered
+   native bytes. If the lock is acquired, `fflush` can still block on the
+   descriptor. macOS and Windows keep the blocking final flush, so #616 remains
+   outside Linux.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush is waited for, no socket is read to its end. `System.exit` and a
@@ -216,8 +222,9 @@ read that the close cannot cancel stays in `_read` and takes the next input, so
 no later runtime in the process may read that descriptor. Children are reaped by
 libuv's exit callback, never by `waitpid` or a sleep; step 1 runs the loop for
 the exits (row 7.2.1d). The streams on the loop drain inside the file flush,
-which bounds them. The blocking fallbacks of §14.1 are the only unbounded writes
-left.
+which bounds them. The blocking fallbacks of §14.1 and a successful final
+`fflush` on a descriptor that blocks remain unbounded; Windows retains the
+blocking final flush.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers
 end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none
