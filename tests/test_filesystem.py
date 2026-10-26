@@ -281,7 +281,7 @@ def test_the_run_waits_for_a_timed_out_close_so_its_buffered_write_reaches_the_d
     path = root / "kept.bin"
     big = root / "big.bin"
     with open(big, "wb") as handle:
-        handle.truncate(1 << 30)
+        handle.truncate(256 << 20)
     run_program(r"""def digest(path: String) -> Bool
   return File.sha256(path, 60000).ok?
 end
@@ -289,8 +289,8 @@ end
 def main() -> Void
   out = File.open(System.args()[0], "create_private", 1000).unwrap!
   File.write_bytes(out, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57], 1000)
-  busy = Task.spawn(&digest, System.args()[1])
-  Task.sleep(50)
+  Task.spawn(&digest, System.args()[1])
+  Task.sleep(100)
   File.close(out, 1)
 end
 """, [path, big], env=vm_environment({"UV_THREADPOOL_SIZE": "1"}))
