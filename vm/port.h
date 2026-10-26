@@ -87,6 +87,7 @@ typedef struct {
   void (*pause)(void *data);
 } agc_io_kind;
 
+/* Compiled code writes these fields by their offsets (agc_emit_call in vm/jit/emit_x64.c, which asserts them). */
 typedef struct {
   uint32_t function, pc, base, ret;
   bool tail;

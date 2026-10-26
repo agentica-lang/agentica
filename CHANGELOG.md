@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The experimental x86-64 JIT (`--jit on`) calls compiled functions natively
+  and compiles small functions without a loop for its callers, so call-heavy
+  code runs in compiled code.
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on

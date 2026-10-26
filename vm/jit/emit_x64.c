@@ -1,7 +1,7 @@
 /*
  * The x86-64 emitter of the JIT (docs/future/22-jit.md §22): the machine code of each instruction kind, the exit
  * stubs and the entry table, for the System V and the Windows x64 calling conventions. Compiled code keeps the VM in
- * rbx, the registers R in r12 and the constants K in r13. Core layer.
+ * rbx, the registers R in r12, the constants K in r13 and its depth of native calls in r14. Core layer.
  */
 #include "jit.h"
 
@@ -13,7 +13,7 @@
 enum { RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15 };
 
 /* Condition codes: the low nibble of jcc (0F 80+cc) and setcc (0F 90+cc). */
-enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_L = 0xC, CC_LE = 0xE };
+enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7, CC_L = 0xC, CC_LE = 0xE };
 
 /* The argument registers of the calling convention: compiled code is called with (vm, R, K, pc), and calls a helper
    with (vm, dst, a, b). Windows x64 also wants 32 bytes of shadow space above the return address. */
@@ -32,7 +32,9 @@ enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_L = 0xC, CC_LE = 0xE
 #define VM RBX
 #define REGS R12
 #define CONSTS R13
-#define SHADOW 32
+#define DEPTH R14
+/* The shadow space and 8 bytes that keep rsp 16-byte aligned at a helper call, under the 4 saved registers. */
+#define FRAME 40
 
 /* A register's tag and payload: registers are 16-byte agc_values, tag at 0 (the full first word is written, as
    agc_word_value builds it) and payload at 8. */
@@ -41,6 +43,26 @@ enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_L = 0xC, CC_LE = 0xE
 
 #define TAG(r) ((int64_t)(r) * 16)
 #define WORD(r) ((int64_t)(r) * 16 + 8)
+
+/* The frame fields that a native CALL writes and RETURN reads (port.h). */
+#define FRAME_FIELD(name) ((int64_t)offsetof(agc_frame, name))
+#define TASK_FIELD(name) ((int64_t)offsetof(agc_task, name))
+#define FIELD_SIZE(type, name) sizeof(((type *)0)->name)
+
+/* agc_emit_call writes a frame as four dwords, a byte and a qword at these offsets, and indexes the frames by a
+   shift of 5; it reads frame_count, frame_capacity and depth as dwords and reg_capacity as a qword. */
+_Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
+_Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 4 && offsetof(agc_frame, base) == 8 &&
+                 offsetof(agc_frame, ret) == 12 && offsetof(agc_frame, tail) == 16 &&
+                 offsetof(agc_frame, native) == 24,
+               "the native CALL writes the frame at these offsets");
+_Static_assert(FIELD_SIZE(agc_frame, pc) == 4 && FIELD_SIZE(agc_frame, base) == 4 && FIELD_SIZE(agc_frame, ret) == 4 &&
+                 FIELD_SIZE(agc_frame, function) == 4 && FIELD_SIZE(agc_frame, tail) == 1 &&
+                 sizeof(agc_native *) == 8,
+               "the native CALL writes the frame fields with these sizes");
+_Static_assert(FIELD_SIZE(agc_task, frame_count) == 4 && FIELD_SIZE(agc_task, frame_capacity) == 4 &&
+                 FIELD_SIZE(agc_task, depth) == 4 && FIELD_SIZE(agc_task, reg_capacity) == 8,
+               "the native CALL reads the task's counts with these sizes");
 
 /* The two shapes of the opcode helpers (agc_op_* in core.h). */
 typedef agc_status (*binary_helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *);
@@ -206,17 +228,35 @@ static void set_bool(agc_emitter *e, int cc) {
   BYTES(e, 0x0F, (uint8_t)(0x90 | cc), 0xC0, 0x0F, 0xB6, 0xC0);
 }
 
+/* Saves the registers compiled code keeps (callee-saved in both conventions) and keeps rsp 16-byte aligned for
+   helper calls (4 pushes on the return address, then FRAME). */
+static void save_registers(agc_emitter *e) {
+  push(e, VM);
+  push(e, REGS);
+  push(e, CONSTS);
+  push(e, DEPTH);
+}
+
 void agc_emit_begin(agc_emitter *e, uint32_t count) {
   memset(e, 0, sizeof *e);
   e->count = count;
   e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
-  /* The entry: save the registers compiled code keeps (callee-saved in both conventions), keep rsp 16-byte aligned
-     for helper calls (3 pushes on the return address) with the shadow space, then jump to instruction pc by the
-     table of offsets that agc_emit_end puts after the code. */
-  push(e, VM);
-  push(e, REGS);
-  push(e, CONSTS);
-  BYTES(e, 0x48, 0x83, 0xEC, SHADOW); /* sub rsp, 32 */
+  /* The native entry at AGC_JIT_NATIVE_ENTRY, which a native CALL of compiled code calls with the callee's R in
+     ARG1, rbx and r13 being the same for every function: one more native call deep, then instruction 0. The entry
+     from C at offset 0 jumps over it. */
+  BYTES(e, 0xEB, 0x00); /* jmp short entry */
+  size_t over = e->len - 1;
+  save_registers(e);
+  BYTES(e, 0x49, 0xFF, 0xC6);        /* inc r14 */
+  BYTES(e, 0x48, 0x83, 0xEC, FRAME); /* sub rsp, 40 */
+  move_reg(e, true, REGS, ARG1);
+  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
+  if (!e->failed) e->code[over] = (uint8_t)(e->len - (over + 1));
+  /* The entry from C: no native call below, then instruction pc by the table of offsets that agc_emit_end puts after
+     the code. */
+  save_registers(e);
+  BYTES(e, 0x45, 0x31, 0xF6);        /* xor r14d, r14d */
+  BYTES(e, 0x48, 0x83, 0xEC, FRAME); /* sub rsp, 40 */
   move_reg(e, true, VM, ARG0);
   move_reg(e, true, REGS, ARG1);
   move_reg(e, true, CONSTS, ARG2);
@@ -462,12 +502,86 @@ void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uin
 
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1, status, pc); }
 
+/* CALL of function bx with the window at R[a], as a native call when it can be one: the callee has code (its slot in
+   the code table at SLOT, read when the call runs), the native depth is below AGC_JIT_NATIVE_DEPTH, and the task has
+   room for the frame, its REGISTERS and one more depth without growing an array or failing, so no pointer that a
+   compiled caller holds moves. The frame is written as push_frame writes it, with the caller's pc after the CALL for
+   a stack trace and the return. Anything else, and the frame push that may grow or fail, exits for run_compiled.
+   The callee answers AGC_JIT_EXIT_RETURNED after its RETURN, and the code goes on; any other exit word is the
+   callee's (or a deeper callee's), with its frame on top, and goes up unchanged. */
+void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers) {
+  uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  BYTES(e, 0x49, 0x81, 0xFE); /* cmp r14, depth */
+  word32(e, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_AE, AGC_JIT_EXIT_CALL, pc);
+  move_imm64(e, RAX, slot);
+  load(e, R11, RAX, 0);
+  BYTES(e, 0x4D, 0x85, 0xDB); /* test r11, r11 */
+  exit_if(e, CC_E, AGC_JIT_EXIT_CALL, pc);
+  load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
+  op_mem(e, false, 0x8B, RAX, RCX, TASK_FIELD(frame_count));    /* mov eax, [rcx + frame_count] */
+  op_mem(e, false, 0x3B, RAX, RCX, TASK_FIELD(frame_capacity)); /* cmp eax, [rcx + frame_capacity] */
+  exit_if(e, CC_AE, AGC_JIT_EXIT_CALL, pc);
+  op_mem(e, false, 0x81, 7, RCX, TASK_FIELD(depth)); /* cmp dword [rcx + depth], AGC_MAX_DEPTH */
+  word32(e, AGC_MAX_DEPTH);
+  exit_if(e, CC_AE, AGC_JIT_EXIT_CALL, pc);
+  /* R + 16 * (a + registers) must not pass regs + 16 * reg_capacity, the end of the register file. */
+  load(e, RDX, RCX, TASK_FIELD(reg_capacity));
+  BYTES(e, 0x48, 0xC1, 0xE2, 0x04);                        /* shl rdx, 4 */
+  op_mem(e, true, 0x03, RDX, RCX, TASK_FIELD(regs));       /* add rdx, [rcx + regs] */
+  lea(e, R10, REGS, TAG((uint64_t)in.a + registers));
+  BYTES(e, 0x49, 0x39, 0xD2); /* cmp r10, rdx */
+  exit_if(e, CC_A, AGC_JIT_EXIT_CALL, pc);
+  /* rax = &frames[frame_count], the new frame; the caller's is the one before it. */
+  BYTES(e, 0x48, 0xC1, 0xE0, 0x05); /* shl rax, 5 */
+  op_mem(e, true, 0x03, RAX, RCX, TASK_FIELD(frames)); /* add rax, [rcx + frames] */
+  op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(pc) - 32); /* mov dword [rax - 32 + pc], pc + 1 */
+  word32(e, pc + 1);
+  op_mem(e, false, 0x8B, RDX, RAX, FRAME_FIELD(base) - 32); /* mov edx, [rax - 32 + base] */
+  BYTES(e, 0x81, 0xC2);                                     /* add edx, a */
+  word32(e, in.a);
+  op_mem(e, false, 0x89, RDX, RAX, FRAME_FIELD(base)); /* mov [rax + base], edx */
+  op_mem(e, false, 0x89, RDX, RAX, FRAME_FIELD(ret));  /* mov [rax + ret], edx */
+  op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(function)); /* mov dword [rax + function], bx */
+  word32(e, function);
+  op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(pc)); /* mov dword [rax + pc], 0 */
+  word32(e, 0);
+  op_mem(e, false, 0xC6, 0, RAX, FRAME_FIELD(tail)); /* mov byte [rax + tail], 0 */
+  byte(e, 0);
+  store_imm(e, RAX, FRAME_FIELD(native), 0);
+  op_mem(e, false, 0xFF, 0, RCX, TASK_FIELD(frame_count)); /* inc dword [rcx + frame_count] */
+  op_mem(e, false, 0xFF, 0, RCX, TASK_FIELD(depth));       /* inc dword [rcx + depth] */
+  lea(e, ARG1, REGS, TAG(in.a));
+  BYTES(e, 0x49, 0x83, 0xC3, AGC_JIT_NATIVE_ENTRY); /* add r11, native entry */
+  BYTES(e, 0x41, 0xFF, 0xD3);                       /* call r11 */
+  BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
+  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+}
+
+/* RETURN R[a]: under a native call, as return_value does it (the frame's ret is its base, R[0], where the native
+   CALL put it), and AGC_JIT_EXIT_RETURNED to the caller's code; else the exit for run_compiled. */
+void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
+  BYTES(e, 0x4D, 0x85, 0xF6); /* test r14, r14 */
+  exit_if(e, CC_E, AGC_JIT_EXIT_RETURN, pc);
+  load(e, RAX, REGS, TAG(a));
+  load(e, RDX, REGS, WORD(a));
+  store(e, REGS, TAG(0), RAX);
+  store(e, REGS, WORD(0), RDX);
+  load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
+  op_mem(e, false, 0xFF, 1, RCX, TASK_FIELD(frame_count)); /* dec dword [rcx + frame_count] */
+  op_mem(e, false, 0xFF, 1, RCX, TASK_FIELD(depth));       /* dec dword [rcx + depth] */
+  byte(e, 0xB8); /* mov eax, RETURNED */
+  word32(e, AGC_JIT_EXIT_RETURNED);
+  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_EPILOGUE, 0);
+}
+
 /* The epilogue, the stubs of the exits (one for each run of patches with the same exit word), then the table of
    entry offsets, each relative to the table, which the entry's lea finds rip-relative. */
 size_t agc_emit_end(agc_emitter *e) {
   if (e->failed) return 0;
   size_t epilogue = e->len;
-  BYTES(e, 0x48, 0x83, 0xC4, SHADOW); /* add rsp, 32 */
+  BYTES(e, 0x48, 0x83, 0xC4, FRAME); /* add rsp, 40 */
+  pop(e, DEPTH);
   pop(e, CONSTS);
   pop(e, REGS);
   pop(e, VM);
@@ -480,6 +594,8 @@ size_t agc_emit_end(agc_emitter *e) {
     if (p.kind == AGC_JIT_PATCH_LABEL) {
       if (p.value >= e->count) return 0;
       to = e->labels[p.value];
+    } else if (p.kind == AGC_JIT_PATCH_EPILOGUE) {
+      to = epilogue;
     } else if (p.kind == last.kind && p.value == last.value) {
       to = stub;
     } else {
