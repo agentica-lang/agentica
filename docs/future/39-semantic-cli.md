@@ -61,7 +61,7 @@ first diagnostic and exits 1, as `check` does. A root that does not link is
 skipped, not an error, for `symbol` and `refs` (`queries.md`). What each command
 needs:
 
-- `outline`: a parse of `FILE`.
+- `outline`: a parse of `FILE`, and a link when it re-exports a name.
 - `symbol`: a parse and a link.
 - `refs` on a function, struct, enum, alias, constant or variant: a link, with
   `--partial`; else a check.

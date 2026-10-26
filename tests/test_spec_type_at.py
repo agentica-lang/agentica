@@ -811,3 +811,13 @@ def test_a_type_through_a_facade_is_written_with_the_alias_of_the_facade(program
     (program / "through.agc").write_text(through, encoding="utf-8")
     report = answer(("through.agc", where(through, "user =")), cwd=program)
     assert (report["kind"], report["type"]) == ("name", "Facade.User")
+
+
+def test_a_type_is_written_with_the_alias_of_its_own_file_when_the_root_imports_it_too(program):
+    facade = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
+    through = ('import Facade from "facade"\nimport Models from "models"\n\ndef build() -> Int\n'
+               '  user = Facade.make("a")\n  return user.age\nend\n')
+    (program / "facade.agc").write_text(facade, encoding="utf-8")
+    (program / "through.agc").write_text(through, encoding="utf-8")
+    report = answer(("through.agc", where(through, "user =")), cwd=program)
+    assert report["type"] == "Models.User"

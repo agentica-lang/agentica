@@ -88,7 +88,7 @@ end
 ## written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
 ## file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the file that
 ## re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports its own file
-## under an alias.
+## under an alias. When two files re-export the same type, the alphabetically first alias is the one written.
 export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases

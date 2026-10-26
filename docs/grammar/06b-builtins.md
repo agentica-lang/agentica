@@ -406,9 +406,10 @@ every public builtin as one JSON array, sorted by name, each element exactly
 what `help NAME --json` prints.
 
 `agentica doc PATH [--json]` prints the exported API of a module with its `##`
-docs (section 4): PATH is a source file or a `std/` module name. It only lexes
-and parses the module, so its imports need not exist. Declarations without
-`export` are left out. A lex or parse error exits 1, an unreadable path exits 2.
+docs (section 4): PATH is a source file or a `std/` module name. It lexes and
+parses the module, so its imports need not exist; only a module that re-exports
+a name is linked, as `outline` below. Declarations without `export` are left
+out. A lex or parse error exits 1, an unreadable path exits 2.
 
 `agentica outline FILE [--json] [--stdin FILE]` lists the top-level declarations
 of one file in source order, private ones too: imports, functions, structs with
@@ -418,8 +419,9 @@ the span of its name. FILE is a source file or a `std/` module name. It only
 lexes and parses the file, so its imports need not exist; only a file that
 re-exports a name (`export Url.parse`) is linked, to list the original
 declaration with its doc, and one that does not link lists no re-export.
-`--stdin FILE` takes the text of FILE from standard input. A lex or parse error exits 1; a mistake in
-the arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
+`--stdin FILE` takes the text of FILE from standard input. A lex or parse error
+exits 1; a mistake in the arguments or an unreadable path is `QUERY-USAGE`
+(section 7) and exits 2.
 
 `agentica type-at FILE:LINE:COL [--json]` gives the checked type of the
 innermost expression at a position (line and column from 1, in code points as

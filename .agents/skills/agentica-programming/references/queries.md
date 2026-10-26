@@ -42,7 +42,8 @@ src/orders.agc:4:3 field Order.id: Int
 src/orders.agc:8:1 export def total(order: Order) -> Int
 ```
 
-It parses only: imports need not exist and no `main` is needed. FILE may be a
+It parses: imports need not exist and no `main` is needed (only a file with
+re-exports is linked, to list the original declarations). FILE may be a
 `std/` module (`agentica outline std/queue`). Private declarations are listed
 too (`agentica doc` shows only the exported API). `--partial` is accepted and
 changes nothing.

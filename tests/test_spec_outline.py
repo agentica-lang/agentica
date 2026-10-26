@@ -258,3 +258,12 @@ def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
         "facade.agc:3:1 export def make(name: String) -> Int",
         "facade.agc:5:1 def hidden() -> Int",
     ]
+
+
+def test_a_facade_of_a_facade_lists_the_original_declaration(tmp_path):
+    models = "## Makes a user.\nexport def make() -> Int\n  return 1\nend\n"
+    (tmp_path / "models.agc").write_text(models, encoding="utf-8")
+    (tmp_path / "inner.agc").write_text('import Models from "models"\n\nexport Models.make\n', encoding="utf-8")
+    (tmp_path / "outer.agc").write_text('import Inner from "inner"\n\nexport Inner.make\n', encoding="utf-8")
+    make = items_by_name(answer("outer.agc", cwd=tmp_path))["make"]
+    assert (make["signature"], make["doc"], make["span"]["file"]) == ("make() -> Int", "Makes a user.", "outer.agc")
