@@ -1,6 +1,7 @@
 ## The builtin functions and tables the linker, checker, and lowering read. The tables are module constants derived
 ## from builtins_data.agc and prelude_data.agc.
 
+import Text from "../syntax/text"
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import {
@@ -54,7 +55,8 @@ export def lookup(name: String) -> Result[Model.Builtin]
   return ENTRIES.get(name)
 end
 
-## The form of a builtin that takes that many arguments, or an error when none does.
+## The form of a builtin that takes that many arguments, or an error when none does. A form with defaults takes every
+## count from its required parameters to all of them; a form that takes exactly that many wins.
 export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   if entry.parameters.size == arity
     return ok(entry)
@@ -66,7 +68,59 @@ export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
     end
   end
 
+  for form in [entry].concat(entry.alternatives)
+    if arity >= required_count(form) and arity < form.parameters.size
+      return ok(form)
+    end
+  end
+
   return error("no form with that arity")
+end
+
+## The index of the first parameter with a default, or the number of parameters when none has one.
+export def first_default(form: Model.Builtin) -> Int
+  at = 0
+  while at < form.parameters.size
+    if default_present?(form.parameters[at].default)
+      return at
+    end
+
+    at += 1
+  end
+
+  return at
+end
+
+## True when some parameter of the form has a default.
+export def defaulted?(form: Model.Builtin) -> Bool
+  return first_default(form) < form.parameters.size
+end
+
+## True when the last parameter of a form with defaults has none: it is an Fn, and the last argument (or the block)
+## always goes to it, as in a function of the program (check/defaults.agc).
+export def fn_last?(form: Model.Builtin) -> Bool
+  return defaulted?(form) and !default_present?(form.parameters[form.parameters.size - 1].default)
+end
+
+## The fewest arguments a call of the form takes: the parameters before the first default, and the last Fn after them.
+export def required_count(form: Model.Builtin) -> Int
+  first = first_default(form)
+  if fn_last?(form)
+    return first + 1
+  end
+
+  return first
+end
+
+## What a call of the form expects: `2`, or `1 to 2` when the form has defaults. skipped leaves out the receiver of a
+## call written as a method.
+export def arity_text(form: Model.Builtin, skipped: Int) -> String
+  total = form.parameters.size - skipped
+  if !defaulted?(form)
+    return total.to_s
+  end
+
+  return "#{required_count(form) - skipped} to #{total}"
 end
 
 ## The form of the builtin name that takes that many arguments (builtin-ref with an arity).
@@ -88,11 +142,121 @@ end
 
 ## The signature of one form.
 export def form_signature(form: Model.Builtin) -> String
-  parameters = form.parameters.map do |parameter: Model.Named|
-    "#{parameter.name}: #{Types.to_text(parameter.type)}"
+  parameters = form.parameters.map do |parameter: Model.Named| parameter_text(parameter) end
+  return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
+end
+
+## A parameter as a signature writes it: `level: Int = 6`.
+export def parameter_text(parameter: Model.Named) -> String
+  typed = "#{parameter.name}: #{Types.to_text(parameter.type)}"
+  if !default_present?(parameter.default)
+    return typed
   end
 
-  return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
+  return "#{typed} = #{default_text(parameter.default)}"
+end
+
+## A default as the source writes it: 6, 0.5, "x", true, nil, [], {} or Enum.Variant; "" for no default.
+export def default_text(value: Model.Default) -> String
+  case value
+    Model.Default.Absent -> return ""
+    Model.Default.Whole(number) -> return number.to_s
+    Model.Default.Real(number) -> return number.to_s
+    Model.Default.Text(text) -> return Text.quote(text)
+    Model.Default.Flag(flag) -> return flag.to_s
+    Model.Default.Nothing -> return "nil"
+    Model.Default.EmptyList -> return "[]"
+    Model.Default.EmptyMap -> return "{}"
+    Model.Default.Variant(name) -> return name
+  end
+end
+
+## True for a default (not Absent).
+export def default_present?(value: Model.Default) -> Bool
+  case value
+    Model.Default.Absent -> return false
+    _ -> return true
+  end
+end
+
+## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain builtin with a single
+## form (the other rules and the prelude read the arguments by position, and a form picked by the number of arguments
+## would be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has
+## the type of its parameter. The catalog text prints a problem, and a test fails on it.
+export def default_problem(entry: Model.Builtin) -> String
+  if !defaulted?(entry)
+    return ""
+  end
+
+  if !plain?(entry.rule) or entry.alternatives.size > 0
+    return "a default needs a Plain builtin with no alternative form"
+  end
+
+  first = first_default(entry)
+  last = entry.parameters.size - 1
+  at = first
+  while at < entry.parameters.size
+    parameter = entry.parameters[at]
+    if !default_present?(parameter.default) and !(at == last and Types.is?(parameter.type, "Fn"))
+      return "parameter #{parameter.name} has no default but follows one"
+    end
+
+    if default_present?(parameter.default) and !default_fits?(parameter)
+      return "the default of #{parameter.name} is not a #{Types.to_text(parameter.type)}"
+    end
+
+    at += 1
+  end
+
+  return ""
+end
+
+## The builtin enums that some builtin gives a default variant of: the lowering keeps them in the tables of every
+## program, because a call that leaves the argument out builds the variant with no expression that names the enum.
+export def default_enums() -> Set[String]
+  names: List[String] = []
+  for row in BUILTIN_ROWS
+    for parameter in row.parameters
+      name = variant_enum(parameter.default)
+      if name != ""
+        names = names.push(name)
+      end
+    end
+  end
+
+  return Set.new(names)
+end
+
+# True for the Plain rule: the arguments are checked against the parameters, one each.
+def plain?(rule: Model.Rule) -> Bool
+  case rule
+    Model.Rule.Plain -> return true
+    _ -> return false
+  end
+end
+
+# True when the default has the type of its parameter. A variant must belong to the enum of the type.
+def default_fits?(parameter: Model.Named) -> Bool
+  type = parameter.type
+  case parameter.default
+    Model.Default.Absent -> return true
+    Model.Default.Whole(number) -> return Types.is?(type, "Int")
+    Model.Default.Real(number) -> return Types.is?(type, "Float")
+    Model.Default.Text(text) -> return Types.is?(type, "String")
+    Model.Default.Flag(flag) -> return Types.is?(type, "Bool")
+    Model.Default.Nothing -> return Types.is?(type, "Nil")
+    Model.Default.EmptyList -> return Types.is?(type, "List")
+    Model.Default.EmptyMap -> return Types.is?(type, "Map")
+    Model.Default.Variant(name) -> return Types.is?(type, "Enum") and name.starts_with?("#{Types.name(type)}.")
+  end
+end
+
+# The enum of a default variant, or "".
+def variant_enum(value: Model.Default) -> String
+  case value
+    Model.Default.Variant(name) -> return name.split(".")[0]
+    _ -> return ""
+  end
 end
 
 def module_of(name: String) -> String

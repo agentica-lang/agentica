@@ -187,6 +187,18 @@ Text-form notes:
   and `lower_argument` use the same functions, so they agree. Compiler code must
   not use defaults until `bootstrap/stage0.agcb` can compile them (the two-step
   refresh in `references/ci.md`).
+- Builtin defaults: a parameter of a catalog row may have
+  `default: Model.Default.Whole(0)` (`Model.Named`; `Real`, `Text`, `Flag`,
+  `Nothing`, `EmptyList`, `EmptyMap`, `Variant("LogLevel.Info")`). The shape is
+  `Defaults.builtin_shape`, and `Builtins.form_for` picks the form for every
+  count from the required parameters to all of them. `check_plain` maps the
+  arguments to parameters with `Defaults.param_of`; `lower_call` fills the
+  omitted ones (`lower_builtin_default`) and emits `call-builtin` with the full
+  count, so the VM and the bytecode never see a short call. A default is only
+  for a Plain row with no alternatives (`Builtins.default_problem`; the catalog
+  text prints a problem and `test_frontend_catalog.py` fails on it). The
+  signature, `help`, its JSON (`default`) and the CHECK-ARITY range
+  (`Builtins.arity_text`) show it. A builtin has no function value.
 - Import forms and the linker's `named` table: `references/stages.md` (Linker).
 - Type aliases: `Ast.Decl.TypeAlias`, with the target `TypeRef` and the
   `type_parameters` of a generic one. The parser reads contextual `type` only
@@ -241,6 +253,11 @@ Add a `Rule` variant in `builtin_model.agc`, an arm in `check_rule`
 (`check_rules.agc`), an arm in `rule_name` or `later_rule_name`
 (`catalog_text.agc`; otherwise the text prints `?`), and a calling fixture (a
 fast test requires one). Edit `frozen/check/builtin-rules.expected` by hand.
+
+A trailing option of a Plain row is a default, not a second row:
+`Model.Named(name: "seed", type: Types.Type.Int, default: ...Whole(0))` (see
+"Builtin defaults" above). Use an alternative form only for another rule
+or another result type (`Map.get`).
 
 ### Add an opcode
 

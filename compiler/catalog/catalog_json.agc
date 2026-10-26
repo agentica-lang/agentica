@@ -45,7 +45,7 @@ end
 
 def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   parameters = form.parameters.map do |parameter: Model.Named|
-    JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))})
+    parameter_json(parameter)
   end
 
   return JSON.object({
@@ -58,6 +58,16 @@ def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
     "effects": strings(form.effects),
     "description": JSON.from(form.description),
   })
+end
+
+# A parameter has `default` (the source text of its default value) only when it has one.
+def parameter_json(parameter: Model.Named) -> Json
+  fields = {"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))}
+  if Builtins.default_present?(parameter.default)
+    fields = fields.put("default", JSON.from(Builtins.default_text(parameter.default)))
+  end
+
+  return JSON.object(fields)
 end
 
 def text_or_null(text: String) -> Json

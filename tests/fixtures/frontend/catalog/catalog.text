@@ -717,7 +717,7 @@ builtin Zlib.encoder_close forms=1
 builtin Zlib.decoder_close forms=1
   Zlib.decoder_close(dec: ZlibDecoder) -> Result[Void] shape=(Opaque(ZlibDecoder)) -> Result(Void) rule=Plain impl="Zlib.decoder_close" effects=[] desc="Free a streaming decoder idempotently; feeding or finishing it afterwards is an error; VM only."
 builtin Zlib.crc32 forms=1
-  Zlib.crc32(data: List[Int], seed: Int) -> Result[Int] shape=(List(Int), Int) -> Result(Int) rule=Plain impl="Zlib.crc32" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed: pass 0 first, then each next chunk with the previous result; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
+  Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int] shape=(List(Int), Int = 0) -> Result(Int) rule=Plain impl="Zlib.crc32" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
 record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record Header name: String, value: String
 record HttpClientOptions timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String

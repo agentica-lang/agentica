@@ -38,6 +38,11 @@ def builtin_lines(entry: Model.Builtin) -> List[String]
     lines = lines.push("  #{form_line(form)}")
   end
 
+  problem = Builtins.default_problem(entry)
+  if problem != ""
+    lines = lines.push("  default-problem #{Text.quote(problem)}")
+  end
+
   return lines
 end
 
@@ -52,8 +57,18 @@ end
 # The parameter and result types with their variants written out, because to_text prints Struct("X"), Enum("X", []) and
 # Var("X") alike.
 def shape_text(form: Model.Builtin) -> String
-  parameters = form.parameters.map do |parameter: Model.Named| Types.debug_text(parameter.type) end
+  parameters = form.parameters.map do |parameter: Model.Named| shape_parameter(parameter) end
   return "(#{parameters.join(", ")}) -> #{Types.debug_text(form.result)}"
+end
+
+# A parameter type, then ` = default` when it has one.
+def shape_parameter(parameter: Model.Named) -> String
+  written = Types.debug_text(parameter.type)
+  if Builtins.default_present?(parameter.default)
+    return "#{written} = #{Builtins.default_text(parameter.default)}"
+  end
+
+  return written
 end
 
 def record_lines() -> List[String]

@@ -49,3 +49,9 @@ def test_every_builtin_implementation_is_one_the_vm_has():
     start = tables.index("VM_BUILTINS = Set.new([")
     vm_builtins = set(re.findall(r'"([^"]+)"', tables[start:tables.index("\n])", start)]))
     assert sorted(names - vm_builtins) == []
+
+
+def test_no_builtin_has_a_default_problem():
+    golden = GOLDEN.read_bytes().decode("utf-8")
+    assert "default-problem" not in golden
+    assert "seed: Int = 0" in golden

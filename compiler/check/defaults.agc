@@ -6,6 +6,8 @@
 ## defaulted ones, the last argument (or the block) always goes to it, and the arguments before it fill the parameters
 ## from the left, so `each_line("a.txt") do |line| ... end` leaves the defaulted parameters between them alone.
 
+import Model from "../catalog/builtin_model"
+import Builtins from "../catalog/builtins"
 import Ast from "../syntax/ast"
 
 ## What a call needs to know about a function: the fewest arguments it takes (required), all its parameters (total),
@@ -15,6 +17,17 @@ export struct Shape
   required: Int
   total: Int
   fn_last: Bool
+end
+
+## The shape of a form of a builtin, read from its parameters by the same rules. A builtin has no default after the
+## first unless the last parameter is an Fn (Builtins.default_problem), so the shape is the one a function of the
+## program with those defaults would have.
+export def builtin_shape(form: Model.Builtin) -> Shape
+  return Shape(
+    required: Builtins.required_count(form),
+    total: form.parameters.size,
+    fn_last: Builtins.fn_last?(form),
+  )
 end
 
 ## The shape of a function, read from its parameters. The order of the defaults was checked before
