@@ -15,18 +15,21 @@
 /* The most parameters an extern function may have. */
 #define AGC_FFI_MAX_PARAMS 64
 
-/* The C types of an extern signature: C.Int32 is int32_t, C.Int64 int64_t, C.Double double, C.Float float, C.Bool _Bool
-   and C.String a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a resource are each a pointer in C.
-   Void is for results only, and C.Bytes for parameters only. A struct is passed and returned by value (agc_c_struct). */
+/* The C types of an extern signature: C.Int32 is int32_t, C.Int64 int64_t, C.Int8 int8_t, C.Int16 int16_t, C.UInt8
+   uint8_t, C.UInt16 uint16_t, C.UInt32 uint32_t, C.Long long (32 bits on Windows, 64 elsewhere), C.Double double,
+   C.Float float, C.Bool _Bool and C.String a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a
+   resource are each a pointer in C. Void is for results only, and C.Bytes for parameters only. A struct is passed and
+   returned by value (agc_c_struct). */
 typedef enum {
   AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_FLOAT, AGC_C_BOOL, AGC_C_STRING, AGC_C_POINTER, AGC_C_BYTES,
-  AGC_C_RESOURCE, AGC_C_STRUCT
+  AGC_C_RESOURCE, AGC_C_STRUCT, AGC_C_INT8, AGC_C_INT16, AGC_C_UINT8, AGC_C_UINT16, AGC_C_UINT32, AGC_C_LONG
 } agc_c_type;
 
-/* A C struct of a signature, in malloc memory: COUNT fields in order, each AGC_C_INT to AGC_C_BOOL, AGC_C_POINTER or
-   AGC_C_STRUCT (its layout in nested[k], NULL for the others). agc_ffi_prepare fills size, align and offsets[k], as
-   libffi lays the struct out by the C rules of the platform. INDEX is the program's struct that it is (ffi.c's; the
-   adapter ignores it), and POINTERS counts its C.Pointer fields, nested ones included. */
+/* A C struct of a signature, in malloc memory: COUNT fields in order, each an integer type, AGC_C_DOUBLE,
+   AGC_C_FLOAT, AGC_C_BOOL, AGC_C_POINTER or AGC_C_STRUCT (its layout in nested[k], NULL for the others).
+   agc_ffi_prepare fills size, align and offsets[k], as libffi lays the struct out by the C rules of the platform.
+   INDEX is the program's struct that it is (ffi.c's; the adapter ignores it), and POINTERS counts its C.Pointer
+   fields, nested ones included. */
 typedef struct agc_c_struct {
   uint32_t count, index, pointers;
   size_t size, align;
@@ -35,9 +38,16 @@ typedef struct agc_c_struct {
   agc_c_type *types;
 } agc_c_struct;
 
+/* One C value; every member starts at the first byte, so a pointer to the union is a pointer to any member. */
 typedef union {
   int32_t i;
   int64_t l;
+  int8_t i8;
+  int16_t i16;
+  uint8_t u8;
+  uint16_t u16;
+  uint32_t u32;
+  long n;
   double d;
   float f;
   bool b;

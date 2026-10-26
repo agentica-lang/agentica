@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,14 +67,17 @@ double peer_mix(int32_t a, double b, int64_t c, bool d, const char *s, double e,
   return a + b + (double)c + (d ? 1000.0 : 0.0) + (double)strlen(s) + e + f + g + h + i + j + k + l;
 }
 
-/* A variadic function: KINDS names the type of each variadic argument (i int, l int64_t, d double, s a string, which
-   adds its length, y bytes, which add the first byte, p a pointer, which adds its address), and it returns the sum. */
+/* A variadic function: KINDS names the type of each variadic argument (i int, l int64_t, j uint32_t, n long, d double,
+   s a string, which adds its length, y bytes, which add the first byte, p a pointer, which adds its address), and it
+   returns the sum. */
 static double vmix_sum(const char *kinds, va_list args) {
   double sum = 0;
   for (const char *kind = kinds; *kind; kind++) {
     switch (*kind) {
       case 'i': sum += va_arg(args, int); break;
       case 'l': sum += (double)va_arg(args, int64_t); break;
+      case 'j': sum += va_arg(args, uint32_t); break;
+      case 'n': sum += (double)va_arg(args, long); break;
       case 'd': sum += va_arg(args, double); break;
       case 's': sum += (double)strlen(va_arg(args, const char *)); break;
       case 'y': sum += *va_arg(args, const uint8_t *); break;
@@ -663,4 +667,57 @@ int64_t peer_batch_hold(peer_batch b, int32_t limit_ms) {
   atomic_fetch_add(&res_holding, 1);
   peer_wait_flag(limit_ms);
   return peer_batch_sum(b);
+}
+
+/* The narrow, unsigned and long integers (C.Int8 to C.Long). Each echo gives back its argument, so a boundary value
+   crosses both ways. Each cut takes an int64_t and returns its low bits as the narrow type: at -O1 the compiler
+   returns the whole register, so the bits above the type are the argument's, which the caller must not read. */
+int8_t peer_i8(int8_t x) { return x; }
+int16_t peer_i16(int16_t x) { return x; }
+uint8_t peer_u8(uint8_t x) { return x; }
+uint16_t peer_u16(uint16_t x) { return x; }
+uint32_t peer_u32(uint32_t x) { return x; }
+long peer_long(long x) { return x; }
+int8_t peer_cut_i8(int64_t x) { return (int8_t)x; }
+int16_t peer_cut_i16(int64_t x) { return (int16_t)x; }
+uint8_t peer_cut_u8(int64_t x) { return (uint8_t)x; }
+uint16_t peer_cut_u16(int64_t x) { return (uint16_t)x; }
+uint32_t peer_cut_u32(int64_t x) { return (uint32_t)x; }
+/* The platform's long: its bits (32 on Windows, 64 elsewhere) and its limits. */
+int32_t peer_long_bits(void) { return (int32_t)(sizeof(long) * 8); }
+long peer_long_max(void) { return LONG_MAX; }
+long peer_long_min(void) { return LONG_MIN; }
+
+/* Each integer type through an out pointer, at the end of its range. */
+void peer_out_ints(int8_t *a, int16_t *b, uint8_t *c, uint16_t *d, uint32_t *e, long *f) {
+  *a = INT8_MIN;
+  *b = INT16_MIN;
+  *c = UINT8_MAX;
+  *d = UINT16_MAX;
+  *e = UINT32_MAX;
+  *f = LONG_MIN;
+}
+
+/* A struct with a field of each integer type, laid out by the C rules: the long field sits at offset 16 on Linux and
+   macOS (8 bytes, aligned to 8) and at 12 on Windows (4 bytes), so the pointer after it moves too. */
+typedef struct {
+  int8_t a;
+  uint16_t b;
+  int16_t c;
+  uint8_t d;
+  uint32_t e;
+  long f;
+  const void *p;
+} peer_ints;
+
+static char ints_text[256];
+
+peer_ints peer_ints_max(void) {
+  return (peer_ints){INT8_MAX, UINT16_MAX, INT16_MAX, UINT8_MAX, UINT32_MAX, LONG_MAX, ints_text};
+}
+/* Every field as C sees it, so the test checks the layout that the VM wrote. */
+const char *peer_ints_text(peer_ints s) {
+  snprintf(ints_text, sizeof ints_text, "a=%d b=%u c=%d d=%u e=%lu f=%ld p=%s", s.a, (unsigned)s.b, s.c, (unsigned)s.d,
+           (unsigned long)s.e, s.f, s.p == ints_text ? "text" : s.p ? "other" : "null");
+  return ints_text;
 }

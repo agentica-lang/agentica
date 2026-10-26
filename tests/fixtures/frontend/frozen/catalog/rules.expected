@@ -33,6 +33,7 @@ MapPut
 MapSize
 MapValues
 NativeClose
+NativeClosed
 NativeMemoryBlock
 Ok
 OkVoid

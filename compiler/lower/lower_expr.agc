@@ -5,6 +5,7 @@
 ## A method call or a field access that names a builtin is not rewritten in compiler/: the lowering reads its Resolved
 ## and lowers the synthetic node it describes.
 
+import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
 import {PRELUDE} from "../catalog/builtins"
 import State from "../check/check_state"
@@ -121,22 +122,32 @@ export def lower_call(
   fx = Lowering.alloc(fx)
   base = fx.next - 1
   fill = cx.fills.get(node.name)
-  total = count
+  shape = Defaults.Shape(required: count, total: count, fn_last: false)
+  # A builtin form with defaults; `builtin` is true only when the form exists (key is set from it).
+  defaulted = builtin and Builtins.defaulted?(form.unwrap!)
   if fill.ok?
-    total = fill.unwrap!.shape.total
+    shape = fill.unwrap!.shape
+  elsif defaulted
+    shape = Defaults.builtin_shape(form.unwrap!)
   end
 
+  total = shape.total
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    out = try lower_argument(cx, fx, node, fill, index)
-    fx = out.fx
+    if defaulted
+      out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
+      fx = out.fx
+    else
+      out = try lower_argument(cx, fx, node, fill, shape, index)
+      fx = out.fx
+    end
+
     index += 1
   end
 
   if builtin
-    spans = [span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
-    fx = Lowering.emit_builtin(fx, base, key, count, spans)
+    fx = Lowering.emit_builtin(fx, base, key, total, builtin_spans(node, shape))
     if tail
       fx = Lowering.emit_at(fx, "return", [base], span)
     end
@@ -165,18 +176,73 @@ end
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
 # gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
 def lower_argument(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], param: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], shape: Defaults.Shape, param: Int
 ) -> Result[Lowering.Out]
-  source = param
-  if fill.ok?
-    source = Defaults.argument_for(fill.unwrap!.shape, node.args.size, param)
-  end
-
+  source = Defaults.argument_for(shape, node.args.size, param)
   if source >= 0
     return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
   end
 
   return lower_default(cx, fx, node, fill.unwrap!, param)
+end
+
+# The same for a builtin form with defaults: the default is the one of the parameter in its catalog row.
+def lower_builtin_argument(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, form: Model.Builtin, shape: Defaults.Shape, param: Int
+) -> Result[Lowering.Out]
+  source = Defaults.argument_for(shape, node.args.size, param)
+  if source >= 0
+    return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
+  end
+
+  return lower_builtin_default(cx, fx, node, form.parameters[param].default)
+end
+
+# The spans of a builtin call for the VM: the call's, then each argument's, in the order of the parameters; a default
+# has the span of the call.
+def builtin_spans(node: Ast.Call, shape: Defaults.Shape) -> List[Source.Span]
+  if shape.total == node.args.size
+    return [node.span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
+  end
+
+  spans = [node.span]
+  param = 0
+  while param < shape.total
+    source = Defaults.argument_for(shape, node.args.size, param)
+    if source >= 0
+      spans = spans.push(Ast.expr_span(node.args[source]))
+    else
+      spans = spans.push(node.span)
+    end
+
+    param += 1
+  end
+
+  return spans
+end
+
+# The default of a builtin parameter, a constant built the way its literal is.
+def lower_builtin_default(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, value: Model.Default
+) -> Result[Lowering.Out]
+  want = fx.next - 1
+  span = node.span
+  literal = Ast.LitValue.Nothing
+  case value
+    Model.Default.Whole(number) -> literal = Ast.LitValue.Whole(number)
+    Model.Default.Real(number) -> literal = Ast.LitValue.Real(number)
+    Model.Default.Text(text) -> literal = Ast.LitValue.Text(text)
+    Model.Default.Flag(flag) -> literal = Ast.LitValue.Flag(flag)
+    Model.Default.Nothing -> literal = Ast.LitValue.Nothing
+    Model.Default.EmptyList -> return Data.lower_list(cx, fx, Ast.ListLit(id: node.id, elements: [], span: span), want)
+    Model.Default.EmptyMap -> return Data.lower_map(cx, fx, Ast.MapLit(id: node.id, entries: [], span: span), want)
+    Model.Default.Variant(name) ->
+      parts = name.split(".")
+      return Data.lower_enum(cx, fx, parts[0], parts[1], [], span, want)
+    Model.Default.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", span))
+  end
+
+  return lower_literal(cx, fx, Ast.Literal(id: node.id, value: literal, span: span), want)
 end
 
 # A default is an expression of the file that declares the function, so it is lowered with that file's index (the

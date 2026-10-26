@@ -209,10 +209,10 @@ Signatures are in
   `gzip.decompress`, concatenated members never decode. One-shot `data` is
   at most 1048576 bytes and `max_out_bytes` is 1 to 1048576, otherwise a
   contract error; output past the cap is an error.
-- `Zlib.crc32(data, seed)` gives `Result[Int]`, the CRC32 (RFC 1952) of
-  `data` chained after `seed`: pass 0 first, then each next chunk with the
-  previous result. Empty input returns `seed` unchanged. `data` is at most
-  1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
+- `Zlib.crc32(data, seed = 0)` gives `Result[Int]`, the CRC32 (RFC 1952) of
+  `data` chained after `seed`: leave the seed out first, then pass each next
+  chunk the previous result. Empty input returns `seed` unchanged. `data` is at
+  most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
 - `Zlib.deflate_file(src, dst, level, max_out_bytes, timeout_ms)` and
   `Zlib.gzip_file(src, dst, level, max_out_bytes, timeout_ms)` compress a
   file and give `Result[Int]`, the bytes written; `Zlib.inflate_file(src,
@@ -443,15 +443,23 @@ extern "libm.so.6"
 end
 ```
 
-- The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
-  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
-  `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
-  `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function pointer, below)
-  and the resources and structs of the block (below); a result may also be
-  `Void`. `C.Int`
-  is `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
-  parameters (`PARSE-EXTERN-ARITY`). A `Float` passed as a `C.Float` is rounded
-  to the nearest float, and one outside its range becomes an infinity.
+- The C types are the integers `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`
+  (`int8_t` to `int64_t`), `C.UInt8`, `C.UInt16`, `C.UInt32` (`uint8_t` to
+  `uint32_t`) and `C.Long` (`long`: 32 bits on Windows, 64 on Linux and
+  macOS), each an `Int` in Agentica, `C.Double` (`double`, `Float`), `C.Float`
+  (a 32-bit `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a
+  `const char *`, `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function
+  pointer, below) and the resources and structs of the block (below); a result
+  may also be `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A
+  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`). A `Float` passed
+  as a `C.Float` is rounded to the nearest float, and one outside its range
+  becomes an infinity.
+- A signed integer result is sign-extended and an unsigned one zero-extended,
+  so a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit
+  type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as
+  `C.Long`. The same bits cross, and a value above the signed maximum reads as
+  negative, as `std/binary`'s `read_i64` reads it (`C.UInt64` and `C.ULong` are
+  `PARSE-EXTERN-TYPE`).
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -474,12 +482,15 @@ end
   05b-modules.md): `extern "NAME"` in a file of the package then opens the file
   it ships for the running system by its absolute path in `deps/`, or the
   system name it gives.
-- An argument is checked before the call: a `C.Int32` outside 32 bits is
-  `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
-  `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
-  it may read only during the call. A `C.String` result is copied; `NULL` reads
-  as `""`, and bytes that are not UTF-8 become U+FFFD. A result that may be
-  NULL is declared `-> C.Pointer` and read with `Native.get_string`.
+- An argument is checked before the call: an integer takes the bits of its type
+  read as signed or as unsigned, as `put_int8` to `put_int32` do (a `C.UInt8` or
+  `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
+  `C.Long` the same on Windows and any `Int` elsewhere), and C gets its low
+  bits; one outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL
+  character is `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each
+  string, which it may read only during the call. A `C.String` result is copied;
+  `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A result
+  that may be NULL is declared `-> C.Pointer` and read with `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -577,20 +588,30 @@ end
   pool thread; a cancel drops the record, and an out resource of a call that
   ran is freed once when it returns. `C.String` and `C.Bytes` cannot be out
   parameters (take a `char **` as an out `C.Pointer`).
+- `Native.closed?(x)` is `true` when a call with `x` would be
+  `RUNTIME-NATIVE-CLOSED`: a resource closed by `Native.close` (in any task) or
+  by the end of its owning task (also the end of a task that returned it), a
+  NULL out resource, and an owned buffer that `Native.free`, its block or its
+  owner's end freed. A live resource or buffer is `false`, also while a
+  `compute def` call holds it; one closed during that call is `true` at once,
+  though `free` waits for the call. A `C.Pointer` of C is never closed (NULL
+  included: `Native.null?` tests that). `true` is final; `false` can be out of
+  date at once if another task may close `x`. It never stops the task and costs
+  as little as a field read. Any other argument is `CHECK-TYPE-MISMATCH`.
 - A `struct` of the block (section 5) is a C struct passed and returned by
   value, laid out as the C compiler of the system lays it out (libffi computes
-  the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program
-  sees a record, copied both ways. A struct result is a new record with each
-  field read from C (a `C.Bool` field is true when its byte is not 0). A struct
+  the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program sees
+  a record, copied both ways. A struct result is a new record with each field
+  read from C (a `C.Bool` field is true when its byte is not 0). A struct
   argument is copied into C memory for the call, each field checked as an
-  argument is: a `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`, a
-  `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field is
-  `RUNTIME-NATIVE-CLOSED`, all before C runs. A field is changed with `.with`
-  and the new record passed back (llama.cpp's params). A `C.Pointer` field is an
-  address that nothing tracks, so the memory it names must outlive C's use; a
-  `compute def` call holds the owned buffers in the fields of its struct
-  arguments as it holds its buffer arguments. A struct with a fixed array
-  field (`char name[16]`) cannot be declared yet.
+  argument is: an integer outside the bits of its type is
+  `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer
+  in a `C.Pointer` field is `RUNTIME-NATIVE-CLOSED`, all before C runs. A field
+  is changed with `.with` and the new record passed back (llama.cpp's params). A
+  `C.Pointer` field is an address that nothing tracks, so the memory it names
+  must outlive C's use; a `compute def` call holds the owned buffers in the
+  fields of its struct arguments as it holds its buffer arguments. A struct with
+  a fixed array field (`char name[16]`) cannot be declared yet.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

@@ -295,8 +295,8 @@ typedef enum {
 typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
 
 /* The builtin that every extern function lowers to (vm/ffi.c). Every builtin whose name starts with AGC_NATIVE_PREFIX
-   (it, the waits Native.wait_readable and wait_writable, Native.close, Native.null, Native.null?, Native.pointer and
-   the memory reads and writes) is native code: the loader notes whether a program imports one, so a run
+   (it, the waits Native.wait_readable and wait_writable, Native.close, Native.closed?, Native.null, Native.null?,
+   Native.pointer and the memory reads and writes) is native code: the loader notes whether a program imports one, so a run
    can refuse native code before it starts (agc_ffi_refusal). */
 #define AGC_NATIVE_CALL "Native.call"
 #define AGC_NATIVE_PREFIX "Native."
@@ -323,7 +323,8 @@ typedef struct {
      builtin whose work grows with a String or a list (a compare, a copy, a UTF-8 walk) is not a leaf even when it
      charges nothing today. List.append and List.set copy the whole list only when a value's tag does not match a packed
      Int or Float list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
-     goes on without the generic tail. A leaf row is never shared, has AGC_NATIVE_NONE and AGC_COST_NONE
+     goes on without the generic tail. A leaf may take rt->sync and drop it before it returns to read shared state
+     (Native.closed?). A leaf row is never shared, has AGC_NATIVE_NONE and AGC_COST_NONE
      (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds abort when a leaf call breaks the
      rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. */
   bool leaf;

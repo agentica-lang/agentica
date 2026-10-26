@@ -2494,6 +2494,19 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.closed?",
+      parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.NativeClosed,
+      implementation: "Native.closed?",
+      effects: ["native"],
+      description: (
+        "True when a resource is closed (by Native.close, its owner's end, or C leaving an out resource NULL) or an " +
+        "owned buffer is freed; false for a live one and for a C.Pointer of C. It never stops the task."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.free",
       parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
       result: Types.Type.Void,
@@ -5111,16 +5124,16 @@ ROWS_56: List[Model.Builtin] = [
       name: "Zlib.crc32",
       parameters: [
         Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "seed", type: Types.Type.Int),
+        Model.Named(name: "seed", type: Types.Type.Int, default: Model.Default.Whole(0)),
       ],
       result: Types.Type.Result(Types.Type.Int),
       rule: Model.Rule.Plain,
       implementation: "Zlib.crc32",
       effects: [],
       description: (
-        "CRC32 (RFC 1952) of bytes chained after seed: pass 0 first, then each next chunk with the previous " +
-        "result; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; " +
-        "VM only."
+        "CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next " +
+        "chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 " +
+        "bytes, seed 0 to 4294967295; VM only."
       ),
       alternatives: [],
     ),

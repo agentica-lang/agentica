@@ -100,6 +100,7 @@ syntax/prelude_name.agc
 syntax/source.agc
 syntax/source_file.agc
 syntax/suggest.agc
+syntax/text.agc
 syntax/token.agc
 syntax/types.agc
 syntax/unicode.agc

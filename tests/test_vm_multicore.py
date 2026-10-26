@@ -38,6 +38,12 @@ SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
 FLAGS = ["--schedulers", SCHEDULERS]
 # A race case runs once in the fast tier and 20 times in the slow tier (make test-slow).
 RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark.slow)], ids=["once", "20x"])
+# The two cases that cost 8 s a repetition (170 s at 20x) repeat 5 times in the slow tier: one repetition already runs
+# 100 rounds or 10 VM runs, enough to catch the fixed race almost surely. The weekly sweep sets
+# AGENTICA_HEAVY_RACE_REPEATS=20 for the long soak.
+HEAVY_REPEATS = int(os.environ.get("AGENTICA_HEAVY_RACE_REPEATS") or "5")
+HEAVY_RACE = pytest.mark.parametrize(
+    "repeats", [1, pytest.param(HEAVY_REPEATS, marks=pytest.mark.slow)], ids=["once", "%dx" % HEAVY_REPEATS])
 
 # The output of these fixtures depends on how tasks interleave (prints from several tasks, a race against a deadline,
 # which of two tasks finds an await cycle, whether a task has run after a yield or a preemption, the count of tasks
@@ -1332,7 +1338,7 @@ def recorded_running(folders):
     return [pid for pid, count in after.items() if before.get(pid) != count]
 
 
-@RACE
+@HEAVY_RACE
 def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeats):
     # Three tasks spawn children in a loop while main returns: every child that started is killed by the end of the
     # run, and a spawn still queued then starts none. A child left behind runs for ever, so once its file is there its
@@ -2159,7 +2165,7 @@ end
 """
 
 
-@RACE
+@HEAVY_RACE
 def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_their_ancestor_returns(tmp_path, repeats):
     # #402, the nested case: the owner hands the listener on to a child (and, nested, the child to a grandchild), then
     # crashes or is cancelled. The cancel of a descendant that runs on another scheduler (busy, or just starting its

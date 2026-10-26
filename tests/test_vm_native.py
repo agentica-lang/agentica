@@ -272,6 +272,97 @@ end
     ]
 
 
+INTEGER_EXTERN = """extern "{library}"
+  struct PeerInts
+    a: C.Int8
+    b: C.UInt16
+    c: C.Int16
+    d: C.UInt8
+    e: C.UInt32
+    f: C.Long
+    p: C.Pointer
+  end
+  def peer_i8(x: C.Int8) -> C.Int8
+  def peer_i16(x: C.Int16) -> C.Int16
+  def peer_u8(x: C.UInt8) -> C.UInt8
+  def peer_u16(x: C.UInt16) -> C.UInt16
+  def peer_u32(x: C.UInt32) -> C.UInt32
+  def peer_long(x: C.Long) -> C.Long
+  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32
+  def peer_cut_i8(x: C.Int64) -> C.Int8
+  def peer_cut_i16(x: C.Int64) -> C.Int16
+  def peer_cut_u8(x: C.Int64) -> C.UInt8
+  def peer_cut_u16(x: C.Int64) -> C.UInt16
+  def peer_cut_u32(x: C.Int64) -> C.UInt32
+  def peer_long_bits() -> C.Int32
+  def peer_long_max() -> C.Long
+  def peer_long_min() -> C.Long
+  def peer_out_ints(
+    out a: C.Int8, out b: C.Int16, out c: C.UInt8, out d: C.UInt16, out e: C.UInt32, out f: C.Long,
+  ) -> Void
+  def peer_ints_max() -> PeerInts
+  def peer_ints_text(s: PeerInts) -> C.String
+  compute def ints_text_later(s: PeerInts) -> C.String = "peer_ints_text"
+  def vmix_ints(kinds: C.String, ..., a: C.UInt32, b: C.Long) -> C.Double = "peer_vmix"
+end
+
+"""
+
+
+# Each integer type at the ends of its range, as an argument and a result, an out parameter, a struct field (C reads
+# the fields at its own offsets, which move with the size of long) and a variadic argument. A signed result is
+# sign-extended and an unsigned one zero-extended, also when C leaves the register's high bits set (peer_cut_*), so a
+# C.UInt32 above 2^31 is positive. An argument takes the bits of its type read as signed or unsigned, as put_int8 to
+# put_int32 do: -1 and 255 are the same C.UInt8. C.Long has the platform's width, 32 bits on Windows and 64
+# elsewhere, which only the Windows run checks for 32.
+@NATIVE_CALLS
+def test_each_integer_type_crosses_at_the_ends_of_its_range(tmp_path, peer):
+    main = """def main() -> Void
+  puts([peer_i8(-128), peer_i8(127), peer_i8(255), peer_i16(-32_768), peer_i16(32_767), peer_i16(65_535)])
+  puts([peer_u8(0), peer_u8(255), peer_u8(-1), peer_u16(65_535), peer_u16(-32_768)])
+  puts([peer_u32(0), peer_u32(2_147_483_648), peer_u32(4_294_967_295), peer_u32(-1), peer_add(2_147_483_648, 0)])
+  puts([peer_cut_i8(511), peer_cut_i16(131_071), peer_cut_u8(511), peer_cut_u16(-1), peer_cut_u32(-16)])
+  puts([peer_long_bits(), peer_long(peer_long_max()), peer_long(peer_long_min()), peer_long(-5), peer_long(0)])
+  puts(peer_out_ints())
+  m = peer_ints_max()
+  puts([m.a, m.b, m.c, m.d, m.e, m.f - peer_long_max()])
+  puts(peer_ints_text(m))
+  puts(ints_text_later(m.with(a: -128, b: 0, c: -32_768, d: 0, e: -1, f: peer_long_min(), p: Native.null())))
+  puts(vmix_ints("jn", 4_000_000_000, -5))
+end
+"""
+    result = agentica(program(tmp_path, INTEGER_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    bits = 32 if WINDOWS else 64
+    high, low = 2 ** (bits - 1) - 1, -2 ** (bits - 1)
+    assert result.stdout.split("\n") == [
+        "[-128, 127, -1, -32768, 32767, -1]",
+        "[0, 255, 255, 65535, 32768]",
+        "[0, 2147483648, 4294967295, 4294967295, -2147483648]",
+        "[-1, -1, 255, 65535, 4294967280]",
+        "[%d, %d, %d, -5, 0]" % (bits, high, low),
+        "PeerOutInts(a: -128, b: -32768, c: 255, d: 65535, e: 4294967295, f: %d)" % low,
+        "[127, 65535, 32767, 255, 4294967295, 0]",
+        "a=127 b=65535 c=32767 d=255 e=4294967295 f=%d p=text" % high,
+        "a=-128 b=0 c=-32768 d=0 e=4294967295 f=%d p=null" % low,
+        "3999999995.0",
+        "",
+    ]
+
+
+# An integer outside the bits of its type, read as signed or as unsigned, stops the run at the extern function before
+# C runs, as an argument and as a struct field. C.Long takes any Int where long has 64 bits, and up to 2^32 - 1 on
+# Windows.
+@NATIVE_CALLS
+@pytest.mark.parametrize("call", [
+    "peer_i8(-129)", "peer_u8(256)", "peer_i16(-32_769)", "peer_u16(65_536)", "peer_u32(4_294_967_296)",
+    "peer_add(-2_147_483_649, 0)", "peer_ints_text(peer_ints_max().with(b: 65_536))",
+] + (["peer_long(4_294_967_296)"] if WINDOWS else []))
+def test_an_integer_outside_the_bits_of_its_type_stops_the_run(tmp_path, peer, call):
+    main = "def main() -> Void\n  puts(%s)\nend\n" % call
+    refused_at_extern(tmp_path, peer, INTEGER_EXTERN, main, call, "RUNTIME-INTEGER-OVERFLOW")
+
+
 @NATIVE_CALLS
 def test_an_extern_function_is_exported_and_imported_like_any_function(tmp_path, peer):
     raw = PEER_EXTERN.format(library=literal(peer)).replace("  def peer_add(", "  export def peer_add(")
@@ -1373,6 +1464,90 @@ end
     assert result.stdout.split("\n") == ["[10, 6, 15000000000, 42, 5]", "1.25", "true", "-1", "42", "1", ""]
 
 
+CLOSED_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_res_get(res: Res) -> C.Int32
+  compute def peer_res_hold(res: Res, limit_ms: C.Int32) -> C.Int32
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_out_null(out res: Res) -> C.Int32
+  def peer_ptr_static() -> C.Pointer
+  def peer_set_flag() -> Void
+end
+
+def get(res: Res) -> Result[Int]
+  if Native.closed?(res)
+    return error("closed")
+  end
+
+  return ok(peer_res_get(res))
+end
+
+def opened(n: Int) -> Res
+  return peer_res_open(n).unwrap!
+end
+
+def close(res: Res) -> Bool
+  Native.close(res)
+  return Native.closed?(res)
+end
+
+def hold(res: Res) -> Int
+  return peer_res_hold(res, 20_000)
+end
+
+def main() -> Void
+  res = peer_res_open(1).unwrap!
+  puts([Native.closed?(res), Native.closed?(res)])
+  IO.inspect(get(res))
+  Native.close(res)
+  puts(Native.closed?(res))
+  IO.inspect(get(res))
+  puts(Native.closed?(peer_out_null().res))
+  other = peer_res_open(2).unwrap!
+  puts(Task.await(Task.spawn(&close, other)))
+  puts(Native.closed?(other))
+  puts(Native.closed?(Task.await(Task.spawn(&opened, 3))))
+  handed = peer_res_open(4).unwrap!
+  IO.inspect(Task.await(Task.spawn_owning(&get, handed)))
+  puts(Native.closed?(handed))
+  held = peer_res_open(5).unwrap!
+  holder = Task.spawn(&hold, held)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(Native.closed?(held))
+  Native.close(held)
+  puts("#{{Native.closed?(held)}} #{{peer_res_frees()}}")
+  peer_set_flag()
+  puts(Task.await(holder))
+  buf = Native.memory_pointer(8)
+  puts(Native.closed?(buf))
+  Native.free(buf)
+  puts([Native.closed?(buf), Native.closed?(Native.null()), Native.closed?(peer_ptr_static())])
+end
+"""
+
+
+# Native.closed? asks what a call would refuse with RUNTIME-NATIVE-CLOSED, so a wrapper can return an error instead:
+# false while the resource is live (also while a compute call in another task holds it), true after Native.close in
+# this task or another, for an out resource that C left NULL, after the end of the task that owned it (Task.spawn's
+# result, Task.spawn_owning's argument), and at once when it is closed while a compute call holds it, before the free
+# runs. An owned buffer is closed once freed; a C.Pointer of C, NULL included, never is.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_closed_tells_a_live_resource_from_a_closed_one(tmp_path, peer, schedulers):
+    result = agentica("--schedulers", schedulers, program(tmp_path, CLOSED_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "[false, false]", "ok(1)", "true", 'error("closed")', "true", "true", "true", "true", "ok(4)", "true",
+        "false", "true 4", "5", "false", "[true, false, false]", "",
+    ]
+
+
 # The record of an exported extern function is exported with it: another file names its type and reads its fields.
 @NATIVE_CALLS
 def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
@@ -1817,10 +1992,10 @@ end
 
 
 # What C cannot take in a struct field stops the run at the extern function before C runs, as for an argument: a
-# C.Int32 field out of range (a nested one too) and a freed owned buffer in a C.Pointer field.
+# C.Int32 field outside 32 bits, signed or unsigned (a nested one too) and a freed owned buffer in a C.Pointer field.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code", [
-    ("peer_pair_sum(PeerPair(x: 2_147_483_648, y: 0))", "RUNTIME-INTEGER-OVERFLOW"),
+    ("peer_pair_sum(PeerPair(x: 4_294_967_296, y: 0))", "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_nested_bump(peer_nested_make(1).with(mixed: PeerMixed(n: -2_147_483_649, x: 0.0)))",
      "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed))", "RUNTIME-NATIVE-CLOSED"),
@@ -2123,7 +2298,7 @@ def main() -> Void
   elsif arg == "sym"
     puts(no_such_function_here())
   elsif arg == "int"
-    puts(abs(2_147_483_648))
+    puts(abs(4_294_967_296))
   else
     puts(strlen("a" + String.from_code(0)))
   end
@@ -2210,9 +2385,11 @@ end
 
 
 # `agentica test` gives the flags to the VMs of the test files, not to the runner: in front of `test` or after it, a
-# test file that declares extern functions is a file error, and the other files still run, under --sandbox too.
+# test file that declares extern functions is a file error, and the other files still run, under --sandbox too. The
+# runner treats every flag alike, and test_deny_native_refuses_the_program_at_load shows that each one turns on
+# --deny-native, so the direct flag and the one that turns on all of them are enough here.
 @NATIVE_CALLS
-@pytest.mark.parametrize("flag", DENY_FLAGS)
+@pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
 def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     (tmp_path / "test").mkdir()
     program(tmp_path / "test", EXTERN_TEST, "native_test.agc")
@@ -2302,7 +2479,8 @@ end
 
 
 # sqlite3_open gives an out Db and sqlite3_prepare_v2 an out Stmt (and the tail as a C.Pointer). A table gets two
-# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
+# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. SQL of
+# only a comment is SQLITE_OK with a NULL Stmt too, which Native.closed? tells apart before the step (#672). An open
 # that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
@@ -2321,6 +2499,9 @@ def run(db: Db, sql: String) -> Int
   if prepared.result != SQLITE_OK
     return prepared.result
   end
+  if Native.closed?(prepared.stmt)
+    return -1
+  end
   code = sqlite3_step(prepared.stmt)
   Native.close(prepared.stmt)
   return code
@@ -2331,6 +2512,7 @@ def main() -> Void
   puts(run(db, "create table t (id integer, name text)"))
   puts(run(db, "insert into t values (1, 'one')"))
   puts(run(db, "insert into t values (2, 'two')"))
+  puts(run(db, "-- only a comment"))
   query = sqlite3_prepare_v2(db, "select id, name from t order by id", -1)
   puts(query.result)
   while sqlite3_step(query.stmt) == SQLITE_ROW
@@ -2340,15 +2522,19 @@ def main() -> Void
   bad = sqlite3_prepare_v2(db, "select from nowhere", -1)
   puts([bad.result, sqlite3_errcode(db)])
   puts(sqlite3_errmsg(db).end_with?("syntax error"))
+  puts(Native.closed?(bad.stmt))
   Native.close(bad.stmt)
+  puts(Native.closed?(db))
   Native.close(db)
+  puts(Native.closed?(db))
   IO.inspect(open("/no/such/dir/x.db"))
 end
 """
     result = agentica(program(tmp_path, "SQLITE_OK = 0\nSQLITE_ROW = 100\n\n" + SQLITE_OUT_EXTERN + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "101", "101", "101", "0", "1 one", "2 two", "[1, 1]", "true", "14", 'error("sqlite open: 14")', "",
+        "101", "101", "101", "-1", "0", "1 one", "2 two", "[1, 1]", "true", "true", "false", "true", "14",
+        'error("sqlite open: 14")', "",
     ]
 
 

@@ -14,6 +14,7 @@ import Lists from "check_list"
 import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
+import Defaults from "defaults"
 import RubyForm from "ruby_form"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
@@ -70,7 +71,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     name = RubyForm.shown(entry.name)
   end
 
-  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| (form.parameters.size - skipped).to_s end
+  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| Builtins.arity_text(form, skipped) end
   expected = counts.join(" or ")
   message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
   base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
@@ -190,15 +191,23 @@ end
 
 # A builtin with no rule: each argument against its parameter.
 def check_plain(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  form = site.selected
+  count = site.args.size
+  shape = Defaults.Shape(required: count, total: count, fn_last: false)
+  if Builtins.defaulted?(form)
+    shape = Defaults.builtin_shape(form)
+  end
+
   current = st
   index = 0
-  while index < site.args.size and index < site.selected.parameters.size
-    out = try State.expr(cx, current, site.args[index], site.selected.parameters[index].type)
+  while index < count and index < form.parameters.size
+    param = Defaults.param_of(shape, count, index)
+    out = try State.expr(cx, current, site.args[index], form.parameters[param].type)
     current = out.st
     index += 1
   end
 
-  return ok(State.Out(st: current, type: site.selected.result))
+  return ok(State.Out(st: current, type: form.result))
 end
 
 # puts and print: any value that can be printed.

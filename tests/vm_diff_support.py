@@ -8,7 +8,8 @@ three diagnostic formats, plus a `--max-steps` sweep. The test modules tests/tes
     python3 -m tests.vm_diff_support check    check only the fixtures named in AGENTICA_FIXTURES (make vm-golden-check)
 
 Environment: AGENTICA_FIXTURES names fixtures (space or comma separated, without .agc; it is an error when CI is
-set), AGENTICA_SWEEP is `full` or `sampled` and AGENTICA_SWEEP_SEED fixes the sampled draw.
+set), AGENTICA_SWEEP is `full`, `sampled` or `ends` (only the limits 1, T - 1, T and the last one) and
+AGENTICA_SWEEP_SEED fixes the sampled draw.
 """
 import itertools
 import json
@@ -52,9 +53,13 @@ FIXTURE_TOKEN = "@fixtures/"
 FD_TOKEN = "@fds"
 
 SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
-if SWEEP_MODE not in ("", "full", "sampled"):
-    raise RuntimeError("AGENTICA_SWEEP must be full or sampled, not %r" % SWEEP_MODE)
+if SWEEP_MODE not in ("", "full", "sampled", "ends"):
+    raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
+# Fixtures whose every run is costly (1000 file rounds; three fixed sleeps): they get the `ends` sweep in every mode but
+# full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
+# task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
+ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc"}
 
 # What a run that outlived its time limit reports in place of an exit code.
 TIMEOUT = "timeout"
@@ -474,10 +479,12 @@ def check_text_format(on_vm, full, message):
         assert diagnostic == "", message
 
 
-def check_steps(total, expected_steps, name):
-    """A fixture stays within the step allowance of its golden."""
-    assert total <= step_allowance(expected_steps), \
-        "%s takes %s steps, more than its golden %s allows (over-charging)" % (name, total, expected_steps)
+def check_step_allowance(limited, expected_steps, name):
+    """A fixture stays within the step allowance of its golden: one run under the allowance must finish. With the
+    limit monotonic (check_sweep), that is the same as the smallest limit that finishes being at most the allowance.
+    A lower count passes, as the per-system goldens (files-real-windows) are only refreshed on their system."""
+    assert not limited(step_allowance(expected_steps)), \
+        "%s takes more steps than its golden %s allows (over-charging)" % (name, expected_steps)
 
 
 def check_limited(on_vm, full, name, limit, note=""):
@@ -540,9 +547,8 @@ def check_fixture(program, work):
     bytecode = compile_agc(program, work / (program.stem + ".agcb"))
     full = read_expected(program)
     expected_steps = read_expected_steps(program)
-    total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))
-    check_steps(total, expected_steps, name)
-    limits = sampled_limits(total, expected_steps, name) if SAMPLED_SWEEP else sweep_limits(total, expected_steps)
+    check_step_allowance(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)), expected_steps, name)
+    limits = fixture_limits(name, expected_steps)
     text_styles = ["plain", "ai"]
     results = vm_batch(
         fixture, bytecode,
@@ -656,7 +662,8 @@ def step_allowance(steps):
 
 
 def total_steps(limited):
-    """The smallest --max-steps under which the program finishes; `limited(n)` says whether a limit of n stops it."""
+    """The smallest --max-steps under which the program finishes; `limited(n)` says whether a limit of n stops it.
+    Only `make goldens` searches: the tests check the recorded count (check_step_allowance)."""
     low = high = 1
     while limited(high):
         low, high = high, high * 2
@@ -669,13 +676,26 @@ def total_steps(limited):
     return high
 
 
-def sweep_limits(total, expected_steps):
-    if total <= FULL_SWEEP_LIMIT:
-        limits = list(range(1, total + 1))
+def fixture_limits(name, steps):
+    """The --max-steps limits of a fixture, around the step count T of its golden (the check of the allowance proves
+    that the VM's own count is not above it)."""
+    if SWEEP_MODE == "ends" or (name in ENDS_ONLY_FIXTURES and SWEEP_MODE != "full"):
+        return end_limits(steps)
+    return sampled_limits(steps, name) if SAMPLED_SWEEP else sweep_limits(steps)
+
+
+def end_limits(steps):
+    """1, T - 1, T and the last limit: the first and the last stop, and the finish."""
+    return sorted({limit for limit in (1, steps - 1, steps) if limit >= 1}) + [last_limit(steps)]
+
+
+def sweep_limits(steps):
+    if steps <= FULL_SWEEP_LIMIT:
+        limits = list(range(1, steps + 1))
     else:
         limits = list(dict.fromkeys(
-            list(range(1, SWEEP_HEAD + 1)) + list(range(SWEEP_HEAD, total, total // 50)) + [total - 1, total]))
-    return limits + [last_limit(expected_steps)]
+            list(range(1, SWEEP_HEAD + 1)) + list(range(SWEEP_HEAD, steps, steps // 50)) + [steps - 1, steps]))
+    return limits + [last_limit(steps)]
 
 
 def _head_sha():
@@ -715,10 +735,10 @@ def name_seed(name):
     return value
 
 
-def sampled_limits(total, expected_steps, name):
-    """1, 2, total - 1, total, the last limit and one limit drawn from each eighth of 3 to total - 2."""
+def sampled_limits(steps, name):
+    """1, 2, T - 1, T, the last limit and one limit drawn from each eighth of 3 to T - 2."""
     low = 3
-    high = total - 2
+    high = steps - 2
     span = high - low + 1
     if span <= SAMPLE_POINTS:
         middle = list(range(low, high + 1))
@@ -729,8 +749,8 @@ def sampled_limits(total, expected_steps, name):
             start = low + bucket * span // SAMPLE_POINTS
             end = low + (bucket + 1) * span // SAMPLE_POINTS
             middle.append(start + draw.randrange(end - start))
-    chosen = sorted({limit for limit in [1, 2, *middle, total - 1, total] if 1 <= limit <= total})
-    return chosen + [last_limit(expected_steps)]
+    chosen = sorted({limit for limit in [1, 2, *middle, steps - 1, steps] if 1 <= limit <= steps})
+    return chosen + [last_limit(steps)]
 
 
 class VmCase(TestCase):
@@ -752,8 +772,8 @@ class VmCase(TestCase):
     def check_sweep(self, results, limits, full, name, note=""):
         return check_sweep(results, limits, full, name, note)
 
-    def check_steps(self, total, expected_steps, name):
-        return check_steps(total, expected_steps, name)
+    def check_step_allowance(self, limited, expected_steps, name):
+        return check_step_allowance(limited, expected_steps, name)
 
     def check_fixture(self, program):
         return check_fixture(program, self.work_dir())

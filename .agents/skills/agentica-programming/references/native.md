@@ -8,17 +8,18 @@ extern "libm.so.6"
   ## The cosine of x.
   export def cos(x: C.Double) -> C.Double
 
-  def labs(n: C.Int64) -> C.Int64
+  def labs(n: C.Long) -> C.Long
 end
 ~~~
 
-- Types: `C.Int32` (32-bit `int`, an `Int`), `C.Int64` (`Int`), `C.Double`
-  (`Float`), `C.Float` (32-bit `float`, a `Float`, rounded; out of range is an
-  infinity), `C.Bool` (`Bool`), `C.String` (`const char *`, a `String`); a
-  result may be `Void`. Anything else (`C.Int` too: write the width) is
-  `PARSE-EXTERN-TYPE`; more than 64 parameters `PARSE-EXTERN-ARITY`; a name
-  with `?` or `!` `PARSE-EXTERN-NAME`; a default `PARSE-EXTERN-DEFAULT`. `##`
-  docs go on the `def` lines.
+- Types: the integers `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`, `C.UInt8`,
+  `C.UInt16`, `C.UInt32` and `C.Long` (C `long`: 32 bits on Windows, 64
+  elsewhere), each an `Int`; `C.Double` (`Float`), `C.Float` (32-bit `float`, a
+  `Float`, rounded; out of range is an infinity), `C.Bool` (`Bool`), `C.String`
+  (`const char *`, a `String`); a result may be `Void`. Anything else (`C.Int`
+  too: write the width) is `PARSE-EXTERN-TYPE`; more than 64 parameters
+  `PARSE-EXTERN-ARITY`; a name with `?` or `!` `PARSE-EXTERN-NAME`; a default
+  `PARSE-EXTERN-DEFAULT`. `##` docs go on the `def` lines.
 - The library is a plain string: a name without `/` (the system looks it up) or
   an absolute path, else `PARSE-EXTERN-LIBRARY`. It opens at the first call; not
   found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
@@ -33,8 +34,13 @@ end
   (SIP drops them).
 - A package picks its library per system in its `agentica.toml`
   (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it.
-- A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
-  `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
+- An integer argument takes the bits of its type read as signed or unsigned,
+  as `put_int32` does (`C.Int32` -2^31 to 2^32 - 1, `C.UInt8` -128 to 255), and
+  C gets the low bits; outside is `RUNTIME-INTEGER-OVERFLOW`. Unsigned results
+  are never negative (`C.UInt32` above 2^31 is positive). No unsigned 64-bit
+  type: `uint64_t` and `size_t` are `C.Int64`, `unsigned long` is `C.Long`
+  (same bits; above the signed maximum reads negative). A NUL in a `C.String`
+  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
   `""`: when NULL matters, declare `-> C.Pointer` and use `Native.get_string`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
@@ -90,7 +96,6 @@ end
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no
   `to_s` or JSON; inspects as `<Db>`.
-
   ~~~ruby
   extern "libc.so.6"
     resource Stream, free: fclose
@@ -98,7 +103,15 @@ end
     def fputs(text: C.String, stream: Stream) -> C.Int32
   end
   ~~~
-- `out NAME: T` is an out parameter (`T` is `C.Int32`, `C.Int64`, `C.Double`,
+- `Native.closed?(x) -> Bool` asks before a call would stop the task with
+  `RUNTIME-NATIVE-CLOSED`, so a wrapper can return `error`: `true` after
+  `Native.close` (any task) or the owner's end (a resource a task returned
+  arrives closed), for a NULL out resource and for a freed owned buffer; `false`
+  for a live one (also while a `compute def` holds it; `true` at once if closed
+  during that call) and for any `C.Pointer` of C, NULL included. `true` is
+  final; `false` can go stale if another task may close `x`. Other types:
+  `CHECK-TYPE-MISMATCH`.
+- `out NAME: T` is an out parameter (`T` is an integer type, `C.Double`,
   `C.Float`, `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`).
   The caller does not pass it; C writes through a pointer to a zeroed slot. The
   call returns a record named after the function in CamelCase
@@ -106,8 +119,9 @@ end
   per out parameter.
   An out resource field is the resource (not a `Result`): owned by the task
   when C wrote a pointer, closed (never freed, calls fail with
-  `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` first. An out
-  named `result` beside a C result is `PARSE-EXTERN-OUT`.
+  `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` or
+  `Native.closed?` first (comment-only SQL gives `SQLITE_OK` and a NULL
+  statement). An out named `result` beside a C result is `PARSE-EXTERN-OUT`.
 
   ~~~ruby
   extern "libsqlite3.so.0"
@@ -165,8 +179,9 @@ end
   function when the `def` name differs, so one function takes several shapes.
   `...` needs a C parameter (not a `C.Function`) before it
   (`PARSE-EXTERN-VARIADIC-FIXED`), once, in an extern block
-  (`PARSE-EXTERN-VARIADIC`); after it no `out`, no `C.Bool` and no `C.Float` (C
-  promotes them: write `C.Int32`, `C.Double`; `PARSE-EXTERN-VARIADIC-TYPE`); the
+  (`PARSE-EXTERN-VARIADIC`); after it no `out`, no `C.Bool`, `C.Int8`,
+  `C.Int16`, `C.UInt8`, `C.UInt16` and no `C.Float` (C promotes them: write
+  `C.Int32`, `C.Double`; `PARSE-EXTERN-VARIADIC-TYPE`); the
   C name is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a
   variadic function without `...`: on Apple arm64 its arguments go on the stack.
 
@@ -202,7 +217,7 @@ end
   ~~~
 - C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
   `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
-  the header in its order, each `C.Int32`, `C.Int64`, `C.Double`, `C.Float`,
+  the header in its order, each an integer type, `C.Double`, `C.Float`,
   `C.Bool`, `C.Pointer` or a struct declared above in the block (else
   `PARSE-EXTERN-TYPE`: a `char *` is a `C.Pointer` read with
   `Native.get_string`; no fixed arrays). The program sees an ordinary struct

@@ -378,7 +378,8 @@ static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *a
   return result;
 }
 #else
-/* The call of a leaf builtin (agc_builtin.leaf). A leaf row is never shared, so it needs no lock. */
+/* The call of a leaf builtin (agc_builtin.leaf). A leaf row is never shared, so the caller takes no lock; a leaf that
+   reads shared state takes rt->sync and drops it itself (agc_builtin.leaf). */
 static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
   return b->fn(vm, args, span);
 }

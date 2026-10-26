@@ -7,6 +7,7 @@
 #include "io_harness.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,7 +82,8 @@ static void test_bad_signatures(void) {
                        "dd.f cos " LIBM, "Fd cos " LIBM, "ddc cos " LIBM, "dcc cos " LIBM, "dC cos " LIBM,
                        "dde cos " LIBM, "rl malloc C.Function Mem " LIBM, "rlee malloc C.Function Mem " LIBM,
                        "rle malloc free Mem " LIBM, "dc.d cos " LIBM, "dd.e cos " LIBM, "ce cos " LIBM,
-                       "rel malloc C.Function Mem " LIBM, "rcel malloc C.Function Mem " LIBM};
+                       "rel malloc C.Function Mem " LIBM, "rcel malloc C.Function Mem " LIBM, "dd.g cos " LIBM,
+                       "dd.h cos " LIBM, "dd.u cos " LIBM, "dd.w cos " LIBM, "dK cos " LIBM, "Nd cos " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -99,8 +101,14 @@ static void test_calls(void) {
   fails("dd cos " LIBM, NULL, 0, "RUNTIME-INTERNAL");
   agc_value word = text("x");
   fails("dd cos " LIBM, &word, 1, "RUNTIME-INTERNAL");
-  agc_value big = agc_int(INT64_C(1) << 31);
+  /* A C.Int32 takes 32 bits read as signed or unsigned: 2^32 is out. */
+  agc_value big = agc_int(INT64_C(1) << 32);
   fails("ii abs " LIBC, &big, 1, "RUNTIME-INTEGER-OVERFLOW");
+  /* C.Long is the platform's long: long labs(long). */
+  agc_value negative = agc_int(-5);
+  assert(agc_as_int(&vm, native_call("nn labs " LIBC, &negative, 1)) == 5);
+  agc_value long_max = agc_int(LONG_MAX);
+  assert(agc_as_int(&vm, native_call("nn labs " LIBC, &long_max, 1)) == LONG_MAX);
   agc_value nul = agc_string_value(agc_make_string("a\0b", 3, 3));
   fails("ls strlen " LIBC, &nul, 1, "RUNTIME-INVALID-CHARACTER");
   agc_value small = agc_int(-(INT64_C(1) << 31));
@@ -532,7 +540,7 @@ static void test_structs(void) {
   got = agc_as_struct(&vm, native_call("{1:fbp}c{1:fbp} flags_flip " LIBM, flag_args, 2));
   assert(agc_as_float(&vm, got->fields[0]) == (double)(0.1f * 2) && agc_as_bool(&vm, got->fields[1]));
   assert(agc_as_c_pointer(&vm, got->fields[2]) == &vm);
-  fields[0] = agc_int(INT64_C(1) << 31);
+  fields[0] = agc_int(INT64_C(1) << 32);
   args[1] = make_struct(0, fields, 2);
   fails("{0:id}c{0:id} mixed_twice " LIBM, args, 2, "RUNTIME-INTEGER-OVERFLOW");
   args[1] = make_struct(1, flag_fields, 3);
