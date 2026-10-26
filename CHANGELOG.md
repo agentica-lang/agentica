@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system
   call); the timeout may start up to one turn late.
+- `Map.delete` and `Set.delete` are much faster on large maps, and
+  `put`/`add` are about 2.5 times faster.
 
 ### Fixed
 

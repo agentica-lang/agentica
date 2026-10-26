@@ -113,9 +113,10 @@ Collection operations preserve their inputs. Costs exclude callback work.
 - `Map.get` with two arguments gives `ok(value)` or `error(message)`. With
   three, the default is always evaluated; `false` and `nil` are present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put
-  back later goes to the end. It is O(n). `Map.values` follows the `Map.keys`
-  order.
-- `Set.delete` is O(n) like `Map.delete`.
+  back later goes to the end. It is O(log32 n) amortized along one line of
+  versions, with an O(n) rebuild of the key list after many deletes.
+  `Map.values` follows the `Map.keys` order.
+- `Set.delete` costs the same as `Map.delete`.
 
 `Lazy[T]` is a lazy pipeline: an immutable recipe of a source and steps, not a
 cursor. Building one runs nothing; a terminal runs it, pulling one item at a

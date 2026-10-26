@@ -1,7 +1,7 @@
 /*
  * The HAMT: 20,000 keys, order, replacement, persistence, full hash
  * collisions, add that leaves a member alone (and the Set text), delete down to
- * an empty map, and deep nesting.
+ * an empty map, dead key cells (put back, subset, churn), and deep nesting.
  */
 #include "../core.h"
 
@@ -215,9 +215,39 @@ int main(void) {
   removed = agc_map_put(&vm, removed, agc_int(3), agc_int(4));
   assert(removed->size == 1 && get_int(removed, agc_int(3)) == 4);
 
+  /* A delete leaves a dead cell in the key list: a key put back goes last, a
+     replaced value keeps its place, and a subset test skips dead cells. */
+  agc_map *order = agc_new_map();
+  for (int64_t k = 0; k < 5; k++) order = agc_map_put(&vm, order, agc_int(k), agc_int(k));
+  agc_map *back = agc_map_put(&vm, agc_map_delete(&vm, order, agc_int(1)), agc_int(1), agc_int(9));
+  back = agc_map_put(&vm, agc_map_delete(&vm, back, agc_int(4)), agc_int(2), agc_int(8));
+  assert(back->size == 4 && back->dead == 2 && get_int(back, agc_int(1)) == 9 && get_int(order, agc_int(1)) == 1);
+  debug_is(agc_map_value(back), "{0: 0, 2: 8, 3: 3, 1: 9}");
+  debug_is(agc_map_value(order), "{0: 0, 1: 1, 2: 2, 3: 3, 4: 4}");
+  agc_map *small = agc_map_delete(&vm, order, agc_int(4));
+  assert(agc_set_subset(&vm, small, back) && agc_set_subset(&vm, back, small) && !agc_set_subset(&vm, order, back));
+  agc_map *churn = order;
+  bool compacted = false;
+  for (int64_t k = 0; k < 1000; k++) {
+    agc_map *before = churn;
+    churn = agc_map_put(&vm, agc_map_delete(&vm, churn, agc_int(k % 5)), agc_int(k % 5), agc_int(k));
+    assert(churn->dead <= churn->size && get_int(before, agc_int(k % 5)) == (k < 5 ? k : k - 5));
+    if (churn->dead == 0) compacted = true;
+  }
+  assert(churn->size == 5 && compacted);
+  debug_is(agc_map_value(churn), "{0: 995, 1: 996, 2: 997, 3: 998, 4: 999}");
+  debug_is(agc_map_value(order), "{0: 0, 1: 1, 2: 2, 3: 3, 4: 4}");
+
   agc_map *thin = collide;
   for (int64_t k = 0; k < 39; k++) thin = agc_map_delete_hash(&vm, thin, same, agc_int(k));
   assert(thin->size == 1 && get_hashed(thin, same, 39) == 390 && get_hashed(collide, same, 0) == 0);
+  agc_map *half_thin = collide;
+  for (int64_t k = 0; k < 40; k += 2) half_thin = agc_map_delete_hash(&vm, half_thin, same, agc_int(k));
+  agc_value *odd = agc_map_keys(&vm, half_thin, 0);
+  for (int64_t k = 0; k < 20; k++) assert(agc_as_int(&vm, odd[k]) == 2 * k + 1);
+  agc_value *all = agc_map_keys(&vm, collide, 0);
+  for (int64_t k = 0; k < 40; k++) assert(agc_as_int(&vm, all[k]) == k);
+  assert(agc_as_int(&vm, agc_map_keys(&vm, thin, 0)[0]) == 39);
   thin = agc_map_put_hash(&vm, thin, same, agc_int(0), agc_int(1));
   assert(thin->size == 2 && get_hashed(thin, same, 0) == 1 && get_hashed(thin, same, 39) == 390);
   thin = agc_map_delete_hash(&vm, agc_map_delete_hash(&vm, thin, same, agc_int(39)), same, agc_int(0));

@@ -122,11 +122,11 @@ def random_lists(rng, universe, count):
         )
 
 
-def walks(kind, rng, universe, count):
+def walks(kind, rng, universe, count, base_max=6, step_counts=(10, 60), moves="+-"):
     rows = []
     for _ in range(count):
-        base = [rng.choice(universe) for _ in range(rng.randint(0, 6))]
-        steps = [(rng.choice("+-"), rng.choice(universe)) for _ in range(rng.randint(10, 60))]
+        base = [rng.choice(universe) for _ in range(rng.randint(0, base_max))]
+        steps = [(rng.choice(moves), rng.choice(universe)) for _ in range(rng.randint(*step_counts))]
         result = walk(new(base), steps)
         encoded = ",".join(op + str(x) for op, x in steps)
         rows.append(";".join([kind, "walk", field(base), encoded, field(result)]))
@@ -164,6 +164,10 @@ def main():
             rows += vectors_for(kind, a_items, b_items, rng.choice(universe))
         rows += walks(kind, rng, small, 25)
     rows += large(rng)
+    # Long walks, two deletes for each add, so that deleted elements outnumber
+    # the ones left and the VM rebuilds its key list.
+    rows += walks("i", rng, list(range(-100, 200)), 2, 400, (900, 1200), "+--")
+    rows += walks("s", rng, [f"k{n}" for n in range(300)], 1, 400, (900, 1200), "+--")
     OUTPUT.write_text(HEADER + "\n" + "\n".join(rows) + "\n", encoding="utf-8")
     print(f"wrote {len(rows)} vectors to {OUTPUT}")
 
