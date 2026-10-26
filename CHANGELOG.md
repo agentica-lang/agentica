@@ -11,6 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
+- `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
+  can return an `error`.
 
 ### Changed
 

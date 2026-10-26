@@ -2494,6 +2494,19 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.closed?",
+      parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.NativeClosed,
+      implementation: "Native.closed?",
+      effects: ["native"],
+      description: (
+        "True when a resource is closed (by Native.close, its owner's end, or C leaving an out resource NULL) or an " +
+        "owned buffer is freed; false for a live one and for a C.Pointer of C. It never stops the task."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.free",
       parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
       result: Types.Type.Void,

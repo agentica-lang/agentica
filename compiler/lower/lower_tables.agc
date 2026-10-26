@@ -50,7 +50,7 @@ export VM_BUILTINS = Set.new([
   "Test.run", "Test.eq", "Test.ok?", "Test.error?", "Test.assert", "FrontEnd.hand_off", "FrontEnd.std_source",
   "FrontEnd.stdin_bytes", "Task.map", "Task.cancel", "Profile.measure", "Profile.steps", "Std.source",
   "String.compare", "Crypto.sha256", "Native.wait_readable", "Native.wait_writable", "Native.close",
-  "Native.null", "Native.null?", "Native.pointer", "Native.memory_pointer",
+  "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.memory_pointer",
   "Native.free", "Native.get_int8", "Native.get_int16", "Native.get_int32", "Native.get_int64", "Native.get_uint8",
   "Native.get_uint16", "Native.get_uint32", "Native.get_float32", "Native.get_float64", "Native.get_pointer",
   "Native.put_int8", "Native.put_int16", "Native.put_int32", "Native.put_int64", "Native.put_float32",
