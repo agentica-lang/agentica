@@ -248,14 +248,21 @@ def trace_env(tmp_path):
 
 def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_peers(tmp_path, adopt, node):
     _, ports = start_peer(adopt, node)
-    # The refused port stays bound, but never listens, until the client is done: a freed port could be taken by
-    # another listener on the host before the client dials it, and the connect would succeed.
-    with socket.socket(socket.AF_INET) as closed:
-        closed.bind(("127.0.0.1", 0))
-        ports["refused"] = closed.getsockname()[1]
-        args = tuple(ports[name] for name in ("echo", "fragments", "reset", "long", "silent", "silent", "partial",
-                                              "refused"))
-        result = run_text(tmp_path, "client", CLIENT_PROGRAM % args)
+    # A port freed before the client dials it can be taken by another listener on the host, and a bound socket that
+    # never listened does not refuse on macOS (XNU drops the SYN). So the port stays held by an established
+    # connection whose listener is closed: no listener answers the SYN, so every kernel refuses it.
+    # No SO_REUSEADDR (which create_server sets), so no other socket can bind the port while the connection holds it.
+    with socket.socket(socket.AF_INET) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        with socket.create_connection(listener.getsockname(), timeout=scaled(10)) as holder:
+            held, _ = listener.accept()
+            with held:
+                listener.close()
+                ports["refused"] = holder.getpeername()[1]
+                args = tuple(ports[name] for name in ("echo", "fragments", "reset", "long", "silent", "silent",
+                                                      "partial", "refused"))
+                result = run_text(tmp_path, "client", CLIENT_PROGRAM % args)
     assert result.code == 0, result.stderr
     assert result.stdout == ("ñ\n"
                              "ñ😀\n"
