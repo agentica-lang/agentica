@@ -57,7 +57,7 @@ end
 
 TIMEOUT_PROGRAM = """\
 def late(n: Int) -> Void
-  Task.sleep(@1500@)
+  Task.sleep(@1000@)
   puts("late child #{n} printed")
 end
 
@@ -68,20 +68,20 @@ def main() -> Void
       Task.sleep(60000)
     end
     if n == 3
-      Task.sleep(@1000@)
+      Task.sleep(@700@)
       puts("item 3 ran on after its timeout")
     end
     ok(n)
   end
   puts(results)
-  Task.sleep(@2500@)
+  Task.sleep(@1750@)
   puts("main done")
 end
 """
 
 GRANDCHILD_PROGRAM = """\
 def grandchild(n: Int) -> Void
-  Task.sleep(@1200@)
+  Task.sleep(@850@)
   puts("grandchild printed")
 end
 
@@ -96,7 +96,7 @@ def main() -> Void
     ok(n)
   end
   puts(results)
-  Task.sleep(@2000@)
+  Task.sleep(@1400@)
   puts("main done")
 end
 """
@@ -105,7 +105,7 @@ NESTED_PROGRAM = """\
 def outer(n: Int) -> Result[Int]
   inner = Task.map([1, 2, 3], 1, 5000) do |i|
     puts("start #{i}")
-    Task.sleep(@400@)
+    Task.sleep(@300@)
     puts("end #{i}")
     ok(i)
   end
@@ -117,7 +117,7 @@ def main() -> Void
     outer(n)
   end
   puts(results)
-  Task.sleep(@1800@)
+  Task.sleep(@1250@)
   puts("main done")
 end
 """
@@ -182,7 +182,7 @@ def main() -> Void
   puts(results)
   puts("call done")
   IO.flush()
-  Task.sleep(@3500@)
+  Task.sleep(@2450@)
   puts("main done")
 end
 """
@@ -392,7 +392,7 @@ class Handler(BaseHTTPRequestHandler):
             # The later the request, the shorter the wait, so the responses end in reverse order.
             time.sleep(scaled(0.5 + 0.05 * (7 - int(number))))
         else:
-            time.sleep(scaled(2.0))
+            time.sleep(scaled(1.4))
         body = ("item " + number if number else "slow").encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
@@ -506,7 +506,7 @@ def test_a_timed_out_http_item_leaves_no_pooled_connection(tmp_path, adopt, peer
     assert vm.next_line() == "call done"
     assert vm.next_line() == "main done"
     finished = time.monotonic()
-    # The detached request ends after 2 s and the client drops the connection then, long before the run ends.
+    # The detached request ends after 1.4 s and the client drops the connection then, long before the run ends.
     assert peer.closed_at is not None, "the peer saw no end of file"
     assert peer.closed_at < finished - 0.5
     assert vm.wait() == 0

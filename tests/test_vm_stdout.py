@@ -766,15 +766,16 @@ end
 @not_wine_child
 @pytest.mark.parametrize("schedulers", [1, 4])
 def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path, schedulers):
-    # The reader of the VM's stderr starts only after the ticker is done; the child's 2 MiB then all arrive.
-    delay = scaled(3.0)
+    # The reader of the VM's stderr starts 1.5 s in, when the ticker (1.6 s) is nearly done: a stuck wait lasts until
+    # then, far over the bound below. The child's 2 MiB then all arrive.
+    delay = scaled(1.5)
     vm = ["--schedulers", str(schedulers)]
     summary, out, err = run_case(tmp_path, "forward", FORWARD_PROGRAM, peer=["--error-delay", str(delay)], vm=vm)
     assert summary["status"] == 0
     lines = lines_of(out)
     assert lines[1] == "ok(0)"
     slowest = int(lines[0].split()[1])
-    assert slowest < 200 + scaled(1000), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
+    assert slowest < 200 + scaled(600), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
     assert err == "e" * FORWARD_BYTES
 
 
