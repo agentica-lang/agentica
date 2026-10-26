@@ -1849,15 +1849,20 @@ void agc_io_flush_files(agc_vm *vm) {
   finish_flushes(vm);
 }
 
-bool agc_io_compute_quiet(agc_vm *vm, uint64_t by) {
-  agc_loop *loop = vm->rt->loop;
-  if (!loop || !loop->compute) return true;
-  agc_compute_drop_queued(loop->compute);
-  while (!agc_compute_idle(loop->compute)) {
-    uint64_t now = agc_clock_ms();
-    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
+void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg) {
+  snapshot shot = registry_snapshot(vm);
+  for (size_t k = 0; k < shot.count; k++) {
+    const job *j = job_of(shot.items[k]);
+    if (j && j->compute && j->data) fn(j->data, arg);
   }
-  return agc_compute_idle(loop->compute);
+}
+
+bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
+  while (!ready(vm, arg)) {
+    uint64_t now = agc_clock_ms();
+    if (now >= by || !agc_io_run_for(vm, by - now, true)) return ready(vm, arg);
+  }
+  return true;
 }
 
 static void aside_work(void *item) {
@@ -1866,6 +1871,11 @@ static void aside_work(void *item) {
 }
 
 static void aside_finished(void *item) { ((aside_call *)item)->done = true; }
+
+static bool aside_done(agc_vm *vm, void *arg) {
+  (void)vm;
+  return ((const aside_call *)arg)->done;
+}
 
 /* A compute pool of one thread, made for the call: the run's own pool may be busy with calls that never end, and its
    close detaches a thread that still works, as the exit needs. */
@@ -1884,11 +1894,7 @@ bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t b
   pool_enter(&saved);
   bool queued = agc_compute_submit(pool, aside_work, a);
   pool_leave(&saved);
-  while (queued && !a->done) {
-    uint64_t now = agc_clock_ms();
-    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
-  }
-  bool done = a->done;
+  bool done = queued && agc_io_wait_for(vm, aside_done, a, by);
   agc_compute_close(pool);
   if (done) free(a);
   return done;
@@ -2162,10 +2168,15 @@ void agc_io_goodbye(agc_vm *vm) { (void)vm; }
 
 void agc_io_flush_files(agc_vm *vm) { (void)vm; }
 
-bool agc_io_compute_quiet(agc_vm *vm, uint64_t by) {
+void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg) {
   (void)vm;
+  (void)fn;
+  (void)arg;
+}
+
+bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
   (void)by;
-  return true;
+  return ready(vm, arg);
 }
 
 /* No threads here, and no native calls either (vm/ffi_none.c), so nothing reaches it with a free to make. */

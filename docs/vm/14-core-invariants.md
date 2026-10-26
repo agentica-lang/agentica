@@ -52,9 +52,9 @@ joined the pool, and the pool waited for a FIFO that never wrote.
 - **Native compute calls** (`compute def`) run on the compute pool, VM threads
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
-  never takes a libuv pool thread, and the end of the run does not wait for it
-  unless it holds a resource that the end frees, and then within the flush limit
-  (§14.4). As built.
+  never takes a libuv pool thread. The end of the run never makes a queued call
+  and waits for a running one only while it holds a resource that the end
+  frees, within the flush limit and not after a stop signal (§14.4). As built.
 
 Known exceptions, as built (the mechanisms are in §10.2.2):
 
@@ -188,6 +188,8 @@ seconds by default, set with
 2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
 flush. **When `main` ends, the program ends.** The steps are:
 
+0. drop the compute calls that no pool thread has started (`agc_ffi_stop_queued`
+   in `vm/ffi.c`): a call is made in full or never, one CAS on its phase decides;
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
@@ -195,16 +197,20 @@ flush. **When `main` ends, the program ends.** The steps are:
    while its pool work had not ended, since that work holds bytes the program
    wrote;
 3. free what native code still owns (`agc_ffi_end` in `vm/ffi.c`): every
-   resource and owned buffer still open, whatever task owns it, newest first,
-   on a thread of its own, so a `free` that hangs cannot hold the exit. One
-   that a compute call holds is freed last, once the compute calls that run
-   have returned; the queued ones are dropped and never made. Step 2 and this
-   step share one deadline, the flush limit from the start of step 2
-   (`rt->flush_by`); what is not freed by then is left to the exit, and the
-   warning line of the flush limit says so. The end of `main` frees what it
+   resource and owned buffer still open, whatever task owns it, newest first, on
+   a thread of its own, so a `free` that hangs holds the exit at most until the
+   deadline below. A resource that a running compute call holds (one that has
+   started and not finished) is skipped, the end waits for those calls only, and
+   then frees what they held; calls that hold nothing, or only what is freed
+   already, are not waited for. After a stop signal there is no such wait, and
+   what a running call holds is not freed. Step 2 and this step share one
+   deadline, the flush limit from the start of step 2 (`rt->flush_by`); what is
+   not freed by then is left to the exit, and the warning line of the flush
+   limit says so. With a limit of 0 nothing is freed. A failure (the loop cannot
+   start) prints the flush failure line instead. The end of `main` frees what it
    owns as any task's end does, because a `free` may write data out (`fclose`)
-   that `_exit` would lose. It comes after the files so that output the
-   program wrote first goes out first;
+   that `_exit` would lose. It comes after the files so that output the program
+   wrote first goes out first;
 4. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush
@@ -216,9 +222,8 @@ flush. **When `main` ends, the program ends.** The steps are:
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
-to its end. `System.exit` and a
-crash of `main` take the same path, and so does the first stop signal (SIGTERM,
-SIGINT, SIGHUP). After a stop signal the flush of stdout and stderr is one
+to its end. `System.exit` and a crash of `main` take the same path, and so does
+the first stop signal (SIGTERM, SIGINT, SIGHUP). After a stop signal the flush of stdout and stderr is one
 non-blocking write per stream, because a reader that never reads would otherwise
 hold the stopped VM for the whole flush limit. Files keep their wait. A second
 stop signal exits at once without flushing, so a stuck flush (a FIFO nobody

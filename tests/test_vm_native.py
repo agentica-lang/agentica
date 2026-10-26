@@ -1420,6 +1420,7 @@ NOTE_EXTERN = """extern "{library}"
   def peer_note_open_slow(path: C.String, tag: C.String) -> SlowNote
   compute def peer_note_hold(note: Note, ms: C.Int32) -> C.Int32
   def peer_note_holding() -> C.Int32
+  compute def peer_nap(ms: C.Int32) -> C.Int32
 end
 
 """
@@ -1510,6 +1511,40 @@ end
     assert notes_of(notes) == ["returned"] * int(schedulers) + ["held", ""]
 
 
+# The end waits only for the compute calls that run and hold a resource it frees: with every pool thread busy in a long
+# call that holds nothing, the call that holds the note is still queued, so it is never made, and the note is freed at
+# once, with no wait and no warning.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_end_of_main_does_not_wait_for_calls_that_hold_nothing(tmp_path, peer, schedulers):
+    main = """def nap(ms: Int) -> Int
+  return peer_nap(ms)
+end
+
+def hold(note: Note) -> Int
+  return peer_note_hold(note, 0)
+end
+
+def main() -> Void
+  note = peer_note_open("NOTES", "freed").unwrap!
+  nappers: List[Task[Int]] = []
+  for k in 1..SCHEDULERS
+    nappers = nappers.push(Task.spawn(&nap, 20_000))
+  end
+  Task.sleep(100)
+  holder = Task.spawn(&hold, note)
+  Task.sleep(50)
+  puts(peer_note_holding())
+end
+""".replace("SCHEDULERS", schedulers)
+    source, notes = note_program(tmp_path, peer, main)
+    began = time.monotonic()
+    result = agentica("--schedulers", schedulers, source, timeout=30)
+    assert time.monotonic() - began < scaled(10)
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n", "")
+    assert notes_of(notes) == ["freed", ""]
+
+
 # A free that hangs holds the exit no longer than the flush limit: the run ends with its own code and one warning line,
 # and the frees made before it (newest first) have run.
 @NATIVE_CALLS
@@ -1530,12 +1565,24 @@ end
     assert notes_of(notes) == ["b", ""]
 
 
-# On SIGINT the run frees what native code owns, as it writes files, then ends by that signal.
+# On SIGINT the run frees what native code owns, as it writes files, then ends by that signal. It does not wait for a
+# running compute call: the note that the call holds is not freed.
 @NATIVE_CALLS
 @pytest.mark.skipif(WINDOWS, reason="POSIX signals")
 def test_a_stop_signal_frees_what_is_still_open(tmp_path, peer):
-    main = """def main() -> Void
+    main = """def hold(note: Note) -> Int
+  return peer_note_hold(note, 20_000)
+end
+
+def main() -> Void
   note = peer_note_open("NOTES", "a").unwrap!
+  held = peer_note_open("NOTES", "held").unwrap!
+  holder = Task.spawn(&hold, held)
+  n = 0
+  while peer_note_holding() < 1 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
   puts("ready")
   Task.sleep(60_000)
 end
@@ -1544,8 +1591,10 @@ end
     child = subprocess.Popen(cli() + [str(source)], stdout=subprocess.PIPE, env=vm_environment(), text=True)
     try:
         assert child.stdout.readline() == "ready\n"
+        began = time.monotonic()
         child.send_signal(signal.SIGINT)
         assert child.wait(timeout=20) == -signal.SIGINT
+        assert time.monotonic() - began < scaled(10)
     finally:
         child.kill()
         child.wait()

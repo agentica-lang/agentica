@@ -307,9 +307,10 @@ section says how the scheduler and the loop keep them.
      `agentica: file data may not be written: the flush took longer than MS ms`
      (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). The exit code
      does not change. Then free what native code still owns, within the same
-     deadline (§14.4, step 3); a free that does not end in time turns the
-     warning into `native resources may not be freed` (both, joined by `and`,
-     when the files ran out too);
+     deadline (§14.4, step 3; the compute calls not started were dropped
+     before step 1); a free that does not end in time turns the warning into
+     `native resources may not be freed` (both, joined by `and`, when the files
+     ran out too);
   4. print what is only known now without blocking (the flush-timeout warning, a
      `RUNTIME-INTERNAL` diagnostic for a stdout or stderr write error), and end
      with `_exit`, so libuv's destructor never joins the pool. These go through

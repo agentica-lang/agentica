@@ -621,11 +621,13 @@ void agc_unregister(agc_vm *vm, agc_resource *r);
 /* A copy of the registry in GC memory, which keeps its resources alive, for a walk at the end of the run (*COUNT
    entries, in no order). */
 agc_resource **agc_registry_copy(agc_vm *vm, size_t *count);
-/* For the end of the run (docs/vm/14-core-invariants.md §14.4), on the I/O thread once the schedulers have joined,
-   both bounded by BY (agc_clock_ms). compute_quiet drops the compute calls that no pool thread took, so they are never
-   made, and waits for those that run: true once none runs. run_aside runs FN(DATA) on a thread of its own and waits
-   for it: true when it ended; else the thread is left to the exit, with DATA, and FN may still run. */
-bool agc_io_compute_quiet(agc_vm *vm, uint64_t by);
+/* For the end of the run (docs/vm/14-core-invariants.md §14.4), on the I/O thread once the schedulers have joined.
+   compute_each calls FN(DATA, ARG) for the data of each compute call whose job still holds it (agc_io_compute).
+   wait_for drives the loop until READY(VM, ARG) or BY (agc_clock_ms); true when READY. run_aside runs FN(DATA) on a
+   thread of its own and waits for it until BY: true when it ended; else the thread is left to the exit, with DATA,
+   and FN may still run. */
+void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg);
+bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by);
 bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);

@@ -47,6 +47,12 @@
    signature needs more than. */
 #define STRUCT_ROUND(size) (((size) + 15) & ~(size_t)15)
 
+/* The resources and owned buffers that running compute calls hold, gathered at the end of the run (running_holds). */
+typedef struct {
+  const agc_c_resource **items;
+  size_t count, cap;
+} held_set;
+
 /* The frees of one step of agc_ffi_end, copied out of GC memory for the thread that makes them, in order. */
 typedef struct {
   agc_ffi_call *free;
@@ -120,9 +126,15 @@ typedef struct {
   agc_c_resource **held;
   uint8_t *structs;
   bool ran;
+  _Atomic int phase;
   agc_c_value out;
   agc_c_value in[];
 } compute_call;
+
+/* The phase of a compute call: QUEUED until a pool thread takes it, then RUNNING while C runs and FINISHED after. The
+   end of the run moves every queued call to ABANDONED (agc_ffi_stop_queued) and a pool thread then skips it: one CAS
+   decides, so a call is either made in full or never. */
+enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
    out resource's, as named by the signature. */
@@ -764,13 +776,61 @@ static int newest_first(const void *a, const void *b) {
   return x < y ? 1 : x > y ? -1 : 0;
 }
 
+static void abandon_queued(void *data, void *arg) {
+  (void)arg;
+  compute_call *c = data;
+  int queued = CALL_QUEUED;
+  (void)atomic_compare_exchange_strong(&c->phase, &queued, CALL_ABANDONED);
+}
+
+void agc_ffi_stop_queued(agc_vm *vm) { agc_io_compute_each(vm, abandon_queued, NULL); }
+
+static void add_running_holds(void *data, void *arg) {
+  const compute_call *c = data;
+  held_set *set = arg;
+  if (atomic_load(&c->phase) != CALL_RUNNING) return;
+  for (uint32_t k = 0; k < c->entry->holds; k++) {
+    if (!c->held[k]) continue;
+    if (set->count == set->cap) {
+      set->cap = set->cap ? agc_size_mul(set->cap, 2) : 16;
+      set->items = realloc(set->items, agc_size_mul(set->cap, sizeof *set->items));
+      if (!set->items) agc_out_of_memory();
+    }
+    set->items[set->count++] = c->held[k];
+  }
+}
+
+/* What the compute calls that run now hold. A queued call never runs any more (agc_ffi_stop_queued) and a finished one
+   is done with its pointers, so neither counts. */
+static held_set running_holds(agc_vm *vm) {
+  held_set set = {NULL, 0, 0};
+  agc_io_compute_each(vm, add_running_holds, &set);
+  return set;
+}
+
+static bool in_held_set(const held_set *set, const agc_c_resource *res) {
+  for (size_t k = 0; k < set->count; k++)
+    if (set->items[k] == res) return true;
+  return false;
+}
+
+/* Whether no running compute call holds a resource or owned buffer that is still to free. */
+static bool holds_released(agc_vm *vm, void *arg) {
+  (void)arg;
+  held_set set = running_holds(vm);
+  bool released = true;
+  for (size_t k = 0; k < set.count && released; k++) released = set.items[k]->freed;
+  free(set.items);
+  return released;
+}
+
 /* Frees, on a thread apart and within BY, the resources and owned buffers of ITEMS (the registry, newest first) that
-   are still to free: all of them when compute calls may no longer hold one (HELD_LEFT is NULL), else those that none
-   holds, and *HELD_LEFT tells whether one was skipped. Each is marked freed here, before its free runs, so the end of
-   a compute call that the loop finishes meanwhile (release_held, discard) does not free it again. True when every
-   free has run. */
-static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *held_left, uint64_t by) {
-  end_frees *batch = malloc(sizeof *batch + agc_size_mul(count, sizeof(end_free)));
+   are still to free and that no running compute call holds; *SKIPPED tells whether one was held. Each is marked freed
+   here, before its free runs, so the end of a compute call that the loop finishes meanwhile (release_held, discard)
+   does not free it again. True when every free of the step has run. */
+static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipped, uint64_t by) {
+  held_set busy = running_holds(vm);
+  end_frees *batch = malloc(agc_size_add(sizeof *batch, agc_size_mul(count, sizeof(end_free))));
   if (!batch) agc_out_of_memory();
   batch->count = 0;
   for (size_t k = 0; k < count; k++) {
@@ -778,13 +838,14 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *held_
     if (r->release != release_resource || !r->native) continue;
     agc_c_resource *res = r->native;
     if (res->freed) continue;
-    if (held_left && res->jobs) {
-      *held_left = true;
+    if (in_held_set(&busy, res)) {
+      *skipped = true;
       continue;
     }
     res->closed = res->freed = true;
     batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer};
   }
+  free(busy.items);
   if (!batch->count) {
     free(batch);
     return true;
@@ -794,17 +855,19 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *held_
   return done;
 }
 
-bool agc_ffi_end(agc_vm *vm) {
+bool agc_ffi_end(agc_vm *vm, bool wait_held) {
   /* agc_io_flush_files, which runs first, set the deadline. */
-  const agc_runtime *rt = vm->rt;
+  uint64_t by = vm->rt->flush_by;
   size_t count;
   agc_resource **items = agc_registry_copy(vm, &count);
   if (!count) return true;
   qsort(items, count, sizeof *items, newest_first);
-  bool held = false;
-  if (!end_step(vm, items, count, &held, rt->flush_by)) return false;
-  if (!held) return true;
-  return agc_io_compute_quiet(vm, rt->flush_by) && end_step(vm, items, count, NULL, rt->flush_by);
+  bool skipped = false;
+  if (!end_step(vm, items, count, &skipped, by)) return false;
+  if (!skipped || !wait_held) return true;
+  bool released = agc_io_wait_for(vm, holds_released, NULL, by);
+  skipped = false;
+  return end_step(vm, items, count, &skipped, by) && released && !skipped;
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL) and owned by the calling task
@@ -1201,6 +1264,8 @@ static void compute_free(void *data) {
 /* On a pool thread: C values only, no GC memory. */
 static void compute_work(void *data) {
   compute_call *c = data;
+  int queued = CALL_QUEUED;
+  if (!atomic_compare_exchange_strong(&c->phase, &queued, CALL_RUNNING)) return;
   agc_ffi_invoke(c->entry->call, c->fn, c->in, &c->out);
   if (c->entry->result == AGC_C_STRING && c->out.s) {
     size_t n = strlen(c->out.s);
@@ -1210,6 +1275,7 @@ static void compute_work(void *data) {
     c->out.s = copy;
   }
   c->ran = true;
+  atomic_store(&c->phase, CALL_FINISHED);
 }
 
 /* On the scheduler that resumes the task, with rt->sync held (the kind is `locked`): the held resources are let go and
@@ -1301,6 +1367,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     c->held = (agc_c_resource **)(void *)(c->slots + e->count);
     c->structs = (uint8_t *)c + structs_at;
     c->ran = false;
+    atomic_init(&c->phase, CALL_QUEUED);
     memset(&c->out, 0, sizeof c->out);
     memset(c->structs, 0, e->struct_bytes);
     size_t used = 0;

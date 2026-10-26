@@ -169,10 +169,6 @@ typedef struct agc_compute agc_compute;
 agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item));
 bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item);
 void agc_compute_close(agc_compute *pool);
-/* For the end of the run, on LOOP's thread: drop_queued drops the items that no thread took, which never run nor
-   finish, and idle is true once every item a thread took has finished. */
-void agc_compute_drop_queued(agc_compute *pool);
-bool agc_compute_idle(const agc_compute *pool);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
  * AGC_JOB_PENDING and is set once, by the first thread that gets a CAS through (release): the winner owns the wake, a
@@ -389,7 +385,8 @@ void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outco
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
 void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, agc_style style);
-void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style);
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, bool natives,
+                            agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 
