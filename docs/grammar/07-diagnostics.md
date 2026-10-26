@@ -456,8 +456,12 @@ type:
   - **Help:** `Task.map(items, limit, timeout_ms) do |x| ... end`, where the
     block gives a `Result`
 
-- **Written:** `Task.async(...)`, `Thread.new(...)`
+- **Written:** `Task.async(...)`
   - **Help:** `Task.spawn(&f, arg)`, then `Task.await(task)` for its result
+
+- **Written:** `Thread.new(...)`
+  - **Help:** `Task.spawn do ... end` (or `Task.spawn(&f, arg)`), then
+    `Task.await(task)` for its result
 
 - **Written:** `Enumerator.new(...)`, `Fiber.new(...)`
   - **Help:** a producer task that sends into a channel: `Task.spawn(&produce,

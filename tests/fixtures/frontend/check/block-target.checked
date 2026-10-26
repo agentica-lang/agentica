@@ -1,1 +1,1 @@
-ERROR CHECK-BLOCK-TARGET 39:2:21-56:2:38 "\"Task.spawn\" does not take a block: its last parameter is not a function" "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)" signature="main() -> Void" file="block-target.agc"
+ERROR CHECK-BLOCK-TARGET 39:2:21-56:2:38 "Task.spawn got a function reference and a block: it takes one of them, not both" "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)" signature="main() -> Void" file="block-target.agc"

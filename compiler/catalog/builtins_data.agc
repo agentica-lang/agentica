@@ -4361,7 +4361,7 @@ ROWS_51: List[Model.Builtin] = [
       rule: Model.Rule.TaskSpawn,
       implementation: "Task.spawn",
       effects: ["concurrency"],
-      description: "Start a function in a lightweight task, with one argument or none.",
+      description: "Start a function with no argument in a lightweight task.",
       alternatives: [
         Model.Builtin(
           name: "Task.spawn",
@@ -4373,7 +4373,7 @@ ROWS_51: List[Model.Builtin] = [
           rule: Model.Rule.TaskSpawn,
           implementation: "Task.spawn",
           effects: ["concurrency"],
-          description: "Start a named function with one argument in a lightweight task.",
+          description: "Start a function with one argument in a lightweight task.",
           alternatives: [],
         ),
       ],

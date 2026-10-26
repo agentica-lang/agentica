@@ -2613,14 +2613,6 @@
     },
     {
       "program": [
-        "def identity(n: Int) -> Int",
-        "  return n",
-        "end",
-        "",
-        "def bare() -> Int",
-        "  return 1",
-        "end",
-        "",
         "def main() -> Void",
         "  offset = 1",
         "  t: Task[Int] = Task.spawn do",
@@ -2635,10 +2627,6 @@
     },
     {
       "program": [
-        "def identity(n: Int) -> Int",
-        "  return n",
-        "end",
-        "",
         "def bare() -> Int",
         "  return 1",
         "end",
@@ -2649,43 +2637,34 @@
         "",
         ""
       ],
-      "code": "CHECK-BLOCK-TARGET"
+      "code": "CHECK-BLOCK-TARGET",
+      "start": [6, 21],
+      "covers": "do |x: Int| x end",
+      "help": true
     },
     {
       "program": [
-        "def identity(n: Int) -> Int",
-        "  return n",
-        "end",
-        "",
-        "def bare() -> Int",
-        "  return 1",
-        "end",
-        "",
         "def main() -> Void",
         "  Task.spawn()",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-ARITY"
+      "code": "CHECK-ARITY",
+      "start": [2, 3]
     },
     {
       "program": [
-        "def identity(n: Int) -> Int",
-        "  return n",
-        "end",
-        "",
-        "def bare() -> Int",
-        "  return 1",
-        "end",
-        "",
         "def main() -> Void",
         "  Task.spawn do |x: Int| x end",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 14],
+      "covers": "do |x: Int| x end",
+      "help": true
     },
     {
       "program": [

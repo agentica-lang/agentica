@@ -611,8 +611,8 @@ builtin Task.pending_count forms=1
 builtin Task.sleep forms=1
   Task.sleep(milliseconds: Int) -> Void shape=(Int) -> Void rule=Plain impl="Task.sleep" effects=["concurrency"] desc="Suspend this task for nonnegative milliseconds; zero yields execution."
 builtin Task.spawn forms=2
-  Task.spawn(function: Fn[R]) -> Task[R] shape=(Fn([], Var(R))) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function in a lightweight task, with one argument or none."
-  Task.spawn(function: Fn[A, R], argument: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a named function with one argument in a lightweight task."
+  Task.spawn(function: Fn[R]) -> Task[R] shape=(Fn([], Var(R))) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with no argument in a lightweight task."
+  Task.spawn(function: Fn[A, R], argument: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with one argument in a lightweight task."
 builtin Task.spawn_owning forms=1
   Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawnOwning impl="Task.spawn_owning" effects=["concurrency"] desc="Like Task.spawn, and gives the handle or Channel argument, which the calling task must own (an unowned Channel counts), to the new task; VM only."
 builtin Task.unobserved_crash forms=1
