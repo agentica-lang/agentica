@@ -132,7 +132,7 @@ class Raw(socketserver.BaseRequestHandler):
             # on a full window, the client's send returns and it reads the 413 now. Reading at once let the whole
             # 4 MiB go out first, and on a loaded macOS runner one send call lasts as long as the upload, so the
             # 413 was read past the 5 s deadline (#692). The rest is then read to the end, so the close sends no
-            # RST.
+            # RST. The program of test_vm_http.py must open its next raw connection (/stale) after reading the 413.
             ARRIVED.clear()
             self.request.sendall(b"HTTP/1.1 413 Payload Too Large\r\nConnection: close\r\nContent-Length: 4\r\n\r\nbig!")
             self.request.shutdown(socket.SHUT_WR)
