@@ -29,6 +29,11 @@ def shout(n: Int) -> Void
   puts("task #{n} ran")
 end
 
+def bare() -> Int
+  Task.sleep(0)
+  return 7
+end
+
 def start(n: Int, f: Fn[Int, Int]) -> Task[Int]
   return Task.spawn(f, n)
 end
@@ -44,6 +49,12 @@ def main() -> Void
   IO.inspect(Task.await(Task.spawn(&tried, 0)))
   IO.inspect(Task.await(Task.spawn(&nothing, 0)))
   Task.await(Task.spawn(&shout, 3))
+  IO.inspect(Task.await(Task.spawn(&bare)))
+  base = 40
+  IO.inspect(Task.await(Task.spawn do
+    Task.sleep(1)
+    base + 2
+  end))
   offset = 100
   IO.inspect(Task.await(start(5) do |n|
     Task.sleep(1)

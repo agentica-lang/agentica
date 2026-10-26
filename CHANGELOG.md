@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
+  takes no argument.
+
 ### Changed
 
 - A timed channel `send` or `recv` that the other task answers within a turn
