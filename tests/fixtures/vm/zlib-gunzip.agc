@@ -1,41 +1,27 @@
-# Zlib.gunzip_file of small hardcoded members, its error taxonomy and its
-# byte counts; tests/test_vm_zlib.py checks long inputs against Python's
-# stdlib gzip.
+# File.chunks and Lazy.write_bytes around gunzip and gzip: small hardcoded
+# members, the byte counts and the error taxonomy; tests/test_vm_zlib.py checks
+# long inputs against Python's stdlib gzip.
 def at(dir: String, name: String) -> String
   return Result.unwrap!(Path.join([dir, name]))
 end
 
-def put_bytes(dir: String, name: String, bytes: List[Int]) -> String
-  path = at(dir, name)
-  out = Result.unwrap!(File.open(path, "write", 60000))
-  Result.unwrap!(File.write_bytes(out, bytes, 60000))
-  Result.unwrap!(File.close(out, 60000))
-  return path
-end
-
-def empty_gz() -> List[Int]
-  return [31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-end
-
-def abc_gz() -> List[Int]
-  return [31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 75, 76, 74, 6, 0, 194, 65, 36, 53, 3, 0, 0, 0]
+def abc_gz() -> List[List[Int]]
+  return [[31, 139, 8, 0, 0, 0, 0, 0, 2, 255], [75, 76, 74, 6, 0], [194, 65, 36, 53, 3, 0, 0, 0]]
 end
 
 def main() -> Void
   dir: String = System.args()[0]
-  empty = put_bytes(dir, "empty.gz", empty_gz())
-  abc = put_bytes(dir, "abc.gz", abc_gz())
-  empty_out = at(dir, "empty.out")
-  abc_out = at(dir, "abc.out")
-  puts("empty #{Zlib.gunzip_file(empty, empty_out, 100, 60000)}")
-  puts("abc #{Zlib.gunzip_file(abc, abc_out, 100, 60000)}")
-  puts("exact #{Zlib.gunzip_file(abc, at(dir, "exact.out"), 3, 60000)}")
-  puts("over #{Zlib.gunzip_file(abc, at(dir, "over.out"), 2, 60000)}")
-  puts("missing -> #{Zlib.gunzip_file(at(dir, "missing.gz"), at(dir, "missing.out"), 100, 60000)}")
-  puts("directory -> #{Zlib.gunzip_file(dir, at(dir, "dir.out"), 100, 60000)}")
-  puts("exists -> #{Zlib.gunzip_file(abc, abc_out, 100, 60000)}")
-  puts("empty path -> #{Zlib.gunzip_file("", abc_out, 100, 60000)}")
-  puts("zero max -> #{Zlib.gunzip_file(abc, at(dir, "zero.out"), 0, 60000)}")
-  puts("huge max -> #{Zlib.gunzip_file(abc, at(dir, "huge.out"), 1073741825, 60000)}")
-  puts("zero timeout -> #{Zlib.gunzip_file(abc, at(dir, "slow.out"), 100, 0)}")
+  abc = at(dir, "abc.gz")
+  puts("write #{abc_gz().lazy.write_bytes(abc)}")
+  puts("chunks #{File.chunks(abc, 10).to_a}")
+  puts("gunzip #{File.chunks(abc).gunzip.write_bytes(at(dir, "abc.out"))}")
+  puts("read #{File.chunks(at(dir, "abc.out")).to_a}")
+  puts("gzip #{File.chunks(at(dir, "abc.out"), 1).gzip.gunzip.to_a}")
+  puts("exact #{File.chunks(abc, 1).gunzip(3).to_a}")
+  puts("over #{File.chunks(abc, 1).gunzip(2).to_a}")
+  puts("missing -> #{File.chunks(at(dir, "missing.gz")).gunzip.to_a}")
+  puts("directory -> #{File.chunks(dir).to_a}")
+  puts("into a directory -> #{File.chunks(abc).gunzip.write_bytes(dir).ok?}")
+  puts("byte range -> #{[[1, 300]].lazy.write_bytes(at(dir, "bad.bin"))}")
+  puts("zero timeout -> #{File.chunks(abc, 10, 0).to_a}")
 end

@@ -13,15 +13,15 @@ Row.none takes=nynn required=1
 Row.alternative takes=nyyn required=1
   arity=1 to 2 method=0 to 1
   signature=Row.alternative(x: Int, b: Int = 1) -> Void
-  problem=a default needs a Plain builtin with no alternative form
+  problem=a default needs a Plain or Prelude builtin with no alternative form
 Row.alternative_second takes=nyyn required=1
   arity=1 method=0
   signature=Row.alternative_second(x: Int) -> Void
-  problem=a default needs a Plain builtin with no alternative form
+  problem=a default needs a Plain or Prelude builtin with no alternative form
 Row.not_plain takes=nyyn required=1
   arity=1 to 2 method=0 to 1
   signature=Row.not_plain(x: Int, b: Int = 1) -> Void
-  problem=a default needs a Plain builtin with no alternative form
+  problem=a default needs a Plain or Prelude builtin with no alternative form
 Row.gap takes=nnyy required=2
   arity=2 to 3 method=1 to 2
   signature=Row.gap(x: Int, a: Int = 1, b: Int) -> Void
