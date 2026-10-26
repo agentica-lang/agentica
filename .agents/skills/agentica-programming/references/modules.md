@@ -144,6 +144,11 @@ import Sqlite from "pkg/sqlite/db"
   `-`, at most 64 characters (the optional top-level `name` follows the same
   rule). Only git sources exist; a `path`, a branch or a version range is
   `PKG-MANIFEST-INVALID`.
+- `[style] blank_line_after_end = true` (boolean, default false; else
+  `PKG-MANIFEST-INVALID`) makes a line with only `end` need an empty line
+  after it, in the project's own files: `CHECK-BLANK-LINE-AFTER-END` at the
+  `end`. The next line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or
+  `.name`; the end of the file needs none.
 - `subdir = "postgres"` makes the package a folder of the repository (several
   packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
   folder names joined by `/`, at most 128 characters, no `..`, no leading `/`,

@@ -47,7 +47,7 @@ def reused(cache: Cache.Cache, root: Cache.Root, settings: Env.Settings) -> Outc
   case root.checking
     Checker.Checking.Done(checked) ->
       front = Front.Checked(linked: root.linked, checked: checked)
-      return Outcome.Done(Recovered(front: front, problems: [], failed: []))
+      return Outcome.Done(Recovered(front: front, problems: styled([], root.linked), failed: []))
     Checker.Checking.Failed(_) -> return recovered(cache, root.loaded, root.linked, settings)
   end
 end
@@ -74,6 +74,15 @@ def answered(program: Linker.Linked, recovering: Checker.Recovering) -> Outcome
     Checker.Recovering.Failed(problem) -> return Outcome.Rejected(problem)
     Checker.Recovering.Done(found) ->
       front = Front.Checked(linked: program, checked: found.checked)
-      return Outcome.Done(Recovered(front: front, problems: found.problems, failed: found.failed))
+      return Outcome.Done(Recovered(front: front, problems: styled(found.problems, program), failed: found.failed))
+  end
+end
+
+# `problems` and, after them, the style problem of the program: Front.query_file gives it too, so `problems` is empty
+# exactly when that gives Done.
+def styled(problems: List[Problems.Problem], program: Linker.Linked) -> List[Problems.Problem]
+  case Front.style_problem(program)
+    Ast.Optional.Present(problem) -> return problems.push(problem)
+    Ast.Optional.Absent -> return problems
   end
 end

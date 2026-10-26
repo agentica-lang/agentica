@@ -72,8 +72,11 @@ hand. `agentica check` enforces the width, and `fmt` does not.
 - `agentica fmt --tree FILE` prints the normal form of 47.7. It is a debugging
   flag, used by the tests.
 - Settings come from the nearest `agentica.toml`, searched upward from the
-  file's folder. Only `[style] max_line_width` exists today (§45.5). Later style
-  keys go in the same table.
+  file's folder. Only `[style] max_line_width` and `blank_line_after_end` exist
+  today (§45.5). Later style keys go in the same table. When
+  `blank_line_after_end` is on, `fmt` must add the empty line after every bare
+  `end` that `CHECK-BLANK-LINE-AFTER-END` asks for, and add none at the end of
+  the file.
 - **Width is not fmt's job.** `fmt` never breaks an identifier, a string word or
   a URL, so its output can still have a long line. `agentica check` reports
   such a line as `CHECK-LINE-TOO-LONG` (§45.5, phase 47c). `fmt --check` covers

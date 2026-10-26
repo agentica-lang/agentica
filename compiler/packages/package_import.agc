@@ -29,13 +29,15 @@ DEPS_FOLDER = "deps"
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
-## files that the bytecode cache must watch because of it.
+## files that the bytecode cache must watch because of it. blank_line_after_end is true for a file of a project whose
+## manifest turns on `[style] blank_line_after_end`; no other file has it.
 export struct Origin
   package: String
   root: String
   label: String
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  blank_line_after_end: Bool
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
@@ -64,6 +66,7 @@ export struct Scope
   declared: Map[String, List[String]]
   opened: Map[String, Opened]
   native_root: String
+  blank_line_after_end: Bool
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -103,6 +106,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        blank_line_after_end: false,
       )
     Project.Project.Declared(found) ->
       return Scope(
@@ -116,6 +120,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        blank_line_after_end: found.manifest.blank_line_after_end,
       )
   end
 end
@@ -136,12 +141,19 @@ end
 
 ## The origin of a file of the project: its folder's native libraries are the scope's.
 export def project_origin(scope: Scope) -> Origin
-  return Origin(package: "", root: "", label: "", natives: scope.natives, watched: scope.watched)
+  return Origin(
+    package: "",
+    root: "",
+    label: "",
+    natives: scope.natives,
+    watched: scope.watched,
+    blank_line_after_end: scope.blank_line_after_end,
+  )
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
-  return Origin(package: "", root: "", label: "", natives: {}, watched: [])
+  return Origin(package: "", root: "", label: "", natives: {}, watched: [], blank_line_after_end: false)
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -199,6 +211,7 @@ export def open_package(
         label: package.label,
         natives: package.natives,
         watched: package.watched,
+        blank_line_after_end: false,
       ),
       name: stored_name(package.label, inner),
       opened: opened,

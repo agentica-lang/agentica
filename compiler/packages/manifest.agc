@@ -14,7 +14,7 @@ import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "dependencies", "native", "style", "workspace"]
-STYLE_KEYS = ["max_line_width"]
+STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir"]
 PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
@@ -48,13 +48,21 @@ export struct NativeLibrary
   places: List[Place]
 end
 
-## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit.
+## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit;
+## blank_line_after_end is false unless `[style]` turns the rule on.
 export struct Manifest
   file: String
   name: String
   dependencies: List[Dependency]
   natives: List[NativeLibrary]
   max_line_width: Int
+  blank_line_after_end: Bool
+end
+
+# The values of [style]: what the project asks of its files.
+struct Style
+  max_line_width: Int
+  blank_line_after_end: Bool
 end
 
 ## Reads the manifest at file.
@@ -72,8 +80,17 @@ export def parse(file: String, text: String) -> Result[Manifest]
   name = try optional_name(reading, root)
   dependencies = try dependencies_of(reading, root)
   natives = try natives_of(reading, root)
-  width = try style_of(reading, root)
-  return ok(Manifest(file: file, name: name, dependencies: dependencies, natives: natives, max_line_width: width))
+  style = try style_of(reading, root)
+  return ok(
+    Manifest(
+      file: file,
+      name: name,
+      dependencies: dependencies,
+      natives: natives,
+      max_line_width: style.max_line_width,
+      blank_line_after_end: style.blank_line_after_end,
+    ),
+  )
 end
 
 ## The dependency with this name, or an error.
@@ -284,19 +301,25 @@ def system_problem(name: String) -> String
   return ""
 end
 
-# [style]: today max_line_width, a positive integer. 0 when there is no [style] or no limit.
-def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Int]
+# [style]: `max_line_width`, a positive integer (0 when there is none), and `blank_line_after_end`, a boolean (false
+# when there is none). Both are off when there is no [style].
+def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Style]
+  style = Style(max_line_width: 0, blank_line_after_end: false)
   if !root.has_key?("style")
-    return ok(0)
+    return ok(style)
   end
   entries = try Reader.table(reading, root["style"], "style")
   try Reader.known_keys(reading, entries, STYLE_KEYS, "style")
-  if !entries.has_key?("max_line_width")
-    return ok(0)
+  if entries.has_key?("max_line_width")
+    width = try Reader.integer(reading, entries["max_line_width"], "style.max_line_width")
+    if width < 1
+      return error(Reader.fail(reading, "style.max_line_width", "the line width is at least 1"))
+    end
+    style = style.with(max_line_width: width)
   end
-  width = try Reader.integer(reading, entries["max_line_width"], "style.max_line_width")
-  if width < 1
-    return error(Reader.fail(reading, "style.max_line_width", "the line width is at least 1"))
+  if entries.has_key?("blank_line_after_end")
+    on = try Reader.boolean(reading, entries["blank_line_after_end"], "style.blank_line_after_end")
+    style = style.with(blank_line_after_end: on)
   end
-  return ok(width)
+  return ok(style)
 end

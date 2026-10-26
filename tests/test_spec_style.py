@@ -1,0 +1,113 @@
+"""The optional style rule `[style] blank_line_after_end` of agentica.toml, through the CLI.
+
+With the key on, a line whose code is only `end` needs an empty line after it (CHECK-BLANK-LINE-AFTER-END, at the
+`end`). The cases run `--json check` and assert the code and the span, never the message (AGENTS.md).
+"""
+import pytest
+
+from tests.spec_support import check_diagnostic
+
+ON = "[style]\nblank_line_after_end = true\n"
+
+# A program with the `end` of an `if` at line 4, column 3, followed by code.
+BARE = "def main() -> Void\n  if true\n    puts(\"a\")\n  end\n  puts(\"b\")\nend\n"
+BARE_END = (4, 3)
+
+
+def check(tmp_path, program, manifest=ON):
+    """The problem `--json check` reports for program, or None when it checks clean."""
+    if manifest is not None:
+        (tmp_path / "agentica.toml").write_text(manifest, encoding="utf-8")
+    return check_diagnostic(program, tmp_path)
+
+
+def start(problem):
+    return problem["range"]["start"]["line"], problem["range"]["start"]["column"]
+
+
+def test_the_rule_is_off_without_the_key(tmp_path):
+    assert check(tmp_path, BARE, manifest=None) is None
+    assert check(tmp_path, BARE, manifest="[style]\nmax_line_width = 119\n") is None
+    assert check(tmp_path, BARE, manifest="[style]\nblank_line_after_end = false\n") is None
+
+
+def test_a_bare_end_needs_an_empty_line_after_it(tmp_path):
+    problem = check(tmp_path, BARE)
+    assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", BARE_END)
+    assert problem["range"]["end"]["column"] == 6
+    assert problem["file"].endswith("program.agc")
+    assert check(tmp_path, BARE.replace("  end\n", "  end\n\n")) is None
+
+
+def test_the_first_missing_line_is_reported_and_a_type_error_comes_first(tmp_path):
+    two = "def f() -> Void\n  if true\n  end\n  if true\n  end\n  puts(\"b\")\nend\n\ndef main() -> Void\nend\n"
+    assert start(check(tmp_path, two)) == (3, 3)
+    wrong = BARE.replace('puts("b")', "puts(1 + \"b\")")
+    assert check(tmp_path, wrong)["code"] != "CHECK-BLANK-LINE-AFTER-END"
+
+
+# (what, program, the problem is at (line, column), or None when the program is clean)
+CASES = [
+    ("a trailing comment on the end", BARE.replace("  end\n", "  end # the if\n"), BARE_END),
+    ("a comment line is not an empty line", BARE.replace("  end\n", "  end\n  # next\n"), BARE_END),
+    ("spaces and tabs are an empty line", BARE.replace("  end\n", "  end\n \t \n"), None),
+    ("the next end", "def main() -> Void\n  if true\n    if true\n    end\n  end\nend\n", None),
+    ("else", "def main() -> Void\n  if true\n    if true\n    end\n  else\n  end\nend\n", None),
+    ("elsif", "def main() -> Void\n  if true\n    if true\n    end\n  elsif true\n  end\nend\n", None),
+    ("a closing paren", "def main() -> Void\n  puts(\n    [1].map do |i|\n      i\n    end\n  )\nend\n", None),
+    ("a closing bracket",
+     "def main() -> Void\n  xs = [\n    [1].map do |i|\n      i\n    end\n  ]\n  puts(xs)\nend\n", None),
+    ("a closing brace",
+     "def main() -> Void\n  m = {\n    \"a\": [1].map do |i|\n      i\n    end\n  }\n  puts(m)\nend\n", None),
+    ("a leading dot", "def main() -> Void\n  v = [1].map do |i|\n    i\n  end\n  .size\n  puts(v)\nend\n", None),
+    ("a leading dot after a comment line",
+     "def main() -> Void\n  v = [1].map do |i|\n    i\n  end\n  # more\n  .size\n  puts(v)\nend\n", None),
+    ("the last end with no final line break", "def main() -> Void\nend", None),
+    ("the last end with one final line break", "def main() -> Void\nend\n", None),
+    ("the last end with an extra empty line", "def main() -> Void\nend\n\n", None),
+    ("the last end with empty lines of spaces", "def main() -> Void\nend\n  \n\t\n", None),
+    ("an end with more on its line", "def main() -> Void\n  v = [1].map do |i| i end.size\n  puts(v)\nend\n", None),
+    ("an end that closes a call", "def main() -> Void\n  puts([1].map do |i| i end)\n  puts(1)\nend\n", None),
+    ("a comment line after a comment end", "def main() -> Void\n  # end\n  puts(1)\nend\n", None),
+    ("an end in a string", 'def main() -> Void\n  puts("end")\n  puts("a\\nend")\nend\n', None),
+    ("an end line in a heredoc",
+     "def main() -> Void\n  text = <<~T\n    one\n    end\n    two\n  T\n  puts(text)\nend\n", None),
+    ("an end in an interpolation of a heredoc",
+     "def main() -> Void\n  text = <<~T\n    #{[1].map do |i| i end.size}\n    end\n  T\n  puts(text)\nend\n", None),
+    ("a bare end after a heredoc",
+     "def main() -> Void\n  if true\n    text = <<~T\n      one\n      two\n    T\n    puts(text)\n  end\n  puts(1)\nend\n",
+     (8, 3)),
+]
+
+
+@pytest.mark.parametrize("what, program, expected", CASES, ids=[case[0] for case in CASES])
+def test_the_rule_and_its_exceptions(tmp_path, what, program, expected):
+    problem = check(tmp_path, program)
+    if expected is None:
+        assert problem is None
+    else:
+        assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", expected)
+
+
+def test_the_rule_covers_the_files_an_import_reads_and_not_std(tmp_path):
+    (tmp_path / "util.agc").write_text("export def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n",
+                                       encoding="utf-8")
+    program = 'import Util from "util"\nimport Queue from "std/queue"\n\ndef main() -> Void\n  puts(Util.one())\nend\n'
+    problem = check(tmp_path, program)
+    assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", (4, 3))
+    assert problem["file"].endswith("util.agc")
+
+
+@pytest.mark.parametrize("tail", ["", "\n", "\n\n"], ids=["no line break", "one line break", "an extra empty line"])
+def test_the_last_end_of_a_module_file_needs_nothing_after_it(tmp_path, tail):
+    (tmp_path / "util.agc").write_text("export def one() -> Int\n  return 1\nend" + tail, encoding="utf-8")
+    program = 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.one())\nend\n'
+    assert check(tmp_path, program) is None
+
+
+@pytest.mark.parametrize("value", ['"yes"', "1", "[true]"])
+def test_a_key_that_is_not_a_boolean_is_a_manifest_error(tmp_path, value):
+    problem = check(tmp_path, BARE, manifest="[style]\nblank_line_after_end = %s\n" % value)
+    assert problem["code"] == "PKG-MANIFEST-INVALID"
+    assert problem["key_path"] == "style.blank_line_after_end"
+    assert problem["file"].endswith("agentica.toml")

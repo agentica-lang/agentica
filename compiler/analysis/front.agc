@@ -3,6 +3,7 @@
 ## all run it, so what one of them accepts, the others accept.
 
 import Checker from "../check/checker"
+import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
@@ -110,6 +111,12 @@ export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcom
   return check(linked, settings, false)
 end
 
+## The first style problem of a linked program: the files whose project asks for a rule that they break. Absent when
+## none does. The style rules come after the type check, so a program that does not check reports that first.
+export def style_problem(linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+  return Style.blank_line_after_end(linked)
+end
+
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))
@@ -160,9 +167,15 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
   return checked_outcome(linked, Checker.check_query(linked, settings))
 end
 
+# A program that checked still has to follow the style rules of its project (check_style.agc). They are not kept in the
+# cache: the modules say whether they are asked, and the cache tells a changed manifest by the shape of the modules.
 def checked_outcome(linked: Linker.Linked, checking: Checker.Checking) -> Outcome
   case checking
     Checker.Checking.Failed(problem) -> return Outcome.Rejected(problem)
-    Checker.Checking.Done(checked) -> return Outcome.Done(Checked(linked: linked, checked: checked))
+    Checker.Checking.Done(checked) ->
+      case style_problem(linked)
+        Ast.Optional.Present(problem) -> return Outcome.Rejected(problem)
+        Ast.Optional.Absent -> return Outcome.Done(Checked(linked: linked, checked: checked))
+      end
   end
 end

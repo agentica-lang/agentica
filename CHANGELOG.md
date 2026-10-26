@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Optional `[style] blank_line_after_end = true` in `agentica.toml` makes
+  `agentica check` require an empty line after a line that holds only `end`
+  (`CHECK-BLANK-LINE-AFTER-END`).
+
 ### Fixed
 
 - Linux shutdown skips a standard C stream already locked by native compute code.

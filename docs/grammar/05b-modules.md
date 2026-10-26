@@ -158,7 +158,21 @@ import Sqlite from "pkg/sqlite/db"
   `[workspace]` (below). An unknown key at any level, a value of the wrong
   form, or a TOML syntax error is `PKG-MANIFEST-INVALID`. `name` is optional
   and follows the rule of a dependency name below. `max_line_width` is an
-  integer of 1 or more.
+  integer of 1 or more. `blank_line_after_end` is a boolean, false by default;
+  any other value is `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
+- With `blank_line_after_end = true`, `agentica check` and every command that
+  checks a program require an empty line (only spaces or tabs) after each line
+  whose code is only `end`, in the files of the project that the manifest
+  governs (not `std/` and not the files of a package, which follow their own
+  manifest). A trailing `# comment` on the `end` line is allowed. A line that
+  breaks it is `CHECK-BLANK-LINE-AFTER-END`, at the `end`, reported after the
+  type check passes. These next lines need no empty line: one that starts with
+  `end`, `else`, `elsif`, `)`, `]` or `}`, and one that starts with `.name`
+  (the lexer joins it to the `end`). The end of the file needs none either: the
+  last `end` may have no final line break, one, or extra empty lines, in a
+  module file and in the main file. An `end` with more on its line (`end.size`,
+  `end)`) is not covered, and an `end` in a string, a heredoc or a comment
+  never counts.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do

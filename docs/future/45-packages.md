@@ -53,15 +53,21 @@ form are decided in 45.14, questions 10 and 11.
   takes the local name as an argument and never reads it. Nothing checks it
   against the names that others give it.
 
-**Pending: the `[style]` rule.** `max_line_width` is the longest line allowed,
-in characters (Unicode code points, not bytes). It counts every line, comments
-and doc comments included. With no `max_line_width` there is no limit. A line
-over it is an error, never a warning (section 26). `agentica check` reports it
-as `CHECK-LINE-TOO-LONG`, at the first character past the limit. The code is
-proposed in §47.2 and owned by phase 28 (47c), which moves the check there; the
-owner confirms it. `tests/test_style_line_width.py` enforces the limit for
-this repository. `agentica fmt` does not enforce it: a line it cannot break
-stays long.
+**Built: `blank_line_after_end`.** The optional key
+`[style] blank_line_after_end = true` (default false) turns on
+`CHECK-BLANK-LINE-AFTER-END` in `agentica check`, as 05b says. The last `end`
+of a file needs no empty line after it. `agentica fmt` (47) must add the empty
+line when the key is on.
+
+**Pending: the `max_line_width` rule.** `max_line_width` is the longest line
+allowed, in characters (Unicode code points, not bytes). It counts every line,
+comments and doc comments included. With no `max_line_width` there is no limit.
+A line over it is an error, never a warning (section 26). `agentica check`
+reports it as `CHECK-LINE-TOO-LONG`, at the first character past the limit. The
+code is proposed in §47.2 and owned by phase 28 (47c), which moves the check
+there; the owner confirms it. `tests/test_style_line_width.py` enforces the
+limit for this repository. `agentica fmt` does not enforce it: a line it cannot
+break stays long.
 
 ### 45.6 Lock and hash
 
