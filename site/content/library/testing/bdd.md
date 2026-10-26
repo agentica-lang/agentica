@@ -110,7 +110,7 @@ Feature: Memory
     Then the count is 3
 ```
 
-- A step gets the scenario's context `ctx` and returns it; the next step gets what the previous one returned. Most `BDD` calls take and return the context: keep the one returned. `BDD.doc_string`, `BDD.table` and `BDD.get` return their value instead. Every `Then` step must make at least one `BDD` check.
+- A step gets the scenario's context `ctx` and returns it; the next step gets what the previous one returned. Most `BDD` calls take and return the context: keep the one returned. `BDD.doc_string`, `BDD.table`, `BDD.get`, `BDD.call` and `BDD.read_line` return their value instead. Every `Then` step must make at least one `BDD` check.
 - Each scenario runs in its own process, so a crash, `System.exit` or an endless loop fails only its scenario. A step must finish the tasks it starts (`RUNTIME-BDD-PENDING-TASKS`); an unawaited crash fails it with `RUNTIME-TASK-CRASHED`.
 - `main` runs again for each scenario, so it should only build the list and call `BDD.run`. Run alone, a step program prints how to run it and exits with code 2.
 - A step may import files and use `Process.spawn`. Its standard input is empty (`IO.gets` gives the end-of-input error). It must not call `Process.parent_read_line` or `Process.parent_send`: they belong to the runner.
@@ -182,6 +182,41 @@ BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 
 Keep JSON values between the steps of one scenario (each starts empty). `BDD.get` gives an error for a missing name.
 
+## BDD.keep and BDD.call
+
+```text
+BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
+BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
+```
+
+Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. Keeping a name again replaces the service, and the old handle is not closed until the scenario's process ends (there is no close hook). A step cannot leave a task running, so the service does its work in the calling step.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def open_pair(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  client = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
+  server = TCP.accept(listener, 5000).unwrap!
+  return BDD.keep(ctx, "pair") do |request|
+    try TCP.send(client, JSON.encode(request) + "\n", 5000)
+    JSON.parse(try TCP.read_line(server, 5000))
+  end
+end
+
+def check_echo(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  reply = BDD.call(ctx, "pair", JSON.from(args[0])).unwrap!
+  return BDD.assert(ctx, JSON.string(reply).unwrap! == args[0], "wrong reply")
+end
+
+def main() -> Void
+  BDD.run([
+    BDD.step("a connected pair", &open_pair),
+    BDD.step("the pair echoes {string}", &check_echo),
+  ])
+end
+```
+
 ## BDD.doc_string and BDD.table
 
 ```text
@@ -218,6 +253,7 @@ BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
 BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
 BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
 BDD.when_eof(ctx: BDD.Context) -> BDD.Context
+BDD.read_line(ctx: BDD.Context, timeout_ms: Int) -> Result[String]
 BDD.then_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
 BDD.then_json_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
 BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
@@ -227,6 +263,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
 The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program.
+
+`BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 
 `stdout is:` compares the output that no line step has read yet. Output is kept up to 1 MiB per stream.
 

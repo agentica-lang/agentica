@@ -231,10 +231,27 @@ A step program is a normal program: its `main` builds the list of steps with
 
 - A handler gets the scenario's context and returns the context it ends with;
   the next step gets that one. Most `BDD` calls take the context first and
-  return it, and `BDD.doc_string`, `BDD.table` and `BDD.get` return their value
-  instead. Only `BDD.set` and `BDD.given_program` change the context. Use the
-  one each call returns: a handler that drops the context `BDD.given_program`
-  returned loses the program under test.
+  return it, and `BDD.doc_string`, `BDD.table`, `BDD.get`, `BDD.call` and
+  `BDD.read_line` return their value instead. Only `BDD.set`, `BDD.keep` and
+  `BDD.given_program` change the context. Use the one each call returns: a
+  handler that drops the context `BDD.given_program` returned loses the
+  program under test.
+- `BDD.keep(ctx, name, service)` holds a value that is not JSON for the later
+  steps of the scenario, such as an open connection. The service is a
+  `Fn[Json, Result[Json]]` that captures the value; `BDD.call(ctx, name,
+  request)` runs it, and a missing name is `error("missing scenario service")`.
+  Agentica has no generic functions or structs, so the step program's own
+  type cannot travel through `Context`; the closure carries the value.
+  Services start empty in each scenario. Keeping a name again replaces the
+  service; the old handle is not closed and lives until the scenario's child
+  VM ends (there is no close hook). A step still cannot leave a task running.
+- `BDD.read_line(ctx, timeout_ms)` is `Process.read_line` of the program under
+  test as a `Result[String]`: the ended output and the timeout are errors the
+  step can handle; the output limit and an I/O failure still fail the step. A
+  timeout stops the program under test (as for `BDD.then_line`): every later
+  read, send or exit check fails with `RUNTIME-BDD-IO`, so it must be the last
+  use of the program.
+  Before `BDD.given_program` it is `RUNTIME-BDD-CONTEXT`.
 - `BDD.doc_string` or `BDD.table` on a step without one is
   `RUNTIME-BDD-CONTEXT`. `BDD.get` of a missing name is
   `error("missing scenario state")`. A stream call before `BDD.given_program`,
