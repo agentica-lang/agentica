@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Extern types `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32` and
   `C.Long` (C `long`, 32 bits on Windows) for parameters, results, out
   parameters and struct fields; unsigned results are never negative.
+- `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
+  can return an `error`.
 
 ### Changed
 

@@ -172,6 +172,7 @@ static void test_leaf_rows(void) {
       {"List.size", 1, true},     {"List.at", 2, true},       {"String.length", 1, true}, {"Int.bit_and", 2, true},
       {"Map.get", 2, false},      {"Map.has_key?", 2, false}, {"Set.include?", 2, false}, {"List.concat", 2, false},
       {"puts", 1, false},         {"List.map", 2, false},     {"IO.gets", 0, false},      {"String.slice", 3, false},
+      {"Native.closed?", 1, true},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const char *name = expected[k].name;

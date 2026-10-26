@@ -107,7 +107,7 @@ end
 - A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
 - `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
 - A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
-- A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`. `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
+- A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`, and `Native.closed?(buf)` is `true`. A `C.Pointer` that C gave is never closed (NULL included: test it with `Native.null?`). `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
 - The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
 
 Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
@@ -168,6 +168,7 @@ end
 
 - A function declared `-> Stream` gives a `Result[Stream]`: a NULL result is `error("fopen returned NULL")`, anything else is `ok` with a resource that the calling task owns.
 - `Native.close(stream)` runs the free function once and closes the resource; closing it again does nothing. A call that takes a closed resource fails with `RUNTIME-NATIVE-CLOSED`.
+- `Native.closed?(stream)` asks first, so a wrapper can return an `error` instead of stopping the task: it is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource; `false` for a live one, also while a `compute def` call holds it (closed during that call, it is `true` at once). It never stops the task. `true` is final; `false` can be out of date at once if another task may close the resource.
 - A resource the task did not close is freed when the task ends (return, crash or cancel), like a file. `Task.spawn_owning(&work, stream)` hands it to the new task. When `main` returns, the program ends without freeing what is still open.
 - A `compute def` call keeps its resource arguments until it returns: if the resource is closed meanwhile, or its task is cancelled, the free runs when the call ends.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
@@ -179,7 +180,7 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 
 - The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
 - An out parameter is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
-- An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
+- An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it, or `Native.closed?`: `sqlite3_prepare_v2` gives `SQLITE_OK` and a NULL statement for SQL that is only a comment.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.
 
 ## Function pointers
