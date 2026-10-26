@@ -11,7 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Linux shutdown skips a standard C stream already locked by native compute code.
-- `agentica test` no longer stops a program started by `Given the Agentica program` after 1,000,000 steps; it runs without a step limit, like `agentica FILE.agc`, and the scenario's timeouts bound it.
+- `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.
 
 ## [0.10.0] - 2026-10-25
 
