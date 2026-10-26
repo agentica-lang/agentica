@@ -41,13 +41,15 @@ end
 
 ## A file of the program once it is loaded. named maps each local name of an import list to what it names. name is the
 ## path the file is stored under (Paths.stored_name, or `pkg/name@version/path` for a file of a package), and origin
-## the package it belongs to. imports lists the keys of the files it imports, in the order of its import lines. The
-## last seven fields are for the cache of checked modules (check_cache.agc) and are empty or false for a walk that does
-## not use it, and for the root file: digest is the SHA-256 of the text, verified the tree digest that the cache's
-## entry for this text vouches for and held the types of its constants (as type_code.agc writes them), stubbed whether
-## program is the parse of the stub of that entry rather than of the text, tree the tree digest of this walk, and clean
-## whether the two are the same and the entry types every constant, so the bodies and constants need no check:
-## constants then has the type of each constant by its linked name.
+## the package it belongs to. reexports maps each name the file re-exports (`export Url.parse`) to the module that
+## declares it and its name there: a chain is already followed, so the key is that of the original declaration, and
+## `public` holds the name too, with the kind of the original. imports lists the keys of the files it imports, in the
+## order of its import lines. The last seven fields are for the cache of checked modules (check_cache.agc) and are
+## empty or false for a walk that does not use it, and for the root file: digest is the SHA-256 of the text, verified
+## the tree digest that the cache's entry for this text vouches for and held the types of its constants (as
+## type_code.agc writes them), stubbed whether program is the parse of the stub of that entry rather than of the text,
+## tree the tree digest of this walk, and clean whether the two are the same and the entry types every constant, so the
+## bodies and constants need no check: constants then has the type of each constant by its linked name.
 export struct Module
   key: String
   file: String
@@ -61,6 +63,7 @@ export struct Module
   public: Map[String, Declarations.Kind]
   aliases: Map[String, String]
   named: Map[String, Named]
+  reexports: Map[String, Named]
   imports: List[String]
   digest: String
   verified: String
@@ -176,6 +179,17 @@ end
 ## Parses nothing again: the files are numbered one after the other from 0.
 export def no_parses() -> Parses
   return Parses(kept: {}, top: 0)
+end
+
+## The name in the linked program of the export `name` of `module`: with the prefix of the file that declares it, which
+## is another file when the module re-exports the name.
+export def linked_name(modules: Map[String, Module], module: Module, name: String) -> String
+  if module.reexports.has_key?(name)
+    origin = module.reexports[name]
+    return modules[origin.target].prefix + origin.name
+  end
+
+  return module.prefix + name
 end
 
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
@@ -365,7 +379,7 @@ end
 def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
   frame = walk.stack[walk.stack.size - 1]
   if frame.next >= frame.imports.size
-    return ok(finish(walk, frame))
+    return finish(walk, frame)
   end
 
   if frame.pending != ""
@@ -375,12 +389,14 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
   return read_import(settings, walk, frame, frame.imports[frame.next])
 end
 
-def finish(walk: Walk, frame: Frame) -> Walk
+def finish(walk: Walk, frame: Frame) -> Result[Walk]
   module = frame.module.with(
     aliases: frame.aliases,
     named: frame.named,
     imports: frame.imported,
   )
+  # The imports are all done: the re-exports can take their kinds and origins from the finished exports.
+  module = try bind_reexports(walk, module)
   if module.digest != ""
     # Every file it imports is done: the stack only finishes a file after the ones it read.
     below = module.imports.map do |imported: String| walk.done[imported].tree end
@@ -391,11 +407,77 @@ def finish(walk: Walk, frame: Frame) -> Walk
     end
   end
 
-  return walk.with(
-    stack: walk.stack.take(walk.stack.size - 1),
-    seen: walk.seen.put(module.key, 0),
-    done: walk.done.put(module.key, module),
+  return ok(
+    walk.with(
+      stack: walk.stack.take(walk.stack.size - 1),
+      seen: walk.seen.put(module.key, 0),
+      done: walk.done.put(module.key, module),
+    ),
   )
+end
+
+# The re-exports of `module` (`export Alias.name`), in the order of the file: the alias must be an import of the file,
+# the module it names must export the name, and the name must be free among the declarations, the import aliases and
+# the other re-exports of the file (CHECK-IMPORT-NAME, CHECK-REDEFINED-NAME). The name joins the exports with the kind
+# of the original, and reexports keeps where the original is, so an importer reads the declaration itself.
+def bind_reexports(walk: Walk, module: Module) -> Result[Module]
+  public = module.public
+  reexports = module.reexports
+  for decl in Declarations.reexports_of(module.program.declarations)
+    if !module.aliases.has_key?(decl.alias)
+      return error(
+        Failure.fail_at(
+          Failure.Site(file: module.file, span: decl.alias_span),
+          "CHECK-IMPORT-NAME",
+          "unknown module alias",
+          Failure.hint("import a module with import #{decl.alias} from \"path\""),
+        ),
+      )
+    end
+
+    target = walk.done[module.aliases[decl.alias]]
+    at_name = Failure.Site(file: module.file, span: decl.name_span)
+    if !target.public.has_key?(decl.name)
+      return error(
+        Failure.fail_at(
+          at_name,
+          "CHECK-IMPORT-NAME",
+          "unknown or private imported name",
+          ImportHelp.unknown_import_help(target.key, target.public, decl.name),
+        ),
+      )
+    end
+
+    if public.has_key?(decl.name) or module.names.has_key?(decl.name) or module.aliases.has_key?(decl.name)
+      return error(
+        Failure.fail_at(
+          at_name,
+          "CHECK-REDEFINED-NAME",
+          "duplicate or reserved re-exported name",
+          Failure.hint(clash_help(module, decl.name)),
+        ),
+      )
+    end
+
+    origin = Named(target: target.key, name: decl.name)
+    if target.reexports.has_key?(decl.name)
+      origin = target.reexports[decl.name]
+    end
+
+    public = public.put(decl.name, target.public[decl.name])
+    reexports = reexports.put(decl.name, origin)
+  end
+
+  return ok(module.with(public: public, reexports: reexports))
+end
+
+# What to do about a re-exported name that is already taken: the alias of the file is the usual cause.
+def clash_help(module: Module, name: String) -> String
+  if module.aliases.has_key?(name)
+    return "an import alias of this file has that name; rename the alias, as in import V from \"path\""
+  end
+
+  return "another declaration or re-export of this file has that name"
 end
 
 # `module`, which its entry vouches for, as a clean module if the entry types every constant it declares and the types
@@ -664,6 +746,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     public: collected.public,
     aliases: {},
     named: {},
+    reexports: {},
     imports: [],
     digest: parsed.digest,
     verified: parsed.verified,

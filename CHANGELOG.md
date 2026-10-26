@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `export Alias.name` re-exports a name that the file imports, so a facade
+  module can collect the API of several files. (#675)
 - `[style] blank_line_after_end = true` in `agentica.toml` requires an empty
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that

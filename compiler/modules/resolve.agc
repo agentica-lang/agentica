@@ -2,7 +2,8 @@
 ##
 ## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file
 ## ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed
-## name in the imported file, if that file exports it.
+## name in the imported file, if that file exports it; a name that file re-exports is the name in the file that
+## declares it.
 
 import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
@@ -81,7 +82,7 @@ export def constant_identity(cx: Context, name: String) -> String
     entry = cx.me.named[name]
     target = cx.modules[entry.target]
     if Declarations.constant?(target.public[entry.name])
-      return target.prefix + entry.name
+      return Modules.linked_name(cx.modules, target, entry.name)
     end
   end
 
@@ -100,7 +101,7 @@ export def alias_constant_identity(cx: Context, name: String) -> String
 
   target = cx.modules[cx.me.aliases[parts[0]]]
   if target.public.has_key?(parts[1]) and Declarations.constant?(target.public[parts[1]])
-    return target.prefix + parts[1]
+    return Modules.linked_name(cx.modules, target, parts[1])
   end
 
   return ""
@@ -245,7 +246,7 @@ def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source
     )
   end
 
-  return ok(target.prefix + entry.name)
+  return ok(Modules.linked_name(cx.modules, target, entry.name))
 end
 
 # Only exports are candidates, so a private name is never suggested.
@@ -267,7 +268,7 @@ def imported(cx: Context, target: Modules.Module, member: String, want: Want, sp
     )
   end
 
-  return ok(target.prefix + member)
+  return ok(Modules.linked_name(cx.modules, target, member))
 end
 
 def right_kind?(kind: Declarations.Kind, want: Want) -> Bool

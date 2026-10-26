@@ -675,3 +675,17 @@ def test_an_extern_function_with_an_out_parameter_is_found_at_its_name_and_calls
         "field", "Sqlite3Open", "db: Db")
     assert start(field["definition"]["name_span"]) == where(NATIVE, "db: Db", 0)
     assert places(field) == [("native.agc", *where(NATIVE, "opened.db", 7), "read", "main")]
+
+
+FACADE = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
+THROUGH = 'import Facade from "facade"\n\ndef build() -> Int\n  return Facade.make("a").age\nend\n'
+
+
+def test_the_name_of_a_re_export_is_the_original_declaration_and_its_uses_through_the_facade_are_references(program):
+    (program / "facade.agc").write_text(FACADE, encoding="utf-8")
+    (program / "through.agc").write_text(THROUGH, encoding="utf-8")
+    report = told(spot("facade.agc", FACADE, "make", 1), "through.agc", cwd=program)
+    definition = report["definition"]
+    assert (definition["kind"], definition["name"], definition["module"]) == ("function", "make", "models.agc")
+    assert start(definition["name_span"]) == where(MODELS, "make(name")
+    assert ("through.agc", *where(THROUGH, "make", 0), "call", "build") in places(report)

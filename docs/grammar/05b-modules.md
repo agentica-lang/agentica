@@ -19,7 +19,7 @@ another capitalized name. Aliases can name private types in exported signatures;
 importers can use values of the alias but cannot name or construct the private
 type. Local names stay unqualified. Import aliases are uppercase and cannot
 collide with declarations, other aliases, imported names or builtin names.
-Imports cannot be re-exported.
+A module can pass on a name it imports with a re-export (below).
 
 #### Importing names
 
@@ -63,6 +63,54 @@ imported struct as the enum of a pattern) is `CHECK-TYPE-MISMATCH`, as with an
 alias.
 
 Unused names are not reported.
+
+#### Re-exports
+
+A module can pass on a name it imports, so a small facade file can collect the
+API of several files:
+
+```agentica
+# web.agc
+import Url from "url"
+import Parts from "http_parts"
+
+export Url.parse
+export Url.Address
+export Parts.header_value
+```
+
+`export Alias.name` (a function, a constant) and `export Alias.TypeName` (a
+struct, enum or type alias) add the name to the exports of the file. There is
+no renaming (`as`) and no wildcard (`export Url.*`): a facade that wants
+another name writes a wrapper function. `export` is followed by a type name
+and a dot only for a re-export, so there is no clash with `export def`,
+`export struct`, `export enum`, `export type` and `export NAME = ...`.
+
+- The alias must be an import of this file (`import Url from "url"`; a module
+  imported only by names has no alias), otherwise `CHECK-IMPORT-NAME` at the
+  alias. The module must export the name, otherwise `CHECK-IMPORT-NAME` at the
+  name, with a `did you mean` help over the exports. A private name is not
+  re-exportable.
+- The name must not be the name of a declaration of the file, of another
+  re-export or of an import alias of the file: `CHECK-REDEFINED-NAME` at the
+  name. So the alias of a facade must differ from the names it re-exports:
+  `import Value from "value"` with `export Value.Value` is an error; write
+  `import V from "value"` and `export V.Value`.
+- It is the same declaration, not a copy. A program that imports both
+  `web.agc` and `url.agc` sees `Web.Address` and `Url.Address` as one type, and
+  `&Web.parse` and `&Url.parse` are the same function. A re-export of a
+  re-export leads to the original declaration, and a re-exported enum brings
+  its variants (`Web.Option.Some(x)`). A re-exported constant is read as
+  `Web.LIMIT`.
+- Inside the file the name is still `Url.parse`: a re-export adds no local
+  name.
+- Re-exports come with the imports, may follow each other and the imports
+  directly, and after a declaration need the blank line
+  (`PARSE-MISSING-BLANK-LINE`); they are in the first group of
+  `CHECK-DECL-ORDER`. A `##` doc before a re-export is `PARSE-DETACHED-DOC`:
+  the doc stays on the original.
+- An exported signature may still mention a private type that importers cannot
+  name, as before.
 
 #### Constants
 

@@ -29,6 +29,7 @@ end
 export def span_of(decl: Ast.Decl) -> Source.Span
   case decl
     Ast.Decl.Import(node) -> return node.span
+    Ast.Decl.Reexport(node) -> return node.span
     Ast.Decl.Export(node) -> return node.span
     Ast.Decl.Function(node) -> return node.span
     Ast.Decl.Struct(node) -> return node.span
@@ -180,12 +181,25 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   return found
 end
 
-## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
-## constants, then struct, enum, type alias and resource (exported or not), then export def, then def. The span is of
-## the declaration out of place; the help names the group it belongs to. The functions of an extern block that declares
-## a resource are in the group of the types, with the resource. The record of an extern function with out parameters
-## (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with no meaning for
-## evaluation.
+## The re-exports of a file, in order.
+export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
+  found: List[Ast.ReexportDecl] = []
+  for decl in declarations
+    case decl
+      Ast.Decl.Reexport(node) -> found = found.push(node)
+      _ -> next
+    end
+  end
+
+  return found
+end
+
+## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
+## re-exports, then constants, then struct, enum, type alias and resource (exported or not), then export def, then def.
+## The span is of the declaration out of place; the help names the group it belongs to. The functions of an extern
+## block that declares a resource are in the group of the types, with the resource. The record of an extern function
+## with out parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with
+## no meaning for evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations
@@ -215,6 +229,7 @@ end
 def rank(decl: Ast.Decl) -> Int
   case decl
     Ast.Decl.Import(node) -> return 0
+    Ast.Decl.Reexport(node) -> return 0
     Ast.Decl.Constant(node) -> return 1
     Ast.Decl.Struct(node) -> return 2
     Ast.Decl.Enum(node) -> return 2

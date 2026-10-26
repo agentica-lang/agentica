@@ -179,6 +179,33 @@ An imported name cannot clash with a declaration, an alias, another import or a 
 
 Only the root file needs `main`. Imported files have no top-level code, so importing a file never runs anything.
 
+## Re-exports
+
+A module can pass on a name it imports with `export Alias.name`, so a small facade file collects the API of several files. Save this as `geometry.agc`:
+
+```agentica {file="geometry.agc"}
+import Shapes from "shapes"
+
+export Shapes.Square
+export Shapes.area
+```
+
+The importer sees the original declaration: `Geometry.Square` and `Shapes.Square` are one type, and `&Geometry.area` and `&Shapes.area` are one function.
+
+```agentica
+import Geometry from "geometry"
+
+def main() -> Void
+  puts(Geometry.area(Geometry.Square(side: 5)))
+end
+```
+
+```output
+25
+```
+
+The alias must be an import of the file, and the module must export the name (`CHECK-IMPORT-NAME`). The name must not be a declaration, another re-export or an import alias of the file (`CHECK-REDEFINED-NAME`). There is no `as` and no wildcard: a facade that wants another name writes a wrapper function. A re-export adds no local name, so inside the facade the name is still `Shapes.area`. Re-exports follow the imports, and one after a declaration needs a blank line (`PARSE-MISSING-BLANK-LINE`).
+
 ## The standard library
 
 Paths that start with `std/` load the standard library that ships with Agentica. `std/queue` is a first-in, first-out queue of strings:

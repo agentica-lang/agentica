@@ -15,8 +15,7 @@
 
 - **Extension:** Modules
   - **Direction:** Group behavior and split programs into files
-  - **Pending decisions:** Import, visibility, cycles; re-exports are planned in
-    [section 25.2](25-ruby-typed-idioms.md#252-re-exports); module attachment
+  - **Pending decisions:** Import, visibility, cycles; module attachment
     (section 7) was decided against ([section
     25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c))
 

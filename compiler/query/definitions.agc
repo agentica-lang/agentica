@@ -136,6 +136,7 @@ def declared_name(declaration: Ast.Decl) -> String
     Ast.Decl.Resource(node) -> return node.name
     Ast.Decl.Constant(node) -> return node.name
     Ast.Decl.Import(_) -> return ""
+    Ast.Decl.Reexport(_) -> return ""
     Ast.Decl.Export(_) -> return ""
   end
 end
@@ -152,6 +153,7 @@ def whole(found: Found) -> Definition
     Ast.Decl.Resource(node) -> return top("resource", node.name, module, node.span, node.name_span)
     Ast.Decl.Constant(node) -> return top("constant", node.name, module, node.span, node.name_span)
     Ast.Decl.Import(node) -> return made("import", "", module, node.span, node.span, nothing_said())
+    Ast.Decl.Reexport(node) -> return made("export", "", module, node.span, node.span, nothing_said())
     Ast.Decl.Export(node) -> return made("export", "", module, node.span, node.span, nothing_said())
   end
 end

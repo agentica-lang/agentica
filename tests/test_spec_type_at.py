@@ -790,3 +790,15 @@ def test_a_resource_has_its_declaration_as_definition_in_a_parameter_and_a_resul
         assert (definition["kind"], definition["name"], definition["signature"]) == (
             "resource", "Db", "resource Db, free: db_close"), needle
         assert start(definition["name_span"]) == where(source, "Db,"), needle
+
+
+def test_a_name_through_a_facade_has_the_original_declaration_as_definition(program):
+    facade = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
+    through = 'import Facade from "facade"\n\ndef build() -> Int\n  return Facade.make("a").age\nend\n'
+    (program / "facade.agc").write_text(facade, encoding="utf-8")
+    (program / "through.agc").write_text(through, encoding="utf-8")
+    report = answer(("through.agc", where(through, "Facade.make", 8)), cwd=program)
+    assert report["kind"] == "name"
+    definition = report["definition"]
+    assert (definition["kind"], definition["name"], definition["file"]) == ("function", "make", "models.agc")
+    assert start(definition["name_span"]) == where(MODELS, "make(name")

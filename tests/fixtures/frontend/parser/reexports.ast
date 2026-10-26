@@ -1,0 +1,11 @@
+program #10 0:1:1-239:12:1 module-doc="Re-exports after the imports: a function, a type and a constant of an imported module."
+  declaration: import-decl #0 91:3:1-113:4:1 path="url" alias="Url"
+  declaration: import-decl #1 113:4:1-144:5:1 path="http_parts" alias="Parts"
+  declaration: reexport-decl #2 144:5:1-161:6:1 alias="Url" name="parse"
+  declaration: reexport-decl #3 161:6:1-180:7:1 alias="Url" name="Address"
+  declaration: reexport-decl #4 180:7:1-199:8:1 alias="Parts" name="LIMIT"
+  declaration: export-decl #9 200:9:1-239:12:1
+    declaration: function-decl #8 207:9:8-239:12:1 name="api"
+      result: type-ref #5 220:9:21-223:9:24 name="Int"
+      body: return-stmt #7 226:10:3-235:11:1
+        value: literal #6 233:10:10-234:10:11 value=int:1

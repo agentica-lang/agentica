@@ -140,6 +140,7 @@ def items_of(declaration: Ast.Decl, text: String) -> List[Item]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, node.doc, node.span, false)]
     Ast.Decl.Resource(node) -> return [resource_item(node, node.doc, node.span, false)]
     Ast.Decl.Import(_) -> return []
+    Ast.Decl.Reexport(_) -> return []
   end
 end
 
@@ -153,6 +154,7 @@ def inner_items(declaration: Ast.Decl, doc: Ast.Optional[String], span: Source.S
     Ast.Decl.Resource(node) -> return [resource_item(node, doc, span, true)]
     Ast.Decl.Constant(node) -> return [constant_item(node, span, true)]
     Ast.Decl.Import(_) -> return []
+    Ast.Decl.Reexport(_) -> return []
     Ast.Decl.Export(_) -> return []
   end
 end

@@ -3001,8 +3001,8 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   end
 
   return (
-    kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos) or
-    (kind == "name" and e.tokens[pos].lexeme == "type")
+    kind == "def" or kind == "struct" or kind == "enum" or (kind == "export" and !reexport_start?(e, pos)) or
+    constant_start?(e, pos) or (kind == "name" and e.tokens[pos].lexeme == "type")
   )
 end
 
@@ -3539,6 +3539,37 @@ def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
   return error(Base.found(e, at, description))
 end
 
+# `export` followed by a type name and a dot is a re-export. Today `export` is followed only by def, struct, enum, type
+# or a constant (a type name and `=` or `:`), so there is no clash.
+def reexport_start?(e: Base.Env, at: Int) -> Bool
+  return (
+    Base.kind_at(e, at) == "export" and Base.kind_at(e, at + 1) == "type-name" and Base.kind_at(e, at + 2) == "dot"
+  )
+end
+
+# export Alias.name, or export Alias.TypeName: no `as`, no wildcard (docs/grammar/05b-modules.md).
+def parse_reexport(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
+  alias = e.tokens[pos + 1]
+  kind = Base.kind_at(e, pos + 3)
+  if kind != "name" and kind != "type-name"
+    return error(Base.found(e, pos + 3, "a name to re-export"))
+  end
+
+  member = e.tokens[pos + 3]
+  stop = try Base.expect(e, pos + 4, "NL", "a newline after export", false)
+  node = Ast.Decl.Reexport(
+    Ast.ReexportDecl(
+      id: ids,
+      alias: alias.lexeme,
+      name: member.lexeme,
+      alias_span: alias.span,
+      name_span: member.span,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, ids)
+end
+
 # The blank line rule: right after a declaration other than an import, the next token must not start a declaration, an
 # import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. The first doc block of a file,
 # followed by a blank line, is the module doc.
@@ -3584,6 +3615,11 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       cursor += 1
     elsif kind == "import"
       parsed = try parse_import(e, cursor, next_id)
+      declarations = declarations.push(parsed.node)
+      cursor = parsed.pos
+      next_id = parsed.ids
+    elsif reexport_start?(e, cursor)
+      parsed = try parse_reexport(e, cursor, next_id)
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
