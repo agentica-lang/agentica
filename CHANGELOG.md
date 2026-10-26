@@ -23,6 +23,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `agentica test` reports a failed step at its keyword's column.
+- Bytes written to a file are no longer lost at exit when its `File.close` or `File.write` timed out. (#696)
 - Each `Scenario Outline` row is named `Name (values)`; names of outlines with unused columns change.
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
