@@ -363,14 +363,16 @@ def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   end
 end
 
+# The reason on one line, whatever line breaks it holds.
 def skip_text(reason: String, ai: Bool) -> String
-  if reason == ""
+  shown = reason.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+  if shown == ""
     return ""
   elsif ai
-    return " | #{reason}"
+    return " | #{shown}"
   end
 
-  return "\n  #{reason}"
+  return "\n  #{shown}"
 end
 
 def separator(ai: Bool) -> String

@@ -448,7 +448,20 @@ Feature: Tagged
 SKIPPING = steps_program(main_running(
     'BDD.step("it holds") do |ctx, args| BDD.assert(ctx, true, "no") end',
     'BDD.step("it skips") do |ctx, args| BDD.skip(ctx, "needs a database") end',
-    'BDD.step("it fails if run") do |ctx, args| BDD.assert(ctx, false, "ran after the skip") end'))
+    'BDD.step("it fails if run") do |ctx, args| BDD.assert(ctx, false, "ran after the skip") end',
+    'BDD.step("the database is down") do |ctx, args| BDD.skip(ctx, "no database\\nat all") end'))
+
+BACKGROUND = """Feature: Background skip
+
+  Background:
+    Given the database is down
+
+  Scenario: first
+    Then it fails if run
+
+  Scenario: second
+    Then it fails if run
+"""
 
 
 def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
@@ -479,9 +492,14 @@ def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
     assert [name for name, _ in names("--tags", "@db", "--only", "tw")[1]] == ["two"]
     status, _, report = names("--tags", "@missing")
     assert (status, report["files"][-1]["error"]["code"]) == (1, "CHECK-BDD-EMPTY")
+    # A `not` before a `not` cancels it, and any white space separates the words.
+    assert names("--tags", "not not @fast")[1] == [("one", "passed")]
+    assert names("--tags", "@fast\u00a0or\u2003@b")[1] == names("--tags", "@fast or @b")[1]
+    # A bad expression is a usage error at the arguments, before anything is compiled.
     for expression in ("not", "@a @b", "(@a)"):
         status, _, report = names("--tags", expression)
         assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE"), expression
+        assert report["files"][-1]["error"]["file"] == "<arguments>"
     status, _, report = names("--tags", "@a", "--tags", "@b")
     assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE")
 
@@ -491,6 +509,21 @@ def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
                                    "0 passed, 0 failed, 1 skipped, 0 not executed, 0 file errors\n")
     ai = bdd.agentica_test("--ai", feature, "--steps", steps, "--tags", "@db and not @slow")
     assert ai.stdout.splitlines()[0] == "SKIP Tagged / three | needs a database"
+
+
+def test_a_background_step_can_skip_every_scenario_and_a_reason_shows_on_one_line(bdd):
+    directory = bdd.suite({"bg.feature": BACKGROUND, "steps.agc": SKIPPING})
+    path = joined(directory, "bg.feature")
+    status, report = bdd.json_test(path, "--steps", joined(directory, "steps.agc"))
+    # Every scenario is skipped at the Background step: the run still passes, with nothing passed.
+    assert (status, report["passed"], report["skipped"], report["ok"]) == (0, 0, 2, True)
+    first = report_cases(report)[0]
+    assert [step["status"] for step in first["steps"]] == ["skipped", "not_executed"]
+    assert first["reason"] == "no database\nat all"
+    result = bdd.agentica_test(path, "--steps", joined(directory, "steps.agc"))
+    assert result.stdout.splitlines()[:2] == ["SKIP Background skip / first", "  no database at all"]
+    ai = bdd.agentica_test("--ai", path, "--steps", joined(directory, "steps.agc"))
+    assert ai.stdout.splitlines()[0] == "SKIP Background skip / first | no database at all"
 
 
 def test_tags_leave_out_unit_test_files(bdd):

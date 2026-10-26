@@ -395,10 +395,10 @@ the test's name, so a test sees the same values alone or after other tests.
 
 `agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]` runs
 `.feature` specifications and `*_test.agc` unit test files in one report, and
-its exit code is the verdict. BDD is the standard module `std/bdd`, written in Agentica, and
-`BDD` is not reserved. A `BDD.` call without `import BDD from "std/bdd"` is
-`CHECK-UNKNOWN-NAME`, with the import as its help. The discovery rules,
-timeouts, output limits, seeds, runner protocol and step catalog are in
+its exit code is the verdict. BDD is the standard module `std/bdd`, written in
+Agentica, and `BDD` is not reserved. A `BDD.` call without `import BDD from
+"std/bdd"` is `CHECK-UNKNOWN-NAME`, with the import as its help. The discovery
+rules, timeouts, output limits, seeds, runner protocol and step catalog are in
 [`bdd.md`](../bdd.md).
 
 Not planned: an assertion that stops the test by itself (Agentica has no

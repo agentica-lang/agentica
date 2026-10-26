@@ -1,13 +1,13 @@
 # BDD feature specifications
 
-`agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--ai|--json]` runs
-`.feature` files and `*_test.agc` unit test files. It searches directories in
-sorted order (folder links are not followed; a feature file is at most 1 MiB);
-the default paths are `specs/` and `test/`. `--steps FILE` names the one step
-program (repeating it is `RUNTIME-BDD-USAGE`); without it, a run with features
-uses the nearest `steps.agc` in the folder of each path (the path if a folder)
-or above it, up to the working directory (two different ones are
-`RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
+`agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
+[--ai|--json]` runs `.feature` files and `*_test.agc` unit test files. It
+searches directories in sorted order (folder links are not followed; a feature
+file is at most 1 MiB); the default paths are `specs/` and `test/`. `--steps
+FILE` names the one step program (repeating it is `RUNTIME-BDD-USAGE`); without
+it, a run with features uses the nearest `steps.agc` in the folder of each path
+(the path if a folder) or above it, up to the working directory (two different
+ones are `RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
 verification fails, 2 infrastructure or usage fails. Programs under test run as
 local processes on the VM. File and output rules shared with unit tests:
 `testing.md`.
@@ -16,11 +16,11 @@ English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
 substituting `<column>` in names, steps, Doc Strings and tables. Comments, tags
-and descriptions before steps are accepted; only `--tags` uses tags. `Rule`, `*`,
-other keyword aliases and localized syntax fail explicitly. `And`/`But` inherit
-the previous kind. Triple-quote Doc Strings are dedented; include a final empty
-line to keep a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One
-argument per step.
+and descriptions before steps are accepted; only `--tags` uses tags. `Rule`,
+`*`, other keyword aliases and localized syntax fail explicitly. `And`/`But`
+inherit the previous kind. Triple-quote Doc Strings are dedented; include a
+final empty line to keep a trailing newline. Data Tables decode `\|`, `\\`,
+`\n`. One argument per step.
 
 Predefined step patterns (the keyword is irrelevant for matching):
 
@@ -111,7 +111,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   an error Result. Every `Then` (And/But included) and every scenario must
   perform a BDD assertion. A BDD failure ends the step at once. `BDD.skip` ends
   it at once too: the scenario is `skipped` with the reason, its later steps are
-  `not_executed`, and the exit code stays 0.
+  `not_executed`, and the exit code stays 0, even when every scenario is
+  skipped (CI should check the `skipped` count).
 - Each scenario runs in its own child VM with empty state and no program,
   running Background again. A crash, `System.exit` (even 0,
   `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario;

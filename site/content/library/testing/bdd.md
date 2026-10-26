@@ -43,7 +43,7 @@ Run it:
 agentica test specs/
 ```
 
-Exit code `0`: every scenario passes or is skipped. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
+Exit code `0`: every scenario passes or is skipped (also when all are skipped, so a CI job should check that the `skipped` count is the one it expects). `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
 - `--tags EXPR` keeps the scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not` binds tighter than `and`, and `and` tighter than `or`; no parentheses), as in `--tags "@db and not @slow"`. A scenario has the tags of its Feature and itself, and a `Scenario Outline` row also those of its `Examples` block. Unit test files have no tags, so they are left out. A bad expression exits with `2`.

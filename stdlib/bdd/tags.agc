@@ -1,7 +1,8 @@
 ## Reads the tag expressions of `agentica test --tags`.
 ##
 ## A small subset of Cucumber's tag expressions: `@a`, `not @a`, joined with `and` and `or`. `not` binds tighter than
-## `and`, and `and` tighter than `or`. There are no parentheses.
+## `and`, and `and` tighter than `or`; a `not` before a `not` cancels it. There are no parentheses. Words are
+## separated by any white space, no-break spaces included.
 
 ## One tag, or its negation.
 struct Literal
@@ -17,7 +18,8 @@ end
 ## Reads `text`. Returns the expression, or an error whose message says what is wrong. An empty text is the expression
 ## that selects every scenario.
 export def compile(text: String) -> Result[Expr]
-  words = text.replace("\t", " ").replace("\n", " ").replace("\r", " ").split(" ").filter do |word| word != "" end
+  spaced = text.split("").map do |character| separator(character) end.join("")
+  words = spaced.split(" ").filter do |word| word != "" end
   if words.size == 0
     return ok(Expr(groups: []))
   end
@@ -28,8 +30,8 @@ export def compile(text: String) -> Result[Expr]
   literal = true
   negated = false
   for word in words
-    if literal and word == "not" and not negated
-      negated = true
+    if literal and word == "not"
+      negated = not negated
     elsif literal and word.length > 1 and word.start_with?("@")
       group = group.push(Literal(tag: word, negated: negated))
       negated = false
@@ -64,6 +66,19 @@ end
 ## Whether the expression leaves some scenarios out, that is, whether `--tags` was given.
 export def filters?(expr: Expr) -> Bool
   return expr.groups.size > 0
+end
+
+# A space for any character that separates words: the ASCII and Unicode white space.
+def separator(character: String) -> String
+  point = String.code(character)
+  spacing = (point >= 9 and point <= 13) or point == 133 or point == 160 or point == 5760
+  spacing = spacing or (point >= 8192 and point <= 8202) or point == 8232 or point == 8233
+  spacing = spacing or point == 8239 or point == 8287 or point == 12288
+  if spacing
+    return " "
+  end
+
+  return character
 end
 
 # Every literal of the group: a tag is there, or a negated one is not.

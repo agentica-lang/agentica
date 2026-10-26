@@ -83,7 +83,7 @@ export def main() -> Void
   # given, the expression as a JSON string. It is a line of its own, not a field of `Config`, because the decode of
   # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
   read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
-  tags_text = JSON.string(JSON.parse(File.read_line(handle, 5000).unwrap_or("")).unwrap_or(JSON.null())).unwrap_or("")
+  tags = read_tags(handle)
   closed = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -93,7 +93,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = selected(seeded(config, seed), tags_text, read.map do |entry| entry.unwrap! end)
+  files = selected(seeded(config, seed), tags, read.map do |entry| entry.unwrap! end)
   text = Report.text(files, config.style == "ai", seed)
   if config.style == "json"
     text = JSON.encode(Report.json(files, seed))
@@ -128,16 +128,43 @@ def min_of(a: Int, b: Int) -> Int
   return b
 end
 
-# The report of the run: a bad `--tags` expression is a usage error and nothing runs.
-def selected(config: Config, tags_text: String, entries: List[Entry]) -> List[Report.FileResult]
-  compiled = Tags.compile(tags_text)
-  if not compiled.ok?
-    where = Report.Span(file: config.empty_path, line: 1, column: 1, end_column: 1)
-    problem = Report.error_at("RUNTIME-BDD-USAGE", "invalid --tags: #{compiled.message}", where)
-    return [Report.file_error(config.empty_path, "", problem)]
+# The `--tags` expression: the line after the entries, a JSON string. No line is no filter; a line that cannot be read
+# is a failure, so a run never goes on without the filter that was asked for.
+def read_tags(handle: FileHandle) -> Result[String]
+  line = File.read_line(handle, 5000)
+  if !line.ok?
+    if line.message == "filesystem: end of file"
+      return ok("")
+    end
+
+    return error(line.message)
   end
 
-  return matched(config, tags_text, compiled.unwrap!, run_all(config, compiled.unwrap!, entries))
+  text = JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
+  if !text.ok?
+    return error("the line is not a JSON string")
+  end
+
+  return text
+end
+
+# The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
+# driver has checked the expression already, so this is a mismatch of driver and runner).
+def selected(config: Config, tags: Result[String], entries: List[Entry]) -> List[Report.FileResult]
+  compiled = Tags.compile(tags.unwrap_or(""))
+  message = ""
+  if !tags.ok?
+    message = "cannot read --tags: #{tags.message}"
+  elsif !compiled.ok?
+    message = "invalid --tags: #{compiled.message}"
+  end
+
+  if message != ""
+    where = Report.Span(file: "<arguments>", line: 1, column: 1, end_column: 1)
+    return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
+  end
+
+  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, entries))
 end
 
 def run_all(config: Config, tags: Tags.Expr, found: List[Entry]) -> List[Report.FileResult]

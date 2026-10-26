@@ -8,6 +8,8 @@
 ## `--only TEXT`, `--tags EXPR`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the
 ## ones in front of `test`).
 
+import Tags from "std/bdd/tags"
+
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
 DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
@@ -113,6 +115,11 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
           return Parsed.Usage("one --tags EXPR", shown)
         elsif value.strip == ""
           return Parsed.Usage("--tags needs a non-empty EXPR", shown)
+        end
+
+        checked = Tags.compile(value)
+        if !checked.ok?
+          return Parsed.Usage("invalid --tags: #{checked.message}", shown)
         end
 
         shown = shown.with(tags: value)

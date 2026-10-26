@@ -51,10 +51,11 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   `not` binding tighter than `and`, and `and` tighter than `or`; there are no
   parentheses (`@db and not @slow`, `@fast or @smoke`). A scenario has the tags
   of its Feature, its own, and, for a `Scenario Outline` row, those of its
-  `Examples` block. A bad expression is `RUNTIME-BDD-USAGE` (exit 2) and nothing
-  runs. Unit test files have no tags, so `--tags` leaves them out. With
-  `--only`, a scenario must pass both. If nothing is kept, the run fails with
-  `CHECK-BDD-EMPTY`.
+  `Examples` block. Words are separated by any white space, and `not not` is
+  `not` twice. A bad expression is `RUNTIME-BDD-USAGE` (exit 2) at
+  `<arguments>`, found before anything is compiled, and nothing runs. Unit test
+  files have no tags, so `--tags` leaves them out. With `--only`, a scenario
+  must pass both. If nothing is kept, the run fails with `CHECK-BDD-EMPTY`.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON
@@ -67,9 +68,11 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   test. Under `--deny-fs` a missing program under test shows as exit 2 from
   its `agentica` command.
 - **Exit codes.** 0 when every scenario passes or is skipped and there is at
-  least one; 1 for
-  verification failures or an empty suite; 2 for usage errors and any
-  `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.
+  least one; 1 for verification failures or an empty suite; 2 for usage errors
+  and any `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.
+  A skip is not a failure (as in Cucumber's non-strict mode), even when every
+  scenario is skipped: a CI job should check that the `skipped` count is the
+  one it expects.
 - **JSON report.** Keys: `ok`, `passed`, `failed`, `skipped`, `not_executed`,
   `file_errors`, `exit_code`, `seed`, `files`. Each file has `path`, `feature`,
   `kind` (`feature`, `tests`, `steps` for the step program, or `""`), `status`,
@@ -86,8 +89,8 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   stderr if their child VM died during them, the last 64 Ki characters. Stdout
   printed by `main` before `Test.run` belongs to the first test.
 - **Summary line.** The text report ends with
-  `N passed, M failed, S skipped, K not executed, F file errors`, and `, seed S` is added
-  when the run fails.
+  `N passed, M failed, S skipped, K not executed, F file errors`, and
+  `, seed S` is added when the run fails.
 - **Limits.** Unread stdout over 1 MiB fails the running test with
   `RUNTIME-BDD-OUTPUT-LIMIT`. Stderr is captured for the whole file, up to 1
   MiB; past that the file fails, and the test then running is `NOT RUN`, when
@@ -361,8 +364,8 @@ agentica test [PATH...] [--steps FILE]
 
 **Outcome of a step.** After sending step `i`, the runner reads the channel with
 `Process.channel_read_line`, up to the scenario deadline. After an `end`,
-`skip` or `fail` record it reads what the handler printed with `Process.read_available`,
-which the child flushed before the record:
+`skip` or `fail` record it reads what the handler printed with
+`Process.read_available`, which the child flushed before the record:
 
 - **What happens:** `end`, and step `i` is a `Then` (or its `And`/`But`) with no
   `assert` since it was sent
@@ -418,11 +421,12 @@ closes each child on every path.
   the options and writes the configuration to `config.jsonl`, one line per file,
   so long lists never meet an argument or line limit. With `--tags`, one more
   last line holds the expression as a JSON string (not a field of the first
-  line, which the runner decodes with no optional fields). The runner writes its
-  report to a file of the run directory, which the driver prints, so a report is
-  not limited to the 1 MiB that a captured stream keeps. If the runner fails
-  with stderr output, the driver reports one `RUNTIME-BDD-INFRA` file error and
-  exits 2.
+  line, which the runner decodes with no optional fields). A line that cannot be
+  read is `RUNTIME-BDD-USAGE`, never a run without the filter. The runner writes
+  its report to a file of the run directory, which the driver prints, so a
+  report is not limited to the 1 MiB that a captured stream keeps. If the runner
+  fails with stderr output, the driver reports one `RUNTIME-BDD-INFRA` file
+  error and exits 2.
 
 ## Unit test files (`Test.run`)
 

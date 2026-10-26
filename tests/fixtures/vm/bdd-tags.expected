@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3714,
+  "steps": 15995,
   "stdout": [
     "\"\" []: true",
     "\"@a\" [\"@a\", \"@b\"]: true",
@@ -24,7 +24,9 @@
     "\"or @a\": unexpected \"or\"; write a tag (@name), not, and, or",
     "\"@a @b\": unexpected \"@b\"; write a tag (@name), not, and, or",
     "\"@a and or @b\": unexpected \"or\"; write a tag (@name), not, and, or",
-    "\"not not @a\": unexpected \"not\"; write a tag (@name), not, and, or",
+    "\"not not @a\" [\"@a\"]: true",
+    "\"not not not @a\" [\"@a\"]: false",
+    "\"@a or @b\" [\"@b\"]: true",
     "\"@a or not\": the expression must end with a tag",
     "\"(@a)\": unexpected \"(@a)\"; write a tag (@name), not, and, or",
     "false",
