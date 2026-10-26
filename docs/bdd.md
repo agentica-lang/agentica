@@ -158,8 +158,7 @@ steps"). Each is a handler in `std/bdd`:
 
 - **Step:** `the Agentica program {string}`
   - **What it does and its errors:** `Process.spawn_captured` of `agentica
-    [--seed N] --max-steps 1000000 PATH` in the feature's
-    directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a
+    [--seed N] PATH` in the feature's directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a
     missing `agentica` is `RUNTIME-BDD-INFRA`.
 
 - **Step:** `I send ...`, `I close stdin`
@@ -243,7 +242,7 @@ then no scenario runs.
 
 - **Host access.** BDD gives no isolation from the host: programs run with the
   user's permissions and environment. Programs under test start with the same
-  `agentica` command and `--max-steps 1000000`.
+  `agentica` command and no step limit, as `agentica FILE.agc` does.
 - **Limits.** A scenario has a 30-second deadline from the start of its child.
   Program-driving calls without a timeout get 5 seconds, and starting a program
   gets 30. The scenario child has 1,000,000 steps per step plus 1,000,000, and
