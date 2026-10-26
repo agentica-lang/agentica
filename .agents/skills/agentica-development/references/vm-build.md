@@ -122,7 +122,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   and `.args` to the VM):
   - `.stdin`: raw bytes fed to the program's stdin (`.gitattributes` marks them
     binary so CRLF survives). The golden batch gives them as a file, the
-    step-count search and the extras as a pipe.
+    step allowance run and the extras as a pipe.
   - `.args`: a list of double-quoted strings (the harness reads them with a
     small regular expression) passed as program arguments; `"@tmp"` becomes a
     fresh empty directory per run, and that path is turned back into `@tmp` in
@@ -171,18 +171,21 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   their codes must match). Crash lines and crash texts carry the fixture's
   path, so `unfixture` replaces the `tests/fixtures/` directory with
   `@fixtures/` in stdout and stderr before any compare. The `--max-steps`
-  sweep: each limit must give the golden outcome, or exit 1 with
-  `RUNTIME-STEP-LIMIT` and stdout and stderr that are prefixes of the
-  golden's; once a limit finishes, larger ones must too (`check_sweep`). Each
-  golden records the fixture's step count T (`"steps"`, the smallest limit
-  that finishes); the VM's own count, found by
-  `total_steps`, may be lower but at most `T + max(10, T / 10)`
-  (`check_steps`, which catches over-charging), and the last sweep limit,
-  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
-  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`)
-  each fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
-  from each eighth of 3 to T - 2 (`sampled_limits`); local `make test`,
-  the release and the weekly `sweep.yml` keep the full sweep. The draw comes
+  sweep, around the golden's step count T (`"steps"`, the smallest limit that
+  finished when `make goldens` searched for it): each limit must give the
+  golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr
+  that are prefixes of the golden's; once a limit finishes, larger ones must
+  too (`check_sweep`). The test does not search: one run under
+  `T + max(10, T / 10)` must finish (`check_step_allowance`, which catches
+  over-charging), and the last sweep limit, `max(2T + 100, T + 2 * 2000)`,
+  must finish. With `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and
+  `make vm-gc-stress`) each fixture runs only 1, 2, T - 1, T, the last limit
+  and 8 limits drawn one from each eighth of 3 to T - 2 (`sampled_limits`);
+  local `make test`, the release and the weekly `sweep.yml` keep the full
+  sweep. `AGENTICA_SWEEP=ends` (`make test-shared`) runs only 1, T - 1, T and
+  the last limit, as do the fixtures of `ENDS_ONLY_FIXTURES` in every mode
+  (`task-map-flushed`, `http-client-queue`: costly runs, whose stops
+  `task-map-steps` and `http-client` sweep). The draw comes
   from `AGENTICA_SWEEP_SEED`, else the first 8 hex digits of `GITHUB_SHA` or
   `git rev-parse HEAD`, plus the fixture name, so it rotates with the commit
   and is fixed within a run. Each shard prints the seed, and a failed limit

@@ -7,6 +7,7 @@
 ## take 1 or 2, because many calls are tail calls), and the checker allows 1,000 levels (CHECK-TOO-DEEP), so it uses
 ## about 3,000 of the 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
 
+import Builtins from "../catalog/builtins"
 import {ENUMS} from "../catalog/builtins"
 import Checker from "../check/checker"
 import Defaults from "../check/defaults"
@@ -96,7 +97,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
   watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
-  used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)))
+  used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)).concat(Builtins.default_enums().to_a))
   tables = Program.build(decls, used, scanned.type_value)
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
   start = plan.slots.size > 0

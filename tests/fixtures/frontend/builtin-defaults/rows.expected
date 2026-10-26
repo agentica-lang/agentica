@@ -1,0 +1,61 @@
+Row.fn_last takes=nnyy required=2
+  arity=2 to 3 method=1 to 2
+  signature=Row.fn_last(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void
+  problem=
+Row.plain takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.plain(path: String, timeout_ms: Int = 1000) -> Void
+  problem=
+Row.none takes=nynn required=1
+  arity=1 method=0
+  signature=Row.none(path: String) -> Void
+  problem=
+Row.alternative takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.alternative(x: Int, b: Int = 1) -> Void
+  problem=a default needs a Plain builtin with no alternative form
+Row.alternative_second takes=nyyn required=1
+  arity=1 method=0
+  signature=Row.alternative_second(x: Int) -> Void
+  problem=a default needs a Plain builtin with no alternative form
+Row.not_plain takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.not_plain(x: Int, b: Int = 1) -> Void
+  problem=a default needs a Plain builtin with no alternative form
+Row.gap takes=nnyy required=2
+  arity=2 to 3 method=1 to 2
+  signature=Row.gap(x: Int, a: Int = 1, b: Int) -> Void
+  problem=parameter b has no default but follows one
+Row.fn_not_last takes=nyyy required=1
+  arity=1 to 4 method=0 to 3
+  signature=Row.fn_not_last(x: Int, b: Int = 1, f: Fn[String, Void], c: Int = 2) -> Void
+  problem=parameter f has no default but follows one
+Row.wrong_type takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.wrong_type(x: Int, b: Int = "x") -> Void
+  problem=the default of b is not an Int
+Row.wrong_list takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.wrong_list(x: Int, a: Map[String, Int] = []) -> Void
+  problem=the default of a is not a Map[String, Int]
+Row.variant_ok takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.variant_ok(x: Int, level: LogLevel = LogLevel.Info) -> Void
+  problem=
+Row.variant_missing takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.variant_missing(x: Int, level: LogLevel = LogLevel.Nope) -> Void
+  problem=the default of level is not a LogLevel
+Row.variant_payload takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.variant_payload(x: Int, done: Await[Int] = Await.Done) -> Void
+  problem=the default of done is not an Await[Int]
+Row.variant_other_enum takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.variant_other_enum(x: Int, level: LogLevel = Await.TimedOut) -> Void
+  problem=the default of level is not a LogLevel
+Row.variant_unknown_enum takes=nyyn required=1
+  arity=1 to 2 method=0 to 1
+  signature=Row.variant_unknown_enum(x: Int, l: Nope = Nope.A) -> Void
+  problem=the default of l is not a Nope
+[] [-6] [0.5] ["a\"b"] [true] [nil] [[]] [{}] [LogLevel.Info]

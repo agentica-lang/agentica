@@ -166,7 +166,8 @@ end
   (`CHECK-ARITY`), also through an import alias; `x = Util.connect` is valid
   when every parameter has a default. A function value takes every argument:
   `&join` is `Fn[List[String], String, String]`, and `.call` needs both. `main`
-  and blocks take no defaults.
+  and blocks take no defaults. A builtin can have defaults too
+  (`Zlib.crc32(data, seed = 0)`; `agentica help NAME` shows them).
 - Nesting goes 1000 levels at most for parentheses, calls, blocks, `if` and
   types, and each operator of a chain or `.` suffix counts a level
   (`PARSE-TOO-DEEP`; 1,000 `+` already fail). The tree of expressions and

@@ -1,5 +1,7 @@
 """Default values of parameters and of struct fields (`NAME: type = expression`), through the product CLI.
 
+A builtin row can give defaults too; `Zlib.crc32(data, seed = 0)` is the one that does, so its cases are here.
+
 Each case writes a program (one file, or several for the import-alias rules) and runs `--json check FILE`. A rejected
 program is asserted by its diagnostic code and the source text its range covers; a good one checks clean. Message and
 help texts are not asserted (AGENTS.md).
@@ -123,6 +125,18 @@ SINGLE_FILE = [
      JOIN + main_with('  f = &join\n  puts(f.call(["a"]))\n'), "CHECK-ARITY", 'f.call(["a"])'),
     ("a function value has the type with every parameter",
      JOIN + main_with('  f: Fn[List[String], String, String] = &join\n  puts(f.call(["a"], "-"))\n'), None, None),
+    ("a builtin call may leave out the trailing parameter with a default, or give it",
+     main_with("  puts(Zlib.crc32([1, 2]).unwrap!)\n  puts(Zlib.crc32([1, 2], 7).unwrap!)\n"), None, None),
+    ("a piped call of a builtin leaves out the default",
+     main_with("  puts(([1, 2] |> Zlib.crc32()).unwrap!)\n"), None, None),
+    ("a builtin call with fewer arguments than it requires is an arity error",
+     main_with("  puts(Zlib.crc32())\n"), "CHECK-ARITY", "Zlib.crc32()"),
+    ("a builtin call with more arguments than it has parameters is an arity error",
+     main_with("  puts(Zlib.crc32([1], 0, 1))\n"), "CHECK-ARITY", "Zlib.crc32([1], 0, 1)"),
+    ("a builtin default does not change the type of a given argument",
+     main_with('  puts(Zlib.crc32([1], "x"))\n'), "CHECK-TYPE-MISMATCH", '"x"'),
+    ("a builtin has no function value, defaults or not",
+     main_with("  f = &Zlib.crc32\n"), "CHECK-UNKNOWN-NAME", "&Zlib.crc32"),
     ("main takes no parameters, defaults included",
      'def main(a: Int = 1) -> Void\n  puts(a)\nend\n\n', "CHECK-MAIN", None),
     ("a block parameter takes no default",

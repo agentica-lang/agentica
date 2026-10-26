@@ -8,8 +8,9 @@ description: The C types of an extern block, variadic functions, reading memory 
 
 | C type | C | In Agentica |
 |---|---|---|
-| `C.Int32` | `int32_t` / `int` (32 bits) | `Int` |
-| `C.Int64` | `int64_t` | `Int` |
+| `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64` | `int8_t` to `int64_t` (`signed char`, `short`, `int`, a 64-bit integer) | `Int` |
+| `C.UInt8`, `C.UInt16`, `C.UInt32` | `uint8_t` to `uint32_t` (`unsigned char`, `unsigned short`, `unsigned int`) | `Int`, never negative |
+| `C.Long` | `long`: 32 bits on Windows, 64 on Linux and macOS | `Int` |
 | `C.Double` | `double` | `Float` |
 | `C.Float` | `float` (32 bits) | `Float` |
 | `C.Bool` | `bool` | `Bool` |
@@ -19,9 +20,10 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.Function` | a function pointer (the first or the last parameter only, [below](#function-pointers)) | `C.Pointer` |
 | a `struct` of the block | a struct passed by value ([below](#c-structs)) | that struct |
 
-`C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+`C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`, or `C.Long` for a C `long`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
-- A `C.Int32` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows and any `Int` elsewhere), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`. The same bits cross, and a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
 - A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
@@ -48,7 +50,7 @@ end
 ```
 
 - `...` comes after one C parameter at least, not counting a `C.Function` (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
-- A variadic parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
+- A variadic parameter is `C.Int32`, `C.Int64`, `C.UInt32`, `C.Long`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
 - The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
 - The call follows the variadic rules of each system's C ABI, which differ from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
 
@@ -178,7 +180,7 @@ end
 A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
 
 - The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
-- An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
+- An out parameter is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it, or `Native.closed?`: `sqlite3_prepare_v2` gives `SQLITE_OK` and a NULL statement for SQL that is only a comment.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.
 
@@ -253,9 +255,9 @@ def main() -> Void
 end
 ```
 
-- A field is `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block, and your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
+- A field is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block, and your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
 - The struct is laid out as the C compiler of the system lays it out, padding included. Declare every field of the header, in its order: a wrong field list is undefined behavior, like a wrong signature. A struct has one field at least (`PARSE-EXTERN-TYPE`) and at most 1024, nested ones counted, in at most 16 levels (`PARSE-EXTERN-ARITY`).
 - A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_*`) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
-- Each field of an argument is checked as an argument is, before C runs: a `C.Int32` outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
+- Each field of an argument is checked as an argument is, before C runs: an integer outside the bits of its type fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
 - A `C.Pointer` field is an address that nothing tracks: the memory it names must outlive C's use. A `compute def` call holds the owned buffers in the fields of its struct arguments until it returns, as it holds its buffer arguments.
 - The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before), and `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.

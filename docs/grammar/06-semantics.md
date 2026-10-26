@@ -259,6 +259,13 @@ String]`, and `.call` needs both arguments. Defaults are part of an exported
 signature. A default is resolved in the module that declares the function, so
 `Models.Level.Info` means the same for a caller that does not import that file.
 
+A builtin can have defaults by the same rules, in its catalog row:
+`Zlib.crc32(data, seed = 0)` takes 1 or 2 arguments, in call, method and pipe
+form alike. The call site fills the arguments left out, so the VM always gets a
+full call; `CHECK-ARITY` names the range (`expects 1 to 2 argument(s)`). A
+builtin has no function value (`&Zlib.crc32` is `CHECK-UNKNOWN-NAME`).
+`agentica help` shows the default (`seed: Int = 0`).
+
 ### Enums and pattern matching
 
 Enums are nominal sum types and may declare type parameters. Variants are

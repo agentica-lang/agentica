@@ -48,6 +48,13 @@ static ffi_type *ffi_type_of(agc_c_type type) {
   switch (type) {
     case AGC_C_INT: return &ffi_type_sint32;
     case AGC_C_INT64: return &ffi_type_sint64;
+    case AGC_C_INT8: return &ffi_type_sint8;
+    case AGC_C_INT16: return &ffi_type_sint16;
+    case AGC_C_UINT8: return &ffi_type_uint8;
+    case AGC_C_UINT16: return &ffi_type_uint16;
+    case AGC_C_UINT32: return &ffi_type_uint32;
+    /* libffi's long has the platform's width: 32 bits on Windows (LLP64), 64 on Linux and macOS (LP64). */
+    case AGC_C_LONG: return &ffi_type_slong;
     case AGC_C_DOUBLE: return &ffi_type_double;
     case AGC_C_FLOAT: return &ffi_type_float;
     case AGC_C_BOOL: return &ffi_type_uint8;
@@ -318,7 +325,8 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
   /* ffi_call reads each argument through a pointer to it: every member of the union starts at its first byte, so a
      pointer to the union is a pointer to the member that ffi_type_of named, and a struct argument already is a pointer
      to its bytes. An integer result is widened to a whole ffi_arg, so it goes through a buffer of that size first; a
-     struct result goes to the caller's buffer, which has room for a whole register. */
+     struct result goes to the caller's buffer, which has room for a whole register. libffi widens a narrow integer
+     result by its type's sign, and the casts below keep only its own bits either way. */
   void *slots[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < call->count; k++) slots[k] = call->params[k] == AGC_C_STRUCT ? args[k].p : &args[k];
   ffi_arg word = 0;
@@ -338,6 +346,12 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
   switch (call->result) {
     case AGC_C_INT: result->i = (int32_t)word; break;
     case AGC_C_INT64: result->l = (int64_t)word; break;
+    case AGC_C_INT8: result->i8 = (int8_t)word; break;
+    case AGC_C_INT16: result->i16 = (int16_t)word; break;
+    case AGC_C_UINT8: result->u8 = (uint8_t)word; break;
+    case AGC_C_UINT16: result->u16 = (uint16_t)word; break;
+    case AGC_C_UINT32: result->u32 = (uint32_t)word; break;
+    case AGC_C_LONG: result->n = (long)word; break;
     case AGC_C_DOUBLE: result->d = real; break;
     case AGC_C_FLOAT: result->f = single; break;
     case AGC_C_BOOL: result->b = (word & 0xFF) != 0; break;
