@@ -318,7 +318,7 @@ String.to_float(s: String) -> Result[Float]
 
 Read a signed decimal number. Bad text gives an error Result.
 
-`to_float` also reads an exponent (`1.5E-3`, `1e+20`) and the text `to_s` writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f` gives `x` back. It rounds to the nearest Float, and a value past the range becomes an infinity or zero. `Infinity`, `.5` and `1_000.0` are errors.
+`to_float` also reads an exponent (`1.5E-3`, `1e+20`) and the text `to_s` writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f` gives `x` back (a NaN reads back as NaN). It rounds to the nearest Float, and a value past the range becomes an infinity or zero. `Infinity`, `.5` and `1_000.0` are errors.
 
 ```agentica
 def main() -> Void
