@@ -41,7 +41,7 @@ void agc_out_of_memory(void) {
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
 #ifdef AGC_FUZZ
-  /* 70 is libFuzzer's timeout exit code, which the fuzz run ignores; a crash makes it save the input. */
+  /* 70 is libFuzzer's timeout exit code, so abort() (a crash) is used instead and the input is saved. */
   abort();
 #else
   _Exit(70);

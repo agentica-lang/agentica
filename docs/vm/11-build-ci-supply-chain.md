@@ -121,11 +121,21 @@
 - A crash, a leak or an input past the RSS limit fails the run. The run turns
   on the leak check (`ASAN_OPTIONS`) that `vm/value.c` turns off in the other
   ASan builds, since `agc_fuzz_one` frees every block of an input.
-- A timeout does not fail the run yet (`-ignore_timeouts=1`, and the run maps
-  exit code 70, a timeout, to success). A timed wait (a channel or await
-  timeout) parks without counting steps, so a mutant with a large timeout can
-  wait for minutes. The run saves it as `timeout-*` and lists those files at
-  the end. TODO: both go once timed waits are bounded by steps.
+- A timeout (an input that runs past `LIBFUZZ_TIMEOUT` seconds, default 10)
+  fails the run too (`-ignore_timeouts=0`). Under `no_files` a run has no wall
+  clock: `Task.sleep` only yields, and a channel, `Task.await` or `Task.map`
+  timeout lasts 0 ms (`agc_timeout_length` in `vm/timers.c`). The task still
+  parks, the other tasks run until the next turn boundary, and then it times
+  out. A loop spends at least one step per wait (every backward jump lands on
+  a `STEP`), so `--max-steps 10000` bounds a mutant that loops on timed waits.
+  Since every timeout is 0 ms, the fuzzer does not explore the order of
+  unequal deadlines. Steps do not bound CPU work (a linear builtin on a large
+  string, once per step), so a timeout can also be a slow input to triage, not
+  only a wait.
+- Fork mode saves a corpus or seed input that fails its first pass and goes on
+  without counting it, so the run also fails when `crashes/` got a new
+  `crash-`, `leak-`, `timeout-` or `oom-` file (a `slow-unit-` file is no
+  failure).
 - `agc_fuzz_one` sets `deny_run`, `deny_env` and `deny_net`. A mutant's
   strings are shell commands with mutated bytes, and a child process or a
   network wait is outside `--max-steps`. The environment and the network
@@ -134,13 +144,13 @@
 - There is no dictionary. The format has no section tags, and libFuzzer learns
   the magic, the format version and the builtin names from its `memcmp` and
   comparison hooks.
-- The sanitizer job of each C PR runs it for 60 s on every core. Fork mode
-  does not make a run repeatable from its seed: the saved file reproduces a
+- The sanitizer job of each C PR runs it for 60 s on every core, with
+  `LIBFUZZ_TIMEOUT=30` so that a loaded runner does not flake. Fork mode does
+  not make a run repeatable from its seed: the saved file reproduces a
   failure. `.github/workflows/fuzz.yml` runs it by hand for the given number
-  of seconds (default 3600, at most 6000) and prints the commit and seed
-  first.
-  Both upload `build/vm/libfuzz/crashes/` whenever it has files, including
-  `timeout-*` files after a green run.
+  of seconds (default 3600, at most 6000) with the default timeout, and prints
+  the commit and seed first. Both upload `build/vm/libfuzz/crashes/` after a
+  failed or green run (not a cancelled one), when it has files.
 - To reproduce, run `ASAN_OPTIONS=detect_leaks=1
   build/vm/libfuzz/agentica-vm-libfuzz <file>` on the saved file
   (`detect_leaks=1` because `vm/value.c` turns the leak check off by default).

@@ -86,12 +86,13 @@ section says how the scheduler and the loop keep them.
     since the Boehm heap is shared. Only a global heap limit is possible (13).
 - **As built.** The turn and its budget code are in `vm/interp.c`.
   `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9). Under
-  `no_files` (the fuzzer) every sleep yields. Stdin EOF is delivered once to
-  every task that waited for the read, so a TTY reader never waits for a second
-  Ctrl-D. `Task.await` parks the caller with *retry*: when the target ends, each
-  waiter re-runs its builtin and gets the cached result. Stdin reads use the
-  same retry (a wake is only a hint, 10.2.3). A task whose bottom frame returns,
-  or leaves through `try`, is done.
+  `no_files` (the fuzzer) every sleep yields, and a channel, `Task.await` or
+  `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin EOF is delivered
+  once to every task that waited for the read, so a TTY reader never waits for a
+  second Ctrl-D. `Task.await` parks the caller with *retry*: when the target
+  ends, each waiter re-runs its builtin and gets the cached result. Stdin reads
+  use the same retry (a wake is only a hint, 10.2.3). A task whose bottom frame
+  returns, or leaves through `try`, is done.
 - **Await cycles (17b).** A task can receive its own handle over a channel, or
   hide it in a closure, so awaits can form a cycle. Each task waits on at most
   one task (`awaiting`). Before `Task.await` parks, it follows the chain from

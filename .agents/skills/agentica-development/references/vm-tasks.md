@@ -91,7 +91,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `vm/task.c`) runs the loop until the nearest deadline with
   `agc_io_run_for(vm, ms, false)`; `agc_runq_wait_until` does the same for a
   scheduler thread. Arm and disarm keep `rt->timers_armed`, which the stall
-  check at N > 1 reads.
+  check at N > 1 reads. The channel, `Task.await` and `Task.map` timeouts go
+  through `agc_timeout_length`, which is 0 under `no_files` (the fuzzer has no
+  wall clock, so its steps bound every wait).
 - `vm/task_map.c`: `Task.map`: a stepper on the caller that starts, times and
   cancels the items.
 - `vm/channel.c`: The `Channel` builtins: a ring buffer, waiter queues and
