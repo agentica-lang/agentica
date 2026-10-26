@@ -735,7 +735,7 @@ end
 
 
 # A free function whose C name starts with a capital letter (PQfinish, SSL_free) is looked up by that exact name: the
-# peer counts its calls, so Native.close and the end of the run each free once.
+# peer counts its calls, so Native.close frees it once.
 CAPITAL_FREE_EXTERN = """extern "{library}"
   resource Cap, free: PeerFree
   def peer_res_open(value: C.Int32) -> Cap

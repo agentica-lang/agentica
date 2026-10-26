@@ -30,7 +30,7 @@ extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
 c_parameters     = c_parameter, { ",", c_parameter },
                    [ ",", "...", { ",", c_parameter } ], [ "," ] ;
 resource_decl    = "resource", TYPE_NAME, ",", "free", ":",
-                   ( NAME | "C", ".", "Function" ), NL ;
+                   ( NAME | TYPE_NAME | "C", ".", "Function" ), NL ;
 c_parameter      = [ "out" ], NAME, ":",
                    ( c_type | "C", ".", ( "Bytes" | "Function" ) | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
