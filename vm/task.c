@@ -1133,9 +1133,7 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
       case AGC_T_MAP: {
         const agc_map *x = agc_as_map(vm, v);
         agc_value first;
-        if (!x->size || !agc_map_get(vm, x, x->reversed->key, &first) || scalar_tag(first) ||
-            !pointer_set_add(&seen, x))
-          break;
+        if (!x->size || (agc_map_any_value(x, &first) && scalar_tag(first)) || !pointer_set_add(&seen, x)) break;
         agc_map_each_value(x, push_value, &todo);
         break;
       }

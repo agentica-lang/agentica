@@ -137,10 +137,10 @@ def ask(ws, words, **options):
     return run(cli() + [str(word) for word in words], cwd=ws.project, env=environment(ws), **options)
 
 
-def answers(ws, *flags):
+def answers(ws, *flags, source=MAIN, needle="Mid.build"):
     """What the three commands print for main.agc, as (code, stdout, stderr) each; `flags` (`--no-cache`) go before
-    the command."""
-    position = "main.agc:%d:%d" % where(MAIN, "Mid.build", 5)
+    the command. The type is asked on `needle` in `source`, the text of main.agc."""
+    position = "main.agc:%d:%d" % where(source, needle, 5)
     results = []
     for words in (["--json", *flags, "check", "main.agc"], ["--json", *flags, "type-at", position],
                   ["--json", *flags, "outline", "main.agc"]):
@@ -149,11 +149,11 @@ def answers(ws, *flags):
     return results
 
 
-def settled(ws, *flags):
+def settled(ws, *flags, **asked):
     """The answers with the cache cold (first run), warm (second) and off, which must be one; the answers."""
-    cold = answers(ws, *flags)
-    warm = answers(ws, *flags)
-    off = answers(ws, "--no-cache", *flags)
+    cold = answers(ws, *flags, **asked)
+    warm = answers(ws, *flags, **asked)
+    off = answers(ws, "--no-cache", *flags, **asked)
     assert cold == warm == off
     return warm
 
@@ -376,3 +376,42 @@ def test_runs_at_the_same_time_give_one_answer_and_leave_valid_entries(ws):
     kept = stamps(ws)
     assert answers(ws) == expected
     assert stamps(ws) == kept
+
+
+# A facade that passes on a function, a type and a constant of deep.agc (`export Alias.name`), and a root that uses them
+# through it.
+FACADE = '''import Deep from "deep"
+
+export Deep.make
+export Deep.Item
+export Deep.SIZE
+'''
+
+THROUGH_FACADE = '''import Facade from "facade"
+import Deep from "deep"
+
+def main() -> Void
+  item: Deep.Item = Facade.make("a")
+  size: Int = Facade.SIZE
+  puts(item.name)
+  puts(size.to_s)
+end
+'''
+
+
+def test_a_module_that_re_exports_answers_alike_cold_warm_and_off_and_after_edits(ws):
+    (ws.project / "facade.agc").write_text(FACADE, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_FACADE, encoding="utf-8")
+    asked = {"source": THROUGH_FACADE, "needle": "Facade.make"}
+    first = settled(ws, **asked)
+    assert first[0] == (0, '{"ok":true}\n', "")
+    # The type of the name through the facade is the one of the original declaration.
+    assert json.loads(first[1][1])["definition"]["file"].endswith("deep.agc")
+    # An entry exists for the facade, and an edit of the original reaches the root through it.
+    assert len(entries(ws)) >= 3
+    edit(ws, "deep", "export SIZE = 7", "export SIZE = 8")
+    assert settled(ws, **asked)[0][0] == 0
+    edit(ws, "deep", "export def make(name: String)", "export def make(name: Int)")
+    assert settled(ws, **asked)[0][0] == 1
+    edit(ws, "facade", "export Deep.SIZE", "export Deep.SIZES")
+    assert settled(ws, **asked)[0][0] == 1

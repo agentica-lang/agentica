@@ -1,16 +1,16 @@
 ## 25. Ruby typed idioms
 
-**Status:** the built parts are 25.1 (default parameter values), 25.3 (struct
-update `with`), 25.6 (the compiler prelude and the Enumerable methods), 25.10
-(heredocs), 25.12.1 (`case` guards and nested patterns) and 25.14 (the pipe
-operator `|>`); their rules live in [`docs/grammar/`](../grammar.md) and the
-programming skill, which are the contract. What remains here, one PR per item
-(row 7.6 of the [roadmap order](../roadmap/README.md)): 25.2 (re-exports, 15b),
-25.4 (value equality, 15d), 25.5 (standalone lambdas, 15e) and 25.9 (`File.open`
-with a block, 15i), after phase 16 (section 26), and 25.11 (`format`, 15k).
-Part B (25.12) lists ideas to evaluate later, and Part C (25.13) lists what was
-decided against, so it is not proposed again. Decided by the user on
-2026-10-12.
+**Status:** the built parts are 25.1 (default parameter values), 25.2
+(re-exports), 25.3 (struct update `with`), 25.6 (the compiler prelude and the
+Enumerable methods), 25.10 (heredocs), 25.12.1 (`case` guards and nested
+patterns) and 25.14 (the pipe operator `|>`); their rules live in
+[`docs/grammar/`](../grammar.md) and the programming skill, which are the
+contract. What remains here, one PR per item (row 7.6 of the [roadmap
+order](../roadmap/README.md)): 25.4 (value equality, 15d), 25.5 (standalone
+lambdas, 15e) and 25.9 (`File.open` with a block, 15i), after phase 16 (section
+26), and 25.11 (`format`, 15k). Part B (25.12) lists ideas to evaluate later,
+and Part C (25.13) lists what was decided against, so it is not proposed again.
+Decided by the user on 2026-10-12.
 Done when: site examples run on the VM and evaluation confirms agents use
 the forms with the same diagnostic quality as the forms they replace.
 
@@ -47,75 +47,6 @@ Part C.
 and runs on the VM; most are sugar that lowering turns into code the VM already
 runs, so the bytecode format does not change. A real program or an evaluation
 round must ask for it first.
-
-### 25.2 Re-exports
-
-Like Elixir's `defdelegate`, a module can pass on a name it imports, so a small
-facade module can collect the API of several files:
-
-```agentica
-# web.agc
-import Url from "url"
-import Parts from "http_parts"
-
-export Url.parse
-export Url.Address
-export Parts.header_value
-```
-
-**Syntax:**
-
-```ebnf
-declaration      = (* ...today's forms, plus: *)
-                 | reexport_decl ;
-reexport_decl    = "export", TYPE_NAME, ".", ( NAME | TYPE_NAME ), NL ;
-```
-
-There is no clash with today's grammar: `export` is followed only by `def`,
-`struct` or `enum`, which are reserved words, so a `TYPE_NAME` after `export` is
-free. There is no renaming (`as`): one thing keeps one name, and a facade that
-wants another name writes a wrapper function. There are no wildcards
-(`export Url.*`), as for imports.
-
-**One way:** a re-export passes the one-way test. It replaces a one-line
-forwarding wrapper (`def parse(s: String) -> Result[Url.Address]` calling
-`Url.parse(s)`), not an existing form: it keeps one declaration and one identity
-(`&Web.parse` and `&Url.parse` are the same function), and the facade cannot
-drift from the original. The skill teaches the re-export as the canonical form;
-the checker cannot reject a hand-written wrapper, as with `with`.
-
-**Rules**, all in the linker:
-
-- The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
-  the help "unknown module alias". The name must be exported by that module
-  (`CHECK-IMPORT-NAME`, with the "did you mean" help).
-- Re-exports are resolved after the file's imports are visited: the plain
-  exports are filled first, the imports are visited, then the re-exports are
-  added from the imported modules' finished exports.
-- The name joins this module's exports. The export entry keeps the original
-  module's key (its canonical path) and name, not this file's, so the importer
-  resolves to the original declaration. It must not collide with a declaration
-  of this file, another re-export or one of the file's import aliases
-  (`CHECK-REDEFINED-NAME`).
-- Inside the file, the name is still `Url.parse`: a re-export adds no local
-  name.
-- It is the same declaration, not a copy. A program that imports both `web.agc`
-  and `url.agc` sees `Web.Address` and `Url.Address` as one type. A chain (a
-  re-export of a re-export) leads to the original declaration; a cycle cannot
-  happen, since import cycles are already `CHECK-IMPORT-CYCLE`. A re-exported
-  enum brings its variants (`Web.Option.Some(x)`).
-- Re-exports follow the blank-line rule of imports (`grammar.md`, "File and
-  declarations"): they may follow each other and the imports directly, and one
-  after a declaration needs the blank line (`PARSE-MISSING-BLANK-LINE`).
-- An exported signature may still mention a private type that importers cannot
-  name, as today.
-- A re-export counts as a use of its alias for `CHECK-UNUSED-IMPORT` ([section
-  26.1](26-strict-diagnostics.md#261-unused-imports)), so a facade that only
-  re-exports is valid.
-
-**Lowering:** none. The linker resolves `Web.parse` to the original declaration
-before the checker runs, so the checker, lowering and the VM see the original
-function. `&Web.parse` is a normal function value.
 
 ### 25.4 Value equality for data
 
@@ -597,5 +528,5 @@ one exists.
    some fields replaced, keeping the others:
    `def logged(base: Storage) -> Storage` returns `base.with(get: ...)`,
    where the new `get` logs and then calls `base.get`.
-3. A facade module passes on names from other modules with re-exports (25.2),
-   like Elixir's `defdelegate`.
+3. A facade module passes on names from other modules with re-exports
+   (`docs/grammar/05b-modules.md`), like Elixir's `defdelegate`.

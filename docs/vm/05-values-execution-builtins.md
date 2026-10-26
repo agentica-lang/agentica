@@ -34,14 +34,20 @@ so zeroed registers are valid values.
 
 - **Type:** Map
   - **Representation:** A persistent 32-way HAMT from key to value (`vm/map.c`),
-    plus a persistent list of keys, newest first, which gives the order. A put
-    copies only its path. Put and lookup are O(log32 n). Printing, `keys` and
-    `values` walk the key list oldest first. Keys are Int or String, compared by
-    tag and value. They are hashed with SipHash-1-3. The key is seeded once per
-    run from OS entropy (`getrandom`, then `/dev/urandom`; `rand_s` on Windows),
-    independent of `--seed`. Tests and the fuzzer use the fixed default key.
-    Iteration order never depends on the hash. `Map.delete` copies the path to
-    the key and returns the same map for a missing key.
+    plus a persistent list of keys, newest first, which gives the order. A node
+    keeps its leaves, then its child pointers, so a put copies only its path
+    and a child link costs 8 bytes. Put and lookup are O(log32 n). A delete is
+    O(log32 n) amortized along one line of versions: it marks its key's cell
+    dead by adding the key's insertion number to the map's dropped list, and
+    the list is rebuilt without dead cells (O(n)) once they outnumber the live
+    ones. Printing, `keys` and `values` walk the key list oldest first and skip
+    dead cells by insertion number, with no key lookup. Keys are Int or String,
+    compared by tag and value. They are hashed with SipHash-1-3. The key is
+    seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
+    `rand_s` on Windows), independent of `--seed`. Tests and the fuzzer use
+    the fixed default key. Iteration order never depends on the hash.
+    `Map.delete` copies the path to the key and returns the same map for a
+    missing key.
 
 - **Type:** Set
   - **Representation:** The `agc_map` of a Map under its own tag (`AGC_T_SET`):

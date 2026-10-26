@@ -1,0 +1,11 @@
+## Re-exports after the imports: a function, a type and a constant of an imported module.
+
+import Url from "url"
+import Parts from "http_parts"
+export Url.parse
+export Url.Address
+export Parts.LIMIT
+
+export def api() -> Int
+  return 1
+end

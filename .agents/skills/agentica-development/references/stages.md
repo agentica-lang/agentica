@@ -271,6 +271,15 @@ table to the linked name of the export (with the same kind check as
 enum in the table into an enum value, and the `visible` list of `.with` also
 takes the targets of the table.
 
+`export Alias.name` is `Ast.Decl.Reexport`. `finish` in `modules.agc` binds it
+(`bind_reexports`) after the imports of the file are done: `CHECK-IMPORT-NAME`
+at the alias or the name, `CHECK-REDEFINED-NAME` at the name. The name joins
+`Module.public` with the kind of the original, and `Module.reexports` keeps the
+original module key and name (a chain is already followed). Every place that
+builds a linked name from an export uses `Modules.linked_name`, never
+`prefix + name`. `LinkedModule.reexported` serves the query commands; the
+declaration is not copied and nothing reaches the checker or lowering.
+
 ## Checker (`compiler/check/checker.agc` and the `check_*.agc` files)
 
 `check(linked, settings) -> Checking.Done(Checked) | Failed(Problem)`.

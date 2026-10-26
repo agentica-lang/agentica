@@ -60,8 +60,7 @@ section for the area you are changing.
   Map.values follows Map.keys order.
 - A step-limit stop is not an "unsolvable" answer: the algorithm examples
   (`knight-tour`, `traveling-salesman`, `maze-bfs`) keep their sizes small and
-  their tests validate complete routes and known optimal costs. A queue built
-  on Map.delete is O(n), so BFS alone does not show linear runtime.
+  their tests validate complete routes and known optimal costs.
 
 ## Ranges
 

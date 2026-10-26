@@ -13,7 +13,7 @@ from tests.agentica_test import ROOT, cli, run
 
 PRELUDE = ROOT / "stdlib" / "prelude"
 TABLE = (ROOT / "compiler" / "catalog" / "prelude_data.agc").read_text(encoding="utf-8")
-SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|values|delete)\b")
+SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|values)\b")
 LOOP_START = re.compile(r"^(\s*)(for|while)\b")
 
 

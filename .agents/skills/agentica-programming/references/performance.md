@@ -177,7 +177,7 @@ Wall time of `tally`, `uniq` and `group_by` also grows with the number of
 distinct keys (the VM's `Map` and `Set` insert cost: about 4 s at 400,000
 distinct keys, as in a hand-written loop). Each block call adds 4 to 6 steps on
 its own `block@` row. The bodies avoid `concat`, `take`, `drop`, `reverse`,
-`sort`, `Map.keys`, `Map.values` and `Map.delete` inside a loop, because an O(n)
+`sort`, `Map.keys` and `Map.values` inside a loop, because an O(n)
 builtin in a loop is quadratic in time while its steps look linear: write your
 own loops the same way. `take_while` and `drop_while` do one `take` or `drop`
 after the scan.

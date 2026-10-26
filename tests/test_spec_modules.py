@@ -434,3 +434,97 @@ class TestModuleRules:
              "root.agc", None)])
         for _directory, problem in results:
             assert problem is None
+
+    URL = ("export struct Address\n  host: String\nend\n\n"
+           "export enum Option\n  Some(Int)\n  None\nend\n\n"
+           "export def parse(text: String) -> Address\n  return Address(host: text)\nend\n\n"
+           "def hidden() -> Void\nend\n\n")
+
+    def test_a_module_re_exports_what_it_imports_and_the_importer_sees_the_original_declaration(self):
+        files = {
+            "url.agc": self.URL,
+            "mid.agc": 'import Url from "url"\n\nexport Url.parse\nexport Url.Address\nexport Url.Option\n',
+            "web.agc": 'import Mid from "mid"\n\nexport Mid.parse\nexport Mid.Address\nexport Mid.Option\n',
+            # One function, one type and one enum through the facade, through a chain of two and directly: a value of
+            # one is a value of the others, variants and `.with` included.
+            "root.agc": 'import Web from "web"\nimport Url from "url"\n\n'
+                        "def main() -> Void\n"
+                        '  address: Url.Address = Web.parse("a")\n'
+                        "  same: Web.Address = address.with(host: \"b\")\n"
+                        "  parse: Fn[String, Url.Address] = &Web.parse\n"
+                        "  option: Url.Option = Web.Option.Some(1)\n"
+                        "  case option\n    Web.Option.Some(n) -> puts(n)\n    Url.Option.None -> puts(0)\n  end\n"
+                        "end\n\n"}
+        assert self.check(files)[1] is None
+
+    def test_a_re_export_names_an_import_alias_of_the_file_and_an_export_of_that_module(self):
+        url = self.URL
+        cases = [
+            # (re-export lines, code, line, column of the span)
+            ("export Urr.parse\n", "CHECK-IMPORT-NAME", 3, 8),
+            ("export Url.parsee\n", "CHECK-IMPORT-NAME", 3, 12),
+            ("export Url.hidden\n", "CHECK-IMPORT-NAME", 3, 12),
+            ("export Url.parse\nexport Url.parse\n", "CHECK-REDEFINED-NAME", 4, 12),
+            ("export Url.parse\n\nexport def parse() -> Void\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
+            ("export Url.Address\n\nexport struct Address\nend\n\n", "CHECK-REDEFINED-NAME", 3, 12),
+        ]
+        results = self.checks([({"url.agc": url, "facade.agc": 'import Url from "url"\n\n' + lines,
+                                 "root.agc": 'import Facade from "facade"\n\n' + MAIN}, "root.agc", None)
+                               for lines, _code, _line, _column in cases])
+        for (_lines, code, line, column), checked in zip(cases, results):
+            problem = self.assert_rejected(checked, code, line=line, file="facade.agc")
+            assert start(problem) == (line, column)
+        assert results[1][1]["help"]
+        # A name imported by name has no alias to re-export through.
+        by_name = self.check({"url.agc": url, "facade.agc": 'import {parse} from "url"\n\nexport Url.parse\n',
+                              "root.agc": 'import Facade from "facade"\n\n' + MAIN})
+        self.assert_rejected(by_name, "CHECK-IMPORT-NAME", line=3, file="facade.agc")
+        clash = self.check({"url.agc": url, "facade.agc": 'import Url from "url"\nimport Address from "url"\n\n'
+                                                          "export Url.Address\n",
+                            "root.agc": 'import Facade from "facade"\n\n' + MAIN})
+        self.assert_rejected(clash, "CHECK-REDEFINED-NAME", line=4, file="facade.agc")
+
+    def test_a_re_export_adds_no_local_name_and_has_no_rename_or_wildcard(self):
+        files = {"url.agc": self.URL}
+        cases = [
+            ('import Url from "url"\n\nexport Url.parse\n\ndef main() -> Void\n  parse("a")\nend\n\n',
+             "CHECK-UNKNOWN-NAME"),
+            ('import Url from "url"\n\nexport Url.parse as fetch\n' + MAIN, "PARSE-UNEXPECTED-TOKEN"),
+            ('import Url from "url"\n\nexport Url.*\n' + MAIN, "PARSE-UNEXPECTED-TOKEN"),
+        ]
+        results = self.checks([({**files, "root.agc": text}, "root.agc", None) for text, _code in cases])
+        for (_text, code), checked in zip(cases, results):
+            self.assert_rejected(checked, code, line=3 if code.startswith("PARSE") else 6)
+
+    def test_a_re_export_follows_the_blank_line_rule_of_imports(self):
+        url = {"url.agc": self.URL}
+        after_import = self.check(
+            {**url, "root.agc": 'import Url from "url"\nexport Url.parse\nexport Url.Address\n' + MAIN})
+        after_declaration = self.check({**url, "root.agc": 'import Url from "url"\n\nexport def api() -> Void\nend\n'
+                                                           "export Url.parse\n" + MAIN})
+        assert after_import[1] is None
+        assert start(self.assert_rejected(after_declaration, "PARSE-MISSING-BLANK-LINE")) == (5, 1)
+
+    def test_a_re_export_next_to_other_forms_a_doc_a_constant_a_cycle_and_its_own_alias(self):
+        url = {"url.agc": self.URL}
+        value = "export struct Value\n  n: Int\nend\n\n"
+        cycle_url = ('import Facade from "facade"\n\n'
+                     "export def parse(text: String) -> Int\n  return 1\nend\n\n")
+        root = 'import Facade from "facade"\n\n' + MAIN
+        cases = [
+            # (files, code, file, line, column)
+            ({**url, "facade.agc": 'import Url from "url"\n\n## Doc.\nexport Url.parse\n', "root.agc": root},
+             "PARSE-DETACHED-DOC", "facade.agc", 3, 1),
+            ({**url, "facade.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-DECL-ORDER", "facade.agc", 5, 1),
+            ({"url.agc": cycle_url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-IMPORT-CYCLE", "url.agc", 1, 1),
+            ({"value.agc": value, "facade.agc": 'import Value from "value"\n\nexport Value.Value\n', "root.agc": root},
+             "CHECK-REDEFINED-NAME", "facade.agc", 3, 14),
+        ]
+        results = self.checks([(files, "root.agc", None) for files, *_rest in cases])
+        for (_files, code, file, line, column), checked in zip(cases, results):
+            problem = self.assert_rejected(checked, code, line=line, file=file)
+            assert start(problem) == (line, column)
+        # The alias of the facade is the usual cause of the last one, so the diagnostic says what to do.
+        assert results[3][1]["help"]

@@ -83,8 +83,8 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
 - §: 25
   - Title: Ruby typed idioms
   - File: [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md)
-  - Status: 25.1, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar and
-    the programming skill are the contract); 25.2, 25.4, 25.5, 25.9 and 25.11
+  - Status: 25.1, 25.2, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar
+    and the programming skill are the contract); 25.4, 25.5, 25.9 and 25.11
     planned (row 7.6); Part B to evaluate later; Part C decided against
 
 - §: 26

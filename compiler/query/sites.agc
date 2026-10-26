@@ -120,8 +120,9 @@ export def member(kind: String, owner: String, name: String) -> Target
 end
 
 ## The target of the imported name that the character at `offset` is on in the import lists of `module`: `make` or
-## `create` of `import {make as create} from "models"`. An import is not a reference, but it names a declaration, which
-## a query can select. Absent elsewhere, an alias import (`import Models from "models"`) included: it names a module.
+## `create` of `import {make as create} from "models"`; or of the name of a re-export (`parse` of `export Url.parse`),
+## which is the original declaration. An import is not a reference, but it names a declaration, which a query can
+## select. Absent elsewhere, an alias import (`import Models from "models"`) included: it names a module.
 export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Target]
   for declaration in module.parsed.declarations
     case declaration
@@ -132,6 +133,12 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Ta
           if on_name and linked.ok?
             return Ast.Optional.Present(named(linked.unwrap!))
           end
+        end
+
+      Ast.Decl.Reexport(node) ->
+        linked = module.reexported.get(node.name)
+        if holds?(node.name_span, offset) and linked.ok?
+          return Ast.Optional.Present(named(linked.unwrap!))
         end
 
       _ -> next
@@ -174,6 +181,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Resource(node) -> return [node.name]
     Ast.Decl.Constant(node) -> return [node.name]
     Ast.Decl.Import(_) -> return []
+    Ast.Decl.Reexport(_) -> return []
     Ast.Decl.Export(_) -> return []
   end
 end
@@ -209,6 +217,7 @@ def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
       head = defined(scan, named(node.name), node.name_span).concat(optional_type_sites(scan, node.type, []))
       return head.concat(walk(scan, [Walk.Node.Expr(node.value)]))
     Ast.Decl.Import(_) -> return []
+    Ast.Decl.Reexport(_) -> return []
     Ast.Decl.Export(_) -> return []
   end
 end

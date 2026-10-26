@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 276253,
+  "steps": 334704,
   "stdout": [
-    "1722 vectors ok",
+    "1725 vectors ok",
     ""
   ],
   "stderr": []

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `export Alias.name` re-exports a name that the file imports, so a facade
+  module can collect the API of several files. (#675)
 - `[style] blank_line_after_end = true` in `agentica.toml` requires an empty
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
@@ -31,6 +33,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system
   call); the timeout may start up to one turn late.
+- `Map.delete` and `Set.delete` are much faster on large maps, and
+  `put`/`add` are about 2.5 times faster.
 
 ### Fixed
 
