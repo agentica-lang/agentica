@@ -47,6 +47,8 @@ comment), then a step that calls it. Targets that are not obvious:
   not part of this runner). `PY_ALONE` modules (`test_vm_latency.py`,
   `test_vm_task_map.py`) run only when named (`make vm-latency`,
   `make vm-task-map`). `test-slow` sets `AGENTICA_TEST_SLOW=1`.
+  `AGENTICA_HEAVY_RACE_REPEATS` (default 5) sets the slow-tier repeats of the
+  two heavy multicore race cases; the weekly sweep runs them 20 times.
 - Test helpers are in `tests/agentica_test.py`: paths, the binary, `run` with
   a timeout, `compile_agc`, `@slow`, `tool` for Node, `Child` and `start_vm`
   (a peer or VM read line by line, killed with its process group at the end),

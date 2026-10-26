@@ -41,7 +41,7 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # The two cases that cost 8 s a repetition (170 s at 20x) repeat 5 times in the slow tier: one repetition already runs
 # 100 rounds or 10 VM runs, enough to catch the fixed race almost surely. The weekly sweep sets
 # AGENTICA_HEAVY_RACE_REPEATS=20 for the long soak.
-HEAVY_REPEATS = int(os.environ.get("AGENTICA_HEAVY_RACE_REPEATS", "5"))
+HEAVY_REPEATS = int(os.environ.get("AGENTICA_HEAVY_RACE_REPEATS") or "5")
 HEAVY_RACE = pytest.mark.parametrize(
     "repeats", [1, pytest.param(HEAVY_REPEATS, marks=pytest.mark.slow)], ids=["once", "%dx" % HEAVY_REPEATS])
 
