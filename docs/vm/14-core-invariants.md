@@ -188,8 +188,9 @@ seconds by default, set with
 2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
 flush. **When `main` ends, the program ends.** The steps are:
 
-0. drop the compute calls that no pool thread has started (`agc_ffi_stop_queued`
-   in `vm/ffi.c`): a call is made in full or never, one CAS on its phase decides;
+0. drop the compute calls that no pool thread has started
+   (`agc_ffi_stop_queued` in `vm/ffi.c`): a call is made in full or never, one
+   CAS on its phase decides;
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
@@ -223,14 +224,14 @@ flush. **When `main` ends, the program ends.** The steps are:
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
 to its end. `System.exit` and a crash of `main` take the same path, and so does
-the first stop signal (SIGTERM, SIGINT, SIGHUP). After a stop signal the flush of stdout and stderr is one
-non-blocking write per stream, because a reader that never reads would otherwise
-hold the stopped VM for the whole flush limit. Files keep their wait. A second
-stop signal exits at once without flushing, so a stuck flush (a FIFO nobody
-reads, or a test child that gets the SIGTERM of `PR_SET_PDEATHSIG`,
-`agc_launch_bind` in `vm/launch.c`) need not wait for the flush limit. A second
-signal that comes before the children are stopped waits for step 1, so children
-are never left behind.
+the first stop signal (SIGTERM, SIGINT, SIGHUP). After a stop signal the flush
+of stdout and stderr is one non-blocking write per stream, because a reader that
+never reads would otherwise hold the stopped VM for the whole flush limit. Files
+keep their wait. A second stop signal exits at once without flushing, so a stuck
+flush (a FIFO nobody reads, or a test child that gets the SIGTERM of
+`PR_SET_PDEATHSIG`, `agc_launch_bind` in `vm/launch.c`) need not wait for the
+flush limit. A second signal that comes before the children are stopped waits
+for step 1, so children are never left behind.
 
 As built, `agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
 run" and "Stop signals"). `main`'s return, `System.exit`, a diagnostic, the step
