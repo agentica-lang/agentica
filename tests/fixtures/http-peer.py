@@ -13,6 +13,8 @@ sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 CERTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tls")
 GATE = threading.Barrier(3, timeout=10)
 HELD = []
+# Set by every connection of the raw server; /early waits on it (see there).
+ARRIVED = threading.Event()
 
 RAW = {
     "/http10": b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok",
@@ -116,6 +118,7 @@ class Quiet(http.server.ThreadingHTTPServer):
 
 class Raw(socketserver.BaseRequestHandler):
     def handle(self):
+        ARRIVED.set()
         data = b""
         while b"\r\n\r\n" not in data:
             chunk = self.request.recv(65536)
@@ -124,8 +127,16 @@ class Raw(socketserver.BaseRequestHandler):
             data += chunk
         path = data.split(b" ")[1].decode()
         if path == "/early":
+            # The 413 goes out while the upload is still coming. The rest of the upload is not read until the
+            # client has the answer (its program's next connection shows it, or 10 s pass): with the upload stuck
+            # on a full window, the client's send returns and it reads the 413 now. Reading at once let the whole
+            # 4 MiB go out first, and on a loaded macOS runner one send call lasts as long as the upload, so the
+            # 413 was read past the 5 s deadline (#692). The rest is then read to the end, so the close sends no
+            # RST. The program of test_vm_http.py must open its next raw connection (/stale) after reading the 413.
+            ARRIVED.clear()
             self.request.sendall(b"HTTP/1.1 413 Payload Too Large\r\nConnection: close\r\nContent-Length: 4\r\n\r\nbig!")
             self.request.shutdown(socket.SHUT_WR)
+            ARRIVED.wait(10)
             while self.request.recv(65536):
                 pass
             return

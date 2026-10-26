@@ -26,6 +26,7 @@ export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) 
     if count == 0
       first = dst
     end
+
     fx = State.emit_at(fx, "list", [dst, first, count], span)
   else
     fx = State.alloc(fx)
@@ -36,6 +37,7 @@ export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) 
       if size > MAX_CHUNK
         size = MAX_CHUNK
       end
+
       fx = fx.with(next: base + 1)
       start = fx.next
       fx = try items(cx, fx, node.elements, at, at + size)
@@ -45,14 +47,17 @@ export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) 
         fx = State.emit_at(fx, "list", [start, start, size], span)
         fx = State.emit_builtin(fx, base, "List.concat", 2, [span, span, span])
       end
+
       at += size
     end
+
     dst = base
     if want >= 0
       fx = State.emit_at(fx, "move", [want, base], span)
       dst = want
     end
   end
+
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
@@ -74,6 +79,7 @@ export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) ->
     if count == 0
       first = dst
     end
+
     fx = State.emit_at(fx, "map", [dst, first, count], span)
   else
     fx = State.alloc(fx)
@@ -88,12 +94,14 @@ export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) ->
       fx = State.emit_builtin(fx, base, "Map.put", 3, [span, span, span, span])
       at += 1
     end
+
     dst = base
     if want >= 0
       fx = State.emit_at(fx, "move", [want, base], span)
       dst = want
     end
   end
+
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
@@ -114,10 +122,12 @@ export def lower_enum(
     out = try cx.expression.call(cx, fx, arg, fx.next - 1, false, false)
     fx = out.fx
   end
+
   first = start
   if args.size == 0
     first = dst
   end
+
   fx = State.emit_at(fx, "enum", [dst, first, id], span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
@@ -137,11 +147,13 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   for field in info.fields
     fx = State.alloc(fx)
   end
+
   after = fx.next
   for arg in node.args
     out = try cx.expression.call(cx, fx, arg.value, start + info.positions[arg.name], false, false)
     fx = out.fx.with(next: after)
   end
+
   if cx.field_fills.has_key?(node.type_name)
     fills = cx.field_fills[node.type_name]
     given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
@@ -152,10 +164,12 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
       end
     end
   end
+
   first = start
   if info.fields.size == 0
     first = dst
   end
+
   fx = State.emit_at(fx, "struct", [dst, first, info.index], span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
@@ -180,12 +194,14 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   for position in positions
     fx = State.alloc(fx)
   end
+
   after = fx.next
   for arg in node.args
     rank = rank_of(positions, info.positions[arg.name])
     done = try cx.expression.call(cx, fx, arg.value, window + 1 + rank, false, false)
     fx = done.fx.with(next: after)
   end
+
   fx = State.emit_at(fx, "struct-with", [dst, window, info.index].concat(positions), span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
@@ -211,6 +227,7 @@ def items(cx: State.Cx, fx: State.Fx, elements: List[Ast.Expr], from: Int, stop:
     fx = out.fx
     at += 1
   end
+
   return ok(fx)
 end
 
@@ -225,6 +242,7 @@ def entries(cx: State.Cx, fx: State.Fx, pairs: List[Ast.MapEntry], from: Int, st
     fx = value.fx
     at += 1
   end
+
   return ok(fx)
 end
 
@@ -234,5 +252,6 @@ def rank_of(positions: List[Int], position: Int) -> Int
   while positions[at] != position
     at += 1
   end
+
   return at
 end

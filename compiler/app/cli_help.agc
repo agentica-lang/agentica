@@ -29,6 +29,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
     as_json = true
     rest = rest.take(rest.size - 1)
   end
+
   if rest.size == 1 and as_json
     return Reply.printed("#{JSON.encode(CatalogJson.catalog(&RubyForm.signature))}\n")
   elsif rest.size == 1
@@ -36,14 +37,17 @@ export def help(words: List[String], style: String) -> Reply.Reply
   elsif rest.size != 2
     return Reply.failed(2, "usage: agentica help [NAME] [--json]\n")
   end
+
   name = rest[1]
   entry = CatalogJson.public(name)
   if !entry.ok?
     return renamed(name, as_json)
   end
+
   if as_json
     return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!, &RubyForm.signature))}\n")
   end
+
   return Reply.printed(block(name, entry.unwrap!))
 end
 
@@ -54,9 +58,11 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
   if !Tables.foreign_names().has_key?(name)
     found = Alias.targets(name)
   end
+
   if found.size == 0
     return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
   end
+
   # `unwrap!` cannot fail: targets keeps only public builtins.
   entries = found.map do |target: String| CatalogJson.public(target).unwrap! end
   hints = Alias.kind_hints(name)
@@ -70,6 +76,7 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
     })
     return Reply.printed("#{JSON.encode(answer)}\n")
   end
+
   blocks = entries.map do |entry: Model.Builtin| block(name, entry) end
   notes = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}\n" end
   return Reply.printed(blocks.concat(notes).join("\n"))
@@ -89,6 +96,7 @@ def form_text(form: Model.Builtin, method: String) -> String
   if ruby == ""
     return Builtins.form_signature(form)
   end
+
   return ruby
 end
 
@@ -103,15 +111,19 @@ def rename_line(name: String, target: String, written: String) -> String
     if method == written
       return ""
     end
+
     typed = name
     if asked.size == 1 and own.size > 1
       typed = "#{own[0]}.#{name}"
     end
+
     return "`#{typed}` is written `.#{written}`\n"
   end
+
   if method == own[own.size - 1]
     return ""
   end
+
   return "`#{name}` is called `#{target}` in Agentica\n"
 end
 
@@ -122,13 +134,16 @@ def suggestion(name: String) -> String
   if !hint.ok?
     hint = Tables.foreign_kind_methods().get(name)
   end
+
   if hint.ok?
     return "; #{hint.unwrap!}"
   end
+
   hints = Alias.kind_hints(name)
   if hints.size > 0
     return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ")
   end
+
   case Suggest.closest_among(name, PUBLIC_NAMES, [])
     Ast.Optional.Present(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
     Ast.Optional.Absent -> return ""
@@ -149,6 +164,7 @@ def namespaces_text() -> String
       spaces = spaces.push(name.slice(0, dot.unwrap!))
     end
   end
+
   return [
     "Builtins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).",
     "  namespaces: #{spaces.join(" ")}",

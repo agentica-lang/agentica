@@ -67,6 +67,7 @@ export def add_help(text: String, more: String) -> String
     Diag.Help.Hint(had) -> line = "#{had}; #{more}"
     Diag.Help.NoHelp -> line = more
   end
+
   packed = Base.bail_span(shown.code, shown.message, shown.span, hint(line))
   return "#{failure.file.length}\n#{failure.file}#{failure.key_path.length}\n#{failure.key_path}#{packed}"
 end

@@ -109,6 +109,7 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
   if !wanted or settings.self_path == ""
     return Plan.Off
   end
+
   case settings.std
     Env.StdProvider.Folder(_) -> return Plan.Off
     Env.StdProvider.Embedded ->
@@ -116,6 +117,7 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
       if made.ok?
         return Plan.On(made.unwrap!)
       end
+
       return Plan.Off
   end
 end
@@ -129,6 +131,7 @@ export def lookup(plan: Plan, settings: Env.Settings) -> Lookup
       if found.ok?
         return Lookup.Hit(found.unwrap!)
       end
+
       return Lookup.Miss
   end
 end
@@ -145,11 +148,13 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
       if !probes.ok?
         return false
       end
+
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
       libraries = library_lines(settings.workspace, sources)
       if !libraries.ok?
         return false
       end
+
       lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       return publish(entry, text, program)
@@ -169,11 +174,13 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
   for module in modules
     paths = paths.concat(module.watched)
   end
+
   lines: List[String] = []
   for path in paths.uniq
     if !plain?(path)
       return error("the path has a line feed, a tab or a NUL")
     end
+
     if workspace.directory_exists.call(path)
       lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
     else
@@ -181,6 +188,7 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
       lines = lines.push("#{SOURCE_WORD}#{CacheFiles.digest(read)} #{path}")
     end
   end
+
   return ok(lines)
 end
 
@@ -196,6 +204,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   if real.contains?("\n")
     return error("the path has a line feed")
   end
+
   site = try CacheFiles.site(settings, real)
   key = [FORMAT, "version #{settings.version}", site.binary, "root #{real}", site.inputs].join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
@@ -231,6 +240,7 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
           roots = try Resolve.search_roots(settings, libs_dir)
           searched = true
         end
+
         for root in roots
           lines = lines.push(try probe(workspace, Paths.join(root, file.slice(4, file.length - 4))))
         end
@@ -239,6 +249,7 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
       end
     end
   end
+
   return ok(lines.uniq)
 end
 
@@ -247,13 +258,16 @@ def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
   if !plain?(path)
     return error("the path has a line feed, a tab or a NUL")
   end
+
   if !workspace.file_exists.call(path)
     return ok("#{ABSENT_WORD}#{path}")
   end
+
   real = try workspace.real_path.call(path)
   if !plain?(real)
     return error("the path has a line feed, a tab or a NUL")
   end
+
   return ok("#{PRESENT_WORD}#{path}\t#{real}")
 end
 
@@ -280,6 +294,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   if !text.starts_with?("#{entry.key}\nprogram ")
     return error("the entry is for another build or program")
   end
+
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
   try check_lines(settings.workspace, lines.drop(1))
@@ -287,6 +302,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   if lines[0] != "program #{CacheFiles.digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
   end
+
   return ok(program)
 end
 
@@ -297,10 +313,12 @@ def text_size(head: List[Int]) -> Result[Int]
   if text.length != HEAD_BYTES or !text.starts_with?(HEAD_WORD) or !text.ends_with?("\n")
     return error("not a cache entry")
   end
+
   size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_int
   if size < 0 or size > MAX_TEXT_BYTES
     return error("the head of the entry is wrong")
   end
+
   return ok(size)
 end
 
@@ -322,6 +340,7 @@ def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[V
       return error("a line of the entry is wrong")
     end
   end
+
   return ok()
 end
 
@@ -329,6 +348,7 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if line.length <= SOURCE_WORD.length + DIGEST_CHARS + 1
     return error("a line of the entry is wrong")
   end
+
   wanted = line.slice(SOURCE_WORD.length, DIGEST_CHARS)
   from = SOURCE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
@@ -336,10 +356,12 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if path.contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   read = try workspace.read_bytes.call(path)
   if CacheFiles.digest(read) != wanted
     return error("#{path} changed")
   end
+
   return ok()
 end
 
@@ -347,14 +369,17 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if line.length <= TREE_WORD.length + DIGEST_CHARS + 1
     return error("a line of the entry is wrong")
   end
+
   from = TREE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
   if path.contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
     return error("the native files of #{path} changed")
   end
+
   return ok()
 end
 
@@ -364,10 +389,12 @@ def check_present(workspace: Workspace.Workspace, rest: String) -> Result[Void]
   if parts.size != 2 or parts[0].contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   real = try workspace.real_path.call(parts[0])
   if real != parts[1]
     return error("#{parts[0]} leads somewhere else")
   end
+
   return ok()
 end
 
@@ -378,6 +405,7 @@ def made_by?(program: List[Int], version: String) -> Bool
   if program.size < VERSION_AT + wanted.size or program[8] != wanted.size
     return false
   end
+
   magic = String.from_bytes(program.take(MAGIC.length))
   found = String.from_bytes(program.take(VERSION_AT + wanted.size).drop(VERSION_AT))
   return magic.ok? and magic.unwrap! == MAGIC and found.ok? and found.unwrap! == version
@@ -392,9 +420,11 @@ def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
     if got.size == 0
       return error("the entry ends too soon")
     end
+
     pieces = pieces.push(got)
     left -= got.size
   end
+
   return ok(PackageHash.concat_all(pieces))
 end
 
@@ -402,6 +432,7 @@ def piece(left: Int) -> Int
   if left < CacheFiles.PIECE
     return left
   end
+
   return CacheFiles.PIECE
 end
 
@@ -416,9 +447,11 @@ def read_rest(handle: FileHandle) -> Result[List[Int]]
     if total > MAX_PROGRAM_BYTES
       return error("the program of the entry is too large")
     end
+
     finished = got.size == 0
     pieces = pieces.push(got)
   end
+
   return ok(PackageHash.concat_all(pieces))
 end
 
@@ -431,10 +464,12 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   if !prepare_folder(entry).ok?
     return false
   end
+
   suffix = RandomName.hex()
   if !suffix.ok?
     return false
   end
+
   body = String.to_bytes(text)
   data = String.to_bytes(head(body.size)).concat(body).concat(program)
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
@@ -442,12 +477,14 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
     Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
+
   CacheFiles.sweep(entry.folder)
   CacheFiles.remove_file(entry.file)
   if !Path.rename(temporary, entry.file, CacheFiles.IO_TIMEOUT_MS).ok?
     Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
+
   return true
 end
 
@@ -459,6 +496,7 @@ def prepare_folder(entry: Entry) -> Result[Void]
   if made and entry.beside
     CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
   end
+
   try CacheFiles.private_folder(entry.folder, user)
   return ok()
 end
@@ -468,6 +506,7 @@ def head(size: Int) -> String
   while digits.length < HEAD_DIGITS
     digits = "0#{digits}"
   end
+
   return "#{HEAD_WORD}#{digits}\n"
 end
 

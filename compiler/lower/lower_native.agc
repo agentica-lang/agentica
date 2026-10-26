@@ -32,18 +32,22 @@ export def lower(
   if count > MAX_PARAMS
     return error(Lowering.unsupported(cx, "extern functions with more than #{MAX_PARAMS} parameters", span))
   end
+
   codes = try indexed_codes(cx, function, native, structs)
   kind = ""
   if native.compute
     kind = "compute "
   end
+
   words = [native.symbol]
   if native.free != ""
     words = words.concat([native.free, native.resource])
   end
+
   for out in native.outs
     words = words.concat([out.free, out.name])
   end
+
   signature = "#{kind}#{codes} #{words.join(" ")} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
@@ -72,9 +76,11 @@ export def lower(
       body = body.push(Ir.instr("list-get", [count + 1 + field, count, position], index, [span]))
       field += 1
     end
+
     body = body.push(Ir.instr("struct", [count, count + 1, info.index], index, [span]))
     slots = position + 1
   end
+
   body = body.push(Ir.instr("return", [count], index, [span]))
   name = function.name
   return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
@@ -95,6 +101,7 @@ def indexed_codes(
   if pieces.size == 1
     return ok(native.codes)
   end
+
   result = function.result.name
   if record?(native)
     first = structs[result].fields[0]
@@ -103,19 +110,23 @@ def indexed_codes(
       result = first.type.name
     end
   end
+
   names = nested_structs(result, structs)
   for param in function.params
     names = names.concat(nested_structs(param.type.name, structs))
   end
+
   if names.size != pieces.size - 1
     return error(Lowering.internal(cx, "the structs of #{function.name} do not match its codes", function.span))
   end
+
   out = pieces[0]
   at = 1
   for name in names
     out += "{#{cx.structs[name].index}:#{pieces[at]}"
     at += 1
   end
+
   return ok(out)
 end
 
@@ -124,9 +135,11 @@ def nested_structs(name: String, structs: Map[String, Ast.StructDecl]) -> List[S
   if !structs.has_key?(name)
     return []
   end
+
   names = [name]
   for field in structs[name].fields
     names = names.concat(nested_structs(field.type.name, structs))
   end
+
   return names
 end

@@ -42,6 +42,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   if function.slots > MAX_U16
     return error(Failure.limit(program, function.file, "registers in one function", function.span))
   end
+
   body = function.body
   labels = label_pcs(body)
   # The constant, update and builtin pools travel in state. The span pool is a local of its own: operands never read
@@ -59,10 +60,12 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       at += 1
       next
     end
+
     run = 1
     if op == "step"
       run = step_run_end(body, at) - at
     end
+
     found = try operands(program, function, labels, state, instr, run)
     state = found.tables
     words = try instr_words(program, instr, found)
@@ -73,6 +76,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     count += 1
     at += run
   end
+
   # The span of the function comes after those of its instructions.
   own = Spans.intern_one(span_pool, function.file, function.span)
   head = Bytes.string(function.name).concat(Bytes.u32(function.params)).concat(Bytes.u32(function.captures))
@@ -86,6 +90,7 @@ def prelude_flag(program: Ir.Program, function: Ir.Function) -> Int
   if Ir.prelude_file?(program, function.file)
     return 1
   end
+
   return 0
 end
 
@@ -100,9 +105,11 @@ def operands(
   if !OPCODES.has_key?(op)
     return error(Failure.internal(program, "unknown opcode #{op}"))
   end
+
   if NEEDS.has_key?(op) and args.size < NEEDS[op]
     return error(Failure.internal(program, "#{op} needs at least #{NEEDS[op]} operands and has #{args.size}"))
   end
+
   if op == "const"
     return const_operands(program, tables, instr)
   elsif op == "struct-with"
@@ -122,6 +129,7 @@ def operands(
   elsif args.size == 3
     return ok(plain(tables, args[0], args[1], args[2]))
   end
+
   # Any other number of operands is written as given: the loader rejects it.
   return ok(Operands(tables: tables, a: 0, b: 0, c: 0, generic: true))
 end
@@ -135,6 +143,7 @@ def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index
   if index < 0
     return error(Failure.internal(program, "a negative index in #{op}"))
   end
+
   return ok(plain(tables, a, index % 65_536, index / 65_536))
 end
 
@@ -145,6 +154,7 @@ def const_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Resu
   if found.ok?
     return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!)
   end
+
   added = Pool.add(tables.constants, key, constant_bytes(instr.imm), 1)
   return wide_operands(program, tables.with(constants: added), instr.op, instr.args[0], tables.constants.count)
 end
@@ -159,14 +169,17 @@ def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Res
   if found.ok?
     return ok(plain(tables, args[0], args[1], found.unwrap!))
   end
+
   updates = tables.updates
   if updates.count >= MAX_U16
     return error(Failure.limit(program, 0, "struct updates", program.span))
   end
+
   entry = Bytes.u32(args[2]).concat(Bytes.u32(positions.size))
   for position in positions
     entry = entry.concat(Bytes.u32(position))
   end
+
   return ok(plain(tables.with(updates: Pool.add(updates, key, entry, 1)), args[0], args[1], updates.count))
 end
 
@@ -179,6 +192,7 @@ def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Re
   if found.ok?
     return wide_operands(program, tables, instr.op, args[0], found.unwrap!)
   end
+
   bytes = Bytes.string(instr.name).concat(Bytes.u32(args[1]))
   added = Pool.add(tables.builtins, key, bytes, 1)
   return wide_operands(program, tables.with(builtins: added), instr.op, args[0], tables.builtins.count)
@@ -196,9 +210,11 @@ def jump_operands(
     register = args[0]
     label = args[1]
   end
+
   if !labels.has_key?(label)
     return error(Failure.internal(program, "the function #{function.name} jumps to a missing label"))
   end
+
   return wide_operands(program, tables, instr.op, register, labels[label])
 end
 
@@ -212,16 +228,20 @@ def instr_words(program: Ir.Program, instr: Ir.Instr, found: Operands) -> Result
       if arg < 0 or arg > MAX_U16
         return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
       end
+
       words = words.concat(Bytes.u16(arg))
     end
+
     return ok(words)
   end
+
   a = found.a
   b = found.b
   c = found.c
   if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
     return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
   end
+
   return ok([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
 end
 
@@ -232,6 +252,7 @@ def step_run_end(body: List[Ir.Instr], at: Int) -> Int
   while stop < body.size and stop - at < MAX_U16 and body[stop].op == "step"
     stop += 1
   end
+
   return stop
 end
 
@@ -254,6 +275,7 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
       end
     end
   end
+
   return labels
 end
 
@@ -286,5 +308,6 @@ def flag_bytes(flag: Bool) -> List[Int]
   if flag
     return [3]
   end
+
   return [2]
 end

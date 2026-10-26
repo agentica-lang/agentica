@@ -23,6 +23,7 @@ export def pick(name: String, matches: List[Symbol.Match], settings: Env.Setting
   if distinct.size == 1
     return Picked.One(distinct[0])
   end
+
   places = distinct.map do |found: Symbol.Match| place(settings, found) end
   help = Diag.Help.Hint("write FILE:LINE:COL of one of: #{places.join(", ")}")
   return Picked.Refused(
@@ -36,6 +37,7 @@ export def not_found(name: String, problem: Problems.Problem) -> Problems.Proble
   if problem.code != "QUERY-NOT-FOUND" or !name.ends_with?(".agc")
     return problem
   end
+
   note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
   case problem.help
     Diag.Help.Hint(text) -> return problem.with(help: Diag.Help.Hint("#{text}; #{note}"))
@@ -51,6 +53,7 @@ def once(matches: List[Symbol.Match]) -> List[Symbol.Match]
       out = out.push(found)
     end
   end
+
   return out
 end
 
@@ -64,6 +67,7 @@ def place(settings: Env.Settings, found: Symbol.Match) -> String
   if found.file == ""
     return found.name
   end
+
   start = found.name_span.start
   return "#{QueryFiles.display(settings, found.file, true)}:#{start.line}:#{start.column}"
 end

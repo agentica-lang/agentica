@@ -33,6 +33,7 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
     bound = try check_argument(cx, bound, site.args[index], form.parameters[index].type, row.module == "lazy")
     index += 1
   end
+
   try check_limits(cx, bound, form, row, site.node.span)
   found = bound.st.with(bodies: bound.st.bodies.put(site.node.id, body_of(row, bound.types)))
   return ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))
@@ -52,19 +53,23 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
       end
+
     _ ->
       context = wanted
       if CheckTypes.has_variables?(wanted)
         context = T.Type.Unknown
       end
+
       checked = try State.expr(cx, bound.st, arg, context)
   end
+
   fresh = free_variables(template).filter do |name: String| !bound.types.has_key?(name) end
   learned = try CheckTypes.unify(cx, checked.st, template, checked.type, bound.types, span)
   spans = bound.spans
   for name in fresh
     spans = spans.put(name, span)
   end
+
   return ok(Bound(st: checked.st, types: learned, spans: spans))
 end
 
@@ -77,10 +82,12 @@ def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, wanted: T.Type,
       State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "the types of the block parameters are not known", block.span),
     )
   end
+
   result = T.result(wanted)
   if CheckTypes.has_variables?(result)
     result = T.Type.Unknown
   end
+
   return Stmt.check_block_in(cx, bound.st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, step)
 end
 
@@ -95,6 +102,7 @@ def check_limits(
         State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call),
       )
     end
+
     if !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end
       names = limit.allowed.map do |allowed: T.Type| T.to_text(allowed) end
       options = names.take(names.size - 1).join(", ") + " or " + names[names.size - 1]
@@ -110,6 +118,7 @@ def check_limits(
       )
     end
   end
+
   return ok(true)
 end
 
@@ -119,6 +128,7 @@ def body_of(row: Model.PreludeRow, types: Map[String, T.Type]) -> String
   if row.selector == ""
     return "#{row.module}::#{row.bodies[""]}"
   end
+
   return "#{row.module}::#{row.bodies[T.tag(types[row.selector])]}"
 end
 
@@ -144,5 +154,6 @@ def free_variables_of(types: List[T.Type]) -> List[String]
   for type in types
     names = names.concat(free_variables(type))
   end
+
   return names
 end

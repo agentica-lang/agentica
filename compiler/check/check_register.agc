@@ -49,9 +49,11 @@ export def check_main(
       end
     end
   end
+
   if found or !required
     return ok(true)
   end
+
   return error(
     State.fail(
       cx.with(file: modules[0].file),
@@ -78,6 +80,7 @@ def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
       end
     end
   end
+
   return ok(found)
 end
 
@@ -96,6 +99,7 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
       end
     end
   end
+
   return ok(found)
 end
 
@@ -110,6 +114,7 @@ def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
       end
     end
   end
+
   return ok(true)
 end
 
@@ -121,9 +126,11 @@ def main_of(module: Linker.LinkedModule) -> Ast.Optional[Ast.FunctionDecl]
         if T.display_name(node.name) == "main"
           return Ast.Optional.Present(node)
         end
+
       _ -> next
     end
   end
+
   return Ast.Optional.Absent
 end
 
@@ -132,6 +139,7 @@ def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result
   if node.params.size != 0 or !T.is?(result, "Void")
     return error(State.fail(cx, st, "CHECK-MAIN", "main must take no parameters and return Void", node.span))
   end
+
   return ok(true)
 end
 
@@ -147,6 +155,7 @@ def register_enum_names(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
       end
     end
   end
+
   return ok(found)
 end
 
@@ -174,8 +183,10 @@ def check_type_parameters(
     if seen.include?(parameter)
       return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate #{owner} type parameter", span))
     end
+
     seen = seen.add(parameter)
   end
+
   for parameter in parameters
     if RESERVED.include?(parameter)
       return error(
@@ -189,6 +200,7 @@ def check_type_parameters(
       )
     end
   end
+
   return ok(true)
 end
 
@@ -196,6 +208,7 @@ def article(owner: String) -> String
   if owner == "enum"
     return "an"
   end
+
   return "a"
 end
 
@@ -213,6 +226,7 @@ def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) 
       State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(name)}\" is already defined", span),
     )
   end
+
   return ok(true)
 end
 
@@ -231,6 +245,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
       end
     end
   end
+
   for module in modules
     for decl in module.declarations
       case decl
@@ -239,6 +254,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
       end
     end
   end
+
   return ok(found)
 end
 
@@ -251,6 +267,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     if seen.include?(field.name)
       return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate field \"#{field.name}\"", field.span))
     end
+
     seen = seen.add(field.name)
     type = try Types.resolve_type(cx, st, field.type, false)
     # value.with(...) is always the struct update, so a function field named with could never be called without .call.
@@ -266,12 +283,15 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
         ),
       )
     end
+
     try DefaultChecks.check_field_value(cx, st, field)
     if Defaults.field_default?(field)
       defaulted = defaulted.add(field.name)
     end
+
     fields = fields.push(Model.Named(name: field.name, type: type))
   end
+
   return ok(
     cx.with(structs: cx.structs.put(node.name, fields), field_defaults: cx.field_defaults.put(node.name, defaulted)),
   )
@@ -288,6 +308,7 @@ def register_enum_variants(cx: State.Cx, modules: List[Linker.LinkedModule]) -> 
       end
     end
   end
+
   return ok(found)
 end
 
@@ -308,10 +329,12 @@ def register_variants(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result[
         ),
       )
     end
+
     seen = seen.add(variant.name)
     payload = try Types.resolve_all(here, st, variant.payload_types)
     variants = variants.push(Model.Variant(name: variant.name, payload: payload))
   end
+
   definition = Model.EnumDef(name: node.name, parameters: node.type_parameters, variants: variants)
   return ok(cx.with(enums: cx.enums.put(node.name, definition)))
 end
@@ -327,6 +350,7 @@ def register_functions(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
       end
     end
   end
+
   return ok(found)
 end
 
@@ -349,6 +373,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Res
       ),
     )
   end
+
   seen: Set[String] = Set.new([])
   params: List[T.Type] = []
   for param in node.params
@@ -357,9 +382,11 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Res
         State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
       )
     end
+
     seen = seen.add(param.name)
     params = params.push(try Types.resolve_type(cx, st, param.type, false))
   end
+
   try DefaultChecks.check_parameters(cx, st, node)
   result = try Types.resolve_type(cx, st, node.result, true)
   signature = State.Signature(params: params, result: result, shape: Defaults.shape(node.params))

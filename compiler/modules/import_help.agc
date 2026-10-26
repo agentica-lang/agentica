@@ -20,6 +20,7 @@ export def unknown_import_help(
   elsif key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
   end
+
   case Suggest.closest_among(member, exports.keys, [])
     Ast.Optional.Present(name) ->
       return Diag.Help.Hint("did you mean \"#{name}\"?")

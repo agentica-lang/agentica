@@ -61,6 +61,7 @@ export def resolve(
   queue = manifest.dependencies.map do |dependency|
     Wanted(name: dependency.name, source: dependency.source, asked_in: manifest.file)
   end
+
   found: Map[String, Lock.Locked] = {}
   at = 0
   # A name is settled once, so the queue grows only by the dependencies of a name seen for the first time.
@@ -71,14 +72,17 @@ export def resolve(
       try agree(found[wanted.name], wanted)
       next
     end
+
     if cache == "" and !Members.member?(members, wanted.source)
       cache = try PackageFetch.cache_root(settings.env, old.file)
     end
+
     locked = try settle(settings, cache, members, old, refresh, wanted)
     found = found.put(wanted.name, locked)
     more = try asked_by(settings, cache, members, locked)
     queue = queue.concat(more)
   end
+
   return ok(found.values)
 end
 
@@ -96,20 +100,24 @@ export def resolve_artifacts(
   if packages.any? do |locked| !locked.member end
     cache = try PackageFetch.cache_root(settings.env, manifest.file)
   end
+
   for locked in packages
     folder = Members.folder_of(members, locked.source)
     if !locked.member
       folder = PackageCache.folder(cache, locked.source, locked.commit)
     end
+
     file = Paths.join(folder, MANIFEST_FILE)
     if settings.workspace.file_exists.call(file)
       declared = try Manifest.read(settings.workspace, file)
       found = collect_manifest(declared, locked.name, found)
     end
   end
+
   if cache == "" and found.keys.any? do |key| found[key].artifact.system == settings.env.os end
     cache = try PackageFetch.cache_root(settings.env, manifest.file)
   end
+
   if cache != ""
     for key in found.keys
       entry = found[key]
@@ -128,6 +136,7 @@ export def resolve_artifacts(
     message = "there is no place for the native artifact cache"
     return error(PackageFetch.fail(place, "PKG-FETCH", "", message, "set HOME or XDG_CACHE_HOME"))
   end
+
   return ok(found.values.map do |entry: Found_artifact| entry.artifact end)
 end
 
@@ -142,6 +151,7 @@ def collect_manifest(
       if place.url == ""
         next
       end
+
       here = Reader.child("native", library.name)
       row = Reader.child(here, place.system)
       artifact = Lock.Artifact(
@@ -155,6 +165,7 @@ def collect_manifest(
       found = found.put(artifact_key(artifact), Found_artifact(artifact: artifact, file: manifest.file, row: row))
     end
   end
+
   return found
 end
 
@@ -168,6 +179,7 @@ def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
   if GitSource.same?(locked.source, wanted.source)
     return ok()
   end
+
   asked = GitSource.describe(wanted.source)
   message = "#{wanted.name} is #{asked}, but another package has it at #{GitSource.describe(locked.source)}"
   help = Failure.hint("one name stands for one source in a build: make the manifests agree")
@@ -188,6 +200,7 @@ def settle(
   if Members.member?(members, wanted.source)
     return ok(Lock.Locked(name: wanted.name, source: wanted.source, commit: "", hash: "", member: true))
   end
+
   for index in 0...old.packages.size
     locked = old.packages[index]
     same = locked.name == wanted.name and GitSource.same?(locked.source, wanted.source)
@@ -197,6 +210,7 @@ def settle(
       return ok(locked)
     end
   end
+
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   return PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
 end
@@ -217,10 +231,12 @@ def asked_by(
   if !locked.member
     folder = PackageCache.folder(cache, locked.source, locked.commit)
   end
+
   file = Paths.join(folder, MANIFEST_FILE)
   if !settings.workspace.file_exists.call(file)
     return ok([])
   end
+
   manifest = try Manifest.read(settings.workspace, file)
   return ok(
     manifest.dependencies.map do |dependency|

@@ -22,10 +22,12 @@ export def catalog_text(probes: List[String]) -> String
   for name in ENTRIES.keys
     lines = lines.concat(builtin_lines(ENTRIES[name]))
   end
+
   lines = lines.concat(record_lines()).concat(enum_lines()).concat(name_lines())
   for probe in probes
     lines = lines.push(probe_line(probe))
   end
+
   return lines.join("\n")
 end
 
@@ -35,6 +37,7 @@ def builtin_lines(entry: Model.Builtin) -> List[String]
   for form in forms
     lines = lines.push("  #{form_line(form)}")
   end
+
   return lines
 end
 
@@ -59,6 +62,7 @@ def record_lines() -> List[String]
     fields = RECORDS[name].map do |field: Model.Named| "#{field.name}: #{Types.debug_text(field.type)}" end
     lines = lines.push("record #{name} #{fields.join(", ")}")
   end
+
   return lines
 end
 
@@ -71,6 +75,7 @@ def enum_lines() -> List[String]
       "enum #{name} parameters=#{quoted_list(definition.parameters)} variants=#{variants.join(" | ")}",
     )
   end
+
   return lines
 end
 
@@ -79,6 +84,7 @@ def name_lines() -> List[String]
   for name in STD_ONLY.keys.sort
     std_only = std_only.push("#{name}=#{STD_ONLY[name][0]} as #{STD_ONLY[name][1]}")
   end
+
   rows: List[String] = []
   for name in PRELUDE.keys.sort
     row = PRELUDE[name]
@@ -86,6 +92,7 @@ def name_lines() -> List[String]
     bodies = row.bodies.keys.sort.map do |type: String| "#{type}=#{row.bodies[type]}" end
     rows = rows.push("#{name}=#{row.module} limits=#{quoted_list(types)} bodies=#{quoted_list(bodies)}")
   end
+
   return [
     "public #{quoted_list(PUBLIC_NAMES)}",
     "bare #{quoted_list(BARE_NAMES.to_a.sort)}",
@@ -145,6 +152,7 @@ def signature_text(name: String) -> String
   if found.ok?
     return Text.quote(Builtins.signature(found.unwrap!))
   end
+
   return "-"
 end
 
@@ -154,6 +162,7 @@ def ref_text(spec: String) -> String
   if found.ok?
     return form_line(found.unwrap!)
   end
+
   return "-"
 end
 
@@ -168,6 +177,7 @@ def variant_text(variant: Model.Variant) -> String
   if variant.payload.size == 0
     return variant.name
   end
+
   payload = variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
   return "#{variant.name}(#{payload})"
 end

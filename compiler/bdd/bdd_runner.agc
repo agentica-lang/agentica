@@ -71,15 +71,18 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
   if options.seeded
     words = words.concat(["--seed", options.seed.to_s])
   end
+
   words = words.concat(["--driver-pid", System.pid().to_s])
   case program
     Program.File(path) -> words = words.concat(["--", path, config_file])
     Program.Embedded(name) -> words = words.concat(["--embedded", name, "--", config_file])
   end
+
   spawned = Process.spawn_captured(options.vm, words, ".", START_TIMEOUT)
   if !spawned.ok?
     return Ran.Failed("cannot start the BDD runner: #{spawned.message}")
   end
+
   child = spawned.unwrap!
   Process.close_stdin(child, IO_TIMEOUT)
   code = wait_for(child)
@@ -90,10 +93,12 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
   elsif !output.ok?
     return Ran.Failed("the BDD runner did not close its output: #{output.message}")
   end
+
   stderr = output.unwrap!.stderr
   if code.unwrap! < 0 or code.unwrap! > MAXIMUM_EXIT_CODE or stderr != ""
     return Ran.Failed("the BDD runner failed with exit code #{code.unwrap!}: #{message_line(stderr)}")
   end
+
   return read_report(code.unwrap!, report_file)
 end
 
@@ -103,6 +108,7 @@ def wait_for(child: Process) -> Result[Int]
   while !waited.ok? and waited.message == "network: operation timed out"
     waited = Process.wait(child, WAIT_SLICE)
   end
+
   return waited
 end
 
@@ -122,14 +128,17 @@ def message_line(text: String) -> String
   if lines.size == 0
     return "no diagnostic"
   end
+
   first = 0
   index = 0
   for line in lines
     if diagnostic_header?(line)
       first = index
     end
+
     index += 1
   end
+
   return lines.drop(first).take(2).join(" ")
 end
 
@@ -139,11 +148,13 @@ def diagnostic_header?(line: String) -> Bool
   if !marker.ok? or !line.ends_with?("]")
     return false
   end
+
   place = line.slice(0, marker.unwrap!).split(":")
   code = line.slice(marker.unwrap! + 7, line.length - marker.unwrap! - 8)
   if place.size < 3 or code == "" or place.take(place.size - 2).join(":") == ""
     return false
   end
+
   return number?(place[place.size - 1]) and number?(place[place.size - 2]) and code_text?(code)
 end
 
@@ -158,5 +169,6 @@ def code_text?(text: String) -> Bool
       return false
     end
   end
+
   return true
 end

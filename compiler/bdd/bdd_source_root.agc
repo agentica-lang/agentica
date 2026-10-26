@@ -12,18 +12,22 @@ export def option(entry: String) -> String
   if !real.ok?
     return ""
   end
+
   folder = Paths.directory_of(real.unwrap!)
   if Paths.rooted?(entry)
     return folder
   end
+
   here = Path.cwd()
   if !here.ok?
     return ""
   end
+
   canonical = Path.real(here.unwrap!)
   if !canonical.ok?
     return ""
   end
+
   return relative(parts(canonical.unwrap!), parts(folder))
 end
 
@@ -33,13 +37,16 @@ def relative(from: List[String], to: List[String]) -> String
   while shared < from.size and shared < to.size and from[shared] == to[shared]
     shared += 1
   end
+
   names: List[String] = []
   for index in shared...from.size
     names = names.push("..")
   end
+
   for index in shared...to.size
     names = names.push(to[index])
   end
+
   return names.join("/")
 end
 

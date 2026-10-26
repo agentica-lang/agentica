@@ -12,10 +12,12 @@ export def text(found: Model.TypeAt) -> String
   if type == ""
     type = "?"
   end
+
   head = "#{found.position.file}:#{range(found.range)} #{first_line(found.text)}: #{type}"
   if found.definition.size == 0
     return "#{head}\n#{builtin_lines(found.signatures)}"
   end
+
   definition = found.definition[0]
   return "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
 end
@@ -35,6 +37,7 @@ def first_line(text: String) -> String
   if lines.size > 1
     return "#{lines[0]} ..."
   end
+
   return text
 end
 

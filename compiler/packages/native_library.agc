@@ -54,19 +54,23 @@ export def resolve(
     target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root)
     targets = targets.put(library.name, target)
   end
+
   if !package
     extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
     return Found(targets: targets, watched: files(targets).concat(extra))
   end
+
   names = PackageHash.native_files(workspace, root)
   hashed = !member and PackageHash.manifest_hashed?(workspace, root, names)
   if names.size == 0 and !hashed and manifest.natives.size == 0
     return Found(targets: targets, watched: [])
   end
+
   watched = [root].concat(names.map do |path: String| Paths.join(root, path) end)
   if hashed
     watched = watched.push(manifest.file)
   end
+
   extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
   return Found(targets: targets, watched: watched.concat(extra))
 end
@@ -81,6 +85,7 @@ def files(targets: Map[String, Target]) -> List[String]
       Target.Unusable(_) -> next
     end
   end
+
   return found
 end
 
@@ -99,22 +104,27 @@ def target_of(
     if place.system != os
       next
     end
+
     if place.url != ""
       return downloaded_target(workspace, manifest, library.name, here, place, os, package_name, lock, cache_root)
     end
+
     if place.file == ""
       return Target.System(place.name)
     end
+
     path = Paths.join(root, place.file)
     if workspace.file_exists.call(path)
       return Target.File(path)
     end
+
     key = Reader.child(Reader.child(here, os), "file")
     message = "the native file #{place.file} is not in the package"
     return Target.Unusable(
       Failure.fail_key(manifest.file, key, "PKG-NATIVE-MISSING", message, Failure.hint("put the file in the package")),
     )
   end
+
   message = "the library #{library.name} is not declared for #{os}"
   help = "add [#{here}.#{os}] to the manifest of the package"
   return Target.Unusable(
@@ -142,17 +152,20 @@ def downloaded_target(
     help = Failure.hint("run agentica install to lock the native artifacts the manifests declare")
     return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-LOCK-STALE", message, help))
   end
+
   artifact = found.unwrap!
   if artifact.url != place.url or artifact.sha256 != place.sha256 or !same_member?(artifact.member, place.member)
     message = "the lock does not list the download the manifest names for #{name} on #{os}"
     help = Failure.hint("run agentica update to lock the download the manifest names")
     return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-LOCK-STALE", message, help))
   end
+
   if cache_root == ""
     message = "there is no place for the native artifact cache"
     help = Failure.hint("set HOME or XDG_CACHE_HOME")
     return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-FETCH", message, help))
   end
+
   request = Workspace.NativeRequest(
     cache_root: cache_root,
     package: package_name,
@@ -177,6 +190,7 @@ def same_member?(left: String, right: String) -> Bool
   if !left_canonical.ok? or !right_canonical.ok?
     return left == right
   end
+
   return left_canonical.unwrap! == right_canonical.unwrap!
 end
 
@@ -193,6 +207,7 @@ def downloaded_watched(
   if cache_root == ""
     return []
   end
+
   found: List[String] = []
   for library in manifest.natives
     case targets.get(library.name)
@@ -206,11 +221,14 @@ def downloaded_watched(
                 found = found.push(receipt)
               end
             end
+
           _ -> next
         end
+
       error(_) -> next
     end
   end
+
   return found
 end
 

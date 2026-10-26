@@ -53,10 +53,12 @@ export def expand(
   if asked.size == 0
     asked = [DEFAULT_PATH]
   end
+
   roots: List[Root] = []
   if buffer != ""
     roots = [root_of(workspace, buffer)]
   end
+
   return with_paths(workspace, roots, asked, usage)
 end
 
@@ -78,6 +80,7 @@ def with_paths(workspace: Workspace.Workspace, roots: List[Root], asked: List[St
         end
     end
   end
+
   return Expanded.Files(found)
 end
 
@@ -89,10 +92,12 @@ def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Lis
     elsif found.unwrap!.size == 0
       return Listed.Refused(QueryOptions.refusal("no .agc file under #{path}", usage))
     end
+
     return Listed.Files(found.unwrap!.sort)
   elsif workspace.file_exists.call(path)
     return Listed.Files([path])
   end
+
   return Listed.Refused(QueryOptions.refusal("cannot read #{path}", usage))
 end
 
@@ -109,6 +114,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
     if !listed.ok?
       return error(here)
     end
+
     project = listed.unwrap!.any? do |entry| entry.name == MANIFEST_FILE end
     for entry in listed.unwrap!
       path = child(here, entry.name)
@@ -117,17 +123,20 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
           if PackageHash.source_file?(entry.name)
             files = files.push(path)
           end
+
         Workspace.EntryKind.Directory ->
           # The package hash decides what a build loads, in any case of the names; `top` is true at every depth, so
           # a nested agc_libs/ is left out too, as the query always did.
           if !PackageHash.skipped_folder?(entry.name, true) and !(project and entry.name == DEPS_FOLDER)
             pending = pending.push(path)
           end
+
         Workspace.EntryKind.Link -> files = files
         Workspace.EntryKind.Other -> files = files
       end
     end
   end
+
   return ok(files)
 end
 
@@ -136,6 +145,7 @@ def child(folder: String, name: String) -> String
   if folder == DEFAULT_PATH
     return name
   end
+
   return Paths.join(folder, name)
 end
 
@@ -145,6 +155,7 @@ def trimmed(path: String) -> String
   while kept.length > 1 and kept.ends_with?("/")
     kept = kept.slice(0, kept.length - 1)
   end
+
   return kept
 end
 
@@ -157,5 +168,6 @@ def with_root(roots: List[Root], root: Root) -> List[Root]
   if roots.any? do |known: Root| known.key == root.key end
     return roots
   end
+
   return roots.push(root)
 end

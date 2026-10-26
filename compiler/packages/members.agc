@@ -39,6 +39,7 @@ export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[M
   if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
     return ok(none())
   end
+
   here = project_dir
   while here != ""
     file = Paths.join(here, MANIFEST_FILE)
@@ -48,12 +49,15 @@ export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[M
         return belongs(workspace, here, file, tables[0], project_dir)
       end
     end
+
     parent = Paths.directory_of(here)
     if parent == here
       return ok(none())
     end
+
     here = parent
   end
+
   return ok(none())
 end
 
@@ -63,9 +67,11 @@ export def member?(members: Members, source: GitSource.Source) -> Bool
   if members.root == "" or source.subdir == ""
     return false
   end
+
   if GitSource.identity(source.git) != GitSource.identity(members.repository)
     return false
   end
+
   return members.folders.any? do |folder| folder == source.subdir end
 end
 
@@ -83,10 +89,12 @@ def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
   if !text.ok?
     return []
   end
+
   root = Reader.parse(reading, text.unwrap!)
   if !root.ok? or !root.unwrap!.has_key?("workspace")
     return []
   end
+
   return [root.unwrap!["workspace"]]
 end
 
@@ -103,6 +111,7 @@ def belongs(
   if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
     return ok(none())
   end
+
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   table = try Reader.table(reading, value, "workspace")
   try Reader.known_keys(reading, table, TABLE_KEYS, "workspace")
@@ -117,9 +126,11 @@ def relative_to(root_dir: String, dir: String) -> String
   if !prefix.ends_with?("/")
     prefix = "#{prefix}/"
   end
+
   if !dir.starts_with?(prefix)
     return ""
   end
+
   return dir.slice(prefix.length, dir.length - prefix.length)
 end
 
@@ -129,15 +140,18 @@ def listed?(value: Toml.Value, relative: String) -> Bool
   if relative == ""
     return false
   end
+
   case value
     Toml.Value.Table(entries) ->
       if !entries.has_key?("members")
         return false
       end
+
       case entries["members"]
         Toml.Value.Array(items) -> return items.any? do |item| names?(item, relative) end
         _ -> return false
       end
+
     _ -> return false
   end
 end
@@ -154,11 +168,13 @@ def repository_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Re
   if !table.has_key?("repository")
     return error(Reader.fail_help(reading, path, "missing key", "repository = \"https://host/owner/repo\""))
   end
+
   repository = try Reader.text(reading, table["repository"], path)
   problem = GitSource.git_problem(repository)
   if problem != ""
     return error(Reader.fail_help(reading, path, "not a git URL", problem))
   end
+
   return ok(repository)
 end
 
@@ -173,10 +189,12 @@ def folders_of(
   if !table.has_key?("members")
     return error(Reader.fail_help(reading, path, "missing key", "members = [\"sqlite\", \"postgres\"]"))
   end
+
   items = try Reader.array(reading, table["members"], path)
   if items.size == 0
     return error(Reader.fail_help(reading, path, "a workspace has members", "list the folders of its packages"))
   end
+
   folders: List[String] = []
   for index in 0...items.size
     here = Reader.item(path, index)
@@ -185,15 +203,19 @@ def folders_of(
     if problem != ""
       return error(Reader.fail_help(reading, here, "not a member folder", problem))
     end
+
     if folders.any? do |seen| seen == folder end
       return error(Reader.fail(reading, here, "member listed twice"))
     end
+
     manifest = Paths.join(Paths.join(root_dir, folder), MANIFEST_FILE)
     if !workspace.file_exists.call(manifest)
       help = "write #{folder}/#{MANIFEST_FILE}"
       return error(Reader.fail_help(reading, here, "a member has an agentica.toml", help))
     end
+
     folders = folders.push(folder)
   end
+
   return ok(folders)
 end

@@ -15,12 +15,14 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
   if text.contains?("\r\n")
     newline = "\r\n"
   end
+
   entry = "#{name} = #{inline_table(source)}"
   lines = text.split("\n")
   header = header_index(lines)
   if header < 0
     return with_new_table(text, entry, newline)
   end
+
   at = after_last_entry(lines, header)
   # A CRLF file splits at the LF, so each of its lines keeps the CR: the new line needs one too.
   carriage = newline.slice(0, newline.length - 1)
@@ -28,6 +30,7 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
     # The entry is the last line, which has no line ending: it gets one, and the new line has none, as the file had.
     return lines.take(at - 1).push("#{lines[at - 1]}#{carriage}").push(entry).join("\n")
   end
+
   return lines.take(at).push("#{entry}#{carriage}").concat(lines.drop(at)).join("\n")
 end
 
@@ -37,9 +40,11 @@ def inline_table(source: GitSource.Source) -> String
   if source.tag != ""
     pin = "tag = \"#{source.tag}\""
   end
+
   if source.subdir != ""
     return "{ git = \"#{source.git}\", #{pin}, subdir = \"#{source.subdir}\" }"
   end
+
   return "{ git = \"#{source.git}\", #{pin} }"
 end
 
@@ -54,6 +59,7 @@ def header_index(lines: List[String]) -> Int
       end
     end
   end
+
   return -1
 end
 
@@ -67,8 +73,10 @@ def after_last_entry(lines: List[String], header: Int) -> Int
     if head != "" and !head.starts_with?("#")
       last = index
     end
+
     index += 1
   end
+
   return last + 1
 end
 
@@ -77,12 +85,15 @@ def with_new_table(text: String, entry: String, newline: String) -> String
   if text.trim == ""
     return "#{HEADER}#{newline}#{entry}#{newline}"
   end
+
   body = text
   if !body.ends_with?("\n")
     body = "#{body}#{newline}"
   end
+
   if !body.ends_with?("\n#{newline}")
     body = "#{body}#{newline}"
   end
+
   return "#{body}#{HEADER}#{newline}#{entry}#{newline}"
 end

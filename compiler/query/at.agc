@@ -30,12 +30,15 @@ export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: I
           best = Ast.Optional.Present(expr)
           best_size = size
         end
+
       Walk.Node.Stmt(_) -> best = best
     end
+
     for child in Walk.children(node)
       work = work.push(child)
     end
   end
+
   return best
 end
 
@@ -54,21 +57,26 @@ def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]
           for param in node.params
             out = out.concat(default_of(param.default))
           end
+
           out = out.concat(node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end)
         end
+
       Ast.Decl.Constant(node) ->
         if holds?(node.span, offset)
           out = out.push(Walk.Node.Expr(node.value))
         end
+
       Ast.Decl.Struct(node) ->
         if holds?(node.span, offset)
           for field in node.fields
             out = out.concat(default_of(field.default))
           end
         end
+
       _ -> out = out
     end
   end
+
   return out
 end
 

@@ -35,6 +35,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
     fields = fields.put("exported", JSON.from(item.exported))
     fields = fields.put("name_span", span_json(module, item.name_range))
   end
+
   if item.kind == "function"
     fields = fields.put("parameters", JSON.array(item.parameters.map do |parameter: Model.Parameter|
       parameter_json(parameter)
@@ -47,6 +48,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
     variants_json = item.variants.map do |variant: Model.Variant| variant_json(module, variant, located) end
     fields = fields.put("variants", JSON.array(variants_json))
   end
+
   return JSON.object(fields)
 end
 
@@ -60,6 +62,7 @@ export def text_json(text: String) -> Json
   if text == ""
     return JSON.null()
   end
+
   return JSON.from(text)
 end
 
@@ -81,6 +84,7 @@ def field_json(module: String, field: Model.Field, located: Bool) -> Json
   if located
     fields = fields.put("name_span", span_json(module, field.name_range))
   end
+
   return JSON.object(fields)
 end
 
@@ -94,5 +98,6 @@ def variant_json(module: String, variant: Model.Variant, located: Bool) -> Json
   if located
     fields = fields.put("name_span", span_json(module, variant.name_range))
   end
+
   return JSON.object(fields)
 end

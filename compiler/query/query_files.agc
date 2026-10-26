@@ -27,12 +27,14 @@ export def pick(query: QueryOptions.Query, usage: String) -> Picked
     if query.words.size > 0
       return Picked.Refused(QueryOptions.refusal("--stdin FILE stands in for the FILE argument", usage))
     end
+
     return Picked.File(query.stdin)
   elsif query.words.size == 0 or query.words[0] == ""
     return Picked.Refused(QueryOptions.refusal("missing FILE", usage))
   elsif query.words.size > 1
     return Picked.Refused(QueryOptions.refusal("extra argument #{query.words[1]}", usage))
   end
+
   return Picked.File(query.words[0])
 end
 
@@ -46,8 +48,10 @@ export def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceF
     if !checked.ok?
       return SourceFile.Read.Unreadable(checked.message)
     end
+
     return Resolve.read_source(settings, key)
   end
+
   return settings.workspace.read_text.call(file)
 end
 
@@ -63,20 +67,24 @@ export def display(settings: Env.Settings, file: String, buffered: Bool) -> Stri
   if embedded?(file, buffered)
     return std_key(file)
   end
+
   real = settings.workspace.real_path.call(file)
   here = settings.workspace.real_path.call(".")
   if !real.ok? or !here.ok?
     return file
   end
+
   named = real.unwrap!
   base = here.unwrap!
   if settings.env.windows
     named = named.replace("\\", "/")
     base = base.replace("\\", "/")
   end
+
   if named != base and Paths.inside?(base, named)
     return Paths.stored_name(base, named)
   end
+
   return real.unwrap!
 end
 
@@ -89,5 +97,6 @@ def std_key(file: String) -> String
   if file.ends_with?(".agc")
     return file
   end
+
   return "#{file}.agc"
 end

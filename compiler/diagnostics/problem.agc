@@ -78,6 +78,7 @@ export def pack(found: Problem) -> String
   for label in found.labels
     fields = fields.concat([span_text(label.span), label.text])
   end
+
   parts = fields.map do |field: String| "#{field.length}\n#{field}" end
   return parts.join("")
 end
@@ -92,16 +93,19 @@ export def unpack(text: String) -> Problem
     fields = fields.push(text.slice(newline + 1, size))
     at = newline + 1 + size
   end
+
   labels: List[Label] = []
   index = 12
   while index < fields.size
     labels = labels.push(Label(span: read_span(fields[index]), text: fields[index + 1]))
     index += 2
   end
+
   help = Diag.Help.NoHelp
   if fields[5] == "1"
     help = Diag.Help.Hint(fields[6])
   end
+
   return Problem(
     file: fields[0],
     key_path: fields[1],
