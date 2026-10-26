@@ -5,6 +5,7 @@
 
 import Gherkin from "std/bdd/gherkin"
 import Match from "std/bdd/match"
+import Tags from "std/bdd/tags"
 import Report from "report"
 import Child from "child"
 import Units from "units"
@@ -78,8 +79,11 @@ export def main() -> Void
     System.exit(2)
   end
   config = decoded.unwrap!
-  # The driver writes one feature file or discovery error per line after the settings.
+  # The driver writes one feature file or discovery error per line after the settings, then, only when `--tags` was
+  # given, the expression as a JSON string. It is a line of its own, not a field of `Config`, because the decode of
+  # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
   read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
+  tags = read_tags(handle)
   closed = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -89,7 +93,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = matched(config, run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end))
+  files = selected(seeded(config, seed), tags, read.map do |entry| entry.unwrap! end)
   text = Report.text(files, config.style == "ai", seed)
   if config.style == "json"
     text = JSON.encode(Report.json(files, seed))
@@ -124,11 +128,56 @@ def min_of(a: Int, b: Int) -> Int
   return b
 end
 
-def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
-  if entries.size == 0
+# The `--tags` expression: the line after the entries, a JSON string. No line is no filter; a line that cannot be read
+# is a failure, so a run never goes on without the filter that was asked for.
+def read_tags(handle: FileHandle) -> Result[String]
+  line = File.read_line(handle, 5000)
+  if !line.ok?
+    if line.message == "filesystem: end of file"
+      return ok("")
+    end
+
+    return error(line.message)
+  end
+
+  text = JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
+  if !text.ok?
+    return error("the line is not a JSON string")
+  end
+
+  return text
+end
+
+# The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
+# driver has checked the expression already, so this is a mismatch of driver and runner).
+def selected(config: Config, tags: Result[String], entries: List[Entry]) -> List[Report.FileResult]
+  compiled = Tags.compile(tags.unwrap_or(""))
+  message = ""
+  if !tags.ok?
+    message = "cannot read --tags: #{tags.message}"
+  elsif !compiled.ok?
+    message = "invalid --tags: #{compiled.message}"
+  end
+
+  if message != ""
+    where = Report.Span(file: "<arguments>", line: 1, column: 1, end_column: 1)
+    return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
+  end
+
+  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, entries))
+end
+
+def run_all(config: Config, tags: Tags.Expr, found: List[Entry]) -> List[Report.FileResult]
+  if found.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
   end
+  # Unit tests have no tags, so `--tags` leaves them out.
+  entries = found
+  if Tags.filters?(tags)
+    entries = found.filter do |entry| entry.kind != "tests" or entry.problem != "" end
+  end
+
   listing = Listing.Ready([])
   if entries.any? do |entry| entry.kind == "feature" and entry.problem == "" end
     listing = steps_listing(config)
@@ -137,21 +186,29 @@ def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
   end
   case listing
     Listing.Broken(problem) ->
-      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, [], entry) end
+      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, tags, [], entry) end
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, patterns, entry) end
+    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, tags, patterns, entry) end
   end
 end
 
-def matched(config: Config, files: List[Report.FileResult]) -> List[Report.FileResult]
-  if config.only == "" or files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
+# A filter (`--only` or `--tags`) that keeps nothing is an error, not a pass.
+def matched(
+  config: Config, tags_text: String, tags: Tags.Expr, files: List[Report.FileResult]
+) -> List[Report.FileResult]
+  filtered = config.only != "" or Tags.filters?(tags)
+  kept = files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
+  if not filtered or kept
     return files
   end
-  problem = Child.located(
-    "CHECK-BDD-EMPTY",
-    "no test or scenario name contains #{config.only.inspect}",
-    config.empty_path,
-  )
+  message = "no test or scenario name contains #{config.only.inspect}"
+  if config.only == ""
+    message = "no scenario has tags matching #{tags_text.inspect}"
+  elsif Tags.filters?(tags)
+    message = "no scenario matches --only #{config.only.inspect} and --tags #{tags_text.inspect}"
+  end
+
+  problem = Child.located("CHECK-BDD-EMPTY", message, config.empty_path)
   return files.push(Report.file_error(config.empty_path, "", problem))
 end
 
@@ -159,6 +216,7 @@ def failed?(verdict: Report.Verdict) -> Bool
   case verdict
     Report.Verdict.Fail(_) -> return true
     Report.Verdict.Pass -> return false
+    Report.Verdict.Skipped(_) -> return false
     Report.Verdict.NotExecuted -> return false
   end
 end
@@ -172,7 +230,7 @@ def steps_listing(config: Config) -> Listing
   return list_steps(config, where)
 end
 
-def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
+def run_entry(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
   if entry.problem != ""
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
@@ -187,7 +245,7 @@ def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Re
     )
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
-  return run_file(config, patterns, entry.path)
+  return run_file(config, tags, patterns, entry.path)
 end
 
 def seeded(config: Config, seed: Int) -> Config
@@ -256,7 +314,7 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
 end
 
-def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Report.FileResult
+def run_file(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], path: String) -> Report.FileResult
   text = File.read_text(path, 5000)
   if text.message == "filesystem: file exceeds 1048576 bytes"
     return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
@@ -268,7 +326,10 @@ def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Rep
     Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", from_diagnostic(problem))
     Gherkin.Outcome.Done(feature) ->
       base = Path.resolve(Path.join([path, ".."]).unwrap_or(path)).unwrap_or(path)
-      chosen = feature.scenarios.filter do |item| config.only == "" or item.name.include?(config.only) end
+      chosen = feature.scenarios.filter do |item|
+        (config.only == "" or item.name.include?(config.only)) and Tags.selects?(tags, item.tags)
+      end
+
       scenarios = chosen.map do |item| run_scenario(config, patterns, base, item) end
       return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios,
                                verdict: Report.Verdict.Pass, output: "")
@@ -300,6 +361,7 @@ def run_scenario(
     elsif i == run.failed_at
       case run.verdict
         Report.Verdict.Fail(problem) -> status = Report.StepStatus.Failed(problem)
+        Report.Verdict.Skipped(_) -> status = Report.StepStatus.Skipped
         Report.Verdict.Pass -> status = Report.StepStatus.Passed
         Report.Verdict.NotExecuted -> status = Report.StepStatus.NotExecuted
       end
@@ -355,6 +417,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     total += answer.asserts
     case answer.verdict
       Report.Verdict.Fail(_) -> run = Run(failed_at: i, verdict: answer.verdict)
+      Report.Verdict.Skipped(_) -> run = Run(failed_at: i, verdict: answer.verdict)
       Report.Verdict.Pass -> i += 1
       Report.Verdict.NotExecuted -> i += 1
     end
@@ -364,6 +427,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     ending = await_exit(p, deadline, item.span)
     case ending
       Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)
+      Report.Verdict.Skipped(_) -> run = Run(failed_at: count, verdict: ending)
       Report.Verdict.Pass ->
         if total == 0
           run = Run(
@@ -417,7 +481,7 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
     event = Child.event_of(record)
     if event == "assert"
       asserts += 1
-    elsif event == "fail" or event == "end"
+    elsif event == "fail" or event == "end" or event == "skip"
       printed = Process.read_available(p, Child.left(deadline))
       if not printed.ok?
         return StepEnd(
@@ -428,6 +492,10 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
       if event == "fail"
         return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
       end
+      if event == "skip"
+        return StepEnd(verdict: Report.Verdict.Skipped(Child.text_of(record, "reason")), asserts: asserts)
+      end
+
       if JSON.int(JSON.get(record, "index").unwrap_or(JSON.null())).unwrap_or(-1) != index
         return StepEnd(
           verdict: failure("RUNTIME-BDD-INFRA", "the step program broke the BDD record protocol", span),

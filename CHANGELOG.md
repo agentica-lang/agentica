@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
   takes no argument.
+- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`).
+- `BDD.skip(ctx, reason)` ends a scenario as skipped; the exit code stays 0. **Breaking:** the text summary line now has `S skipped`, and `--json` has a `skipped` total, a scenario `reason` and the status `"skipped"`.
 
 ### Changed
 
