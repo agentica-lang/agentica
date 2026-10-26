@@ -34,12 +34,18 @@ static const char oom_line[] = "agentica: out of memory\n";
 static void **owned; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 static size_t owned_count, owned_cap, owned_bytes, limit_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 static jmp_buf *on_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static bool over_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 #endif
 
 void agc_out_of_memory(void) {
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
+#ifdef AGC_FUZZ
+  /* 70 is libFuzzer's timeout exit code, which the fuzz run ignores; a crash makes it save the input. */
+  abort();
+#else
   _Exit(70);
+#endif
 }
 
 #ifndef AGC_NO_GC
@@ -167,10 +173,17 @@ void agc_gc_collect(void) {
 }
 
 #ifdef AGC_NO_GC
+/* The limit is soft up to twice its size: past it, an allocation still succeeds and only marks the run. The
+   interpreter sees the mark at the next step taken after a charge or at a turn start (set_counter) and jumps there
+   (agc_alloc_limit_check), outside any builtin that holds malloc'd memory, so the fuzzer's leak check sees no false
+   leak. Past twice the limit the allocation jumps at once: a builtin that allocates without charging (AGC_OP_LIST,
+   say) can still get there midway, a known hole. */
 static void *own(size_t size) {
   if (!on_limit) return calloc(1, size);
   size_t cost = size > SIZE_MAX - BLOCK_COST ? SIZE_MAX : size + BLOCK_COST;
-  if (owned_bytes > limit_bytes || cost > limit_bytes - owned_bytes) longjmp(*on_limit, 1);
+  size_t hard = limit_bytes > SIZE_MAX / 2 ? SIZE_MAX : limit_bytes * 2;
+  if (owned_bytes > hard || cost > hard - owned_bytes) longjmp(*on_limit, 1);
+  if (cost > limit_bytes - (owned_bytes < limit_bytes ? owned_bytes : limit_bytes)) over_limit = true;
   void *p = calloc(1, size);
   if (!p) agc_out_of_memory();
   owned_bytes += cost;
@@ -202,8 +215,17 @@ void agc_release_all(void) {
   owned_count = 0;
   owned_bytes = 0;
   on_limit = NULL;
+  over_limit = false;
 #endif
 }
+
+#ifdef AGC_NO_GC
+bool agc_alloc_over_limit(void) { return over_limit; }
+
+void agc_alloc_limit_check(void) {
+  if (over_limit && on_limit) longjmp(*on_limit, 1);
+}
+#endif
 
 #ifdef AGC_GC_STRESS
 static void stress(void) {
