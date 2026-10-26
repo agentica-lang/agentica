@@ -656,8 +656,9 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
    alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
    armed timer is a service task's: those only end idle waits that no other task depends on, so the run still stalls
-   when the loop has nothing alive. */
+   when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds the wait. */
 static bool idle_wait(agc_vm *vm) {
+  agc_timers_settle(vm);
   uint64_t due = agc_timers_next_due(vm);
   if (due == UINT64_MAX) return agc_io_poll(vm, true);
   uint64_t now = agc_clock_ms();
@@ -762,6 +763,8 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
          leave a task of this scheduler behind. */
       t = agc_runq_spin(q);
       if (!t) {
+        /* After the spin, which often finds the peer that ends a pending channel wait; before the wait it bounds. */
+        agc_timers_settle(vm);
         uint64_t due = agc_timers_next_due(vm);
         t = due == UINT64_MAX ? agc_runq_wait(q) : agc_runq_wait_until(q, due);
       }
@@ -1022,6 +1025,11 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], &args[1], 1, span));
 }
 
+/* Task.spawn(f): the function takes no parameter. */
+static agc_value builtin_spawn_bare(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], NULL, 0, span));
+}
+
 static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(agc_task_spawn_owning(vm, vm->task, args[0], args[1], span));
 }
@@ -1181,6 +1189,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

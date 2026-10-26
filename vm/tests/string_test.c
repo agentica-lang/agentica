@@ -54,6 +54,27 @@ static void float_invalid(const char *s) {
   assert(agc_parse_float((const uint8_t *)s, strlen(s), &value) == AGC_NUMBER_INVALID);
 }
 
+/* Float#to_s text reads back to the same bits: special values, the edges of each range and xorshift patterns. */
+static void float_text_round_trips(void) {
+  uint64_t fixed[] = {0, 0x8000000000000000ull, 1, 0x000FFFFFFFFFFFFFull, 0x0010000000000000ull, 0x7FEFFFFFFFFFFFFFull,
+                      0xFFEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x4415AF1D78B58C40ull};
+  uint64_t state = 0x9E3779B97F4A7C15ull;
+  for (size_t k = 0; k < 20000; k++) {
+    uint64_t bits = k < sizeof fixed / sizeof fixed[0] ? fixed[k] : state;
+    state ^= state << 13, state ^= state >> 7, state ^= state << 17;
+    double x, back;
+    memcpy(&x, &bits, sizeof x);
+    if (isnan(x)) continue;
+    char out[AGC_SCALAR_TEXT];
+    size_t n = agc_float_text(x, out);
+    assert(agc_parse_float((const uint8_t *)out, n, &back) == AGC_NUMBER_OK);
+    if (memcmp(&x, &back, sizeof x) != 0) {
+      fprintf(stderr, "float text \"%.*s\" does not read back\n", (int)n, out);
+      assert(0);
+    }
+  }
+}
+
 static char *repeat_text(const char *head, char fill, size_t count, const char *tail) {
   size_t h = strlen(head), t = strlen(tail);
   char *s = malloc(h + count + t + 1);
@@ -387,9 +408,26 @@ int main(void) {
   char *denormal = repeat_text("0.", '0', 323, "5");
   float_bits(denormal, 1);
   free(denormal);
-  const char *bad_floats[] = {"", "+", "-", ".5", "1.", "1.e5", "1e5", "1.5e3", "inf", "-inf", "nan", "+nan.0",
-                              "+inf.0", "0x1p3", "0x10", " 1.5", "1.5 ", "1.5\n", "1,5", "1..5", "1.5.2", "#e1.5",
-                              "1/2", "\xd9\xa1.5"};
+  float_bits("1e5", 0x40F86A0000000000ull);
+  float_bits("1.5E-3", 0x3F589374BC6A7EFAull);
+  float_bits("1e+20", 0x4415AF1D78B58C40ull);
+  float_bits("-0e0", 0x8000000000000000ull);
+  float_bits("5e-324", 1);
+  float_bits("2.4703282292062328e-324", 1);
+  float_bits("2.4703282292062327e-324", 0);
+  float_bits("1.7976931348623157e+308", 0x7FEFFFFFFFFFFFFFull);
+  float_bits("1.7976931348623159e+308", 0x7FF0000000000000ull);
+  float_bits("-1e99999999999999999999", 0xFFF0000000000000ull);
+  float_bits("1e-99999999999999999999", 0);
+  float_bits("+inf.0", 0x7FF0000000000000ull);
+  float_bits("-inf.0", 0xFFF0000000000000ull);
+  double nan_value;
+  assert(agc_parse_float((const uint8_t *)"+nan.0", 6, &nan_value) == AGC_NUMBER_OK && isnan(nan_value));
+  float_text_round_trips();
+  const char *bad_floats[] = {"", "+", "-", ".5", "1.", "1.e5", "1e", "e5", "1e+", "1e-", "1.5e", "1e5.0", "1e 5",
+                              "1e+-5", "1ee5", "1e5e5", "inf", "-inf", "nan", "-nan.0", "+inf", "inf.0", "+INF.0",
+                              "+nan.0 ", "Infinity", "-Infinity", "NaN", "0x1p3", "0x10", " 1.5", "1.5 ", "1.5\n",
+                              "1,5", "1..5", "1.5.2", "#e1.5", "1/2", "1_000.0", "1e1_0", "\xd9\xa1.5"};
   for (size_t i = 0; i < sizeof bad_floats / sizeof bad_floats[0]; i++) float_invalid(bad_floats[i]);
   double x;
   assert(agc_parse_float((const uint8_t *)"1.5\0", 4, &x) == AGC_NUMBER_INVALID);

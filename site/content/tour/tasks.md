@@ -6,7 +6,7 @@ description: Run work at the same time with lightweight tasks.
 
 ## Start a task
 
-`Task.spawn` starts a function in a lightweight task, with one argument. `Task.await` waits for it and gives the result.
+`Task.spawn` starts a function in a lightweight task, with one argument, or with none for a function that takes no parameter. `Task.await` waits for it and gives the result.
 
 ```agentica
 def square(n: Int) -> Int

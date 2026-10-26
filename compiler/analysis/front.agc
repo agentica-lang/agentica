@@ -9,10 +9,13 @@ import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
+import CheckCache from "../modules/check_cache"
 import Modules from "../modules/modules"
+import TypeCode from "../modules/type_code"
 import Workspace from "../modules/workspace"
 import Ast from "../syntax/ast"
 import SourceFile from "../syntax/source_file"
+import T from "../syntax/types"
 import Cache from "cache"
 
 ## What the root file is: it can be read as UTF-8, it cannot be read (the system's message), or it is not UTF-8
@@ -78,6 +81,44 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) -> return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
+  end
+end
+
+## Like `query_cached` for a question that only reads the types of the root file (`check`, `type-at`), using the cache
+## of checked modules of the workspace (modules/check_cache.agc) when it is on and `cache` holds nothing. The modules
+## whose tree the cache vouches for are loaded from their stubs and their function bodies are not checked, so the types
+## of their nodes are Unknown; nothing but the root file's nodes may be read from the result. The answer, the first
+## problem included, is the one `query_cached` gives: a problem is only given when it is in a file that was read in
+## full, and a walk in which a stub is not vouched for is made again without stubs. After a program that checks, the
+## modules that were checked in full are entered in the cache.
+export def query_checked(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
+  if !settings.workspace.check_cache.on or cache.roots.size > 0 or cache.parses.kept.size > 0
+    return query_cached(cache, path, settings)
+  end
+
+  first = Modules.load_checked(path, settings, true)
+  if !first.ok?
+    return query_cached(cache, path, settings)
+  end
+
+  loaded = first.unwrap!
+  if unvouched?(loaded)
+    second = Modules.load_checked(path, settings, false)
+    if !second.ok?
+      return query_cached(cache, path, settings)
+    end
+
+    loaded = second.unwrap!
+  end
+
+  case Linker.link_loaded(loaded, settings)
+    Linker.Linking.Failed(failure) ->
+      if stand_in?(loaded, failure.file)
+        return query_cached(cache, path, settings)
+      end
+
+      return Outcome.Rejected(link_problem(failure))
+    Linker.Linking.Done(program) -> return skipped(cache, path, settings, loaded, program)
   end
 end
 
@@ -159,6 +200,105 @@ def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, set
       root = Cache.solved(loaded, program, rechecked.checking, style, Cache.held(cache, loaded))
       return Cache.remember(reaching, root, loaded, true, rechecked.taken)
   end
+end
+
+# Checks a program that was linked from a walk of the check cache, and enters its modules in the cache when it checks.
+def skipped(
+  cache: Cache.Cache,
+  path: String,
+  settings: Env.Settings,
+  loaded: Modules.Loaded,
+  program: Linker.Linked,
+) -> Outcome
+  clean: List[String] = []
+  constants: Map[String, T.Type] = {}
+  for key in loaded.order
+    module = loaded.modules[key]
+    if module.clean
+      clean = clean.push(key)
+      for name in module.constants.keys
+        constants = constants.put(name, module.constants[name])
+      end
+    end
+  end
+
+  case Checker.check_query_taking(program, settings, Set.new(clean), constants)
+    Checker.Checking.Failed(problem) ->
+      if stand_in?(loaded, problem.file)
+        return query_cached(cache, path, settings)
+      end
+
+      return Outcome.Rejected(problem)
+    Checker.Checking.Done(checked) ->
+      enter_checked(loaded, checked, settings)
+      return Outcome.Done(Checked(linked: program, checked: checked))
+  end
+end
+
+# Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be
+# fine for this tree.
+def unvouched?(loaded: Modules.Loaded) -> Bool
+  return loaded.modules.values.any? do |module: Modules.Module| module.stubbed and !module.clean end
+end
+
+# Whether `file` is one that the walk parsed from a stub: a problem there could come from the stub, so it is not given.
+def stand_in?(loaded: Modules.Loaded, file: String) -> Bool
+  return loaded.stubs > 0 and loaded.modules.values.any? do |module: Modules.Module|
+    module.stubbed and module.file == file
+  end
+end
+
+# Enters in the cache every module of a program that checked, but the root, whose entry does not vouch for its tree
+# yet. A module that is clean has its entry already.
+def enter_checked(loaded: Modules.Loaded, checked: Checker.Checked, settings: Env.Settings) -> Void
+  keys: Map[String, String] = {}
+  for key in loaded.order
+    keys = keys.put(loaded.modules[key].prefix, key)
+  end
+
+  for key in loaded.order.drop(1)
+    module = loaded.modules[key]
+    if module.digest == "" or module.clean
+      next
+    end
+
+    stub = ""
+    case CheckCache.stub_of(module.text, module.program)
+      Ast.Optional.Present(found) -> stub = found
+      Ast.Optional.Absent -> stub = stub
+    end
+
+    constants = coded_constants(module, checked, keys)
+    # Without the types of all its constants a module is never clean, so its stub would not be used either.
+    if constants.ok?
+      CheckCache.store(
+        settings.workspace.check_cache,
+        key,
+        module.digest,
+        CheckCache.Entry(tree: module.tree, stub: stub, constants: constants.unwrap!),
+      )
+    end
+  end
+end
+
+# The type of each constant of `module` that `checked` recorded, as type_code.agc writes it, by the name the module
+# declares it with.
+def coded_constants(
+  module: Modules.Module,
+  checked: Checker.Checked,
+  keys: Map[String, String],
+) -> Result[Map[String, String]]
+  found: Map[String, String] = {}
+  for name in CheckCache.constant_names(module.program)
+    linked = module.prefix + name
+    if !checked.constant_types.has_key?(linked)
+      return error("the check recorded no type for #{linked}")
+    end
+
+    found = found.put(name, try TypeCode.encode(checked.constant_types[linked], keys))
+  end
+
+  return ok(found)
 end
 
 def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Outcome

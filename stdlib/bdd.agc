@@ -312,7 +312,9 @@ def start(ctx: Context, path: String) -> Context
   if settings.seeded
     flags = flags.concat(["--seed", settings.seed.to_s])
   end
-  args = settings.agentica.drop(1).concat(flags).concat(["--max-steps", "1000000", file])
+  # No --max-steps: the program runs as `agentica FILE.agc` does. A runaway program ends with its scenario, whose
+  # deadline and `within N milliseconds` steps are the limits.
+  args = settings.agentica.drop(1).concat(flags).concat([file])
   spawned = Process.spawn_captured(settings.agentica[0], args, settings.base, 30000)
   if not spawned.ok?
     if spawned.message == "process: executable is unavailable"

@@ -76,7 +76,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_spec_package_native.py", "tests/test_spec_package_native_download.py", "tests/test_spec_style.py",
     "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_zlib.py", "tests/test_vm_file_lines.py", "tests/test_vm_file_sha256.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
-    "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py",
+    "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_vm_native.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py"})
@@ -103,6 +103,7 @@ AREAS = {
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
             "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
             "tests/test_single_binary.py", "tests/test_stdlib_distribution.py", "tests/test_bytecode_cache.py",
+            "tests/test_check_cache.py",
         ],
     ),
     "spec": (
