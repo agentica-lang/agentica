@@ -27,18 +27,21 @@ int main(void) {
     default: assert(0);
   }
   agc_release_all();
-  static volatile int checks = 0;
+  static volatile int checks = 0, allocated = 0;
   switch (setjmp(over)) {
     case 0:
       agc_set_alloc_limit(&over, 4096);
       assert(agc_alloc(3000) && !agc_alloc_over_limit());
+      allocated = 1;
       assert(agc_alloc(3000) && agc_alloc_over_limit());
+      allocated = 2;
       agc_alloc_limit_check();
       assert(0);
       break;
     case 1:
+      // Both allocations returned, so the jump came from agc_alloc_limit_check, not from agc_alloc.
       checks++;
-      assert(checks == 1);
+      assert(checks == 1 && allocated == 2);
       break;
     default: assert(0);
   }

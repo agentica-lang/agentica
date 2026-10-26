@@ -405,7 +405,7 @@ void agc_init(void);
 void agc_release_all(void);
 void agc_set_alloc_limit(jmp_buf *target, size_t limit);
 #ifdef AGC_NO_GC
-/* Past the soft allocation limit (fuzz and test builds only): the interpreter jumps out at its next step. */
+/* Past the soft allocation limit (fuzz and test builds only): the interpreter jumps out at a later step. */
 bool agc_alloc_over_limit(void);
 void agc_alloc_limit_check(void);
 #endif

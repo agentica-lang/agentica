@@ -173,9 +173,11 @@ void agc_gc_collect(void) {
 }
 
 #ifdef AGC_NO_GC
-/* The limit is soft up to twice its size: past it, an allocation still succeeds and only marks the run, which
-   agc_alloc_limit_check ends at the next step, where no builtin holds malloc'd memory that the jump would leak (a
-   false leak in the fuzzer's leak check). Past twice the limit the allocation jumps at once. */
+/* The limit is soft up to twice its size: past it, an allocation still succeeds and only marks the run. The
+   interpreter sees the mark at the next step taken after a charge or at a turn start (set_counter) and jumps there
+   (agc_alloc_limit_check), outside any builtin that holds malloc'd memory, so the fuzzer's leak check sees no false
+   leak. Past twice the limit the allocation jumps at once: a builtin that allocates without charging (AGC_OP_LIST,
+   say) can still get there midway, a known hole. */
 static void *own(size_t size) {
   if (!on_limit) return calloc(1, size);
   size_t cost = size > SIZE_MAX - BLOCK_COST ? SIZE_MAX : size + BLOCK_COST;

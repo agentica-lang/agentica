@@ -93,14 +93,16 @@
 - Steps bound instructions, not bytes, so a mutant can still grow a value to
   gigabytes. `agc_set_alloc_limit` gives each mutant 256 MB (each block counted
   with 64 bytes of overhead). The limit is soft: an allocation past it still
-  succeeds and marks the run, and the next step (`step_slow`, which the mark
-  forces) longjmps back to `agc_fuzz_one`. That frees the mutant and returns 2
-  (a mutant that counts as run). A builtin that holds `malloc`'d memory across
-  an allocation so never loses it to the jump, which the leak check would
-  report. Past twice the limit an allocation jumps at once. Under `AGC_NO_GC`
-  yyjson allocates through `agc_alloc_atomic` (`vm/json.c`), so its documents
-  count toward this limit too. The VM itself sets no limit. `agc_fuzz_one` is
-  linked only into the fuzz and test binaries.
+  succeeds and marks the run. The interpreter sees the mark at the next step
+  taken after a charge or at a turn start (`set_counter`), and `step_slow`
+  longjmps back to `agc_fuzz_one`, which frees the mutant and returns 2 (a
+  mutant that counts as run). The jump then leaves no builtin's `malloc`'d
+  memory behind, which the leak check would report. Past twice the limit an
+  allocation jumps at once; a builtin that allocates without charging
+  (`AGC_OP_LIST`, say) can still get there midway, a known hole. Under
+  `AGC_NO_GC` yyjson allocates through `agc_alloc_atomic` (`vm/json.c`), so its
+  documents count toward this limit too. The VM itself sets no limit.
+  `agc_fuzz_one` is linked only into the fuzz and test binaries.
 - In the libFuzzer build (`AGC_FUZZ`), `agc_out_of_memory` aborts instead of
   exiting with 70, libFuzzer's timeout code, so a size overflow or a failed
   `malloc` is a crash with a saved input.
@@ -120,14 +122,15 @@
   on the leak check (`ASAN_OPTIONS`) that `vm/value.c` turns off in the other
   ASan builds, since `agc_fuzz_one` frees every block of an input.
 - A timeout does not fail the run yet (`-ignore_timeouts=1`, and the run maps
-  exit code 70, a timeout, to success). A timed wait (a channel or await timeout) parks
-  without counting steps, so a mutant with a large timeout can wait for
-  minutes. The run saves it as `timeout-*` and lists those files at the end.
-  TODO: both go once timed waits are bounded by steps.
-- `agc_fuzz_one` sets `deny_run` and `deny_env`. A mutant's strings are shell
-  commands with mutated bytes, and a child process waits outside
-  `--max-steps`. The environment differs between machines, so an input that
-  reads it would not reproduce elsewhere.
+  exit code 70, a timeout, to success). A timed wait (a channel or await
+  timeout) parks without counting steps, so a mutant with a large timeout can
+  wait for minutes. The run saves it as `timeout-*` and lists those files at
+  the end. TODO: both go once timed waits are bounded by steps.
+- `agc_fuzz_one` sets `deny_run`, `deny_env` and `deny_net`. A mutant's
+  strings are shell commands with mutated bytes, and a child process or a
+  network wait is outside `--max-steps`. The environment and the network
+  differ between machines, so an input that reads them would not reproduce
+  elsewhere.
 - There is no dictionary. The format has no section tags, and libFuzzer learns
   the magic, the format version and the builtin names from its `memcmp` and
   comparison hooks.
