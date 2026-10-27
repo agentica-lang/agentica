@@ -61,8 +61,11 @@ end
   `Native.null?` first), checked before a negative length
   (`RUNTIME-INVALID-COUNT`); a length past what C owns is undefined behavior.
   `Native.pointer(n)` is the pointer with value `n` (`SQLITE_TRANSIENT` is
-  `Native.pointer(-1)`). A `char **` out parameter read with `get_string` is
-  then freed by its C function (`sqlite3_free`).
+  `Native.pointer(-1)`); `Native.address(p) -> Int` is the inverse (a freed
+  buffer `RUNTIME-NATIVE-CLOSED`): subtract two pointers into one block for the
+  bytes between them (SQLite's `pzTail`). Pointers have no `==`. A `char **`
+  out parameter read with `get_string` is then freed by its C function
+  (`sqlite3_free`).
 - Owned buffers: `Native.memory_pointer(size) -> C.Pointer` is `size` zeroed
   bytes that the task owns (pass it to any `C.Pointer` parameter; a size the
   system cannot give is `RUNTIME-INVALID-COUNT`). `Native.free(p)` ends a buffer
@@ -76,6 +79,13 @@ end
   freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of C's pointer
   `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an untracked address: keep
   the target alive while C uses it.
+- `Native.offset(p, n) -> C.Pointer` is `n` bytes past `p`: plain `p + n`
+  (wrapping) for C's pointer; for a buffer a view from byte `n` to its end (`n`
+  outside 0..size is `RUNTIME-NATIVE-BOUNDS`), checked against that range, freed
+  with its buffer (`RUNTIME-NATIVE-CLOSED` after), held through its buffer by a
+  `compute def` call; `Native.free(view)` is `RUNTIME-NATIVE-NOT-OWNED` and
+  `Task.spawn_owning` takes the buffer, not a view. Use it to keep several C
+  cells (a MySQL bind's `length`, `is_null`, `buffer`) in one buffer.
 - Typed memory at a byte offset of any `C.Pointer` (Ruby `ffi` names):
   `Native.get_int8/16/32/64(p, off)`, `get_uint8/16/32`, `get_float32/64`,
   `get_pointer`; `Native.put_int8/16/32/64(p, off, v)` (signed or unsigned

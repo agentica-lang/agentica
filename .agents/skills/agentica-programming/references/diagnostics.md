@@ -255,8 +255,8 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-TASK-AWAIT-CYCLE`: `Task.await` of a task that is waiting for the
   caller, directly or through other awaits, at the await.
 - `RUNTIME-HANDLE-NOT-OWNED`: `Task.spawn_owning` of a handle the calling task
-  does not own, one already handed over, or a closed one (a closed channel too),
-  at the handle argument.
+  does not own, one already handed over, a closed one (a closed channel too), or
+  a view of a buffer (`Native.offset`), at the handle argument.
 - `RUNTIME-TASK-CRASHED`: `Task.await` on a crashed task when `R` is not a
   `Result`, at the await; the message is the crash text. Also a BDD step or test
   whose task crashed unawaited.
@@ -304,7 +304,7 @@ and a task's crash line (`"task":true`) carry it too.
   or a memory builtin took a closed resource or a freed buffer; a memory
   builtin read or wrote at NULL, at a negative offset or past an owned buffer;
   a `C.Function` argument was NULL or an owned buffer;
-  `Native.free` took a pointer that C gave; or, at load with exit 2,
+  `Native.free` took a pointer that C gave or a view; or, at load with exit 2,
   `--deny-native` refused a program with an extern function or a `Native.*`
   call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything

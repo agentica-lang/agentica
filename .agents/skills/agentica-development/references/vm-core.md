@@ -103,7 +103,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   program types as a `C.Pointer` (`buffer_of` and `pointer_of` take either), so
   an extern call passes it and a compute call holds it. Its block form (arity 2)
   is a stepper (`buffer_block_step`) that calls the block with the buffer and
-  closes it when the block returns, if the task still owns it. The typed reads
+  closes it when the block returns, if the task still owns it.
+  `Native.offset` of a buffer makes a view: an `agc_c_resource` with `parent`
+  set to the buffer (`root_of`) and no state, whose `pointer` and `size` are the
+  bytes from its offset to the buffer's end; every closed check and hold
+  (`held_by`, `struct_held`) goes to the parent. The typed reads
   and writes (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`,
   `put_string`, `put_bytes`) and `get_string`/`get_bytes` go through
   `memory_at`, which checks a buffer's

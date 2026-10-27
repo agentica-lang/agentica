@@ -62,6 +62,7 @@ A function that returns a pointer and a length, or text that may be NULL, is dec
 - `Native.get_bytes(p, offset, length)` copies `length` bytes into a `List[Int]`.
 - A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
 - `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
+- `Native.address(p)` is the other way: the integer value of `p`. Pointers have no `==`, so compare addresses, or subtract two pointers into one block for the bytes between them: SQLite's `pzTail` minus the SQL text is how much it read. The address of a freed buffer fails with `RUNTIME-NATIVE-CLOSED`.
 
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
@@ -145,6 +146,26 @@ end
 - A buffer knows its size: a read or write that starts before it or runs past its end fails with `RUNTIME-NATIVE-BOUNDS`, and so does `Native.get_string` of a buffer with no NUL after the offset. Nothing outside the buffer is ever read or written.
 - A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `get_bytes` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`; any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library. Two tasks that read and write the same memory of C at once race, as in C; each read or write of an owned buffer holds a lock.
 - A negative count or size fails with `RUNTIME-INVALID-COUNT`.
+
+`Native.offset(p, n)` is the pointer `n` bytes past `p`, for C structs whose fields point into one block, such as the `length`, `is_null` and `buffer` cells of a MySQL bind:
+
+- For a pointer that C returned it is the plain sum (wrapping on overflow), trusted like `p`.
+- For an owned buffer it is a view of the same memory from byte `n` to the buffer's end. `n` outside 0 to the size fails with `RUNTIME-NATIVE-BOUNDS`, and reads and writes through the view are checked against its range.
+- The view belongs to its buffer: freeing the buffer closes it (`RUNTIME-NATIVE-CLOSED`, `Native.closed?` is `true`), and a `compute def` call that takes the view keeps the buffer until it returns. `Native.free` of a view fails with `RUNTIME-NATIVE-NOT-OWNED`, and `Task.spawn_owning` hands over the buffer, not a view.
+
+```agentica {mode="check"}
+extern "/opt/db/libdb.so"
+  def db_bind(length: C.Pointer, is_null: C.Pointer, data: C.Pointer) -> C.Int32
+end
+
+def main() -> Void
+  Native.memory_pointer(16 + 8) do |bind|
+    Native.put_int64(bind, 0, 5)
+    Native.put_string(bind, 16, "hello")
+    puts(db_bind(bind, Native.offset(bind, 8), Native.offset(bind, 16)))
+  end
+end
+```
 
 ## Resources
 

@@ -126,6 +126,7 @@ Map.keys
 Map.put
 Map.size
 Map.values
+Native.address
 Native.close
 Native.closed?
 Native.free
@@ -149,6 +150,7 @@ Native.load
 Native.memory_pointer
 Native.null
 Native.null?
+Native.offset
 Native.pointer
 Native.put_array_of_float32
 Native.put_array_of_float64

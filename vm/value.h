@@ -266,8 +266,12 @@ struct agc_ffi_call;
    too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with free(), and `free` is NULL; the
    program sees it as a C.Pointer. A resource declared `free: C.Function` has its own free function at `free_at`, the
    address that the call which made it got (`free` is then a call prepared without a symbol); NULL for the others.
-   Changes under rt->sync. */
-typedef struct {
+   A view of a buffer (Native.offset) is a buffer too, with `parent` set to the buffer of Native.memory_pointer whose
+   memory it shows: `pointer` and `size` are the bytes from its offset to the parent's end, and it has no state, no
+   owner and no `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others. Changes
+   under rt->sync. */
+typedef struct agc_c_resource {
+  struct agc_c_resource *parent;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;
