@@ -53,9 +53,9 @@ without one) hands over nothing. At run time a handle that the caller does not
 own, that was already handed over or that is closed is
 `RUNTIME-HANDLE-NOT-OWNED` in the caller, and then no handle of the value moves:
 all of them or none. Of the `C.Pointer` values only an
-owned buffer (`Native.memory_pointer`) can be handed over; one that C gave is
-`RUNTIME-HANDLE-NOT-OWNED`. A crash or an end never closes an
-`HttpClient`. A `Channel` has no opener: it is unowned until
+owned buffer (`Native.memory_pointer`) can be handed over; one that C gave, or a
+view of a buffer (`Native.offset`), is `RUNTIME-HANDLE-NOT-OWNED`. A crash or an
+end never closes an `HttpClient`. A `Channel` has no opener: it is unowned until
 `Task.spawn_owning(&f, channel)` gives it to the new task, and then it is
 closed when that task ends, as in [Channels](#channels). The first hand-off of
 an unowned channel is open to any task; after that only the owner can hand it

@@ -1,39 +1,41 @@
 /*
  * The Zlib builtins (agc_zlib_builtins): one-shot compression and
- * decompression of byte lists, the CRC32 checksum, and task-owned streaming
- * encoder and decoder handles with their progress records. The file jobs (Zlib.*_file) only
- * validate and hand over to vm/files.c; the codec itself is the adapter of
- * zlib_codec.h, which alone includes zlib.h. Service layer. Design: RFC 1950
- * (zlib), RFC 1951 (deflate) and RFC 1952 (gzip).
+ * decompression of byte lists and the CRC32 checksum, and the zlib streams of
+ * the Lazy steps deflate, inflate, gzip and gunzip (agc_zstep_*, driven by
+ * vm/lazy.c). The codec itself is the adapter of zlib_codec.h, which alone
+ * includes zlib.h. Service layer. Design: RFC 1950 (zlib), RFC 1951
+ * (deflate) and RFC 1952 (gzip).
  */
 #include "services.h"
 #include "zlib_codec.h"
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* One-shot bytes are capped at 1 MiB in and out; each streaming call moves at
-   most a 64 KiB quantum in and out, while a handle's lifetime totals are
-   capped at 1 GiB each. */
+/* One-shot bytes are capped at 1 MiB in and out; each pass of a codec moves
+   at most a 64 KiB quantum out, so a Lazy step gives chunks of at most that
+   size whatever the ratio of the data. */
 #define ZLIB_ONE_SHOT_MAX ((size_t)1048576)
 #define ZLIB_QUANTUM ((size_t)65536)
-#define ZLIB_TOTAL_MAX ((uint64_t)1073741824)
 
 typedef enum { ZLIB_ENCODER, ZLIB_DECODER } zlib_kind;
 
-typedef enum { ZLIB_OPEN, ZLIB_FINISHING, ZLIB_DONE, ZLIB_FAILED } zlib_state;
-
-/* A streaming context: malloc'd, with no GC pointer, so only the registry
-   entry ties it to a task. The codec holds no caller buffer on any return
-   (the adapter clears its stream pointers), and totals only move forward, so
-   a feed that fails its caps changes nothing. Changes under rt->sync. */
+/* The stream of one zlib stage in one Lazy run: malloc'd, with no GC
+   pointer, so only its registry entry ties it to the task that runs the
+   terminal. The codec holds no caller buffer on any return (the adapter
+   clears its stream pointers). full is true when the last pass filled its
+   output, so more output may wait in the codec with no new input; done once
+   the stream ended (a decoder verified its trailer); idle counts the passes
+   in a row that moved nothing. Only the task that owns the entry touches it. */
 typedef struct {
-  zlib_kind kind;
   agc_zcodec *codec;
-  uint64_t total_in, total_out, max_in, max_out;
-  zlib_state state;
-} zlib_ctx;
+  uint8_t *buf; /* one quantum, the output of every pass */
+  bool encode, full, done;
+  int idle;
+  uint64_t total_out, max_out;
+} zstep;
 
 /* The bytes a one-shot call returns, grown in place. False when the next
    write would exceed max_out; running out of memory never returns. */
@@ -42,25 +44,25 @@ typedef struct {
   size_t len, cap;
 } out_accum;
 
-/* The no-input address of a finishing drain: length zero, never read. */
+/* The no-input address of a pass with no input: length zero, never read. */
 static const uint8_t zlib_empty[1] = {0};
 
-/* The progress record fields in the contract's order. */
-static const char *const progress_fields[] = {"output", "consumed", "finished", "needs_input"};
+/* The window bits of the kinds of __lazy_zlib (stdlib/prelude/lazy.agc): deflate, raw deflate, gzip, inflate, raw
+   inflate, gunzip. */
+static const int step_bits[] = {15, -15, 31, 15, -15, 31};
 
 static agc_value zlib_error(const char *message) {
   size_t len = strlen(message);
   return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
 }
 
-/* The bytes of a List[Int] argument of at most LIMIT items, or NULL with
-   *failed set to the call's error. A non-Int item fails through agc_as_int,
-   as in the other byte-list builtins. */
-static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, size_t limit, const char *too_big,
-                                 agc_value *failed) {
+/* The bytes of a List[Int] argument of at most ZLIB_ONE_SHOT_MAX items, or
+   NULL with *failed set to the call's error. A non-Int item fails through
+   agc_as_int, as in the other byte-list builtins. */
+static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, agc_value *failed) {
   const agc_list *values = agc_as_list(vm, list);
-  if (agc_list_len(values) > limit) {
-    *failed = zlib_error(too_big);
+  if (agc_list_len(values) > ZLIB_ONE_SHOT_MAX) {
+    *failed = zlib_error("zlib: input exceeds 1048576 bytes");
     return NULL;
   }
   const uint8_t *bytes = agc_byte_list(vm, values, agc_list_len(values));
@@ -68,172 +70,7 @@ static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, size_t limit, const
   return bytes;
 }
 
-static agc_value byte_list_value(const uint8_t *data, size_t n) {
-  agc_list_builder b;
-  agc_list_builder_sized(&b, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_int(data[k]));
-  return agc_list_value(agc_list_builder_finish(&b));
-}
-
-static bool valid_window(int64_t window_bits) {
-  return window_bits == 15 || window_bits == -15 || window_bits == 31;
-}
-
-static bool valid_total(int64_t total) { return total >= 1 && (uint64_t)total <= ZLIB_TOTAL_MAX; }
-
-/* The end of the run: frees a context the owner never closed. No registry
-   walk here (release_handles walks), no lock (only one thread is left). */
-static void release_zlib(void *native) {
-  zlib_ctx *c = native;
-  agc_zcodec_free(c->codec);
-  free(c);
-}
-
-/* Zlib.encoder_close, Zlib.decoder_close and the end of the owning task:
-   idempotent, under rt->sync, with no pool job that could still reach the
-   context, so the codec is freed at once. Identity is checked before the
-   cast: File and lock handles share the AGC_T_HANDLE tag, and unregistering
-   or freeing a foreign native would corrupt its owner. */
-static void close_zlib(agc_vm *vm, agc_resource *r, agc_task *ender) {
-  (void)ender;
-  agc_sync_assert(vm);
-  if (r->close != close_zlib) return;
-  zlib_ctx *c = r->native;
-  if (!c) return;
-  r->native = NULL;
-  agc_unregister(vm, r);
-  agc_zcodec_free(c->codec);
-  free(c);
-}
-
-/* The context of a streaming call: a closed handle (no native left) reads as
-   closed whatever task asks, the owner alone may feed or finish, and the
-   kind must match the call. A wrong task is a programming error like handing
-   a handle to Task.spawn_owning without owning it, so it fails the same way;
-   every other refusal is the call's error value. */
-static zlib_ctx *open_ctx(agc_vm *vm, agc_value handle, zlib_kind kind, uint32_t span, agc_value *failed) {
-  agc_resource *r = agc_as_handle(vm, handle);
-  if (r->close != close_zlib) {
-    *failed = zlib_error("zlib: handle is not a zlib handle");
-    return NULL;
-  }
-  zlib_ctx *c = r->native;
-  if (!c) {
-    *failed = zlib_error("zlib: handle is closed");
-    return NULL;
-  }
-  if (r->owner != vm->task)
-    agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 1);
-  if (c->kind != kind) {
-    *failed = zlib_error(kind == ZLIB_ENCODER ? "zlib: handle is not an encoder" : "zlib: handle is not a decoder");
-    return NULL;
-  }
-  if (c->state == ZLIB_FAILED) {
-    *failed = zlib_error("zlib: handle failed");
-    return NULL;
-  }
-  return c;
-}
-
-static uint32_t progress_struct(agc_vm *vm) { return agc_builtin_struct(vm, "ZlibProgress", progress_fields, 4); }
-
-/* A progress record in the contract's field order: the fresh output bytes,
-   what the call consumed of its input, whether the stream end was reached,
-   and whether the codec wants more input (false while output may still drain
-   from its internal state, so the caller drains with empty input). The
-   struct type resolves at the caller, before any malloc it must survive. */
-static agc_value progress_value(agc_vm *vm, uint32_t type, const uint8_t *output, size_t produced, uint64_t consumed,
-                                bool finished, bool needs_input) {
-  (void)vm;
-  agc_struct *p = agc_new_struct(type, 4);
-  p->fields[0] = byte_list_value(output, produced);
-  p->fields[1] = agc_int((int64_t)consumed);
-  p->fields[2] = agc_bool(finished);
-  p->fields[3] = agc_bool(needs_input);
-  return agc_result_value(true, agc_struct_value(p));
-}
-
-/* Whether the codec wants more input: only when it took all it was given,
-   left room in the output, and has not ended. A call that produced nothing
-   from nothing while waiting for input reports true; any other standstill
-   keeps its remainder with the caller through consumed. */
-static bool wants_input(size_t given, size_t consumed, size_t produced, size_t out_cap, bool finished) {
-  if (finished) return false;
-  return consumed == given && produced < out_cap;
-}
-
-/* One deflate or inflate pass over at most a quantum each way, through a
-   malloc'd output buffer the call frees. Totals move only on success, and a
-   refused cap changes nothing, except for one decoder case: once its output
-   budget is exactly full, a further call may still need to consume the
-   wrapper trailer (or a raw final empty block), which produces no bytes. A
-   positive max_out is still required by the range check, and any positive
-   quantum would trip the totals precheck, so that valid stream end would be
-   unreachable. The decoder then runs a bounded one-byte overflow probe
-   instead of the requested quantum: zero production commits normally, while
-   any produced byte fails the handle without exposing the extra byte. The
-   encoder keeps its conservative requested-quantum refusal (a smaller retry
-   quantum always exists there). The progress record is resolved before the
-   malloc: its lookup longjmps when the frontend has not provided it, and
-   must not leave a live buffer behind. */
-static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size_t given, size_t out_cap, bool finish,
-                             uint32_t span) {
-  (void)span;
-  uint32_t progress = progress_struct(vm);
-  if (c->total_in + (uint64_t)given > c->max_in) return zlib_error("zlib: total input exceeds max_total_in");
-  /* At an exactly full decoder budget only the zero-output trailer (or raw
-     terminator) may remain. Probe it with a private one-byte buffer rather
-     than refusing every positive quantum or running the full requested
-     quantum with no room: the probe either commits empty progress or
-     proves a genuine overflow. */
-  bool probe = false;
-  size_t eff_cap = out_cap;
-  if (c->total_out + (uint64_t)out_cap > c->max_out) {
-    if (c->kind == ZLIB_DECODER && c->total_out == c->max_out) {
-      probe = true;
-      eff_cap = 1;
-    } else {
-      return zlib_error("zlib: total output exceeds max_total_out");
-    }
-  }
-  uint8_t *out = malloc(eff_cap ? eff_cap : 1);
-  if (!out) agc_out_of_memory();
-  const uint8_t *next = input;
-  size_t left = given, produced = 0;
-  agc_zcodec_status fed = c->kind == ZLIB_ENCODER
-                              ? agc_zcodec_encode(c->codec, &next, &left, finish, out, eff_cap, &produced)
-                              : agc_zcodec_decode(c->codec, &next, &left, out, eff_cap, &produced);
-  size_t consumed = given - left;
-  bool end = fed == AGC_ZCODEC_DONE;
-  bool check = fed == AGC_ZCODEC_CHECK;
-  bool format = fed == AGC_ZCODEC_FORMAT;
-  if (fed == AGC_ZCODEC_NOMEM) {
-    free(out);
-    agc_out_of_memory();
-  }
-  agc_value result;
-  if (check || format) {
-    c->state = ZLIB_FAILED;
-    result = zlib_error(check ? "zlib: checksum mismatch" : c->kind == ZLIB_ENCODER ? "zlib: compression failed"
-                                                                                    : "zlib: invalid compressed data");
-  } else if (probe && produced != 0) {
-    /* A genuine overflow past the full budget: fail sticky without
-       recording or returning the probe byte, so the handle can never
-       resume and the extra output never leaks. Totals stay frozen, as on
-       every other failure leg. */
-    c->state = ZLIB_FAILED;
-    result = zlib_error("zlib: total output exceeds max_total_out");
-  } else {
-    if (end) c->state = ZLIB_DONE;
-    c->total_in += (uint64_t)consumed;
-    c->total_out += (uint64_t)produced;
-    agc_charge_bytes(vm, consumed + produced);
-    result = progress_value(vm, progress, out, produced, (uint64_t)consumed, end,
-                            wants_input(given, consumed, produced, eff_cap, end));
-  }
-  free(out);
-  return result;
-}
+static agc_value byte_list_value(const uint8_t *data, size_t n) { return agc_list_value(agc_list_of_bytes(data, n)); }
 
 static bool accum_push(out_accum *a, const uint8_t *chunk, size_t n, size_t max_out) {
   if (a->len + n > max_out) return false;
@@ -282,7 +119,7 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
       break;
     }
     if (!accum_push(&out, chunk, produced, max_out)) {
-      failed = zlib_error("zlib: output exceeds max_out_bytes");
+      failed = zlib_error("zlib: output exceeds max_bytes");
       break;
     }
     if (fed == AGC_ZCODEC_DONE) {
@@ -341,7 +178,7 @@ static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int 
    1 MiB input and output bounds keeping each call's work bounded. */
 static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool compress) {
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], ZLIB_ONE_SHOT_MAX, "zlib: input exceeds 1048576 bytes", &failed);
+  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
   if (!input) return failed;
   size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t level = 0;
@@ -351,7 +188,7 @@ static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool
   }
   int64_t max_out = agc_as_int(vm, args[compress ? 2 : 1]);
   if (max_out < 1 || (uint64_t)max_out > ZLIB_ONE_SHOT_MAX)
-    return zlib_error("zlib: max_out_bytes must be between 1 and 1048576");
+    return zlib_error("zlib: max_bytes must be between 1 and 1048576");
   return compress ? oneshot_compress(vm, input, n, window_bits, level, (size_t)max_out)
                   : oneshot_decode(vm, input, n, window_bits, (size_t)max_out);
 }
@@ -376,118 +213,6 @@ static agc_value builtin_gunzip(agc_vm *vm, agc_value *args, uint32_t span) {
   return oneshot_args(vm, args, 31, false);
 }
 
-static agc_value builtin_deflate_file(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_zlib_file(vm, AGC_ZLIB_DEFLATE_FILE, agc_as_string(vm, args[0]), agc_as_string(vm, args[1]),
-                       agc_as_int(vm, args[2]), agc_as_int(vm, args[3]), agc_as_int(vm, args[4]), span);
-}
-
-static agc_value builtin_inflate_file(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_zlib_file(vm, AGC_ZLIB_INFLATE_FILE, agc_as_string(vm, args[0]), agc_as_string(vm, args[1]), 0,
-                       agc_as_int(vm, args[2]), agc_as_int(vm, args[3]), span);
-}
-
-static agc_value builtin_gzip_file(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_zlib_file(vm, AGC_ZLIB_GZIP_FILE, agc_as_string(vm, args[0]), agc_as_string(vm, args[1]),
-                       agc_as_int(vm, args[2]), agc_as_int(vm, args[3]), agc_as_int(vm, args[4]), span);
-}
-
-static agc_value builtin_gunzip_file(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_zlib_file(vm, AGC_ZLIB_GUNZIP_FILE, agc_as_string(vm, args[0]), agc_as_string(vm, args[1]), 0,
-                       agc_as_int(vm, args[2]), agc_as_int(vm, args[3]), span);
-}
-
-/* Streaming calls run with rt->sync held and touch the shared registry, so
-   each moves at most one quantum: the lock is never held across unbounded
-   work, and consumed plus produced pay turn cost. */
-static agc_value init_stream(agc_vm *vm, zlib_kind kind, int64_t window_bits, int64_t level, bool has_level,
-                             int64_t max_in, int64_t max_out) {
-  if (!valid_window(window_bits)) return zlib_error("zlib: window_bits must be 15, -15, or 31");
-  if (has_level && (level < 0 || level > 9)) return zlib_error("zlib: level must be between 0 and 9");
-  if (!valid_total(max_in)) return zlib_error("zlib: max_total_in must be between 1 and 1073741824");
-  if (!valid_total(max_out)) return zlib_error("zlib: max_total_out must be between 1 and 1073741824");
-  agc_zcodec *codec = kind == ZLIB_ENCODER ? agc_zcodec_encode_begin((int)window_bits, (int)level)
-                                           : agc_zcodec_decode_begin((int)window_bits);
-  if (!codec) agc_out_of_memory();
-  zlib_ctx *c = calloc(1, sizeof *c);
-  if (!c) {
-    agc_zcodec_free(codec);
-    agc_out_of_memory();
-  }
-  c->kind = kind;
-  c->codec = codec;
-  c->max_in = (uint64_t)max_in;
-  c->max_out = (uint64_t)max_out;
-  agc_resource *r = agc_register(vm, c, release_zlib);
-  agc_own(vm, r, close_zlib);
-  return agc_result_value(true, agc_handle_value(r));
-}
-
-static agc_value builtin_deflate_init(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return init_stream(vm, ZLIB_ENCODER, agc_as_int(vm, args[0]), agc_as_int(vm, args[1]), true,
-                     agc_as_int(vm, args[2]), agc_as_int(vm, args[3]));
-}
-
-static agc_value builtin_inflate_init(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return init_stream(vm, ZLIB_DECODER, agc_as_int(vm, args[0]), 0, false, agc_as_int(vm, args[1]),
-                     agc_as_int(vm, args[2]));
-}
-
-static agc_value next_stream(agc_vm *vm, agc_value *args, uint32_t span, zlib_kind kind) {
-  agc_value failed = agc_void();
-  zlib_ctx *c = open_ctx(vm, args[0], kind, span, &failed);
-  if (!c) return failed;
-  const uint8_t *input = zlib_bytes(vm, args[1], ZLIB_QUANTUM, "zlib: input exceeds 65536 bytes", &failed);
-  if (!input) return failed;
-  size_t n = agc_list_len(agc_as_list(vm, args[1]));
-  int64_t max_out = agc_as_int(vm, args[2]);
-  if (max_out < 1 || (uint64_t)max_out > ZLIB_QUANTUM) return zlib_error("zlib: max_out must be between 1 and 65536");
-  if (c->state == ZLIB_DONE) {
-    /* Empty drains after the verified end report finished again; only new
-       input after it is an error, since those bytes would be discarded. */
-    if (n != 0) return zlib_error("zlib: stream already finished");
-    return progress_value(vm, progress_struct(vm), input, 0, 0, true, false);
-  }
-  if (c->kind == ZLIB_ENCODER && c->state == ZLIB_FINISHING)
-    return zlib_error("zlib: encoder finish already started");
-  return feed_stream(vm, c, input, n, (size_t)max_out, false, span);
-}
-
-static agc_value builtin_deflate_next(agc_vm *vm, agc_value *args, uint32_t span) {
-  return next_stream(vm, args, span, ZLIB_ENCODER);
-}
-
-static agc_value builtin_inflate_next(agc_vm *vm, agc_value *args, uint32_t span) {
-  return next_stream(vm, args, span, ZLIB_DECODER);
-}
-
-static agc_value builtin_deflate_finish(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_value failed = agc_void();
-  zlib_ctx *c = open_ctx(vm, args[0], ZLIB_ENCODER, span, &failed);
-  if (!c) return failed;
-  int64_t max_out = agc_as_int(vm, args[1]);
-  if (max_out < 1 || (uint64_t)max_out > ZLIB_QUANTUM) return zlib_error("zlib: max_out must be between 1 and 65536");
-  /* Finishing drains stay callable until the terminal call: each bounded
-     drain reports its finished flag, and only new feed is refused. FINISHING
-     is assigned only once the drain is accepted, so a refused cap leaves
-     OPEN intact and a later feed stays legal. */
-  if (c->state == ZLIB_DONE) return progress_value(vm, progress_struct(vm), zlib_empty, 0, 0, true, false);
-  agc_value drained = feed_stream(vm, c, zlib_empty, 0, (size_t)max_out, true, span);
-  if (agc_as_result(vm, drained)->ok && c->state != ZLIB_DONE) c->state = ZLIB_FINISHING;
-  return drained;
-}
-
-static agc_value builtin_inflate_finish(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_value failed = agc_void();
-  zlib_ctx *c = open_ctx(vm, args[0], ZLIB_DECODER, span, &failed);
-  if (!c) return failed;
-  /* A verified stream end is the only success: anything earlier is a
-     truncation, never a quiet ok. */
-  if (c->state != ZLIB_DONE) return zlib_error("zlib: stream is truncated");
-  return agc_result_value(true, agc_void());
-}
-
 /* Zlib.crc32(data, seed): the zlib CRC32 of the bytes chained after seed,
    for the ZIP checksum (RFC 1952 §8). A pure function of its arguments: no
    handle, no shared state, so it runs without the shared lock, like the
@@ -499,7 +224,7 @@ static agc_value builtin_inflate_finish(agc_vm *vm, agc_value *args, uint32_t sp
 static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], ZLIB_ONE_SHOT_MAX, "zlib: input exceeds 1048576 bytes", &failed);
+  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
   if (!input) return failed;
   size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t seed = agc_as_int(vm, args[1]);
@@ -508,36 +233,128 @@ static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, agc_int((int64_t)crc));
 }
 
-/* Both close rows: closing is idempotent and owner-indifferent, like
-   Native.close, so one function serves the encoder and the decoder. A
-   foreign handle is refused before close_zlib could unregister it: the
-   close reports, it never touches another library's resource. */
-static agc_value builtin_zlib_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  agc_resource *r = agc_as_handle(vm, args[0]);
-  if (r->close != close_zlib) return zlib_error("zlib: handle is not a zlib handle");
-  close_zlib(vm, r, NULL);
-  return agc_result_value(true, agc_void());
+/* The end of the run: frees a stream no run and no task end freed. No
+   registry walk here (release_handles walks), no lock (only one thread is
+   left). */
+static void release_zstep(void *native) {
+  zstep *z = native;
+  agc_zcodec_free(z->codec);
+  free(z->buf);
+  free(z);
+}
+
+/* The end of the owning task (a raise, a cancel, --max-steps) and
+   agc_zstep_close: idempotent, under rt->sync. Identity is checked before
+   the cast, as File and lock handles share the registry. */
+static void close_zstep(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  (void)ender;
+  agc_sync_assert(vm);
+  if (r->close != close_zstep) return;
+  zstep *z = r->native;
+  if (!z) return;
+  r->native = NULL;
+  agc_unregister(vm, r);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "zlib_close handle=%" PRIu64, r->id);
+  agc_zcodec_free(z->codec);
+  free(z->buf);
+  free(z);
+}
+
+static agc_zstep_status zstep_failed(agc_value *out, const char *message) {
+  *out = zlib_error(message);
+  return AGC_ZSTEP_FAILED;
+}
+
+agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes) {
+  if (kind < 3 && (level < 0 || level > 9)) return zlib_error("zlib: level must be between 0 and 9");
+  if (kind >= 3 && max_bytes < 1) return zlib_error("zlib: max_bytes must be at least 1");
+  return agc_void();
+}
+
+/* The caller checked the kind (0 to 5) and agc_zstep_check passed. The registry and the owner list are shared, so
+   the entry is made under rt->sync: a Lazy terminal runs unlocked. */
+agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes) {
+  bool encode = kind < 3;
+  int bits = step_bits[kind];
+  agc_zcodec *codec = encode ? agc_zcodec_encode_begin(bits, (int)level) : agc_zcodec_decode_begin(bits);
+  if (!codec) agc_out_of_memory();
+  zstep *z = calloc(1, sizeof *z);
+  uint8_t *buf = malloc(ZLIB_QUANTUM);
+  if (!z || !buf) {
+    agc_zcodec_free(codec);
+    free(z);
+    free(buf);
+    agc_out_of_memory();
+  }
+  z->codec = codec;
+  z->buf = buf;
+  z->encode = encode;
+  z->max_out = encode ? UINT64_MAX : (uint64_t)max_bytes;
+  agc_sync_take(vm);
+  agc_resource *r = agc_register(vm, z, release_zstep);
+  agc_own(vm, r, close_zstep);
+  agc_sync_drop(vm);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "zlib_open handle=%" PRIu64, r->id);
+  return r;
+}
+
+void agc_zstep_close(agc_vm *vm, agc_resource *r) {
+  agc_sync_take(vm);
+  close_zstep(vm, r, NULL);
+  agc_sync_drop(vm);
+}
+
+/* One pass of the codec over in (len bytes, *used set to what it took) into one chunk of at most a quantum. A
+   decoder's output buffer is one byte past what max_out still allows when that is less than a quantum, so a pass
+   that fills it proves the overflow without ever keeping a byte past the cap; at an exactly full budget the pass can
+   still read the trailer, which produces nothing. The decoder never finishes by itself: the end is its trailer, and
+   any byte after it is refused here (RFC 1950 §2.2, RFC 1952 §2.2: one stream, one member). */
+agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, size_t len, size_t *used, bool finish,
+                                agc_value *out) {
+  *used = 0;
+  *out = agc_void();
+  zstep *z = r->close == close_zstep ? r->native : NULL;
+  if (!z) agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy zlib step after its stream was freed", 0);
+  if (z->done) return len ? zstep_failed(out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+  if (len == 0 && !finish && !z->full) return AGC_ZSTEP_INPUT;
+  size_t cap = ZLIB_QUANTUM;
+  if (z->max_out - z->total_out < (uint64_t)cap) cap = (size_t)(z->max_out - z->total_out) + 1;
+  uint8_t *buf = z->buf;
+  const uint8_t *next = len ? in : zlib_empty;
+  size_t left = len, produced = 0;
+  agc_zcodec_status fed = z->encode ? agc_zcodec_encode(z->codec, &next, &left, finish, buf, cap, &produced)
+                                    : agc_zcodec_decode(z->codec, &next, &left, buf, cap, &produced);
+  if (fed == AGC_ZCODEC_NOMEM) agc_out_of_memory();
+  size_t consumed = len - left;
+  *used = consumed;
+  if (fed == AGC_ZCODEC_CHECK || fed == AGC_ZCODEC_FORMAT || z->total_out + produced > z->max_out) {
+    if (fed == AGC_ZCODEC_CHECK) return zstep_failed(out, "zlib: checksum mismatch");
+    if (fed == AGC_ZCODEC_FORMAT)
+      return zstep_failed(out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
+    return zstep_failed(out, "zlib: output exceeds max_bytes");
+  }
+  z->total_out += produced;
+  agc_charge_bytes(vm, consumed + produced);
+  if (produced) *out = byte_list_value(buf, produced);
+  if (fed == AGC_ZCODEC_DONE) {
+    z->done = true;
+    return left ? zstep_failed(out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
+  }
+  /* Every pass consumes input, produces output, or ends: eight still passes bound a codec that stopped moving. */
+  z->idle = consumed == 0 && produced == 0 ? z->idle + 1 : 0;
+  if (z->idle > 8) return zstep_failed(out, z->encode ? "zlib: compression failed" : "zlib: invalid compressed data");
+  z->full = produced == cap;
+  if (left || z->full || (finish && z->encode)) return AGC_ZSTEP_AGAIN;
+  if (finish) return zstep_failed(out, "zlib: truncated stream");
+  return AGC_ZSTEP_INPUT;
 }
 
 const agc_builtin agc_zlib_builtins[] = {
-  {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_file", 5, builtin_deflate_file, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate_file", 4, builtin_inflate_file, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gzip_file", 5, builtin_gzip_file, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gunzip_file", 4, builtin_gunzip_file, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_init", 4, builtin_deflate_init, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.inflate_init", 3, builtin_inflate_init, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.deflate_next", 3, builtin_deflate_next, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.inflate_next", 3, builtin_inflate_next, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.deflate_finish", 2, builtin_deflate_finish, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.inflate_finish", 1, builtin_inflate_finish, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.encoder_close", 1, builtin_zlib_close, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.decoder_close", 1, builtin_zlib_close, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];

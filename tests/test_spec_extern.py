@@ -183,7 +183,8 @@ end
 # An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, Task.spawn_owning hands it over, and the
 # typed reads and writes take any C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
 # The block form yields a C.Pointer and has the type of the block's value (a Result from a `try` in it included); the
-# block or function must take one C.Pointer.
+# block or function must take one C.Pointer. Native.from_string takes a String in place of the size, and
+# text.bytesize is an Int.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
@@ -203,6 +204,12 @@ end
     ("  n = Native.memory_pointer(8) do |buf: Int| buf end", "CHECK-TYPE-MISMATCH", (10, 36), (10, 44)),
     ("  Native.memory_pointer(8, &main)", "CHECK-TYPE-MISMATCH", (10, 28), (10, 33)),
     ("  n = Native.memory_pointer(8.5) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
+    ('  buf: C.Pointer = Native.from_string("ab")\n  fill(buf, 0)\n'
+     '  n: Int = Native.from_string("é") do |s| Native.get_uint8(s, 0) + "é".bytesize end\n  puts(n)',
+     None, None, None),
+    ("  n = Native.from_string(3) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 26), (10, 27)),
+    ('  n = Native.memory_pointer("x") do |buf| 1 end', "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
+    ('  s: String = "ab".bytesize', "CHECK-TYPE-MISMATCH", (10, 15), (10, 28)),
 ])
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
     assert_checks(check(source(tmp_path, MEMORY % body)), code, start, stop)
@@ -246,6 +253,22 @@ def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
 def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop):
     text = 'extern %s\n  def abs(n: C.Int32) -> C.Int32\nend\n' % library
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
+
+
+# The library of Native.load is a string literal with the rule of an extern library, so the front end can resolve it
+# like one; anything else (a variable or a constant too) is CHECK-NATIVE-LOAD at the argument.
+@pytest.mark.parametrize("before, local, library, code", [
+    ("", "", '"libm.so.6"', None),
+    ("", "", '""', "CHECK-NATIVE-LOAD"),
+    ("", '  name = "libm.so.6"\n', "name", "CHECK-NATIVE-LOAD"),
+    ('LIB = "libm.so.6"\n\n', "", "LIB", "CHECK-NATIVE-LOAD"),
+    ("", "", '"lib/m.so"', "CHECK-NATIVE-LOAD"),
+    ("", "", '"m#{1}"', "CHECK-NATIVE-LOAD"),
+])
+def test_native_load_takes_a_library_literal(tmp_path, before, local, library, code):
+    text = "%sdef main() -> Void\n%s  puts(Native.load(%s).ok?)\nend\n" % (before, local, library)
+    line = next(k for k, row in enumerate(text.split("\n"), 1) if "Native.load" in row)
+    assert_checks(check(source(tmp_path, text)), code, (line, 20), (line, 20 + len(library)))
 
 
 def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
@@ -475,6 +498,23 @@ def test_the_old_memory_names_have_a_help(tmp_path, call):
 def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, stop):
     text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FREE", start, stop)
+
+
+# free_ref: names a C function that takes the address of the handle, checked as a free: name is. A resource has
+# one free function: free: with free_ref:, in either order, is PARSE-EXTERN-FREE at the second word.
+@pytest.mark.parametrize("members, code, start, stop", [
+    ("  resource Db, free_ref: db_close\n  def db_open() -> Db", None, None, None),
+    ("  resource Db, free: db_close, free_ref: db_free", "PARSE-EXTERN-FREE", (2, 32), (2, 40)),
+    ("  resource Db, free_ref: db_close, free: db_free", "PARSE-EXTERN-FREE", (2, 36), (2, 40)),
+    ("  resource Db, free: C.Function, free_ref: db_free", "PARSE-EXTERN-FREE", (2, 34), (2, 42)),
+    ("  resource Db, free_ref: db_close\n  def db_close(db: Db) -> Void", "PARSE-EXTERN-FREE", (3, 7), (3, 15)),
+    ("  def db_close(p: C.Pointer) -> Void\n  resource Db, free_ref: db_close", "PARSE-EXTERN-FREE", (3, 26), (3, 34)),
+    ("  resource Db, free_ref: C.Function", "PARSE-EXTERN-FUNCTION", (2, 26), (2, 36)),
+    ("  resource Db, free_ref: db_close?", "PARSE-EXTERN-NAME", (2, 26), (2, 35)),
+])
+def test_a_resource_may_be_freed_through_a_reference_to_its_handle(tmp_path, members, code, start, stop):
+    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
+    assert_checks(check(source(tmp_path, text)), code, start, stop)
 
 
 @pytest.mark.parametrize("members, code, start", [
@@ -733,6 +773,30 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
            '  p = Raw.llama_model_default_params().with(n_gpu_layers: 2)\n' \
            '  puts(Raw.ModelParams(use_mmap: p.use_mmap, progress: p.progress).n_gpu_layers)\nend\n'
     assert check(source(tmp_path, text)).code == 0
+
+
+# Native.size_of(T) is an Int, Native.get_struct(p, offset, T) a T and Native.put_struct(p, offset, value) Void, for a
+# struct of an extern block, also through a type alias or from another module; a struct of the program, a resource, a
+# value in place of the type or a type name in place of the value is CHECK-TYPE-MISMATCH at it.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  buf = Native.memory_pointer(2 * Native.size_of(Outer))\n"
+     "  Native.put_struct(buf, Native.size_of(OuterAlias), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
+     "  o: Outer = Native.get_struct(buf, 0, OuterAlias)\n  puts(o.inner.n)", None, None, None),
+    ("  buf = Native.memory_pointer(Native.size_of(Raw.ModelParams))\n"
+     "  p: Raw.ModelParams = Native.get_struct(buf, 0, Raw.ModelParams)\n  Native.put_struct(buf, 0, p)",
+     None, None, None),
+    ("  puts(Native.size_of(Plain))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
+    ("  puts(Native.get_struct(Native.null(), 0, Plain))", "CHECK-TYPE-MISMATCH", (32, 44), (32, 49)),
+    ("  Native.put_struct(Native.null(), 0, Plain(x: 1))", "CHECK-TYPE-MISMATCH", (32, 39), (32, 50)),
+    ("  Native.put_struct(Native.null(), 0, Outer)", "CHECK-TYPE-MISMATCH", (32, 39), (32, 44)),
+    ("  puts(Native.size_of(Model))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
+    ("  puts(Native.size_of(3))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 24)),
+    ("  s: String = Native.get_struct(Native.null(), 0, Inner)", "CHECK-TYPE-MISMATCH", (32, 15), (32, 57)),
+])
+def test_structs_through_pointers_take_a_struct_of_an_extern_block(tmp_path, body, code, start, stop):
+    source(tmp_path, STRUCTS % "  puts(1)", "raw.agc")
+    text = 'import Raw from "./raw"\n\nstruct Plain\n  x: Int\nend\n\ntype OuterAlias = Outer\n\n' + STRUCTS % body
+    assert_checks(check(source(tmp_path, text)), code, start, stop)
 
 
 # A field of a C struct is a C integer type, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in the

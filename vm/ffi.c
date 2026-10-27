@@ -1,12 +1,12 @@
 /*
  * Native calls (docs/grammar/06d-io-and-network.md, "Native code"): Native.call, which every extern function lowers
- * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
- * converts values to C and back, calls a C function by name or through a function pointer, runs a fast call on the
- * scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
+ * to, Native.load, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per
+ * signature, converts values to C and back, calls a C function by name or through a function pointer, runs a fast call
+ * on the scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
  * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
- * null?, Native.pointer, the owned buffers of Native.memory_pointer (and its block form) and Native.free, the reads and
- * writes of memory (Native.get_string, get_bytes, get_*, put_*, the array forms), and Native.wait_readable and
- * wait_writable, the waits on a descriptor. Service layer.
+ * null?, Native.pointer and address, the owned buffers of Native.memory_pointer and from_string (with block forms),
+ * their views (Native.offset) and Native.free, the reads and writes of memory (Native.get_string, get_bytes, get_*,
+ * put_*, the array and struct forms, Native.size_of), and Native.wait_readable and wait_writable. Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -24,6 +24,9 @@
 /* The free word of a resource kind declared `free: C.Function`: no C name holds a dot. */
 #define BY_POINTER "C.Function"
 #define BY_POINTER_LEN (sizeof BY_POINTER - 1)
+/* The mark in front of the free word of a resource kind declared `free_ref:`: its free function takes the address
+   of the pointer (void free(void **)). No C name starts with it. */
+#define BY_REF '&'
 /* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
 #define COMPUTE_PREFIX "compute "
 #define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
@@ -62,7 +65,7 @@ typedef struct {
 typedef struct {
   agc_ffi_call *free;
   void *at, *pointer;
-  bool buffer;
+  bool buffer, by_ref;
 } end_free;
 
 typedef struct {
@@ -71,26 +74,29 @@ typedef struct {
 } end_frees;
 
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
-   declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. */
+   declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. A
+   kind declared `free_ref:` (by_ref) gives its free function the address of the pointer instead. */
 typedef struct {
   agc_ffi_call *free;
   char *name;
-  bool by_pointer;
+  bool by_pointer, by_ref;
 } made_kind;
 
 /* A prepared signature. An out parameter (out[k]) is not an argument of Native.call: C gets a pointer to a zeroed slot
    of type params[k] and writes its value there. For the others, arg[k] is the index of the argument in the List of
-   Native.call (`inputs` of them). For a function that returns a resource, `free` is the prepared call of the
-   resource's free function, `resource` the resource's name and `symbol` the C name of the function, which the error of
-   a NULL result names; all three are NULL otherwise. `made` holds the kind of each out resource (NULL when the call has
-   none). A function with out parameters (`outs` > 0) gives a List: the C result, unless Void, then each out value.
-   `params` and the rest index the C parameters only. A call through a C function pointer (`by_pointer`, code c) takes
-   the function's address as argument 0, and the free function of the resources it makes of a `free: C.Function` kind
-   (`free_by_pointer` for the result's) as argument `free_input` (code e), -1 when it has none; neither goes to C. A
-   struct parameter has its layout in structs[k] (NULL for the others) and a struct result in `result_struct`; a call
-   copies its struct arguments into `struct_bytes` of memory (each at a multiple of 16), then gives the result's buffer.
-   `holds` counts what a compute call may hold: one per C parameter, then one per C.Pointer field of each struct
-   argument, in order. */
+   Native.call (`inputs` of them). For a function that returns a resource, `free` is the prepared call of the resource's
+   free function (`free_by_ref` when it takes the pointer's address), `resource` the resource's name and `symbol`
+   the C name of the function, which the error of a NULL result names; all three are NULL otherwise. `made` holds the
+   kind of each out resource (NULL when the call has none). A function with out parameters (`outs` > 0) gives a List:
+   the C result, unless Void, then each out value. `params` and the rest index the C parameters only. A call through a C
+   function pointer (`by_pointer`, code c) takes the function's address as argument 0, and the free function of the
+   resources it makes of a `free: C.Function` kind (`free_by_pointer` for the result's) as argument `free_input` (code
+   e), -1 when it has none; neither goes to C. A struct parameter has its layout in structs[k] (NULL for the others) and
+   a struct result in `result_struct`; a call copies its struct arguments into `struct_bytes` of memory (each at a
+   multiple of 16), then gives the result's buffer. `holds` counts what a compute call may hold: one per C parameter,
+   then one per C.Pointer field of each struct argument, in order. A `layout` entry is no signature but the layout code
+   of one struct ("{N:CODES}") for Native.size_of, get_struct and put_struct: only `result_struct` is set, laid out
+   without a call. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -104,7 +110,7 @@ typedef struct {
   agc_c_struct *result_struct;
   size_t struct_bytes;
   uint32_t count, inputs, outs, holds;
-  bool compute, by_pointer, free_by_pointer;
+  bool compute, by_pointer, free_by_pointer, free_by_ref, layout;
   int32_t free_input;
   agc_ffi_call *free;
   char *resource, *symbol;
@@ -142,7 +148,7 @@ typedef struct {
 enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
-   out resource's, as named by the signature. */
+   out resource's, as named by the signature (without the & of a free_ref: kind, which sets by_ref). */
 typedef struct {
   const char *names[AGC_FFI_MAX_PARAMS + 1];
   size_t lens[AGC_FFI_MAX_PARAMS + 1];
@@ -150,6 +156,7 @@ typedef struct {
   size_t kind_lens[AGC_FFI_MAX_PARAMS + 1];
   agc_ffi_call *calls[AGC_FFI_MAX_PARAMS + 1];
   bool by_pointer[AGC_FFI_MAX_PARAMS + 1];
+  bool by_ref[AGC_FFI_MAX_PARAMS + 1];
   uint32_t count;
 } free_list;
 
@@ -190,14 +197,16 @@ typedef struct {
   uint32_t offset_span, count_span;
 } memory_ask;
 
-/* The block form of Native.memory_pointer: the buffer it yields, and whether the block has been called. */
+/* The block form of Native.memory_pointer and Native.from_string: the buffer it yields, and whether the block has
+   been called. */
 typedef struct {
   agc_stepper stepper;
   agc_value buffer;
   bool called;
 } buffer_block;
 
-/* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
+/* The prepared calls of the run, by signature string, and the struct layouts of Native.size_of, get_struct and
+   put_struct, by layout code, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
    rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries. */
 typedef struct agc_ffi_cache {
@@ -377,9 +386,14 @@ static _Noreturn void bad_signature(agc_vm *vm, uint32_t span) {
   agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: bad native signature", span);
 }
 
+/* The String of a message of the system loader, whose bytes (a path, the OS text) may not be UTF-8: those become
+   U+FFFD. */
+static agc_string *loader_text(const char *error) {
+  return agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
+}
+
 static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) {
-  agc_string *text = agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
-  agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", text, span);
+  agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", loader_text(error), span);
 }
 
 /* The length of the struct "{...}" at the start of TEXT (LEN bytes), up to its closing brace, or 0 when its braces do
@@ -483,19 +497,20 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
   return fit;
 }
 
-/* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
-   C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
-   function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after
-   it are never an out parameter, a C.Bool, a C.Float or an integer narrower than an int, which C would promote. Each
+/* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the C
+   name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
+   function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after it
+   are never an out parameter, a C.Bool, a C.Float or an integer narrower than an int, which C would promote. Each
    resource the call makes adds two words after the C name, the C name of its free function and the resource's name, an
-   identifier: the result's first (code r), then each out resource's (code R), in order. A call through a C function
-   pointer has the code c first: the argument is the address to call, and SYMBOL (the def's name) is only shown. The
-   code e, only as the last code (a "." may follow), is the argument that holds the free function of each resource the
-   call makes whose free word is C.Function; the call has one exactly when such a resource needs it. A struct passed or
-   returned by value is one code "{N:CODES}": N is its index in the program's struct table and CODES has one code per
-   field, in the struct's field order, an integer code, d, f, b, p or a nested struct; it is never an out parameter or
-   after the ".". The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold anything, so every
-   part is checked here. */
+   identifier: the result's first (code r), then each out resource's (code R), in order. A free word that starts with &
+   (`free_ref:`) names a function that takes the address of the pointer, void free(void **). A call through a C
+   function pointer has the code c first: the argument is the address to call, and SYMBOL (the def's name) is only
+   shown. The code e, only as the last code (a "." may follow), is the argument that holds the free function of each
+   resource the call makes whose free word is C.Function; the call has one exactly when such a resource needs it. A
+   struct passed or returned by value is one code "{N:CODES}": N is its index in the program's struct table and CODES
+   has one code per field, in the struct's field order, an integer code, d, f, b, p or a nested struct; it is never an
+   out parameter or after the ".". The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold
+   anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
@@ -574,7 +589,14 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
         !next_word(&at, &left, &frees.kinds[k], &frees.kind_lens[k]) ||
         !identifier(frees.kinds[k], frees.kind_lens[k]))
       bad_signature(vm, span);
+    frees.by_ref[k] = frees.names[k][0] == BY_REF;
+    if (frees.by_ref[k]) {
+      frees.names[k]++;
+      frees.lens[k]--;
+    }
     frees.by_pointer[k] = frees.lens[k] == BY_POINTER_LEN && memcmp(frees.names[k], BY_POINTER, BY_POINTER_LEN) == 0;
+    /* A free_ref: kind is always a C name: a lone & or &C.Function is no signature of the front end. */
+    if (frees.by_ref[k] && (frees.lens[k] == 0 || frees.by_pointer[k])) bad_signature(vm, span);
     any_by_pointer = any_by_pointer || frees.by_pointer[k];
     frees.calls[k] = NULL;
   }
@@ -605,8 +627,8 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   }
   bool prepared = call != NULL;
   for (uint32_t k = 0; k < frees.count && prepared; k++) {
-    /* Each free function is in the same library, or at the address the call gets, and takes the pointer:
-       void free(void *). */
+    /* Each free function is in the same library, or at the address the call gets, and takes the pointer, or its
+       address: void free(void *) or void free(void **), both one pointer to libffi. */
     char *free_text = frees.by_pointer[k] ? NULL : text_copy(frees.names[k], frees.lens[k]);
     const agc_c_type pointer = AGC_C_POINTER;
     frees.calls[k] = agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, AGC_FFI_NOT_VARIADIC, NULL, NULL,
@@ -652,7 +674,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
         if (!e->made) agc_out_of_memory();
       }
       e->made[k] = (made_kind){frees.calls[kind], text_copy(frees.kinds[kind], frees.kind_lens[kind]),
-                               frees.by_pointer[kind]};
+                               frees.by_pointer[kind], frees.by_ref[kind]};
       kind++;
     }
   }
@@ -660,6 +682,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   if (made) {
     e->free = frees.calls[0];
     e->free_by_pointer = frees.by_pointer[0];
+    e->free_by_ref = frees.by_ref[0];
     e->resource = text_copy(frees.kinds[0], frees.kind_lens[0]);
     e->symbol = symbol_text;
   } else {
@@ -684,7 +707,27 @@ static void cache_grow(agc_ffi_cache *c) {
   c->size = size;
 }
 
-static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
+/* The entry of the layout code TEXT, exactly one struct "{N:CODES}" (parse_signature has the codes), laid out as a
+   struct argument is, at most STRUCT_MAX_SIZE bytes. Its braces go through group_length first, as a struct of a
+   signature does, so the depth limit is the same. */
+static ffi_entry *parse_layout(agc_vm *vm, const agc_string *text, uint32_t span) {
+  bool grouped = text->bytes && text->data[0] == '{' && group_length(text->data, text->bytes) == text->bytes;
+  agc_c_struct *s = grouped ? layout_of(vm, text->data, text->bytes) : NULL;
+  if (s && (!agc_ffi_layout(s) || s->size > STRUCT_MAX_SIZE)) {
+    struct_free(s);
+    s = NULL;
+  }
+  if (!s) bad_signature(vm, span);
+  ffi_entry *e = calloc(1, sizeof(ffi_entry));
+  if (!e) agc_out_of_memory();
+  e->layout = true;
+  e->result_struct = s;
+  return e;
+}
+
+/* The prepared signature TEXT, or with LAYOUT the layout entry of a struct, from the cache of the run. One cache holds
+   both, so an entry of the other kind is bad bytecode. */
+static ffi_entry *find_entry(agc_vm *vm, const agc_string *text, bool layout, uint32_t span) {
   agc_runtime *rt = vm->rt;
   if (!rt->ffi) {
     rt->ffi = calloc(1, sizeof(agc_ffi_cache));
@@ -695,11 +738,14 @@ static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
   uint64_t hash = text_hash(text->data, text->bytes);
   size_t at = hash & (c->size - 1);
   for (ffi_entry *e = c->slots[at]; e; e = c->slots[at]) {
-    if (e->hash == hash && e->key_len == text->bytes && memcmp(e->key, text->data, text->bytes) == 0) return e;
+    if (e->hash == hash && e->key_len == text->bytes && memcmp(e->key, text->data, text->bytes) == 0) {
+      if (e->layout != layout) bad_signature(vm, span);
+      return e;
+    }
     at = (at + 1) & (c->size - 1);
   }
   if (c->used >= FFI_MAX_CALLS) agc_fail(vm, "RUNTIME-NATIVE-LOAD", "too many native signatures in one run", span);
-  ffi_entry *e = parse_signature(vm, text, span);
+  ffi_entry *e = layout ? parse_layout(vm, text, span) : parse_signature(vm, text, span);
   e->key = malloc(text->bytes ? text->bytes : 1);
   if (!e->key) agc_out_of_memory();
   memcpy(e->key, text->data, text->bytes);
@@ -713,27 +759,28 @@ static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
   return e;
 }
 
-/* Runs FREE_CALL, a void free(void *), on POINTER unless it is NULL: the function at AT, or the prepared one when AT is
-   NULL. */
-static void free_pointer(agc_ffi_call *free_call, void *at, void *pointer) {
-  if (!pointer) return;
-  agc_c_value arg = {.p = pointer}, unused;
+/* Runs FREE_CALL on the pointer in SLOT unless it is NULL: the function at AT, or the prepared one when AT is NULL. A
+   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. */
+static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
+  if (!*slot) return;
+  agc_c_value arg = {.p = by_ref ? (void *)slot : *slot}, unused;
   agc_ffi_invoke(free_call, at, &arg, &unused);
 }
 
-/* Frees POINTER: an owned buffer (BUFFER) is malloc'd memory, a resource goes to FREE_CALL as in free_pointer. */
-static void free_native(bool buffer, agc_ffi_call *free_call, void *at, void *pointer) {
+/* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, a resource goes to FREE_CALL as in
+   free_pointer. */
+static void free_native(bool buffer, agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (buffer) {
-    free(pointer);
+    free(*slot);
   } else {
-    free_pointer(free_call, at, pointer);
+    free_pointer(free_call, at, by_ref, slot);
   }
 }
 
 /* Calls the free function of the resource, once. */
 static void call_free(agc_c_resource *res) {
   res->closed = res->freed = true;
-  free_native(res->buffer, res->free, res->free_at, res->pointer);
+  free_native(res->buffer, res->free, res->free_at, res->by_ref, &res->pointer);
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
@@ -769,10 +816,10 @@ static void release_resource(void *native) {
 }
 
 static void make_end_frees(void *data) {
-  const end_frees *batch = data;
+  end_frees *batch = data;
   for (size_t k = 0; k < batch->count; k++) {
-    const end_free *f = &batch->items[k];
-    free_native(f->buffer, f->free, f->at, f->pointer);
+    end_free *f = &batch->items[k];
+    free_native(f->buffer, f->free, f->at, f->by_ref, &f->pointer);
   }
 }
 
@@ -832,9 +879,11 @@ static bool holds_released(agc_vm *vm, void *arg) {
 }
 
 /* Frees, on a thread apart and within BY, the resources and owned buffers of ITEMS (the registry, newest first) that
-   are still to free and that no running compute call holds; *SKIPPED tells whether one was held. Each is marked freed
-   here, before its free runs, so the end of a compute call that the loop finishes meanwhile (release_held, discard)
-   does not free it again. True when every free of the step has run. */
+   are still to free, up to the first that a running compute call still holds: that one and every older one are left,
+   since an older one may be what it points into (a database under its statement); *SKIPPED tells whether it stopped
+   so. Each is marked freed here, before its free runs, so the end of a compute call that the loop finishes meanwhile
+   (release_held, discard) does not free it again. True when every free of the step has run. A view (Native.offset)
+   has no registry entry: its parent stands for it. */
 static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipped, uint64_t by) {
   held_set busy = running_holds(vm);
   end_frees *batch = malloc(agc_size_add(sizeof *batch, agc_size_mul(count, sizeof(end_free))));
@@ -847,12 +896,12 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
     if (res->freed) continue;
     if (in_held_set(&busy, res)) {
       *skipped = true;
-      continue;
+      break;
     }
     /* Marked freed now: on a timeout or a failure below the free never runs, which the exit that follows does not
        mind. */
     res->closed = res->freed = true;
-    batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer};
+    batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref};
   }
   free(busy.items);
   if (!batch->count) {
@@ -881,15 +930,19 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   return done && (!skipped || stop_signal());
 }
 
-/* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL) and owned by the calling task
-   (none for a detached compute call, whose result is dropped and so freed at once). A NULL pointer (an out resource
-   that C left NULL) gives a resource that is closed already and was never registered: no close, owner's end or end of
-   the run frees it, and a call that takes it is RUNTIME-NATIVE-CLOSED. */
-static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, const char *name, void *pointer) {
+/* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
+   pointer when BY_REF) and owned by the calling task (none for a detached compute call, whose result is dropped and so
+   freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is closed already and was
+   never registered: no close, owner's end or end of the run frees it, and a call that takes it is
+   RUNTIME-NATIVE-CLOSED. */
+static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
+                               void *pointer) {
   agc_c_resource *res = agc_alloc(sizeof *res);
+  res->parent = NULL;
   res->pointer = pointer;
   res->free = free_call;
   res->free_at = free_at;
+  res->by_ref = by_ref;
   res->name = name;
   res->size = 0;
   res->jobs = 0;
@@ -905,7 +958,7 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_a
 
 /* The address that frees a resource of a kind: FREE_AT, the free function that the call got (code e), for a kind
    declared free: C.Function (BY_POINTER), else NULL, so its prepared call by name runs. */
-static void *free_address(bool by_pointer, void *free_at) { return by_pointer ? free_at : NULL; }
+static void *free_target(bool by_pointer, void *free_at) { return by_pointer ? free_at : NULL; }
 
 /* The resource that a call returned, as Result ok; NULL is an error that names the function. FREE_AT is the free
    function that the call got (code e), else NULL. */
@@ -915,8 +968,8 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
     return agc_error_value(message);
   }
-  return agc_result_value(true, make_resource(vm, e->free, free_address(e->free_by_pointer, free_at), e->resource,
-                                              pointer));
+  return agc_result_value(true, make_resource(vm, e->free, free_target(e->free_by_pointer, free_at),
+                                              e->free_by_ref, e->resource, pointer));
 }
 
 /* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
@@ -936,6 +989,10 @@ static agc_c_resource *buffer_of(agc_vm *vm, agc_value v) {
   if (!res->buffer) agc_wrong_tag(vm);
   return res;
 }
+
+/* The buffer of Native.memory_pointer that RES shows: its parent for a view (Native.offset), else RES itself. Its
+   `closed` and `jobs` stand for every view of it. */
+static agc_c_resource *root_of(agc_c_resource *res) { return res && res->parent ? res->parent : res; }
 
 /* The C pointer of a C.Pointer value: an owned buffer gives its memory. Whether a buffer is closed is checked apart. */
 static void *pointer_of(agc_vm *vm, agc_value v) {
@@ -968,7 +1025,11 @@ static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layo
     }
     case AGC_C_POINTER: (void)buffer_of(vm, v); break;
     case AGC_C_BYTES: agc_as_list(vm, v); break;
-    case AGC_C_RESOURCE: agc_as_c_resource(vm, v); break;
+    /* A resource parameter takes a resource of an extern block, never an owned buffer or a view of one: only
+       hand-made bytecode passes one, and held_by and c_argument read a resource as its own. */
+    case AGC_C_RESOURCE:
+      if (agc_as_c_resource(vm, v)->buffer) agc_wrong_tag(vm);
+      break;
     case AGC_C_STRUCT: {
       const agc_struct *st = agc_as_struct(vm, v);
       if (st->type != layout->index || st->n != layout->count) agc_wrong_tag(vm);
@@ -1137,11 +1198,11 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
 }
 
 /* The resource or owned buffer that argument K holds (a resource parameter, or a C.Pointer one given a buffer), or
-   NULL. */
+   NULL. A view gives its parent: the call holds the memory through it. */
 static agc_c_resource *held_by(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint32_t k) {
   if (e->out[k]) return NULL;
   if (e->params[k] == AGC_C_RESOURCE) return agc_as_c_resource(vm, agc_list_get(values, e->arg[k]));
-  if (e->params[k] == AGC_C_POINTER) return buffer_of(vm, agc_list_get(values, e->arg[k]));
+  if (e->params[k] == AGC_C_POINTER) return root_of(buffer_of(vm, agc_list_get(values, e->arg[k])));
   return NULL;
 }
 
@@ -1151,7 +1212,7 @@ static void struct_held(agc_vm *vm, const agc_c_struct *layout, agc_value v, agc
   if (!layout->pointers) return;
   const agc_struct *st = agc_as_struct(vm, v);
   for (uint32_t k = 0; k < layout->count; k++) {
-    if (layout->types[k] == AGC_C_POINTER) held[(*n)++] = buffer_of(vm, st->fields[k]);
+    if (layout->types[k] == AGC_C_POINTER) held[(*n)++] = root_of(buffer_of(vm, st->fields[k]));
     if (layout->types[k] == AGC_C_STRUCT) struct_held(vm, layout->nested[k], st->fields[k], held, n);
   }
 }
@@ -1163,7 +1224,7 @@ static bool struct_closed(agc_vm *vm, const agc_c_struct *layout, agc_value v) {
   const agc_struct *st = agc_as_struct(vm, v);
   bool closed = false;
   for (uint32_t k = 0; k < layout->count && !closed; k++) {
-    agc_c_resource *res = layout->types[k] == AGC_C_POINTER ? buffer_of(vm, st->fields[k]) : NULL;
+    agc_c_resource *res = layout->types[k] == AGC_C_POINTER ? root_of(buffer_of(vm, st->fields[k])) : NULL;
     closed = (res && res->closed) ||
              (layout->types[k] == AGC_C_STRUCT && struct_closed(vm, layout->nested[k], st->fields[k]));
   }
@@ -1226,7 +1287,8 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
-      return make_resource(vm, kind->free, free_address(kind->by_pointer, free_at), kind->name, slot->p);
+      return make_resource(vm, kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, kind->name,
+                           slot->p);
     }
     case AGC_C_STRING:
     case AGC_C_BYTES:
@@ -1252,11 +1314,15 @@ static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r
 /* The resources that a compute call with out parameters made, when nobody takes its value (the task was cancelled):
    each pointer that is not NULL is freed here, once, and no value is made. */
 static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots, void *free_at) {
-  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, free_address(e->free_by_pointer, free_at), r->p);
+  if (e->result == AGC_C_RESOURCE) {
+    void *pointer = r->p;
+    free_pointer(e->free, free_target(e->free_by_pointer, free_at), e->free_by_ref, &pointer);
+  }
   for (uint32_t k = 0; k < e->count; k++) {
     if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
     const made_kind *kind = &e->made[k];
-    free_pointer(kind->free, free_address(kind->by_pointer, free_at), slots[k].p);
+    void *pointer = slots[k].p;
+    free_pointer(kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, &pointer);
   }
 }
 
@@ -1346,7 +1412,7 @@ static void *function_at(agc_vm *vm, agc_value v, uint32_t span) {
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
   /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  ffi_entry *e = find_call(vm, agc_as_string(vm, args[0]), span);
+  ffi_entry *e = find_entry(vm, agc_as_string(vm, args[0]), false, span);
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
@@ -1428,10 +1494,12 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   return v;
 }
 
-/* Native.close(resource): see close_resource. */
+/* Native.close(resource): see close_resource. A view has no owner to close it; only hand-made bytecode passes one. */
 static agc_value builtin_native_close(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  close_resource(vm, agc_as_c_resource(vm, args[0]));
+  agc_c_resource *res = agc_as_c_resource(vm, args[0]);
+  if (res->parent) agc_wrong_tag(vm);
+  close_resource(vm, res);
   return agc_void();
 }
 
@@ -1448,21 +1516,26 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_bool(!buffer_of(vm, args[0]) && agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
+/* Whether the resource or owned buffer RES (for a view, its parent) is closed, read under rt->sync, which the caller
+   does not hold. */
+static bool buffer_closed(agc_vm *vm, agc_c_resource *res) {
+  agc_sync_take(vm);
+  bool closed = root_of(res)->closed;
+  agc_sync_drop(vm);
+  return closed;
+}
+
 /* Native.closed?(value): true when the program can no longer use VALUE: a resource closed by Native.close or by the
    end of the task that owned it, an out resource that C left NULL (closed from the start), and an owned buffer that
    Native.free or its owner's end freed. A live resource or buffer is false, and so is a C.Pointer of C, NULL included:
    it is not the program's to close (Native.null? tests NULL). A resource closed while a compute call still holds it is
    true at once, though its free waits for the call. `closed` only ever goes from false to true, under rt->sync
    (close_resource), so the read takes rt->sync as memory_at does; the row stays a leaf, since it takes and drops the
-   lock itself and does nothing else. */
+   lock itself and does nothing else. A view is closed when its parent is. */
 static agc_value builtin_native_closed_p(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   if (agc_is(args[0], AGC_T_C_POINTER)) return agc_bool(false);
-  const agc_c_resource *res = agc_as_c_resource(vm, args[0]);
-  agc_sync_take(vm);
-  bool closed = res->closed;
-  agc_sync_drop(vm);
-  return agc_bool(closed);
+  return agc_bool(buffer_closed(vm, agc_as_c_resource(vm, args[0])));
 }
 
 /* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
@@ -1471,23 +1544,62 @@ static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
 }
 
-/* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a
-   resource: Native.free, the owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's
-   hand-made bytecode (no_files) may not make one, as it may not call. */
-static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  int64_t size = agc_as_int(vm, args[0]);
-  if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", span + 1);
+/* Native.address(pointer), the inverse of Native.pointer: the integer value of the pointer, for a difference of two
+   pointers into one block, a comparison with a sentinel or a log line. A freed buffer is RUNTIME-NATIVE-CLOSED: its
+   address may already be another block's. */
+static agc_value builtin_native_address(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_c_resource *res = buffer_of(vm, args[0]);
+  if (res && buffer_closed(vm, res)) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
+  return agc_int((int64_t)(intptr_t)(res ? res->pointer : agc_as_c_pointer(vm, args[0])));
+}
+
+/* Native.offset(pointer, n): the pointer N bytes further. A C pointer gives the plain sum, wrapping as an address
+   does; C vouches for it, as for any pointer it gives. An owned buffer gives a view: the same memory from byte N to the
+   buffer's end (N from 0 to its size, else RUNTIME-NATIVE-BOUNDS), with the bounds checks of a buffer. The view keeps
+   its parent (the buffer of Native.memory_pointer, also for a view of a view), which owns the memory: the parent's
+   free closes the view, a compute call that takes the view holds the parent (held_by), and Native.free of a view is
+   RUNTIME-NATIVE-NOT-OWNED. The view is allocated first, so a failure after it leaves only garbage; its pointer is
+   computed after the check, and a parent freed later fails every use of the view before the pointer is read. */
+static agc_value builtin_native_offset(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_c_resource *res = buffer_of(vm, args[0]);
+  int64_t n = agc_as_int(vm, args[1]);
+  if (!res) return agc_c_pointer_value((void *)((uintptr_t)agc_as_c_pointer(vm, args[0]) + (uintptr_t)n));
+  agc_c_resource *view = agc_alloc(sizeof *view);
+  if (buffer_closed(vm, res)) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
+  if (n < 0 || (uint64_t)n > res->size)
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the offset is outside the owned buffer", span + 2);
+  view->parent = root_of(res);
+  view->state = NULL;
+  view->pointer = (uint8_t *)res->pointer + n;
+  view->free = NULL;
+  view->free_at = NULL;
+  view->by_ref = false;
+  view->name = BUFFER_NAME;
+  view->size = res->size - (size_t)n;
+  view->jobs = 0;
+  view->closed = view->freed = false;
+  view->buffer = true;
+  return agc_c_resource_value(view);
+}
+
+/* A new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a resource: Native.free, the
+   owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's hand-made bytecode (no_files)
+   may not make one, as it may not call: each caller checks no_files before it reads its argument. A bad size fails
+   at SIZE_SPAN. */
+static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t size_span) {
+  if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", size_span);
   /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
      program's error, not the VM's out of memory. */
   agc_c_resource *res = agc_alloc(sizeof *res);
+  res->parent = NULL;
   void *memory = (uint64_t)size <= BUFFER_MAX && (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
-  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", span + 1);
+  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", size_span);
   /* Zeroing the memory grows with the size, as the copy of a C.String argument does. */
   agc_charge_bytes(vm, (size_t)size);
   res->pointer = memory;
   res->free = NULL;
   res->free_at = NULL;
+  res->by_ref = false;
   res->name = BUFFER_NAME;
   res->size = (size_t)size;
   res->jobs = 0;
@@ -1496,6 +1608,24 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   res->state = agc_register(vm, res, release_resource);
   agc_own(vm, res->state, close_owned);
   return agc_c_resource_value(res);
+}
+
+/* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (new_buffer). */
+static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  return new_buffer(vm, agc_as_int(vm, args[0]), span + 1);
+}
+
+/* Native.from_string(text), Ruby ffi's MemoryPointer.from_string: a new owned buffer of the text's UTF-8 bytes and a
+   trailing NUL (new_buffer zeroes it), so its size is text.bytesize + 1. A NUL inside the text is copied like any
+   byte: C that takes the length reads it all, which a C.String cannot give. A String lies in memory, so bytes + 1
+   fits an int64_t; a size the system cannot give is new_buffer's to refuse (its BUFFER_MAX and SIZE_MAX check). */
+static agc_value builtin_from_string(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  const agc_string *text = agc_as_string(vm, args[0]);
+  agc_value buffer = new_buffer(vm, (int64_t)text->bytes + 1, span + 1);
+  if (text->bytes) memcpy(agc_as_c_resource(vm, buffer)->pointer, text->data, text->bytes);
+  return buffer;
 }
 
 /* The first step calls the block with the buffer; the second frees the buffer, as Native.free does, and ends the call
@@ -1514,21 +1644,32 @@ static agc_step buffer_block_step(agc_vm *vm, agc_stepper *self, agc_value last)
   return (agc_step){.kind = AGC_STEP_END, .value = last};
 }
 
-/* Native.memory_pointer(size) do |buf| ... end, Ruby ffi's MemoryPointer.new(size) { |p| ... }: a new owned buffer
-   for the block, freed when the block ends; the call returns the block's value. */
-static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint32_t span) {
+/* Yields BUFFER, a new owned buffer, to the block (the last argument) and frees it when the block ends. */
+static agc_value buffer_for_block(agc_vm *vm, agc_value buffer) {
   buffer_block *b = agc_alloc(sizeof *b);
-  b->buffer = builtin_memory_pointer(vm, args, span);
+  b->buffer = buffer;
   b->stepper.step = buffer_block_step;
   agc_task_stepper(vm, &b->stepper);
   return agc_void();
 }
 
+/* Native.memory_pointer(size) do |buf| ... end, Ruby ffi's MemoryPointer.new(size) { |p| ... }: a new owned buffer
+   for the block, freed when the block ends; the call returns the block's value. */
+static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  return buffer_for_block(vm, builtin_memory_pointer(vm, args, span));
+}
+
+/* Native.from_string(text) do |buf| ... end: the buffer of Native.from_string for the block, as above. */
+static agc_value builtin_from_string_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  return buffer_for_block(vm, builtin_from_string(vm, args, span));
+}
+
 /* Native.free(pointer): frees an owned buffer once, as Native.close frees a resource; a C.Pointer that C gave is not
-   the program's to free. */
+   the program's to free, and neither is a view (Native.offset), whose parent owns the memory. */
 static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_c_resource *res = buffer_of(vm, args[0]);
-  if (!res) agc_fail(vm, "RUNTIME-NATIVE-NOT-OWNED", "Native.free takes a buffer of Native.memory_pointer", span + 1);
+  if (!res || res->parent)
+    agc_fail(vm, "RUNTIME-NATIVE-NOT-OWNED", "Native.free takes a buffer of Native.memory_pointer", span + 1);
   close_resource(vm, res);
   return agc_void();
 }
@@ -1536,7 +1677,8 @@ static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span)
 /* The address of what a memory builtin reads or writes (ASK) at the pointer P, its first argument (span + 1). The
    fuzzer's hand-made bytecode (no_files) may not touch memory, as it may not call. An owned buffer knows its size: a
    freed one is RUNTIME-NATIVE-CLOSED, and any byte before or past it RUNTIME-NATIVE-BOUNDS, so nothing outside it is
-   ever read or written. A C.Pointer of C has no size: NULL fails unless nothing is asked for (a count of 0, the C way
+   ever read or written; a view (Native.offset) has the size from its offset to its parent's end, and is freed when
+   the parent is. A C.Pointer of C has no size: NULL fails unless nothing is asked for (a count of 0, the C way
    to say "empty": SQLite gives NULL for an empty blob), a negative offset fails, and any other address is used as it
    is. Native code is trusted: memory that C does not own is undefined behavior, like a wrong signature. Then a
    negative count fails. The memory rows are not shared: a read at a C pointer runs beside the other schedulers. For an
@@ -1548,7 +1690,7 @@ static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span
   *locked = res != NULL;
   if (res) agc_sync_take(vm);
   uint8_t *base = res ? res->pointer : agc_as_c_pointer(vm, p);
-  if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
+  if (res && root_of(res)->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
   if (!base && ask.count != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a memory access at a NULL C.Pointer", span + 1);
   if (ask.offset < 0) agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "a memory offset must be nonnegative", ask.offset_span);
   if (ask.count < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", ask.count_span);
@@ -1626,7 +1768,7 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
   } else if (kind == ITEM_POINTER) {
     agc_c_resource *res = buffer_of(vm, v);
     if (!res) (void)agc_as_c_pointer(vm, v);
-    if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span);
+    if (res && root_of(res)->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span);
   } else if (kind == ITEM_BYTE) {
     int64_t n = agc_as_int(vm, v);
     if (n < 0 || n > 255) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a byte must be 0 to 255", span);
@@ -1722,6 +1864,47 @@ static agc_value builtin_put_string(agc_vm *vm, agc_value *args, uint32_t span) 
     agc_fail(vm, "RUNTIME-INVALID-CHARACTER", "the text holds a NUL character", span + 3);
   if (text->bytes) memcpy(at, text->data, text->bytes);
   at[text->bytes] = 0;
+  memory_done(vm, locked);
+  return agc_void();
+}
+
+/* The layout of the C struct that the layout code TEXT names ("{N:CODES}", compiler/lower/lower_native.agc), laid out
+   as a struct argument is. The struct rows are shared: the cache is read and grown under rt->sync. */
+static const agc_c_struct *struct_layout(agc_vm *vm, agc_value text, uint32_t span) {
+  return find_entry(vm, agc_as_string(vm, text), true, span)->result_struct;
+}
+
+/* Native.size_of(Struct), Ruby ffi's Struct.size: the bytes of the C struct, its tail padding included, so element k
+   of an array of them is at k times the size. */
+static agc_value builtin_size_of(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_int((int64_t)struct_layout(vm, args[0], span + 1)->size);
+}
+
+/* Native.get_struct(pointer, offset, Struct), Ruby ffi's Struct.new(pointer): the struct value read from the C struct
+   at OFFSET bytes past the pointer, as a struct result is read, with the bounds of get_int32. */
+static agc_value builtin_get_struct(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_c_struct *layout = struct_layout(vm, args[2], span + 3);
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, layout->size, span + 2, span + 2};
+  bool locked;
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  agc_value v = struct_value(layout, at);
+  memory_done(vm, locked);
+  return v;
+}
+
+/* Native.put_struct(pointer, offset, value): writes VALUE as its C struct (the layout code is the fourth argument,
+   which the front end adds) at OFFSET bytes past the pointer, as a struct argument is written. The fields are checked
+   first, so a bad one leaves the memory as it was; a freed buffer in a C.Pointer field fails like a freed buffer that
+   put_pointer stores, and a live one is stored as an untracked address. The row is shared, so no free comes between
+   the check and the write. */
+static agc_value builtin_put_struct(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_c_struct *layout = struct_layout(vm, args[3], span + 4);
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, layout->size, span + 2, span + 2};
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  check_argument(vm, AGC_C_STRUCT, layout, args[2], span + 3);
+  if (struct_closed(vm, layout, args[2])) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 3);
+  struct_write(vm, layout, args[2], at);
   memory_done(vm, locked);
   return agc_void();
 }
@@ -1903,6 +2086,28 @@ static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t spa
   return native_wait_on(vm, args, span, true);
 }
 
+/* Native.load(library): opens the library that the front end resolved like the one of an extern block, so a program
+   can handle a missing one (error with the loader's text) before its first call. The library stays open
+   (agc_ffi_open), and the calls prepared later find it loaded; a missing function is still RUNTIME-NATIVE-LOAD at its
+   call. Refused at load like any Native.* builtin (agc_ffi_refusal). */
+static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  char *library = agc_cstr(agc_as_string(vm, args[0]));
+  /* The error has the "native: " prefix of the other Native.* results, then the loader's message. */
+  char error[512] = "native: ";
+  size_t prefix = strlen(error);
+  bool opened = false;
+  if (!library || !*library) {
+    snprintf(error + prefix, sizeof error - prefix, "cannot open the library: its name is empty or holds a NUL");
+  } else {
+    opened = agc_ffi_open(library, error + prefix, sizeof error - prefix);
+  }
+  free(library);
+  agc_charge(vm, FFI_CALL_COST);
+  if (opened) return agc_result_value(true, agc_void());
+  return agc_result_value(false, agc_string_value(loader_text(error)));
+}
+
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {
   if (program->native_import == UINT32_MAX) return NULL;
   *span = program->native_function == UINT32_MAX ? 0 : program->functions[program->native_function].span;
@@ -1920,47 +2125,55 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 }
 
 const agc_builtin agc_ffi_builtins[] = {
-  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.closed?", 1, builtin_native_closed_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
-  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.memory_pointer", 2, builtin_memory_pointer_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_int32", 2, builtin_get_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_int64", 2, builtin_get_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_uint8", 2, builtin_get_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_uint16", 2, builtin_get_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_uint32", 2, builtin_get_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_float32", 2, builtin_get_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_float64", 2, builtin_get_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.get_pointer", 2, builtin_get_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_int8", 3, builtin_put_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_int16", 3, builtin_put_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_int32", 3, builtin_put_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_int64", 3, builtin_put_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_float32", 3, builtin_put_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_float64", 3, builtin_put_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_pointer", 3, builtin_put_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.put_string", 3, builtin_put_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_array_of_int32", 3, builtin_get_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_array_of_int64", 3, builtin_get_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_array_of_float32", 3, builtin_get_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.get_array_of_float64", 3, builtin_get_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.put_array_of_int32", 3, builtin_put_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.put_bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.closed?", 1, builtin_native_closed_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.address", 1, builtin_native_address, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.offset", 2, builtin_native_offset, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.memory_pointer", 2, builtin_memory_pointer_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.from_string", 1, builtin_from_string, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.from_string", 2, builtin_from_string_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_int32", 2, builtin_get_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_int64", 2, builtin_get_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_uint8", 2, builtin_get_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_uint16", 2, builtin_get_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_uint32", 2, builtin_get_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_float32", 2, builtin_get_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_float64", 2, builtin_get_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.get_pointer", 2, builtin_get_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_int8", 3, builtin_put_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_int16", 3, builtin_put_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_int32", 3, builtin_put_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_int64", 3, builtin_put_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_float32", 3, builtin_put_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_float64", 3, builtin_put_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_pointer", 3, builtin_put_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.put_string", 3, builtin_put_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_array_of_int32", 3, builtin_get_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_array_of_int64", 3, builtin_get_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_array_of_float32", 3, builtin_get_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.get_array_of_float64", 3, builtin_get_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.put_array_of_int32", 3, builtin_put_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.put_bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Native.size_of", 1, builtin_size_of, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.get_struct", 3, builtin_get_struct, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Native.put_struct", 4, builtin_put_struct, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

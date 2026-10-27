@@ -203,17 +203,17 @@ static agc_value test_block(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static const agc_builtin test_builtins[] = {
-  {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.net_where", 1, test_net_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.service", 1, test_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.no_pending", 1, test_no_pending, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.hop", 1, test_hop, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Test.tick", 1, test_tick, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Test.main_here", 1, test_main_here, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.net_where", 1, test_net_where, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.service", 1, test_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.no_pending", 1, test_no_pending, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.hop", 1, test_hop, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Test.tick", 1, test_tick, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Test.main_here", 1, test_main_here, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 /* The index of the next instruction of F, the target of a jump. */

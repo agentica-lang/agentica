@@ -4,18 +4,13 @@
 # order, catch one SQL error and keep going, then COPY the table to CSV and to
 # Parquet and read both files back with their counts and typed rows compared.
 #
-# The extern block stays private at the end of this file; main.agc only calls
-# run_demo. Every DuckDB handle lives in an 8-byte slot this task owns
-# (Native.memory_pointer(8)). The helpers close the handle and free the slot on
-# every normal path, including the error paths, by capturing the Result,
-# closing, and only then returning it. A halt, a task cancel, or a runtime
-# abort of the whole run does NOT run this cleanup: raw C handles have no
-# destructor here (duckdb_close takes a pointer to the handle, so no resource
-# free fits it, and there is no C shim), so this file never hands a live
-# handle to another task. See README.md.
+# The extern block stays private in this file; main.agc only calls run_demo.
+# The database and the connection are resources: duckdb_close and
+# duckdb_disconnect take the address of the handle, so the resources name them
+# with free_ref:. The helpers close each one on every normal path, and the
+# end of the owning task (a cancel or an error included) closes what is left.
+# See README.md.
 VERSION_WANT = "v2.0.0"
-RESULT_BYTES = 48
-HANDLE_BYTES = 8
 STATE_OK = 0
 TYPE_INTEGER = 4
 TYPE_BIGINT = 5
@@ -43,6 +38,44 @@ struct PeopleRead
   lines: List[String]
 end
 
+# The C signatures below are copied from the pinned header
+# (duckdb v2.0.0, src/include/duckdb.h): idx_t is 64 bits, so the counts read
+# through C.Int64, which holds every small count of this demo. duckdb_open and
+# duckdb_connect write the new handle to an out resource, which is closed
+# already when C left it NULL. DuckdbResult is the duckdb_result that
+# duckdb_query fills: the program only sizes its buffer with it
+# (Native.size_of) and leaves the fields to the duckdb_* accessors.
+extern "duckdb"
+  resource Database, free_ref: duckdb_close
+  resource Connection, free_ref: duckdb_disconnect
+
+  struct DuckdbResult
+    deprecated_column_count: C.Int64
+    deprecated_row_count: C.Int64
+    deprecated_rows_changed: C.Int64
+    deprecated_columns: C.Pointer
+    deprecated_error_message: C.Pointer
+    internal_data: C.Pointer
+  end
+
+  def duckdb_library_version() -> C.String
+  def duckdb_open(path: C.String, out db: Database) -> C.Int32
+  def duckdb_connect(db: Database, out conn: Connection) -> C.Int32
+  def duckdb_query(conn: Connection, sql: C.String, out_buf: C.Pointer) -> C.Int32
+  def duckdb_destroy_result(buf: C.Pointer) -> Void
+  def duckdb_result_error(buf: C.Pointer) -> C.Pointer
+  def duckdb_free(at: C.Pointer) -> Void
+  def duckdb_column_count(buf: C.Pointer) -> C.Int64
+  def duckdb_column_type(buf: C.Pointer, col: C.Int64) -> C.Int32
+  def duckdb_row_count(buf: C.Pointer) -> C.Int64
+  def duckdb_rows_changed(buf: C.Pointer) -> C.Int64
+  def duckdb_value_is_null(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Bool
+  def duckdb_value_int32(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Int32
+  def duckdb_value_int64(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Int64
+  def duckdb_value_double(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Double
+  def duckdb_value_varchar(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Pointer
+end
+
 export def run_demo(out_dir: String) -> Result[Void]
   have = version()
   if have != VERSION_WANT
@@ -60,7 +93,7 @@ export def run_demo(out_dir: String) -> Result[Void]
   end
   db = db_out.unwrap!()
   done = run_all(db, csv_path, parquet_path)
-  close_db(db)
+  Native.close(db)
   return done
 end
 
@@ -83,18 +116,18 @@ def refuse_existing(path: String) -> Result[Void]
   return ok()
 end
 
-def run_all(db: C.Pointer, csv_path: String, parquet_path: String) -> Result[Void]
+def run_all(db: Database, csv_path: String, parquet_path: String) -> Result[Void]
   conn_out = connect_db(db)
   if !conn_out.ok?()
     return error(conn_out.message())
   end
   conn = conn_out.unwrap!()
   done = phases(conn, csv_path, parquet_path)
-  disconnect_db(conn)
+  Native.close(conn)
   return done
 end
 
-def phases(conn: C.Pointer, csv_path: String, parquet_path: String) -> Result[Void]
+def phases(conn: Connection, csv_path: String, parquet_path: String) -> Result[Void]
   try setup(conn)
   try seed(conn)
   try show_people(conn)
@@ -104,14 +137,14 @@ def phases(conn: C.Pointer, csv_path: String, parquet_path: String) -> Result[Vo
   return ok()
 end
 
-def setup(conn: C.Pointer) -> Result[Void]
+def setup(conn: Connection) -> Result[Void]
   try exec_sql(conn, "SET threads TO 1")
   try exec_sql(conn, "SET memory_limit TO '128MiB'")
   try exec_sql(conn, "CREATE TABLE people(id INTEGER, code BIGINT, score DOUBLE, name VARCHAR)")
   return ok()
 end
 
-def seed(conn: C.Pointer) -> Result[Void]
+def seed(conn: Connection) -> Result[Void]
   out = query_buffer(conn, "INSERT INTO people VALUES (1, 10000000000, 9.5, 'Ada'), (2, -42, -0.25, 'Böb \"Jr\"'), (3, 0, NULL, NULL), (4, 7, 3.125, 'O''Brien')")
   if !out.ok?()
     return error(out.message())
@@ -125,7 +158,7 @@ def seed(conn: C.Pointer) -> Result[Void]
   return ok()
 end
 
-def show_people(conn: C.Pointer) -> Result[Void]
+def show_people(conn: Connection) -> Result[Void]
   got = try fetch_people(conn, "SELECT id, code, score, name FROM people ORDER BY id")
   if got.lines.join("\n") != WANT_ROWS.join("\n")
     return error("duckdb: people rows differ: #{got.lines.join(" | ")}")
@@ -136,7 +169,7 @@ def show_people(conn: C.Pointer) -> Result[Void]
   return ok()
 end
 
-def show_error(conn: C.Pointer) -> Result[Void]
+def show_error(conn: Connection) -> Result[Void]
   out = query_buffer(conn, "SELECT * FROM no_such_table_xyz")
   if out.ok?()
     close_result(out.unwrap!())
@@ -146,7 +179,7 @@ def show_error(conn: C.Pointer) -> Result[Void]
   return ok()
 end
 
-def csv_roundtrip(conn: C.Pointer, csv_path: String) -> Result[Void]
+def csv_roundtrip(conn: Connection, csv_path: String) -> Result[Void]
   try exec_sql(conn, "COPY people TO #{sql_path(csv_path)} (HEADER)")
   try exec_sql(conn, "CREATE TABLE people_csv(id INTEGER, code BIGINT, score DOUBLE, name VARCHAR)")
   try exec_sql(conn, "COPY people_csv FROM #{sql_path(csv_path)} (HEADER)")
@@ -160,7 +193,7 @@ def csv_roundtrip(conn: C.Pointer, csv_path: String) -> Result[Void]
   return ok()
 end
 
-def parquet_roundtrip(conn: C.Pointer, parquet_path: String) -> Result[Void]
+def parquet_roundtrip(conn: Connection, parquet_path: String) -> Result[Void]
   try exec_sql(conn, "COPY people TO #{sql_path(parquet_path)} (FORMAT PARQUET)")
   try exec_sql(conn, "CREATE TABLE people_parquet(id INTEGER, code BIGINT, score DOUBLE, name VARCHAR)")
   try exec_sql(conn, "COPY people_parquet FROM #{sql_path(parquet_path)}")
@@ -168,7 +201,7 @@ def parquet_roundtrip(conn: C.Pointer, parquet_path: String) -> Result[Void]
   return ok()
 end
 
-def check_same(conn: C.Pointer, label: String, sql: String) -> Result[Void]
+def check_same(conn: Connection, label: String, sql: String) -> Result[Void]
   n = try scalar_count(conn, "SELECT COUNT(*) FROM #{label_table(label)}")
   if n != 4
     return error("duckdb: #{label} roundtrip has #{n} rows, want 4")
@@ -188,7 +221,7 @@ def label_table(label: String) -> String
   return "people_parquet"
 end
 
-def scalar_count(conn: C.Pointer, sql: String) -> Result[Int]
+def scalar_count(conn: Connection, sql: String) -> Result[Int]
   out = query_buffer(conn, sql)
   if !out.ok?()
     return error(out.message())
@@ -203,7 +236,7 @@ def scalar_count(conn: C.Pointer, sql: String) -> Result[Int]
   return ok(value)
 end
 
-def fetch_people(conn: C.Pointer, sql: String) -> Result[PeopleRead]
+def fetch_people(conn: Connection, sql: String) -> Result[PeopleRead]
   out = query_buffer(conn, sql)
   if !out.ok?()
     return error(out.message())
@@ -214,7 +247,7 @@ def fetch_people(conn: C.Pointer, sql: String) -> Result[PeopleRead]
   return rendered
 end
 
-def fetch_lines(conn: C.Pointer, sql: String) -> Result[List[String]]
+def fetch_lines(conn: Connection, sql: String) -> Result[List[String]]
   got = try fetch_people(conn, sql)
   return ok(got.lines)
 end
@@ -275,47 +308,27 @@ def sql_path(path: String) -> String
   return "'#{String.replace(path, "'", "''")}'"
 end
 
-def open_db(path: String) -> Result[C.Pointer]
-  slot = Native.memory_pointer(HANDLE_BYTES)
-  state = duckdb_open(path, slot)
-  if state != STATE_OK
-    Native.free(slot)
+# A failed open may still give a handle, which duckdb_close frees: close it
+# before the error. A NULL handle is a closed resource, which close skips.
+def open_db(path: String) -> Result[Database]
+  opened = duckdb_open(path)
+  if opened.result != STATE_OK or Native.closed?(opened.db)
+    Native.close(opened.db)
     return error("duckdb_open(#{path}) failed")
   end
-  if Native.null?(Native.get_pointer(slot, 0))
-    Native.free(slot)
-    return error("duckdb_open(#{path}) returned NULL")
-  end
-  return ok(slot)
+  return ok(opened.db)
 end
 
-def close_db(slot: C.Pointer) -> Void
-  duckdb_close(slot)
-  Native.put_pointer(slot, 0, Native.null())
-  Native.free(slot)
-end
-
-def connect_db(db: C.Pointer) -> Result[C.Pointer]
-  slot = Native.memory_pointer(HANDLE_BYTES)
-  state = duckdb_connect(Native.get_pointer(db, 0), slot)
-  if state != STATE_OK
-    Native.free(slot)
+def connect_db(db: Database) -> Result[Connection]
+  connected = duckdb_connect(db)
+  if connected.result != STATE_OK or Native.closed?(connected.conn)
+    Native.close(connected.conn)
     return error("duckdb_connect failed")
   end
-  if Native.null?(Native.get_pointer(slot, 0))
-    Native.free(slot)
-    return error("duckdb_connect returned NULL")
-  end
-  return ok(slot)
+  return ok(connected.conn)
 end
 
-def disconnect_db(slot: C.Pointer) -> Void
-  duckdb_disconnect(slot)
-  Native.put_pointer(slot, 0, Native.null())
-  Native.free(slot)
-end
-
-def exec_sql(conn: C.Pointer, sql: String) -> Result[Void]
+def exec_sql(conn: Connection, sql: String) -> Result[Void]
   out = query_buffer(conn, sql)
   if !out.ok?()
     return error(out.message())
@@ -324,9 +337,9 @@ def exec_sql(conn: C.Pointer, sql: String) -> Result[Void]
   return ok()
 end
 
-def query_buffer(conn: C.Pointer, sql: String) -> Result[C.Pointer]
-  buf = Native.memory_pointer(RESULT_BYTES)
-  state = duckdb_query(Native.get_pointer(conn, 0), sql, buf)
+def query_buffer(conn: Connection, sql: String) -> Result[C.Pointer]
+  buf = Native.memory_pointer(Native.size_of(DuckdbResult))
+  state = duckdb_query(conn, sql, buf)
   if state != STATE_OK
     message = read_error(buf)
     duckdb_destroy_result(buf)
@@ -359,32 +372,4 @@ def read_text_cell(buf: C.Pointer, col: Int, row: Int) -> String
   text = Native.get_string(at, 0)
   duckdb_free(at)
   return text
-end
-
-# The C signatures below are copied from the pinned header
-# (duckdb v2.0.0, src/include/duckdb.h): idx_t is 64 bits, so the counts read
-# through C.Int64, which holds every small count of this demo. The result
-# buffer is 3 idx_t values then 3 pointers: 48 bytes, alignment 8. Only plain
-# C.Pointer parameters cross here: the database and connection handles stay in
-# owned 8-byte slots above, because duckdb_close and duckdb_disconnect take a
-# pointer to the handle, not the handle value.
-extern "duckdb"
-  def duckdb_library_version() -> C.String
-  def duckdb_open(path: C.String, db_slot: C.Pointer) -> C.Int32
-  def duckdb_close(db_slot: C.Pointer) -> Void
-  def duckdb_connect(db: C.Pointer, conn_slot: C.Pointer) -> C.Int32
-  def duckdb_disconnect(conn_slot: C.Pointer) -> Void
-  def duckdb_query(conn: C.Pointer, sql: C.String, out_buf: C.Pointer) -> C.Int32
-  def duckdb_destroy_result(buf: C.Pointer) -> Void
-  def duckdb_result_error(buf: C.Pointer) -> C.Pointer
-  def duckdb_free(at: C.Pointer) -> Void
-  def duckdb_column_count(buf: C.Pointer) -> C.Int64
-  def duckdb_column_type(buf: C.Pointer, col: C.Int64) -> C.Int32
-  def duckdb_row_count(buf: C.Pointer) -> C.Int64
-  def duckdb_rows_changed(buf: C.Pointer) -> C.Int64
-  def duckdb_value_is_null(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Bool
-  def duckdb_value_int32(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Int32
-  def duckdb_value_int64(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Int64
-  def duckdb_value_double(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Double
-  def duckdb_value_varchar(buf: C.Pointer, col: C.Int64, row: C.Int64) -> C.Pointer
 end

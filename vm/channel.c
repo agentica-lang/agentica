@@ -317,11 +317,11 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_channel_builtins[] = {
-  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

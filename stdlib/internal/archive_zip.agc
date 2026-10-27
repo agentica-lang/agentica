@@ -17,8 +17,8 @@
 ## validates every local record even after the selected files, so corruption past a selected file is still an error.
 ##
 ## Only stored (method 0) and raw deflate (method 8) entries are supported. Selected deflate payloads stream through
-## `Zlib.inflate_init(-15, ...)` within the exact compressed window, and the CRC32 and the uncompressed size of
-## every selected file are verified. Unselected payloads are skipped by their compressed size with structure and
+## `lazy.inflate(true, ...)` within the exact compressed window, and the CRC32 and the uncompressed size of every
+## selected file are verified. Unselected payloads are skipped by their compressed size with structure and
 ## offset checks only: they are never inflated or CRC-checked. Data descriptors (bit 3) resolve against the sizes
 ## the central directory holds, never by scanning for the descriptor magic. Names need the UTF-8 flag to hold
 ## anything but ASCII; anything else is legacy CP437 and is refused, never misdecoded.
@@ -115,6 +115,20 @@ struct Stream
   buf: List[Int]
   raw: Int
   eof: Bool
+end
+
+# One piece of the compressed window of a deflated entry, as Lazy.produce gives it: the bytes read last, how many
+# are still to read, and whether the window is over.
+struct Piece
+  bytes: List[Int]
+  left: Int
+  done: Bool
+end
+
+# What the inflated bytes of one entry came to so far: their count and their CRC32.
+struct Pump
+  got: Int
+  crc: Int
 end
 
 # The moved stream with the bytes a take produced.
@@ -267,13 +281,6 @@ end
 
 def close_file(handle: FileHandle, budget: Int) -> Void
   case File.close(handle, budget)
-    ok(_) -> return
-    error(_) -> return
-  end
-end
-
-def close_decoder(dec: ZlibDecoder) -> Void
-  case Zlib.decoder_close(dec)
     ok(_) -> return
     error(_) -> return
   end
@@ -1054,101 +1061,75 @@ def chain_crc(piece: List[Int], crc: Int, canon: String) -> Result[Int]
   end
 end
 
-# Streams one deflated file through a raw inflate decoder within the exact compressed window: every byte taken from
-# the archive counts, leftover or missing bytes are an error, and the size and CRC32 must match.
+# Streams one deflated file through a raw inflate within the exact compressed window: every byte taken from the
+# archive counts, leftover or missing bytes are an error, and the size and CRC32 must match. The window starts with
+# the bytes the stream already read past the local header (at most csize of them, taken first) and goes on from the
+# stream's handle, csize bytes in all.
 def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src: String) -> Result[Stream]
-  out_cap = entry.usize
-  if out_cap == 0
-    out_cap = 1
+  held = List.take(st.buf, entry.csize)
+  start = Piece(bytes: held, left: entry.csize - held.size, done: false)
+  raw = try add_cap(st.raw, start.left, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
+  cap = entry.usize
+  if cap == 0
+    cap = 1
   end
-  case Zlib.inflate_init(-15, entry.csize, out_cap)
-    ok(decoder) -> return inflate_payload(st, entry, handle, decoder, deadline, src)
-    error(message) -> return error("archive: cannot decode #{entry.canon}: #{message}")
+  source = st.handle
+  outcome = Lazy.produce(start) do |piece: Piece| try next_piece(source, piece, deadline, src, entry.canon) end
+    .take_while do |piece: Piece| !piece.done end
+    .map do |piece: Piece| piece.bytes end
+    .inflate(true, cap)
+    .reduce(Pump(got: 0, crc: 0)) do |pump: Pump, out: List[Int]| try pump_out(handle, pump, out, deadline, entry) end
+  case outcome
+    ok(pump) ->
+      if pump.got != entry.usize
+        return error("archive: size mismatch for #{entry.canon}: expected #{entry.usize}, got #{pump.got}")
+      end
+      if pump.crc != entry.crc
+        return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{pump.crc}")
+      end
+      return ok(st.with(buf: List.drop(st.buf, held.size), raw: raw))
+    error(message) -> return error(inflate_error(message, entry.canon))
   end
 end
 
-def inflate_payload(
-  st: Stream,
-  entry: Entry,
-  handle: FileHandle,
-  decoder: ZlibDecoder,
-  deadline: Int,
-  src: String,
-) -> Result[Stream]
-  fed = 0
-  got = 0
-  crc = 0
-  idle = 0
-  pending: List[Int] = []
-  done = false
-  while !done
-    if Time.monotonic_ms() >= deadline
-      close_decoder(decoder)
-      return error("archive: operation timed out")
-    end
-    if pending.size == 0 and fed < entry.csize
-      want = smaller(entry.csize - fed, CHUNK)
-      taken = try stream_take(st, want, INPUT_BYTES, deadline, src, "compressed data of #{entry.canon}")
-      st = taken.stream
-      fed += taken.bytes.size
-      pending = taken.bytes
-    end
-    quantum = 1
-    remaining = entry.usize - got
-    if remaining < 0
-      remaining = 0
-    end
-    if remaining > 0
-      quantum = smaller(remaining, CHUNK)
-    end
-    case Zlib.inflate_next(decoder, pending, quantum)
-      ok(step) ->
-        pending = List.drop(pending, step.consumed)
-        if step.output.size > 0
-          case File.write_bytes(handle, step.output, try time_left(deadline))
-            ok(_) -> got += step.output.size
-            error(message) ->
-              close_decoder(decoder)
-              return error("archive: cannot write a selected file: #{message}")
-          end
-          crc = try chain_crc(step.output, crc, entry.canon)
-        end
-        if step.consumed == 0 and step.output.size == 0
-          if pending.size == 0 and fed == entry.csize
-            close_decoder(decoder)
-            return error("archive: truncated deflate data for #{entry.canon}")
-          end
-          idle += 1
-        else
-          idle = 0
-        end
-        if idle > 8
-          close_decoder(decoder)
-          return error("archive: deflate data is invalid for #{entry.canon}")
-        end
-        done = step.finished
-        if done and (pending.size > 0 or fed != entry.csize)
-          close_decoder(decoder)
-          return error("archive: trailing bytes after the deflate stream of #{entry.canon}")
-        end
-      error(message) ->
-        close_decoder(decoder)
-        return error("archive: deflate data is invalid for #{entry.canon}: #{message}")
-    end
+# The next piece of a compressed window, at most CHUNK bytes; a window that runs past the end of the file is
+# truncated.
+def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, canon: String) -> Result[Piece]
+  if piece.left == 0
+    return ok(Piece(bytes: [], left: 0, done: true))
   end
-  case Zlib.inflate_finish(decoder)
-    ok(_) -> close_decoder(decoder)
-    error(message) ->
-      close_decoder(decoder)
-      return error("archive: truncated deflate data for #{entry.canon}: #{message}")
+  if Time.monotonic_ms() >= deadline
+    return error("archive: operation timed out")
   end
-  if got != entry.usize
-    return error("archive: size mismatch for #{entry.canon}: expected #{entry.usize}, got #{got}")
+  want = smaller(piece.left, CHUNK)
+  bytes = try read_chunk(handle, want, deadline, src)
+  if bytes.size < want
+    return error("archive: truncated ZIP data, needed #{want} bytes for compressed data of #{canon}")
   end
-  if crc != entry.crc
-    return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}")
+  return ok(Piece(bytes: bytes, left: piece.left - want, done: false))
+end
+
+# Writes one inflated piece of a selected file and chains its CRC32.
+def pump_out(handle: FileHandle, pump: Pump, out: List[Int], deadline: Int, entry: Entry) -> Result[Pump]
+  case File.write_bytes(handle, out, try time_left(deadline))
+    ok(_) -> return ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
+    error(message) -> return error("archive: cannot write a selected file: #{message}")
   end
-  return ok(st)
+end
+
+# The error of the inflate pipeline as std/archive words it. The zlib texts matched here are the ones vm/zlib.c gives
+# (agc_zstep_next): keep them in step.
+def inflate_error(message: String, canon: String) -> String
+  if String.starts_with?(message, "archive: ")
+    return message
+  end
+  if message == "zlib: trailing bytes after stream end"
+    return "archive: trailing bytes after the deflate stream of #{canon}"
+  end
+  if message == "zlib: truncated stream"
+    return "archive: truncated deflate data for #{canon}"
+  end
+  return "archive: deflate data is invalid for #{canon}: #{message}"
 end
 
 def join_one(parts: List[String]) -> Result[String]

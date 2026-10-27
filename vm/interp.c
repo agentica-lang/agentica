@@ -47,9 +47,20 @@ struct agc_native {
   agc_stepper *stepper;
 };
 
+/* Where a failure or an exit jumps: the catch of a builtin that compiled code calls, which hands it on outside
+   compiled code (run_compiled), else the turn's or the run's target. */
+static _Noreturn void unwind(agc_vm *vm) {
+  agc_catch_buf *jit_catch = vm->jit_catch;
+  if (jit_catch) {
+    vm->jit_catch = NULL;
+    AGC_THROW(*jit_catch);
+  }
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+}
+
 static _Noreturn void raise_failure(agc_vm *vm) {
   agc_stack_capture(vm, vm->outcome);
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  unwind(vm);
 }
 
 /* A frame of the run of prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): a function with the prelude flag,
@@ -124,7 +135,7 @@ void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, 
 void agc_exit(agc_vm *vm, int64_t code) {
   vm->outcome->kind = AGC_EXITED;
   vm->outcome->exit_code = code;
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  unwind(vm);
 }
 
 void agc_stop(agc_vm *vm, int sig) {
@@ -1126,18 +1137,22 @@ static agc_turn_result park_task(agc_task *t) {
    that function's frame on top, which is the frame the exit is about from then on. CALL and RETURN use the shared
    frame handlers and go on in the code of the new top frame when it has code, else reload; other unsupported
    instructions return to the opcode switch at frame->pc, after a reload when the top frame is not FRAME any more (the
-   reload enters the code at that instruction, which exits again at once). A function that `on` compiled for native
-   calls only is entered here only to resume it, never at its first instruction. Only the jit copy of the turn loop
-   calls it; nothing here changes that loop, whose plain copy's machine code follows every edit of it. */
+   reload enters the code at that instruction, which exits again at once). A block call (a builtin row with a native
+   kind, such as `filter`) starts here too, as a leaf builtin is called here: its native frame calls the block, whose
+   frames go on in the block's code, and each RETURN of the block resumes the native frame. A function that `on`
+   compiled for native calls only is entered here only to resume it, or at its first instruction when a native frame
+   called it (a block whose call began in a turn that ended). Only the jit copy of the turn loop calls it; nothing
+   here changes that loop, whose plain copy's machine code follows every edit of it. */
 static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc_vm *vm, agc_jit *jit,
                                                                              agc_frame *frame) {
-  if (!frame->pc && agc_jit_native_only(jit, frame->function)) return COMPILED_NONE;
+  agc_task *t = vm->task;
+  if (!frame->pc && agc_jit_native_only(jit, frame->function) && (frame == t->frames || !frame[-1].native))
+    return COMPILED_NONE;
   agc_jit_code code = agc_jit_code_of(jit, frame->function, frame->pc);
   const agc_program *p = vm->rt->program;
   const agc_function *f = &p->functions[frame->function];
   if (!code || frame->pc >= f->count) return COMPILED_NONE;
   agc_frame *const entry = frame;
-  agc_task *t = vm->task;
   agc_value *R = t->regs + frame->base;
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
@@ -1160,12 +1175,16 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       case AGC_JIT_EXIT_COST:
         if (apply_cost(vm)) return COMPILED_YIELD;
         break;
+      /* A builtin that compiled code called (agc_jit_call_builtin) returned and ended the turn, or failed: its
+         failure, recorded with the stack of that moment, goes on to the turn's target from here. */
+      case AGC_JIT_EXIT_YIELD: return COMPILED_YIELD;
+      case AGC_JIT_EXIT_RAISE: unwind(vm);
       case AGC_JIT_EXIT_CALL: {
         agc_instr in = f->code[out.pc];
         uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
         if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
         call_instruction(vm, t, function, frame->base, in.a, f->spans[out.pc], false);
-        code = agc_jit_callee_code(jit, function);
+        code = agc_jit_callee_code(jit, function, false);
         if (!code) return COMPILED_RELOAD;
         pc = 0;
         break;
@@ -1195,6 +1214,23 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
           R[in.a] = call_leaf(vm, b, R + in.a, f->spans[out.pc]);
           break;
         }
+        /* A block call starts as the interpreter's CALL_BUILTIN starts it, with frame->pc already past the call (the
+           stack trace and the return read it). Its native frame has called the block (the frame on top now, which goes
+           on in its code when it has some), or, for no item, written the result and gone, and the code goes on after
+           the call. The native frame counts the steps and the turn cost of each call of the block. */
+        if (b && b->native) {
+          if (tracing) agc_jit_count_block(jit);
+          start_native(vm, b->native, frame->base + in.a, f->spans[out.pc]);
+          if (vm->yield) return COMPILED_YIELD;
+          if (t->frame_count == depth) break;
+          const agc_frame *top = &t->frames[t->frame_count - 1];
+          code = top->native ? NULL : agc_jit_callee_code(jit, top->function, true);
+          if (!code) return COMPILED_RELOAD;
+          /* No `top->pc >= count` test, unlike RETURN: the block's frame is new, at pc 0, and the loader rejects an
+             empty function. */
+          pc = top->pc;
+          break;
+        }
         frame->pc = out.pc;
         if (frame != entry) return COMPILED_RELOAD;
         if (tracing) agc_jit_count_exit(jit, frame->function, out.pc);
@@ -1202,14 +1238,12 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       }
       default: op_failed(vm, (agc_status)out.status);
     }
-    if (out.status == AGC_JIT_EXIT_CALL || out.status == AGC_JIT_EXIT_RETURN) {
-      /* The top frame changed (a RETURN into a native frame may even push another one), and push_frame may have moved
-         the frames and the register file. */
-      depth = t->frame_count;
-      frame = &t->frames[depth - 1];
-      f = &p->functions[frame->function];
-      R = t->regs + frame->base;
-    }
+    /* The top frame may have changed (a RETURN into a native frame may even push another one, and a block call
+       pushes two or none), and new_frame and push_frame may have moved the frames and the register file. */
+    depth = t->frame_count;
+    frame = &t->frames[depth - 1];
+    f = &p->functions[frame->function];
+    R = t->regs + frame->base;
   }
 }
 
@@ -1663,16 +1697,18 @@ reload:
 #undef FUSED_NEXT
 #undef SPAN
 
-/* The jit and the profiling copies of the turn loop are functions of their own, and agc_run_turn holds only the plain
-   copy that --jit off runs: the compiler lays out blocks and allocates registers for each function apart, so a change
-   to the JIT's copy does not reshape the plain one. With the three copies in agc_run_turn, a change to the jit copy
-   alone made case 7% slower with --jit off. */
+/* The three copies of the turn loop are functions of their own: the compiler lays out blocks and allocates registers
+   for each function apart, so a change to the JIT's copy, or to the choice in agc_run_turn, does not reshape the plain
+   one. With the three copies in agc_run_turn, a change to the jit copy alone made case 7% slower with --jit off, and
+   with the plain copy inline there, one more test before it changed a third of its instructions. */
 static __attribute__((noinline)) agc_turn_result jit_turn(agc_vm *vm) { return turn_loop(vm, false, true); }
 static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { return turn_loop(vm, true, false); }
+static __attribute__((noinline)) agc_turn_result plain_turn(agc_vm *vm) { return turn_loop(vm, false, false); }
 
-/* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. */
+/* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. A run with a JIT runs
+   the plain copy, the one of --jit off, for the turns agc_jit_turn turns down while no code is published. */
 agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
-  if (vm->rt->jit) return jit_turn(vm);
-  return turn_loop(vm, false, false);
+  if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
+  return plain_turn(vm);
 }

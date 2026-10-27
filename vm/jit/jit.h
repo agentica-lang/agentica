@@ -29,15 +29,19 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
    compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return that compiled code
    could not make natively (the callee has no code, an array would grow, the call would fail, or the function was not
    called natively), whose shared frame handler run_compiled runs. RETURNED never reaches run_compiled: it is the
-   answer of a natively called function's RETURN to its caller's code. An exit from a natively called function goes
-   up through its callers' code unchanged, so run_compiled finds that function's frame on top. */
+   answer of a natively called function's RETURN to its caller's code. YIELD and RAISE come from a builtin that
+   compiled code called (agc_jit_call_builtin): it returned and the turn ends, or it failed or exited, and run_compiled
+   jumps to the turn's target. An exit from a natively called function goes up through its callers' code unchanged,
+   so run_compiled finds that function's frame on top. */
 enum {
   AGC_JIT_EXIT_STEP = 16,
   AGC_JIT_EXIT_COST,
   AGC_JIT_EXIT_INTERPRET,
   AGC_JIT_EXIT_CALL,
   AGC_JIT_EXIT_RETURN,
-  AGC_JIT_EXIT_RETURNED
+  AGC_JIT_EXIT_RETURNED,
+  AGC_JIT_EXIT_YIELD,
+  AGC_JIT_EXIT_RAISE
 };
 
 /* An exit: 8 bytes, so both calling conventions return it in one register (rax), status in the low half. */
@@ -46,10 +50,11 @@ typedef struct {
 } agc_jit_exit;
 
 /* Compiled code of one function: runs from instruction `pc` with R the frame's registers and K the program's
-   constants, and returns at the first exit. The machine code itself never fails, allocates directly, calls a builtin
-   or grows an array: an opcode helper it calls may allocate, but never fails (no agc_fail, no longjmp), parks or
-   moves a frame. A CALL of a function that has code pushes its frame in room the task already has and calls that
-   code natively (at AGC_JIT_NATIVE_ENTRY), up to AGC_JIT_NATIVE_DEPTH calls deep; its RETURN pops it. */
+   constants, and returns at the first exit. The machine code itself never fails, allocates directly or grows an
+   array: an opcode helper it calls may allocate, but never fails (no agc_fail, no longjmp), parks or moves a frame,
+   and it calls a builtin only through agc_jit_call_builtin, which catches the builtin's failure. A CALL of a function
+   that has code pushes its frame in room the task already has and calls that code natively (at
+   AGC_JIT_NATIVE_ENTRY), up to AGC_JIT_NATIVE_DEPTH calls deep; its RETURN pops it. */
 typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *K, uint32_t pc);
 
 /* On a function that calls compiled code: clang's -fsanitize=function reads a type word before each indirect call
@@ -69,12 +74,15 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    or before the one before, `arena` the current chunk of code memory (`chunk` bytes reserved, `chunk_used` of them
    taken), `used` the bytes taken in all chunks, `cap` the most it may take (AGC_JIT_CODE_CAP, or `used` once the
    memory failed), `page` the host's page size, and `batch` the code that waits for a seal (jit.c), all under
-   `lock`; `exits[op]` the INTERPRET exits at each opcode that went back
-   to the turn loop, `leaves` the leaf builtins that run_compiled called itself and `transitions` the CALL and RETURN
-   exits that it ran, all counted only while the jit trace is on. `native_only[f]` is set when `on` gives a function
-   without a loop code only for native calls: compiled at a CALL exit from compiled code (the first when
-   `calling[f]`, set when f calls a function, else the AGC_JIT_CALLEE_THRESHOLD-th) and published at a seal, which
-   clears its `skip`. The code lives until the process exits, like the program. */
+   `lock`; `exits[op]` the INTERPRET exits at each opcode that went back to the turn loop, `leaves` the leaf builtins
+   that run_compiled called itself, `blocks` the block calls (`map`, `filter`, `times` and the other rows with a native
+   kind) that it started itself and `transitions` the CALL and RETURN exits that it ran, all counted only while the jit
+   trace is on. `native_only[f]` is set when `on` gives a function without a loop code only for native calls and
+   block calls: compiled at a CALL exit from compiled code (the first when `calling[f]`, set when f calls a function,
+   else the AGC_JIT_CALLEE_THRESHOLD-th) or at the first block call that compiled code starts with it, and published at
+   a seal, which clears its `skip`. `live` is set by the first code published (agc_jit_turn), and `turns` counts the
+   turns that ran the jit copy of the turn loop while the jit trace is on. The code lives until the process exits,
+   like the program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -84,7 +92,8 @@ typedef struct agc_jit {
   _Atomic uint32_t *entries;
   _Atomic size_t used;
   _Atomic uint64_t *exits;
-  _Atomic uint64_t leaves, transitions;
+  _Atomic uint64_t leaves, blocks, transitions, turns;
+  _Atomic bool live;
   _Atomic bool *native_only;
   _Atomic bool *claimed;
   const bool *calling;
@@ -105,12 +114,27 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc);
 static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
   return !atomic_load_explicit(&jit->skip[function], memory_order_relaxed);
 }
-/* The code of FUNCTION for the frame a CALL exit just pushed: its code, or, for a function without a loop that `on`
-   compiles only to be called from compiled code, its code compiled now if this exit makes it hot; NULL to interpret
-   it. It counts an entry only for such a function. */
-agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function);
-/* True when FUNCTION gets code only for native calls from compiled code (a function without a loop, with `on`): the
-   interpreter enters that code only to resume a frame of it. */
+/* True when the turn VM is about to run for its task runs the jit copy of the turn loop; false, the plain copy, the
+   code of --jit off. Every turn does once some code is published. Before that, the entries of `on` are counted only in
+   the jit copy, so a turn runs it when one of the task's AGC_JIT_TOP_FRAMES top frames is of a function the reload may
+   enter (or the task has more frames than that), which catches a long loop the turn starts in, and a turn drawn at
+   random, one in AGC_JIT_SAMPLE on average, on each scheduler does in any case, which counts a function that runs only
+   inside turns (a callee that returns before the turn ends, the work of a task that parks or ends within its turn).
+   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a
+   run whose functions that may get code run seldom or never keeps the plain loop for nearly every turn, without a test
+   of the JIT inside it. */
+#define AGC_JIT_TOP_FRAMES 64
+#define AGC_JIT_SAMPLE 16
+bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
+/* The code of FUNCTION for the frame a CALL exit just pushed (BLOCK false), or for the block a block call started
+   from compiled code just called (BLOCK set): its code, or, for a function without a loop that `on` compiles only to
+   be called from compiled code, its code compiled now if this exit makes it hot; NULL to interpret it. It counts an
+   entry only for such a function. A block is hot at once, as a function that calls is: the block call calls it for
+   each item. */
+agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block);
+/* True when FUNCTION gets code only for native calls and block calls from compiled code (a function without a loop,
+   with `on`): the interpreter enters that code only to resume a frame of it, or at its first instruction when a native
+   frame sits below that frame (a block call; run_compiled). */
 static inline bool agc_jit_native_only(agc_jit *jit, uint32_t function) {
   return atomic_load_explicit(&jit->native_only[function], memory_order_relaxed);
 }
@@ -118,12 +142,36 @@ static inline bool agc_jit_native_only(agc_jit *jit, uint32_t function) {
 void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc);
 /* Counts a leaf builtin that run_compiled called between two runs of compiled code, when the jit trace is on. */
 void agc_jit_count_leaf(agc_jit *jit);
+/* Counts a block call (a builtin row with a native kind) that run_compiled started, when the jit trace is on. */
+void agc_jit_count_block(agc_jit *jit);
 /* Counts a CALL or RETURN exit that run_compiled ran, when the jit trace is on. */
 void agc_jit_count_transition(agc_jit *jit);
 /* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
-   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, and `transition count=N`,
-   the calls and returns that left compiled code (a native one does not). */
+   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, `block count=N`, the
+   block calls started there, `transition count=N`, the calls and returns that left compiled code (a native one does
+   not), and `turn count=N`, the turns that ran the jit copy of the turn loop. */
 void agc_jit_report(agc_jit *jit);
+/* The CALL_BUILTIN of a row marked direct (agc_builtin.direct) in compiled code, as the interpreter's generic tail
+   runs it: ARGS is the window R + a, WHERE the instruction's span in the high half and its pc + 1 in the low half,
+   which becomes the top frame's pc first (the stack trace and the error's span read it). It charges the cost of an
+   AGC_COST_SIZE row and applies the task's turn cost. It answers AGC_STATUS_OK, the result in ARGS[0], for the code
+   to go on; AGC_JIT_EXIT_YIELD when the call ended the turn (the result written); AGC_JIT_EXIT_RAISE when the builtin
+   failed or exited: agc_fail recorded the failure and the stack and jumped to vm->jit_catch, here, so no longjmp
+   crosses compiled code, and run_compiled hands it on. The call either completes or raises, as in the interpreter;
+   a direct row never parks, starts a stepper or a native frame, or moves the frames, so nothing is left half done. */
+uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
+/* MAP_GET in compiled code, as the interpreter's case runs it: *DST = the value of *KEY in *MAP, and AGC_STATUS_OK.
+   A missing key, or a wrong tag (hand-made bytecode), answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left
+   alone, so the interpreter runs the instruction and fails as it does. A String key charges its bytes to the task's
+   turn cost, which compiled code then leaves to apply, as after EQ. It never fails, allocates or parks. */
+uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
+/* LIST in compiled code, as the interpreter's case: *DST = a new List of the COUNT values at ITEMS (the window the
+   loader checked), or the run's empty List. It may allocate; it charges nothing and never fails or parks. */
+void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count);
+/* CLOSURE in compiled code, as the interpreter's case: WINDOW[0] = a new function value of FUNCTION that holds the
+   CAPTURES values at WINDOW (the window the loader checked). It allocates; it charges nothing and never fails or
+   parks. */
+void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -192,9 +240,15 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
+void agc_emit_list(agc_emitter *e, agc_instr in);
+/* CLOSURE of function bx, which holds CAPTURES values: a call of agc_jit_closure. */
+void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
+/* CALL_BUILTIN of the direct row at BUILTIN, whose span is SPAN: a call of agc_jit_call_builtin. */
+void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span);
 /* CALL with SLOT the address of the callee's entry in the code table and REGISTERS the callee's register count. */
 void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers);
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc);

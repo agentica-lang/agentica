@@ -17,6 +17,7 @@ List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]                         # (1..n).lazy, (0...n).lazy
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]                 # seed, f(seed), f(f(seed)) ... without end
 File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lines, read as File.each_line
+File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]   # bytes, size at a time
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]  # ch.lazy(ms): values until closed and drained
 
 # Steps: each gives a new Lazy and runs nothing
@@ -31,6 +32,8 @@ Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B]   # f(item, index), 
 Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]    # last slice shorter; size < 1 is RUNTIME-INVALID-COUNT
 Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]     # windows of size neighbours
 Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]   # new group where f(prev, item) is false
+lazy.deflate(level = 6, raw = false), lazy.inflate(raw = false, max_bytes = 1073741824),
+lazy.gzip(level = 6), lazy.gunzip(max_bytes = 1073741824)    # byte chunks, compression.md
 
 # Terminals: always a Result
 Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]]
@@ -39,6 +42,7 @@ Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]   # stops at f'
 Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
 Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]         # error("not found") when the source ends
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # each item + LF into a file
+lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]   # byte chunks into a file, bytes written
 ```
 
 ```ruby
@@ -90,6 +94,9 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
   task closes it at the task's end. Read errors, a missing file or a timeout
   `<= 0` end the terminal with an error Result; `buffer_bytes` outside
   1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
+- `File.chunks` opens and closes like `File.foreach`; a missing or non-regular
+  file ends the terminal with an error Result, and `size` outside 1..16777216
+  is `RUNTIME-INVALID-COUNT` at the argument.
 - `File.foreach(...).each do ... end` with no step in between, written as one
   chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line|
   ... end`.
@@ -115,3 +122,6 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 - A timeout `<= 0`, a bad path, a failed open, write or close, and a line over 1
   MiB end the terminal with an error Result. `timeout_ms` bounds the open, each
   64 KiB write and the close.
+- `write_bytes(path, timeout_ms = 30000)` takes a `Lazy[List[Int]]` and works
+  like `write_lines` without line feeds; it gives the bytes written. Chunks of
+  any size are fine; a byte outside 0..255 ends it with an error Result.

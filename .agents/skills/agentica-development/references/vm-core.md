@@ -103,7 +103,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   program types as a `C.Pointer` (`buffer_of` and `pointer_of` take either), so
   an extern call passes it and a compute call holds it. Its block form (arity 2)
   is a stepper (`buffer_block_step`) that calls the block with the buffer and
-  closes it when the block returns, if the task still owns it. The typed reads
+  closes it when the block returns, if the task still owns it.
+  `Native.from_string` is the same buffer (`new_buffer`, a shared row too) with
+  the String's bytes copied in and a NUL after them, and the same block form.
+  `Native.offset` of a buffer makes a view: an `agc_c_resource` with `parent`
+  set to the buffer (`root_of`) and no state, whose `pointer` and `size` are the
+  bytes from its offset to the buffer's end; every closed check and hold
+  (`held_by`, `struct_held`) goes to the parent. The typed reads
   and writes (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`,
   `put_string`, `put_bytes`) and `get_string`/`get_bytes` go through
   `memory_at`, which checks a buffer's
@@ -112,7 +118,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   takes rt->sync only for a buffer, and the caller drops it after the copy
   (`memory_done`), so no free comes between the check and the copy while a read
   of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
-  and `Native.free` are shared rows. `C.Float` is code `f` (`F` out), refused
+  and `Native.free` are shared rows. `Native.size_of`, `get_struct` and
+  `put_struct` are shared rows too: their last argument is a `{N:CODES}` code
+  that lowering writes for the type name (for `put_struct`, a fourth argument
+  from the value's type), laid out once by `agc_ffi_layout` and kept in the
+  signature cache as a `layout` entry; they reuse `memory_at`, `struct_value`,
+  `check_argument` and `struct_write`. `C.Float` is code `f` (`F` out), refused
   after `.`. The integer codes are `i l g h u w j n` (`C.Int32`, `C.Int64`,
   `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32`, `C.Long`; capitals
   out); `fits_bits` is the one range rule of arguments, fields and `put_*`, and
@@ -181,7 +192,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   innermost loops that seldom leave the code, a fixed point that
   `agc_jit_settle` reaches in time linear in the program), sets `skip` for the
   rest and returns NULL when no function is left, so that run takes the plain
-  turn loop; it walks a function
+  turn loop, as a turn does while no code is published, no top frame may get
+  some and it is not one of the turns sampled at random, one in 16 on average
+  (`agc_jit_turn`, called by `agc_run_turn`); it walks a function
   once: each instruction (fused ones as their STEP or CONST) calls one
   `agc_emit_*` function; the scheduler that claims a function compiles it,
   seals it in the run's code memory chunks (functions without a loop wait in a
@@ -196,15 +209,21 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   as one cost arithmetic 20% by code layout alone)
   and handles the exits as the interpreter handles that instruction: STEP runs
   `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
-  leaf builtin itself or lets the loop run that one instruction, which enters
-  the code again at the next pc (`resume`), CALL and RETURN the shared frame
-  handlers. A CALL of a function with code is native (`agc_emit_call`): an
-  exit inside the callee comes back with the callee's frame on top.
+  leaf builtin itself, starts a block call (a row with a native kind:
+  `start_native`, whose block then runs in its code, one RETURN exit per
+  call) or lets the loop run that one instruction, which enters the code
+  again at the next pc (`resume`), CALL and RETURN the shared frame handlers.
+  A CALL of a function with code is native (`agc_emit_call`): an exit inside
+  the callee comes back with the callee's frame on top.
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
   slow path leaves for the interpreter; compiled code never fails,
-  allocates, parks or calls a builtin, and pushes or pops a frame only in
-  room the task already has. An edit of `turn_loop`, even in its jit copy,
+  allocates or parks, and pushes or pops a frame only in room the task
+  already has. It calls a builtin only when the row is marked `direct`
+  (`agc_builtin.direct`, checked by `sync_test.c`), through
+  `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail` from
+  jumping across compiled code; mark a row only if it never parks, starts a
+  block or moves frames. An edit of `turn_loop`, even in its jit copy,
   changes the plain copy's machine code: keep JIT logic in `run_compiled`
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)

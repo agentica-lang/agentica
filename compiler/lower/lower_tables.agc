@@ -12,7 +12,8 @@ export VM_BUILTINS = Set.new([
   "List.set", "List.repeat", "List.concat", "List.take", "List.drop", "List.at", "List.reverse", "List.sort",
   "Map.has_key?", "Map.keys", "Map.size", "Map.put", "Map.get", "Map.delete", "Map.values", "Set.new", "Set.add",
   "Set.delete", "Set.include?", "Set.size", "Set.empty?", "Set.to_a", "Set.union", "Set.intersection",
-  "Set.difference", "Set.subset?", "String.length", "String.upcase", "String.downcase", "String.trim", "String.split",
+  "Set.difference", "Set.subset?", "String.length", "String.bytesize", "String.upcase", "String.downcase",
+  "String.trim", "String.split",
   "String.join", "String.contains?", "String.starts_with?", "String.ends_with?", "String.replace", "String.slice",
   "String.index_of", "String.at", "String.reverse", "String.code", "String.from_code", "String.from_bytes",
   "String.to_bytes", "String.to_int", "String.to_int!", "String.to_float", "String.to_float!", "Float.from_int",
@@ -25,10 +26,7 @@ export VM_BUILTINS = Set.new([
   "File.read_bytes", "File.read_line", "File.write", "File.write_bytes", "File.flush", "File.close", "File.each_line",
   "File.read_text", "File.sha256", "File.write_text", "File.append_text", "File.stat", "File.lstat",
   "File.try_lock",
-  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.deflate_file", "Zlib.inflate_file",
-  "Zlib.gzip_file", "Zlib.gunzip_file", "Zlib.deflate_init", "Zlib.inflate_init", "Zlib.deflate_next",
-  "Zlib.inflate_next", "Zlib.deflate_finish", "Zlib.inflate_finish", "Zlib.encoder_close", "Zlib.decoder_close",
-  "Zlib.crc32",
+  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
@@ -49,8 +47,10 @@ export VM_BUILTINS = Set.new([
   "Process.parent_read_line", "Process.parent_send", "Task.await_result", "Task.unobserved_crash", "Test.test",
   "Test.run", "Test.eq", "Test.ok?", "Test.error?", "Test.assert", "FrontEnd.hand_off", "FrontEnd.std_source",
   "FrontEnd.stdin_bytes", "Task.map", "Task.cancel", "Profile.measure", "Profile.steps", "Std.source",
-  "String.compare", "Crypto.sha256", "Native.wait_readable", "Native.wait_writable", "Native.close",
-  "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.memory_pointer",
+  "String.compare", "Crypto.sha256", "Native.wait_readable", "Native.wait_writable", "Native.load",
+  "Native.close", "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.address",
+  "Native.offset", "Native.memory_pointer", "Native.from_string", "Native.size_of", "Native.get_struct",
+  "Native.put_struct",
   "Native.free", "Native.get_int8", "Native.get_int16", "Native.get_int32", "Native.get_int64", "Native.get_uint8",
   "Native.get_uint16", "Native.get_uint32", "Native.get_float32", "Native.get_float64", "Native.get_pointer",
   "Native.put_int8", "Native.put_int16", "Native.put_int32", "Native.put_int64", "Native.put_float32",
@@ -61,7 +61,7 @@ export VM_BUILTINS = Set.new([
   "__lazy_channel",
   "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group",
   "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a",
-  "__lazy_with_index", "__lazy_write_lines",
+  "__lazy_with_index", "__lazy_write_lines", "__lazy_chunks", "__lazy_zlib", "__lazy_write_bytes",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
@@ -80,11 +80,15 @@ export FLOAT_OPS: Map[String, String] = {
   "less": "lt-f", "less-equal": "le-f", "greater": "lt-f", "greater-equal": "le-f"
 }
 
+## The builtins that take the layout code of a C struct of an extern block: a type name argument lowers to it, and
+## Native.put_struct gets the layout of its value's struct as one more argument (lower_expr.agc).
+export NATIVE_STRUCTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct"])
+
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply", "HttpWire.Job",
-  "HttpWire.Response", "ZlibProgress"
+  "HttpWire.Response"
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

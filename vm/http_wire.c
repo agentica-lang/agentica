@@ -565,18 +565,18 @@ static agc_value builtin_error_answer(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 const agc_builtin agc_http_wire_builtins[] = {
-  {"HttpWire.chunked", 1, builtin_chunked, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.chunk", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.text", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.encode_request", 8, builtin_encode_request, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"HttpWire.chunked", 1, builtin_chunked, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.chunk", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.text", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.encode_request", 8, builtin_encode_request, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_http_wire_builtin_count = sizeof agc_http_wire_builtins / sizeof agc_http_wire_builtins[0];
 #else
-const agc_builtin agc_http_wire_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false}};
+const agc_builtin agc_http_wire_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_http_wire_builtin_count = 0;
 #endif

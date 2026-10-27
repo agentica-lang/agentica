@@ -201,14 +201,16 @@ flush. **When `main` ends, the program ends.** The steps are:
    for the running compute calls (started, not finished) that hold a resource or
    owned buffer still open; calls that hold nothing, or only what is freed
    already, are not waited for. Then free every resource and owned buffer still
-   open, whatever task owns it, in one pass, newest first, as a task's end does,
-   so an older resource that a held one points into (a database under its
-   statement) never goes while C still uses the newer one. The frees run on a
-   thread of their own, so a `free` that hangs holds the exit at most until the
-   deadline below. A resource that a held call returns during the wait is never
-   freed (its `done` half does not run). A stop signal, before or during the
-   wait, ends the wait, and what a running call still holds is not freed. Step 2
-   and this step share one deadline, the flush limit from the start of step 2
+   open, whatever task owns it, in one pass, newest first (the reverse of
+   opening), as a task's end does. The pass stops at the first resource that a
+   running call still holds (after a stop signal or at the deadline) and never
+   skips past it, so an older resource that a held one points into (a database
+   under its statement) never goes while C still uses the newer one. The frees
+   run on a thread of their own, so a `free` that hangs holds the exit at most
+   until the deadline below. A resource that a held call returns during the wait
+   is never freed (its `done` half does not run). A stop signal, before or
+   during the wait, ends the wait, and the pass stops as above. Step 2 and this
+   step share one deadline, the flush limit from the start of step 2
    (`rt->flush_by`); what is not freed by then is left to the exit, and the
    warning line of the flush limit says so. With a limit of 0 nothing is freed.
    A failure (the loop cannot start) prints the flush failure line instead. The

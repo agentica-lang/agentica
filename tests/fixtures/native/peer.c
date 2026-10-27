@@ -27,7 +27,7 @@
 
 static char shout[64];
 static int32_t bumps;
-static atomic_int flag, returned, naps, stalled;
+static atomic_int flag, returned, waiting, naps, stalled;
 
 /* Sleeps MS milliseconds. */
 static void sleep_ms(int32_t ms) {
@@ -107,8 +107,9 @@ double peer_vmix_out(int32_t *count, const char *kinds, ...) {
 }
 
 /* For compute defs, which run on a pool thread. peer_wait_flag returns 1 once peer_set_flag (a fast call from another
-   task) has run, or 0 after LIMIT_MS milliseconds; each return is counted. */
+   task) has run, or 0 after LIMIT_MS milliseconds; each start and each return is counted. */
 int32_t peer_wait_flag(int32_t limit_ms) {
+  atomic_fetch_add(&waiting, 1);
   int32_t found = 0;
   for (int32_t k = 0; k < limit_ms && !found; k++) {
     found = atomic_load(&flag);
@@ -120,6 +121,7 @@ int32_t peer_wait_flag(int32_t limit_ms) {
 
 void peer_set_flag(void) { atomic_store(&flag, 1); }
 int32_t peer_returned(void) { return atomic_load(&returned); }
+int32_t peer_waiting(void) { return atomic_load(&waiting); }
 
 /* The text is in a buffer of the calling thread, which the next call on that thread overwrites. */
 const char *peer_word(int32_t n) {
@@ -131,12 +133,18 @@ const char *peer_word(int32_t n) {
 
 double peer_half(int64_t n) { return (double)n / 2.0; }
 
-/* Sleeps MS milliseconds, then counts one nap. */
+static atomic_int nap_starts;
+
+/* Counts one started nap, sleeps MS milliseconds, then counts one nap. */
 int32_t peer_nap(int32_t ms) {
+  atomic_fetch_add(&nap_starts, 1);
   sleep_ms(ms);
   atomic_fetch_add(&naps, 1);
   return ms;
 }
+
+/* How many peer_nap calls have started. */
+int32_t peer_nap_starts(void) { return atomic_load(&nap_starts); }
 
 int32_t peer_naps(void) { return atomic_load(&naps); }
 
@@ -409,6 +417,23 @@ void peer_res_free(void *p) {
 /* The same free under a name that starts with a capital letter, as in libpq (PQfinish) and OpenSSL (SSL_free). */
 void PeerFree(void *p) { peer_res_free(p); }
 
+/* For free_ref: a free that takes the address of the handle, as duckdb_close(duckdb_database *) does: it frees
+   the resource and writes NULL there. A call with a NULL handle, a second free of the same handle, is counted apart. */
+static atomic_int res_closes, res_null_closes;
+
+void peer_res_close(void **p) {
+  if (!*p) {
+    atomic_fetch_add(&res_null_closes, 1);
+    return;
+  }
+  atomic_fetch_add(&res_closes, 1);
+  peer_res_free(*p);
+  *p = NULL;
+}
+
+int32_t peer_res_closes(void) { return atomic_load(&res_closes); }
+int32_t peer_res_null_closes(void) { return atomic_load(&res_null_closes); }
+
 int32_t peer_res_get(void *p) { return ((peer_res *)p)->value; }
 int32_t peer_res_opens(void) { return atomic_load(&res_opens); }
 int32_t peer_res_frees(void) { return atomic_load(&res_frees); }
@@ -570,6 +595,18 @@ int64_t peer_strs_len(const char *const *strs, int32_t n) {
   int64_t sum = 0;
   for (int32_t k = 0; k < n; k++) sum += (int64_t)strlen(strs[k]);
   return sum;
+}
+/* Text with a length (sqlite3_bind_text, mysql_real_query): the sum of each of the LEN bytes times its place from 1,
+   so a byte cut off or out of order changes it. */
+int64_t peer_text_sum(const char *p, int32_t len) {
+  int64_t sum = 0;
+  for (int32_t k = 0; k < len; k++) sum += (int64_t)(k + 1) * (uint8_t)p[k];
+  return sum;
+}
+/* SQLite's pzTail: a pointer into the input past the first ';' of its LEN bytes, or at its end when it has none. */
+const char *peer_tail(const char *p, int32_t len) {
+  const char *semi = memchr(p, ';', (size_t)len);
+  return semi ? semi + 1 : p + len;
 }
 /* Memory that C owns, read through a plain C.Pointer: 1.5, -2.25 and 1e30 as floats, then 7 and -9 as int64. */
 static const float static_floats[] = {1.5f, -2.25f, 1e30f};
@@ -769,4 +806,32 @@ const char *peer_ints_text(peer_ints s) {
   snprintf(ints_text, sizeof ints_text, "a=%d b=%u c=%d d=%u e=%lu f=%ld p=%s", s.a, (unsigned)s.b, s.c, (unsigned)s.d,
            (unsigned long)s.e, s.f, s.p == ints_text ? "text" : s.p ? "other" : "null");
   return ints_text;
+}
+
+/* For Native.size_of, get_struct and put_struct: an array of structs with a long between an int32 and a double, so
+   the layout differs by system: count at 4 and 16 bytes on Windows (LLP64), at 8 and 24 bytes on Linux and macOS. */
+typedef struct {
+  int32_t id;
+  long count;
+  double score;
+} peer_row;
+
+static char rows_text[256];
+
+int64_t peer_row_size(void) { return (int64_t)sizeof(peer_row); }
+/* Row k gets id k, count LONG_MAX - k and score k + 0.5. */
+void peer_rows_fill(peer_row *rows, int32_t n) {
+  for (int32_t k = 0; k < n; k++) rows[k] = (peer_row){k, LONG_MAX - k, k + 0.5};
+}
+/* Every row as C sees it, so the test checks the layout that the VM wrote. */
+const char *peer_rows_text(const peer_row *rows, int32_t n) {
+  size_t used = 0;
+  rows_text[0] = '\0';
+  for (int32_t k = 0; k < n && used < sizeof rows_text; k++) {
+    int wrote = snprintf(rows_text + used, sizeof rows_text - used, "%s%d:%ld:%.2f", k ? " " : "", rows[k].id,
+                         rows[k].count, rows[k].score);
+    if (wrote < 0) break;
+    used += (size_t)wrote;
+  }
+  return rows_text;
 }

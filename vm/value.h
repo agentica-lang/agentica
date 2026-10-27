@@ -262,12 +262,18 @@ struct agc_ffi_call;
    the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
    entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
    it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
-   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer) is one
-   too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with free(), and `free` is NULL; the
-   program sees it as a C.Pointer. A resource declared `free: C.Function` has its own free function at `free_at`, the
-   address that the call which made it got (`free` is then a call prepared without a symbol); NULL for the others.
-   Changes under rt->sync. */
-typedef struct {
+   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer or
+   Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
+   free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared `free: C.Function` has its own
+   free function at `free_at`, the address that the call which made it got (`free` is then a call prepared without a
+   symbol); NULL for the others.
+   A resource declared `free_ref:` (`by_ref`) gives its free function the address of `pointer`, where C may
+   write NULL.
+   A view of a buffer (Native.offset) is a buffer too, with `parent` set to the owned buffer whose memory it shows:
+   `pointer` and `size` are the bytes from its offset to the parent's end, and it has no state, no owner and no
+   `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others. Changes under rt->sync. */
+typedef struct agc_c_resource {
+  struct agc_c_resource *parent;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;
@@ -275,7 +281,7 @@ typedef struct {
   const char *name;
   size_t size;
   uint32_t jobs;
-  bool closed, freed, buffer;
+  bool closed, freed, buffer, by_ref;
 } agc_c_resource;
 
 typedef struct {
@@ -328,6 +334,14 @@ typedef struct {
      (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds abort when a leaf call breaks the
      rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. */
   bool leaf;
+  /* A call that compiled code makes itself (agc_jit_call_builtin, vm/jit/jit.c), without leaving for the interpreter:
+     the builtin returns a value or fails with agc_fail, and never parks (nor asks to retry), never starts a stepper,
+     a block or a native frame, and never pushes or pops a frame. Unlike a leaf it may allocate a lot, do work that
+     grows with its arguments, charge turn cost (AGC_COST_SIZE or agc_charge) and fail. A direct row is not a leaf,
+     never shared and has AGC_NATIVE_NONE (vm/tests/sync_test.c checks the tables), and the builds of AGC_LEAF_CHECK
+     abort when a direct call parks or starts a stepper. When unsure, leave a row unmarked: it then takes the
+     INTERPRET exit. */
+  bool direct;
 } agc_builtin;
 
 /* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not

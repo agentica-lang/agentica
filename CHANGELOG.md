@@ -10,6 +10,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `resource Name, free_ref: c_function`: a resource freed by `void f(T **)`,
+  such as `duckdb_close`.
+- `Native.from_string(text)` and `text.bytesize`: pass text with its byte length
+  to C (NUL bytes included) and keep pointers into it (SQLite's `pzTail`).
+- `[native]` entries of `agentica.toml` may give `system` as an absolute path or
+  a list of candidates, such as a Homebrew path after the bare name: the first
+  absolute path that exists wins, else the first bare name.
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
 - Builtins can have default arguments, with the rules of a default parameter of
   a function: a call may leave out the trailing ones, and `agentica help` shows
@@ -19,9 +26,32 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters and struct fields; unsigned results are never negative.
 - `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
   can return an `error`.
+- `Native.load("NAME")` opens a native library before its first call and
+  returns a `Result`, so a missing library can be handled.
+- `File.chunks(path)` reads a file as a `Lazy` of byte chunks, and
+  `lazy.write_bytes(path)` writes byte chunks to a file.
+- Lazy zlib steps `deflate`, `inflate`, `gzip` and `gunzip` compress and
+  decompress a stream of byte chunks with bounded memory; `raw = true` is raw
+  DEFLATE.
+- `Zlib.deflate`, `inflate`, `gzip` and `gunzip` take default `level` (6) and
+  `max_bytes` (1048576).
+- `Native.offset(p, n)` points into an owned buffer as a bounds-checked view,
+  and `Native.address(p)` gives a pointer's integer value.
+- `Native.size_of`, `Native.get_struct` and `Native.put_struct` read and write
+  a C struct of an extern block through a pointer, laid out as C does.
 
 ### Changed
 
+- **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
+  `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
+  use the Lazy steps `deflate` and `gzip`.
+- **Breaking:** the Zlib streaming decoder (`inflate_init`, `inflate_next`,
+  `inflate_finish`, `decoder_close`) and the types `ZlibDecoder` and
+  `ZlibProgress` are removed: use the Lazy steps `inflate` and `gunzip`.
+- **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
+  `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`,
+  which overwrites an existing `dst`.
+- **Breaking:** the Zlib errors name `max_bytes` instead of `max_out_bytes`.
 - An integer argument or struct field of an extern function takes the bits of
   its type read as signed or unsigned, as `Native.put_int32` does: a
   `C.Int32` takes up to 2^32 - 1.
@@ -31,6 +61,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `--jit on` starts faster on large programs (deciding what to compile no
   longer grows with the square of the program's size) and compiles less code
   that would run only a few times, so it uses less memory.
+- `--jit on` no longer slows down a program that compiles nothing hot: such a
+  run spends nearly all of its turns in the interpreter loop of `--jit off`
+  (`logger-disabled` of `benchmarks/` was 1.5 times slower).
+- The experimental x86-64 JIT calls the String, List, Map and Set builtins that
+  only return a value from compiled code, so loops that use them compile under
+  `--jit on` and stay in compiled code.
+- The experimental x86-64 JIT reads maps by key (`counts[key]`) and builds list
+  literals in compiled code, so loops that do compile under `--jit on`.
+- The experimental x86-64 JIT makes blocks and starts `map`, `filter`, `reduce`
+  and the other block calls from compiled code, and runs the blocks compiled, so
+  loops that use them compile under `--jit on`.
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on

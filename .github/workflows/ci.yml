@@ -116,7 +116,7 @@ jobs:
         run: make test-shared
       - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
         run: make test-multicore-modules
-      - name: The goldens and their --max-steps sweeps with the JIT compiling every function it can
+      - name: The goldens and their --max-steps sweeps with the JIT compiling every function it can, then half the golden shards with the JIT on hot functions only
         run: make vm-jit-test
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point

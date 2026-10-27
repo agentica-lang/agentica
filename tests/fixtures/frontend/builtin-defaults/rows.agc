@@ -3,9 +3,10 @@ import Builtins from "../../../../compiler/catalog/builtins"
 import Types from "../../../../compiler/syntax/types"
 
 # Builds catalog rows by hand for the paths of builtin defaults that no real row uses yet: a last Fn parameter, an
-# alternative form, a rule that is not Plain, a gap in the defaults, a default of the wrong type and a bad variant.
-# Prints, for each row, which counts of arguments form_for takes (for 0 to 3), the fewest arguments, the arity text
-# (and the one of a method call, which leaves out the receiver), the signature and the problem of the defaults.
+# alternative form, a Prelude rule, a rule that is neither Plain nor Prelude, a gap in the defaults, a default of the
+# wrong type and a bad variant. Prints, for each row, which counts of arguments form_for takes (for 0 to 3), the
+# fewest arguments, the arity text (and the one of a method call, which leaves out the receiver), the signature and
+# the problem of the defaults.
 
 def required(name: String, type: Types.Type) -> Model.Named
   return Model.Named(name: name, type: type)
@@ -65,6 +66,7 @@ def main() -> Void
   show(row("Row.alternative", [x, one], Model.Rule.Plain, [plain("Row.alternative", [x])]))
   show(row("Row.alternative_second", [x], Model.Rule.Plain, [plain("Row.alternative_second", [x, one])]))
   show(row("Row.not_plain", [x, one], Model.Rule.ListMap, []))
+  show(row("Row.prelude", [required("path", text), timeout], Model.Rule.Prelude, []))
   show(plain("Row.gap", [x, optional("a", number, Model.Default.Whole(1)), required("b", number)]))
   show(plain("Row.fn_not_last", [x, one, required("f", each_line), optional("c", number, Model.Default.Whole(2))]))
   show(plain("Row.wrong_type", [x, optional("b", number, Model.Default.Text("x"))]))

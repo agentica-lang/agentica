@@ -116,6 +116,11 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   end
 
   main_index = by_name["main"]
+  struct_decls: Map[String, Ast.StructDecl] = {}
+  for entry in structs
+    struct_decls = struct_decls.put(entry.decl.name, entry.decl)
+  end
+
   cx = Lowering.Cx(
     types: checked.types,
     resolved: checked.resolved,
@@ -123,6 +128,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     structs: tables.infos,
     variants: tables.variants,
     json_structs: tables.json_structs,
+    layouts: {},
     functions: by_name,
     bodies: checked.bodies,
     step_tries: checked.step_tries,
@@ -140,10 +146,15 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   end
 
   table = Table(functions: [], blocks: {}, block_count: table_size)
-  struct_decls: Map[String, Ast.StructDecl] = {}
+  layouts: Map[String, String] = {}
   for entry in structs
-    struct_decls = struct_decls.put(entry.decl.name, entry.decl)
+    if entry.decl.layout != ""
+      layout = try Native.struct_layout(cx, entry.decl.name, struct_decls)
+      layouts = layouts.put(entry.decl.name, layout)
+    end
   end
+
+  cx = cx.with(layouts: layouts)
 
   for entry in functions
     params = entry.function.params.map do |param: Ast.Param| param.name end

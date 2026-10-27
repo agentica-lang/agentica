@@ -388,6 +388,7 @@ void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, ag
 void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, bool natives,
                             agc_style style);
 
-int agc_fuzz_one(const uint8_t *data, size_t len);
+/* vm/fuzz.c: one fuzz input, run in the interpreter or, with JIT, under AGC_JIT_ALWAYS. */
+int agc_fuzz_one(const uint8_t *data, size_t len, bool jit);
 
 #endif

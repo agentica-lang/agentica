@@ -300,6 +300,12 @@ static agc_value builtin_length(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_string(vm, args[0])->chars);
 }
 
+/* The number of UTF-8 bytes, which the String keeps: no walk over the text. */
+static agc_value builtin_bytesize(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_string(vm, args[0])->bytes);
+}
+
 /* Upper or lower case of the String in args[0]. A String of no characters is its own result, and one ASCII character
    maps by itself (no special casing applies to ASCII), so neither allocates. */
 static agc_value change_case(agc_vm *vm, agc_value *args, bool up) {
@@ -612,29 +618,30 @@ static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_string_builtins[] = {
-  {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
-  {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.downcase", 1, builtin_downcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.trim", 1, builtin_trim, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.split", 2, builtin_split, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.join", 2, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.contains?", 2, builtin_contains, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.starts_with?", 2, builtin_starts_with, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"String.ends_with?", 2, builtin_ends_with, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
-  {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
-  {"String.from_bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.to_bytes", 1, builtin_to_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"String.bytesize", 1, builtin_bytesize, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.downcase", 1, builtin_downcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.trim", 1, builtin_trim, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.split", 2, builtin_split, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.join", 2, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.contains?", 2, builtin_contains, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.starts_with?", 2, builtin_starts_with, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"String.ends_with?", 2, builtin_ends_with, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"String.from_bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.to_bytes", 1, builtin_to_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];

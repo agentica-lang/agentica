@@ -18,7 +18,7 @@ import Types from "../syntax/types"
 import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
-import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
+import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_STRUCTS, STRING_OPS, VM_BUILTINS} from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
@@ -123,8 +123,8 @@ export def lower_call(
   base = fx.next - 1
   fill = cx.fills.get(node.name)
   shape = Defaults.Shape(required: count, total: count, fn_last: false)
-  # A builtin form with defaults; `builtin` is true only when the form exists (key is set from it).
-  defaulted = builtin and Builtins.defaulted?(form.unwrap!)
+  # A builtin or prelude form with defaults; `builtin` and `prelude` are true only when the form exists.
+  defaulted = (builtin or prelude) and Builtins.defaulted?(form.unwrap!)
   if fill.ok?
     shape = fill.unwrap!.shape
   elsif defaulted
@@ -132,10 +132,15 @@ export def lower_call(
   end
 
   total = shape.total
+  # The struct builtins of Native take a type name as their layout code (no defaults: one argument per parameter).
+  laid_out = builtin and NATIVE_STRUCTS.include?(key)
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    if defaulted
+    if laid_out and type_name?(node.args[index])
+      arg = node.args[index]
+      fx = try emit_layout(cx, fx, Lowering.type_of(cx, arg), Ast.expr_span(arg))
+    elsif defaulted
       out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
       fx = out.fx
     else
@@ -146,16 +151,25 @@ export def lower_call(
     index += 1
   end
 
+  spans = builtin_spans(node, shape)
+  if laid_out and key == "Native.put_struct"
+    # The VM gets the layout of the value's struct as a fourth argument, with the span of the value.
+    fx = Lowering.alloc(fx.with(next: base + total))
+    value_span = Ast.expr_span(node.args[2])
+    fx = try emit_layout(cx, fx, Lowering.type_of(cx, node.args[2]), value_span)
+    spans = spans.push(value_span)
+    total += 1
+  end
+
   if builtin
-    fx = Lowering.emit_builtin(fx, base, key, total, builtin_spans(node, shape))
+    fx = Lowering.emit_builtin(fx, base, key, total, spans)
     if tail
       fx = Lowering.emit_at(fx, "return", [base], span)
     end
   elsif prelude
     # The span of each argument follows the span of the call, so the VM can name the argument a prelude function
     # rejects (docs/vm/03-ir-and-bytecode.md).
-    spans = [span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
-    fx = Lowering.emit(fx, "call", [base, cx.functions[target]], spans)
+    fx = Lowering.emit(fx, "call", [base, cx.functions[target]], builtin_spans(node, shape))
   else
     op = "call"
     if tail
@@ -266,6 +280,29 @@ def typed(cx: Lowering.Cx, expr: Ast.Expr, known: Bool) -> Result[Bool]
   end
 
   return Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
+end
+
+def type_name?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.TypeName(node) -> return true
+    _ -> return false
+  end
+end
+
+# The layout code ("{N:CODES}") of the C struct TYPE as a constant in the last register taken. TYPE is the struct that
+# the checker resolved (for a type name, an alias gives the struct it names), and the checker lets only a C struct of
+# an extern block through, so a missing layout is LOWER-INTERNAL.
+def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, type: Types.Type, span: Source.Span) -> Result[Lowering.Fx]
+  layout = ""
+  if Types.is?(type, "Struct")
+    layout = cx.layouts.get(Types.name(type), "")
+  end
+
+  if layout == ""
+    return error(Lowering.internal(cx, "lower: no C struct layout for #{Types.to_text(type)}", span))
+  end
+
+  return ok(Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(layout), span))
 end
 
 # The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an

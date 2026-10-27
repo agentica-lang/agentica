@@ -189,77 +189,29 @@ Signatures are in
   ends owns nothing. There is no snapshot: bytes are hashed in read order,
   so a concurrent writer changes the digest; to verify an archive, write it
   to a temporary name first, hash it, then `Path.rename` it into place.
-- `Zlib` compresses and decompresses bytes, files and streams, with the
-  opaque `ZlibEncoder` and `ZlibDecoder` handles and the
-  `ZlibProgress(output, consumed, finished, needs_input)` record; all three
-  names are reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950,
-  the Ruby and Python default), `gzip`/`gunzip` are gzip (RFC 1952), and
-  the streaming `deflate_init`/`inflate_init` take `window_bits` 15 (zlib),
-  -15 (raw deflate, RFC 1951) or 31 (gzip). There is no auto-detect, no
-  dictionary and no metadata option. Signatures are in
-  [`library/text-and-data/zlib.md`][agentica-link-5].
-- `Zlib.deflate(data, level, max_out_bytes)` and `Zlib.gzip(data, level,
-  max_out_bytes)` give `Result[List[Int]]` with `level` 0 to 9; empty input
-  is valid and gives the empty stream or member. `Zlib.inflate(data,
-  max_out_bytes)` and `Zlib.gunzip(data, max_out_bytes)` give
-  `Result[List[Int]]`: one stream or member only, with its checksum (zlib)
-  or CRC and size (gzip) checked. Empty compressed input fails, and any
-  unused or trailing bytes after the single stream or member (a second
-  member or zeros alike) are an error, on purpose: unlike Python's
-  `gzip.decompress`, concatenated members never decode. One-shot `data` is
-  at most 1048576 bytes and `max_out_bytes` is 1 to 1048576, otherwise a
-  contract error; output past the cap is an error.
+- `Zlib` compresses and decompresses bytes; files and streams go through the
+  Lazy steps (§6b). `Zlib` is a reserved name. `deflate`/`inflate` are the
+  zlib wrapper (RFC 1950, the Ruby and Python default) and `gzip`/`gunzip`
+  are gzip (RFC 1952). There is no auto-detect, no dictionary and no metadata
+  option. Signatures are in [`library/text-and-data/zlib.md`][agentica-link-5].
+- `Zlib.deflate(data, level = 6, max_bytes = 1048576)` and `Zlib.gzip(data,
+  level = 6, max_bytes = 1048576)` give `Result[List[Int]]` with `level` 0 to
+  9; empty input is valid and gives the empty stream or member.
+  `Zlib.inflate(data, max_bytes = 1048576)` and `Zlib.gunzip(data, max_bytes
+  = 1048576)` give `Result[List[Int]]`: one stream or member only, with its
+  checksum (zlib) or CRC and size (gzip) checked. Empty compressed input
+  fails, and any trailing byte after the single stream or member (a second
+  member or zeros alike) is an error, on purpose: unlike Python's
+  `gzip.decompress`, concatenated members never decode. `data` is at most
+  1048576 bytes and `max_bytes`, the cap of the output, is 1 to 1048576,
+  otherwise a contract error; output past the cap is an error.
 - `Zlib.crc32(data, seed = 0)` gives `Result[Int]`, the CRC32 (RFC 1952) of
   `data` chained after `seed`: leave the seed out first, then pass each next
   chunk the previous result. Empty input returns `seed` unchanged. `data` is at
   most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
-- `Zlib.deflate_file(src, dst, level, max_out_bytes, timeout_ms)` and
-  `Zlib.gzip_file(src, dst, level, max_out_bytes, timeout_ms)` compress a
-  file and give `Result[Int]`, the bytes written; `Zlib.inflate_file(src,
-  dst, max_out_bytes, timeout_ms)` and `Zlib.gunzip_file(src, dst,
-  max_out_bytes, timeout_ms)` decompress one stream or member the same way.
-  The raw input of compression never exceeds 1073741824 bytes and the
-  compressed input of decompression never exceeds 268435456 bytes, enforced
-  while reading even when the source grows; `max_out_bytes` is 1 to
-  1073741824, and output past it is cut while streaming so a partial file
-  never grows past it and is kept on error (never removed). The source is
-  read like `File.sha256` reads it (regular files only) and the destination
-  opens like `create_private` (an existing path, a dangling link included,
-  is an error and stays intact). `timeout_ms` covers the whole call; expiry
-  or a cancel detaches like the other whole-file calls, while work already
-  running runs to its end and its result is dropped. Only the file
-  functions carry the filesystem effect, so `--deny-fs` turns off only
-  them; the bytes and streaming calls run in any compute context.
-- `Zlib.deflate_init(window_bits, level, max_total_in, max_total_out)` gives
-  `Result[ZlibEncoder]` and `Zlib.inflate_init(window_bits,
-  max_total_in, max_total_out)` gives `Result[ZlibDecoder]`; each total cap
-  is 1 to 1073741824, enforced before the output or state could exceed it.
-  A call of `Zlib.deflate_next(enc, data, max_out)` or
-  `Zlib.inflate_next(dec, data, max_out)` takes at most 65536 input bytes
-  with room for `max_out` 1 to 65536 output bytes and gives
-  `Result[ZlibProgress]`. `consumed` may be less than `data.size`; the
-  caller owns the rest and presents it again, and trailing bytes after the
-  stream end stay caller-owned through `consumed` and are never silently
-  dropped. `needs_input` is true only when the call took all it was given
-  and left room in the output without finishing: it asks for more input
-  (or a finish), never for a spin. When it is false and bytes remain
-  unconsumed, the caller presents the remainder again with fresh room
-  first; when nothing remains, the caller drains with empty input and
-  fresh room. A 0-consumed and 0-produced call is either finished or asks
-  for input; an empty drain that asks for input never becomes a spin by
-  retrying the same empty input. A refused encoder quantum changes
-  nothing and may run again with a smaller positive `max_out`. A decoder
-  at its exact output budget still completes a trailer that produces no
-  bytes, while a true overflow fails without returning extra bytes.
-  `Zlib.deflate_finish(enc, max_out)` drains the end of a stream; repeat it
-  until `finished` is true, and new input after finishing starts is an
-  error. `Zlib.inflate_finish(dec)` gives `Result[Void]`: `ok()` only once
-  a whole checked stream end arrived, else a truncation error. Empty drains
-  after `finished` answer finished again; nonempty input after `finished` is
-  an error. `Zlib.encoder_close(enc)` and `Zlib.decoder_close(dec)` give
-  `Result[Void]` and are idempotent; feeding or finishing a closed, failed
-  or finished handle is an error. Both handles move across tasks with
-  `Task.spawn_owning`, and a task that ends frees what it did not close.
+- The `Zlib` calls and the zlib steps run in any compute context; of the
+  zlib-related calls only `File.chunks` and `Lazy.write_bytes` touch the
+  filesystem, so `--deny-fs` turns off only them.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.
@@ -475,22 +427,34 @@ end
   (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in
   `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared
   cache (`"libSystem.B.dylib"` has libc and libm); any other library needs an
-  absolute path. macOS drops `DYLD_*` variables when a protected program
+  absolute path (a package lists the places in its manifest,
+  05b-modules.md). macOS drops `DYLD_*` variables when a protected program
   (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
   pass through a shebang line or a shell.
 - A package names its libraries in its manifest (`[native.NAME]`,
   05b-modules.md): `extern "NAME"` in a file of the package then opens the file
   it ships for the running system by its absolute path in `deps/`, or the
   system name it gives.
+- `Native.load("NAME") -> Result[Void]` opens a library before its first call.
+  Its argument is a string literal that means what `extern "NAME"` means (the
+  same name rule, and the manifest's `[native.NAME]`); anything else is
+  `CHECK-NATIVE-LOAD` at the argument. It gives `ok` and keeps the library open
+  for the extern functions, or `error` with the loader's text (`native: cannot
+  open NAME: ...`), so a program can report a missing library or fall back
+  before any side effect. A function missing from the library is still
+  `RUNTIME-NATIVE-LOAD` at its first call. `--deny-native` refuses a program
+  that calls it, as for every `Native.*` builtin.
 - An argument is checked before the call: an integer takes the bits of its type
   read as signed or as unsigned, as `put_int8` to `put_int32` do (a `C.UInt8` or
   `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
   `C.Long` the same on Windows and any `Int` elsewhere), and C gets its low
   bits; one outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL
-  character is `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each
-  string, which it may read only during the call. A `C.String` result is copied;
-  `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A result
-  that may be NULL is declared `-> C.Pointer` and read with `Native.get_string`.
+  character is `RUNTIME-INVALID-CHARACTER` (for text with a NUL or a known
+  length, use `Native.from_string` and `bytesize`). The C function gets a copy
+  of each string, which it may read only during the call. A `C.String` result is
+  copied; `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A
+  result that may be NULL is declared `-> C.Pointer` and read with
+  `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -509,7 +473,10 @@ end
   length is `RUNTIME-INVALID-COUNT` at the length. A pointer or a
   length that C does not own is undefined behavior, like a wrong signature, and
   is not checked. `Native.pointer(n)` is the `C.Pointer` with the integer value
-  `n`, for sentinels such as `SQLITE_TRANSIENT` (`Native.pointer(-1)`).
+  `n`, for sentinels such as `SQLITE_TRANSIENT` (`Native.pointer(-1)`), and
+  `Native.address(p)` is the integer value of `p` (of a freed buffer
+  `RUNTIME-NATIVE-CLOSED`): the difference of two pointers into one block is
+  the bytes between them (SQLite's `pzTail` minus the SQL is what it read).
 - `Native.memory_pointer(size)` makes an owned buffer: `size` zeroed bytes that
   Agentica allocates, as a `C.Pointer` that goes wherever a `C.Pointer`
   parameter is (a negative size is `RUNTIME-INVALID-COUNT`). The calling task
@@ -528,6 +495,25 @@ end
   pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
   address that nothing tracks, so the buffer it names must outlive C's use.
   `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
+- `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) makes an
+  owned buffer of the UTF-8 bytes of `text` and a NUL after them, so its size
+  is `text.bytesize + 1`; a NUL inside `text` is copied like any byte. It is an
+  owned buffer in every other way, block form `Native.from_string(text) do |p|
+  ... end` included. It serves C functions that take text with a length
+  (`sqlite3_bind_text`, `PQexecParams`, `mysql_real_query`), which a
+  `C.String` cannot give, and pointers that C returns into the text: they stay
+  valid while the buffer lives, and `Native.address(tail) -
+  Native.address(p)` is the bytes before `tail` (SQLite's `pzTail`).
+- `Native.offset(p, n)` is the `C.Pointer` `n` bytes past `p`. For a pointer
+  that C gave it is the plain sum (wrapping on overflow), trusted like `p`. For
+  an owned buffer it is a view of the same memory, from byte `n` to the buffer's
+  end (`n` outside 0 to the size is `RUNTIME-NATIVE-BOUNDS` at `n`): reads and
+  writes through it are checked against that range, it is freed when its buffer
+  is (then every use is `RUNTIME-NATIVE-CLOSED`, and `Native.closed?` is true),
+  a `compute def` call that takes it holds its buffer, and `Native.free` of it
+  is `RUNTIME-NATIVE-NOT-OWNED`. A view of a view takes its offset from the
+  view, and ends where the buffer ends. One buffer can thus hold several cells
+  that C reads by address.
 - Typed memory, at a byte offset past any `C.Pointer` (alignment is not needed):
   `Native.get_int8`, `get_int16`, `get_int32`, `get_int64`, `get_uint8`,
   `get_uint16`, `get_uint32` (an `Int`), `get_float32`, `get_float64` (a
@@ -571,20 +557,27 @@ end
   first `SIGINT`, `SIGTERM` or `SIGHUP`), a compute call that has not started is
   never made; child programs stop, files are written, the end waits for the
   running `compute def` calls that hold a resource, and then every resource and
-  owned buffer still open is freed, whatever task owns it, newest first. A
-  resource that such a call returns at that point is never freed. After a stop
-  signal the end does not wait for those calls, and what they hold is not freed.
-  These frees and the file writes share one flush limit (`--flush-timeout`): a
-  call or a `free` that takes longer is left behind and stderr gets one warning
-  line; with `--flush-timeout 0` nothing is freed, and the line says so. A
-  second stop signal ends the run at once. A resource and a `C.Pointer` do not
-  convert into each other. Every resource result is a new pointer that the
-  program owns: a function that returns a pointer it keeps (a
+  owned buffer still open is freed, whatever task owns it, newest first (the
+  reverse of opening); the frees stop at the first resource that a running call
+  still holds and never skip past it, so that one and all older ones stay
+  unfreed. A resource that such a call returns at that point is never freed.
+  After a stop signal the end does not wait for those calls. These frees and the
+  file writes share one flush limit (`--flush-timeout`): a call or a `free` that
+  takes longer is left behind and stderr gets one warning line; with
+  `--flush-timeout 0` nothing is freed, and the line says so. A second stop
+  signal ends the run at once. A resource and a `C.Pointer` do not convert into
+  each other. Every resource result is a new pointer that the program owns: a
+  function that returns a pointer it keeps (a
   borrowed one) must be declared `-> C.Pointer`, or its pointer is freed twice.
   A `def` of `db_close` in the same block is `PARSE-EXTERN-FREE`; the check
   stops at the block, so do not declare it in another one either. `IO.inspect`
   prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
   as for other handles.
+- `resource Db, free_ref: db_close` declares a resource freed by
+  `void db_close(void **)`, as `duckdb_close` and `duckdb_disconnect`: every
+  free above (close, the owner's end, a dropped compute result) passes the
+  address of the VM's copy of the pointer, where C may write NULL, and runs
+  once.
 - An `out` parameter (section 5) gets a pointer to a slot that is zeroed before
   the call: an `int *` for `C.Int32`, a `void **` for `C.Pointer` or a resource.
   The call returns the function's record, with the C result as `result` and
@@ -622,6 +615,18 @@ end
   must outlive C's use; a `compute def` call holds the owned buffers in the
   fields of its struct arguments as it holds its buffer arguments. A struct with
   a fixed array field (`char name[16]`) cannot be declared yet.
+- Such a struct also goes through a pointer (Ruby ffi's `Struct.size` and
+  `Struct.new(pointer)`): `Native.size_of(Name)` is its size in bytes as C's
+  `sizeof` gives it, tail padding included, so item `k` of a C array of them is
+  at `k * Native.size_of(Name)`. `Native.get_struct(p, offset, Name)` reads one
+  at `offset` bytes past `p` as a struct result is read, and
+  `Native.put_struct(p, offset, value)` writes `value` as a struct argument is
+  written, every field checked before the first byte is written
+  (`RUNTIME-INTEGER-OVERFLOW` or `RUNTIME-NATIVE-CLOSED` at the value). The
+  bounds, NULL and freed checks are those of `get_int32`, for the struct's
+  size. A `C.Pointer` field stores an address that nothing tracks, as
+  `put_pointer` does. `Name` may be a type alias of such a struct. Any other
+  type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH` at it.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

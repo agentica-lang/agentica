@@ -124,14 +124,15 @@ end
 RAW_PROGRAM = """\
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
+  limit = String.to_int!(System.args()[4])
   upload = "x"
   while String.length(upload) < 4194304
     upload = upload + upload
   end
-  large = Result.unwrap!(HTTP.client(options(5000, 1, 8388608, "")))
+  large = Result.unwrap!(HTTP.client(options(limit, 1, 8388608, "")))
   show(HTTP.post(large, raw + "/early", [], upload))
-  hostile = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  stale = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  hostile = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
+  stale = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
   show(HTTP.get(stale, raw + "/stale"))
   show(HTTP.post(stale, raw + "/after", [], "x"))
   show(HTTP.get(stale, raw + "/stale"))
@@ -245,22 +246,24 @@ SERVER_NODE_LINES = [
 
 
 def start_peer(adopt):
-    """http-peer.py serves until its stdin closes, so the pipe stays open; returns the ports it prints."""
+    """http-peer.py serves until its stdin closes, so the pipe stays open; returns the peer and the ports it prints."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
-    return json.loads(peer.next_line())
+    return peer, json.loads(peer.next_line())
 
 
 def run_program(tmp_path, name, text, ports):
     source = tmp_path / (name + ".agc")
     source.write_text(PRELUDE + text, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / (name + ".agcb"))
-    result = run_vm(bytecode, env=vm_environment(), args=[CERTS] + [ports[key] for key in ("plain", "tls", "raw")])
+    # The fifth argument is the client deadline of RAW_PROGRAM: a call that a correct run must finish, so it is scaled.
+    args = [CERTS] + [ports[key] for key in ("plain", "tls", "raw")] + [str(scaled(5000))]
+    result = run_vm(bytecode, env=vm_environment(), args=args)
     assert result.code == 0, result.stderr
     return result.stdout
 
 
 def test_client_against_threading_http_server_keep_alive_chunked_close_delimited_timeout_pool_limits(tmp_path, adopt):
-    ports = start_peer(adopt)
+    _, ports = start_peer(adopt)
     check_lines(run_program(tmp_path, "plain", PLAIN_PROGRAM, ports), [
         '200 hello 127.0.0.1 ["a", "b"]',
         "200 ñandú chunks 12",
@@ -276,7 +279,7 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
 
 
 def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, adopt):
-    ports = start_peer(adopt)
+    _, ports = start_peer(adopt)
     check_lines(run_program(tmp_path, "tls", TLS_PROGRAM, ports), [
         "200 hello localhost 15",
         "200 hello localhost 15",
@@ -289,8 +292,24 @@ def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, a
 
 
 def test_client_against_hostile_raw_responses_and_a_413_that_comes_before_the_upload_ends(tmp_path, adopt):
-    ports = start_peer(adopt)
-    check_lines(run_program(tmp_path, "raw", RAW_PROGRAM, ports), [
+    peer, ports = start_peer(adopt)
+    try:
+        check_raw_lines(run_program(tmp_path, "raw", RAW_PROGRAM, ports))
+    except AssertionError:
+        print(peer_early_line(peer))
+        raise
+
+
+def peer_early_line(peer):
+    """What the raw peer saw of /early (its line is printed once the connection ends), for a failure report."""
+    try:
+        return peer.next_line(timeout=scaled(2))
+    except AssertionError as problem:
+        return "the peer printed no /early line: %s" % problem
+
+
+def check_raw_lines(text):
+    check_lines(text, [
         "413 big! 4",
         "200 stale 5",
         "http: connection closed before the response was complete",

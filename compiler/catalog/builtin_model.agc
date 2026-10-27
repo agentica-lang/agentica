@@ -45,6 +45,7 @@ export enum Rule
   NativeClose
   NativeClosed
   NativeMemoryBlock
+  NativeStruct
   Ok
   OkVoid
   Prelude
@@ -96,9 +97,9 @@ export struct Named
 end
 
 ## One builtin. A name may have alternatives: other forms with a different number of parameters (ok(), Task.await with
-## a timeout, Map.get with a default). A Plain builtin with no alternative may instead give a default to its last
-## parameters, as a user function does (builtins.agc `default_problem` lists the rules). implementation is the name of
-## the VM builtin; effects are the capabilities it needs (stdout, network, ...).
+## a timeout, Map.get with a default). A Plain or Prelude builtin with no alternative may instead give a default to its
+## last parameters, as a user function does (builtins.agc `default_problem` lists the rules). implementation is the
+## name of the VM builtin; effects are the capabilities it needs (stdout, network, ...).
 export struct Builtin
   name: String
   parameters: List[Named]

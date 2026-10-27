@@ -81,17 +81,22 @@ typedef struct agc_line_reader agc_line_reader;
 typedef enum { AGC_LINES_LINE, AGC_LINES_WAIT, AGC_LINES_END } agc_lines_status;
 bool agc_lines_buffer_ok(int64_t buffer_bytes);
 agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span);
+/* The same reader over the bytes of a regular file (File.chunks): each LINE is a List[Int] of `size` bytes, the last
+   one shorter, and a file that is not regular is refused when it opens. */
+bool agc_chunks_size_ok(int64_t size);
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span);
 agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, agc_value *out);
 void agc_lines_stop(agc_line_reader *r, agc_value outcome);
 /* The lines of Lazy.write_lines (vm/lazy.c) into a file by path, created or truncated: the same rules as the reader.
    agc_writer_new opens nothing; the first agc_writer_next opens the file. READY means the writer waits for a line:
-   the next call passes it as `line` (a String; Void passes none). WAIT means the task parks on a file job, whose
+   the next call passes it as `line` (a String, or with `bytes` a List[Int] written as it is: Lazy.write_bytes; Void
+   passes none). WAIT means the task parks on a file job, whose
    result is the `last` of the next call (with a Void line). END puts the outcome in *out and comes only after the
    file is flushed and closed. agc_writer_stop, while READY, ends the writer with that outcome: the next calls close
    the file. */
 typedef struct agc_line_writer agc_line_writer;
 typedef enum { AGC_WRITER_READY, AGC_WRITER_WAIT, AGC_WRITER_END } agc_writer_status;
-agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, uint32_t span);
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, bool bytes, uint32_t span);
 agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
 void agc_writer_stop(agc_line_writer *w, agc_value outcome);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
@@ -156,18 +161,19 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
-/* The file jobs behind the Zlib.*_file builtins (vm/zlib.c validates
-   nothing; this call checks the paths, caps, level and timeout, then starts
-   the pool job): DEFLATE/INFLATE mean a zlib wrapper, GZIP/GUNZIP a gzip
-   member. Level applies to compression only. */
-typedef enum {
-  AGC_ZLIB_DEFLATE_FILE,
-  AGC_ZLIB_INFLATE_FILE,
-  AGC_ZLIB_GZIP_FILE,
-  AGC_ZLIB_GUNZIP_FILE
-} agc_zlib_file_kind;
-agc_value agc_zlib_file(agc_vm *vm, agc_zlib_file_kind kind, const agc_string *src, const agc_string *dst,
-                        int64_t level, int64_t max_out, int64_t timeout, uint32_t span);
+/* The zlib stream of a Lazy step (vm/lazy.c drives it, vm/zlib.c owns it). kind is the step of __lazy_zlib: 0
+   deflate, 1 raw deflate, 2 gzip, 3 inflate, 4 raw inflate, 5 gunzip. agc_zstep_check gives Void or the error of a bad
+   level or max_bytes. agc_zstep_open starts the codec as a registered entry the calling task owns, so the task's end
+   frees it when the run did not; agc_zstep_close frees it (idempotent). agc_zstep_next runs one pass over `in` with
+   `finish` once no item will come, sets *used, and puts a chunk of at most 64 KiB in *out when it produced bytes
+   (Void when not). INPUT: the stream wants the next item. AGAIN: call again with what is left of `in` (maybe none).
+   END: the stream ended; a later call with bytes is a trailing byte. FAILED: *out is the error Result. */
+typedef enum { AGC_ZSTEP_INPUT, AGC_ZSTEP_AGAIN, AGC_ZSTEP_END, AGC_ZSTEP_FAILED } agc_zstep_status;
+agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes);
+agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes);
+void agc_zstep_close(agc_vm *vm, agc_resource *r);
+agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, size_t len, size_t *used, bool finish,
+                                agc_value *out);
 extern const agc_builtin agc_zlib_builtins[];
 extern const size_t agc_zlib_builtin_count;
 extern const agc_builtin agc_lazy_builtins[];
@@ -205,8 +211,9 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 /* The end of the run (docs/vm/14-core-invariants.md §14.4), once the schedulers have joined. stop_queued, first:
    the compute calls that no pool thread took are never made. end, after the file flush: waits for the running compute
    calls that hold a resource, then frees every resource and owned buffer of native code still open, whatever task owns
-   it, newest first, on a thread apart. The wait ends at rt->flush_by, or once STOP_SIGNAL() is nonzero, and then what
-   a running call still holds is not freed. False when the deadline ran out first; the frees not made are left to the
+   it, newest first (the reverse of opening), on a thread apart. The wait ends at rt->flush_by, or once STOP_SIGNAL()
+   is nonzero; the frees then stop at the first resource that a running call still holds and never skip past it, so
+   that one and all older ones are not freed. False when the deadline ran out first; the frees not made are left to the
    exit. */
 void agc_ffi_stop_queued(agc_vm *vm);
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void));

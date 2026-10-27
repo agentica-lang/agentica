@@ -778,6 +778,12 @@ def hold(res: Res) -> Result[Int]
   return ok(peer_res_hold(res, 20_000))
 end
 
+def use_and_close(res: Res) -> Int
+  value = peer_res_get(res)
+  Native.close(res)
+  return value
+end
+
 def wait_for(frees: Int) -> Void
   n = 0
   while peer_res_frees() < frees and n < 2000
@@ -848,6 +854,105 @@ end
 def test_a_resource_with_a_capital_free_name_is_freed_by_that_function(tmp_path, peer):
     result = agentica(program(tmp_path, CAPITAL_FREE_EXTERN.format(library=literal(peer))))
     assert (result.code, result.stdout, result.stderr) == (0, "5\n0\n1\n", "")
+
+
+# A free_ref: function gets the address of the handle (void f(T **)) and may write NULL there. Each free path calls
+# it once and never again, never with NULL and never while C uses the handle ([closes, NULL closes, busy frees]):
+# Native.close (twice), the end of the owning task, an out resource, a close while a compute call holds the handle
+# (the free waits for the call), and the result and the out resource of cancelled compute calls (dropped when C
+# returns). A free given the pointer itself would free what the handle points at, which crashes the run.
+REF_FREE_EXTERN = """extern "{library}"
+  resource Handle, free_ref: peer_res_close
+  def peer_res_open(value: C.Int32) -> Handle
+  def peer_res_get(handle: Handle) -> C.Int32
+  def peer_out_all(
+    n: C.Int32, out i: C.Int32, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Handle,
+  ) -> C.Int32
+  compute def peer_res_hold(handle: Handle, limit_ms: C.Int32) -> C.Int32
+  compute def peer_res_open_later(value: C.Int32, limit_ms: C.Int32) -> Handle
+  compute def peer_out_open_later(value: C.Int32, limit_ms: C.Int32, out res: Handle) -> C.Int32
+  def peer_set_flag() -> Void
+  def peer_waiting() -> C.Int32
+  def peer_res_closes() -> C.Int32
+  def peer_res_null_closes() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
+end
+
+def open_one(n: Int) -> Int
+  handle = peer_res_open(n).unwrap!
+  return peer_res_get(handle)
+end
+
+def hold(handle: Handle) -> Result[Int]
+  return ok(peer_res_hold(handle, 20_000))
+end
+
+def open_later(n: Int) -> Result[Int]
+  handle = try peer_res_open_later(n, 20_000)
+  return ok(peer_res_get(handle))
+end
+
+def out_later(n: Int) -> Result[Int]
+  opened = peer_out_open_later(n, 20_000)
+  return ok(peer_res_get(opened.res))
+end
+
+def wait_waiting(calls: Int) -> Void
+  n = 0
+  while peer_waiting() < calls and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def wait_closes(closes: Int) -> Void
+  n = 0
+  while peer_res_closes() < closes and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def counts() -> List[Int]
+  return [peer_res_closes(), peer_res_null_closes(), peer_res_busy_frees()]
+end
+
+def main() -> Void
+  handle = peer_res_open(7).unwrap!
+  Native.close(handle)
+  Native.close(handle)
+  puts(Task.await(Task.spawn(&open_one, 5)))
+  made = peer_out_all(3)
+  puts(peer_res_get(made.res))
+  Native.close(made.res)
+  puts(counts())
+  held = peer_res_open(9).unwrap!
+  holder = Task.spawn(&hold, held)
+  opener = Task.spawn(&open_later, 1)
+  out_opener = Task.spawn(&out_later, 2)
+  wait_waiting(3)
+  Native.close(held)
+  Task.cancel(opener)
+  Task.cancel(out_opener)
+  puts([Task.await(opener), Task.await(out_opener)])
+  puts(counts())
+  peer_set_flag()
+  puts(Task.await(holder))
+  wait_closes(6)
+  Task.sleep(20)
+  puts(counts())
+end
+"""
+
+
+@NATIVE_CALLS
+def test_a_free_ref_function_gets_the_address_of_the_handle_once(tmp_path, peer):
+    result = agentica("--schedulers", "4", program(tmp_path, REF_FREE_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "5", "3", "[3, 0, 0]", '[error("task: cancelled"), error("task: cancelled")]', "[3, 0, 0]", "ok(9)",
+        "[6, 0, 0]", "",
+    ]
 
 
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
@@ -999,6 +1104,8 @@ BUFFER_EXTERN = """extern "{library}"
   compute def peer_floats_hold(xs: C.Pointer, n: C.Int32, limit_ms: C.Int32) -> C.Double
   def peer_res_holding() -> C.Int32
   def peer_set_flag() -> Void
+  def peer_text_sum(p: C.Pointer, len: C.Int32) -> C.Int64
+  def peer_tail(p: C.Pointer, len: C.Int32) -> C.Pointer
 end
 
 """
@@ -1083,7 +1190,8 @@ end
 
 
 # An owned buffer knows its size: a read or write before or past it is RUNTIME-NATIVE-BOUNDS (at the offset, or at the
-# count or list that runs past), and a freed one RUNTIME-NATIVE-CLOSED, also as an extern argument. A C pointer has no
+# count or list that runs past), and a freed one RUNTIME-NATIVE-CLOSED, also as an extern argument. A view
+# (Native.offset) ends where its buffer does, is freed with it, and is not the program's to free. A C pointer has no
 # size, but NULL and a negative offset are refused; a value that does not fit is RUNTIME-INTEGER-OVERFLOW, a NUL in a
 # C string RUNTIME-INVALID-CHARACTER, and Native.free of a pointer that C gave RUNTIME-NATIVE-NOT-OWNED.
 @NATIVE_CALLS
@@ -1120,16 +1228,24 @@ end
     ("Native.get_int8(gone, 0)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("Native.put_pointer(buf, 0, gone)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("peer_sum_floats(gone, 1)", "RUNTIME-NATIVE-CLOSED", None),
+    ("Native.offset(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.offset(buf, -1)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.get_int32(Native.offset(buf, 14), 0)", "RUNTIME-NATIVE-BOUNDS", "0)"),
+    ("Native.free(Native.offset(buf, 4))", "RUNTIME-NATIVE-NOT-OWNED", "Native.offset"),
+    ("Native.offset(gone, 0)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("Native.address(gone)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("Native.get_int8(gone_view, 0)", "RUNTIME-NATIVE-CLOSED", "gone_view"),
+    ("peer_sum_floats(gone_view, 1)", "RUNTIME-NATIVE-CLOSED", None),
 ])
 def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, argument):
     text = "  %s" % line if line.startswith(("Native.put", "Native.free")) else "  IO.inspect(%s)" % line
     main = 'def main() -> Void\n  buf = Native.memory_pointer(16)\n  gone = Native.memory_pointer(4)\n' \
-        '  Native.free(gone)\n  full = Native.memory_pointer(2)\n  Native.put_int16(full, 0, 24_929)\n' \
-        '  puts("before")\n%s\nend\n' % text
+        '  gone_view = Native.offset(gone, 2)\n  Native.free(gone)\n  full = Native.memory_pointer(2)\n' \
+        '  Native.put_int16(full, 0, 24_929)\n  puts("before")\n%s\nend\n' % text
     result = agentica("--json", program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert result.stdout == "before\n"
     # An extern call fails at its extern function, as for a closed resource.
-    where = (BUFFER_EXTERN.count("\n") + 8, text.index(argument) + 1) if argument else (3, 3)
+    where = (BUFFER_EXTERN.count("\n") + 9, text.index(argument) + 1) if argument else (3, 3)
     assert diagnostic(result, 1) == (code, where)
 
 
@@ -1151,6 +1267,69 @@ end
 """
     result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "256\ntrue\n[0, 255, 0]\n", "")
+
+
+# Native.offset of an owned buffer is a view of the same memory from that byte to the buffer's end: C fills and reads
+# it, a view of a view counts from the buffer, and the parent's free closes it. Of a C pointer it is the plain sum.
+# Native.address gives back the integer, so two pointers into one block subtract to the bytes between them.
+@NATIVE_CALLS
+def test_a_view_into_an_owned_buffer_and_the_address_of_a_pointer(tmp_path, peer):
+    main = """def main() -> Void
+  buf = Native.memory_pointer(16)
+  ints = Native.offset(buf, 8)
+  peer_fill_ints(ints, 2)
+  puts(Native.get_array_of_int32(buf, 0, 4))
+  Native.put_float32(ints, 0, 1.5)
+  Native.put_float32(Native.offset(ints, 4), 0, 2.0)
+  puts(peer_sum_floats(ints, 2))
+  tail = Native.offset(ints, 8)
+  puts([Native.address(ints) - Native.address(buf), Native.address(tail) - Native.address(buf)])
+  puts(Native.get_bytes(tail, 0, 0))
+  puts([Native.null?(ints), Native.closed?(ints)])
+  IO.inspect(ints)
+  puts(Native.get_int64(Native.offset(peer_static_int64s(), 8), 0))
+  puts(Native.address(Native.offset(Native.pointer(4096), -96)))
+  puts(Native.address(Native.pointer(-1)))
+  Native.free(buf)
+  puts(Native.closed?(ints))
+end
+"""
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr, result.stdout.splitlines()) == (0, "", [
+        "[0, 0, -3, -2]", "3.5", "[8, 16]", "[]", "[false, false]", "<C.Pointer>", "-9", "4000", "-1", "true",
+    ])
+
+
+# Native.from_string copies the UTF-8 bytes of a String and a NUL into an owned buffer: C that takes the length
+# (text.bytesize) reads every byte, a NUL inside included, and a pointer that C returns into the buffer (SQLite's
+# pzTail) subtracts from the buffer's address to the bytes C read. Like a buffer of Native.memory_pointer, the free
+# closes its views, and its block form frees it when the block ends.
+@NATIVE_CALLS
+def test_from_string_gives_c_the_bytes_of_a_string_with_its_length(tmp_path, peer):
+    text = "é\x00😀 ok"
+    main = """def main() -> Void
+  text = "é#{String.from_code(0)}😀 ok"
+  buf = Native.from_string(text)
+  puts(peer_text_sum(buf, text.bytesize))
+  puts(Native.get_bytes(buf, text.bytesize, 1))
+  sql = "SELECT 'é'; SELECT 2"
+  used = Native.from_string(sql) do |s|
+    tail = peer_tail(s, sql.bytesize)
+    puts(Native.get_string(tail, 0))
+    Native.address(tail) - Native.address(s)
+  end
+  puts(used)
+  view = Native.offset(buf, 2)
+  Native.free(buf)
+  kept = Native.from_string("x") do |s| s end
+  puts([Native.closed?(buf), Native.closed?(view), Native.closed?(kept)])
+end
+"""
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    checksum = sum((k + 1) * b for k, b in enumerate(text.encode("utf-8")))
+    assert (result.code, result.stderr, result.stdout.splitlines()) == (0, "", [
+        str(checksum), "[0]", " SELECT 2", str(len("SELECT 'é';".encode("utf-8"))), "[true, true, true]",
+    ])
 
 
 # The block form of Native.memory_pointer yields a new buffer, frees it when the block ends and returns the block's
@@ -1226,12 +1405,13 @@ end
 
 
 # Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
-# is not the caller's to hand over.
+# and a view of a buffer (Native.offset) are not the caller's to hand over.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("handed, out, code", [
     ("buf", "3.5\n", "RUNTIME-NATIVE-CLOSED"),
     ("peer_static_floats()", "", "RUNTIME-HANDLE-NOT-OWNED"),
+    ("Native.offset(buf, 0)", "", "RUNTIME-HANDLE-NOT-OWNED"),
 ])
 def test_task_spawn_owning_hands_an_owned_buffer_over(tmp_path, peer, schedulers, handed, out, code):
     main = """def sum(buf: C.Pointer) -> Float
@@ -1265,10 +1445,13 @@ end
 
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-@pytest.mark.parametrize("form", ["free", "block"])
+@pytest.mark.parametrize("form", ["free", "view", "block"])
 def test_a_compute_call_keeps_its_buffer_until_it_returns(tmp_path, peer, schedulers, form):
-    if form == "free":
-        body = "  buf = Native.memory_pointer(256)\n" + textwrap.indent(HOLD_BUFFER, "  ") + \
+    if form != "block":
+        # A call that takes a view holds its buffer the same way.
+        hold = HOLD_BUFFER.replace("(&sum_later, buf)", "(&sum_later, Native.offset(buf, 0))") \
+            if form == "view" else HOLD_BUFFER
+        body = "  buf = Native.memory_pointer(256)\n" + textwrap.indent(hold, "  ") + \
             "  Native.free(buf)\n  holder = task\n"
     else:
         body = "  holder = Native.memory_pointer(256) do |buf|\n" + textwrap.indent(HOLD_BUFFER, "    ") + \
@@ -1308,11 +1491,13 @@ end
 
 # A compute call holds its resource until C returns: a close by another task, or a cancel that ends the owning task,
 # marks it closed, and the free runs only when the call ends, never while the pool thread still uses the pointer.
+# The close may come from a task that did not open the resource (no owner check) after it used the resource.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("spawn, stop, awaited", [
     ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
     ("Task.spawn", "Native.close(res)", "ok(9)"),
+    ("Task.spawn", "Task.await(Task.spawn(&use_and_close, res))", "ok(9)"),
 ])
 def test_a_compute_call_keeps_its_resource_until_it_returns(tmp_path, peer, schedulers, spawn, stop, awaited):
     main = """def main() -> Void
@@ -1421,6 +1606,7 @@ NOTE_EXTERN = """extern "{library}"
   compute def peer_note_hold(note: Note, ms: C.Int32) -> C.Int32
   def peer_note_holding() -> C.Int32
   compute def peer_nap(ms: C.Int32) -> C.Int32
+  def peer_nap_starts() -> C.Int32
 end
 
 """
@@ -1438,7 +1624,8 @@ def notes_of(notes):
 
 
 # The end of main frees what it still owns as a task's end does, newest first, whether main returns, exits or crashes:
-# the free of a note writes its tag down. The note closed already is not freed again. The docs' own example, a C stream
+# the free of a note writes its tag down. The note closed already is not freed again, and a view of a buffer
+# (Native.offset) is not freed apart from its buffer. The docs' own example, a C stream
 # that main never closes, keeps what fputs wrote, and so does the stream of a task that still runs.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
@@ -1468,6 +1655,8 @@ def main() -> Void
   b = peer_note_open("NOTES", "b").unwrap!
   c = peer_note_open("NOTES", "c").unwrap!
   Native.close(b)
+  buf = Native.memory_pointer(16)
+  view = Native.offset(buf, 4)
   puts("main ends")
   %s
 end
@@ -1519,7 +1708,8 @@ def test_the_end_of_main_does_not_wait_for_calls_that_hold_nothing(tmp_path, pee
   return peer_nap(ms)
 end
 
-def hold(note: Note) -> Int
+def hold(note: Note, calling: Channel[Int]) -> Int
+  calling.send(1, 10_000).unwrap!
   return peer_note_hold(note, 0)
 end
 
@@ -1529,9 +1719,14 @@ def main() -> Void
   for k in 1..SCHEDULERS
     nappers = nappers.push(Task.spawn(&nap, 20_000))
   end
-  Task.sleep(100)
-  holder = Task.spawn(&hold, note)
-  Task.sleep(50)
+  n = 0
+  while peer_nap_starts() < SCHEDULERS and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  calling: Channel[Int] = Channel.new(1)
+  holder = Task.spawn do hold(note, calling) end
+  calling.recv(10_000).unwrap!
   puts(peer_note_holding())
 end
 """.replace("SCHEDULERS", schedulers)
@@ -1563,18 +1758,22 @@ end
     assert notes_of(notes) == ["b", ""]
 
 
-# On SIGINT the run frees what native code owns, as it writes files, then ends by that signal. It does not wait for a
-# running compute call: the note that the call holds is not freed.
+# On SIGINT the run frees what native code owns, as it writes files, then ends by that signal, also when the signal
+# comes while the end waits for a running compute call. It does not wait for that call: the frees go newest first and
+# stop at the note the call holds, so "a" (newer) is freed and the older "parent", which a real child could point
+# into, is left with it.
 @NATIVE_CALLS
-@pytest.mark.skipif(WINDOWS, reason="POSIX signals")
-def test_a_stop_signal_frees_what_is_still_open(tmp_path, peer):
+@host_only(WINDOWS, "Windows has no POSIX signals")
+@pytest.mark.parametrize("ending", ["  Task.sleep(60_000)\n", ""])
+def test_a_stop_signal_frees_what_is_still_open(tmp_path, peer, ending):
     main = """def hold(note: Note) -> Int
   return peer_note_hold(note, 20_000)
 end
 
 def main() -> Void
-  note = peer_note_open("NOTES", "a").unwrap!
+  parent = peer_note_open("NOTES", "parent").unwrap!
   held = peer_note_open("NOTES", "held").unwrap!
+  note = peer_note_open("NOTES", "a").unwrap!
   holder = Task.spawn(&hold, held)
   n = 0
   while peer_note_holding() < 1 and n < 2000
@@ -1582,9 +1781,8 @@ def main() -> Void
     n += 1
   end
   puts("ready")
-  Task.sleep(60_000)
-end
-"""
+%send
+""" % ending
     source, notes = note_program(tmp_path, peer, main)
     child = subprocess.Popen(cli() + [str(source)], stdout=subprocess.PIPE, env=vm_environment(), text=True)
     try:
@@ -2178,26 +2376,30 @@ end
 
 
 # What C cannot take in a struct field stops the run at the extern function before C runs, as for an argument: a
-# C.Int32 field outside 32 bits, signed or unsigned (a nested one too) and a freed owned buffer in a C.Pointer field.
+# C.Int32 field outside 32 bits, signed or unsigned (a nested one too) and a freed owned buffer, or a view of one, in a
+# C.Pointer field.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code", [
     ("peer_pair_sum(PeerPair(x: 4_294_967_296, y: 0))", "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_nested_bump(peer_nested_make(1).with(mixed: PeerMixed(n: -2_147_483_649, x: 0.0)))",
      "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed))", "RUNTIME-NATIVE-CLOSED"),
+    ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed_view))", "RUNTIME-NATIVE-CLOSED"),
 ])
 def test_what_c_cannot_take_in_a_struct_field_stops_the_run(tmp_path, peer, call, code):
-    main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
+    main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  freed_view = Native.offset(freed, 0)\n" \
+        "  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
     refused_at_extern(tmp_path, peer, STRUCT_EXTERN, main, call, code)
 
 
 # A compute call holds the owned buffer in a C.Pointer field of its struct argument, as it holds a C.Pointer argument:
-# a free while C still reads the memory only marks the buffer freed.
+# a free while C still reads the memory only marks the buffer freed. A view of the buffer in the field holds it too.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_compute_call_keeps_the_buffer_of_a_struct_field(tmp_path, peer, schedulers):
+@pytest.mark.parametrize("token", ["buf", "Native.offset(buf, 0)"])
+def test_a_compute_call_keeps_the_buffer_of_a_struct_field(tmp_path, peer, schedulers, token):
     main = """def sum_later(buf: C.Pointer) -> Result[Int]
-  return ok(peer_batch_hold(PeerBatch(n_tokens: 64, token: buf), 20_000))
+  return ok(peer_batch_hold(PeerBatch(n_tokens: 64, token: TOKEN), 20_000))
 end
 
 def main() -> Void
@@ -2215,9 +2417,84 @@ def main() -> Void
   peer_set_flag()
   puts(Task.await(task))
 end
-"""
+""".replace("TOKEN", token)
     result = agentica("--schedulers", schedulers, program(tmp_path, STRUCT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "ok(128)\n", "")
+
+
+ROWS_EXTERN = """extern "{library}"
+  struct PeerRow
+    id: C.Int32
+    count: C.Long
+    score: C.Double
+  end
+  struct PeerBatch
+    n_tokens: C.Int32
+    token: C.Pointer
+  end
+  def peer_row_size() -> C.Int64
+  def peer_rows_fill(rows: C.Pointer, n: C.Int32) -> Void
+  def peer_rows_text(rows: C.Pointer, n: C.Int32) -> C.String
+  def peer_batch_sum(b: PeerBatch) -> C.Int64
+end
+
+"""
+
+
+# Structs through pointers: Native.size_of is C's sizeof, so an array of structs with a C.Long field (16 bytes on
+# Windows, 24 elsewhere) is put_struct at k times the size and C reads it, C fills one that get_struct reads (through
+# a view and a type alias too), and a struct whose C.Pointer field holds an owned buffer reads back as C sees it.
+@NATIVE_CALLS
+def test_c_structs_through_pointers_have_the_c_layout(tmp_path, peer):
+    main = """type Row = PeerRow
+
+def main() -> Void
+  size = Native.size_of(PeerRow)
+  puts(size == peer_row_size())
+  rows = Native.memory_pointer(3 * size)
+  for k in 0...3
+    Native.put_struct(rows, k * size, PeerRow(id: 10 + k, count: -k, score: k.to_f * 1.5))
+  end
+  puts(peer_rows_text(rows, 3))
+  peer_rows_fill(rows, 3)
+  puts(Native.get_struct(rows, 2 * size, PeerRow))
+  puts(Native.get_struct(Native.offset(rows, Native.size_of(Row)), 0, Row).id)
+  tokens = Native.memory_pointer(8)
+  Native.put_array_of_int32(tokens, 0, [40, 2])
+  batches = Native.memory_pointer(2 * Native.size_of(PeerBatch))
+  Native.put_struct(batches, Native.size_of(PeerBatch), PeerBatch(n_tokens: 2, token: tokens))
+  puts(peer_batch_sum(Native.get_struct(batches, Native.size_of(PeerBatch), PeerBatch)))
+end
+"""
+    result = agentica(program(tmp_path, ROWS_EXTERN.format(library=literal(peer)) + main))
+    long_max = 2**31 - 1 if WINDOWS else 2**63 - 1
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "true", "10:0:0.00 11:-1:1.50 12:-2:3.00", "PeerRow(id: 2, count: %d, score: 2.5)" % (long_max - 2), "1",
+        "42", "",
+    ]
+
+
+# A struct past the end of an owned buffer (or of a view), a negative offset and a freed buffer stop the run as for
+# get_int32; a field C cannot take (a freed buffer in a C.Pointer field, an integer outside its bits) stops it at
+# the value before anything is written.
+@NATIVE_CALLS
+@pytest.mark.parametrize("line, code, argument", [
+    ("Native.get_struct(rows, 1, PeerRow)", "RUNTIME-NATIVE-BOUNDS", "1,"),
+    ("Native.put_struct(Native.offset(rows, 8), 0, row)", "RUNTIME-NATIVE-BOUNDS", "0,"),
+    ("Native.get_struct(rows, -1, PeerRow)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.get_struct(gone, 0, PeerRow)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("Native.put_struct(rows, 0, PeerBatch(n_tokens: 1, token: gone))", "RUNTIME-NATIVE-CLOSED", "PeerBatch"),
+    ("Native.put_struct(rows, 0, row.with(id: 4_294_967_296))", "RUNTIME-INTEGER-OVERFLOW", "row.with"),
+])
+def test_a_struct_outside_its_buffer_or_with_a_bad_field_stops_the_run(tmp_path, peer, line, code, argument):
+    text = "  %s" % line if line.startswith("Native.put") else "  IO.inspect(%s)" % line
+    main = "def main() -> Void\n  rows = Native.memory_pointer(Native.size_of(PeerRow))\n" \
+        "  row = PeerRow(id: 1, count: 2, score: 3.0)\n  gone = Native.memory_pointer(64)\n  Native.free(gone)\n" \
+        '  puts("before")\n%s\nend\n' % text
+    result = agentica("--json", program(tmp_path, ROWS_EXTERN.format(library=literal(peer)) + main))
+    assert result.stdout == "before\n"
+    assert diagnostic(result, 1) == (code, (ROWS_EXTERN.count("\n") + 7, text.index(argument) + 1))
 
 
 WAIT_EXTERN = """extern "{library}"
@@ -2448,13 +2725,19 @@ WAIT_ONLY = """def main() -> Void
   puts(Native.wait_writable(1, 1_000))
 end
 """
+LOAD_ONLY = """def main() -> Void
+  puts("started")
+  puts(Native.load("%s").ok?)
+end
+""" % LIBM
 
 
-# A wait needs a descriptor of native code and changes it (non-blocking mode), so --deny-native refuses a program
-# that waits, with no extern block, at load; other systems refuse it at load too.
+# A wait needs a descriptor of native code and changes it (non-blocking mode), and Native.load opens a library, so
+# --deny-native refuses a program that does either, with no extern block, at load; other systems refuse it at load too.
 @pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
-def test_a_program_that_waits_is_native_code(tmp_path, flag):
-    result = agentica("--json", flag, program(tmp_path, WAIT_ONLY))
+@pytest.mark.parametrize("text", [WAIT_ONLY, LOAD_ONLY], ids=["wait", "load"])
+def test_a_program_that_waits_or_loads_is_native_code(tmp_path, flag, text):
+    result = agentica("--json", flag, program(tmp_path, text))
     assert result.stdout == ""
     assert diagnostic(result, 2) == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED", (1, 1))
 
@@ -2514,6 +2797,38 @@ def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_outp
     result = agentica("--json", program(tmp_path, text % literal(library)))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
+
+
+LOAD_PEER = """extern "peer"
+  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32
+end
+
+def main() -> Void
+  case Native.load("libnot_there_at_all.so")
+    ok(_) -> puts("loaded")
+    error(_) -> puts("missing")
+  end
+  case Native.load("peer")
+    ok(_) -> puts(peer_add(40, 2))
+    error(message) -> puts(message)
+  end
+end
+"""
+
+
+# Native.load opens a library before its first call: a missing one is an error that the program handles, and a present
+# one stays open for the extern functions. Its literal means what extern "peer" means: the project's [native.peer]
+# names the file of this system.
+@NATIVE_CALLS
+def test_native_load_opens_a_library_or_gives_an_error(tmp_path, peer):
+    here = "windows" if WINDOWS else "macos" if MACOS else "linux"
+    folder = tmp_path / "native" / here
+    folder.mkdir(parents=True)
+    (folder / peer.name).write_bytes(peer.read_bytes())
+    manifest = 'name = "app"\n\n[native.peer]\n%s = { file = "native/%s/%s" }\n' % (here, here, peer.name)
+    (tmp_path / "agentica.toml").write_text(manifest, encoding="utf-8")
+    result = agentica(program(tmp_path, LOAD_PEER, "main.agc"), cwd=tmp_path)
+    assert (result.code, result.stdout, result.stderr) == (0, "missing\n42\n", "")
 
 
 EXTERN_FIRST = """def main() -> Void

@@ -1,4 +1,4 @@
-program #154 0:1:1-1787:48:1
+program #162 0:1:1-1941:51:1
   declaration: export-decl #4 38:3:3-78:4:1 doc="The cosine."
     declaration: function-decl #3 45:3:10-78:4:1 name="cos" doc="The cosine." library="libm.so.6" codes="dd"
       param: param #1 53:3:18-64:3:29 name="x"
@@ -121,13 +121,13 @@ program #154 0:1:1-1787:48:1
     result: type-ref #121 1468:32:58-1475:32:65 name="Result"
       arg: type-ref #120 1468:32:58-1475:32:65 name="Session"
   declaration: export-decl #129 1511:34:3-1570:38:1 doc="A C struct passed by value."
-    declaration: struct-decl #128 1518:34:10-1570:38:1 name="Pair" doc="A C struct passed by value."
+    declaration: struct-decl #128 1518:34:10-1570:38:1 name="Pair" doc="A C struct passed by value." layout="{ii}"
       field: field-decl #124 1534:35:5-1545:36:1 name="x"
         type: type-ref #123 1537:35:8-1544:35:15 name="Int"
       field: field-decl #127 1549:36:5-1564:37:1 name="y"
         type: type-ref #125 1552:36:8-1559:36:15 name="Int"
         default: literal #126 1562:36:18-1563:36:19 value=int:0
-  declaration: struct-decl #138 1572:38:3-1675:45:1 name="Box"
+  declaration: struct-decl #138 1572:38:3-1675:45:1 name="Box" layout="{{ii}fbp}"
     field: field-decl #131 1606:40:5-1615:41:1 name="at" doc="The corner."
       type: type-ref #130 1610:40:9-1614:40:13 name="Pair"
     field: field-decl #133 1619:41:5-1634:42:1 name="scale"
@@ -151,3 +151,11 @@ program #154 0:1:1-1787:48:1
       type: type-ref #149 1779:46:71-1782:46:74 name="Box"
     field: field-decl #148 1756:46:48-1774:46:66 name="area"
       type: type-ref #147 1766:46:58-1774:46:66 name="Float"
+  declaration: resource-decl #154 1848:48:3-1888:49:1 name="Handle" free="handle_close" by_ref=true doc="Freed by a function that takes the address of the handle."
+  declaration: function-decl #161 1890:49:3-1937:50:1 name="handle_open" library="/opt/lib/my peer.so" codes="iR" out="Handle" free="&handle_close"
+    result: type-ref #160 1929:49:42-1936:49:49 name="HandleOpen"
+  declaration: struct-decl #159 1890:49:3-1937:50:1 name="HandleOpen" doc="The result of `handle_open`." record-of="handle_open"
+    field: field-decl #158 1929:49:42-1936:49:49 name="result"
+      type: type-ref #157 1929:49:42-1936:49:49 name="Int"
+    field: field-decl #156 1906:49:19-1924:49:37 name="handle"
+      type: type-ref #155 1918:49:31-1924:49:37 name="Handle"

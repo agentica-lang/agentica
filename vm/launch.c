@@ -700,8 +700,15 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->std = launch->std;
   rt->std_count = launch->std_count;
   rt->schedulers = front_end ? 1 : options->schedulers;
-  /* The front end runs in the interpreter: --jit is for the user's program. */
-  if (!front_end) rt->jit = agc_jit_new(program, (agc_jit_mode)options->jit, &rt->trace);
+  /* The front end runs in the interpreter: --jit is for the user's program. Test-only:
+     AGENTICA_VM_TEST_FRONT_END_JIT=on|always gives the front end that mode, so the self-compile can show that the JIT
+     makes the same bytes (make vm-jit-self-compile); any other value is off. */
+  agc_jit_mode mode = (agc_jit_mode)options->jit;
+  if (front_end) {
+    const char *test_mode = getenv("AGENTICA_VM_TEST_FRONT_END_JIT");
+    if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
+  }
+  rt->jit = agc_jit_new(program, mode, &rt->trace);
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
