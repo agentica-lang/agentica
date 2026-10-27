@@ -270,7 +270,10 @@ import Sqlite from "pkg/sqlite/db"
   `[native.NAME]` each, with an inline table for each of `linux`, `macos` and
   `windows` that has exactly one of `file = "native/path"` (shipped in the
   package, at most 1 MiB, hashed with it; a macOS file is a universal binary),
-  `system = "libname"` (a name the system loader looks up), or
+  `system = "libname"` (a name the system loader looks up, or an absolute
+  path; a list `["libpq.5.dylib", "/opt/homebrew/lib/libpq.5.dylib"]` gives
+  candidates, and the first existing absolute path wins, else the first
+  name), or
   `{ url, sha256, member }` (a pinned TAR or ZIP download, fetched for the host; the format is detected from file magic, never the URL):
 
   ```toml

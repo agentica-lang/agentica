@@ -19,7 +19,8 @@ import Rewrite from "rewrite"
 ## from here. named maps each local name of an import list (`create` of `import {make as create} from "models"`) to
 ## the linked name of what it stands for (`@2::make`), so a query can tell which declaration an imported name selects.
 ## reexported does the same for the names the file re-exports (`export Url.parse`): the linked name of the original.
-## watched are the files of its package that its extern functions may open (the bytecode cache watches them).
+## watched are the files of its package that its extern functions may open (the bytecode cache watches them), and
+## probed the paths whose presence chose a library for them (the cache notes whether each exists).
 ## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`
 ## (check_style.agc).
 export struct LinkedModule
@@ -36,6 +37,7 @@ export struct LinkedModule
   reexported: Map[String, String]
   parsed: Ast.Program
   watched: List[String]
+  probed: List[String]
   blank_line_after_end: Bool
 end
 
@@ -314,6 +316,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       reexported: reexported_names(module, loaded.modules),
       parsed: module.program,
       watched: module.origin.watched,
+      probed: module.origin.probed,
       blank_line_after_end: module.origin.blank_line_after_end,
     ),
   )

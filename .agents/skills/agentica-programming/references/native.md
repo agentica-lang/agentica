@@ -33,7 +33,9 @@ end
   absolute path. `DYLD_*` variables do not pass through a shebang or a shell
   (SIP drops them).
 - A package picks its library per system in its `agentica.toml`
-  (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it.
+  (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it. A
+  `native/` library that loads a sibling works on Windows; on Linux build it
+  with `RPATH=$ORIGIN`, on macOS with `@loader_path`.
 - `Native.load("NAME") -> Result[Void]` opens the library now: `ok` (it stays
   open for the extern functions) or `error("native: cannot open NAME: ...")`, so
   a package can report a missing library or fall back before any side effect
@@ -100,14 +102,24 @@ end
   an owned buffer holds a lock.
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library (any C name, capitals
-  allowed: `free: PQfinish`; only `C.Function` is a type). Declare it above the
+  allowed: `free: PQfinish`; only `C.Function` is a type). On Windows a
+  function of a dependency (`free` of the C runtime) is `RUNTIME-NATIVE-LOAD`,
+  as `GetProcAddress` searches that DLL only: declare it from the library that
+  exports it. Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
   `error("db_open returned NULL")`); the resource is owned by the calling
   task. `Native.close(db)` frees once (a second close does nothing); a call
   with a closed resource is `RUNTIME-NATIVE-CLOSED`. The owner's end frees
   what it did not close; `Task.spawn_owning(&f, db)` hands it on; `main`'s
   return frees nothing. A `compute def` call keeps its resource until it
-  returns (a close or cancel meanwhile defers the free). A function that
+  returns (a close or cancel meanwhile defers the free). Any task may pass a
+  resource or buffer to C (no owner check); only the owner's end frees it, and
+  `Native.close`/`free` by any task closes it for all. Two tasks inside C on one
+  object race, as in C (`sqlite3_interrupt` from another task is the intended
+  use). A free that blocks (`mysql_close`, a `duckdb_close` checkpoint) runs on
+  the scheduler and stalls other tasks. Each owner frees newest first, but a
+  parent handed to another task may be freed before its children: close the
+  children first, or keep them in one task. A function that
   returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no
@@ -154,6 +166,8 @@ end
     return ok(opened.db)
   end
   ~~~
+- `RUNTIME-NATIVE-*` and `RUNTIME-INTEGER-OVERFLOW` of an extern call have
+  their primary span on the `extern def` line; the call site is in the stack.
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such
   calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
   polls short).
@@ -302,4 +316,5 @@ Keep the `extern` layer private and give the user a normal API; site page:
   choose a printf format: pass a constant format and the text as `%s`.
 - A package lists the library per system in `agentica.toml`
   (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
-  `{ file = "native/..." }`) and the `extern` block says `extern "NAME"`.
+  `{ file = "native/..." }`; `system` may be an absolute path or a list of
+  candidates, see `modules.md`) and the `extern` block says `extern "NAME"`.
