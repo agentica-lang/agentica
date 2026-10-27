@@ -640,6 +640,31 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
 }
 
+/* CALL_VALUE of the function value in R[a] with in.b arguments after it, as a native call when it can be one:
+   below AGC_JIT_NATIVE_DEPTH, agc_jit_call_value(vm, &R[a], argc, pc) checks the value and the room and pushes the
+   frame (base a + 1, result to R[a]) as call_value does, and returns the callee's code, which is called at its native
+   entry as a native CALL calls it. Its native RETURN leaves the result in its R[0], the caller's R[a + 1], which is
+   moved to R[a]. A NULL answer takes the CALL_VALUE exit with nothing pushed; an exit of the callee goes up
+   unchanged, with its frame on top, whose RETURN then writes R[a] through return_value. */
+void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
+  BYTES(e, 0x49, 0x81, 0xFE); /* cmp r14, depth */
+  word32(e, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_AE, AGC_JIT_EXIT_CALL_VALUE, pc);
+  move_reg(e, true, ARG0, VM);
+  lea(e, ARG1, REGS, TAG(in.a));
+  move_imm64(e, ARG2, in.b);
+  move_imm64(e, ARG3, pc);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_value);
+  BYTES(e, 0x48, 0x85, 0xC0); /* test rax, rax */
+  exit_if(e, CC_E, AGC_JIT_EXIT_CALL_VALUE, pc);
+  lea(e, ARG1, REGS, TAG((uint64_t)in.a + 1));
+  BYTES(e, 0x48, 0x83, 0xC0, AGC_JIT_NATIVE_ENTRY); /* add rax, native entry */
+  BYTES(e, 0xFF, 0xD0);                             /* call rax */
+  BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
+  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+  agc_emit_move(e, in.a, (uint32_t)in.a + 1);
+}
+
 /* RETURN R[a]: under a native call, as return_value does it (the frame's ret is its base, R[0], where the native
    CALL put it), and AGC_JIT_EXIT_RETURNED to the caller's code; else the exit for run_compiled. */
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {

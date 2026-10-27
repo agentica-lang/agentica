@@ -939,7 +939,7 @@ static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   if (child->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
   child->spawned = true;
   child->spawn_span = span;
-  agc_task_call(vm, child, fn, args, argc, span);
+  agc_task_call(vm, child, fn, 0, args, argc, 0, span);
   return child;
 }
 

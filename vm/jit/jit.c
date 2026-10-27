@@ -44,8 +44,8 @@ static bool backward(agc_instr in, uint32_t pc, uint32_t *start) {
   return (op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && *start <= pc;
 }
 
-/* True when IN always has code of its own. CALL and RETURN have code that may exit, and TAIL_CALL is an exit that
-   run_compiled handles (leaves_code). */
+/* True when IN always has code of its own. CALL, CALL_VALUE and RETURN have code that may exit, and TAIL_CALL is an
+   exit that run_compiled handles (leaves_code). */
 static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
@@ -106,10 +106,12 @@ static bool calls_function(const agc_program *p, agc_instr in) {
    program (calls_function). A leaf builtin, and a block call (a row with a native kind, such as
    `filter`: its native frame and the block's frames), are started by run_compiled itself, which LEAF says to count or
    not, as their exit unwinds the native calls; a direct builtin is called by the code itself, which leaves only when
-   the call ends the turn or fails; a RETURN runs once per call. */
+   the call ends the turn or fails; a RETURN runs once per call. A CALL_VALUE does not leave: its callee is known only
+   when it runs, and it is called natively once it has code (a block or a small function, which `on` compiles at its
+   CALL_VALUE exits), so it is counted as a call of a function that may get code. */
 static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  if (has_code(in.op) || in.op == AGC_OP_RETURN) return false;
+  if (has_code(in.op) || in.op == AGC_OP_RETURN || in.op == AGC_OP_CALL_VALUE) return false;
   if (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) return !calls_function(p, in);
   if (in.op != AGC_OP_CALL_BUILTIN) return true;
   const agc_builtin *b = p->builtins[bx];
@@ -174,7 +176,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     for (uint32_t pc = 0; pc < f->count; pc++) {
       agc_instr in = f->code[pc];
       bool call = calls_function(p, in);
-      calling[k] |= call;
+      calling[k] |= call || in.op == AGC_OP_CALL_VALUE;
       if (at[pc] == UINT32_MAX) continue;
       if (call)
         sites[site_count++] = (call_site){(uint32_t)in.b | ((uint32_t)in.c << 16), at[pc]};
@@ -218,8 +220,8 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
 }
 
 #if AGC_JIT_HOST
-/* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL and
-   RETURN; other instructions leave for the interpreter. */
+/* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL,
+   CALL_VALUE and RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
   const agc_program *p = jit->program;
   agc_emit_begin(e, f->count);
@@ -310,6 +312,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         /* As for CALL, the loader checks bx. */
         agc_emit_exit(e, bx < p->function_count ? AGC_JIT_EXIT_TAIL_CALL : AGC_JIT_EXIT_INTERPRET, pc);
         break;
+      case AGC_OP_CALL_VALUE: agc_emit_call_value(e, in, pc); break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
       case AGC_OP_CALL_BUILTIN:
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
@@ -756,6 +759,38 @@ uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window
   *dst = agc_struct_value(st);
   agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
   return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
+}
+
+uint32_t agc_jit_call_value_exit(agc_vm *vm, agc_jit *jit, const agc_function *f, agc_jit_exit out, uint32_t base) {
+  agc_task *t = vm->task;
+  agc_instr in = f->code[out.pc];
+  uint32_t at = base + in.a;
+  if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
+  agc_task_call(vm, t, t->regs[at], at + 1, NULL, in.b, at, f->spans[out.pc]);
+  return t->frames[t->frame_count - 1].function;
+}
+
+agc_jit_code agc_jit_call_value(agc_vm *vm, agc_value *window, uint32_t argc, uint32_t pc) {
+  const agc_program *p = vm->rt->program;
+  agc_task *t = vm->task;
+  if (!agc_is(window[0], AGC_T_FN)) return NULL;
+  const agc_fn *fn = agc_as_fn(vm, window[0]);
+  if (fn->function >= p->function_count) return NULL;
+  const agc_function *callee = &p->functions[fn->function];
+  if (callee->params != argc || callee->captures != fn->n) return NULL;
+  agc_jit_code code = atomic_load_explicit(&vm->rt->jit->code[fn->function], memory_order_acquire);
+  /* WINDOW is R + a of the frame on top, inside the register file. */
+  size_t base = (size_t)(window - t->regs) + 1;
+  if (!code || t->frame_count >= t->frame_capacity || t->depth >= AGC_MAX_DEPTH ||
+      base + callee->registers > t->reg_capacity)
+    return NULL;
+  t->frames[t->frame_count - 1].pc = pc + 1;
+  t->frames[t->frame_count++] =
+    (agc_frame){.function = fn->function, .pc = 0, .base = (uint32_t)base, .ret = (uint32_t)base - 1};
+  t->depth++;
+  /* The loader keeps params + captures within the callee's registers, which fit the file (checked above). */
+  if (fn->n) memcpy(window + 1 + argc, fn->captured, (size_t)fn->n * sizeof(agc_value));
+  return code;
 }
 
 void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {

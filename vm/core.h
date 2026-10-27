@@ -196,7 +196,11 @@ static inline bool agc_job_unref(_Atomic int *refs) {
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 void agc_vm_init_context(agc_vm *vm, agc_runtime *rt);
 agc_task *agc_new_task(agc_vm *vm);
-void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
+/* Pushes the frame of the function value FN on T, as the interpreter's CALL_VALUE does: its registers at WINDOW, the
+   ARGC values at ARGS copied there first (none when ARGS is NULL: they are in place), then its captures, and its
+   result to register RET. Fails as there on a value that does not match the call or on the depth limit. */
+void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, uint32_t window, const agc_value *args, uint32_t argc,
+                   uint32_t ret, uint32_t span);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);

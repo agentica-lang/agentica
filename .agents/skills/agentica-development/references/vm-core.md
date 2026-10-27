@@ -214,7 +214,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   call) or lets the loop run that one instruction, which enters the code
   again at the next pc (`resume`), CALL and RETURN the shared frame handlers.
   A CALL of a function with code is native (`agc_emit_call`): an exit inside
-  the callee comes back with the callee's frame on top.
+  the callee comes back with the callee's frame on top. So is a CALL_VALUE
+  whose function value has code (`agc_jit_call_value` pushes the frame in room
+  the task has); otherwise its CALL_VALUE exit runs the interpreter's
+  `call_value` (`agc_task_call`, through `agc_jit_call_value_exit` in `jit.c`,
+  so `call_exit` stays small) and goes on in the callee's code; `on` counts a
+  CALL_VALUE as a call that does not leave.
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
   slow path leaves for the interpreter; compiled code never fails,

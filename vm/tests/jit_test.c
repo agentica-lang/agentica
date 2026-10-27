@@ -1,8 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, tail calls, direct builtins, map reads, lists, closures,
- * globals, structs and their updates, enums, `try`), the code memory sealed read-execute, functions packed in it up to
- * its cap, one copy made when threads compile a function at once, and the `on` decision settled in linear time.
+ * failures that leave the result register alone, native calls, calls of function values, tail calls, direct builtins,
+ * map reads, lists, closures, globals, structs and their updates, enums, `try`), the code memory sealed read-execute,
+ * functions packed in it up to its cap, one copy made per function by racing threads, and the `on` decision.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -145,6 +145,15 @@ static AGC_JIT_CALLER void call_return_exits(void) {
   assert(same_bits(R[0], agc_int(42)));
 }
 
+/* The task T runs function 0 in FRAMES (room for 2, one in use) with the 8 registers REGS. */
+static void run_on(agc_task *t, agc_frame *frames, agc_value *regs) {
+  t->frames = frames;
+  t->frame_capacity = 2;
+  t->frame_count = t->depth = 1;
+  t->regs = regs;
+  t->reg_capacity = 8;
+}
+
 /* Function 0 calls function 1, which adds 1 to its argument, natively: the frame is pushed and popped in compiled code
    and the result lands in the caller's window. A STEP exit inside the callee comes out of the caller with the callee's
    frame on top, and a task without room for the frame takes the CALL exit with nothing pushed. */
@@ -167,11 +176,7 @@ static AGC_JIT_CALLER void native_calls(void) {
   agc_task *t = vm.task, saved = *vm.task;
   agc_frame frames[2] = {{.function = 0}};
   agc_value regs[8] = {0};
-  t->frames = frames;
-  t->frame_capacity = 2;
-  t->frame_count = t->depth = 1;
-  t->regs = regs;
-  t->reg_capacity = 8;
+  run_on(t, frames, regs);
   regs[2] = agc_int(41);
   vm.next_stop = 1000;
   expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
@@ -196,6 +201,88 @@ static AGC_JIT_CALLER void native_calls(void) {
   expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
   assert(same_bits(regs[2], agc_int(43)) && t->frame_count == 1);
   *t = saved;
+  vm.next_stop = 1000;
+}
+
+/* Function 0 calls the function value in R2 with R3 as its argument: function 1, which adds its capture to it. The
+   call is native once function 1 has code (agc_jit_call_value pushes the frame, base 3 and result to R2, with the
+   capture after the argument) and the result lands in R2. A callee without code yet, a task without room for the
+   frame, its registers or one more depth, and a value that does not match the call take the CALL_VALUE exit with
+   nothing pushed, for run_compiled to call it, or fail, as the interpreter does. */
+static AGC_JIT_CALLER void call_values(void) {
+  static const agc_trace quiet = {0};
+  static agc_instr caller[] = {{AGC_OP_CALL_VALUE, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
+  static agc_instr callee[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ADD_I, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static uint32_t spans[3] = {0};
+  agc_value constants[1] = {agc_int(0)};
+  agc_function fns[2] = {
+    {.name = agc_make_string("caller", 6, 6), .registers = 4, .code = caller, .spans = spans, .count = 2},
+    {.name = agc_make_string("callee", 6, 6), .registers = 2, .params = 1, .captures = 1, .code = callee,
+     .spans = spans, .count = 3},
+  };
+  agc_program program = {.functions = fns, .function_count = 2, .constants = constants, .constant_count = 1};
+  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
+  assert(jit);
+  agc_jit_code code = agc_jit_code_of(jit, 0, 0);
+  assert(code);
+  const agc_program *saved_program = vm.rt->program;
+  agc_jit *saved_jit = vm.rt->jit;
+  vm.rt->program = &program;
+  vm.rt->jit = jit;
+  agc_task *t = vm.task, saved = *vm.task;
+  agc_frame frames[2] = {{.function = 0}};
+  agc_value regs[8] = {0};
+  run_on(t, frames, regs);
+  agc_fn *adder = agc_new_fn(1, 1);
+  adder->captured[0] = agc_int(100);
+  agc_value fn = agc_fn_value(adder);
+  vm.next_stop = 1000;
+  /* Function 1 has no code yet. */
+  regs[2] = fn;
+  regs[3] = agc_int(41);
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_CALL_VALUE, 0);
+  assert(t->frame_count == 1 && t->depth == 1 && same_bits(regs[2], fn));
+  assert(agc_jit_code_of(jit, 1, 0));
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(regs[2], agc_int(141)) && t->frame_count == 1 && t->depth == 1 && frames[0].pc == 1);
+  assert(vm.next_stop == 999);
+  regs[2] = fn;
+  regs[3] = agc_int(41);
+  vm.next_stop = 1;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_STEP, 0);
+  assert(t->frame_count == 2 && t->depth == 2 && frames[0].pc == 1);
+  assert(frames[1].function == 1 && frames[1].pc == 0 && frames[1].base == 3 && frames[1].ret == 2 &&
+         !frames[1].tail && !frames[1].native);
+  assert(same_bits(regs[3], agc_int(41)) && same_bits(regs[4], agc_int(100)));
+  t->frame_count = t->depth = 1;
+  vm.next_stop = 1000;
+  /* No room for the frame, the callee's registers (3 + 2 of them) or one more depth. */
+  t->frame_capacity = 1;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_CALL_VALUE, 0);
+  assert(t->frame_count == 1 && t->depth == 1);
+  t->frame_capacity = 2;
+  t->reg_capacity = 4;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_CALL_VALUE, 0);
+  t->depth = AGC_MAX_DEPTH;
+  t->reg_capacity = 5;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_CALL_VALUE, 0);
+  assert(t->frame_count == 1 && t->depth == AGC_MAX_DEPTH);
+  /* The callee's registers end exactly at the end of the register file. */
+  t->depth = 1;
+  regs[3] = agc_int(41);
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(regs[2], agc_int(141)) && t->frame_count == 1 && t->depth == 1);
+  /* Not a function value, another arity, another capture count, a function past the table (hand-made code). */
+  agc_value wrong[4] = {agc_int(5), agc_fn_value(agc_new_fn(0, 0)), agc_fn_value(agc_new_fn(1, 0)),
+                        agc_fn_value(agc_new_fn(2, 0))};
+  for (size_t k = 0; k < 4; k++) {
+    regs[2] = wrong[k];
+    expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_CALL_VALUE, 0);
+    assert(t->frame_count == 1 && t->depth == 1 && same_bits(regs[2], wrong[k]));
+  }
+  *t = saved;
+  vm.rt->program = saved_program;
+  vm.rt->jit = saved_jit;
   vm.next_stop = 1000;
 }
 
@@ -831,6 +918,14 @@ static void ineligible(void) {
     assert(looped[0] && !looped[1] && calling[0] && !calling[1]);
     assert(callable[0] == !leaving && callable[1] == !leaving);
   }
+  /* A CALL_VALUE does not leave and counts as calling: its callee, known only when it runs, is called natively once it
+     has code. */
+  agc_instr values[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  agc_function looping[1] = {{.registers = 2, .code = values, .count = 3}};
+  agc_program program = {.functions = looping, .function_count = 1};
+  bool callable[1], looped[1], calling[1];
+  agc_jit_settle(&program, callable, looped, calling);
+  assert(callable[0] && looped[0] && calling[0]);
 }
 
 /* mov eax, 42; ret */
@@ -1048,6 +1143,7 @@ int main(void) {
   bytes();
   call_return_exits();
   native_calls();
+  call_values();
   direct_calls();
   loops_and_steps();
   int_rules();

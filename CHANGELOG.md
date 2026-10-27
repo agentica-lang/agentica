@@ -30,6 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The experimental x86-64 JIT runs tail calls and struct updates
   (`s.with(...)`) from compiled code, so functions that use them compile under
   `--jit on`.
+- The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
+  a closure or `&name`) from compiled code, so loops that call them compile
+  under `--jit on`.
 
 ### Fixed
 
