@@ -1,8 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, direct builtins, map reads, list literals, closures),
- * the code memory sealed read-execute and never writable then, functions packed in it up to its cap, one copy made
- * when several threads compile a function at once, and the `on` decision settled in time that follows program size.
+ * failures that leave the result register alone, native calls, direct builtins, map reads, lists, closures, globals,
+ * structs, enums, `try`), the code memory sealed read-execute and never writable then, functions packed in it up to
+ * its cap, one copy made when threads compile a function at once, and the `on` decision settled in linear time.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -465,6 +465,15 @@ static AGC_JIT_CALLER void reads(void) {
   binary(AGC_OP_IS_OK, agc_result_value(false, x), any, AGC_STATUS_OK, agc_bool(false));
   binary(AGC_OP_RESULT_VALUE, agc_result_value(false, y), any, AGC_STATUS_OK, y);
   binary(AGC_OP_RESULT_VALUE, y, any, out, any);
+  /* TRY gives an ok Result's value; an error (which returns from the frame) or a wrong tag leaves for the
+     interpreter. */
+  static const agc_opcode tries[] = {AGC_OP_TRY, AGC_OP_TRY_STEP};
+  for (size_t k = 0; k < 2; k++) {
+    agc_opcode op = tries[k];
+    binary(op, agc_result_value(true, y), any, AGC_STATUS_OK, y);
+    binary(op, agc_result_value(false, y), any, out, any);
+    binary(op, x, any, out, any);
+  }
 }
 
 /* A String compare charges its bytes to the task's turn cost, and the code leaves for the interpreter to apply it. */
@@ -579,6 +588,64 @@ static AGC_JIT_CALLER void closures(void) {
   const agc_fn *fn = agc_as_fn(&vm, R[3]);
   assert(fn->function == 0 && fn->n == 2);
   assert(same_bits(fn->captured[0], agc_int(7)) && same_bits(fn->captured[1], held) && same_bits(R[4], held));
+}
+
+/* GLOBAL reads its slot when it runs, and an unset one (tag Void) leaves for the interpreter, R3 untouched. STRUCT and
+   ENUM build their values from the window at R1 in compiled code; a variant without a payload gives its shared value.
+   An index past the program's tables (hand-made code) leaves for the interpreter. */
+static AGC_JIT_CALLER void globals_structs_enums(void) {
+  /* globals[1] is zeroed: tag Void, a slot never set. */
+  agc_value globals[2] = {agc_int(1)}, any = agc_nil(), R[8];
+  agc_struct_def structs[1] = {{.count = 2}};
+  agc_variant_def variants[2] = {{.arity = 0, .shared = agc_new_enum(0, 0)}, {.arity = 2}};
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_GLOBAL, 3, 1, 0);
+  emit(&f, AGC_OP_RETURN, 3, 0, 0);
+  f.program.globals = globals;
+  f.program.global_count = 2;
+  agc_jit_code code = compile(&f);
+  memset(R, 0, sizeof R);
+  R[3] = any;
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  assert(same_bits(R[3], any));
+  globals[1] = agc_int(9);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[3], agc_int(9)));
+  f.program.global_count = 1;
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  agc_value x = agc_int(5), y = agc_float(1.5);
+  static const agc_opcode makes[] = {AGC_OP_STRUCT, AGC_OP_ENUM};
+  for (size_t k = 0; k < 2; k++) {
+    agc_opcode op = makes[k];
+    for (uint32_t c = 0; c < 2; c++) {
+      memset(&f, 0, sizeof f);
+      emit(&f, op, 3, 1, c);
+      emit(&f, AGC_OP_RETURN, 3, 0, 0);
+      f.program.structs = structs;
+      f.program.struct_count = 1;
+      f.program.variants = variants;
+      f.program.variant_count = 2;
+      code = compile(&f);
+      memset(R, 0, sizeof R);
+      R[1] = x;
+      R[2] = y;
+      R[3] = any;
+      bool beyond = op == AGC_OP_STRUCT && c == 1;
+      expect_exit(code(&vm, R, f.constants, 0), beyond ? AGC_JIT_EXIT_INTERPRET : AGC_JIT_EXIT_RETURN, beyond ? 0 : 1);
+      if (beyond) {
+        assert(same_bits(R[3], any));
+      } else if (op == AGC_OP_STRUCT) {
+        const agc_struct *st = agc_as_struct(&vm, R[3]);
+        assert(st->type == 0 && st->n == 2 && same_bits(st->fields[0], x) && same_bits(st->fields[1], y));
+      } else if (c == 0) {
+        assert(agc_as_enum(&vm, R[3]) == variants[0].shared);
+      } else {
+        const agc_enum *e = agc_as_enum(&vm, R[3]);
+        assert(e->variant == 1 && e->n == 2 && same_bits(e->payload[0], x) && same_bits(e->payload[1], y));
+      }
+    }
+  }
 }
 
 /* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): one claims it and compiles
@@ -918,6 +985,7 @@ int main(void) {
   string_build_cost();
   maps_and_lists();
   closures();
+  globals_structs_enums();
   ineligible();
   every_opcode_compiles();
 #else
