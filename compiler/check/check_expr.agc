@@ -81,7 +81,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
       found.span,
       expected,
     )
-    Ast.Expr.FunctionRef(found) -> return check_function_ref(cx, st, found)
+    Ast.Expr.FunctionRef(found) -> return check_function_ref(cx, st, found, expected)
     Ast.Expr.Invoke(found) -> return check_invoke(cx, st, found)
     Ast.Expr.Try(found) -> return check_try(cx, st, found, expected)
     Ast.Expr.Construct(found) -> return Calls.check_construct(cx, st, found, expected)
@@ -182,15 +182,38 @@ def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[St
   )
 end
 
-def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef) -> Result[State.Out]
-  signature = cx.functions.get(node.name)
-  if !signature.ok?
+# &name. A generic function is a value only where the expected Fn type fixes each of its type parameters (a type
+# parameter of the enclosing function counts as fixed); the type is then the Fn type with them put in.
+def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expected: T.Type) -> Result[State.Out]
+  entry = cx.functions.get(node.name)
+  if !entry.ok?
     return error(
       State.fail(cx, st, "CHECK-UNKNOWN-NAME", "a function reference requires a declared function", node.span),
     )
   end
 
-  return ok(State.Out(st: st, type: T.Type.Fn(signature.unwrap!.params, signature.unwrap!.result)))
+  signature = entry.unwrap!
+  type = T.Type.Fn(signature.params, signature.result)
+  if signature.type_parameters.size == 0
+    return ok(State.Out(st: st, type: type))
+  end
+
+  found = CheckTypes.learn(type, expected, {})
+  unresolved = signature.type_parameters.filter do |name: String| !found.has_key?(name) end
+  if unresolved.size > 0
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-ENUM-TYPE-INFERENCE",
+        "cannot infer type parameter(s) #{unresolved.join(", ")} of #{T.display_name(node.name)}",
+        node.span,
+        "a generic function is a value only where the Fn type is known, such as f: Fn[List[Int], Int, Int] = &name",
+      ),
+    )
+  end
+
+  return ok(State.Out(st: st, type: CheckTypes.substitute(type, found)))
 end
 
 # target.call(args): the target is a function value and the arguments match its parameters.

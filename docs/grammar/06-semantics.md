@@ -210,9 +210,10 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
   returns.
 - `return` without a value completes a `Void` function. A `Nil` function uses
   `return nil`.
-- An executable declares exactly one `main() -> Void` with no parameters. A run
-  and `agentica compile` report `CHECK-MAIN` without it; `agentica check` does
-  not need a `main`, but one that is declared must have this signature.
+- An executable declares exactly one `main() -> Void` with no parameters and no
+  type parameters. A run and `agentica compile` report `CHECK-MAIN` without it;
+  `agentica check` does not need a `main`, but one that is declared must have
+  this signature.
 
 ### Default parameter values
 
@@ -486,6 +487,104 @@ of a struct field, so it is also refused as a type argument
 (`CHECK-JSON-FIELD-PLACE`). A C struct of an `extern` block takes no type
 parameters (`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in
 the checker: the VM sees a struct of its field names and order, as before.
+
+### Generic functions
+
+A function declares type parameters after its name: `def first_or[T](xs:
+List[T], fallback: T) -> T`. The names follow the enum rules, with one more: a
+name that a struct, enum or alias of the file already has (declared there or
+imported by name) would hide that type, so it is `CHECK-REDEFINED-NAME` at the
+parameter, as are a repeated name and a reserved one (`Int`, `List`). `def f[]`
+is `PARSE-UNEXPECTED-TOKEN`. `main` with type parameters is `CHECK-MAIN`. A type
+parameter that no parameter type and no result type mentions cannot be inferred:
+`CHECK-ENUM-TYPE-INFERENCE` at its name. A parameter whose type mentions a type
+parameter cannot have a default (`CHECK-DEFAULT-VALUE` at the default).
+
+```ruby
+def first_or[T](xs: List[T], fallback: T) -> T
+  if xs.length == 0
+    return fallback
+  end
+
+  return xs[0]
+end
+
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+  # ...
+end
+
+puts(first_or(["ana", "ben"], "none"))  # T is String
+puts(first_or([], 0))                   # T is Int, from 0; [] is checked last
+```
+
+**Inference.** A call gives no type arguments. The checker finds them in four
+steps; a call has its own type variables, so the `T` of the callee and the `T`
+of the caller do not mix:
+
+1. The arguments that have a type of their own, from left to right. Each one
+   binds the type parameters of its parameter type; a value of another type
+   than one already bound is `CHECK-TYPE-MISMATCH` (`first_or([1], "x")`).
+2. The expected type of the call (an annotation, a parameter, a field or a
+   return type) is matched with the result type, for the parameters still open.
+   The arguments win over it. A parameter that only the result mentions, as in
+   `def empty_of[T]() -> List[T]`, comes from here.
+3. The arguments that need an expected type are checked against their parameter
+   type as far as it is known, and bind nothing: `[]`, `{}`, `Set.new([])`,
+   `error(...)`, a variant of a generic enum without a payload, a list or map
+   literal that holds one of them, and `&f` of a generic function.
+4. The block, the last argument. Its parameter types come from the `Fn`
+   parameter; one that is still open must be annotated in the block (`do |x:
+   Int|`), which binds it, else `CHECK-BLOCK-TYPE`. The block's result binds the
+   open parameters of the `Fn` result (`R` in `Result[R]`); a result that does
+   not fit is `CHECK-TYPE-MISMATCH`. A step 3 argument whose parameter type is
+   still open waits for the block.
+
+A type parameter still open after step 4 is `CHECK-ENUM-TYPE-INFERENCE` at the
+call. The call has the result type with the arguments put in. Recursion, mutual
+recursion and a generic function that calls another work; a recursive call may
+use other type arguments, because the checker builds no copy per type. A type
+argument may be `Void` where `Void` is valid after substitution (a result, the
+last type of an `Fn`, the completion of a `Result` or a `Task`: `ok()` binds `R`
+to `Void` in `Result[R]`); a parameter or a list item that becomes `Void` is
+`CHECK-VOID-TYPE` at the call. `try f(x)`, with `f` returning `Result[T]`, gives
+`T`. A call is no constant expression (`CHECK-CONSTANT-EXPRESSION`).
+
+**Inside the body.** A type parameter stands only for itself, and the body is
+checked once, whatever the types of the calls. A `T` value can be stored,
+returned, put in a `List`, a `Result`, a `Map` value, a struct or an enum
+payload, captured by a block, and passed to anything that takes that type. A
+`T` annotation is valid in the body (`x: T`, `do |y: T|`). These are errors, as
+they are for an `Fn`:
+
+- `==`, `!=`, arithmetic and ordering: `CHECK-TYPE-MISMATCH`.
+- `puts`, interpolation and the other printing forms: `CHECK-TYPE-MISMATCH`;
+  `x.to_s` and `x.inspect` are `CHECK-UNKNOWN-METHOD`, like any method of `T`.
+- a field or a method (`x.name`, `x.with(...)`): `CHECK-UNKNOWN-METHOD`;
+  `x.call(...)`: `CHECK-TYPE-MISMATCH`.
+- a literal or variant arm in `case x`: `CHECK-PATTERN-TYPE`.
+- `JSON.encode(x)`: `CHECK-NOT-ENCODABLE`; `JSON.decode(text, T)`:
+  `CHECK-NOT-DECODABLE`.
+- `T` as a `Map` key or a `Set` element: `CHECK-MAP-KEY-TYPE` and
+  `CHECK-SET-ELEMENT-TYPE`, wherever it is written; a call with `Int` does not
+  help.
+
+Behaviour comes from `Fn` parameters, as in `max_by`: there are no traits or
+constraints on a type parameter. The data-type and effect rules are judged on
+the substituted types at each call: with `fns: List[Fn[Int, Int]]`,
+`puts(first_or(fns, &id))` is `CHECK-TYPE-MISMATCH`, because `T` is that `Fn`.
+
+**References.** `&first_or` is a value only where the expected `Fn` type fixes
+each type parameter: `f: Fn[List[Int], Int, Int] = &first_or` is valid, and `f =
+&first_or` is `CHECK-ENUM-TYPE-INFERENCE` at the reference. A type parameter of
+the enclosing function counts as fixed.
+
+**Modules.** An exported generic function is called as any function
+(`M.first_or(xs, 0)`, or `first_or(xs, 0)` after `import {first_or} from "m"`).
+Linking keeps the type parameters local, in the signature and the body: a bare
+`T` does not get the module prefix. Type parameters exist only in the checker:
+the bytecode of a body is the same for any type argument. Not in the language:
+constraints on type parameters, type arguments written at a call, generic
+`extern` functions and generic `Map` keys.
 
 ### Ranges
 

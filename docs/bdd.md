@@ -240,8 +240,8 @@ A step program is a normal program: its `main` builds the list of steps with
   steps of the scenario, such as an open connection. The service is a
   `Fn[Json, Result[Json]]` that captures the value; `BDD.call(ctx, name,
   request)` runs it, and a missing name is `error("missing scenario service")`.
-  Agentica has no generic functions or structs, so the step program's own
-  type cannot travel through `Context`; the closure carries the value.
+  `Context` is not generic, so the step program's own type cannot travel
+  through it; the closure carries the value.
   Services start empty in each scenario. Keeping a name again replaces the
   service; the old handle is not closed and lives until the scenario's child
   VM ends (there is no close hook). A step still cannot leave a task running.

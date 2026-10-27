@@ -227,12 +227,12 @@ end
 def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
   out = defined(scan, named(node.name), node.name_span)
   if !record_result?(node)
-    out = out.concat(type_sites(scan, node.result, []))
+    out = out.concat(type_sites(scan, node.result, node.type_parameters))
   end
 
   roots: List[Walk.Node] = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
   for param in node.params
-    out = out.concat(type_sites(scan, param.type, []))
+    out = out.concat(type_sites(scan, param.type, node.type_parameters))
     case param.default
       Ast.Optional.Present(value) -> roots = roots.push(Walk.Node.Expr(value))
       Ast.Optional.Absent -> roots = roots

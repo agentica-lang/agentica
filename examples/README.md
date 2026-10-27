@@ -23,6 +23,9 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`generic-structs.agc`](generic-structs.agc): a struct with a type parameter,
   `Page[T]`, whose type argument comes from the field values or the expected
   type.
+- [`generic-functions.agc`](generic-functions.agc): functions with type
+  parameters, `first_or[T]`, `max_by[T]` and `with[T, R]`, whose type arguments
+  come from the arguments, the expected type and the block.
 - [`case-guards.agc`](case-guards.agc): `case` guards (`pattern if condition
   ->`) and patterns inside patterns.
 - [`heredoc.agc`](heredoc.agc): heredocs `<<~NAME`: text of several lines with

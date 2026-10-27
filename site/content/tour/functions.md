@@ -265,6 +265,80 @@ def main() -> Void
 end
 ```
 
+## Type parameters
+
+A function can take type parameters after its name, so one definition works on any type. The call gives no type arguments: the checker finds them from the arguments.
+
+```agentica
+def first_or[T](xs: List[T], fallback: T) -> T
+  if xs.length == 0
+    return fallback
+  end
+
+  return xs[0]
+end
+
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+  if xs.length == 0
+    return error("empty list")
+  end
+
+  best = xs[0]
+  best_key = key.call(best)
+  for x in xs
+    k = key.call(x)
+    if k > best_key
+      best = x
+      best_key = k
+    end
+  end
+
+  return ok(best)
+end
+
+def main() -> Void
+  puts(first_or(["ana", "ben"], "none"))
+  puts(first_or([], 0))
+
+  longest = max_by(["pear", "fig", "banana"]) do |w|
+    w.length
+  end
+  puts(longest.unwrap_or("none"))
+end
+```
+
+```output
+ana
+0
+banana
+```
+
+In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`.
+
+```agentica {expect="CHECK-ENUM-TYPE-INFERENCE"}
+def empty_of[T]() -> List[T]
+  return []
+end
+
+def main() -> Void
+  xs = empty_of()
+end
+```
+
+Inside the body, `T` can be any type, so the body can only store it, return it and pass it on. Comparing, adding, printing or reading a field of a `T` value is an error, such as `CHECK-TYPE-MISMATCH` for `==`. To act on the items, take a function, as `max_by` does with `key`.
+
+```agentica {expect="CHECK-TYPE-MISMATCH"}
+def same[T](a: T, b: T) -> Bool
+  return a == b
+end
+
+def main() -> Void
+  puts(same(1, 1))
+end
+```
+
+A type parameter is a type name that no struct, enum or alias of the file has (`CHECK-REDEFINED-NAME`). `&first_or` is a function value only where the `Fn` type fixes each type parameter, as in `f: Fn[List[Int], Int, Int] = &first_or`. A generic function can be exported and imported like any other.
+
 ## No overloading
 
 A name has one definition: no overloading, no keyword arguments and no methods on your own types. Use a default value instead of a second version.

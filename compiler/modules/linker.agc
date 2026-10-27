@@ -299,6 +299,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
     me: module,
     visible: visible_structs(module, loaded.modules),
     ids: ids,
+    type_parameters: [],
   )
   declarations = try Rewrite.rewrite_declarations(cx)
   return ok(

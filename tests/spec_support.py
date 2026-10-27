@@ -72,6 +72,14 @@ def assert_exact_span(source: str, span: dict[str, object], expected: object) ->
     assert covered(source, span) == expected
 
 
+def assert_rule(found, program, code, text):
+    """Assert a rule case: `found` is the diagnostic of `program` (None when it checks clean), `code` the expected code
+    (None for a clean program) and `text` the source text its range must cover (None when the span is not asserted)."""
+    assert (found and found["code"]) == code, program
+    if text is not None:
+        assert covered(program, found["range"]) == text
+
+
 def covered(text, span):
     """Return the source text from a diagnostic range's start to its exclusive end."""
     lines = text.split("\n")

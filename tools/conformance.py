@@ -118,6 +118,7 @@ AREAS = {
             "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
+            "tests/test_spec_generics.py",
         ],
     ),
     "golden": (

@@ -116,10 +116,14 @@ end
 
 ## def name(params) -> Result with its body. A function of an `extern "library"` block has native Present and no body;
 ## its parameter and result types are already the Agentica types of the C types it was written with.
+## type_parameters are the names of a generic function (def first_or[T](...)) and type_parameter_spans their spans, in
+## the same order; both are empty for any other function, and always for an extern one.
 export struct FunctionDecl
   id: Int
   name: String
   name_span: Source.Span
+  type_parameters: List[String]
+  type_parameter_spans: List[Source.Span]
   params: List[Param]
   result: TypeRef
   body: List[Stmt]

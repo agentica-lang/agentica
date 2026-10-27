@@ -25,39 +25,14 @@ struct ArmDone
 end
 
 ## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
-## not Void. An extern function has no body: its signature is all there is.
+## not Void. An extern function has no body: its signature is all there is. The body of a generic function is checked
+## once, with its type parameters in scope as types that stand only for themselves.
 export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
-  if extern?(node)
-    return ok(st)
+  if node.type_parameters.size > 0
+    return check_function_body(cx.with(type_params: node.type_parameters), st, node)
   end
 
-  signature = cx.functions[node.name]
-  here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
-  checked = try DefaultChecks.check_types(cx, here, node, signature.params)
-  inner = State.enter(checked)
-  index = 0
-  while index < node.params.size
-    param = node.params[index]
-    inner = try State.introduce(cx, inner, param.name, signature.params[index], param.span, false)
-    inner = State.record_bound(inner, param.id, [signature.params[index]])
-    index += 1
-  end
-
-  inner = try check_block(cx, inner, node.body)
-  if !T.is?(signature.result, "Void") and !Flow.block_returns?(node.body)
-    return error(
-      State.fail_maybe(
-        cx,
-        inner,
-        "CHECK-MISSING-RETURN",
-        "function \"#{T.display_name(node.name)}\" must return #{T.to_text(signature.result)} on every path",
-        node.span,
-        Flow.missing_return_help(node.body, T.to_text(signature.result)),
-      ),
-    )
-  end
-
-  return ok(State.leave(inner, here))
+  return check_function_body(cx, st, node)
 end
 
 ## Checks the statements in order.
@@ -115,6 +90,40 @@ export def check_block_in(
   end
 
   return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+end
+
+def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
+  if extern?(node)
+    return ok(st)
+  end
+
+  signature = cx.functions[node.name]
+  here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
+  checked = try DefaultChecks.check_types(cx, here, node, signature.params)
+  inner = State.enter(checked)
+  index = 0
+  while index < node.params.size
+    param = node.params[index]
+    inner = try State.introduce(cx, inner, param.name, signature.params[index], param.span, false)
+    inner = State.record_bound(inner, param.id, [signature.params[index]])
+    index += 1
+  end
+
+  inner = try check_block(cx, inner, node.body)
+  if !T.is?(signature.result, "Void") and !Flow.block_returns?(node.body)
+    return error(
+      State.fail_maybe(
+        cx,
+        inner,
+        "CHECK-MISSING-RETURN",
+        "function \"#{T.display_name(node.name)}\" must return #{T.to_text(signature.result)} on every path",
+        node.span,
+        Flow.missing_return_help(node.body, T.to_text(signature.result)),
+      ),
+    )
+  end
+
+  return ok(State.leave(inner, here))
 end
 
 # A known_result of Result[Unknown]: the block must give a Result whose type the body decides.

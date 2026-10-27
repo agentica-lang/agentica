@@ -120,6 +120,17 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
     assert items["Grid"]["doc"] == "A grid of cells."
 
 
+def test_a_generic_function_lists_its_type_parameters(tmp_path):
+    path = tmp_path / "generic.agc"
+    path.write_text(
+        "export def first_or[T](xs: List[T], fallback: T) -> T\n  return fallback\nend\n", encoding="utf-8")
+    result = doc(path, "--json")
+    assert result.code == 0, result.stderr
+    item = json.loads(result.stdout)["items"][0]
+    assert item["signature"] == "first_or[T](xs: List[T], fallback: T) -> T"
+    assert item["result"] == "T"
+
+
 def test_a_trailing_json_flag_and_a_module_without_docs(tmp_path):
     path = tmp_path / "plain.agc"
     path.write_text("export def one() -> Int\n  return 1\nend\n", encoding="utf-8")
