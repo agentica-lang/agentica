@@ -8,39 +8,31 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
+  a closure or `&name`) from compiled code.
+
+## [0.13.0] - 2026-10-27
+
 ### Added
 
-- `ATS[K, V]` shared tables for counters and caches that tasks update
-  (`examples/shared-cache.agc`).
-- `Type.members` lists the fields of a struct type as a `List[StructMember]`
-  (`name` and `type` as source), for tools such as an ORM.
-- `JsonField[T]` struct fields tell an absent key, `null` and a value apart in
-  `JSON.decode`, `JSON.encode`, `JSON.from` and `JSON.schema`.
-- `JSON.decode(json, T)` decodes a `Json` value without writing it out as text.
+- `ATS[K, V]` shared tables that tasks update together, for counters and
+  caches.
+- `Type.members` lists the fields of a struct type as `List[StructMember]`.
+- `JsonField[T]` fields tell an absent key, `null` and a value apart in JSON.
+- `JSON.decode(json, T)` decodes a `Json` value directly.
 
 ### Changed
 
-- `--jit on` stops compiling once a run has spent its compile budget (about a
-  million bytecode instructions, or 64 MiB of code); the rest of the program
-  runs in the interpreter, and `AGENTICA_VM_TRACE=jit` prints a `budget` line.
-- **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
-  `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
-- **Breaking:** `StructMember` is a reserved type name, so a program cannot
-  declare a type of that name.
-- **Breaking:** `JsonField` is a reserved type name.
-- **Breaking:** `JSON.schema` leaves out `required` when no field is required,
-  such as for a struct with no fields.
-- The experimental x86-64 JIT runs tail calls and struct updates
-  (`s.with(...)`) from compiled code, so functions that use them compile under
-  `--jit on`.
-- The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
-  a closure or `&name`) from compiled code, so loops that call them compile
-  under `--jit on`.
+- **Breaking:** `ATS`, `StructMember` and `JsonField` are reserved names.
+- **Breaking:** `JSON.schema` leaves out `required` when no field is required.
+- The experimental x86-64 JIT compiles tail calls and struct updates.
+- `--jit on` has a per-run compile budget; past it, code is interpreted.
 
 ### Fixed
 
-- On Windows, the check and bytecode caches retry removing a temporary file
-  that stays in `_build/` when an entry cannot be put in place.
+- Windows: the check and bytecode caches retry removing a temporary file.
 
 ## [0.12.0] - 2026-10-27
 
@@ -583,7 +575,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.12.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.13.0...HEAD
+[0.13.0]: https://github.com/sonic182/agentica/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/sonic182/agentica/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/sonic182/agentica/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...0.10.0
