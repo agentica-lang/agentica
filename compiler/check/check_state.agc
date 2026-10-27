@@ -45,12 +45,13 @@ end
 
 ## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
 ## on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call.
-## Each holds the type of the receiver.
+## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct.
 export enum Resolved
   Self(Types.Type)
   Text(Types.Type)
   Inspect(Types.Type)
   Call(String, Types.Type)
+  Members(List[Model.Named])
 end
 
 ## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape).

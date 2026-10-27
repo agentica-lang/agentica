@@ -11397,5 +11397,167 @@
       ],
       "code": null
     }
+  ],
+  "Type.members lists the fields of a struct type as StructMember values": [
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "  name: String",
+        "  members: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ms: List[StructMember] = User.members",
+        "  ms.each do |m|",
+        "    puts(\"#{m.name}: #{m.type}\")",
+        "  end",
+        "  u = User(id: 1, name: \"Ada\", members: 2)",
+        "  n: Int = u.members",
+        "  puts(n)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Color",
+        "  Red",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Color.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [6, 8],
+      "covers": "Color.members",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "  name: String",
+        "  members: Int",
+        "end",
+        "",
+        "type People = User",
+        "",
+        "def main() -> Void",
+        "  puts(People.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [10, 8],
+      "covers": "People.members",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Nope.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Nope.members"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Int.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Int.members"
+    },
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "  name: String",
+        "  members: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  names: List[String] = User.members",
+        "  puts(names.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [8, 25],
+      "covers": "User.members",
+      "expected": "List[String]",
+      "actual": "List[StructMember]"
+    },
+    {
+      "program": [
+        "struct StructMember",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(User.members().size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [6, 8],
+      "covers": "User.members()"
+    },
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = 1",
+        "  puts(x |> User.members())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [7, 13],
+      "covers": "User.members()"
+    },
+    {
+      "program": [
+        "extern \"libdb.so\"",
+        "  resource Conn, free: close_it",
+        "  def open_conn() -> Conn",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Conn.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [7, 8],
+      "covers": "Conn.members"
+    }
   ]
 }

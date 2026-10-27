@@ -109,7 +109,7 @@ below it is entered at its first instruction.
   function that `on` will not compile is never counted or walked again, and
   when no function is left the run has no JIT: it runs the plain turn loop,
   the same code as `off`.
--  Why a loop: a function without a backward jump runs each instruction at most
+- Why a loop: a function without a backward jump runs each instruction at most
   once per entry, and the entry, the exit and the `RETURN` in the interpreter
   cost more than those few instructions save. Blocks of 3 to 7 instructions that
   `filter`, `map` or `reduce` call a million times, and an empty function called
@@ -124,7 +124,7 @@ below it is entered at its first instruction.
   item, each call returning to `run_compiled`, not the turn loop. The
   interpreter enters that code only to resume a frame of it, or at the first
   instruction of a frame that a native frame called.
--  Why `on` also keeps out a loop that often leaves: each trip to the
+- Why `on` also keeps out a loop that often leaves: each trip to the
   interpreter and back costs more than interpreting the few instructions around
   it saves (`print-lines`, `small-values` and `strings` of `benchmarks/`, whose
   loops leave every 4 to 9 instructions, ran 3 to 8% slower compiled). A
@@ -161,7 +161,7 @@ below it is entered at its first instruction.
   at its next reload. A `CALL` or `RETURN` that is not native takes its own exit
   (above). A direct builtin leaves only when its call ended the turn (`YIELD`,
   the result written) or failed (`RAISE`).
--  Code: one pass, fixed code per instruction, the VM in rbx, the registers in
+- Code: one pass, fixed code per instruction, the VM in rbx, the registers in
   r12, the constants in r13 and the native call depth in r14, the Int fast paths
   inline with their overflow checks; `EQ` and `NE` call `agc_op_eq` and
   `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
@@ -192,7 +192,7 @@ below it is entered at its first instruction.
   together share one seal, also on several schedulers. Only the
   scheduler that claims a function compiles it; another one interprets it
   until the code is published.
--  `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
+- `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits` when
   the run starts, and `size` when its code did not fit at compile time; a `full`
   line for a function past the code memory, and a `memory` line when the code
@@ -202,7 +202,7 @@ below it is entered at its first instruction.
   there, `transition count=N` the `CALL`, `TAIL_CALL` and `RETURN` exits (a
   native call or return is not one; each call of a block from a block call is
   one), and `turn count=N` the turns that ran the jit copy of the turn loop.
--  Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
+- Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a function without a loop
   that `on` compiles only for a compiled caller, `on` in the plain turn loop but
@@ -234,8 +234,10 @@ below it is entered at its first instruction.
   native call's frame push and pop and its exits, a direct builtin's result,
   turn end and caught failure, a map read, its missing key and its String key's
   charge, list literals and closures, globals, structs, struct updates and their
-  charge, enums, `try` and the `TAIL_CALL` exit, also under `make vm-tsan`).
--  Known limits: a function with a loop that is called very often from the
+  charge, enums, `try` and the `TAIL_CALL` exit, also under `make vm-tsan`), and
+  `make test-jit-on` (the conformance areas plus the destructive group with
+  `AGENTICA_JIT=on`, daily on the four systems in `jit-soak.yml`).
+- Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
   each call; a leaf builtin still leaves the code (and unwinds the native
   calls), and a builtin that is neither leaf, direct nor a block call (output,

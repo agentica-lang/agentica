@@ -13,6 +13,7 @@ interpreter, and the code goes on after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
+import os
 import platform
 
 import pytest
@@ -1355,3 +1356,17 @@ def test_a_bad_jit_mode_is_refused(tmp_path):
     assert result.code == 2 and "AGENTICA_JIT needs off, on or always" in result.stderr
     result = run_vm(bytecode, "--jit", "off", env=vm_environment({"AGENTICA_JIT": "always"}))
     assert (result.code, result.stdout) == (0, "1\n")
+
+
+def test_the_jit_mode_of_the_environment_reaches_the_vm(tmp_path):
+    """The canary of make test-jit-on: no --jit flag, so only AGENTICA_JIT decides whether this hot loop is compiled.
+
+    If the variable stopped reaching the VMs, the soak would run the interpreter and pass without proving anything.
+    """
+    bytecode = compile_text(THRESHOLD, "threshold-env", tmp_path)
+    trace = tmp_path / "env.trace"
+    run_vm(bytecode, env=vm_environment({"AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}))
+    lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
+    functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+    jit_on = os.environ.get("AGENTICA_JIT", "off") in ("on", "always")
+    assert ("spin" in functions) == (X86_64 and jit_on), (os.environ.get("AGENTICA_JIT"), functions)

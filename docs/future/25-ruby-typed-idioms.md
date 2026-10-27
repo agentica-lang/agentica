@@ -458,9 +458,10 @@ one exists.
   a `Map[String, Fn[...]]` to dispatch by name.
 - **`respond_to?`:** already not planned (15.5): the answer is known at compile
   time.
-- **Reflection:** `instance_variable_get`/`set`, listing fields or methods: it
-  breaks static checking and makes the VM keep names at run time; `JSON.from`
-  shows a value's fields.
+- **Reflection:** `instance_variable_get`/`set`, listing methods: it breaks
+  static checking and makes the VM keep names at run time; `JSON.from` shows a
+  value's fields. Listing the fields of a struct type is `Type.members`
+  (`docs/grammar/06-semantics.md`, "Structs and lists").
 - **`eval` and `binding`:** no code from strings at run time; the checker would
   not see it.
 - **Monkey patching and refinements:** builtin types and modules are fixed;
