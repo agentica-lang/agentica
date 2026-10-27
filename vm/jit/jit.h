@@ -8,9 +8,10 @@
 
 #include "../core.h"
 
-/* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself, is compiled at its
-   AGC_JIT_THRESHOLD-th entry once AGC_JIT_PASSES of its entries landed at or before the previous one, unless an
-   innermost loop leaves compiled code for the interpreter more than once in AGC_JIT_SPACING instructions) and always
+/* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself with at most
+   AGC_JIT_TAIL_PARAMS arguments, is compiled at its AGC_JIT_THRESHOLD-th entry once AGC_JIT_PASSES of its entries
+   landed at or before the previous one, unless an innermost loop leaves compiled code for the interpreter more than
+   once in AGC_JIT_SPACING instructions) and always
    (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything in
    the interpreter. With `on`, a function without a loop gets code only for native calls, at its first CALL, TAIL_CALL
    or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
