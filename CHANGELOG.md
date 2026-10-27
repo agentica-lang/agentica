@@ -8,6 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `JsonField[T]` struct fields tell an absent key, `null` and a value apart in
+  `JSON.decode`, `JSON.encode`, `JSON.from` and `JSON.schema`.
+- `JSON.decode(json, T)` decodes a `Json` value without writing it out as text.
+
+### Changed
+
+- **Breaking:** `JsonField` is a reserved type name.
+- **Breaking:** `JSON.schema` leaves out `required` when no field is required,
+  such as for a struct with no fields.
+
 ## [0.12.0] - 2026-10-27
 
 ### Added

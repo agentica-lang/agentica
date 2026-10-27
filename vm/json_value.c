@@ -11,9 +11,11 @@
 #include <math.h>
 #include <string.h>
 
+/* next is the child to read, written the number of children written so far: a JsonField.Absent struct field is read
+   but not written, so the two differ. */
 typedef struct {
   agc_value value;
-  size_t next, n;
+  size_t next, written, n;
   agc_value *keys;
   agc_json *node;
   agc_list_builder items;
@@ -173,6 +175,7 @@ static bool json_kind(agc_vm *vm, agc_value v, agc_json_kind kind) {
 static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
   f->value = v;
   f->next = 0;
+  f->written = 0;
   f->keys = NULL;
   if (agc_is(v, AGC_T_LIST)) {
     f->n = agc_list_len(agc_as_list(vm, v));
@@ -222,6 +225,36 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
   return j->members[k].value;
 }
 
+/* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JsonField.Absent,
+   whose key is left out; JsonField.Null is nil (null) and JsonField.Value(x) is x. Any other value is unchanged. The
+   checker allows JsonField only as the direct type of a struct field, so only struct children are looked at; a
+   JsonField anywhere else fails as a value JSON cannot write. */
+static bool field_value(agc_vm *vm, agc_value *item) {
+  if (!agc_is(*item, AGC_T_ENUM)) return true;
+  uint32_t first = vm->rt->program->json_field;
+  const agc_enum *e = agc_as_enum(vm, *item);
+  if (first == UINT32_MAX || e->variant - first > AGC_JSON_FIELD_VALUE) return true;
+  uint32_t which = e->variant - first;
+  if (which == AGC_JSON_FIELD_ABSENT) return false;
+  if (which == AGC_JSON_FIELD_NULL) {
+    *item = agc_nil();
+    return true;
+  }
+  if (e->n != 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid JsonField value", 0);
+  *item = e->payload[0];
+  return true;
+}
+
+/* The next child of the frame that JSON writes, skipping JsonField.Absent struct fields; false when none is left. */
+static bool next_child(agc_vm *vm, walk_frame *f, agc_value *item, agc_string **key) {
+  while (f->next < f->n) {
+    *item = child(vm, f, key);
+    f->next++;
+    if (!agc_is(f->value, AGC_T_STRUCT) || field_value(vm, item)) return true;
+  }
+  return false;
+}
+
 agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
   agc_json_buffer b;
   b.cap = 64;
@@ -240,6 +273,7 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
     } else {
       put_scalar(vm, &b, item, span);
     }
+    agc_string *key;
     for (;;) {
       if (!depth) {
         agc_string *s = agc_new_string(b.len, agc_utf8_count((const uint8_t *)b.data, b.len));
@@ -248,19 +282,16 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
         return s;
       }
       walk_frame *top = &stack[depth - 1];
-      if (top->next < top->n) break;
+      if (next_child(vm, top, &item, &key)) break;
       agc_json_put(&b, is_object(vm, top->value) ? "}" : "]", 1);
       depth--;
     }
     walk_frame *top = &stack[depth - 1];
-    if (top->next) agc_json_put(&b, ",", 1);
-    agc_string *key;
-    item = child(vm, top, &key);
+    if (top->written++) agc_json_put(&b, ",", 1);
     if (key) {
       put_string(&b, key);
       agc_json_put(&b, ":", 1);
     }
-    top->next++;
   }
 }
 
@@ -289,28 +320,26 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
       v = item;
     } else if (open_frame(vm, item, f)) {
       f->node = agc_json_container(!agc_is(item, AGC_T_LIST), f->n, &f->items);
-      v = agc_json_value(f->node);
-      if (f->n) {
+      agc_string *key;
+      if (next_child(vm, f, &item, &key)) {
         depth++;
-        agc_string *key;
-        item = child(vm, f, &key);
         if (key) f->node->members[0].key = key;
         continue;
       }
+      v = agc_json_finish(f->node, &f->items, 0);
     } else {
       v = scalar_json(vm, item, span);
     }
     for (;;) {
       if (depth == 0) return v;
       walk_frame *top = &stack[depth - 1];
-      agc_json_store(top->node, &top->items, top->next, v);
-      if (++top->next < top->n) {
-        agc_string *key;
-        item = child(vm, top, &key);
-        if (key) top->node->members[top->next].key = key;
+      agc_json_store(top->node, &top->items, top->written++, v);
+      agc_string *key;
+      if (next_child(vm, top, &item, &key)) {
+        if (key) top->node->members[top->written].key = key;
         break;
       }
-      v = agc_json_finish(top->node, &top->items, top->n);
+      v = agc_json_finish(top->node, &top->items, top->written);
       depth--;
     }
   }

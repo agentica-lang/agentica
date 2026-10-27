@@ -88,7 +88,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   (`lazy.md`), `Task[R]`, `Channel[T]` (`tasks.md`), `Socket`, `Listener`,
   `HttpClient`, `HttpServer`.
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
-  `tasks.md`) and `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`).
+  `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
+  `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`).
 - Builtin records: `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`,
   `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent`. `Name` is a
   struct you declare; its fields are typed and immutable.

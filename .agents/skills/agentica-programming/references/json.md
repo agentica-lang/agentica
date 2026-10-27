@@ -9,6 +9,7 @@ JSON.null?(value: Json) -> Bool
 JSON.kind(value: Json) -> String
 JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
+JSON.decode(j: Json, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -32,16 +33,53 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 - `JSON.schema(User)` and `JSON.decode(text, User)` take a named struct type,
   not a value (bare type names are valid only there). The schema has
-  `properties` and `required`; Int schemas carry signed 64-bit bounds; lists use
+  `properties` and `required` (left out when no field is required); Int schemas carry signed 64-bit bounds; lists use
   `items`; String-keyed maps `additionalProperties`; nested and recursive
   structs `$defs` and `$ref`. Extra struct keys stay allowed, as in decoding. A
   schema is a `Json` value, not text.
-- Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps, and
-  nested or recursive structs; other types are `CHECK-NOT-DECODABLE`.
+- `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
+  an item of a parsed document, with the same errors; no `JSON.encode` first).
+- Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
+  nested or recursive structs, and `JsonField` of those; other types are
+  `CHECK-NOT-DECODABLE`.
 - `JSON.decode` returns errors, with field or index paths, for malformed JSON,
   missing fields, wrong types, Int overflow and non-finite Floats. Extra object
   keys are ignored. An integer may decode as Float; a decimal or exponent value
   never decodes as Int. Decoded maps use sorted key order.
+
+## Optional and nullable fields
+
+A field `age: JsonField[Int]` tells an absent key, `null` and a value apart. The
+builtin enum has `JsonField.Absent`, `JsonField.Null` and `JsonField.Value(x)`;
+match all three or use `_`.
+
+- Decode: a missing key is `Absent`, `null` is `Null`, anything else is
+  decoded as `T` into `Value`. A wrong kind reads `age: expected signed 64-bit
+  Int or null`; an error inside the value keeps its own path (`address.zip:
+  expected String`).
+- Encode (`JSON.encode`, `JSON.from`): `Absent` leaves the key out, `Null`
+  writes `null`. Schema: the field is not `required` and allows `null`
+  (`anyOf`).
+- Only as the direct type of a struct field: `List[JsonField[Int]]`, a map of
+  them, `JsonField[JsonField[T]]` or `JSON.encode(field_value)` is
+  `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` is not encodable or decodable.
+  `JsonField` is a reserved name.
+
+```ruby
+struct Patch
+  name: JsonField[String]
+end
+
+def main() -> Void
+  patch = JSON.decode("{\"name\": null}", Patch).unwrap!
+  case patch.name
+    JsonField.Value(name) -> puts("rename to #{name}")
+    JsonField.Null -> puts("clear the name")
+    JsonField.Absent -> puts("keep the name")
+  end
+  puts(JSON.encode(Patch(name: JsonField.Absent)))   # {}
+end
+```
 
 ## Json values
 
@@ -68,7 +106,8 @@ JSON.list(j: Json) -> Result[List[Json]]
 ## Encoding
 
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as null), Json, lists,
-  String-keyed maps and structs, recursively. Results and Int-keyed maps are
+  String-keyed maps and structs (`JsonField` fields too), recursively. Results,
+  other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`, even when empty or nested. Empty literals still need a
   known type.
 - Output is compact. Structs follow declaration order; maps follow insertion

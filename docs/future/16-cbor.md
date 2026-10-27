@@ -80,6 +80,11 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
   through list elements, `Map` keys and values, struct fields and enum payloads,
   and for a generic instance it first substitutes the instance's type arguments
   into the field and payload types, then recurses into the result.
+- `JsonField[T]` (the grammar's JSON section) is an ordinary generic enum
+  instance here, written as the 2-element array `[tag, values]` of 16.4:
+  `Absent` is `["Absent", []]` and `Value(x)` is `["Value", [x]]`. It has no
+  absent-key meaning: a struct field that holds `Absent` is still written under
+  its key, and a missing key is an error on decode, as for any field.
 - Recursion is cut off with a `seen` set keyed on the substituted type: its kind
   (struct or enum), its name and its type arguments. A recursive type stops
   there: for `enum Tree[T]` with a payload `Node(List[Tree[T]])`, the walk of

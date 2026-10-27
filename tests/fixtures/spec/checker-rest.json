@@ -11069,5 +11069,224 @@
       "start": [2, 9],
       "covers": "Zlib.inflate_init(15, 1073741824, 1073741824)"
     }
+  ],
+  "JsonField is optional and nullable only as a direct struct field of a JSON type, and reserves its name": [
+    {
+      "program": [
+        "struct W",
+        "  items: List[JsonField[Int]]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", W)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-JSON-FIELD-PLACE",
+      "start": [6, 25],
+      "covers": "W",
+      "help": true
+    },
+    {
+      "program": [
+        "struct W",
+        "  a: JsonField[JsonField[Int]]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = JSON.schema(W)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-JSON-FIELD-PLACE",
+      "start": [6, 19],
+      "covers": "W"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[String, JsonField[Int]] = {}",
+        "  puts(JSON.encode(m))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-JSON-FIELD-PLACE",
+      "start": [3, 20],
+      "covers": "m"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  f: JsonField[Int] = JsonField.Value(1)",
+        "  x = JSON.from(f)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-JSON-FIELD-PLACE",
+      "start": [3, 17],
+      "covers": "f"
+    },
+    {
+      "program": [
+        "struct W",
+        "  items: List[JsonField[Nil]]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", W)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-JSON-FIELD-PLACE",
+      "start": [6, 25],
+      "covers": "W"
+    },
+    {
+      "program": [
+        "struct W",
+        "  a: JsonField[Nil]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", W)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE",
+      "start": [6, 25],
+      "covers": "W"
+    },
+    {
+      "program": [
+        "struct W",
+        "  a: JsonField[Nil]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(JSON.encode(W(a: JsonField.Null)))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [6, 20],
+      "covers": "W(a: JsonField.Null)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.schema(JsonField)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 19],
+      "covers": "JsonField"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JsonField.Absent",
+        "end",
+        ""
+      ],
+      "code": "CHECK-ENUM-TYPE-INFERENCE",
+      "start": [2, 7],
+      "covers": "JsonField.Absent"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: JsonField[Int] = JsonField.Value(\"s\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 39],
+      "covers": "\"s\""
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: JsonField[Int] = JsonField.Null",
+        "  case x",
+        "    JsonField.Absent -> puts(\"a\")",
+        "    JsonField.Null -> puts(\"n\")",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE",
+      "start": [3, 3]
+    },
+    {
+      "program": [
+        "enum JsonField",
+        "  Absent",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "struct JsonField",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "struct P",
+        "  a: JsonField[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(JSON.decode(3, P))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 20],
+      "covers": "3",
+      "expected": "String",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "struct Address",
+        "  zip: String",
+        "end",
+        "",
+        "struct P",
+        "  a: JsonField[Int]",
+        "  b: JsonField[List[Address]]",
+        "  c: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  j = JSON.parse(\"{\\\"c\\\": 1}\").unwrap!",
+        "  p = JSON.decode(j, P).unwrap!",
+        "  puts(JSON.encode(p))",
+        "  puts(JSON.from(p))",
+        "  puts(JSON.schema(P))",
+        "  q = P(a: JsonField.Absent, b: JsonField.Value([]), c: 2)",
+        "  puts(q)",
+        "end",
+        ""
+      ],
+      "code": null
+    }
   ]
 }

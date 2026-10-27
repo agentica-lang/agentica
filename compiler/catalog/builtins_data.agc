@@ -196,6 +196,15 @@ export ENUMS: List[Model.EnumDef] = [
       ],
     ),
     Model.EnumDef(
+      name: "JsonField",
+      parameters: ["T"],
+      variants: [
+        Model.Variant(name: "Absent", payload: []),
+        Model.Variant(name: "Null", payload: []),
+        Model.Variant(name: "Value", payload: [Types.Type.Var("T")]),
+      ],
+    ),
+    Model.EnumDef(
       name: "LogLevel",
       parameters: [],
       variants: [
@@ -241,6 +250,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Int",
     "JSON",
     "Json",
+    "JsonField",
     "Lazy",
     "List",
     "Listener",
@@ -1406,7 +1416,7 @@ ROWS_17: List[Model.Builtin] = [
       rule: Model.Rule.JsonDecode,
       implementation: "JSON.decode",
       effects: [],
-      description: "Decode JSON into a named struct; invalid data returns an error.",
+      description: "Decode JSON text or a Json value into a named struct; invalid data returns an error.",
       alternatives: [],
     ),
     Model.Builtin(

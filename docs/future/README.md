@@ -11,11 +11,11 @@ current status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
-Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33, 35–37 and 49 have no file of their
-own: they are built or decided, and their content lives in the grammar,
+Sections 1, 2, 5, 8–12, 14, 17, 21, 23, 24, 33, 35–37 and 49 have no file of
+their own: they are built or decided, and their content lives in the grammar,
 `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
-[`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
-small-value sharing. §40 (native code and FFI) was replaced by issue
+[`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built small-value
+sharing. §40 (native code and FFI) was replaced by issue
 [#534](https://github.com/sonic182/agentica/issues/534), which holds its design.
 
 - §: 3
@@ -54,11 +54,6 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Binary serialization (CBOR)
   - File: [`16-cbor.md`](16-cbor.md)
   - Status: On demand (row 18)
-
-- §: 17
-  - Title: Optional and nullable JSON fields
-  - File: [`17-optional-json-fields.md`](17-optional-json-fields.md)
-  - Status: Planned (item 10e, row 7.6)
 
 - §: 18
   - Title: Front-end implementation language (self-hosting; done)

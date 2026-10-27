@@ -434,7 +434,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_STRUCT) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_JSON_FIELD) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (t->kind < AGC_TYPE_LIST) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -466,6 +466,27 @@ static void load_types(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_STRUCT && !p->structs[p->types[i].arg].json_name)
       reject(r, "type names a struct without field types");
+}
+
+/* The builtin JsonField enum, by its display name (a reserved name, so no user enum has it): exactly Absent, Null and
+   Value(T) in that order, at most once. A type of kind JsonField needs it, since typed JSON builds its variants. */
+static void find_json_field(reader *r, agc_program *p) {
+  static const char *const names[] = {"Absent", "Null", "Value"};
+  p->json_field = UINT32_MAX;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    const agc_enum_def *d = &p->enums[i];
+    if (!same_text(d->name, "JsonField")) continue;
+    if (p->json_field != UINT32_MAX) reject(r, "duplicate JsonField enum");
+    if (d->count != 3) reject(r, "bad JsonField enum");
+    for (uint32_t k = 0; k < 3; k++) {
+      const agc_variant_def *v = &p->variants[d->first + k];
+      if (!same_text(v->name, names[k]) || v->arity != (k == AGC_JSON_FIELD_VALUE)) reject(r, "bad JsonField enum");
+    }
+    p->json_field = d->first;
+  }
+  for (uint32_t i = 0; i < p->type_count; i++)
+    if (p->types[i].kind == AGC_TYPE_JSON_FIELD && p->json_field == UINT32_MAX)
+      reject(r, "JsonField type without the JsonField enum");
 }
 
 static void load_tables(reader *r, agc_program *p) {
@@ -509,6 +530,7 @@ static void load_tables(reader *r, agc_program *p) {
       }
     }
   }
+  find_json_field(r, p);
 }
 
 static void load_updates(reader *r, agc_program *p) {

@@ -354,9 +354,15 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
+/* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T); it
+   points to an earlier type like List and Map. */
 typedef enum {
-  AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT
+  AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
+  AGC_TYPE_JSON_FIELD
 } agc_type_kind;
+
+/* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
+enum { AGC_JSON_FIELD_ABSENT, AGC_JSON_FIELD_NULL, AGC_JSON_FIELD_VALUE };
 
 typedef struct {
   uint32_t kind, arg;
@@ -400,6 +406,9 @@ typedef struct {
   agc_enum_def *enums;
   agc_variant_def *variants;
   agc_update_def *updates;
+  /* The variant id of JsonField.Absent (Null and Value follow it), or UINT32_MAX when the program has no JsonField
+     enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
+  uint32_t json_field;
   const agc_builtin **builtins;
   agc_function *functions;
   /* The index in builtins of the first native import (a name that starts with AGC_NATIVE_PREFIX), and of the first
