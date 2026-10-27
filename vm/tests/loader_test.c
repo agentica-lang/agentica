@@ -5,6 +5,7 @@
  * source_root_tests covers agc_program_set_source_root.
  */
 #include "../core.h"
+#include "../jit/jit.h"
 
 #include <assert.h>
 #include <math.h>
@@ -1061,8 +1062,8 @@ static void test_fuzz_timed_waits(void) {
   s.registers = 3;
   buffer b = build(s);
   uint64_t start = agc_clock_ms();
-  assert(agc_fuzz_one(b.data, b.len, false) == 1);
-  assert(agc_fuzz_one(b.data, b.len, true) == 1);
+  assert(agc_fuzz_one(b.data, b.len, AGC_JIT_OFF, NULL, NULL) == 1);
+  assert(agc_fuzz_one(b.data, b.len, AGC_JIT_ALWAYS, NULL, NULL) == 1);
   assert(agc_clock_ms() - start < 5000);
   free(b.data);
 }
