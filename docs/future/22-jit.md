@@ -71,10 +71,11 @@ long loop body that runs a few times stays interpreted however many calls
 it makes; `always`, every
 function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
-every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
-and list opcodes (`LIST`, `LIST_LEN`, `LIST_GET`), `MAP_GET`, `CLOSURE`, `EQ`,
-`NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`,
-`IS_OK`, `RESULT_VALUE` and the jumps have code. A `CALL` of a
+every mode runs the interpreter. `MOVE`, `CONST`, `GLOBAL`, `STEP`, the Int,
+Float and list opcodes (`LIST`, `LIST_LEN`, `LIST_GET`), `MAP_GET`, `CLOSURE`,
+`STRUCT`, `ENUM`, `EQ`, `NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`,
+`IS_VARIANT`, `PAYLOAD`, `IS_OK`, `RESULT_VALUE`, `TRY` (and `TRY_STEP`) and
+the jumps have code. A `CALL` of a
 function that has code is a native call: compiled code pushes the frame as
 `push_frame` does, in frames and registers the task already has, and calls the
 callee's code, up to 256 calls deep on the C stack (`AGC_JIT_NATIVE_DEPTH`); the
@@ -153,7 +154,8 @@ instruction.
   compare in `EQ`, `NE` or `SAME`, a join in `CONCAT`, a compound, String or
   Json form in `TO_TEXT`, a String key in `MAP_GET`), a failure (raised as the
   helper contract says), and an instruction without code or a slow path (a wrong
-  tag, a field index past the count, a missing key), which the interpreter runs;
+  tag, a field index past the count, a missing key, an unset global, the error
+  that a `try` returns from the frame), which the interpreter runs;
   the turn loop enters the code again when it reaches the next instruction, or
   at its next reload. A `CALL` or `RETURN` that is not native takes its own exit
   (above). A direct builtin leaves only when its call ended the turn (`YIELD`,
@@ -164,14 +166,15 @@ instruction.
   `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
   `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `MAP_GET`
   calls `agc_jit_map_get` (a missing key gives back a String key's charge and
-  leaves, so the interpreter fails as it does) and `LIST` `agc_jit_list`; `NOT`,
-  `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
-  inline after a tag check; `CALL_BUILTIN` of a direct row calls
-  `agc_jit_call_builtin`, which runs the interpreter's generic tail of the call:
-  it stores the pc after the call in the top frame (for the stack trace and the
-  error's span), charges an `AGC_COST_SIZE` row's cost, applies the turn cost
-  and writes the result. The registers stay in the frame's register file, so the
-  collector sees them during the call.
+  leaves, so the interpreter fails as it does), `LIST` `agc_jit_list`, `STRUCT`
+  `agc_jit_struct` and `ENUM` `agc_jit_enum`; `GLOBAL` reads its slot inline;
+  `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK`, `RESULT_VALUE` and `TRY` (an
+  ok Result's value) read the value inline after a tag check; `CALL_BUILTIN`
+  of a direct row calls `agc_jit_call_builtin`, which runs the interpreter's
+  generic tail of the call: it stores the pc after the call in the top frame
+  (for the stack trace and the error's span), charges an `AGC_COST_SIZE` row's
+  cost, applies the turn cost and writes the result. The registers stay in the
+  frame's register file, so the collector sees them during the call.
 - Code memory: at most 64 MiB per run (`AGC_JIT_CODE_CAP`, in bytes),
   reserved in chunks as it fills (1 MiB, then twice the last one, so the
   address space follows the code under an address space limit; after a
@@ -211,7 +214,10 @@ instruction.
   that make closures with captures and pass them to `filter`, `map`, `reduce`
   and `any?` with no `closure` or `call-builtin` exit, turns that end inside
   the block calls and a `--max-steps` sweep, a failure inside a compiled block
-  and a cancel inside a long block call),
+  and a cancel inside a long block call, and a loop that reads module
+  constants, builds structs and enums and unwraps Results with `try` with no
+  such exit but the errors, which fail with the interpreter's span and stack,
+  and a `--max-steps` sweep),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
   `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, functions
@@ -220,7 +226,8 @@ instruction.
   every opcode compiles, the results and statuses of the helper calls and inline
   reads, a native call's frame push and pop and its exits, a direct builtin's
   result, turn end and caught failure, a map read, its missing key and its
-  String key's charge, list literals and closures, also under
+  String key's charge, list literals and closures, globals, structs, enums and
+  `try`, also under
   `make vm-tsan`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at

@@ -49,6 +49,7 @@ static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
     case AGC_OP_CONST:
+    case AGC_OP_GLOBAL:
     case AGC_OP_STEP:
     case AGC_OP_ADD_I:
     case AGC_OP_SUB_I:
@@ -81,6 +82,10 @@ static bool has_code(uint32_t op) {
     case AGC_OP_IS_OK:
     case AGC_OP_RESULT_VALUE:
     case AGC_OP_CLOSURE:
+    case AGC_OP_STRUCT:
+    case AGC_OP_ENUM:
+    case AGC_OP_TRY:
+    case AGC_OP_TRY_STEP:
     case AGC_OP_JUMP:
     case AGC_OP_JUMP_IF_FALSE:
     case AGC_OP_JUMP_IF_TRUE: return true;
@@ -208,6 +213,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL and
    RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
+  const agc_program *p = jit->program;
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
@@ -217,6 +223,13 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
     switch (op) {
       case AGC_OP_MOVE: agc_emit_move(e, in.a, in.b); break;
       case AGC_OP_CONST: agc_emit_const(e, in.a, bx); break;
+      case AGC_OP_GLOBAL:
+        /* The loader checks bx, and the indexes of STRUCT and ENUM below; the C tests' hand-made code may not. */
+        if (bx < p->global_count)
+          agc_emit_global(e, in.a, (uint64_t)(uintptr_t)&p->globals[bx], pc);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_STEP: agc_emit_step(e, in.a, pc); break;
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
@@ -243,33 +256,47 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_LIST: agc_emit_list(e, in); break;
       case AGC_OP_CLOSURE:
         /* As for CALL, the loader checks bx. */
-        if (bx < jit->program->function_count)
-          agc_emit_closure(e, in, jit->program->functions[bx].captures);
+        if (bx < p->function_count)
+          agc_emit_closure(e, in, p->functions[bx].captures);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
       case AGC_OP_MAP_GET: agc_emit_map_get(e, in, pc); break;
+      case AGC_OP_STRUCT:
+        if (in.c < p->struct_count)
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_struct, in.c, p->structs[in.c].count);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
+      case AGC_OP_ENUM:
+        if (in.c < p->variant_count)
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_enum, (uint64_t)(uintptr_t)&p->variants[in.c], in.c);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_NOT:
       case AGC_OP_FIELD:
       case AGC_OP_IS_VARIANT:
       case AGC_OP_PAYLOAD:
       case AGC_OP_IS_OK:
-      case AGC_OP_RESULT_VALUE: agc_emit_read(e, op, in, pc); break;
+      case AGC_OP_RESULT_VALUE:
+      case AGC_OP_TRY:
+      case AGC_OP_TRY_STEP: agc_emit_read(e, op, in, pc); break;
       case AGC_OP_JUMP: agc_emit_jump(e, bx); break;
       case AGC_OP_JUMP_IF_FALSE:
       case AGC_OP_JUMP_IF_TRUE: agc_emit_branch(e, in.a, op == AGC_OP_JUMP_IF_TRUE, bx, pc); break;
       case AGC_OP_CALL:
         /* The loader checks bx; the C tests' hand-made code may not. */
-        if (bx < jit->program->function_count)
-          agc_emit_call(e, in, pc, (uint64_t)(uintptr_t)&jit->code[bx], jit->program->functions[bx].registers);
+        if (bx < p->function_count)
+          agc_emit_call(e, in, pc, (uint64_t)(uintptr_t)&jit->code[bx], p->functions[bx].registers);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_CALL, pc);
         break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
       case AGC_OP_CALL_BUILTIN:
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
-        if (bx < jit->program->builtin_count && jit->program->builtins[bx]->direct)
-          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)jit->program->builtins[bx], f->spans[pc]);
+        if (bx < p->builtin_count && p->builtins[bx]->direct)
+          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc]);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
@@ -688,6 +715,22 @@ void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures) {
   agc_fn *f = agc_new_fn(function, captures);
   for (uint32_t k = 0; k < captures; k++) f->captured[k] = window[k];
   window[0] = agc_fn_value(f);
+}
+
+void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count) {
+  agc_struct *st = agc_new_struct(type, count);
+  for (uint32_t k = 0; k < count; k++) st->fields[k] = fields[k];
+  *dst = agc_struct_value(st);
+}
+
+void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {
+  if (v->arity == 0) {
+    *dst = agc_enum_value(v->shared);
+    return;
+  }
+  agc_enum *e = agc_new_enum(variant, v->arity);
+  for (uint32_t k = 0; k < v->arity; k++) e->payload[k] = payload[k];
+  *dst = agc_enum_value(e);
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {
