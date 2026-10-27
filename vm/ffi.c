@@ -1791,7 +1791,6 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 
 const agc_builtin agc_ffi_builtins[] = {
   {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
@@ -1832,6 +1831,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.put_bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];
