@@ -5,6 +5,7 @@
 ## The builtin module that holds the methods of each receiver kind.
 export def method_modules() -> Map[String, String]
   return {
+    "ATS": "ATS",
     "Channel": "Channel",
     "Float": "Float",
     "Int": "Int",
@@ -22,6 +23,7 @@ end
 ## The method names that are another builtin; `self` means the method returns the receiver.
 export def method_aliases() -> Map[String, String]
   return {
+    "ATS.length": "ATS.size",
     "Float.to_i": "Float.to_int",
     "Float.to_i!": "Float.to_int!",
     "Float.to_s": "String.from_float",
@@ -66,9 +68,9 @@ end
 ## name here (`strip` for `String.trim`, `select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
   return [
-    "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect", "List.inject", "List.length",
-    "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?", "Set.length", "Set.member?",
-    "String.size",
+    "ATS.length", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect", "List.inject",
+    "List.length", "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?", "Set.length",
+    "Set.member?", "String.size",
   ]
 end
 

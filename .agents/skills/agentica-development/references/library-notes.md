@@ -71,7 +71,12 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   the task is a `Task`, the timeout an `Int`, the result `Await[R]`) and returns
   the builtin enum `Await[T]` (`Done(T)`, `TimedOut`); see the next bullet for
   how a builtin enum is wired. Channels are VM-only builtins in `vm/channel.c`;
-  see `docs/vm/10-io-scheduler.md` §10.2.2.
+  see `docs/vm/10-io-scheduler.md` §10.2.2. `ATS[K, V]` (reserved too) is the
+  type variant `Types.Type.ATS`, checked by the rules `AtsNew` and `AtsCall`
+  (`check_collections.agc`: the row's `K` and `V` become the table's, so
+  `ATS.add`'s `ATS[K, Int]` refuses other values) and the value rule
+  `ats_value?` (`check_types.agc`, `CHECK-ATS-VALUE`); the VM side is
+  `vm/ats.c` (`references/vm-tasks.md`).
 - Entrypoint return cancels pending work and closes the run's resources. A
   diagnostic in `main`, RUNTIME-STEP-LIMIT, RUNTIME-INTERNAL or System.exit ends
   the run; any other diagnostic in a task is a crash that ends only that

@@ -5,8 +5,9 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name; the Zlib rows are appended last, in
-## contract order, so the positions of the existing rows never shift.
+## Every builtin, sorted by name; the Zlib rows and then the ATS rows are
+## appended last, in contract order, so the positions of the existing rows
+## never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -18,7 +19,7 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57)
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -226,6 +227,7 @@ export OPAQUE_TYPES: List[String] = [
 
 ## The type names no declaration or import alias may take.
 export RESERVED_TYPE_NAMES: List[String] = [
+    "ATS",
     "Await",
     "Bool",
     "Channel",
@@ -5189,6 +5191,137 @@ ROWS_56: List[Model.Builtin] = [
         "chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 " +
         "bytes, seed 0 to 4294967295; VM only."
       ),
+      alternatives: [],
+    ),
+  ]
+
+ROWS_57: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "ATS.add",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Int)),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+        Model.Named(name: "n", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.add",
+      effects: ["concurrency"],
+      description: (
+        "Add n to the Int value of key (absent counts as 0) and return the new value, atomically; overflow " +
+        "halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.delete",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.delete",
+      effects: ["concurrency"],
+      description: "Remove a key atomically; an absent key is ignored; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.get",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+      ],
+      result: Types.Type.Result(Types.Type.Var("V")),
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.get",
+      effects: [],
+      description: "Read the value of a key, or an error when the key is absent; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.has_key?",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+      ],
+      result: Types.Type.Bool,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.has_key?",
+      effects: [],
+      description: "Check whether a key exists; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.keys",
+      parameters: [Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V")))],
+      result: Types.Type.List(Types.Type.Var("K")),
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.keys",
+      effects: [],
+      description: "A snapshot of the keys in first-insertion order; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.new",
+      parameters: [],
+      result: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V")),
+      rule: Model.Rule.AtsNew,
+      implementation: "ATS.new",
+      effects: [],
+      description: (
+        "Create an empty shared table that tasks update in place; needs an expected ATS[K, V] type; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.put",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+        Model.Named(name: "value", type: Types.Type.Var("V")),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.put",
+      effects: ["concurrency"],
+      description: "Insert or replace the value of a key atomically; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.put_new",
+      parameters: [
+        Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "key", type: Types.Type.Var("K")),
+        Model.Named(name: "value", type: Types.Type.Var("V")),
+      ],
+      result: Types.Type.Bool,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.put_new",
+      effects: ["concurrency"],
+      description: (
+        "Insert the value only when the key is absent, atomically; false leaves the table unchanged; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.size",
+      parameters: [Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V")))],
+      result: Types.Type.Int,
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.size",
+      effects: [],
+      description: "Count the entries of the table (a snapshot); VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "ATS.to_map",
+      parameters: [Model.Named(name: "table", type: Types.Type.ATS(Types.Type.Var("K"), Types.Type.Var("V")))],
+      result: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V")),
+      rule: Model.Rule.AtsCall,
+      implementation: "ATS.to_map",
+      effects: [],
+      description: "A snapshot of the table as a Map in first-insertion order; VM only.",
       alternatives: [],
     ),
   ]

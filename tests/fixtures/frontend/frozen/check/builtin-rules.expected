@@ -1,3 +1,13 @@
+ATS.add AtsCall
+ATS.delete AtsCall
+ATS.get AtsCall
+ATS.has_key? AtsCall
+ATS.keys AtsCall
+ATS.new AtsNew
+ATS.put AtsCall
+ATS.put_new AtsCall
+ATS.size AtsCall
+ATS.to_map AtsCall
 Channel.close ChannelTarget
 Channel.closed? ChannelTarget
 Channel.new ChannelNew

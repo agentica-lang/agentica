@@ -18,8 +18,9 @@ bends:
   convention.
 
 It is also smaller and faster to read and write. Uses: a disk cache, messages
-between Agentica processes (over `Process.spawn` pipes), and later a snapshot of
-a shared table (§13) through `Table.to_map`.
+between Agentica processes (over `Process.spawn` pipes), and a snapshot of an
+`ATS` table through `ATS.to_map` (the "Shared tables" section of
+`docs/grammar/06c-tasks-and-tests.md`).
 
 ### 16.2 API
 

@@ -27,7 +27,7 @@ vm-test: $(VM_TESTS)
 # locks, a timer fired against a wake and a function compiled by several threads at once. The VM is built without
 # libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails
 # it.
-VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit zlib
+VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit zlib ats
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:

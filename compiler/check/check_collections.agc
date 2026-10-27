@@ -1,5 +1,5 @@
-## The checking rules of the Map, Set, Task, Channel, Profile and Native builtins A rule takes the call (State.Site)
-## and returns the new state with the type of the call.
+## The checking rules of the Map, Set, Task, Channel, ATS, Profile and Native builtins. A rule takes the call
+## (State.Site) and returns the new state with the type of the call.
 
 import Model from "../catalog/builtin_model"
 import {HANDLES} from "../catalog/builtins"
@@ -23,6 +23,8 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
     Model.Rule.TaskTarget -> return check_target(cx, st, site, &Args.task_argument)
+    Model.Rule.AtsNew -> return check_ats_new(cx, st, site)
+    Model.Rule.AtsCall -> return check_ats_call(cx, st, site)
     Model.Rule.ChannelNew -> return check_channel_new(cx, st, site)
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
@@ -365,6 +367,57 @@ def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.S
   end
 
   return ok(State.Out(st: st, type: T.Type.List(result)))
+end
+
+# ATS.new needs the table type from its context. The resolved type has passed the value rule already; the check here
+# keeps it for a type that reaches the call some other way.
+def check_ats_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  span = site.node.span
+  if T.unknown?(site.expected)
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-EXPECTED-TYPE",
+        "a table needs an expected type",
+        span,
+        "annotate the variable, for example hits: ATS[String, Int] = ATS.new()",
+      ),
+    )
+  end
+
+  if !T.is?(site.expected, "ATS")
+    return error(State.mismatch(cx, st, site.expected, T.Type.ATS(T.Type.Var("K"), T.Type.Var("V")), span))
+  end
+
+  if !CheckTypes.ats_value?(cx, T.value(site.expected))
+    return error(CheckTypes.ats_value_failure(cx, st, T.value(site.expected), span))
+  end
+
+  return ok(State.Out(st: st, type: site.expected))
+end
+
+# An ATS builtin other than ATS.new: argument 0 is an ATS[K, V], the K and V of the row become the table's key and
+# value types, the other arguments are checked against the row's parameters, and the call has the row's result. A row
+# whose table parameter fixes V (ATS.add takes ATS[K, Int]) refuses a table of another value type.
+def check_ats_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try Args.ats_argument(cx, st, site)
+  found: Map[String, T.Type] = {"K": T.key(target.type), "V": T.value(target.type)}
+  parameters = site.selected.parameters
+  table = CheckTypes.substitute(parameters[0].type, found)
+  if !T.same?(table, target.type)
+    return error(State.mismatch(cx, target.st, table, target.type, Ast.expr_span(site.args[0])))
+  end
+
+  current = target.st
+  index = 1
+  while index < site.args.size
+    out = try State.expr(cx, current, site.args[index], CheckTypes.substitute(parameters[index].type, found))
+    current = out.st
+    index += 1
+  end
+
+  return ok(State.Out(st: current, type: CheckTypes.substitute(site.selected.result, found)))
 end
 
 # Channel.new needs the channel type from its context.
