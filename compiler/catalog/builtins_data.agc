@@ -183,16 +183,6 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "truncated", type: Types.Type.Bool),
       ],
     ),
-    # The record of the streaming decoder (vm/zlib.c progress_fields): keep the field order in step.
-    Model.Record(
-      name: "ZlibProgress",
-      fields: [
-        Model.Named(name: "output", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "consumed", type: Types.Type.Int),
-        Model.Named(name: "finished", type: Types.Type.Bool),
-        Model.Named(name: "needs_input", type: Types.Type.Bool),
-      ],
-    ),
   ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -219,13 +209,12 @@ export ENUMS: List[Model.EnumDef] = [
 
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpServer", "FileHandle", "Process", "ZlibDecoder",
+  "Socket", "Listener", "HttpServer", "FileHandle", "Process",
 ]
 
 ## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
-  "ZlibDecoder",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -280,8 +269,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Time",
     "Void",
     "Zlib",
-    "ZlibDecoder",
-    "ZlibProgress",
   ]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
@@ -5078,71 +5065,6 @@ ROWS_56: List[Model.Builtin] = [
         "CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next " +
         "chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 " +
         "bytes, seed 0 to 4294967295; VM only."
-      ),
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Zlib.inflate_init",
-      parameters: [
-        Model.Named(name: "window_bits", type: Types.Type.Int),
-        Model.Named(name: "max_total_in", type: Types.Type.Int),
-        Model.Named(name: "max_total_out", type: Types.Type.Int),
-      ],
-      result: Types.Type.Result(Types.Type.Opaque("ZlibDecoder")),
-      rule: Model.Rule.Plain,
-      implementation: "Zlib.inflate_init",
-      effects: [],
-      description: (
-        "Start a streaming decompressor, kept for now (the Lazy steps will replace it): window_bits 15 is the " +
-        "zlib wrapper, -15 raw deflate, 31 gzip; each total cap 1 to 1073741824; the handle works with " +
-        "Task.spawn_owning; VM only."
-      ),
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Zlib.inflate_next",
-      parameters: [
-        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "max_out", type: Types.Type.Int),
-      ],
-      result: Types.Type.Result(Types.Type.Struct("ZlibProgress")),
-      rule: Model.Rule.Plain,
-      implementation: "Zlib.inflate_next",
-      effects: [],
-      description: (
-        "Feed a streaming decompressor at most 65536 input bytes with room for max_out 1 to 65536 output " +
-        "bytes; consumed may be less than data.size and the rest stays caller-owned; empty input drains pending " +
-        "output; needs_input true asks for more input or a finish, false asks to call again at once; VM only."
-      ),
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Zlib.inflate_finish",
-      parameters: [
-        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
-      ],
-      result: Types.Type.Result(Types.Type.Void),
-      rule: Model.Rule.Plain,
-      implementation: "Zlib.inflate_finish",
-      effects: [],
-      description: (
-        "Succeed only once a whole checked stream end arrived on a streaming decoder, else a truncation error; " +
-        "VM only."
-      ),
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Zlib.decoder_close",
-      parameters: [
-        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
-      ],
-      result: Types.Type.Result(Types.Type.Void),
-      rule: Model.Rule.Plain,
-      implementation: "Zlib.decoder_close",
-      effects: [],
-      description: (
-        "Free a streaming decoder idempotently; feeding or finishing it afterwards is an error; VM only."
       ),
       alternatives: [],
     ),
