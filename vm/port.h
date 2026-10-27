@@ -544,9 +544,9 @@ struct agc_vm {
   /* Set when this scheduler's last turn pushed its task with agc_runq_push_own, which wakes nobody; the next pick
      reads and clears it, and if it takes the slot instead of that task it wakes another scheduler for it. */
   bool own_pending;
-  /* The turns of this scheduler since the JIT last sampled one (agc_jit_turn in vm/jit/jit.h). Only this scheduler's
-     thread touches it; it fills padding, so no field moves. */
-  uint8_t jit_sample;
+  /* The state of this scheduler's random draw of the turns the JIT samples (agc_jit_turn in vm/jit/jit.h), 0 until
+     its first draw. Only this scheduler's thread touches it; it fills padding, so no field moves. */
+  uint16_t jit_sample;
   /* The steps this turn took from rt->steps_left: what it spent is turn_taken less what is left of the batch. Kept
      after the fields the loop reads, so they keep their offsets. */
   int64_t turn_taken;

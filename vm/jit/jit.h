@@ -111,9 +111,10 @@ static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
 /* True when the turn VM is about to run for its task runs the jit copy of the turn loop; false, the plain copy, the
    code of --jit off. Every turn does once some code is published. Before that, the entries of `on` are counted only in
    the jit copy, so a turn runs it when one of the task's AGC_JIT_TOP_FRAMES top frames is of a function the reload may
-   enter (or the task has more frames than that), which catches a long loop the turn starts in, and one turn in
-   AGC_JIT_SAMPLE of each scheduler does in any case, which counts a function that runs only inside turns (a callee
-   that returns before the turn ends, the work of a task that parks or ends within its turn). So a run whose functions
+   enter (or the task has more frames than that), which catches a long loop the turn starts in, and a turn drawn at
+   random, one in AGC_JIT_SAMPLE on average, on each scheduler does in any case, which counts a function that runs only
+   inside turns (a callee that returns before the turn ends, the work of a task that parks or ends within its turn).
+   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a run whose functions
    that may get code run seldom or never keeps the plain loop for nearly every turn, without a test of the JIT inside
    it. */
 #define AGC_JIT_TOP_FRAMES 64

@@ -535,9 +535,17 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   return jit;
 }
 
-/* AGC_JIT_SAMPLE divides the 256 values of the scheduler's 8-bit turn counter, so the sample stays regular when it
-   wraps. */
-_Static_assert(256 % AGC_JIT_SAMPLE == 0, "AGC_JIT_SAMPLE must divide 256");
+/* True for a turn drawn at random, one in AGC_JIT_SAMPLE on average (a power of two): a xorshift16 with the shifts 7,
+   9, 8, whose period is all 65535 non-zero states, seeded with an odd number made of the scheduler's index. A counter
+   would sample every 16th turn, and two tasks that take turns could then put every sample on the one that idles. */
+static bool sampled(agc_vm *vm) {
+  uint16_t x = vm->jit_sample ? vm->jit_sample : (uint16_t)(vm->index * 2 + 1);
+  x ^= (uint16_t)(x << 7);
+  x ^= (uint16_t)(x >> 9);
+  x ^= (uint16_t)(x << 8);
+  vm->jit_sample = x;
+  return (x & (AGC_JIT_SAMPLE - 1)) == 0;
+}
 
 bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
   const agc_task *t = vm->task;
@@ -545,8 +553,8 @@ bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
      load on x86-64) only keeps "live" meaning "some code is visible" on every scheduler. */
   bool jit_copy = atomic_load_explicit(&jit->live, memory_order_acquire);
   uint32_t n = t->frame_count, low = n > AGC_JIT_TOP_FRAMES ? n - AGC_JIT_TOP_FRAMES : 0;
-  /* The sample: a per-scheduler count, no shared write. */
-  if (!jit_copy) jit_copy = (uint8_t)++vm->jit_sample % AGC_JIT_SAMPLE == 0;
+  /* The sample: a per-scheduler draw, no shared write. */
+  if (!jit_copy) jit_copy = sampled(vm);
   /* A deeper stack runs the jit copy, as every run did before: its frames below the top ones may be in a loop that
      gets hot, and walking all of them each turn would cost more than the plain loop saves. */
   if (!jit_copy) jit_copy = low > 0;

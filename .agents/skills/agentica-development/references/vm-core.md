@@ -182,8 +182,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `agc_jit_settle` reaches in time linear in the program), sets `skip` for the
   rest and returns NULL when no function is left, so that run takes the plain
   turn loop, as a turn does while no code is published, no top frame may get
-  some and it is not the sampled one turn in 16 (`agc_jit_turn`, called by
-  `agc_run_turn`); it walks a function
+  some and it is not one of the turns sampled at random, one in 16 on average
+  (`agc_jit_turn`, called by `agc_run_turn`); it walks a function
   once: each instruction (fused ones as their STEP or CONST) calls one
   `agc_emit_*` function; the scheduler that claims a function compiles it,
   seals it in the run's code memory chunks (functions without a loop wait in a

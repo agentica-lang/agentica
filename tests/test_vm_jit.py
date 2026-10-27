@@ -612,8 +612,9 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
 @pytest.mark.parametrize("calls", [0, 3000])
 def test_on_runs_the_jit_turn_loop_only_in_sampled_turns_until_code_is_published(tmp_path, calls):
     # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the run in the plain turn
-    # loop but for one turn in 16 (AGC_JIT_SAMPLE) of the steps / 2000 turns. Called 3000 times, the turns that start in
-    # it run the jit copy, which compiles it, and from then on every turn does.
+    # loop but for the turns drawn at random, one in 16 (AGC_JIT_SAMPLE) on average of the steps / 2000 turns (bounded
+    # here at twice that). Called 3000 times, the turns that start in it run the jit copy, which compiles it, and from
+    # then on every turn does.
     bytecode = compile_text(f"""def pad(n: Int, width: Int) -> String
   text = n.to_s
   while text.length < width
@@ -645,9 +646,9 @@ end
     turns = [int(line.split("count=")[1]) for line in lines if " jit turn count=" in line]
     assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
     if X86_64 and not calls:
-        assert len(turns) == 1 and 0 < turns[0] <= all_turns // 16 + 1, (turns, all_turns)
+        assert len(turns) == 1 and 0 < turns[0] <= all_turns // 8 + 1, (turns, all_turns)
     elif X86_64:
-        assert len(turns) == 1 and turns[0] > all_turns // 16 + 1, (turns, all_turns)
+        assert len(turns) == 1 and turns[0] > all_turns // 4, (turns, all_turns)
     else:
         assert turns == []
 
@@ -696,12 +697,60 @@ def main() -> Void
   puts(total)
 end
 """, f"{1500 * 3 * sum(i % 7 for i in range(45))}\n"),
+    # main and echo take turns (a ping-pong): every second turn is echo's, and work runs only inside main's. The random
+    # sample of the JIT still lands on main's turns; a sample of every 16th turn landed only on echo's.
+    "ping_pong": ("""struct Pipes
+  ping: Channel[Int]
+  pong: Channel[Int]
+end
+
+""" + MID_TURN_WORK + """def echo(p: Pipes) -> Int
+  seen: Map[Int, Int] = {}
+  while true
+    case p.ping.recv(5000)
+      ok(n) ->
+        seen = seen.put(n % 2, n)
+        try_send(p.pong, n)
+      error(_) ->
+        return seen.size
+    end
+  end
+  return 0
+end
+
+def try_send(c: Channel[Int], n: Int) -> Void
+  case c.send(n, 5000)
+    ok(_) -> nil
+    error(_) -> nil
+  end
+end
+
+def main() -> Void
+  ping: Channel[Int] = Channel.new(1)
+  pong: Channel[Int] = Channel.new(1)
+  t = Task.spawn(&echo, Pipes(ping: ping, pong: pong))
+  total = 0
+  k = 0
+  while k < 3000
+    try_send(ping, k)
+    case pong.recv(5000)
+      ok(n) -> total = total + {"k": n}.size * work(120)
+      error(_) -> nil
+    end
+    k += 1
+  end
+  ping.close
+  puts(total)
+  puts(Task.await(t))
+end
+""", f"{3000 * sum(i % 7 for i in range(120))}\n2\n"),
 }
 
 
 @pytest.mark.parametrize("case", sorted(MID_TURN))
 def test_on_compiles_a_hot_function_that_runs_only_inside_turns(tmp_path, case):
     # No turn starts with work on the stack; the turns that the JIT samples count its entries, so it still compiles.
+    # One scheduler draws the same samples in each run, and each case runs at least twice the passes it needs.
     source, expected = MID_TURN[case]
     bytecode = compile_text(source, f"mid_turn_{case}", tmp_path)
     assert ("work" in compiled(bytecode, tmp_path, "on")) == X86_64
