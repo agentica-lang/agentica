@@ -643,27 +643,45 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
 }
 
+/* The TAIL_CALL exit at PC when CC holds (always for CC < 0). With COUNTER, the jit trace's agc_jit_count_tail(COUNTER,
+   SLOT) runs first, which counts it (and whether the callee in SLOT had code): run_compiled's call_exit cannot tell a
+   tail call from a call without growing. */
+static void tail_exit(agc_emitter *e, int cc, uint32_t pc, uint64_t counter, uint64_t slot) {
+  if (!counter) {
+    exit_if(e, cc, AGC_JIT_EXIT_TAIL_CALL, pc);
+    return;
+  }
+  size_t over = cc < 0 ? 0 : jump_to_patch(e, cc ^ 1); /* the inverse condition: the low bit of the code */
+  move_imm64(e, ARG0, counter);
+  move_imm64(e, ARG1, slot);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_count_tail);
+  exit_if(e, -1, AGC_JIT_EXIT_TAIL_CALL, pc);
+  if (cc >= 0) land(e, over);
+}
+
 /* TAIL_CALL of function bx with the window at R[a], in place, as replace_frame does it: the top frame keeps its base,
    ret and depth, takes the callee's PARAMS arguments from the window into R[0..), and becomes the callee's (pc 0, tail
    set). For itself (SELF) that is a jump to instruction 0. Another function needs code (its slot in the code table at
    SLOT, read when the call runs) and room for its REGISTERS in the register file, as replace_frame would grow it;
    then the code jumps to that code's tail entry, at the same native depth and on the same stack, so a chain of tail
-   calls never grows the C stack. Anything else takes the TAIL_CALL exit with nothing changed, for run_compiled. The
-   tail call itself charges nothing, as in the interpreter: the callee's STEPs do (the loader makes every function that
-   calls start with one). The window is copied upwards one register at a time, which is right as R[k] is never above
-   R[a + k]; a callee of more than AGC_JIT_TAIL_PARAMS arguments always takes the exit, so that copy stays short. */
+   calls never grows the C stack. run_compiled reads the top frame again after an exit when the frame count changed
+   or the frame's tail flag is set, which this sets. Anything else takes the TAIL_CALL exit with nothing changed, for
+   run_compiled. The tail call itself charges nothing, as in the interpreter: the callee's
+   STEPs do (the loader makes every function that calls start with one). The window is copied upwards one register at
+   a time, which is right as R[k] is never above R[a + k]; a callee of more than AGC_JIT_TAIL_PARAMS arguments always
+   takes the exit, so that copy stays short. COUNTER, when the jit trace is on, counts each exit (tail_exit). */
 void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
-                        uint32_t registers) {
+                        uint32_t registers, uint64_t counter) {
   uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (params > AGC_JIT_TAIL_PARAMS) {
-    agc_emit_exit(e, AGC_JIT_EXIT_TAIL_CALL, pc);
+    tail_exit(e, -1, pc, counter, slot);
     return;
   }
   if (!self) {
     move_imm64(e, RAX, slot);
     load(e, R11, RAX, 0);
     BYTES(e, 0x4D, 0x85, 0xDB); /* test r11, r11 */
-    exit_if(e, CC_E, AGC_JIT_EXIT_TAIL_CALL, pc);
+    tail_exit(e, CC_E, pc, counter, slot);
   }
   load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
   if (!self) {
@@ -673,7 +691,7 @@ void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, ui
     op_mem(e, true, 0x03, RDX, RCX, TASK_FIELD(regs)); /* add rdx, [rcx + regs] */
     lea(e, R10, REGS, TAG(registers));
     BYTES(e, 0x49, 0x39, 0xD2); /* cmp r10, rdx */
-    exit_if(e, CC_A, AGC_JIT_EXIT_TAIL_CALL, pc);
+    tail_exit(e, CC_A, pc, counter, slot);
   }
   for (uint32_t k = 0; in.a && k < params; k++) agc_emit_move(e, k, (uint32_t)in.a + k);
   /* rax = &frames[frame_count]: the top frame is the one before it. */

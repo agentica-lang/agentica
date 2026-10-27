@@ -233,6 +233,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
   const agc_program *p = jit->program;
   uint32_t self = (uint32_t)(f - p->functions);
+  uint64_t counter = AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT) ? (uint64_t)(uintptr_t)jit : 0;
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
@@ -321,7 +322,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         /* As for CALL, the loader checks bx. */
         if (bx < p->function_count)
           agc_emit_tail_call(e, in, pc, bx == self, (uint64_t)(uintptr_t)&jit->code[bx], p->functions[bx].params,
-                             p->functions[bx].registers);
+                             p->functions[bx].registers, counter);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
@@ -719,12 +720,10 @@ void agc_jit_count_block(agc_jit *jit) { atomic_fetch_add_explicit(&jit->blocks,
 
 void agc_jit_count_transition(agc_jit *jit) { atomic_fetch_add_explicit(&jit->transitions, 1, memory_order_relaxed); }
 
-void agc_jit_count_call(agc_jit *jit, uint32_t status, uint32_t function) {
-  agc_jit_count_transition(jit);
-  if (status != AGC_JIT_EXIT_TAIL_CALL) return;
+void agc_jit_count_tail(agc_jit *jit, _Atomic(agc_jit_code) *slot) {
   atomic_fetch_add_explicit(&jit->tails, 1, memory_order_relaxed);
-  /* A trace hint: another scheduler may have published the callee's code since the exit, which then counts here. */
-  if (atomic_load_explicit(&jit->code[function], memory_order_relaxed))
+  /* A trace hint: another scheduler may publish the callee's code between the code's own check and this load. */
+  if (atomic_load_explicit(slot, memory_order_relaxed))
     atomic_fetch_add_explicit(&jit->tails_compiled, 1, memory_order_relaxed);
 }
 

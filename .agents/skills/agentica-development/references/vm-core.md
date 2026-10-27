@@ -233,10 +233,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (base, ret and depth kept, tail set) and jumps to the callee's tail entry
   (`AGC_JIT_TAIL_ENTRY`), or to instruction 0 for a call of itself, so the
   frame's function changes without an exit and `run_compiled` reads the top
-  frame again after every exit; it exits only when the callee has no code, the
-  register file would grow or it takes more than `AGC_JIT_TAIL_PARAMS` (32)
-  arguments. `on` counts a self TAIL_CALL within that limit as a loop
-  (`backward` in `jit.c`).
+  frame again after an exit when the frame count changed or the tail flag is
+  set (a one-test change, as `run_compiled`'s size moves `plain_turn`); its
+  trace count is emitted by the code (`agc_jit_count_tail`), so `call_exit`
+  stays as it is. It exits only when the callee has no code, the register file
+  would grow or it takes more than `AGC_JIT_TAIL_PARAMS` (32) arguments. `on`
+  counts a self TAIL_CALL within that limit as a loop (`backward` in `jit.c`).
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
   slow path leaves for the interpreter; compiled code never fails,
