@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters and struct fields; unsigned results are never negative.
 - `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
   can return an `error`.
+- `Native.load("NAME")` opens a native library before its first call and
+  returns a `Result`, so a missing library can be handled.
 
 ### Changed
 

@@ -222,8 +222,20 @@ def test_a_link_named_native_is_a_symlink_error_in_the_build_and_in_the_fetch(ws
     assert result.code == 1 and problem["code"] == "PKG-SYMLINK"
 
 
-def test_a_package_that_names_no_library_for_this_system_is_refused_where_it_uses_it(ws):
-    declare(ws, {"demo.agc": DEMO}, table(**{OTHER: library_path(OTHER)}))
+# Native.load("pkgdemo") means what extern "pkgdemo" means, so it is refused the same way.
+LOAD_DEMO = """export def pkgdemo_add(a: Int, b: Int) -> Int
+  if Native.load("pkgdemo").ok?
+    return a + b
+  end
+
+  return 0
+end
+"""
+
+
+@pytest.mark.parametrize("demo", [DEMO, LOAD_DEMO], ids=["extern", "load"])
+def test_a_package_that_names_no_library_for_this_system_is_refused_where_it_uses_it(ws, demo):
+    declare(ws, {"demo.agc": demo}, table(**{OTHER: library_path(OTHER)}))
     assert_at_key(check(ws), "PKG-NATIVE-PLATFORM", ws.deps / "pkgdemo" / "agentica.toml", "native.pkgdemo")
 
 
