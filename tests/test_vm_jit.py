@@ -1359,6 +1359,65 @@ end
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
+
+def test_on_stops_compiling_once_the_compile_budget_is_spent(tmp_path):
+    """A budget that fits only the first hot function: the others stay interpreted, the output is the interpreter's.
+
+    The budget comes from a run without one (that compile's instructions plus the 32 units each compile takes), so it
+    follows the lowering. AGENTICA_VM_TEST_JIT_BUDGET is the test-only way to make the budget small.
+    """
+    bytecode = compile_text("""def spin(n: Int, k: Int) -> Int
+  i = 0
+  total = 0
+  while i < n
+    total = total + i * k
+    i = i + 1
+  end
+  return total
+end
+
+def twirl(n: Int) -> Int
+  i = 0
+  total = 0
+  while i < n
+    total = total + i % 5
+    i = i + 1
+  end
+  return total
+end
+
+def main() -> Void
+  sum = 0
+  r = 0
+  while r < 300
+    sum = sum + spin(20, r) + twirl(20)
+    r += 1
+  end
+  puts(sum)
+  puts("steps #{Profile.steps()}")
+end
+""", "budget", tmp_path)
+    lines = jit_trace(bytecode, tmp_path, "on")
+    compiles = [line for line in lines if " jit compile " in line]
+    assert len(compiles) >= (2 if X86_64 else 0) and not any(" jit budget " in line for line in lines), lines
+    first = compiles[0].split("function=")[1].split()[0] if X86_64 else None
+    budget = int(compiles[0].split("instructions=")[1].split()[0]) + 32 if X86_64 else 1
+    trace = tmp_path / "budget.trace"
+    env = {"AGENTICA_VM_TEST_JIT_BUDGET": budget, "AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}
+    result = run_vm(bytecode, "--jit", "on", "--schedulers", "1", env=vm_environment(env))
+    off = run_vm(bytecode, "--jit", "off", "--schedulers", "1", env=vm_environment())
+    assert (result.code, result.stdout, result.stderr) == (off.code, off.stdout, off.stderr)
+    assert off.code == 0 and off.stdout.count("\n") == 2, off.stderr
+    lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
+    compiled_functions = [line.split("function=")[1].split()[0] for line in lines if " jit compile " in line]
+    assert compiled_functions == ([first] if X86_64 else []), lines
+    spent = [line.split(" jit ")[1] for line in lines if " jit budget " in line]
+    if X86_64:
+        assert len(spent) == 1 and spent[0].startswith("budget spent=work ") and f" work={budget} " in spent[0], spent
+    else:
+        assert spent == [], spent
+
+
 # Two tasks whose compiled loop (sweep) calls function values: the worker's block, which captures `shift`, `&triple`
 # from a struct field, and every 1000 rounds `&deep`, which calls itself through a function value 300 deep (past the
 # native depth of compiled code, so the frames grow on the way down), and `&noisy`, a loop that prints, which `on`

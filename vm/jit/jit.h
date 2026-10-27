@@ -91,7 +91,10 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    `live` is set by the first code published (agc_jit_turn), and `turns` counts the turns that ran the jit copy of the
    turn loop while the jit trace is on. `hot_entries`, `hot_passes` and `hot_calls` are the thresholds of `on`
    (AGC_JIT_THRESHOLD, AGC_JIT_PASSES and AGC_JIT_CALLEE_THRESHOLD, all at least 1), which only agc_fuzz_one lowers,
-   so that a mutant's 10,000 steps reach them. The code lives until the process exits, like the program. */
+   so that a mutant's 10,000 steps reach them. The code lives until the process exits, like the program. `work` is
+   the compile budget taken, at most `budget` (AGC_JIT_BUDGET; a C test or AGENTICA_VM_TEST_JIT_BUDGET sets less), and
+   `spent` is set once a compile did not fit the budget or the code memory: from then on nothing is compiled
+   (jit.c). They come last, so the fields the interpreter reads keep their offsets. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -112,6 +115,9 @@ typedef struct agc_jit {
   agc_lock *lock;
   size_t page, cap, chunk, chunk_used;
   uint32_t hot_entries, hot_passes, hot_calls;
+  _Atomic uint64_t work;
+  uint64_t budget;
+  _Atomic bool spent;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -230,6 +236,16 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
    interpreted. It is reserved in chunks as it fills, and each seal takes the next whole pages of a chunk, which the
    functions sealed together share. */
 #define AGC_JIT_CODE_CAP ((size_t)64 * 1024 * 1024)
+
+/* The compile budget of a run, so that no program pays an unbounded compile cost (thousands of hot functions, say):
+   each compile takes the function's instructions plus AGC_JIT_COMPILE_BASE units of work before it walks them (a walk
+   costs about 1.5 us an instruction on x86-64, and the emitter's set-up and a seal about 30 us), and the code takes
+   bytes of AGC_JIT_CODE_CAP. The first compile that fits neither stops compiling for the rest of the run: every
+   function not compiled yet stays interpreted, and the jit trace says `budget`. A unit is not a time, so the same
+   program compiles the same functions on every host. The front end's self-compile takes about 120000 units with
+   `always`, 32000 with `on`. */
+#define AGC_JIT_BUDGET ((uint64_t)1000000)
+#define AGC_JIT_COMPILE_BASE 32
 
 /* Exit words share the status half with agc_status, so every status is below the first exit. */
 _Static_assert((int)AGC_STATUS_COUNT <= (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");

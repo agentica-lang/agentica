@@ -1,8 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
  * failures that leave the result register alone, native calls, calls of function values, tail calls, direct builtins,
- * map reads, lists, closures, globals, structs and their updates, enums, `try`), the code memory sealed read-execute,
- * functions packed in it up to its cap, one copy made per function by racing threads, and the `on` decision.
+ * map reads, lists, closures, globals, structs and their updates, enums, `try`), sealed code memory, functions packed
+ * in it up to its cap, the compile budget's stop, one copy made by racing threads, and the `on` decision.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -1035,7 +1035,7 @@ static void arena(void) {
 }
 
 /* A smaller cap (what is left once the memory failed) bounds the code: two one-page functions fill two pages, and
-   the third stays interpreted. */
+   the third does not fit, which spends the budget: it and the fourth, never walked, stay interpreted. */
 static void small_cap(void) {
   four_functions p;
   agc_jit *jit = four_new(&p);
@@ -1045,6 +1045,28 @@ static void small_cap(void) {
   assert(first && second && jit->cap == 2 * page && atomic_load(&jit->used) == 2 * page);
   four_run(&p, second, 1);
   assert(!agc_jit_code_of(jit, 2, 0) && !agc_jit_may_run(jit, 2) && atomic_load(&jit->used) == 2 * page);
+  uint64_t work = atomic_load(&jit->work);
+  assert(atomic_load(&jit->spent) && atomic_load(&jit->claimed[3]) && !agc_jit_may_run(jit, 3));
+  assert(!agc_jit_code_of(jit, 3, 0) && atomic_load(&jit->work) == work);
+}
+
+/* The work budget: each compile takes its instructions plus AGC_JIT_COMPILE_BASE before the walk. Two functions fit
+   it exactly; the third does not, so it and the fourth stay interpreted without a walk or a byte of code memory, and
+   the code made before still runs. */
+static AGC_JIT_CALLER void work_budget(void) {
+  four_functions p;
+  agc_jit *jit = four_new(&p);
+  assert(jit->budget == AGC_JIT_BUDGET && atomic_load(&jit->work) == 0 && !atomic_load(&jit->spent));
+  uint64_t one = p.fns[0].count + AGC_JIT_COMPILE_BASE;
+  jit->budget = 2 * one;
+  agc_jit_code first = agc_jit_code_of(jit, 0, 0), second = agc_jit_code_of(jit, 1, 0);
+  assert(first && second && atomic_load(&jit->work) == 2 * one && !atomic_load(&jit->spent));
+  size_t used = atomic_load(&jit->used);
+  assert(!agc_jit_code_of(jit, 2, 0) && !agc_jit_may_run(jit, 2) && atomic_load(&jit->spent));
+  assert(atomic_load(&jit->claimed[3]) && !agc_jit_may_run(jit, 3) && !agc_jit_code_of(jit, 3, 0));
+  assert(atomic_load(&jit->work) == 2 * one && atomic_load(&jit->used) == used);
+  assert(agc_jit_code_of(jit, 0, 0) == first && agc_jit_may_run(jit, 1));
+  four_run(&p, first, 0);
 }
 
 /* With `on`, functions without a loop compiled for native calls wait in the batch from their
@@ -1136,6 +1158,7 @@ int main(void) {
   code_memory();
   arena();
   small_cap();
+  work_budget();
   batch();
   settle_is_linear();
   compile_race();
