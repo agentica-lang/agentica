@@ -91,7 +91,10 @@ TYPE_NAME_HELP = {
   "C.UInt64": "write C.Int64: it carries the same 64 bits, and a value above 2^63 - 1 reads as negative",
   "C.ULong": "write C.Long: it carries the same bits, and a value above the largest long reads as negative",
 }
-EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+## The help of a library that is not a name or an absolute path, in an extern block and in Native.load.
+export EXTERN_LIBRARY_HELP = (
+  "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+)
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
 # The types that C's default argument promotions leave as they are, which the variadic part of an extern function
 # takes: C.Bool, C.Int8, C.Int16, C.UInt8 and C.UInt16 (promoted to int) and C.Float (promoted to double) are not.
@@ -248,6 +251,13 @@ export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.
     ok(program) -> return Diag.Outcome.Done(program)
     error(text) -> return Diag.Outcome.Failed(Base.unpack(text))
   end
+end
+
+## Whether the library of an extern block or of Native.load is a name the system loader searches for or an absolute
+## path. A relative path would resolve against the working directory, while imports resolve against the source file:
+## until a later phase decides, it is refused.
+export def library_name?(name: String) -> Bool
+  return name != "" and (!name.contains?("/") or name.starts_with?("/"))
 end
 
 def brace_help(form: String) -> String
@@ -2103,9 +2113,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
 
   after_library = try Base.expect(e, library, "string", "a library name", false)
   name = Base.token_text(e.tokens[library])
-  # A relative path would resolve against the working directory, while imports resolve against the source file:
-  # until a later phase decides, only a name the system loader searches for or an absolute path is taken.
-  if name == "" or (name.contains?("/") and not name.starts_with?("/"))
+  if !library_name?(name)
     return error(
       Base.bail(
         e,
