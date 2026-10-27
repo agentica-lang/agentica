@@ -283,7 +283,8 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
     return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
   end
 
-  if parts.size == 2 and parts[1] == "members" and !node.parenthesized and Resolve.declared_type?(cx, parts[0])
+  plain = node.args.size == 0 and !node.parenthesized and !node.piped
+  if parts.size == 2 and parts[1] == "members" and plain and Resolve.declared_type?(cx, parts[0])
     return rewrite_members(cx, node, parts[0])
   end
 
@@ -296,10 +297,10 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
 end
 
-# Type.members, written without parentheses, on a type of this file or one it imports by name is a field access on the
-# type name, as for a type behind an alias (`Alias.Type.members`), which has no parenthesized form either. The checker
-# decides whether the type is a struct. The type name takes an id
-# past the ids of the program, like the receiver of a constant.
+# Type.members, written without parentheses and not piped, on a type of this file or one it imports by name is a
+# field access on the type name, as for a type behind an alias (`Alias.Type.members`), which has no parenthesized form
+# either. The checker decides whether the type is a struct. The type name takes an id past the ids of the program, like
+# the receiver of a constant.
 def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
   linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
   start = node.span.start

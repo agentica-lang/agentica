@@ -405,8 +405,9 @@ form: an alias is expanded (`type Id = Int` gives `Int`) and a struct or enum
 from another module is written by its own name, without the import alias, so
 `A.Point` and `B.Point` both give `Point`. `Type` is a struct you declare, one
 you import by name or through an alias (`Models.User.members`), or a builtin
-record such as `HttpResponse`. It is written without parentheses:
-`User.members()` is `CHECK-UNKNOWN-NAME`. There is no form on a value:
+record such as `HttpResponse`. It is written without parentheses and not
+piped: `User.members()` and `x |> User.members()` are `CHECK-UNKNOWN-NAME`, and
+`Models.User.members()` is `CHECK-TYPE-MISMATCH`. There is no form on a value:
 `user.members` is the field of that name, so a struct may have a field called
 `members`. The list needs no runtime support beyond the instructions that build
 it, but each evaluation builds it again, so hoist `Type.members` out of a hot

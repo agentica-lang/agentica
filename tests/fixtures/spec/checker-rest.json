@@ -11201,6 +11201,22 @@
     },
     {
       "program": [
+        "struct User",
+        "  id: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = 1",
+        "  puts(x |> User.members())",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [7, 13],
+      "covers": "User.members()"
+    },
+    {
+      "program": [
         "extern \"libdb.so\"",
         "  resource Conn, free: close_it",
         "  def open_conn() -> Conn",

@@ -297,12 +297,12 @@ methods) are not planned: user types have no methods, §6 already rules out
 interfaces and traits, and a struct of `Fn` fields (15.1) is an interface
 checked by name. `respond_to?` is not planned: the checker knows every field and
 method of a value, so the answer is constant, and a run-time check would only
-hide a type error. Run-time reflection (building a value from a type name, calling a function by a
-name in a string) is not planned: it breaks static checking and makes the VM
-keep names and types at run time; use `JSON.from` to see a value's fields and a
-`Map[String, Fn[...]]` to dispatch by name. Listing the fields of a struct type
-is known at compile time and is `Type.members` (`docs/grammar/06-semantics.md`,
-"Structs and lists").
+hide a type error. Run-time reflection (building a value from a type name,
+calling a function by a name in a string) is not planned: it breaks static
+checking and makes the VM keep names and types at run time; use `JSON.from` to
+see a value's fields and a `Map[String, Fn[...]]` to dispatch by name. Listing
+the fields of a struct type is known at compile time and is `Type.members`
+(`docs/grammar/06-semantics.md`, "Structs and lists").
 
 ### 15.6 Implementation (row 7.6)
 

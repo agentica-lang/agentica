@@ -183,6 +183,11 @@ def test_type_members_reads_a_struct_imported_by_name_or_through_an_alias(agenti
     )
     assert agentica_check({"main.agc": root % "", "models.agc": models}) is None
 
+    called = "import Models from \"models\"\n\ndef main() -> Void\n  puts(Models.User.members().size)\nend\n\n"
+    found = agentica_check({"main.agc": called, "models.agc": models})
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert covered(called, found["range"]) == "Models.User"
+
     found = agentica_check({"main.agc": root % "  puts(Role.members.size)\n", "models.agc": models})
     assert found["code"] == "CHECK-UNKNOWN-METHOD"
     assert covered(root % "  puts(Role.members.size)\n", found["range"]) == "Role.members"
