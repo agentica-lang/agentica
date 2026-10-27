@@ -14,7 +14,6 @@
 # free fits it, and there is no C shim), so this file never hands a live
 # handle to another task. See README.md.
 VERSION_WANT = "v2.0.0"
-RESULT_BYTES = 48
 HANDLE_BYTES = 8
 STATE_OK = 0
 TYPE_INTEGER = 4
@@ -41,6 +40,20 @@ end
 struct PeopleRead
   columns: Int
   lines: List[String]
+end
+
+# The duckdb_result that duckdb_query fills, as the pinned header declares it:
+# the program only sizes its buffer with it (Native.size_of) and leaves the
+# fields to the duckdb_* accessors.
+extern "duckdb"
+  struct DuckdbResult
+    deprecated_column_count: C.Int64
+    deprecated_row_count: C.Int64
+    deprecated_rows_changed: C.Int64
+    deprecated_columns: C.Pointer
+    deprecated_error_message: C.Pointer
+    internal_data: C.Pointer
+  end
 end
 
 export def run_demo(out_dir: String) -> Result[Void]
@@ -325,7 +338,7 @@ def exec_sql(conn: C.Pointer, sql: String) -> Result[Void]
 end
 
 def query_buffer(conn: C.Pointer, sql: String) -> Result[C.Pointer]
-  buf = Native.memory_pointer(RESULT_BYTES)
+  buf = Native.memory_pointer(Native.size_of(DuckdbResult))
   state = duckdb_query(Native.get_pointer(conn, 0), sql, buf)
   if state != STATE_OK
     message = read_error(buf)
@@ -364,7 +377,7 @@ end
 # The C signatures below are copied from the pinned header
 # (duckdb v2.0.0, src/include/duckdb.h): idx_t is 64 bits, so the counts read
 # through C.Int64, which holds every small count of this demo. The result
-# buffer is 3 idx_t values then 3 pointers: 48 bytes, alignment 8. Only plain
+# buffer is a DuckdbResult (declared with the types above). Only plain
 # C.Pointer parameters cross here: the database and connection handles stay in
 # owned 8-byte slots above, because duckdb_close and duckdb_disconnect take a
 # pointer to the handle, not the handle value.

@@ -29,6 +29,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
     Model.Rule.ProfileMeasure -> return check_block_value(cx, st, site, T.Type.String, [])
     Model.Rule.NativeMemoryBlock -> return check_block_value(cx, st, site, T.Type.Int, [T.Type.Opaque("C.Pointer")])
+    Model.Rule.NativeStruct -> return check_native_struct(cx, st, site)
     _ -> return check_map_rule(cx, st, site, rule)
   end
 end
@@ -190,6 +191,83 @@ def check_native_target(cx: State.Cx, st: State.St, site: State.Site, closed: Bo
   end
 
   return ok(State.Out(st: target.st, type: T.Type.Void))
+end
+
+# Native.size_of(Type), Native.get_struct(pointer, offset, Type) and Native.put_struct(pointer, offset, value): the
+# type, or the type of the value, is a C struct of an extern block, so the VM knows the C type of each field and lays
+# the struct out as C does.
+def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  name = site.selected.name
+  current = st
+  if name != "Native.size_of"
+    pointer = try State.expr(cx, current, site.args[0], T.Type.Opaque("C.Pointer"))
+    offset = try State.expr(cx, pointer.st, site.args[1], T.Type.Int)
+    current = offset.st
+  end
+
+  last = site.args[site.args.size - 1]
+  if name == "Native.put_struct"
+    if type_name?(last)
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-TYPE-MISMATCH",
+          "Native.put_struct writes a value of a struct of an extern block, found a type name",
+          Ast.expr_span(last),
+          "pass a value of the struct, not its name: Native.put_struct(p, 0, Name(field: value))",
+        ),
+      )
+    end
+
+    value = try State.expr(cx, current, last, T.Type.Unknown)
+    if !c_struct?(cx, value.type)
+      return error(not_c_struct(cx, value.st, name, T.to_text(value.type), Ast.expr_span(last)))
+    end
+
+    return ok(State.Out(st: value.st, type: T.Type.Void))
+  end
+
+  case last
+    Ast.Expr.TypeName(node) ->
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
+      type = try CheckTypes.resolve_type(cx, current, ref, false)
+      if !c_struct?(cx, type)
+        return error(not_c_struct(cx, current, name, T.to_text(type), node.span))
+      end
+
+      # The lowering reads the struct from the type name's own type, so an alias gives the struct it names.
+      current = State.record_type(current, node.id, type)
+      if name == "Native.size_of"
+        return ok(State.Out(st: current, type: T.Type.Int))
+      end
+
+      return ok(State.Out(st: current, type: type))
+    _ -> return error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
+  end
+end
+
+def type_name?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.TypeName(node) -> return true
+    _ -> return false
+  end
+end
+
+def c_struct?(cx: State.Cx, type: T.Type) -> Bool
+  return T.is?(type, "Struct") and cx.c_structs.include?(T.name(type))
+end
+
+# CHECK-TYPE-MISMATCH of a struct builtin of Native given something that is not a C struct of an extern block.
+def not_c_struct(cx: State.Cx, st: State.St, name: String, found: String, span: Source.Span) -> String
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-TYPE-MISMATCH",
+    "#{name} requires a struct of an extern block, found #{found}",
+    span,
+    "declare the C struct with struct Name ... end in an extern block, its fields in the order of the C header",
+  )
 end
 
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

@@ -26,6 +26,11 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   return NULL;
 }
 
+bool agc_ffi_layout(agc_c_struct *s) {
+  (void)s;
+  return false;
+}
+
 bool agc_ffi_open(const char *library, char *error, size_t size) {
   (void)library;
   snprintf(error, size, "native calls are not supported on this system yet");

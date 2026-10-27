@@ -35,6 +35,7 @@ MapValues
 NativeClose
 NativeClosed
 NativeMemoryBlock
+NativeStruct
 Ok
 OkVoid
 Plain

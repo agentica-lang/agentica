@@ -33,6 +33,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `max_bytes` (1048576).
 - `Native.offset(p, n)` points into an owned buffer as a bounds-checked view,
   and `Native.address(p)` gives a pointer's integer value.
+- `Native.size_of`, `Native.get_struct` and `Native.put_struct` read and write
+  a C struct of an extern block through a pointer, laid out as C does.
 
 ### Changed
 

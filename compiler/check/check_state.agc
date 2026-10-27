@@ -61,6 +61,7 @@ export struct Signature
 end
 
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
+## c_structs the C structs of the extern blocks (Ast.StructDecl.layout), by linked name;
 ## field_defaults the names of the fields that have a default value, by struct; functions the program's; constants the
 ## type of each module constant by linked name, which grows as the initializers are checked in order. type_params are
 ## the type parameters in scope (only while the variants of a generic enum are registered). file is the file of the
@@ -75,6 +76,7 @@ export struct Cx
   enums: Map[String, Model.EnumDef]
   aliases: Map[String, Ast.TypeAliasDecl]
   resources: Set[String]
+  c_structs: Set[String]
   functions: Map[String, Signature]
   constants: Map[String, Types.Type]
   type_params: List[String]

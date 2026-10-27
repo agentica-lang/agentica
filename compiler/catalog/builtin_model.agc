@@ -45,6 +45,7 @@ export enum Rule
   NativeClose
   NativeClosed
   NativeMemoryBlock
+  NativeStruct
   Ok
   OkVoid
   Prelude

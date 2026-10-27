@@ -48,7 +48,8 @@ end
 
 ## What is fixed while the program is lowered. types and resolved are those of the checker. user_types maps a struct or
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
-## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; functions the index of each
+## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; layouts the layout code of each
+## C struct of an extern block ("{N:CODES}", lower_native.agc), by name; functions the index of each
 ## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call
 ## (prelude_files.agc); step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
 ## fills the functions that have default values, by name; field_fills the structs that have fields with a default, by
@@ -63,6 +64,7 @@ export struct Cx
   structs: Map[String, StructInfo]
   variants: Map[String, Int]
   json_structs: Set[String]
+  layouts: Map[String, String]
   functions: Map[String, Int]
   bodies: Map[Int, String]
   step_tries: Set[Int]

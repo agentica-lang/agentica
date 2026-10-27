@@ -344,6 +344,20 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   return call;
 }
 
+/* The ffi_types live only while libffi computes the layout: ffi_get_struct_offsets lays out the nested structs first,
+   by the same rules as ffi_prep_cif. */
+bool agc_ffi_layout(agc_c_struct *s) {
+  size_t nodes = 0, elements = 0;
+  aggregate_count(s, &nodes, &elements);
+  /* At most 1024 fields (ffi.c): the size cannot overflow. */
+  void *block = malloc(nodes * sizeof(ffi_type) + elements * sizeof(ffi_type *));
+  if (!block) agc_out_of_memory();
+  aggregate_space space = {block, (ffi_type **)(void *)((ffi_type *)block + nodes)};
+  bool laid_out = aggregate_layout(s, aggregate_make(s, &space));
+  free(block);
+  return laid_out;
+}
+
 void agc_ffi_discard(agc_ffi_call *call) {
   if (call->lib) library_close(call->lib);
   free(call->aggregates);
