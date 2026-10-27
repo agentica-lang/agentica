@@ -295,6 +295,8 @@ and a task's crash line (`"task":true`) carry it too.
   `C.Function` with `= "symbol"`, a call that makes a `free: C.Function`
   resource without that last parameter or makes two, or a `free:` type other
   than `C.Function` (`native.md`).
+- `CHECK-NATIVE-LOAD`: the argument of `Native.load` is not a string literal,
+  or is not a library name without `/` or an absolute path (`native.md`).
 - `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-NULL`,
   `RUNTIME-NATIVE-BOUNDS`, `RUNTIME-NATIVE-NOT-OWNED`,
   `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`: the library or

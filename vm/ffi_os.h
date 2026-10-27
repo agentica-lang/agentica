@@ -79,6 +79,11 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
                               uint32_t count, uint32_t fixed, agc_c_struct *result_struct,
                               agc_c_struct *const *structs, char *error, size_t size);
 
+/* Opens LIBRARY as agc_ffi_prepare does and keeps it open until the process ends, so the calls prepared later find it
+   loaded (Native.load). False with the loader's message in ERROR (SIZE bytes) when it cannot be opened or the build
+   cannot call native code. */
+bool agc_ffi_open(const char *library, char *error, size_t size);
+
 /* Frees a prepared call that no run uses (the free function of a resource was not found), and gives back its hold on
    the library. */
 void agc_ffi_discard(agc_ffi_call *call);
