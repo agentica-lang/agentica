@@ -574,6 +574,13 @@ def assert_same_failure(bytecode, code, *stack):
         assert at == sorted(at), (style, stderr)
 
 
+def assert_step_limits_stop_alike(bytecode, steps):
+    """The lowest limits, nine spread over the run and STEPS - 1 stop every tier with RUNTIME-STEP-LIMIT."""
+    for limit in (*range(1, 12), *range(steps // 9, steps, steps // 9), steps - 1):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+
+
 def jit_trace(bytecode, tmp_path, mode):
     """The jit trace lines of a run with --jit MODE."""
     trace = tmp_path / "jit.trace"
@@ -587,6 +594,17 @@ def compiled(bytecode, tmp_path, mode="always"):
     """The functions the jit trace says were compiled in a run with --jit MODE."""
     lines = jit_trace(bytecode, tmp_path, mode)
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+
+
+def assert_compiled_without_exits(bytecode, tmp_path, want, forbidden):
+    """With `on` and `always`, the functions of WANT[mode] are compiled (none off x86-64), and no exit to the turn loop
+    is at an opcode that FORBIDDEN(op) holds for."""
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        names = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+        assert names == (want[mode] if X86_64 else []), (mode, names)
+        exits = [line for line in lines if " jit exit op=" in line and forbidden(line.split("op=")[1].split()[0])]
+        assert exits == [], (mode, exits)
 
 
 def test_recursive_compiled_calls_match_the_interpreter_across_frame_growth(tmp_path):
@@ -1255,22 +1273,15 @@ end
 
 def test_tail_calls_and_struct_updates_run_in_compiled_code_without_growing_the_stack(tmp_path):
     bytecode = compile_text(TAIL, "tail", tmp_path)
-    want = {"on": ["count_down", "drive", "is_even", "is_odd", "step"],
-            "always": ["count_down", "drive", "is_even", "is_odd", "main", "noisy", "step"]}
-    for mode in ("on", "always"):
-        lines = jit_trace(bytecode, tmp_path, mode)
-        names = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
-        assert names == (want[mode] if X86_64 else []), (mode, names)
-        exits = [line for line in lines if " jit exit op=tail-call " in line or " jit exit op=struct-with " in line]
-        assert exits == [], (mode, exits)
+    assert_compiled_without_exits(bytecode, tmp_path, {
+        "on": ["count_down", "drive", "is_even", "is_odd", "step"],
+        "always": ["count_down", "drive", "is_even", "is_odd", "main", "noisy", "step"],
+    }, lambda op: op in ("tail-call", "struct-with"))
     for style in ((), ("--json",)):
         code, stdout, stderr = assert_same(bytecode, *style)
         assert code == 0 and stdout.count("\n") == 2 * 3 + 2 * 6 * 2 + 3, (style, stdout, stderr)
         assert "\nfalse\nsteps " in stdout, stdout
-    steps = int(stdout.split("steps ")[1])
-    for limit in (*range(1, 12), *range(steps // 9, steps, steps // 9), steps - 1):
-        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
-        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+    assert_step_limits_stop_alike(bytecode, int(stdout.split("steps ")[1]))
 
 
 def test_a_failure_after_many_compiled_tail_calls_matches_the_interpreter(tmp_path):
@@ -1405,6 +1416,171 @@ end
         assert len(spent) == 1 and spent[0].startswith("budget spent=work ") and f" work={budget} " in spent[0], spent
     else:
         assert spent == [], spent
+
+
+# Two tasks whose compiled loop (sweep) calls function values: the worker's block, which captures `shift`, `&triple`
+# from a struct field, and every 1000 rounds `&deep`, which calls itself through a function value 300 deep (past the
+# native depth of compiled code, so the frames grow on the way down), and `&noisy`, a loop that prints, which `on`
+# never compiles: a call into a function without code. With `on`, the block, triple and deep have no loop and get
+# code only from compiled code. The order of the lines shows where the turns end.
+CALL_VALUE = """struct Rule
+  name: String
+  apply: Fn[Int, Int]
+end
+
+def triple(x: Int) -> Int
+  return x * 3
+end
+
+def deep(n: Int) -> Int
+  if n == 0
+    return 0
+  end
+  hop = &deep
+  return hop.call(n - 1) + 1
+end
+
+def noisy(x: Int) -> Int
+  i = 0
+  while i < 1
+    puts("noisy #{x}")
+    i += 1
+  end
+  return x
+end
+
+def sweep(id: Int, rounds: Int, f: Fn[Int, Int]) -> Int
+  rule = Rule(name: "triple", apply: &triple)
+  say = &noisy
+  down = &deep
+  total = 0
+  r = 0
+  while r < rounds
+    total = (total + f.call(r) + rule.apply.call(r)) % 1000003
+    if r % 1000 == 999
+      total = (total + down.call(300 + id) + say.call(id * 100000 + r)) % 1000003
+    end
+    r += 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  shift = id * 7
+  total = sweep(id, 6000) do |x| (x + shift) % 1000 end
+  puts("worker #{id} total #{total}")
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_calls_of_function_values_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(CALL_VALUE, "call_value", tmp_path)
+    # Only the prints and the tasks' builtins leave compiled code for the turn loop.
+    assert_compiled_without_exits(bytecode, tmp_path, {
+        "on": ["block@call_value.agc:45:27", "deep", "sweep", "triple"],
+        "always": ["block@call_value.agc:45:27", "deep", "main", "noisy", "sweep", "triple", "worker"],
+    }, lambda op: op != "call-builtin")
+    for style in ((), ("--json",)):
+        code, stdout, stderr = assert_same(bytecode, *style)
+        assert code == 0 and stdout.count("\n") == 2 * 6 + 2 + 2, (style, stdout, stderr)
+    assert_step_limits_stop_alike(bytecode, int(stdout.split("steps ")[1]))
+
+
+# A function value called from a compiled loop fails at the 700th pass: a block divides by zero, or `&deep` passes the
+# depth limit of 10,000 frames through calls of function values. The diagnostic, its span and the stack are the
+# interpreter's.
+CALL_VALUE_FAILURES = {
+    "block": ("""def sweep(rounds: Int, f: Fn[Int, Int]) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total += f.call(r)
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  puts("before")
+  puts(sweep(1000) do |x| 1000 / (x - 700) end)
+end
+""", "RUNTIME-DIVISION-BY-ZERO", ["block@call_value_block.agc:13:20", "sweep"], ("sweep", "main")),
+    "depth": ("""def deep(n: Int) -> Int
+  if n == 0
+    return 0
+  end
+  hop = &deep
+  return hop.call(n - 1) + 1
+end
+
+def sweep(rounds: Int) -> Int
+  down = &deep
+  total = 0
+  r = 0
+  while r < rounds
+    n = 3
+    if r == 700
+      n = 20000
+    end
+    total += down.call(n)
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  puts("before")
+  puts(sweep(1000))
+end
+""", "RUNTIME-STACK-OVERFLOW", ["deep", "sweep"], ("deep", "sweep", "main")),
+}
+
+
+@pytest.mark.parametrize("case", sorted(CALL_VALUE_FAILURES))
+def test_a_failure_in_a_called_function_value_matches_the_interpreter(tmp_path, case):
+    source, code, functions, stack = CALL_VALUE_FAILURES[case]
+    bytecode = compile_text(source, f"call_value_{case}", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (functions if X86_64 else [])
+    assert_same_failure(bytecode, code, *stack)
+
+
+def test_a_task_cancelled_in_a_long_loop_of_function_value_calls_stops_as_in_the_interpreter(tmp_path):
+    # The spawned task's compiled loop calls a block a billion times; main's own loop runs meanwhile, and its cancel
+    # lands between two turns of the spawned one, inside the block or the loop.
+    bytecode = compile_text("""def spin(rounds: Int, f: Fn[Int, Int]) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total = (total + f.call(r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def churn(rounds: Int) -> Int
+  return spin(rounds) do |x| x % 7 end
+end
+
+def main() -> Void
+  t = Task.spawn(&churn, 1000000000)
+  puts(spin(300000) do |x| x % 5 end)
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "call_value_cancel", tmp_path)
+    want = ["block@call_value_cancel.agc:12:23", "block@call_value_cancel.agc:17:21", "spin"]
+    assert compiled(bytecode, tmp_path, "on") == (want if X86_64 else [])
+    status, stdout, stderr = assert_same(bytecode, "--json")
+    assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):
