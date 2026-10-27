@@ -492,7 +492,7 @@ def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     ], result.stdout
 
 
-@pytest.mark.skipif(WINDOWS, reason="no FIFO on Windows")
+@pytest.mark.skipif(WINDOWS, reason="host-only: Windows has no FIFO files")
 def test_file_chunks_refuses_a_fifo_without_waiting(tmp_path):
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
