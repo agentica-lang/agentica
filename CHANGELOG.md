@@ -10,9 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `ATS[K, V]` shared tables: one mutable table that tasks share for a counter
-  or a cache, with atomic `put`, `put_new`, `get`, `delete`, `add`, `keys` and
-  `to_map` (`ATS.new()`; `examples/shared-cache.agc`).
+- `ATS[K, V]` shared tables for counters and caches that tasks update
+  (`examples/shared-cache.agc`).
 - `resource Name, free_ref: c_function`: a resource freed by `void f(T **)`,
   such as `duckdb_close`.
 - `Native.from_string(text)` and `text.bytesize`: pass text with its byte length

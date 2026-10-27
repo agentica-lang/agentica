@@ -214,7 +214,8 @@ type:
 - **Written:** `JOBS: Channel[Int] = Channel.new(1)` in a constant
   (`CHECK-CONSTANT-TYPE`)
   - **Help:** a constant holds data: numbers, text, collections, structs and
-    enums of those; functions, tasks, channels and handles are not data
+    enums of those; functions, tasks, channels, handles and tables are not
+    data
 
 - **Written:** `A = B + 1` with `B = A + 1` (`CHECK-CONSTANT-CYCLE`)
   - **Help:** break the loop; the help lists the constants around it, `A -> B ->

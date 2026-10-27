@@ -6,7 +6,7 @@ description: Share a counter or a cache between tasks in one mutable table.
 
 An `ATS[K, V]` (Agentica Table Storage) is a table that tasks share and update in place, like Erlang's ETS. Values stay immutable; a table is the one shared place that changes. Use a [Channel](/library/concurrency/channel/) to pass messages, and a table for state that many tasks read and update, such as a counter or a cache.
 
-- A table is a handle: passing it to a function or task shares it, it is never copied. `ATS` is a reserved name.
+- A table is a handle: passing it to a function or task shares it, it is never copied. A constant cannot hold one (`CHECK-CONSTANT-TYPE`). `ATS` is a reserved name.
 - Keys are `Int` or `String`, else `CHECK-MAP-KEY-TYPE`. Values are data with no `Fn`, `Task`, `Channel`, handle or table inside, and not `Nil`, else `CHECK-ATS-VALUE`.
 - Each call is atomic, on any scheduler. No call takes a block, so a call never waits for user code.
 - All but `new` also work as methods: `hits.add("home", 1)` is `ATS.add(hits, "home", 1)`.

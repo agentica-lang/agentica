@@ -47,7 +47,7 @@ end
 def work(job: Job) -> Int
   stored = 0
   i = 0
-  while i < 200
+  while i < 2000
     job.hits.add("total", 1)
     job.hits.add("task-#{job.id}", 1)
     if job.cache.put_new("key-#{i % 50}", i % 50)
@@ -76,7 +76,7 @@ def main() -> Void
   puts("hits #{hits.size}")
   puts("cache #{cache.size}")
   wrong = (0...64).to_a.filter do |id|
-    hits.get("task-#{id}").unwrap_or(0) != 200 or cache.has_key?("own-#{id}-9") == (id % 2 == 1)
+    hits.get("task-#{id}").unwrap_or(0) != 2000 or cache.has_key?("own-#{id}-9") == (id % 2 == 1)
   end
   puts("wrong #{wrong}")
   shared = (0...50).to_a.filter do |k| cache.get("key-#{k}").unwrap_or(-1) != k end
@@ -162,9 +162,9 @@ def test_tasks_on_four_schedulers_share_a_counter_and_a_cache(tmp_path):
     bytecode = compile_text(SHARED, "ats_shared", tmp_path)
     vm = run_vm(bytecode, "--schedulers", "4", env=vm_environment())
     assert vm.code == 0, vm.stderr
-    # 64 tasks add 200 each; 50 shared keys are stored once in all; the 32 even tasks keep their 10 own keys.
+    # 64 tasks add 2000 each; 50 shared keys are stored once in all; the 32 even tasks keep their 10 own keys.
     assert vm.stdout.splitlines() == [
-        "total 12800", "stored 50", "hits 65", "cache 370", "wrong []", "shared wrong []"]
+        "total 128000", "stored 50", "hits 65", "cache 370", "wrong []", "shared wrong []"]
 
 
 def test_a_table_captured_by_bdd_steps_starts_fresh_in_each_scenario(tmp_path):

@@ -282,9 +282,9 @@ Weighed later (no fixed order):
   - **Outcome:** Build protocol clients and servers on the proven foundations
 
 - **Order:** 16
-  - **Next work:** Adapters and JSON inspection (phase 10 goes before phase 9):
-    call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for
-    enums, optional and nullable JSON fields
+  - **Next work:** Adapters and JSON inspection: call `Fn` fields without
+    `.call`, `JSON.kind`, generic structs, JSON for enums, optional and
+    nullable JSON fields
   - **Outcome:** Write adapters and read JSON of unknown shape without
     workarounds
 

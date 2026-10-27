@@ -213,17 +213,18 @@ static const state *changed(agc_vm *vm, const state *s, change c, agc_value key,
 }
 
 /* One write: build the next state from the one loaded, and build again from the newer one when another call
-   installed it first. */
+   installed it first. A lost race charges the levels it built for nothing, so retries under contention are turn cost,
+   not free work. */
 static agc_value update(agc_vm *vm, agc_value *args, uint32_t span, change c) {
   table *t = table_arg(vm, args[0], span);
   agc_value key = key_arg(vm, args[1]);
   agc_value value = c == CHANGE_DELETE ? agc_void() : args[2];
   agc_value result = agc_void();
-  const state *seen;
-  do {
-    seen = load(t);
-  } while (!install(t, seen, changed(vm, seen, c, key, value, span, &result)));
-  return result;
+  for (;;) {
+    const state *seen = load(t);
+    if (install(t, seen, changed(vm, seen, c, key, value, span, &result))) return result;
+    agc_charge(vm, (uint64_t)height(seen->by_key) + 1);
+  }
 }
 
 static agc_value builtin_put(agc_vm *vm, agc_value *args, uint32_t span) { return update(vm, args, span, CHANGE_PUT); }
@@ -256,12 +257,15 @@ static agc_value builtin_size(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* Calls visit on each entry of the snapshot in insertion order: an in-order walk of by_seq with an explicit stack. */
-static void each_entry(const state *s, void (*visit)(agc_vm *vm, entry e, void *data), agc_vm *vm, void *data) {
+static void each_entry(const state *s, void (*visit)(agc_vm *vm, entry e, void *data), agc_vm *vm, void *data,
+                       uint32_t span) {
   const node *stack[MAX_HEIGHT];
   size_t depth = 0;
   const node *at = s->by_seq;
   while (at || depth) {
     while (at) {
+      /* An AVL tree never gets this deep (MAX_HEIGHT); the check keeps a broken tree from writing past the stack. */
+      if (depth == MAX_HEIGHT) agc_fail(vm, "RUNTIME-INTERNAL", "an ATS tree is deeper than an AVL tree can be", span);
       stack[depth++] = at;
       at = at->left;
     }
@@ -287,7 +291,7 @@ static agc_value builtin_keys(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_charge(vm, (uint64_t)s->size);
   agc_list_builder b;
   agc_list_builder_sized(&b, (size_t)s->size);
-  each_entry(s, add_key, vm, &b);
+  each_entry(s, add_key, vm, &b, span);
   return agc_list_value(agc_list_builder_finish(&b));
 }
 
@@ -295,8 +299,28 @@ static agc_value builtin_to_map(agc_vm *vm, agc_value *args, uint32_t span) {
   const state *s = load(table_arg(vm, args[0], span));
   agc_charge(vm, (uint64_t)s->size);
   agc_map *map = agc_new_map();
-  each_entry(s, add_pair, vm, &map);
+  each_entry(s, add_pair, vm, &map, span);
   return agc_map_value(map);
+}
+
+/* The count of nodes of t when it is a valid AVL tree in the order of by_seq whose entries lie strictly between low and
+   high (NULL: no bound), else -1. */
+static int64_t valid_tree(agc_vm *vm, const node *t, bool by_seq, const entry *low, // NOLINT(misc-no-recursion)
+                          const entry *high) {
+  if (!t) return 0;
+  if ((low && order(vm, by_seq, *low, t) >= 0) || (high && order(vm, by_seq, *high, t) <= 0)) return -1;
+  uint32_t l = height(t->left), r = height(t->right);
+  if (t->height != (l > r ? l : r) + 1 || l > r + 1 || r > l + 1) return -1;
+  int64_t left = valid_tree(vm, t->left, by_seq, low, &t->e), right = valid_tree(vm, t->right, by_seq, &t->e, high);
+  return left < 0 || right < 0 ? -1 : left + right + 1;
+}
+
+/* For the C test (vm/tests/ats_test.c): both trees of the table are valid AVL trees in their order, and each holds
+   size nodes. */
+bool agc_ats_valid(agc_vm *vm, agc_value v) {
+  const state *s = load(agc_as_ats(vm, v));
+  return valid_tree(vm, s->by_key, false, NULL, NULL) == s->size &&
+         valid_tree(vm, s->by_seq, true, NULL, NULL) == s->size;
 }
 
 /* No row is shared or a leaf: a call takes no lock (the atomic pointer orders the writers), and a call charges for

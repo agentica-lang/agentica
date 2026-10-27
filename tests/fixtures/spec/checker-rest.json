@@ -11283,7 +11283,72 @@
         "",
         ""
       ],
-      "code": "CHECK-NOT-ENCODABLE"
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [7, 22]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Void] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE",
+      "start": [2, 18],
+      "covers": "Void"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Int] = ATS.new()",
+        "  puts(t.length)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Job",
+        "  Running(Task[Int])",
+        "  Done(Int)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: ATS[String, Job] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [7, 18],
+      "covers": "Job"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Map[String, Fn[Int, Int]]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 18],
+      "covers": "Map[String, Fn[Int, Int]]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[Int, Result[Task[Int]]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 15],
+      "covers": "Result[Task[Int]]"
     },
     {
       "program": [

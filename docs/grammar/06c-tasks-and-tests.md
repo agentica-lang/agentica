@@ -377,7 +377,8 @@ Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
 
 - **A handle.** Assigning or passing a table shares the same table; it is never
   copied. A table may be a struct field, a list element, a `Map` value, or a
-  `Task.spawn` argument or result, but not a value inside a table.
+  `Task.spawn` argument or result, but not a value inside a table. A table is
+  not data, so a constant cannot hold one (`CHECK-CONSTANT-TYPE`).
 - **Keys and values.** Keys are `Int` or `String`; any other key type is
   `CHECK-MAP-KEY-TYPE`, as for `Map`. `V` must be a data type that is not
   `Nil`, else `CHECK-ATS-VALUE` at the value type. The test is deep: it looks
@@ -412,7 +413,9 @@ Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
 - **Costs.** `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take
   O(log n) in the table size, and `size` O(1). `keys` and `to_map` take their
   snapshot in O(1) without holding back other tasks, and build their list or
-  map in O(n).
+  map in O(n). A write that loses a race to another task builds its change
+  again; each retry is charged to the task's step budget, so a task under heavy
+  contention yields and cannot spin forever.
 - **Lifetime.** A table lives while any value refers to it, and the garbage
   collector frees it then. It is not an OS resource, so the owner rule of
   handle ownership does not apply: the task that made it does not own it, its
