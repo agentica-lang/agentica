@@ -98,7 +98,8 @@ Lowering gets the types today. In order of payoff:
    differs from this sketch in one point: the list code decides the kind from
    the values it stores, instead of the checker passing the element type
    (§17.12). It also enables the vector sort of §19 item 4.
-2. **Typed registers in the JIT** (roadmap 7m, §22): Int and Float stay in
+2. **Typed registers in the JIT** (roadmap 7m,
+   [§6.4](../vm/05-values-execution-builtins.md#64-jit)): Int and Float stay in
    machine registers with no tag.
 3. **Compact struct fields**: a struct type knows its field types, so an Int,
    Float or Bool field can be stored in 8 bytes with no tag, and a pointer field

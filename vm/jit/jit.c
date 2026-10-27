@@ -1,8 +1,8 @@
 /*
- * The JIT tier (docs/future/22-jit.md §22): which functions to compile and when, the walk over a function's bytecode
- * that drives the host's emitter, and the code cache and compile budget of a run. Every function can be compiled: an
- * instruction without code of its own leaves for the interpreter, which runs it and comes back. With `on`, only a
- * function with a loop that seldom leaves is compiled, and the small functions it calls. Core layer.
+ * The JIT tier (docs/vm/05-values-execution-builtins.md §6.4): which functions to compile and when, the walk over a
+ * function's bytecode that drives the host's emitter, and the code cache and compile budget of a run. Every function
+ * can be compiled: an instruction without code of its own leaves for the interpreter, which runs it and comes back.
+ * With `on`, only a function with a loop that seldom leaves is compiled, and the small functions it calls. Core layer.
  */
 #include "jit.h"
 

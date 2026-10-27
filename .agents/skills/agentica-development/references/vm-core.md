@@ -185,7 +185,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`agc_std_builtins`, not guarded), which reads the std sources of `rt->std`
 - `vm/fuzz.c`, `vm/fuzz_libfuzzer.c`: `agc_fuzz_one` and the libFuzzer entry
   point (not in the release binary)
-- `vm/jit/` (core, `docs/future/22-jit.md` §22; `--jit`, `AGENTICA_JIT`):
+- `vm/jit/` (core, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit`,
+  `AGENTICA_JIT`):
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
   and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
   decides every function once in `agc_jit_new` (for `on`, a backward jump and

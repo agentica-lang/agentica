@@ -1,7 +1,7 @@
 /*
- * The x86-64 emitter of the JIT (docs/future/22-jit.md §22): the machine code of each instruction kind, the exit
- * stubs and the entry table, for the System V and the Windows x64 calling conventions. Compiled code keeps the VM in
- * rbx, the registers R in r12, the constants K in r13 and its depth of native calls in r14. Core layer.
+ * The x86-64 emitter of the JIT (docs/vm/05-values-execution-builtins.md §6.4): the machine code of each instruction
+ * kind, the exit stubs and the entry table, for the System V and the Windows x64 calling conventions. Compiled code
+ * keeps the VM in rbx, the registers R in r12, the constants K in r13 and its depth of native calls in r14. Core layer.
  */
 #include "jit.h"
 

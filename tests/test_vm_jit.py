@@ -1,4 +1,5 @@
-"""The JIT tier (`--jit`, docs/future/22-jit.md §22) changes no exit code, output, diagnostic, span or step count.
+"""The JIT tier (`--jit`, docs/vm/05-values-execution-builtins.md §6.4) changes no exit code, output, diagnostic,
+span or step count.
 
 Each program runs with `--jit off`, `on` and `always`, which compiles every function at its first entry (`on` only
 those with a loop that seldom leaves compiled code, at their 100th entry, and small functions without a loop after

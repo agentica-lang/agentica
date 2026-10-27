@@ -155,10 +155,10 @@ test-shared: dist/agentica$(EXE)
 	AGENTICA_SWEEP=ends AGENTICA_VM_TEST_SHARED=1 AGENTICA_VM_TEST_MODULE_SCHEDULERS=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
 
 # The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
-# the JIT can compile compiled at its first entry (AGENTICA_JIT=always, docs/future/22-jit.md §22): no output may
-# depend on the tier. Then half of the golden shards with AGENTICA_JIT=on, the mode that compiles hot functions only:
-# the odd or the even shards by the last hex digit of GITHUB_SHA (else HEAD), so successive commits cover all of them;
-# VM_JIT_ON_TESTS names others.
+# the JIT can compile compiled at its first entry (AGENTICA_JIT=always,
+# docs/vm/05-values-execution-builtins.md §6.4): no output may depend on the tier. Then half of the golden shards with
+# AGENTICA_JIT=on, the mode that compiles hot functions only: the odd or the even shards by the last hex digit of
+# GITHUB_SHA (else HEAD), so successive commits cover all of them; VM_JIT_ON_TESTS names others.
 VM_JIT_ON_TESTS ?=
 vm-jit-test: dist/agentica$(EXE)
 	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \

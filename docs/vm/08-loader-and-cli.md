@@ -148,7 +148,7 @@ byte of a file with a type table, an Updates section or Globals.
   not get it; they read the variable.
 - `--jit MODE` (`off`, the default, `on` or `always`; the variable
   `AGENTICA_JIT` too, the flag wins) compiles functions of the user's program to
-  machine code (`docs/future/22-jit.md` §22). A bad flag or variable exits 2.
+  machine code (§6.4). A bad flag or variable exits 2.
   `agentica test` refuses the flag, as it refuses `--schedulers`.
 - `agentica file.agc [args...]` runs in the same process: the front end compiles
   in memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them

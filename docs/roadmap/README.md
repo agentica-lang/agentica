@@ -40,8 +40,9 @@ keeps their records.
      buffers and typed memory and `C.Float` (done), structs by value (done),
      function pointers (done) and downloaded prebuilt libraries. No
      callbacks.
-  3. JIT tier 2 (§22) with our own emitter for x86-64 (no sljit); the arm64
-     emitter is deferred beyond 0.10.0.
+  3. JIT tier 2 ([§6.4](../vm/05-values-execution-builtins.md#64-jit)) with our
+     own emitter for x86-64 (no sljit); the arm64 emitter is deferred beyond
+     0.10.0.
 
 ### Next, after 0.8.0 (owner, 2026-10-21)
 
@@ -81,8 +82,9 @@ Weighed later (no fixed order):
 
 7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
    (row 7.10).
-8. The JIT (row 9.1, [§22](../future/22-jit.md)); it needs 8.1, 7.7 and 9, and
-   comes after the FFI.
+8. The JIT (row 9.1, [§6.4](../vm/05-values-execution-builtins.md#64-jit)); it
+   needs 8.1, 7.7 and 9, and comes after the FFI. What is left:
+   [#756](https://github.com/sonic182/agentica/issues/756).
 9. [#531](https://github.com/sonic182/agentica/issues/531), `type-at` on type
    names: done in 0.8.1 (#550).
 10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer: done
@@ -247,7 +249,8 @@ Weighed later (no fixed order):
     peak memory and real start-up, against Python as an outside reference
 
 - **Order:** 9.1
-  - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; its place
+  - **Next work:** JIT (7m, `docs/vm/05-values-execution-builtins.md`
+    §6.4): required; its place
     and prerequisites are item 8 above. JIT code must follow the multicore
     rules of row 11 (§16)
   - **Outcome:** Hot functions run as native code with the same results
