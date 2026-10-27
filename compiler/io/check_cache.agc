@@ -169,18 +169,7 @@ def write_entry(plan: Plan, key: String, text: String) -> Bool
 
   path = entry_path(plan, key)
   temporary = "#{path}#{CacheFiles.TEMP_MARK}#{suffix.unwrap!}"
-  if !CacheFiles.write_private(temporary, String.to_bytes("#{plan.head}\n#{text}")).ok?
-    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
-    return false
-  end
-
-  CacheFiles.remove_file(path)
-  if !Path.rename(temporary, path, CacheFiles.IO_TIMEOUT_MS).ok?
-    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
-    return false
-  end
-
-  return true
+  return CacheFiles.install(temporary, String.to_bytes("#{plan.head}\n#{text}"), path)
 end
 
 # Both folders must be ones this program may trust, or be made now. The .gitignore goes in `_build/` when the cache

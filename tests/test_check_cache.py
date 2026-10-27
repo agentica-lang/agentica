@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, cli, host_only, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, cli, host_only, run, vm_environment, wait_until
 from tests.package_support import Workspace, dependency
 from tests.span_support import where
 
@@ -452,11 +452,26 @@ def test_runs_at_the_same_time_give_one_answer_and_leave_valid_entries(ws):
     with ThreadPoolExecutor(max_workers=6) as pool:
         together = list(pool.map(lambda _: answers(ws), range(6)))
     assert together == [expected] * 6
-    assert not list((folder_of(ws) / "check").glob("*tmp*"))
+    # On Windows a scanner can keep the name of a removed temporary file in the folder for a moment.
+    assert wait_until(lambda: not list((folder_of(ws) / "check").glob("*tmp*")), 5)
     # Every entry is valid: another run finds all of them and writes nothing.
     kept = stamps(ws)
     assert answers(ws) == expected
     assert stamps(ws) == kept
+
+
+def test_a_write_that_cannot_rename_into_place_leaves_no_temporary_file(ws):
+    expected = settled(ws)
+    taken = entries(ws)
+    assert taken
+    # A folder in the place of each entry: the read is a miss, the old entry is not removed and the rename fails, as it
+    # does for a run that finds the entry another run just made.
+    for path in taken:
+        path.unlink()
+        path.mkdir()
+    assert answers(ws) == expected
+    assert all(path.is_dir() for path in taken)
+    assert not list((folder_of(ws) / "check").glob("*tmp*"))
 
 
 # A facade that passes on a function, a type and a constant of deep.agc (`export Alias.name`), and a root that uses them
