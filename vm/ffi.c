@@ -6,7 +6,7 @@
  * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
  * null?, Native.pointer and address, the owned buffers of Native.memory_pointer (and its block form), their views
  * (Native.offset) and Native.free, the reads and writes of memory (Native.get_string, get_bytes, get_*, put_*, the
- * array forms), and Native.wait_readable and wait_writable, the waits on a descriptor. Service layer.
+ * array and struct forms, Native.size_of), and Native.wait_readable and wait_writable. Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -67,7 +67,8 @@ typedef struct {
    struct parameter has its layout in structs[k] (NULL for the others) and a struct result in `result_struct`; a call
    copies its struct arguments into `struct_bytes` of memory (each at a multiple of 16), then gives the result's buffer.
    `holds` counts what a compute call may hold: one per C parameter, then one per C.Pointer field of each struct
-   argument, in order. */
+   argument, in order. A `layout` entry is no signature but the layout code of one struct ("{N:CODES}") for
+   Native.size_of, get_struct and put_struct: only `result_struct` is set, laid out without a call. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -81,7 +82,7 @@ typedef struct {
   agc_c_struct *result_struct;
   size_t struct_bytes;
   uint32_t count, inputs, outs, holds;
-  bool compute, by_pointer, free_by_pointer;
+  bool compute, by_pointer, free_by_pointer, layout;
   int32_t free_input;
   agc_ffi_call *free;
   char *resource, *symbol;
@@ -168,7 +169,8 @@ typedef struct {
   bool called;
 } buffer_block;
 
-/* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
+/* The prepared calls of the run, by signature string, and the struct layouts of Native.size_of, get_struct and
+   put_struct, by layout code, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
    rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries. */
 typedef struct agc_ffi_cache {
@@ -660,7 +662,25 @@ static void cache_grow(agc_ffi_cache *c) {
   c->size = size;
 }
 
-static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
+/* The entry of the layout code TEXT, exactly one struct "{N:CODES}" (parse_signature has the codes), laid out as a
+   struct argument is, at most STRUCT_MAX_SIZE bytes. */
+static ffi_entry *parse_layout(agc_vm *vm, const agc_string *text, uint32_t span) {
+  agc_c_struct *s = layout_of(vm, text->data, text->bytes);
+  if (s && (!agc_ffi_layout(s) || s->size > STRUCT_MAX_SIZE)) {
+    struct_free(s);
+    s = NULL;
+  }
+  if (!s) bad_signature(vm, span);
+  ffi_entry *e = calloc(1, sizeof(ffi_entry));
+  if (!e) agc_out_of_memory();
+  e->layout = true;
+  e->result_struct = s;
+  return e;
+}
+
+/* The prepared signature TEXT, or with LAYOUT the layout entry of a struct, from the cache of the run. One cache holds
+   both, so an entry of the other kind is bad bytecode. */
+static ffi_entry *find_entry(agc_vm *vm, const agc_string *text, bool layout, uint32_t span) {
   agc_runtime *rt = vm->rt;
   if (!rt->ffi) {
     rt->ffi = calloc(1, sizeof(agc_ffi_cache));
@@ -671,11 +691,14 @@ static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
   uint64_t hash = text_hash(text->data, text->bytes);
   size_t at = hash & (c->size - 1);
   for (ffi_entry *e = c->slots[at]; e; e = c->slots[at]) {
-    if (e->hash == hash && e->key_len == text->bytes && memcmp(e->key, text->data, text->bytes) == 0) return e;
+    if (e->hash == hash && e->key_len == text->bytes && memcmp(e->key, text->data, text->bytes) == 0) {
+      if (e->layout != layout) bad_signature(vm, span);
+      return e;
+    }
     at = (at + 1) & (c->size - 1);
   }
   if (c->used >= FFI_MAX_CALLS) agc_fail(vm, "RUNTIME-NATIVE-LOAD", "too many native signatures in one run", span);
-  ffi_entry *e = parse_signature(vm, text, span);
+  ffi_entry *e = layout ? parse_layout(vm, text, span) : parse_signature(vm, text, span);
   e->key = malloc(text->bytes ? text->bytes : 1);
   if (!e->key) agc_out_of_memory();
   memcpy(e->key, text->data, text->bytes);
@@ -1210,7 +1233,7 @@ static void *function_at(agc_vm *vm, agc_value v, uint32_t span) {
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
   /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  ffi_entry *e = find_call(vm, agc_as_string(vm, args[0]), span);
+  ffi_entry *e = find_entry(vm, agc_as_string(vm, args[0]), false, span);
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
@@ -1636,6 +1659,47 @@ static agc_value builtin_put_string(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_void();
 }
 
+/* The layout of the C struct that the layout code TEXT names ("{N:CODES}", compiler/lower/lower_native.agc), laid out
+   as a struct argument is. The struct rows are shared: the cache is read and grown under rt->sync. */
+static const agc_c_struct *struct_layout(agc_vm *vm, agc_value text, uint32_t span) {
+  return find_entry(vm, agc_as_string(vm, text), true, span)->result_struct;
+}
+
+/* Native.size_of(Struct), Ruby ffi's Struct.size: the bytes of the C struct, its tail padding included, so element k
+   of an array of them is at k times the size. */
+static agc_value builtin_size_of(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_int((int64_t)struct_layout(vm, args[0], span + 1)->size);
+}
+
+/* Native.get_struct(pointer, offset, Struct), Ruby ffi's Struct.new(pointer): the struct value read from the C struct
+   at OFFSET bytes past the pointer, as a struct result is read, with the bounds of get_int32. */
+static agc_value builtin_get_struct(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_c_struct *layout = struct_layout(vm, args[2], span + 3);
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, layout->size, span + 2, span + 2};
+  bool locked;
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  agc_value v = struct_value(layout, at);
+  memory_done(vm, locked);
+  return v;
+}
+
+/* Native.put_struct(pointer, offset, value): writes VALUE as its C struct (the layout code is the fourth argument,
+   which the front end adds) at OFFSET bytes past the pointer, as a struct argument is written. The fields are checked
+   first, so a bad one leaves the memory as it was; a freed buffer in a C.Pointer field fails like a freed buffer that
+   put_pointer stores, and a live one is stored as an untracked address. The row is shared, so no free comes between
+   the check and the write. */
+static agc_value builtin_put_struct(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_c_struct *layout = struct_layout(vm, args[3], span + 4);
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, layout->size, span + 2, span + 2};
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  check_argument(vm, AGC_C_STRUCT, layout, args[2], span + 3);
+  if (struct_closed(vm, layout, args[2])) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 3);
+  struct_write(vm, layout, args[2], at);
+  memory_done(vm, locked);
+  return agc_void();
+}
+
 static agc_value builtin_get_int8(agc_vm *vm, agc_value *args, uint32_t span) {
   return get_one(vm, args, span, ITEM_INT8);
 }
@@ -1893,6 +1957,9 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.put_bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.size_of", 1, builtin_size_of, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Native.get_struct", 3, builtin_get_struct, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Native.put_struct", 4, builtin_put_struct, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},

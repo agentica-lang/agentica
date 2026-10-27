@@ -2082,6 +2082,79 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "ok(128)\n", "")
 
 
+ROWS_EXTERN = """extern "{library}"
+  struct PeerRow
+    id: C.Int32
+    count: C.Long
+    score: C.Double
+  end
+  struct PeerBatch
+    n_tokens: C.Int32
+    token: C.Pointer
+  end
+  def peer_row_size() -> C.Int64
+  def peer_rows_fill(rows: C.Pointer, n: C.Int32) -> Void
+  def peer_rows_text(rows: C.Pointer, n: C.Int32) -> C.String
+  def peer_batch_sum(b: PeerBatch) -> C.Int64
+end
+
+"""
+
+
+# Structs through pointers: Native.size_of is C's sizeof, so an array of structs with a C.Long field (16 bytes on
+# Windows, 24 elsewhere) is put_struct at k times the size and C reads it, C fills one that get_struct reads, and a
+# struct whose C.Pointer field holds an owned buffer reads back (through a view too) as C sees it.
+@NATIVE_CALLS
+def test_c_structs_through_pointers_have_the_c_layout(tmp_path, peer):
+    main = """def main() -> Void
+  size = Native.size_of(PeerRow)
+  puts(size == peer_row_size())
+  rows = Native.memory_pointer(3 * size)
+  for k in 0...3
+    Native.put_struct(rows, k * size, PeerRow(id: 10 + k, count: -k, score: k.to_f * 1.5))
+  end
+  puts(peer_rows_text(rows, 3))
+  peer_rows_fill(rows, 3)
+  puts(Native.get_struct(rows, 2 * size, PeerRow))
+  puts(Native.get_struct(Native.offset(rows, size), 0, PeerRow).id)
+  tokens = Native.memory_pointer(8)
+  Native.put_array_of_int32(tokens, 0, [40, 2])
+  batches = Native.memory_pointer(2 * Native.size_of(PeerBatch))
+  Native.put_struct(batches, Native.size_of(PeerBatch), PeerBatch(n_tokens: 2, token: tokens))
+  puts(peer_batch_sum(Native.get_struct(batches, Native.size_of(PeerBatch), PeerBatch)))
+end
+"""
+    result = agentica(program(tmp_path, ROWS_EXTERN.format(library=literal(peer)) + main))
+    long_max = 2**31 - 1 if WINDOWS else 2**63 - 1
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "true", "10:0:0.00 11:-1:1.50 12:-2:3.00", "PeerRow(id: 2, count: %d, score: 2.5)" % (long_max - 2), "1",
+        "42", "",
+    ]
+
+
+# A struct past the end of an owned buffer (or of a view), a negative offset and a freed buffer stop the run as for
+# get_int32; a field C cannot take (a freed buffer in a C.Pointer field, an integer outside its bits) stops it at
+# the value before anything is written.
+@NATIVE_CALLS
+@pytest.mark.parametrize("line, code, argument", [
+    ("Native.get_struct(rows, 1, PeerRow)", "RUNTIME-NATIVE-BOUNDS", "1,"),
+    ("Native.put_struct(Native.offset(rows, 8), 0, row)", "RUNTIME-NATIVE-BOUNDS", "0,"),
+    ("Native.get_struct(rows, -1, PeerRow)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.get_struct(gone, 0, PeerRow)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("Native.put_struct(rows, 0, PeerBatch(n_tokens: 1, token: gone))", "RUNTIME-NATIVE-CLOSED", "PeerBatch"),
+    ("Native.put_struct(rows, 0, row.with(id: 4_294_967_296))", "RUNTIME-INTEGER-OVERFLOW", "row.with"),
+])
+def test_a_struct_outside_its_buffer_or_with_a_bad_field_stops_the_run(tmp_path, peer, line, code, argument):
+    text = "  %s" % line if line.startswith("Native.put") else "  IO.inspect(%s)" % line
+    main = "def main() -> Void\n  rows = Native.memory_pointer(Native.size_of(PeerRow))\n" \
+        "  row = PeerRow(id: 1, count: 2, score: 3.0)\n  gone = Native.memory_pointer(64)\n  Native.free(gone)\n" \
+        '  puts("before")\n%s\nend\n' % text
+    result = agentica("--json", program(tmp_path, ROWS_EXTERN.format(library=literal(peer)) + main))
+    assert result.stdout == "before\n"
+    assert diagnostic(result, 1) == (code, (ROWS_EXTERN.count("\n") + 7, text.index(argument) + 1))
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int32
   def peer_pipe_writer() -> C.Int32

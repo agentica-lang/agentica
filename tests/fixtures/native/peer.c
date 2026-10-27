@@ -721,3 +721,31 @@ const char *peer_ints_text(peer_ints s) {
            (unsigned long)s.e, s.f, s.p == ints_text ? "text" : s.p ? "other" : "null");
   return ints_text;
 }
+
+/* For Native.size_of, get_struct and put_struct: an array of structs with a long between an int32 and a double, so
+   the layout differs by system: count at 4 and 16 bytes on Windows (LLP64), at 8 and 24 bytes on Linux and macOS. */
+typedef struct {
+  int32_t id;
+  long count;
+  double score;
+} peer_row;
+
+static char rows_text[256];
+
+int64_t peer_row_size(void) { return (int64_t)sizeof(peer_row); }
+/* Row k gets id k, count LONG_MAX - k and score k + 0.5. */
+void peer_rows_fill(peer_row *rows, int32_t n) {
+  for (int32_t k = 0; k < n; k++) rows[k] = (peer_row){k, LONG_MAX - k, k + 0.5};
+}
+/* Every row as C sees it, so the test checks the layout that the VM wrote. */
+const char *peer_rows_text(const peer_row *rows, int32_t n) {
+  size_t used = 0;
+  rows_text[0] = '\0';
+  for (int32_t k = 0; k < n && used < sizeof rows_text; k++) {
+    int wrote = snprintf(rows_text + used, sizeof rows_text - used, "%s%d:%ld:%.2f", k ? " " : "", rows[k].id,
+                         rows[k].count, rows[k].score);
+    if (wrote < 0) break;
+    used += (size_t)wrote;
+  }
+  return rows_text;
+}

@@ -107,6 +107,10 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         attrs += " record-of=#{Text.quote(node.record_of)}"
       end
 
+      if node.layout != ""
+        attrs += " layout=#{Text.quote(node.layout)}"
+      end
+
       lines = out.push(head(at, role, "struct-decl", node.id, node.span, attrs))
       for field in node.fields
         lines = print_field(lines, child, field)

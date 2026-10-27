@@ -18,7 +18,7 @@ import Types from "../syntax/types"
 import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
-import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
+import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_STRUCTS, STRING_OPS, VM_BUILTINS} from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
@@ -132,10 +132,14 @@ export def lower_call(
   end
 
   total = shape.total
+  # The struct builtins of Native take a type name as their layout code (no defaults: one argument per parameter).
+  laid_out = builtin and NATIVE_STRUCTS.include?(key)
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    if defaulted
+    if laid_out and type_name_of(node.args[index]) != ""
+      fx = emit_layout(cx, fx, type_name_of(node.args[index]), Ast.expr_span(node.args[index]))
+    elsif defaulted
       out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
       fx = out.fx
     else
@@ -146,8 +150,19 @@ export def lower_call(
     index += 1
   end
 
+  spans = builtin_spans(node, shape)
+  if laid_out and key == "Native.put_struct"
+    # The VM gets the layout of the value's struct as a fourth argument, with the span of the value.
+    fx = Lowering.alloc(fx.with(next: base + total))
+    value_span = Ast.expr_span(node.args[2])
+    value_type = Lowering.type_of(cx, node.args[2])
+    fx = emit_layout(cx, fx, Types.name(value_type), value_span)
+    spans = spans.push(value_span)
+    total += 1
+  end
+
   if builtin
-    fx = Lowering.emit_builtin(fx, base, key, total, builtin_spans(node, shape))
+    fx = Lowering.emit_builtin(fx, base, key, total, spans)
     if tail
       fx = Lowering.emit_at(fx, "return", [base], span)
     end
@@ -269,6 +284,20 @@ end
 
 # The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an
 # error value then. A call made from a method call has no type of its own.
+# The linked name of a type name used as a value, else "".
+def type_name_of(expr: Ast.Expr) -> String
+  case expr
+    Ast.Expr.TypeName(node) -> return node.name
+    _ -> return ""
+  end
+end
+
+# The layout code of the C struct NAME ("{N:CODES}") as a constant in the last register taken. The checker lets only a
+# C struct of an extern block through, so cx.layouts has it.
+def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, name: String, span: Source.Span) -> Lowering.Fx
+  return Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(cx.layouts.get(name, "")), span)
+end
+
 def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Result[String]
   type = Lowering.type_of(cx, Ast.Expr.Call(node))
   if checked or Types.unknown?(type)

@@ -177,7 +177,8 @@ end
 ## A struct and its fields. record_of is "" for a struct written in the program, and for the record that the parser
 ## makes for an extern function with `out` parameters the name of that function: a field `result` with the C result
 ## (none for Void), then one field per out parameter, named after it. The record has the function's span and name
-## span, and comes right after the function.
+## span, and comes right after the function. layout is "" for every struct but a C struct of an extern block, which has
+## its layout code (Native.codes): { then the code of each field in order, then }.
 export struct StructDecl
   id: Int
   name: String
@@ -185,6 +186,7 @@ export struct StructDecl
   fields: List[FieldDecl]
   doc: Optional[String]
   record_of: String
+  layout: String
   span: Source.Span
 end
 
