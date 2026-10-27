@@ -108,6 +108,8 @@
   `malloc` is a crash with a saved input.
 - The fuzzer is libFuzzer (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
   calls `agc_fuzz_one`, so AFL++, honggfuzz and Centipede can drive it too.
+  Where the build turns on the wrap (`AGC_FUZZ_JIT_WRAP`, Linux), each input
+  also runs under `AGC_JIT_ALWAYS`, and its code memory is unmapped after it.
   `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
   `-fsanitize=fuzzer-no-link,address,undefined`, `AGC_NO_GC`) into
   `build/vm/libfuzz/` and links `agentica-vm-libfuzz` with libFuzzer's

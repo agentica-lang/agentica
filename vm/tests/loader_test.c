@@ -1042,7 +1042,8 @@ static void prelude_tests(void) {
 }
 
 /* agc_fuzz_one runs without a wall clock (no_files), so a loop of hour-long recvs on a channel nobody sends to ends
-   at its 10,000 steps at once instead of waiting an hour per recv (agc_timeout_length). */
+   at its 10,000 steps at once instead of waiting an hour per recv (agc_timeout_length), in the interpreter and with
+   the JIT. */
 static void test_fuzz_timed_waits(void) {
   static const agc_instr recv_loop[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_STEP, 1, 0, 0},
@@ -1060,7 +1061,8 @@ static void test_fuzz_timed_waits(void) {
   s.registers = 3;
   buffer b = build(s);
   uint64_t start = agc_clock_ms();
-  assert(agc_fuzz_one(b.data, b.len) == 1);
+  assert(agc_fuzz_one(b.data, b.len, false) == 1);
+  assert(agc_fuzz_one(b.data, b.len, true) == 1);
   assert(agc_clock_ms() - start < 5000);
   free(b.data);
 }
