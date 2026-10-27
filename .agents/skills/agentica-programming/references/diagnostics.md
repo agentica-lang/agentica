@@ -255,8 +255,8 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-TASK-AWAIT-CYCLE`: `Task.await` of a task that is waiting for the
   caller, directly or through other awaits, at the await.
 - `RUNTIME-HANDLE-NOT-OWNED`: `Task.spawn_owning` of a handle the calling task
-  does not own, one already handed over, or a closed one (a closed channel too),
-  at the handle argument.
+  does not own, one already handed over, a closed one (a closed channel too), or
+  a view of a buffer (`Native.offset`), at the handle argument.
 - `RUNTIME-TASK-CRASHED`: `Task.await` on a crashed task when `R` is not a
   `Result`, at the await; the message is the crash text. Also a BDD step or test
   whose task crashed unawaited.

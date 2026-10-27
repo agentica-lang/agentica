@@ -541,14 +541,15 @@ end
   address that nothing tracks, so the buffer it names must outlive C's use.
   `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
 - `Native.offset(p, n)` is the `C.Pointer` `n` bytes past `p`. For a pointer
-  that C gave it is the plain sum, trusted like `p`. For an owned buffer it is a
-  view of the same memory, from byte `n` to the buffer's end (`n` outside 0 to
-  the size is `RUNTIME-NATIVE-BOUNDS` at `n`): reads and writes through it are
-  checked against that range, it is freed when its buffer is (then every use is
-  `RUNTIME-NATIVE-CLOSED`, and `Native.closed?` is true), a `compute def` call
-  that takes it holds its buffer, and `Native.free` of it is
-  `RUNTIME-NATIVE-NOT-OWNED`. A view of a view counts from the same buffer.
-  One buffer can thus hold several cells that C reads by address.
+  that C gave it is the plain sum (wrapping on overflow), trusted like `p`. For
+  an owned buffer it is a view of the same memory, from byte `n` to the buffer's
+  end (`n` outside 0 to the size is `RUNTIME-NATIVE-BOUNDS` at `n`): reads and
+  writes through it are checked against that range, it is freed when its buffer
+  is (then every use is `RUNTIME-NATIVE-CLOSED`, and `Native.closed?` is true),
+  a `compute def` call that takes it holds its buffer, and `Native.free` of it
+  is `RUNTIME-NATIVE-NOT-OWNED`. A view of a view takes its offset from the
+  view, and ends where the buffer ends. One buffer can thus hold several cells
+  that C reads by address.
 - Typed memory, at a byte offset past any `C.Pointer` (alignment is not needed):
   `Native.get_int8`, `get_int16`, `get_int32`, `get_int64`, `get_uint8`,
   `get_uint16`, `get_uint32` (an `Int`), `get_float32`, `get_float64` (a

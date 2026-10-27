@@ -2528,7 +2528,7 @@ ROWS_28: List[Model.Builtin] = [
       effects: ["native"],
       description: (
         "Free an owned buffer of Native.memory_pointer once; a freed buffer is left as it is, and a C.Pointer of C " +
-        "is RUNTIME-NATIVE-NOT-OWNED."
+        "or a view is RUNTIME-NATIVE-NOT-OWNED."
       ),
       alternatives: [],
     ),

@@ -1266,12 +1266,13 @@ end
 
 
 # Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
-# is not the caller's to hand over.
+# and a view of a buffer (Native.offset) are not the caller's to hand over.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("handed, out, code", [
     ("buf", "3.5\n", "RUNTIME-NATIVE-CLOSED"),
     ("peer_static_floats()", "", "RUNTIME-HANDLE-NOT-OWNED"),
+    ("Native.offset(buf, 0)", "", "RUNTIME-HANDLE-NOT-OWNED"),
 ])
 def test_task_spawn_owning_hands_an_owned_buffer_over(tmp_path, peer, schedulers, handed, out, code):
     main = """def sum(buf: C.Pointer) -> Float
@@ -2035,26 +2036,30 @@ end
 
 
 # What C cannot take in a struct field stops the run at the extern function before C runs, as for an argument: a
-# C.Int32 field outside 32 bits, signed or unsigned (a nested one too) and a freed owned buffer in a C.Pointer field.
+# C.Int32 field outside 32 bits, signed or unsigned (a nested one too) and a freed owned buffer, or a view of one, in a
+# C.Pointer field.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code", [
     ("peer_pair_sum(PeerPair(x: 4_294_967_296, y: 0))", "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_nested_bump(peer_nested_make(1).with(mixed: PeerMixed(n: -2_147_483_649, x: 0.0)))",
      "RUNTIME-INTEGER-OVERFLOW"),
     ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed))", "RUNTIME-NATIVE-CLOSED"),
+    ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed_view))", "RUNTIME-NATIVE-CLOSED"),
 ])
 def test_what_c_cannot_take_in_a_struct_field_stops_the_run(tmp_path, peer, call, code):
-    main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
+    main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  freed_view = Native.offset(freed, 0)\n" \
+        "  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
     refused_at_extern(tmp_path, peer, STRUCT_EXTERN, main, call, code)
 
 
 # A compute call holds the owned buffer in a C.Pointer field of its struct argument, as it holds a C.Pointer argument:
-# a free while C still reads the memory only marks the buffer freed.
+# a free while C still reads the memory only marks the buffer freed. A view of the buffer in the field holds it too.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_compute_call_keeps_the_buffer_of_a_struct_field(tmp_path, peer, schedulers):
+@pytest.mark.parametrize("token", ["buf", "Native.offset(buf, 0)"])
+def test_a_compute_call_keeps_the_buffer_of_a_struct_field(tmp_path, peer, schedulers, token):
     main = """def sum_later(buf: C.Pointer) -> Result[Int]
-  return ok(peer_batch_hold(PeerBatch(n_tokens: 64, token: buf), 20_000))
+  return ok(peer_batch_hold(PeerBatch(n_tokens: 64, token: TOKEN), 20_000))
 end
 
 def main() -> Void
@@ -2072,7 +2077,7 @@ def main() -> Void
   peer_set_flag()
   puts(Task.await(task))
 end
-"""
+""".replace("TOKEN", token)
     result = agentica("--schedulers", schedulers, program(tmp_path, STRUCT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "ok(128)\n", "")
 

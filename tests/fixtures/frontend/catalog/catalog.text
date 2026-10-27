@@ -344,7 +344,7 @@ builtin Native.close forms=1
 builtin Native.closed? forms=1
   Native.closed?(resource: R) -> Bool shape=(Var(R)) -> Bool rule=NativeClosed impl="Native.closed?" effects=["native"] desc="True when a resource is closed (by Native.close, its owner's end, or C leaving an out resource NULL) or an owned buffer is freed; false for a live one and for a C.Pointer of C. It never stops the task."
 builtin Native.free forms=1
-  Native.free(pointer: C.Pointer) -> Void shape=(Opaque(C.Pointer)) -> Void rule=Plain impl="Native.free" effects=["native"] desc="Free an owned buffer of Native.memory_pointer once; a freed buffer is left as it is, and a C.Pointer of C is RUNTIME-NATIVE-NOT-OWNED."
+  Native.free(pointer: C.Pointer) -> Void shape=(Opaque(C.Pointer)) -> Void rule=Plain impl="Native.free" effects=["native"] desc="Free an owned buffer of Native.memory_pointer once; a freed buffer is left as it is, and a C.Pointer of C or a view is RUNTIME-NATIVE-NOT-OWNED."
 builtin Native.get_array_of_float32 forms=1
   Native.get_array_of_float32(pointer: C.Pointer, offset: Int, count: Int) -> List[Float] shape=(Opaque(C.Pointer), Int, Int) -> List(Float) rule=Plain impl="Native.get_array_of_float32" effects=["native"] desc="Read count 32-bit floats from offset bytes past the C.Pointer into a list; a negative count is RUNTIME-INVALID-COUNT."
 builtin Native.get_array_of_float64 forms=1

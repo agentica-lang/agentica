@@ -149,7 +149,7 @@ end
 
 `Native.offset(p, n)` is the pointer `n` bytes past `p`, for C structs whose fields point into one block, such as the `length`, `is_null` and `buffer` cells of a MySQL bind:
 
-- For a pointer that C returned it is the plain sum, trusted like `p`.
+- For a pointer that C returned it is the plain sum (wrapping on overflow), trusted like `p`.
 - For an owned buffer it is a view of the same memory from byte `n` to the buffer's end. `n` outside 0 to the size fails with `RUNTIME-NATIVE-BOUNDS`, and reads and writes through the view are checked against its range.
 - The view belongs to its buffer: freeing the buffer closes it (`RUNTIME-NATIVE-CLOSED`, `Native.closed?` is `true`), and a `compute def` call that takes the view keeps the buffer until it returns. `Native.free` of a view fails with `RUNTIME-NATIVE-NOT-OWNED`, and `Task.spawn_owning` hands over the buffer, not a view.
 
@@ -159,7 +159,7 @@ extern "/opt/db/libdb.so"
 end
 
 def main() -> Void
-  Native.memory_pointer(16 + 64) do |bind|
+  Native.memory_pointer(16 + 8) do |bind|
     Native.put_int64(bind, 0, 5)
     Native.put_string(bind, 16, "hello")
     puts(db_bind(bind, Native.offset(bind, 8), Native.offset(bind, 16)))

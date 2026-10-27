@@ -831,7 +831,11 @@ static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layo
     }
     case AGC_C_POINTER: (void)buffer_of(vm, v); break;
     case AGC_C_BYTES: agc_as_list(vm, v); break;
-    case AGC_C_RESOURCE: agc_as_c_resource(vm, v); break;
+    /* A resource parameter takes a resource of an extern block, never an owned buffer or a view of one: only
+       hand-made bytecode passes one, and held_by and c_argument read a resource as its own. */
+    case AGC_C_RESOURCE:
+      if (agc_as_c_resource(vm, v)->buffer) agc_wrong_tag(vm);
+      break;
     case AGC_C_STRUCT: {
       const agc_struct *st = agc_as_struct(vm, v);
       if (st->type != layout->index || st->n != layout->count) agc_wrong_tag(vm);
@@ -1309,6 +1313,15 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_bool(!buffer_of(vm, args[0]) && agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
+/* Whether the resource or owned buffer RES (for a view, its parent) is closed, read under rt->sync, which the caller
+   does not hold. */
+static bool buffer_closed(agc_vm *vm, agc_c_resource *res) {
+  agc_sync_take(vm);
+  bool closed = root_of(res)->closed;
+  agc_sync_drop(vm);
+  return closed;
+}
+
 /* Native.closed?(value): true when the program can no longer use VALUE: a resource closed by Native.close or by the
    end of the task that owned it, an out resource that C left NULL (closed from the start), and an owned buffer that
    Native.free or its owner's end freed. A live resource or buffer is false, and so is a C.Pointer of C, NULL included:
@@ -1319,25 +1332,13 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
 static agc_value builtin_native_closed_p(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   if (agc_is(args[0], AGC_T_C_POINTER)) return agc_bool(false);
-  const agc_c_resource *res = root_of(agc_as_c_resource(vm, args[0]));
-  agc_sync_take(vm);
-  bool closed = res->closed;
-  agc_sync_drop(vm);
-  return agc_bool(closed);
+  return agc_bool(buffer_closed(vm, agc_as_c_resource(vm, args[0])));
 }
 
 /* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
 static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
-}
-
-/* Whether the owned buffer RES (a view included) is freed, read under rt->sync, which the caller does not hold. */
-static bool buffer_closed(agc_vm *vm, agc_c_resource *res) {
-  agc_sync_take(vm);
-  bool closed = root_of(res)->closed;
-  agc_sync_drop(vm);
-  return closed;
 }
 
 /* Native.address(pointer), the inverse of Native.pointer: the integer value of the pointer, for a difference of two
@@ -1435,7 +1436,8 @@ static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint3
    the program's to free, and neither is a view (Native.offset), whose parent owns the memory. */
 static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_c_resource *res = buffer_of(vm, args[0]);
-  if (!res || res->parent) agc_fail(vm, "RUNTIME-NATIVE-NOT-OWNED", "Native.free takes a buffer of Native.memory_pointer", span + 1);
+  if (!res || res->parent)
+    agc_fail(vm, "RUNTIME-NATIVE-NOT-OWNED", "Native.free takes a buffer of Native.memory_pointer", span + 1);
   close_resource(vm, res);
   return agc_void();
 }

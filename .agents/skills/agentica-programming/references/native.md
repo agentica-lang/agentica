@@ -79,11 +79,11 @@ end
   freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of C's pointer
   `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an untracked address: keep
   the target alive while C uses it.
-- `Native.offset(p, n) -> C.Pointer` is `n` bytes past `p`: plain `p + n` for
-  C's pointer; for a buffer a view from byte `n` to its end (`n` outside 0..size
-  is `RUNTIME-NATIVE-BOUNDS`), checked against that range, freed with its buffer
-  (`RUNTIME-NATIVE-CLOSED` after), held through its buffer by a `compute def`
-  call; `Native.free(view)` is `RUNTIME-NATIVE-NOT-OWNED` and
+- `Native.offset(p, n) -> C.Pointer` is `n` bytes past `p`: plain `p + n`
+  (wrapping) for C's pointer; for a buffer a view from byte `n` to its end (`n`
+  outside 0..size is `RUNTIME-NATIVE-BOUNDS`), checked against that range, freed
+  with its buffer (`RUNTIME-NATIVE-CLOSED` after), held through its buffer by a
+  `compute def` call; `Native.free(view)` is `RUNTIME-NATIVE-NOT-OWNED` and
   `Task.spawn_owning` takes the buffer, not a view. Use it to keep several C
   cells (a MySQL bind's `length`, `is_null`, `buffer`) in one buffer.
 - Typed memory at a byte offset of any `C.Pointer` (Ruby `ffi` names):
