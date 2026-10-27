@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `ATS[K, V]` shared tables for counters and caches that tasks update
   (`examples/shared-cache.agc`).
+- `Type.members` lists the fields of a struct type as a `List[StructMember]`
+  (`name` and `type` as source), for tools such as an ORM.
 - `JsonField[T]` struct fields tell an absent key, `null` and a value apart in
   `JSON.decode`, `JSON.encode`, `JSON.from` and `JSON.schema`.
 - `JSON.decode(json, T)` decodes a `Json` value without writing it out as text.
@@ -20,6 +22,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
   `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
+- **Breaking:** `StructMember` is a reserved type name, so a program cannot
+  declare a type of that name.
 - **Breaking:** `JsonField` is a reserved type name.
 - **Breaking:** `JSON.schema` leaves out `required` when no field is required,
   such as for a struct with no fields.

@@ -563,24 +563,26 @@ static buffer type_tables(int which) {
     str(&t, "P");
     u32(&t, 2);
   }
-  /* 13: a JsonField type (kind 7) and no enum; 14: with the JsonField enum; 15 and 16: with a JsonField enum of the
-     wrong shape (Value without its payload, a fourth variant). */
+  /* 13: a JsonField type (kind 7) and no enum; 14: with the JsonField enum; 15 to 18: a JsonField enum of the
+     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second JsonField enum. */
   if (which < 14) {
     u32(&t, 0);
     return t;
   }
-  u32(&t, 1);
-  str(&t, "JsonField");
-  u32(&t, which == 16 ? 4 : 3);
-  str(&t, "Absent");
-  u32(&t, 0);
-  str(&t, "Null");
-  u32(&t, 0);
-  str(&t, "Value");
-  u32(&t, which == 15 ? 0 : 1);
-  if (which == 16) {
-    str(&t, "More");
+  u32(&t, which == 18 ? 2 : 1);
+  for (int copy = 0; copy < (which == 18 ? 2 : 1); copy++) {
+    str(&t, "JsonField");
+    u32(&t, which == 16 ? 4 : 3);
+    str(&t, which == 17 ? "Null" : "Absent");
     u32(&t, 0);
+    str(&t, which == 17 ? "Absent" : "Null");
+    u32(&t, 0);
+    str(&t, "Value");
+    u32(&t, which == 15 ? 0 : 1);
+    if (which == 16) {
+      str(&t, "More");
+      u32(&t, 0);
+    }
   }
   return t;
 }
@@ -1991,6 +1993,8 @@ int main(void) {
   assert(loads_types(14, NULL));
   assert(!loads_types(15, "bad JsonField enum"));
   assert(!loads_types(16, "bad JsonField enum"));
+  assert(!loads_types(17, "bad JsonField enum"));
+  assert(!loads_types(18, "duplicate JsonField enum"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

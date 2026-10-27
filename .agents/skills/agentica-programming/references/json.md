@@ -9,7 +9,7 @@ JSON.null?(value: Json) -> Bool
 JSON.kind(value: Json) -> String
 JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
-JSON.decode(j: Json, type: T) -> Result[T]
+JSON.decode(json: Json, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -33,10 +33,11 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 - `JSON.schema(User)` and `JSON.decode(text, User)` take a named struct type,
   not a value (bare type names are valid only there). The schema has
-  `properties` and `required` (left out when no field is required); Int schemas carry signed 64-bit bounds; lists use
-  `items`; String-keyed maps `additionalProperties`; nested and recursive
-  structs `$defs` and `$ref`. Extra struct keys stay allowed, as in decoding. A
-  schema is a `Json` value, not text.
+  `properties` and `required` (left out when no field is required); Int schemas
+  carry signed 64-bit bounds; lists use `items`; String-keyed maps
+  `additionalProperties`; nested and recursive structs `$defs` and `$ref`. Extra
+  struct keys stay allowed, as in decoding. A schema is a `Json` value, not
+  text.
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
   an item of a parsed document, with the same errors; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,

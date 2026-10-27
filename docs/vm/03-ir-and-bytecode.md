@@ -177,9 +177,10 @@ captures, slots, body, span), `Instr` (op, args, imm, name, spans), `StructDef`
     straight into its slot.
 
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
-`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
-only when the program names them or a checked type mentions them. Then they
-lower like user structs (`compiler/lower/lower_program.agc`).
+`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogEvent`,
+`StructMember`) join the struct table only when the program names them or a
+checked type mentions them. Then they lower like user structs
+(`compiler/lower/lower_program.agc`).
 
 ### 3.4 Closure conversion
 
@@ -563,11 +564,13 @@ header and the entry.
   entry, and a program may call `main()`.
 - The VM accepts only its own format version and Agentica version (8). Any
   change to the layout or to an opcode's meaning bumps the format version
-  (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8
-  are reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not
-  bump it: an older VM rejects the file as an unknown opcode. Type kind 7
+  (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8 are
+  reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not bump
+  it: an older VM rejects the file as an unknown opcode. Type kind 7
   (`JsonField`) did not either: the layout of an entry is unchanged, and an
-  older VM rejects the file as an unknown type kind.
+  older VM rejects the file as an unknown type kind. A call `JSON.decode(<Json>,
+  T)` needs no new kind, so an older VM loads such a file and the call fails at
+  run time with a wrong value type.
 - The C loader is the only reader of this format and has no compatibility
   shims, with one transitional exception: the loader still reads format 5,
   which has no prelude flag (`AGC_FORMAT_PREVIOUS`). It was kept while

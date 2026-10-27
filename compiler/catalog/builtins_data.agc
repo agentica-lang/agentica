@@ -184,6 +184,13 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "truncated", type: Types.Type.Bool),
       ],
     ),
+    Model.Record(
+      name: "StructMember",
+      fields: [
+        Model.Named(name: "name", type: Types.Type.String),
+        Model.Named(name: "type", type: Types.Type.String),
+      ],
+    ),
   ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -272,6 +279,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Socket",
     "Std",
     "String",
+    "StructMember",
     "System",
     "TCP",
     "TLS",
@@ -1418,8 +1426,22 @@ ROWS_17: List[Model.Builtin] = [
       rule: Model.Rule.JsonDecode,
       implementation: "JSON.decode",
       effects: [],
-      description: "Decode JSON text or a Json value into a named struct; invalid data returns an error.",
-      alternatives: [],
+      description: "Decode JSON text into a named struct; invalid data returns an error.",
+      alternatives: [
+        Model.Builtin(
+          name: "JSON.decode",
+          parameters: [
+            Model.Named(name: "json", type: Types.Type.Json),
+            Model.Named(name: "type", type: Types.Type.Var("T")),
+          ],
+          result: Types.Type.Result(Types.Type.Var("T")),
+          rule: Model.Rule.JsonDecode,
+          implementation: "JSON.decode",
+          effects: [],
+          description: "Decode a Json value into a named struct, with the rules and errors of its text.",
+          alternatives: [],
+        ),
+      ],
     ),
     Model.Builtin(
       name: "JSON.encode",

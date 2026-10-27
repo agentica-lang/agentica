@@ -71,7 +71,15 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     name = RubyForm.shown(entry.name)
   end
 
-  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| Builtins.arity_text(form, skipped) end
+  # Forms of one arity (JSON.decode of text or of a Json) count once.
+  counts: List[String] = []
+  for form in [entry].concat(entry.alternatives)
+    text = Builtins.arity_text(form, skipped)
+    if !counts.any? do |seen: String| seen == text end
+      counts = counts.push(text)
+    end
+  end
+
   expected = counts.join(" or ")
   message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
   base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
@@ -259,7 +267,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   if decode
     source = try State.expr(cx, current, site.args[0], T.Type.Unknown)
     if !T.is?(source.type, "String") and !T.is?(source.type, "Json")
-      return error(State.mismatch(cx, source.st, T.Type.String, source.type, Ast.expr_span(site.args[0])))
+      return error(decode_source_mismatch(cx, source.st, source.type, Ast.expr_span(site.args[0])))
     end
 
     current = source.st
@@ -278,6 +286,14 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
       ),
     )
   end
+end
+
+# CHECK-TYPE-MISMATCH for a JSON.decode source that is neither JSON text nor a Json value.
+def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Source.Span) -> String
+  found = T.to_text(actual)
+  message = "expected String or Json, found #{found}"
+  base = Failure.problem(cx.file, st.signature, "CHECK-TYPE-MISMATCH", message, span, State.hint_of(""))
+  return Failure.pack(base.with(expected: "String or Json", actual: found))
 end
 
 def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) -> Result[State.Out]

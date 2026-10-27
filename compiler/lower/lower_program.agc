@@ -234,27 +234,28 @@ def struct_names_in(type: Types.Type) -> List[String]
   end
 end
 
-# True for a JsonField field type: field_type makes no other enum.
+# True for a JsonField field type.
 def json_field?(type: Types.Type) -> Bool
-  return Types.is?(type, "Enum")
+  return Types.is?(type, "Enum") and Types.name(type) == "JsonField"
 end
 
 # The type of a struct field as JSON.decode builds it, or Absent when it cannot: a JsonField of a JSON type, or a JSON
 # type. JsonField is only allowed here, as the direct type of the field.
 def field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
   if ref.name != "JsonField" or ref.args.size != 1
-    return json_field_type(ref, names)
+    return json_field_inner(ref, names)
   end
 
-  value = json_field_type(ref.args[0], names)
+  value = json_field_inner(ref.args[0], names)
   case value
     Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Enum("JsonField", [type]))
     Ast.Optional.Absent -> return Ast.Optional.Absent
   end
 end
 
-# The type of a value inside a JSON field type as JSON.decode builds it, or Absent when it cannot.
-def json_field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
+# The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JsonField[T]), or
+# Absent when it cannot.
+def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
   args = ref.args
   if args.size == 0 and ref.name == "Int"
     return Ast.Optional.Present(Types.Type.Int)
@@ -265,13 +266,13 @@ def json_field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.
   elsif args.size == 0 and ref.name == "String"
     return Ast.Optional.Present(Types.Type.String)
   elsif ref.name == "List" and args.size == 1
-    item = json_field_type(args[0], names)
+    item = json_field_inner(args[0], names)
     case item
       Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.List(type))
       Ast.Optional.Absent -> return Ast.Optional.Absent
     end
   elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0
-    value = json_field_type(args[1], names)
+    value = json_field_inner(args[1], names)
     case value
       Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Map(Types.Type.String, type))
       Ast.Optional.Absent -> return Ast.Optional.Absent

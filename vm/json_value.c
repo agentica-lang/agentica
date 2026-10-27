@@ -227,8 +227,9 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
 
 /* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JsonField.Absent,
    whose key is left out; JsonField.Null is nil (null) and JsonField.Value(x) is x. Any other value is unchanged. The
-   checker allows JsonField only as the direct type of a struct field, so only struct children are looked at; a
-   JsonField anywhere else fails as a value JSON cannot write. */
+   checker allows JsonField only as the direct type of a struct field, so only struct children are looked at. Only
+   hostile bytecode puts an enum anywhere else; the writers then read it as a scalar and fail with RUNTIME-INTERNAL
+   (wrong value type). */
 static bool field_value(agc_vm *vm, agc_value *item) {
   if (!agc_is(*item, AGC_T_ENUM)) return true;
   uint32_t first = vm->rt->program->json_field;

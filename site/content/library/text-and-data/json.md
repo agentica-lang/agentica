@@ -43,7 +43,7 @@ end
 
 ```text
 JSON.decode(s: String, type: T) -> Result[T]
-JSON.decode(j: Json, type: T) -> Result[T]
+JSON.decode(json: Json, type: T) -> Result[T]
 ```
 
 Reads JSON into a struct. The first argument is JSON text or a `Json` value, the second the struct's name. Missing fields and wrong types give an error Result that names the field. Extra keys are ignored. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
