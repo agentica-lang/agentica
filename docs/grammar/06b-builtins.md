@@ -368,9 +368,9 @@ Expected types flow into these operations for empty collections and Results.
 
 ### JSON
 
-`Json` and `JSON` are reserved. A `Json` value has no constructor, equality,
-fields or indexing. `IO.inspect` prints `<Json>`; `to_s`, interpolation, `puts`
-and `JSON.encode` give its text. Signatures are in
+`Json`, `JSON` and `JsonField` are reserved. A `Json` value has no constructor,
+equality, fields or indexing. `IO.inspect` prints `<Json>`; `to_s`,
+interpolation, `puts` and `JSON.encode` give its text. Signatures are in
 [`library/text-and-data/json.md`][agentica-link-4].
 
 - `JSON.object` takes `Map[String, Json]`, `JSON.array` takes `List[Json]`, and
@@ -378,16 +378,21 @@ and `JSON.encode` give its text. Signatures are in
   `RUNTIME-JSON-ENCODE`. Null and `false` stay distinct, and so do empty objects
   and empty arrays.
 - `JSON.schema(T)` takes a named struct, as `decode` does, and returns an object
-  schema with `properties` and `required`. Int bounds are signed 64-bit; lists
-  use `items`; String-keyed maps use `additionalProperties`; nested and
-  recursive structs use `$defs` and `$ref`. Extra keys stay allowed.
-- `JSON.decode(text, T)` takes a named struct type, not a value; bare type names
-  are valid only for `decode` and `schema`. Fields may be Int, Float, Bool,
-  String, lists, String-keyed maps, and nested or recursive structs; other
-  nested types are `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong
-  types, Int overflow and non-finite numbers give errors with a field or index
-  path. Extra keys are ignored. A JSON integer may decode as a Float; a decimal
-  or exponent never decodes as an Int. Decoded maps are in sorted key order.
+  schema with `properties` and `required`. `required` lists every field that is
+  not a `JsonField` and is left out when no field is required (an empty struct
+  too). Int bounds are signed 64-bit; lists use `items`; String-keyed maps use
+  `additionalProperties`; nested and recursive structs use `$defs` and `$ref`.
+  Extra keys stay allowed.
+- `JSON.decode(source, T)` takes JSON text (a `String`) or a `Json` value, and a
+  named struct type, not a value; bare type names are valid only for `decode`
+  and `schema`. A `Json` source is decoded as it is, without going through text,
+  with the same rules and the same errors as its text. Fields may be Int, Float,
+  Bool, String, lists, String-keyed maps, nested or recursive structs, and
+  `JsonField` of those; other nested types are `CHECK-NOT-DECODABLE`. Malformed
+  JSON, missing fields, wrong types, Int overflow and non-finite numbers give
+  errors with a field or index path. Extra keys are ignored. A JSON integer may
+  decode as a Float; a decimal or exponent never decodes as an Int. Decoded maps
+  are in sorted key order.
 - `JSON.parse` reads exactly one value, with optional surrounding whitespace
   (space, tab, CR, LF). Empty input, trailing content, invalid escapes, raw
   control characters and non-finite numbers are errors. A repeated object key
@@ -404,7 +409,8 @@ and `JSON.encode` give its text. Signatures are in
   without fraction or exponent, or built from an Int, is `"int"`, even outside
   64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists,
-  String-keyed maps and structs of those. Results and Int-keyed maps are
+  String-keyed maps and structs of those, whose fields may also be `JsonField`.
+  Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation. A
   non-finite Float halts with `RUNTIME-JSON-ENCODE`; it is never written as
   null.
@@ -413,6 +419,80 @@ and `JSON.encode` give its text. Signatures are in
   `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in
   whitespace, key order or repeated keys give the same text. `1` and `1.0` stay
   different.
+
+#### Optional and nullable fields (`JsonField`)
+
+Some JSON APIs (tool calls, PATCH bodies, config files) tell three states of a
+key apart: absent, `null`, or a value. A struct field of type `JsonField[T]`
+keeps the three apart in typed JSON. `JsonField` is a builtin generic enum:
+
+```agentica
+enum JsonField[T]
+  Absent
+  Null
+  Value(T)
+end
+```
+
+```agentica
+struct UpdateUser
+  name: JsonField[String]
+  age: JsonField[Int]
+end
+
+def describe_age(age: JsonField[Int]) -> String
+  case age
+    JsonField.Absent -> return "age: keep"
+    JsonField.Null -> return "age: clear"
+    JsonField.Value(n) -> return "age: set to #{n}"
+  end
+end
+
+def main() -> Void
+  update = Result.unwrap!(JSON.decode("{\"age\": null}", UpdateUser))
+  puts(describe_age(update.age))          # age: clear
+  puts(JSON.encode(update))               # {"age":null}
+  reply = UpdateUser(name: JsonField.Value("Bo"), age: JsonField.Absent)
+  puts(JSON.encode(reply))                # {"name":"Bo"}
+end
+```
+
+- The variants are always qualified (`JsonField.Value(x)`). `Absent` and `Null`
+  need an expected type, like any nullary variant of a generic enum
+  (`CHECK-ENUM-TYPE-INFERENCE` otherwise); a struct field gives one. A `case`
+  needs the three arms or a `_` arm, which is how a program treats absent and
+  null alike.
+- **Decode:** a missing key gives `Absent`, JSON `null` gives `Null`, and any
+  other value is decoded as `T` and gives `Value(...)`. `Value` adds no step to
+  an error path, so an error inside the value keeps its path and text
+  (`address.zip: expected String`, `tags[0]: expected String`). Only when the
+  value itself has the wrong kind does the message add "or null": `age:
+  expected signed 64-bit Int or null`, `address: expected object or null`. A
+  missing field that is not a `JsonField` is still "required field".
+- **Encode** (`JSON.encode`, `JSON.from`): `Absent` leaves the key out, `Null`
+  writes `null`, and `Value(x)` writes `x`. The other keys keep declaration
+  order.
+- **Schema:** a `JsonField[T]` field is not in `required`, and its property is
+  `{"anyOf": [<schema of T>, {"type": "null"}]}`, with no `$defs` entry of its
+  own.
+- **Round trip:** an object with only the struct's declared keys, its values in
+  the form encode writes, decodes and encodes back to the same object, up to key
+  order: an absent key stays absent and a `null` stays `null`. Extra keys are
+  dropped, and an integer in a Float field comes back as `1.0`.
+- **Where:** in the type of a `JSON.decode` or `JSON.schema` target or of a
+  `JSON.encode` or `JSON.from` argument, `JsonField` may only be the direct type
+  of a struct field. A list item, a map value, a nested
+  `JsonField[JsonField[T]]` or the whole argument of `JSON.encode` or
+  `JSON.from` is
+  `CHECK-JSON-FIELD-PLACE`, at the target or argument. This check comes first,
+  so `List[JsonField[Nil]]` is `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` as a
+  field is `CHECK-NOT-DECODABLE` or `CHECK-NOT-ENCODABLE`, since `Value(nil)`
+  would be written as `null`. A bare `JsonField` target is
+  `CHECK-UNKNOWN-TYPE`.
+- Outside JSON, `JsonField[T]` is an ordinary enum value: locals, parameters,
+  lists and maps may hold it, it prints when `T` does (`JsonField.Value(30)`),
+  and it has no `==`. A user `struct JsonField`, `enum JsonField` or `import ...
+  as JsonField` is `CHECK-REDEFINED-NAME`.
 
 ### Builtin discovery and execution budget
 

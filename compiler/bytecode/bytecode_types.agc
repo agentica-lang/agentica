@@ -1,6 +1,6 @@
 ## The Types and Decodable sections of the .agcb (docs/vm/03-ir-and-bytecode.md 4.6): the field types of the structs
-## that JSON.decode may build, as a table of types in which a List, a Map from String and a struct name the entry of
-## their item, and for each such struct the entries of its fields.
+## that JSON.decode may build, as a table of types in which a List, a Map from String, a JsonField and a struct name
+## the entry of their item, and for each such struct the entries of its fields.
 ##
 ## Recursion: type_id takes 1 VM frame for each level of List and Map in a field type. The parser stops a written type
 ## at 1,000 levels, and the writer stops at 1,024 (BYTECODE-LIMIT), so the writer stays under 1,100 frames here.
@@ -61,7 +61,8 @@ export def build(program: Ir.Program, struct_index: Map[String, Int]) -> Result[
 end
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
-# 3 String, 4 List, 5 Map from String, 6 struct) and, for the last three, the number of the item type or the struct.
+# 3 String, 4 List, 5 Map from String, 6 struct, 7 JsonField) and, for the last four, the number of the item type, the
+# struct or the type inside the JsonField.
 def type_id(
   program: Ir.Program, struct_index: Map[String, Int], pool: Pool.Pool, type: Types.Type
 ) -> Result[Pool.Interned]
@@ -80,6 +81,13 @@ def type_id(
 
       inner = try type_id(program, struct_index, pool, value)
       return ok(entry_of(inner.pool, 5, inner.id))
+    Types.Type.Enum(name, args) ->
+      if name != "JsonField" or args.size != 1
+        return error(unsupported(program, "the enum #{name} in a JSON field type"))
+      end
+
+      inner = try type_id(program, struct_index, pool, args[0])
+      return ok(entry_of(inner.pool, 7, inner.id))
     Types.Type.Struct(name) ->
       if !struct_index.has_key?(name)
         return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
@@ -103,6 +111,7 @@ def nesting(type: Types.Type) -> Int
   case type
     Types.Type.List(item) -> return 1 + nesting(item)
     Types.Type.Map(key, item) -> return 1 + nesting(item)
+    Types.Type.Enum(name, args) -> return 1 + nesting(args[0])
     _ -> return 0
   end
 end

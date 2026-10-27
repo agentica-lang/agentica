@@ -17,7 +17,7 @@ Two ways to work with JSON:
 JSON.encode(value: T) -> String
 ```
 
-Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, and structs. Struct fields keep their order.
+Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, and structs. Struct fields keep their order. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
 ```agentica
 struct User
@@ -43,9 +43,10 @@ end
 
 ```text
 JSON.decode(s: String, type: T) -> Result[T]
+JSON.decode(json: Json, type: T) -> Result[T]
 ```
 
-Reads JSON into a struct. The second argument is the struct's name. Missing fields and wrong types give an error Result. Extra keys are ignored.
+Reads JSON into a struct. The first argument is JSON text or a `Json` value, the second the struct's name. Missing fields and wrong types give an error Result that names the field. Extra keys are ignored. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
 
 ```agentica
 struct User
@@ -69,13 +70,32 @@ Ana is 25
 false
 ```
 
+```agentica
+struct Point
+  x: Int
+  y: Int
+end
+
+def main() -> Void
+  data = JSON.parse("{\"points\": [{\"x\": 1, \"y\": 2}, {\"x\": 3}]}").unwrap!
+  for item in data.get("points").unwrap!.list.unwrap!
+    puts(JSON.decode(item, Point))
+  end
+end
+```
+
+```output
+ok(Point(x: 1, y: 2))
+error("y: expected required field")
+```
+
 ## JSON.schema
 
 ```text
 JSON.schema(type: T) -> Json
 ```
 
-Describes a struct as a JSON Schema.
+Describes a struct as a JSON Schema. `required` lists the fields that are not `JsonField`, and is left out when there are none.
 
 ```agentica
 struct Point
@@ -92,6 +112,67 @@ end
 ```output
 ["x","y"]
 ```
+
+## Optional and nullable fields
+
+Some APIs (tool calls, PATCH bodies, config files) tell three states of a key apart: the key is absent, it is `null`, or it has a value. A struct field of type `JsonField[T]` keeps them apart. It is a builtin enum with the variants `JsonField.Absent`, `JsonField.Null` and `JsonField.Value(x)`.
+
+- `JSON.decode` gives `Absent` for a missing key, `Null` for `null`, and `Value(...)` for any other value, decoded as `T`. A value of the wrong kind gives an error such as `age: expected signed 64-bit Int or null`.
+- `JSON.encode` and `JSON.from` leave out an `Absent` key, write `null` for `Null`, and write the value of `Value`.
+- `JSON.schema` leaves the field out of `required` and allows `null`: `{"anyOf": [<schema of T>, {"type": "null"}]}`.
+
+```agentica
+struct UpdateUser
+  name: JsonField[String]
+  age: JsonField[Int]
+end
+
+def describe_age(age: JsonField[Int]) -> String
+  text = ""
+  case age
+    JsonField.Absent -> text = "age: keep"
+    JsonField.Null -> text = "age: clear"
+    JsonField.Value(n) -> text = "age: set to #{n}"
+  end
+  return text
+end
+
+def show(text: String) -> Result[Void]
+  update = try JSON.decode(text, UpdateUser)
+  puts(describe_age(update.age))
+  name = ""
+  case update.name
+    JsonField.Value(n) -> name = "set to #{n}"
+    _ -> name = "keep"          # this API treats null like absent
+  end
+  puts("name: #{name}")
+  puts(JSON.encode(update))
+  return ok()
+end
+
+def main() -> Void
+  for text in ["{}", "{\"age\": null}", "{\"name\": \"Ana\", \"age\": 30}"]
+    Result.unwrap!(show(text))
+  end
+  reply = UpdateUser(name: JsonField.Value("Bo"), age: JsonField.Null)
+  puts(JSON.encode(reply))
+end
+```
+
+```output
+age: keep
+name: keep
+{}
+age: clear
+name: keep
+{"age":null}
+age: set to 30
+name: set to Ana
+{"name":"Ana","age":30}
+{"name":"Bo","age":null}
+```
+
+`JsonField` may only be the type of a struct field in a JSON type: a list of `JsonField`, a map of them, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` is the error `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` cannot be encoded or decoded, since `Value(nil)` would look like `Null`. Outside JSON it is an ordinary enum value, and `JsonField` is a reserved name.
 
 ## JSON.parse
 

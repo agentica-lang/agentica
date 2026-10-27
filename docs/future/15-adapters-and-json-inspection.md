@@ -209,11 +209,11 @@ it.
   enum (with 15.4), whose fields or payloads are encodable after substitution,
   because encoding needs no `$defs`. Only `JSON.decode` and `JSON.schema` reject
   a generic instance, struct or enum, anywhere in the target, with
-  `CHECK-NOT-DECODABLE` (except `JsonField[T]` as a direct struct field, §17),
-  until a real program needs it. The reason: `$defs` is keyed by the bare type
-  name, so `Box[Int]` and `Box[String]` would collide. A direct target would
-  also need type arguments in expression position (`Box[Int]` reads as
-  indexing). A bare generic target with no type arguments, such as
+  `CHECK-NOT-DECODABLE` (except `JsonField[T]` as a direct struct field, in
+  the grammar), until a real program needs it. The reason: `$defs` is keyed by
+  the bare type name, so `Box[Int]` and `Box[String]` would collide. A direct
+  target would also need type arguments in expression position (`Box[Int]`
+  reads as indexing). A bare generic target with no type arguments, such as
   `JSON.decode(text, Box)` or `JSON.schema(Option)`, is `CHECK-UNKNOWN-TYPE`, as
   type resolution gives today.
 - VM: no change. Type parameters exist only in the checker, as for generic
@@ -252,7 +252,7 @@ end
 - Only non-generic enums are decodable, and only when their payload types are. A
   generic enum instance such as `Option[Int]` anywhere in a decode or schema
   target is `CHECK-NOT-DECODABLE` (except `JsonField[T]` as a direct struct
-  field, §17; 15.3 gives the reason); a bare `Option` is `CHECK-UNKNOWN-TYPE`.
+  field; 15.3 gives the reason); a bare `Option` is `CHECK-UNKNOWN-TYPE`.
   `Result` stays out. `JsonValue` stays out of all four functions (15.2).
 - The decode target may be a non-generic enum: `JSON.decode(text, Shape)`.
 - Errors return `error(...)` with the same paths as struct fields
@@ -310,7 +310,8 @@ the fields of a struct type is known at compile time and is `Type.members`
   10e, and the JSON part of 10c, need the VM JSON work; 10e also needs 10b.
 - 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
   `JsonValue` enum (§15.2); 10c generic structs (§15.3); 10d JSON for
-  enums (§15.4); 10e optional and nullable JSON fields (§17).
+  enums (§15.4); 10e optional and nullable JSON fields (the grammar's JSON
+  section).
 - Done when: two programs run. The VM program has a `Storage` adapter with a
   read-only memory backend and a walker over unknown JSON, using only builtin
   library calls (golden check). The disk program uses the same `Storage` shape

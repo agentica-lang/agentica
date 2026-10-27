@@ -1,0 +1,27 @@
+# json-field-vectors.stdin: made by python3 tests/fixtures/json-field-vectors.py (Python json module); do not edit by hand
+{"id": 1}	ok	{"id":1}	same
+{"id": 1, "name": null, "age": null, "score": null, "address": null, "tags": null, "homes": null}	ok	{"id":1,"name":null,"age":null,"score":null,"address":null,"tags":null,"homes":null}	same
+{"id": 1, "name": "Ana", "age": 30, "score": 2.5, "address": {"zip": "08001"}, "tags": ["a", "b"], "homes": [{"zip": "1", "note": null}, {"zip": "2", "note": "x"}]}	ok	{"id":1,"name":"Ana","age":30,"score":2.5,"address":{"zip":"08001"},"tags":["a","b"],"homes":[{"zip":"1","note":null},{"zip":"2","note":"x"}]}	same
+{"age": 7, "id": 2}	ok	{"id":2,"age":7}	same
+{"id": 3, "address": {"zip": "z", "note": "n"}, "tags": []}	ok	{"id":3,"address":{"zip":"z","note":"n"},"tags":[]}	same
+{"id": 4, "score": 1}	ok	{"id":4,"score":1.0}	changed
+{"id": 5, "extra": true, "name": "x"}	ok	{"id":5,"name":"x"}	changed
+{}	error	id: expected required field	-
+{"name": "x"}	error	id: expected required field	-
+{"id": null}	error	id: expected signed 64-bit Int	-
+[]	error	$: expected object	-
+{"id": 1, "age": "30"}	error	age: expected signed 64-bit Int or null	-
+{"id": 1, "age": 1.5}	error	age: expected signed 64-bit Int or null	-
+{"id": 1, "age": 9223372036854775808}	error	age: expected signed 64-bit Int or null	-
+{"id": 1, "score": "x"}	error	score: expected finite Float or null	-
+{"id": 1, "name": 3}	error	name: expected String or null	-
+{"id": 1, "address": 3}	error	address: expected object or null	-
+{"id": 1, "address": []}	error	address: expected object or null	-
+{"id": 1, "address": {}}	error	address.zip: expected required field	-
+{"id": 1, "address": {"zip": 9}}	error	address.zip: expected String	-
+{"id": 1, "address": {"zip": "z", "note": 9}}	error	address.note: expected String or null	-
+{"id": 1, "tags": {}}	error	tags: expected array or null	-
+{"id": 1, "tags": [1]}	error	tags[0]: expected String	-
+{"id": 1, "tags": [null]}	error	tags[0]: expected String	-
+{"id": 1, "homes": [{"zip": "a"}, {"note": "b"}]}	error	homes[1].zip: expected required field	-
+{"id": 1, "homes": [{"zip": "a"}, {"zip": "b", "note": false}]}	error	homes[1].note: expected String or null	-

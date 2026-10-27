@@ -102,7 +102,7 @@ true
 
 ## Typed decoding
 
-`Toml.to_json` turns a `DateTime` into its string and keeps integers and floats apart (`port = 8080.0` does not decode into an `Int`). `inf` and `nan` have no JSON form: errors. `JSON.decode(JSON.encode(json), Config)` then fills a struct, and its errors name the field path.
+`Toml.to_json` turns a `DateTime` into its string and keeps integers and floats apart (`port = 8080.0` does not decode into an `Int`). `inf` and `nan` have no JSON form: errors. `JSON.decode(json, Config)` then fills a struct, and its errors name the field path.
 
 ```agentica
 import Toml from "std/toml"
@@ -120,7 +120,7 @@ end
 def load(text: String) -> Result[Config]
   doc = try Toml.parse(text)
   json = try Toml.to_json(doc)
-  return JSON.decode(JSON.encode(json), Config)
+  return JSON.decode(json, Config)
 end
 
 def main() -> Void

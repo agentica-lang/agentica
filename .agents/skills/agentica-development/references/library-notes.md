@@ -21,18 +21,22 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## JSON
 
-- Typed decoding uses a type-expression AST node accepted only in JSON
-  type argument positions. JSON.decode returns located-path Result errors for
-  bad data, validates signed Int/finite Float bounds, and ignores extra fields.
+- Typed decoding uses a type-expression AST node accepted only in JSON type
+  argument positions. JSON.decode returns located-path Result errors for bad
+  data, validates signed Int/finite Float bounds, and ignores extra fields.
   Recursive type validation visits each struct once. Decoded map keys are
-  sorted. JSON.schema uses the same eligibility check, emits required
-  fields/64-bit bounds and $defs/$ref for nested or recursive types. Builders
-  construct opaque Json directly; JSON.from shares encode eligibility and
-  non-finite diagnostics. Builtin record declarations participate in decoding
-  and schemas.
+  sorted. The source may be a String or a Json (two catalog forms, one rule and
+  one VM builtin that skips the parse for a Json). JSON.schema uses the same
+  eligibility check, emits 64-bit bounds and $defs/$ref for nested or recursive
+  types, and lists in required every field that is not a JsonField (no required
+  key when that list is empty). JsonField[T] is only the direct type of a struct
+  field (CHECK-JSON-FIELD-PLACE, checked before the decodable and encodable
+  walks). Builders construct opaque Json directly; JSON.from shares encode
+  eligibility and non-finite diagnostics. Builtin record declarations
+  participate in decoding and schemas.
 
-- `Json` is opaque, not primitive for equality. `Json` and `JSON` are reserved
-  names.
+- `Json` is opaque, not primitive for equality. `Json`, `JSON` and `JsonField`
+  are reserved names.
 - Recursively check encoding eligibility, including declared struct fields and
   empty containers. A seen-struct path prevents infinite recursion without
   skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
