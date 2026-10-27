@@ -614,7 +614,7 @@ def test_on_runs_the_jit_turn_loop_only_in_sampled_turns_until_code_is_published
     # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the run in the plain turn
     # loop but for the turns drawn at random, one in 16 (AGC_JIT_SAMPLE) on average of the steps / 2000 turns (bounded
     # here at twice that). Called 3000 times, the turns that start in it run the jit copy, which compiles it, and from
-    # then on every turn does.
+    # then on every turn does: at least the whole turns of the second loop's steps.
     bytecode = compile_text(f"""def pad(n: Int, width: Int) -> String
   text = n.to_s
   while text.length < width
@@ -630,25 +630,28 @@ def main() -> Void
     total = total + {{"k": i}}.size * {{"j": i}}.size
     i += 1
   end
+  first = Profile.steps()
   k = 0
   while k < {calls}
     total = total + pad(k, 6).length
     k += 1
   end
   puts(total)
+  puts(first)
   puts(Profile.steps())
 end
 """, "plain_until_live", tmp_path)
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.split("\n")[0] == f"{20000 + 6 * calls}", (stdout, stderr)
-    all_turns = int(stdout.split("\n")[1]) // 2000 + 1
+    first, total = int(stdout.split("\n")[1]), int(stdout.split("\n")[2])
+    all_turns = total // 2000 + 1
     lines = jit_trace(bytecode, tmp_path, "on")
     turns = [int(line.split("count=")[1]) for line in lines if " jit turn count=" in line]
     assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
     if X86_64 and not calls:
         assert len(turns) == 1 and 0 < turns[0] <= all_turns // 8 + 1, (turns, all_turns)
     elif X86_64:
-        assert len(turns) == 1 and turns[0] > all_turns // 4, (turns, all_turns)
+        assert len(turns) == 1 and turns[0] >= (total - first) // 2000, (turns, first, total)
     else:
         assert turns == []
 

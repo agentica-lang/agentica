@@ -114,9 +114,9 @@ static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
    enter (or the task has more frames than that), which catches a long loop the turn starts in, and a turn drawn at
    random, one in AGC_JIT_SAMPLE on average, on each scheduler does in any case, which counts a function that runs only
    inside turns (a callee that returns before the turn ends, the work of a task that parks or ends within its turn).
-   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a run whose functions
-   that may get code run seldom or never keeps the plain loop for nearly every turn, without a test of the JIT inside
-   it. */
+   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a
+   run whose functions that may get code run seldom or never keeps the plain loop for nearly every turn, without a test
+   of the JIT inside it. */
 #define AGC_JIT_TOP_FRAMES 64
 #define AGC_JIT_SAMPLE 16
 bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
