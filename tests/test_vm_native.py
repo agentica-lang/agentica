@@ -856,6 +856,47 @@ def test_a_resource_with_a_capital_free_name_is_freed_by_that_function(tmp_path,
     assert (result.code, result.stdout, result.stderr) == (0, "5\n0\n1\n", "")
 
 
+# A free_address: function gets the address of the handle (void f(T **)) and may write NULL there: Native.close,
+# the end of the owning task and the free of an out resource each call it once, and a second close calls nothing. A
+# free given the pointer itself would free what the handle points at, which crashes the run.
+ADDRESS_FREE_EXTERN = """extern "{library}"
+  resource Handle, free_address: peer_res_close
+  def peer_res_open(value: C.Int32) -> Handle
+  def peer_res_get(handle: Handle) -> C.Int32
+  def peer_out_all(
+    n: C.Int32, out i: C.Int32, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Handle,
+  ) -> C.Int32
+  def peer_res_closes() -> C.Int32
+  def peer_res_null_closes() -> C.Int32
+end
+
+def open_one(n: Int) -> Int
+  handle = peer_res_open(n).unwrap!
+  return peer_res_get(handle)
+end
+
+def main() -> Void
+  handle = peer_res_open(7).unwrap!
+  puts(peer_res_get(handle))
+  Native.close(handle)
+  Native.close(handle)
+  puts(peer_res_closes())
+  puts(Task.await(Task.spawn(&open_one, 5)))
+  puts(peer_res_closes())
+  made = peer_out_all(3)
+  puts(peer_res_get(made.res))
+  Native.close(made.res)
+  puts([peer_res_closes(), peer_res_null_closes()])
+end
+"""
+
+
+@NATIVE_CALLS
+def test_a_free_address_function_gets_the_address_of_the_handle_once(tmp_path, peer):
+    result = agentica(program(tmp_path, ADDRESS_FREE_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stdout, result.stderr) == (0, "7\n1\n5\n2\n3\n[3, 0]\n", "")
+
+
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
 # the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
 # RUNTIME-HANDLE-NOT-OWNED.

@@ -550,6 +550,10 @@ end
   stops at the block, so do not declare it in another one either. `IO.inspect`
   prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
   as for other handles.
+- `resource Db, free_address: db_close` declares a resource freed by `void
+  db_close(void **)`, as `duckdb_close` and `duckdb_disconnect`: every free
+  above (close, the owner's end, a dropped compute result) passes the address
+  of the VM's copy of the pointer, where C may write NULL, and runs once.
 - An `out` parameter (section 5) gets a pointer to a slot that is zeroed before
   the call: an `int *` for `C.Int32`, a `void **` for `C.Pointer` or a resource.
   The call returns the function's record, with the C result as `result` and

@@ -146,7 +146,12 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
 
       return lines
     Ast.Decl.Resource(node) ->
-      attrs = "#{name_attr(node.name)} free=#{Text.quote(node.free)}#{doc_attr(node.doc)}"
+      attrs = "#{name_attr(node.name)} free=#{Text.quote(node.free)}"
+      if node.address
+        attrs += " address=true"
+      end
+
+      attrs += doc_attr(node.doc)
       return out.push(head(at, role, "resource-decl", node.id, node.span, attrs))
     Ast.Decl.TypeAlias(node) ->
       attrs = name_attr(node.name)

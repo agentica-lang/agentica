@@ -89,9 +89,13 @@ the C pointers that the block's functions return, freed by the C function
 `c_name` of the same library (section 6d). `c_name` is any C identifier, also
 one that starts with a capital letter (`PQfinish`, `SSL_free`): only the dotted
 `C.Function` after the colon is a type, so a bare name is always a C name,
-whatever types the program declares. It is a type for the rest of the
-language: `export` makes it importable, and it takes the place of a type in the
-declaration order. So does every `def` of a block that declares a resource or a
+whatever types the program declares. `resource Name, free_address: c_name` names
+a C function that takes the address of the pointer instead (`void c_name(T **)`,
+as `duckdb_close`), checked as a `free:` name; a resource has one free word, so
+a second one is `PARSE-EXTERN-FREE` at it, and `free_address: C.Function` is
+`PARSE-EXTERN-FUNCTION`. It is a type for the rest of the language: `export`
+makes it importable, and it takes the place of a type in the declaration order.
+So does every `def` of a block that declares a resource or a
 struct, exported or not: such a block is one declaration among the types, and
 its functions do not count as functions for the order (a block with neither
 keeps the rule of the `def`). A `def` of the block may use it in its signature

@@ -493,6 +493,21 @@ def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, s
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FREE", start, stop)
 
 
+# free_address: names a C function that takes the address of the handle, checked as a free: name is. A resource has
+# one free function: free: with free_address: is PARSE-EXTERN-FREE at the second word.
+@pytest.mark.parametrize("members, code, start, stop", [
+    ("  resource Db, free_address: db_close\n  def db_open() -> Db", None, None, None),
+    ("  resource Db, free: db_close, free_address: db_free", "PARSE-EXTERN-FREE", (2, 32), (2, 44)),
+    ("  resource Db, free_address: db_close, free: db_free", "PARSE-EXTERN-FREE", (2, 40), (2, 44)),
+    ("  resource Db, free_address: db_close\n  def db_close(db: Db) -> Void", "PARSE-EXTERN-FREE", (3, 7), (3, 15)),
+    ("  resource Db, free_address: C.Function", "PARSE-EXTERN-FUNCTION", (2, 30), (2, 40)),
+    ("  resource Db, free_address: db_close?", "PARSE-EXTERN-NAME", (2, 30), (2, 39)),
+])
+def test_a_resource_may_be_freed_by_the_address_of_its_handle(tmp_path, members, code, start, stop):
+    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
+    assert_checks(check(source(tmp_path, text)), code, start, stop)
+
+
 @pytest.mark.parametrize("members, code, start", [
     ("  def db_open() -> Db\n  resource Db, free: db_close", "PARSE-EXTERN-TYPE", (2, 20)),
     ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int32', "PARSE-EXTERN-TYPE",

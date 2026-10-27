@@ -409,6 +409,23 @@ void peer_res_free(void *p) {
 /* The same free under a name that starts with a capital letter, as in libpq (PQfinish) and OpenSSL (SSL_free). */
 void PeerFree(void *p) { peer_res_free(p); }
 
+/* For free_address: a free that takes the address of the handle, as duckdb_close(duckdb_database *) does: it frees
+   the resource and writes NULL there. A call with a NULL handle, a second free of the same handle, is counted apart. */
+static atomic_int res_closes, res_null_closes;
+
+void peer_res_close(void **p) {
+  if (!*p) {
+    atomic_fetch_add(&res_null_closes, 1);
+    return;
+  }
+  atomic_fetch_add(&res_closes, 1);
+  peer_res_free(*p);
+  *p = NULL;
+}
+
+int32_t peer_res_closes(void) { return atomic_load(&res_closes); }
+int32_t peer_res_null_closes(void) { return atomic_load(&res_null_closes); }
+
 int32_t peer_res_get(void *p) { return ((peer_res *)p)->value; }
 int32_t peer_res_opens(void) { return atomic_load(&res_opens); }
 int32_t peer_res_frees(void) { return atomic_load(&res_frees); }

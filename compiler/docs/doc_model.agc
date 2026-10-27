@@ -300,12 +300,17 @@ def alias_item(node: Ast.TypeAliasDecl, doc: Ast.Optional[String], span: Source.
 end
 
 def resource_item(node: Ast.ResourceDecl, doc: Ast.Optional[String], span: Source.Span, exported: Bool) -> Item
+  word = "free"
+  if node.address
+    word = "free_address"
+  end
+
   return Item(
     kind: "resource",
     name: node.name,
     name_span: node.name_span,
     exported: exported,
-    signature: "resource #{node.name}, free: #{node.free}",
+    signature: "resource #{node.name}, #{word}: #{node.free}",
     doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Plain,
