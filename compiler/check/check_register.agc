@@ -169,8 +169,8 @@ def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result
   )
 end
 
-# CHECK-REDEFINED-NAME when the type parameters of an enum or a generic alias (owner) repeat a name or take a reserved
-# one. Both follow the same rule.
+# CHECK-REDEFINED-NAME when the type parameters of a struct, an enum or a generic alias (owner) repeat a name or take a
+# reserved one. All three follow the same rule.
 def check_type_parameters(
   cx: State.Cx,
   st: State.St,
@@ -240,7 +240,11 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
         Ast.Decl.Struct(node) ->
           here = found.with(file: module.file)
           try check_new_name(here, st, node.name, node.span)
-          found = here.with(structs: found.structs.put(node.name, []))
+          try check_type_parameters(here, st, node.type_parameters, "struct", node.span)
+          found = here.with(
+            structs: found.structs.put(node.name, []),
+            struct_params: found.struct_params.put(node.name, node.type_parameters),
+          )
         _ -> st = st
       end
     end
@@ -258,7 +262,9 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
   return ok(found)
 end
 
+# The fields of one struct, resolved with the struct's type parameters in scope.
 def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.Cx]
+  here = cx.with(type_params: node.type_parameters)
   seen: Set[String] = Set.new([])
   fields: List[Model.Named] = []
   defaulted: Set[String] = Set.new([])
@@ -269,19 +275,11 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     end
 
     seen = seen.add(field.name)
-    type = try Types.resolve_type(cx, st, field.type, false)
+    type = try Types.resolve_type(here, st, field.type, false)
     # value.with(...) is always the struct update, so a function field named with could never be called without .call.
-    if field.name == "with" and T.is?(type, "Fn")
-      return error(
-        State.fail_help(
-          cx,
-          st,
-          "CHECK-REDEFINED-NAME",
-          "a field named \"with\" cannot hold a function",
-          field.span,
-          "value.with(...) is the struct update; rename the field",
-        ),
-      )
+    # A field of a type parameter could be one, so it is refused too.
+    if field.name == "with" and (T.is?(type, "Fn") or T.is?(type, "Var"))
+      return error(with_field_failure(cx, st, type, field.span))
     end
 
     try DefaultChecks.check_field_value(cx, st, field)
@@ -303,6 +301,22 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
       field_defaults: cx.field_defaults.put(node.name, defaulted),
       c_structs: c_structs,
     ),
+  )
+end
+
+def with_field_failure(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> String
+  message = "a field named \"with\" cannot hold a function"
+  if T.is?(type, "Var")
+    message = "a field named \"with\" cannot have a type parameter as its type, since it could be a function"
+  end
+
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-REDEFINED-NAME",
+    message,
+    span,
+    "value.with(...) is the struct update; rename the field",
   )
 end
 

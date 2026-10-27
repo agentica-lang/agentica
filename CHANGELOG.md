@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Generic structs: `struct Box[T]`, used as `Box[Int]`, with the type argument
+  inferred when you build the value.
+
 ### Changed
 
 - The experimental x86-64 JIT calls function values (`f.call(...)` of a block,

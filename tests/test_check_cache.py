@@ -544,3 +544,35 @@ def test_a_table_type_in_a_module_answers_alike_cold_warm_and_off(ws):
     assert json.loads(first[1][1])["type"] == "ATS[String, Int]"
     edit(ws, "tables", "hits: ATS[String, Int]\nend", "hits: ATS[String, Float]\nend")
     assert settled(ws, **asked)[0][0] == 1
+
+
+# A module whose constant has the type of a generic struct with arguments, which the entry writes with its own letter.
+GENERIC = '''export ORIGIN = Pt(x: ["a"])
+
+export struct Pt[T]
+  x: T
+end
+'''
+
+THROUGH_GENERIC = '''import Gen from "gen"
+
+def main() -> Void
+  origin: Gen.Pt[List[String]] = Gen.ORIGIN
+  puts(origin.x.size.to_s)
+end
+'''
+
+
+def test_a_generic_struct_constant_is_read_back_from_its_entry(ws):
+    (ws.project / "gen.agc").write_text(GENERIC, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_GENERIC, encoding="utf-8")
+    asked = {"source": THROUGH_GENERIC, "needle": "origin.x"}
+    first = settled(ws, **asked)
+    assert first[0] == (0, '{"ok":true}\n', "")
+    assert any(b"\nconst ORIGIN G@" in path.read_bytes() for path in entries(ws))
+    # The second run reads the entry: the same wrong use gets the same diagnostic, cold, warm and off.
+    wrong = THROUGH_GENERIC.replace("Gen.Pt[List[String]]", "Gen.Pt[Int]")
+    (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
+    failed = settled(ws, source=wrong, needle="origin.x")
+    assert failed[0][0] == 1
+    assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"

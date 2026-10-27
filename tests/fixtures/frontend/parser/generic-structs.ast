@@ -1,0 +1,17 @@
+program #16 0:1:1-153:15:1
+  declaration: struct-decl #6 21:2:1-72:6:1 name="Box" type-parameters=["T"] doc="A generic struct."
+    field: field-decl #1 37:3:3-46:4:1 name="value"
+      type: type-ref #0 44:3:10-45:3:11 name="T"
+    field: field-decl #5 48:4:3-68:5:1 name="items"
+      type: type-ref #3 55:4:10-62:4:17 name="List"
+        arg: type-ref #2 60:4:15-61:4:16 name="T"
+      default: list-lit #4 65:4:20-67:4:22
+  declaration: export-decl #12 73:7:1-125:11:1
+    declaration: struct-decl #11 80:7:8-125:11:1 name="Pair" type-parameters=["A","B"]
+      field: field-decl #8 100:8:3-109:9:1 name="first"
+        type: type-ref #7 107:8:10-108:8:11 name="A"
+      field: field-decl #10 111:9:3-121:10:1 name="second"
+        type: type-ref #9 119:9:11-120:9:12 name="B"
+  declaration: struct-decl #15 126:12:1-153:15:1 name="Plain"
+    field: field-decl #14 141:13:3-149:14:1 name="id"
+      type: type-ref #13 145:13:7-148:13:10 name="Int"

@@ -88,7 +88,7 @@ def type_id(
 
       inner = try type_id(program, struct_index, pool, args[0])
       return ok(entry_of(inner.pool, 7, inner.id))
-    Types.Type.Struct(name) ->
+    Types.Type.Struct(name, args) ->
       if !struct_index.has_key?(name)
         return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
       end

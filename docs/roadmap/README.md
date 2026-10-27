@@ -286,15 +286,15 @@ Weighed later (no fixed order):
 
 - **Order:** 16
   - **Next work:** Adapters and JSON inspection: call `Fn` fields without
-    `.call`, `JSON.kind`, generic structs, JSON for enums; optional and
-    nullable JSON fields (10e, `JsonField`) are done
+    `.call`, `JSON.kind`, JSON for enums; generic structs (10c) and optional
+    and nullable JSON fields (10e, `JsonField`) are done
   - **Outcome:** Write adapters and read JSON of unknown shape without
     workarounds
 
 - **Order:** 18
   - **Next work:** (On demand) Binary serialization (phase 11): typed
-    `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c)
-    and the JSON form of enums (10d); starts when a real program needs it
+    `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of
+    enums (10d); starts when a real program needs it
   - **Outcome:** Keep a disk cache or send values between Agentica processes
     without losing Int keys, Float bits or enums
 

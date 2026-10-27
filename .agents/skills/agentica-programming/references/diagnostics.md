@@ -118,7 +118,8 @@ and a task's crash line (`"task":true`) carry it too.
   is not a list, set or range.
 - `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`,
   `CHECK-ENUM-TYPE-INFERENCE`: unknown enum variant; named arguments to a
-  variant; a generic enum type not known from payloads or context.
+  variant; a generic enum or struct type not known from payloads, field values
+  or context.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.

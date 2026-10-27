@@ -1,7 +1,8 @@
 ## Types in the checker: reading a type written in the source (resolve_type), the questions the rules ask of a type
-## (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute,
-## unify). These are the helpers that do not depend on the walk of the tree.
+## (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic structs and enums
+## (substitute, unify). These are the helpers that do not depend on the walk of the tree.
 
+import Model from "../catalog/builtin_model"
 import {ENUMS, OPAQUE_TYPES} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -108,6 +109,15 @@ export def json_field_place(
     return json_field_place(cx, Types.value(type), false, "map value", owner, seen)
   elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
     key = "Struct:#{Types.name(type)}"
+    # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
+    # Box by an argument, and the fields below are walked once for each name.
+    for argument in Types.args(type)
+      found = json_field_place(cx, argument, false, "type argument", owner, seen)
+      if found != ""
+        return found
+      end
+    end
+
     if seen.any? do |item: String| item == key end
       return ""
     end
@@ -126,7 +136,8 @@ export def json_field_place(
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
-## those, and JsonField of an encodable type other than Nil.
+## those (a generic struct by its fields with the type arguments put in), and JsonField of an encodable type other than
+## Nil.
 export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if primitive?(type) or Types.is?(type, "Json")
     return true
@@ -137,14 +148,15 @@ export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   elsif Types.is?(type, "Map")
     return Types.is?(Types.key(type), "String") and encodable?(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
-    return struct_all?(cx, Types.name(type), seen, 0)
+    return struct_all?(cx, type, seen, 0)
   end
 
   return false
 end
 
-## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, structs
-## of those, and JsonField of a decodable type (Nil is not one).
+## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
+## structs of those, and JsonField of a decodable type (Nil is not one). A generic struct is not decodable: the schema
+## of the structs is keyed by their bare names, which Box[Int] and Box[String] would share.
 export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
     return true
@@ -155,7 +167,7 @@ export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   elsif Types.is?(type, "Map")
     return Types.is?(Types.key(type), "String") and decodable?(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
-    return struct_all?(cx, Types.name(type), seen, 1)
+    return Types.args(type).size == 0 and struct_all?(cx, type, seen, 1)
   end
 
   return false
@@ -220,6 +232,7 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.ATS(key, value) -> return has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
       return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
+    Types.Type.Struct(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     _ -> return false
   end
@@ -247,6 +260,7 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
       substitute_all(params, substitutions),
       substitute(result, substitutions),
     )
+    Types.Type.Struct(name, args) -> return Types.Type.Struct(name, substitute_all(args, substitutions))
     Types.Type.Enum(name, args) -> return Types.Type.Enum(name, substitute_all(args, substitutions))
     _ -> return type
   end
@@ -255,6 +269,31 @@ end
 ## substitute for each type of a list.
 export def substitute_all(types: List[ResolvedType], substitutions: Map[String, ResolvedType]) -> List[ResolvedType]
   return types.map do |type: ResolvedType| substitute(type, substitutions) end
+end
+
+## The substitutions that a list of type parameters and a list of type arguments of the same length make.
+export def bindings(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
+  found: Map[String, ResolvedType] = {}
+  index = 0
+  while index < parameters.size and index < args.size
+    found = found.put(parameters[index], args[index])
+    index += 1
+  end
+
+  return found
+end
+
+## The fields of a struct type with its type arguments put in, in declaration order: a Box[Int] has `value: Int`.
+## A plain struct has the fields as declared.
+export def fields_of(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
+  name = Types.name(type)
+  parameters = cx.struct_params.get(name, [])
+  if parameters.size == 0 or parameters.size != Types.args(type).size
+    return cx.structs[name]
+  end
+
+  substitutions = bindings(parameters, Types.args(type))
+  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, substitutions)) end
 end
 
 ## Matches the actual type against a template that may have type variables, and returns the substitutions with what the
@@ -686,8 +725,10 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
     end
 
     return ok(Types.Type.Enum(name, args))
+  elsif cx.structs.has_key?(name) and cx.struct_params.get(name, []).size > 0
+    return resolve_generic_struct(cx, st, ref)
   elsif cx.structs.has_key?(name) and ref.args.size == 0
-    return ok(Types.Type.Struct(name))
+    return ok(Types.Type.Struct(name, []))
   end
 
   candidates = cx.structs.keys.concat(cx.enums.keys)
@@ -706,6 +747,29 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
       help,
     ),
   )
+end
+
+# A generic struct with its type arguments: one per type parameter, CHECK-UNKNOWN-TYPE otherwise (a bare Box too).
+def resolve_generic_struct(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[ResolvedType]
+  parameters = cx.struct_params[ref.name]
+  if parameters.size != ref.args.size
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "struct #{Types.display_name(ref.name)} #{expects_text(parameters.size, ref.args.size)}",
+        ref.span,
+      ),
+    )
+  end
+
+  args: List[ResolvedType] = []
+  for arg in ref.args
+    args = args.push(try resolve_expanded(cx, st, arg, false))
+  end
+
+  return ok(Types.Type.Struct(ref.name, args))
 end
 
 # The type names offered as a guess for an unknown type besides the structs and enums.
@@ -731,15 +795,25 @@ def shared_type_names(cx: State.Cx) -> List[String]
   ].concat(OPAQUE_TYPES.to_a)
 end
 
-# True when every field of the struct passes the test: 0 for encodable, 1 for decodable. A struct already in seen is
-# true (the type is recursive).
-def struct_all?(cx: State.Cx, name: String, seen: List[String], test: Int) -> Bool
+# True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
+# each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
+# argument). Then every field with the arguments put in is tested, once for each name on the path: a struct already in
+# seen is true (the type is recursive), and since seen holds names, a recursion that changes its type arguments each
+# time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
+  name = Types.name(type)
+  for argument in Types.args(type)
+    if test == 0 and !encodable?(cx, argument, seen)
+      return false
+    end
+  end
+
   if seen.any? do |item: String| item == name end
     return true
   end
 
   inner = seen.push(name)
-  for field in cx.structs[name]
+  for field in fields_of(cx, type)
     if test == 0 and !encodable?(cx, field.type, inner)
       return false
     elsif test == 1 and !decodable?(cx, field.type, inner)
@@ -800,7 +874,7 @@ def composite?(type: ResolvedType) -> Bool
   return parts(type).size > 0
 end
 
-# unify for two types with the same head: the arguments pair by pair. An enum must have the same name.
+# unify for two types with the same head: the arguments pair by pair. A struct or an enum must have the same name.
 def unify_inside(
   cx: State.Cx,
   st: State.St,
@@ -811,7 +885,7 @@ def unify_inside(
 ) -> Result[Map[String, ResolvedType]]
   pairs = parts(template)
   others = parts(actual)
-  if Types.is?(template, "Enum") and Types.name(template) != Types.name(actual)
+  if (Types.is?(template, "Enum") or Types.is?(template, "Struct")) and Types.name(template) != Types.name(actual)
     try State.ensure(cx, st, actual, template, span)
   end
 
@@ -841,6 +915,7 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Map(key, value) -> return [key, value]
     Types.Type.ATS(key, value) -> return [key, value]
     Types.Type.Fn(params, result) -> return params.concat([result])
+    Types.Type.Struct(name, args) -> return args
     Types.Type.Enum(name, args) -> return args
     _ -> return []
   end

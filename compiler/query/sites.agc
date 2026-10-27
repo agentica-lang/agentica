@@ -242,7 +242,8 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
   return out.concat(walk(scan, roots))
 end
 
-# The record of an extern function (record_of) has the function's name span, which the function's definition takes.
+# The record of an extern function (record_of) has the function's name span, which the function's definition takes. A
+# type parameter of the struct stays as it is in a field (`value: T`): it names no declaration.
 def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
   out: List[Site] = []
   if node.record_of == ""
@@ -252,7 +253,7 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
   roots: List[Walk.Node] = []
   for field in node.fields
     out = out.concat(defined(scan, member("field", node.name, field.name), field.name_span))
-    out = out.concat(type_sites(scan, field.type, []))
+    out = out.concat(type_sites(scan, field.type, node.type_parameters))
     case field.default
       Ast.Optional.Present(value) -> roots = roots.push(Walk.Node.Expr(value))
       Ast.Optional.Absent -> roots = roots

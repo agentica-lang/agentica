@@ -172,9 +172,9 @@ def scenario(name: String) -> Ir.Program
     found = structs_named(65534)
     types: List[Types.Type] = [Types.Type.Int, Types.Type.Float, Types.Type.Bool, Types.Type.String]
     for index in 0...65534
-      types = types.push(Types.Type.Struct("S#{index}"))
+      types = types.push(Types.Type.Struct("S#{index}", []))
     end
-    return program(found.push(decodable("J", types.push(Types.Type.Struct("J")))), [], [], 0)
+    return program(found.push(decodable("J", types.push(Types.Type.Struct("J", [])))), [], [], 0)
   elsif name == "types-deep-ok"
     return program([decodable("J", [deep(1024)])], [], [], 0)
   elsif name == "types-deep-over"
