@@ -122,8 +122,10 @@ jobs:
           rm -f build/layout-check.rc
           rc=0
           make -j"$(nproc)" layout-check BASE=HEAD^1 || rc=$?
+          # The labels go to a variable first: `gh ... | grep -q` can kill gh with SIGPIPE under pipefail.
+          labels=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name') || labels=
           if [ "$rc" -ne 0 ] && [ "$(cat build/layout-check.rc 2>/dev/null)" = 4 ] \
-            && gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx layout-change; then
+            && printf '%s\n' "$labels" | grep -qx layout-change; then
             echo "::warning title=layout-check::the loop of --jit off changed; the layout-change label accepts it"
             rc=0
           fi
