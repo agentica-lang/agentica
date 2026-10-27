@@ -2,7 +2,7 @@
 # check, clang-tidy and the layer check. Their binaries use the build mode and the objects of mk/vm.mk.
 
 .PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
-  vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
+  vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-jit-test vm-gc-stress-jit vm-jit-self-compile vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
   vm-layers
 
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
@@ -62,8 +62,14 @@ vm-tsan-run: dist/agentica$(EXE)
 vm-test-binaries: $(VM_TESTS)
 
 # libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
+# On Linux each input also runs with the JIT (AGC_JIT_ALWAYS), and the link wraps agc_jit_mem_reserve so that the entry
+# point unmaps each input's code memory (vm/fuzz_libfuzzer.c).
+LIBFUZZ_LINK_FLAGS :=
+ifeq ($(shell uname -s),Linux)
+LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve
+endif
 $(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
-	$(VM_LINK) -fsanitize=fuzzer
+	$(VM_LINK) -fsanitize=fuzzer $(LIBFUZZ_LINK_FLAGS)
 
 # The fuzzer links the VM objects and no front end: an internal artifact of build/, never shipped.
 LIBFUZZ_DIR := build/vm/libfuzz
@@ -143,10 +149,44 @@ test-shared: dist/agentica$(EXE)
 
 # The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
 # the JIT can compile compiled at its first entry (AGENTICA_JIT=always, docs/future/22-jit.md §22): no output may
-# depend on the tier.
+# depend on the tier. Then half of the golden shards with AGENTICA_JIT=on, the mode that compiles hot functions only:
+# the odd or the even shards by the last hex digit of GITHUB_SHA (else HEAD), so successive commits cover all of them;
+# VM_JIT_ON_TESTS names others.
+VM_JIT_ON_TESTS ?=
 vm-jit-test: dist/agentica$(EXE)
 	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_vm_multicore.py"
+	@tests="$(VM_JIT_ON_TESTS)"; if [ -z "$$tests" ]; then \
+	  sha=$${GITHUB_SHA:-$$(git rev-parse HEAD 2>/dev/null || echo 0)}; parity=$$(( 0x$$(printf '%s' "$$sha" | tail -c 1) % 2 )); \
+	  tests=$$(printf '%s\n' $(VM_DIFF_TESTS) | awk -v p=$$parity 'NR % 2 == p'); fi; \
+	  echo "vm-jit-test: AGENTICA_JIT=on over" $$tests; \
+	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=on $(MAKE) --no-print-directory test-py TESTS="$$tests"
+
+# The goldens and the stack traces with AGENTICA_JIT=always on the sanitizer binary that an earlier step built
+# (SANITIZE=1, as vm-sanitize-test), and on the GC stress binary (collect every 64 allocations), each with the sampled
+# sweep: compiled code under ASan and UBSan, and under a collector that moves no object but runs at every chance.
+# Weekly in sweep.yml.
+vm-sanitize-jit-test: vm-sanitize-build
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=sampled $(MAKE) --no-print-directory test-py \
+	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py" JOBS=$(SANITIZE_JOBS)
+
+vm-gc-stress-jit: dist/agentica$(EXE)
+	$(MAKE) build/vm/gcstress/agentica$(EXE) GC_STRESS=1 SANITIZE=0
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=sampled \
+	  $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
+
+# The front end compiling itself with the JIT on it (the test-only AGENTICA_VM_TEST_FRONT_END_JIT, vm/launch.c), once
+# with `on` and once with `always`: each must give stage2 byte for byte, and the jit trace must show compiled functions
+# (so a hook that stopped working cannot pass). Weekly in sweep.yml.
+vm-jit-self-compile: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
+	@mkdir -p $(STAGE_DIR)/jit
+	for mode in on always; do \
+	  out=$(STAGE_DIR)/jit/$$mode; \
+	  AGENTICA_VM_TEST_FRONT_END_JIT=$$mode AGENTICA_VM_TRACE=jit AGENTICA_VM_TRACE_FILE=$$out.trace \
+	    $(RUN_PROGRAM) dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $$out.agcb || exit 1; \
+	  grep -q ' jit compile ' $$out.trace || { echo "vm-jit-self-compile: the JIT compiled nothing under --jit $$mode" >&2; exit 1; }; \
+	  cmp $(STAGE_DIR)/stage2.agcb $$out.agcb || { echo "vm-jit-self-compile: the front end under --jit $$mode compiles another front end" >&2; exit 1; }; \
+	done
 
 vm-sanitize-build: dist/agentica$(EXE)
 

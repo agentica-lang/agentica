@@ -109,6 +109,9 @@ comment), then a step that calls it. Targets that are not obvious:
   them. Wine is no substitute for native Windows (process creation, UTF-16
   command lines and symlinks can differ).
 - `sweep-full` runs the golden shards with `AGENTICA_SWEEP=full`.
+  `vm-jit-test` runs the goldens with `AGENTICA_JIT=always`, then half the
+  shards with `on` (odd or even by the last digit of `GITHUB_SHA`;
+  `VM_JIT_ON_TESTS` names others).
   `test-distribution` copies `dist/agentica` away from the checkout and runs
   it (`tests/test_stdlib_distribution.py`).
 
@@ -265,11 +268,19 @@ Skip rules, checked by the report:
 
 ## Other workflows
 
+- `vm-libfuzz-run` runs each input in the interpreter, then on Linux with
+  `AGC_JIT_ALWAYS`; the link wraps `agc_jit_mem_reserve` so each input's code
+  memory is unmapped (`vm/fuzz_libfuzzer.c`).
 - `fuzz.yml` (by hand): `make vm-libfuzz-run` for an hour (the `seconds`
   input) on every core, random seed; a crash, leak or timeout fails it;
   uploads `build/vm/libfuzz/crashes/` unless cancelled.
-- `sweep.yml`: Monday 03:00 UTC and by hand, `make sweep-full` on the
-  release VM. Nothing else runs on a schedule.
+- `sweep.yml`: Monday 03:00 UTC and by hand, `make sweep-full` and
+  `vm-jit-self-compile` (the front end compiles itself under `--jit on` and
+  `always`, via the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`, to stage2) on
+  the release VM; job `jit-stress` runs `vm-gc-stress-jit` and
+  `vm-sanitize-jit-test` (the goldens with `AGENTICA_JIT=always` on the GC
+  stress and the ASan binaries, sampled sweep). Nothing else runs on a
+  schedule.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.
 
 ## Release (`release.yml`)
