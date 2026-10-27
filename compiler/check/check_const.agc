@@ -378,7 +378,7 @@ def data_help(type: T.Type) -> String
 
   return (
     "a constant holds numbers, text, collections, structs and enums of those; " +
-    "functions, tasks, channels and handles are not data"
+    "functions, tasks, channels, handles and tables are not data"
   )
 end
 

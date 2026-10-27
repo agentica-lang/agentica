@@ -157,6 +157,7 @@ def type_help(word: String) -> Ast.Optional[String]
     "Task",
     "Channel",
     "Lazy",
+    "ATS",
     "Range",
   ].concat(OPAQUE_TYPES.to_a)
   return Suggest.did_you_mean_among(word, RECORDS.keys.concat(ENUMS.keys), shared)
@@ -205,6 +206,8 @@ end
 def rule_name(rule: Model.Rule) -> String
   case rule
     Model.Rule.Plain -> return "Plain"
+    Model.Rule.AtsCall -> return "AtsCall"
+    Model.Rule.AtsNew -> return "AtsNew"
     Model.Rule.ChannelNew -> return "ChannelNew"
     Model.Rule.ChannelRecv -> return "ChannelRecv"
     Model.Rule.ChannelSend -> return "ChannelSend"

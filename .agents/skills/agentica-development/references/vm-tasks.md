@@ -98,6 +98,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   cancels the items.
 - `vm/channel.c`: The `Channel` builtins: a ring buffer, waiter queues and
   reservations.
+- `vm/ats.c`: The `ATS` shared tables: one atomic pointer to an immutable state,
+  replaced with compare-and-swap.
 - `vm/testing.c`: The `Test` builtins for unit tests, such as `Test.test`.
 
 - `vm/task.c`
@@ -268,6 +270,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Arguments are checked before any wait state changes
   - `Channel.new` and the timeouts fail at their argument (`span + 1 + index`;
     the receiver is argument 0).
+- `vm/ats.c`
+  - the `ATS` builtins (`agc_ats_builtins`, tag `AGC_T_ATS`; the rules are in
+    the grammar's "Shared tables"; service layer). A table holds an
+    `_Atomic` pointer to a `state` that never changes: two persistent AVL trees
+    over the same entries (by key for lookups, by insertion number for the
+    snapshots) and the size. A reader loads the pointer; a writer builds the
+    next state from the one it loaded and installs it with a strong CAS,
+    building again when another writer won. No row is `shared`: a call takes
+    neither `rt->sync` nor a lock, so `keys` and `to_map` build their result
+    from a snapshot without holding back writers.
+  - A failure (an `add` overflow, a wrong tag from forged bytecode) happens
+    before the CAS, so the table keeps its state. Keys compare Int before
+    String, so mixed keys from forged bytecode stay defined. Tree depth is
+    bounded by the AVL height (at most 96 levels), the stack of the in-order
+    walk too.
+  - `vm/tests/ats_test.c` races threads on one table (in `VM_TSAN_TESTS`);
+    `tests/test_vm_ats.py` checks one table against a Python dict and many
+    tasks at `--schedulers 4`.
 - `vm/testing.c`
   - the `Test` builtins (`agc_test_builtins`; the rules are in the grammar's
     `Unit tests (Test)` section): `Test.test`

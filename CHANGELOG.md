@@ -8,8 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `ATS[K, V]` shared tables for counters and caches that tasks update
+  (`examples/shared-cache.agc`).
+
 ### Changed
 
+- **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
+  `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
 - The experimental x86-64 JIT runs tail calls and struct updates
   (`s.with(...)`) from compiled code, so functions that use them compile under
   `--jit on`.
