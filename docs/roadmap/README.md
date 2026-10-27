@@ -83,7 +83,8 @@ Weighed later (no fixed order):
 7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
    (row 7.10).
 8. The JIT (row 9.1, [§6.4](../vm/05-values-execution-builtins.md#64-jit)); it
-   needs 8.1, 7.7 and 9, and comes after the FFI.
+   needs 8.1, 7.7 and 9, and comes after the FFI. What is left:
+   [#756](https://github.com/sonic182/agentica/issues/756).
 9. [#531](https://github.com/sonic182/agentica/issues/531), `type-at` on type
    names: done in 0.8.1 (#550).
 10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer: done
