@@ -346,8 +346,8 @@ static void test_reads(void) {
 /* Calls the row NAME/ARITY with ARGS. */
 static agc_value call_row(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)(&vm, args, 0); }
 
-/* An owned buffer: typed writes and reads at byte offsets, unaligned too, the bounds of its size, a free that runs
-   once and leaves every later use RUNTIME-NATIVE-CLOSED; the same reads at a C pointer, which has no size but refuses
+/* An owned buffer: typed writes and reads at byte offsets, unaligned too, the bounds of its size and of a view, a
+   free that runs once and leaves every later use RUNTIME-NATIVE-CLOSED, of its views too; the same reads at a C pointer, which has no size but refuses
    NULL and a negative offset; and nothing at all under no_files. */
 static void test_buffers(void) {
   agc_value size = agc_int(16);
@@ -391,11 +391,38 @@ static void test_buffers(void) {
   put_bytes[2] = agc_list_value(agc_list_from_array(bytes, 2));
   (void)call_row("Native.put_bytes", 3, put_bytes);
   assert(agc_as_int(&vm, call_row("Native.get_uint16", 2, get)) == 9 + 255 * 256);
+  /* A view (Native.offset) shows the bytes from its offset to the buffer's end, with those bounds; a view of a view
+     keeps the buffer as its parent; neither is the program's to free. */
+  agc_value at[2] = {buf, agc_int(4)};
+  agc_value view = call_row("Native.offset", 2, at);
+  const agc_c_resource *v = agc_as_c_resource(&vm, view);
+  assert(v->buffer && v->parent == res && v->size == 12 && !v->state);
+  agc_value vget[3] = {view, agc_int(1), agc_int(1)};
+  assert(agc_as_int(&vm, call_row("Native.get_uint16", 2, vget)) == 9 + 255 * 256);
+  vget[1] = agc_int(9);
+  read_fails("Native.get_int32", 2, vget, "RUNTIME-NATIVE-BOUNDS");
+  vget[1] = agc_int(0);
+  vget[2] = agc_int(13);
+  read_fails("Native.get_bytes", 3, vget, "RUNTIME-NATIVE-BOUNDS");
+  at[1] = agc_int(17);
+  read_fails("Native.offset", 2, at, "RUNTIME-NATIVE-BOUNDS");
+  agc_value inner[2] = {view, agc_int(12)};
+  agc_value end = call_row("Native.offset", 2, inner);
+  assert(agc_as_c_resource(&vm, end)->parent == res && agc_as_c_resource(&vm, end)->size == 0);
+  inner[1] = agc_int(13);
+  read_fails("Native.offset", 2, inner, "RUNTIME-NATIVE-BOUNDS");
+  read_fails("Native.free", 1, &view, "RUNTIME-NATIVE-NOT-OWNED");
   read_fails("Native.free", 1, (agc_value[]){agc_c_pointer_value(NULL)}, "RUNTIME-NATIVE-NOT-OWNED");
   (void)call_row("Native.free", 1, &buf);
   assert(res->closed && res->freed);
   (void)call_row("Native.free", 1, &buf);
   read_fails("Native.get_int8", 2, get, "RUNTIME-NATIVE-CLOSED");
+  /* The buffer's free closes its views. */
+  read_fails("Native.get_int8", 2, vget, "RUNTIME-NATIVE-CLOSED");
+  inner[1] = agc_int(0);
+  read_fails("Native.offset", 2, inner, "RUNTIME-NATIVE-CLOSED");
+  read_fails("Native.address", 1, &view, "RUNTIME-NATIVE-CLOSED");
+  assert(agc_as_bool(&vm, call_row("Native.closed?", 1, &end)));
   assert(!agc_as_bool(&vm, row("Native.null?", 1)(&vm, &buf, 0)));
   /* A C pointer: read as it is, but never NULL or before itself. */
   static const int32_t words[2] = {7, -9};

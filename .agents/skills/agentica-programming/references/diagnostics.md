@@ -302,7 +302,7 @@ and a task's crash line (`"task":true`) carry it too.
   or a memory builtin took a closed resource or a freed buffer; a memory
   builtin read or wrote at NULL, at a negative offset or past an owned buffer;
   a `C.Function` argument was NULL or an owned buffer;
-  `Native.free` took a pointer that C gave; or, at load with exit 2,
+  `Native.free` took a pointer that C gave or a view; or, at load with exit 2,
   `--deny-native` refused a program with an extern function or a `Native.*`
   call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything

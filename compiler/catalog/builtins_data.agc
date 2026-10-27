@@ -2481,6 +2481,19 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.address",
+      parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.address",
+      effects: ["native"],
+      description: (
+        "The integer value of the C.Pointer, the inverse of Native.pointer: subtract two to count the bytes between " +
+        "them. A freed owned buffer is RUNTIME-NATIVE-CLOSED."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.close",
       parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
       result: Types.Type.Void,
@@ -2847,6 +2860,23 @@ ROWS_28: List[Model.Builtin] = [
       implementation: "Native.null?",
       effects: ["native"],
       description: "True when the C.Pointer is NULL.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.offset",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.offset",
+      effects: ["native"],
+      description: (
+        "The C.Pointer offset bytes further. In an owned buffer it is a view up to the buffer's end (offset 0 to " +
+        "the size, else RUNTIME-NATIVE-BOUNDS), freed with the buffer; Native.free of a view is " +
+        "RUNTIME-NATIVE-NOT-OWNED."
+      ),
       alternatives: [],
     ),
     Model.Builtin(

@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters and struct fields; unsigned results are never negative.
 - `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
   can return an `error`.
+- `Native.offset(p, n)` points into an owned buffer as a bounds-checked view,
+  and `Native.address(p)` gives a pointer's integer value.
 
 ### Changed
 
