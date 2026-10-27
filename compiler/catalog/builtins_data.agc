@@ -2898,6 +2898,19 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.load",
+      parameters: [Model.Named(name: "library", type: Types.Type.String)],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Native.load",
+      effects: ["native"],
+      description: (
+        "Open the library that extern \"library\" names (a string literal, CHECK-NATIVE-LOAD otherwise) now, or " +
+        "give its loader error; the library stays open for the extern functions. Refused by --deny-native."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.memory_pointer",
       parameters: [Model.Named(name: "size", type: Types.Type.Int)],
       result: Types.Type.Opaque("C.Pointer"),
