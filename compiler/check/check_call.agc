@@ -20,10 +20,12 @@ struct Inferred
   substitutions: Map[String, T.Type]
 end
 
-# The names given in a construction or an update, and the state after checking their values.
+# The names given in a construction or an update, the state after checking their values, and the type arguments of a
+# generic struct that the values showed.
 struct Fields
   st: State.St
   seen: Set[String]
+  substitutions: Map[String, T.Type]
 end
 
 ## Checks a call written by name: a builtin (and, for a piped call, that its method form is not the better one) or a
@@ -115,7 +117,7 @@ export def check_enum_constructor(
     return error(State.fail(cx, st, "CHECK-ENUM-POSITIONAL-ARGS", "enum variants use positional arguments", span))
   end
 
-  substitutions = expected_substitutions(found, expected)
+  substitutions = expected_substitutions("Enum", found.name, found.parameters, expected)
   inferred = try infer_arguments(cx, st, payload.unwrap!, args, substitutions)
   return finish_constructor(cx, inferred.st, found, variant_name, inferred.substitutions, span, expected)
 end
@@ -128,7 +130,7 @@ export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
     return check_enum_constructor(cx, st, parts[0], parts[1], [], node.args.size, node.span, expected)
   end
 
-  return check_struct_construct(cx, st, node)
+  return check_struct_construct(cx, st, node, expected)
 end
 
 ## Checks target.with(name: value, ...): the target is a struct, every name is one of its fields, given once, with a
@@ -163,7 +165,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
     )
   end
 
-  fields = try check_named_fields(cx, target.st, name, cx.structs[name], node.args)
+  fields = try check_named_fields(cx, target.st, name, Types.fields_of(cx, target.type), node.args, [], {})
   return ok(State.Out(st: fields.st, type: target.type))
 end
 
@@ -383,19 +385,20 @@ def variant_payload(definition: Model.EnumDef, name: String) -> Result[List[T.Ty
   return error("no such variant")
 end
 
-# The type arguments the context already gives: an expected Enum of the same enum with the same number of arguments.
-def expected_substitutions(definition: Model.EnumDef, expected: T.Type) -> Map[String, T.Type]
-  found: Map[String, T.Type] = {}
+# The type arguments the context already gives: an expected type of the same kind ("Enum" or "Struct") and name, with
+# the same number of arguments as the type has parameters.
+def expected_substitutions(
+  kind: String,
+  name: String,
+  parameters: List[String],
+  expected: T.Type,
+) -> Map[String, T.Type]
   args = T.args(expected)
-  if T.is?(expected, "Enum") and T.name(expected) == definition.name and args.size == definition.parameters.size
-    index = 0
-    while index < args.size
-      found = found.put(definition.parameters[index], args[index])
-      index += 1
-    end
+  if T.is?(expected, kind) and T.name(expected) == name and args.size == parameters.size
+    return Types.bindings(parameters, args)
   end
 
-  return found
+  return {}
 end
 
 # Each argument against its payload type with the type variables filled in as far as they are known; an empty
@@ -476,7 +479,9 @@ def finish_constructor(
   return ok(State.Out(st: st, type: type))
 end
 
-def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> Result[State.Out]
+# Type(name: value, ...) for a struct. A generic struct takes its type arguments from the field values, left to right
+# as they are written, and from the expected type.
+def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
   name = node.type_name
   if cx.aliases.has_key?(name)
     target = try Types.alias_target_text(cx, st, name)
@@ -506,7 +511,9 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
     )
   end
 
-  checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args)
+  parameters = cx.struct_params.get(name, [])
+  known = expected_substitutions("Struct", name, parameters, expected)
+  checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args, parameters, known)
   # A field with a default may be left out: the lowering fills it in at this construction.
   none: Set[String] = Set.new([])
   defaulted = cx.field_defaults.get(name, none)
@@ -525,19 +532,57 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
     end
   end
 
-  return ok(State.Out(st: checked.st, type: T.Type.Struct(name)))
+  if parameters.size == 0
+    return ok(State.Out(st: checked.st, type: T.Type.Struct(name, [])))
+  end
+
+  return finish_struct(cx, checked, name, parameters, node.span, expected)
+end
+
+# The generic struct type with its arguments, once every type parameter has been found.
+def finish_struct(
+  cx: State.Cx,
+  checked: Fields,
+  name: String,
+  parameters: List[String],
+  span: Source.Span,
+  expected: T.Type,
+) -> Result[State.Out]
+  unresolved = parameters.filter do |parameter: String| !checked.substitutions.has_key?(parameter) end
+  if unresolved.size > 0
+    return error(
+      State.fail_help(
+        cx,
+        checked.st,
+        "CHECK-ENUM-TYPE-INFERENCE",
+        "cannot infer type parameter(s) #{unresolved.join(", ")} of struct #{T.display_name(name)}",
+        span,
+        "give the struct a type where it is used, such as a variable with a type annotation",
+      ),
+    )
+  end
+
+  args = parameters.map do |parameter: String| checked.substitutions[parameter] end
+  type = try State.ensure(cx, checked.st, T.Type.Struct(name, args), expected, span)
+  return ok(State.Out(st: checked.st, type: type))
 end
 
 # The `name: value` pairs of a construction or an update: each name is a field of the struct, given once, with a value
-# of the field's type. The values are checked in source order, which is also the order they run in.
+# of the field's type. The values are checked in source order, which is also the order they run in. For a generic
+# struct, parameters lists its type parameters and known the arguments that the expected type gives: each value is
+# checked against the field type as far as it is known, and a value whose type has a type parameter in it binds that
+# parameter. An empty collection cannot bind one (CHECK-ENUM-TYPE-INFERENCE), as in a variant.
 def check_named_fields(
   cx: State.Cx,
   st: State.St,
   name: String,
   fields: List[Model.Named],
   args: List[Ast.NamedArg],
+  parameters: List[String],
+  known: Map[String, T.Type],
 ) -> Result[Fields]
   current = st
+  found = known
   seen: Set[String] = Set.new([])
   for arg in args
     field = find_field(fields, arg.name)
@@ -561,11 +606,38 @@ def check_named_fields(
     end
 
     seen = seen.add(arg.name)
-    out = try State.expr(cx, current, arg.value, field.unwrap!.type)
+    template = field.unwrap!.type
+    wanted = template
+    if parameters.size > 0
+      wanted = Types.substitute(template, found)
+      if Types.has_variables?(wanted) and empty_collection?(arg.value)
+        return error(empty_field_failure(cx, current, name, Ast.expr_span(arg.value)))
+      end
+
+      if Types.has_variables?(wanted)
+        wanted = T.Type.Unknown
+      end
+    end
+
+    out = try State.expr(cx, current, arg.value, wanted)
     current = out.st
+    if parameters.size > 0
+      found = try Types.unify(cx, current, template, out.type, found, Ast.expr_span(arg.value))
+    end
   end
 
-  return ok(Fields(st: current, seen: seen))
+  return ok(Fields(st: current, seen: seen, substitutions: found))
+end
+
+def empty_field_failure(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> String
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-ENUM-TYPE-INFERENCE",
+    "cannot infer the type arguments of struct #{T.display_name(name)} from an empty collection",
+    span,
+    "give the struct a type where it is used, such as a variable with a type annotation",
+  )
 end
 
 # A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program

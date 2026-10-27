@@ -41,8 +41,8 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
   an item of a parsed document, with the same errors; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
-  nested or recursive structs, and `JsonField` of those; other types are
-  `CHECK-NOT-DECODABLE`.
+  nested or recursive structs, and `JsonField` of those; other types, an
+  instance of a generic struct or enum included, are `CHECK-NOT-DECODABLE`.
 - `JSON.decode` returns errors, with field or index paths, for malformed JSON,
   missing fields, wrong types, Int overflow and non-finite Floats. Extra object
   keys are ignored. An integer may decode as Float; a decimal or exponent value

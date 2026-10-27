@@ -82,7 +82,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Range -> return ok("r")
     T.Type.Unknown -> return ok("u")
     T.Type.Opaque(name) -> return ok("O" + try name_text(name, keys))
-    T.Type.Struct(name) -> return ok("T" + try name_text(name, keys))
+    T.Type.Struct(name, args) -> return struct_text(name, args, keys, depth)
     T.Type.Var(name) -> return ok("X" + name_plain(name))
     T.Type.Result(item) -> return ok("R" + try written(item, keys, depth + 1))
     T.Type.Task(item) -> return ok("K" + try written(item, keys, depth + 1))
@@ -97,6 +97,15 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Enum(name, args) ->
       return ok("E" + try name_text(name, keys) + "#{args.size}:" + try list_text(args, keys, depth))
   end
+end
+
+# `T<name>` for a plain struct, `G<name><count>:<types>` for one with type arguments.
+def struct_text(name: String, args: List[T.Type], keys: Map[String, String], depth: Int) -> Result[String]
+  if args.size == 0
+    return ok("T" + try name_text(name, keys))
+  end
+
+  return ok("G" + try name_text(name, keys) + "#{args.size}:" + try list_text(args, keys, depth))
 end
 
 def list_text(types: List[T.Type], keys: Map[String, String], depth: Int) -> Result[String]
@@ -155,7 +164,12 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
       return ok(Read(type: T.Type.Opaque(named.name), next: named.next))
     "T" ->
       named = try read_name(text, after, prefixes)
-      return ok(Read(type: T.Type.Struct(named.name), next: named.next))
+      return ok(Read(type: T.Type.Struct(named.name, []), next: named.next))
+    "G" ->
+      named = try read_name(text, after, prefixes)
+      count = try read_count(text, named.next)
+      args = try read_list(text, count, depth, prefixes)
+      return ok(Read(type: T.Type.Struct(named.name, args.types), next: args.next))
     "X" ->
       named = try read_plain(text, after)
       return ok(Read(type: T.Type.Var(named.name), next: named.next))

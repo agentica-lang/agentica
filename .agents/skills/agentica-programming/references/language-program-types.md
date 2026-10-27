@@ -142,8 +142,8 @@ end
 - A blank line follows the `end` of each `def`, `struct` and `enum`
   (`PARSE-MISSING-BLANK-LINE`). Every parameter and the return type need an
   annotation.
-- Structs, enums and functions are top level only. Only enums and aliases take
-  type parameters. There are no generic functions or structs, user methods,
+- Structs, enums and functions are top level only. Only structs, enums and
+  aliases take type parameters. There are no generic functions, user methods,
   nested functions, keyword arguments or overloads. Closures are blocks.
 - A struct field may have a default: `retries: Int = 3`. A constructor may
   leave it out (`Options(name: "a")`); a field without one must be given
@@ -151,6 +151,18 @@ end
   below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
   is built again at each construction. `.with(...)` and `JSON.decode` are not
   affected: a decode still needs every key.
+- A generic struct, `struct Box[T]`, is written with all its arguments in a type
+  (`Box[Int]`, `M.Box[Int]`); a bare `Box` or a wrong count is
+  `CHECK-UNKNOWN-TYPE`. A construction infers them from the field values, left
+  to right, and from the expected type (annotation, parameter, field, return
+  type): `Box(value: 1)` is `Box[Int]`. An empty `[]` or `{}` needs the expected
+  type, and so does a parameter no value fixes (`CHECK-ENUM-TYPE-INFERENCE`);
+  conflicting values are `CHECK-TYPE-MISMATCH`. Fields, `.with(...)` and
+  printing work on the substituted type (`Box[Fn[Int, Int]]` does not print).
+  Parameter names follow the enum rules (`CHECK-REDEFINED-NAME`); a parameter
+  is no `Map` key (`CHECK-MAP-KEY-TYPE`) and no type of a field named `with`.
+  `JSON.encode` takes a generic instance; `JSON.decode` and `JSON.schema` refuse
+  one anywhere in the target (`CHECK-NOT-DECODABLE`).
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the
   fields in declaration order; `StructMember` has `name: String` and
   `type: String`, the field type as source with aliases expanded

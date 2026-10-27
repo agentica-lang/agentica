@@ -96,10 +96,11 @@ def rewrite_constant(cx: Resolve.Context, node: Ast.ConstDecl) -> Result[Ast.Dec
   )
 end
 
+# A field type goes through rewrite_payload so that a type parameter of a generic struct keeps its name.
 def rewrite_struct(cx: Resolve.Context, node: Ast.StructDecl) -> Result[Ast.Decl]
   fields: List[Ast.FieldDecl] = []
   for field in node.fields
-    type = try rewrite_type(cx, field.type)
+    type = try rewrite_payload(cx, node.type_parameters, field.type)
     default = try rewrite_optional_expr(cx, field.default)
     fields = fields.push(field.with(type: type, default: default))
   end
@@ -121,7 +122,8 @@ def rewrite_enum(cx: Resolve.Context, node: Ast.EnumDecl) -> Result[Ast.Decl]
   return ok(Ast.Decl.Enum(node.with(name: Resolve.identity(cx, node.name), variants: variants)))
 end
 
-# A type that is a type parameter of the enum or generic alias (T) stays as it is, in a payload or an alias target.
+# A type that is a type parameter of the struct, enum or generic alias (T) stays as it is, in a field, a payload or an
+# alias target.
 def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.TypeRef) -> Result[Ast.TypeRef]
   name = type.name
   if type.args.size > 0 or !parameters.any? do |parameter| parameter == type.name end

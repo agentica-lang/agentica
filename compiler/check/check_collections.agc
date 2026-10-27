@@ -120,8 +120,8 @@ end
 # True for a type Task.spawn_owning can hand over: a handle, a Channel or a C.Pointer, or a struct, enum, List, Map or
 # Result whose type holds one somewhere (through fields, variant payloads and type arguments). The walk visits the
 # fields of each struct and the payloads of each enum once, so a recursive type ends and a type that names one struct
-# many times costs it once; the type arguments of an enum are walked at each use, and a type variable in a payload
-# holds nothing.
+# many times costs it once; the type arguments of a struct or enum are walked at each use, and a type variable in a
+# field or payload holds nothing.
 def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
   todo = [type]
   seen: Set[String] = Set.new([])
@@ -143,18 +143,18 @@ def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
 end
 
 # The types inside a type that holds_handle? walks next: the item of a Result or List, the key and value of a Map, the
-# type arguments of an enum, and the fields or payloads of a struct or enum not seen yet.
+# type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
 def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type
     T.Type.Result(item) -> return [item]
     T.Type.List(item) -> return [item]
     T.Type.Map(key, value) -> return [key, value]
-    T.Type.Struct(name) ->
+    T.Type.Struct(name, args) ->
       if seen.include?(name) or !cx.structs.has_key?(name)
-        return []
+        return args
       end
 
-      return cx.structs[name].map do |field: Model.Named| field.type end
+      return args.concat(cx.structs[name].map do |field: Model.Named| field.type end)
     T.Type.Enum(name, args) ->
       if seen.include?(name) or !cx.enums.has_key?(name)
         return args

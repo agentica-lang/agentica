@@ -42,7 +42,7 @@ c_field          = [ DOC, NL ], NAME, ":", ( c_field_type | TYPE_NAME ),
 c_field_type     = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
                    | "Pointer" ) ;
 
-struct_decl      = "struct", TYPE_NAME, NL,
+struct_decl      = "struct", TYPE_NAME, [ type_parameters ], NL,
                    { field_decl }, "end", NL ;
 field_decl       = [ DOC, NL ], NAME, ":", type, [ "=", expression ], NL ;
 
@@ -244,8 +244,10 @@ Struct, enum, type alias and function declarations appear only at the top level.
 A type alias is transparent (section 6, "Enums and pattern matching"). The
 parser accepts type applications such as
 `List[Int]`. The checker allows them only for supported builtins, declared
-enums and generic aliases; enums and aliases are the only declarations that
-take type parameters, so generic functions and structs are not supported.
+structs and enums that take type parameters, and generic aliases; structs, enums
+and aliases are the only declarations that take type parameters, so generic
+functions are not supported. A struct with type parameters is in section 6,
+"Generic structs".
 
 A generic alias, `type Matrix[T] = List[List[T]]`, is pure substitution:
 `Matrix[Int]` means exactly `List[List[Int]]`. The parameters follow the enum

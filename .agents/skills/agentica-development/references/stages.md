@@ -297,7 +297,7 @@ error:
   additionally reserved on locals, parameters, loop variables, and fields.
 - Types are the `Type` enum of `compiler/syntax/types.agc`: the primitives,
   `List`, `Map`, `Set`, `Result` and `Task` of a type, structs and enums by
-  linked name (an enum carries its type arguments), and type variables during
+  linked name (both carry their type arguments), and type variables during
   payload registration.
 - A piped builtin call that has a method form for its first parameter's type is
   `CHECK-PIPE-METHOD` at the call span (after the call checks, so type and arity

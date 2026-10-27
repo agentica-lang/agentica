@@ -1,0 +1,28 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 197,
+  "stdout": [
+    "42",
+    "AGENTICA",
+    "0",
+    "0",
+    "ONE",
+    "Pair(first: 1, second: \"one\")",
+    "Pair(first: 1, second: \"one\")",
+    "5.0",
+    "7",
+    "41",
+    "[StructMember(name: \"value\", type: \"T\")]",
+    "{\"first\":1,\"second\":\"one\"}",
+    "{\"value\":[1,2]}",
+    "6",
+    "10",
+    "true",
+    "Stack(items: [], label: \"names\")",
+    "Stack(items: [1, 2], label: \"stack\")",
+    "1",
+    ""
+  ],
+  "stderr": []
+}

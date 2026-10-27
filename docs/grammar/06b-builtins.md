@@ -388,11 +388,11 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   and `schema`. A `Json` source is decoded as it is, without going through text,
   with the same rules and the same errors as its text. Fields may be Int, Float,
   Bool, String, lists, String-keyed maps, nested or recursive structs, and
-  `JsonField` of those; other nested types are `CHECK-NOT-DECODABLE`. Malformed
-  JSON, missing fields, wrong types, Int overflow and non-finite numbers give
-  errors with a field or index path. Extra keys are ignored. A JSON integer may
-  decode as a Float; a decimal or exponent never decodes as an Int. Decoded maps
-  are in sorted key order.
+  `JsonField` of those; other nested types, a generic struct or enum instance
+  included, are `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong
+  types, Int overflow and non-finite numbers give errors with a field or index
+  path. Extra keys are ignored. A JSON integer may decode as a Float; a decimal
+  or exponent never decodes as an Int. Decoded maps are in sorted key order.
 - `JSON.parse` reads exactly one value, with optional surrounding whitespace
   (space, tab, CR, LF). Empty input, trailing content, invalid escapes, raw
   control characters and non-finite numbers are errors. A repeated object key
@@ -409,8 +409,9 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   without fraction or exponent, or built from an Int, is `"int"`, even outside
   64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists,
-  String-keyed maps and structs of those, whose fields may also be `JsonField`.
-  Results, other enums and Int-keyed maps are
+  String-keyed maps and structs of those, whose fields may also be `JsonField`;
+  an instance of a generic struct counts by its fields after substitution
+  (`Box[List[Int]]`). Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation. A
   non-finite Float halts with `RUNTIME-JSON-ENCODE`; it is never written as
   null.

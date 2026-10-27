@@ -274,11 +274,11 @@ section for the area you are changing.
   into a temporary register (`read_payload`) and testing that, then binds; the
   guard is lowered after the bindings with a `jump-if-false` to the same skip
   label as a failed test.
-- Generic type variables exist only while resolving an enum's payload
-  declarations. Preserve those names while the module linker rewrites type
-  references; otherwise `T` becomes a module-qualified ordinary type and generic
-  enum registration fails. Imported enum references resolve `Alias.Enum`;
-  variants need `Alias.Enum.Variant`.
+- Generic type variables exist only while resolving an enum's payload or a
+  struct's field declarations. Preserve those names while the module linker
+  rewrites type references (`rewrite_payload`); otherwise `T` becomes a
+  module-qualified ordinary type and generic registration fails. Imported enum
+  references resolve `Alias.Enum`; variants need `Alias.Enum.Variant`.
 - Nullary enum construction with `Option.None()` is parsed as a general
   `Construct` node (empty argument list); module linking, checking and lowering
   must recognize the enum prefix. Payload variants parse as `EnumConstructor`.
@@ -289,6 +289,15 @@ section for the area you are changing.
   inference from a matching expected enum type. `Result[T]` is still the builtin
   Result, but case patterns use tags `Result.Ok` and `Result.Err`;
   `Result[Void]` can only discard its Ok payload with `_`.
+- Generic structs follow the enum path. The type is `Type.Struct(name, args)`
+  and `Cx.struct_params` holds the parameters. `CheckTypes.fields_of` gives the
+  fields with the arguments put in (field access, `with`, JSON encode);
+  `Type.members` lists the declared types instead. A construction infers like a
+  variant (`check_named_fields` and `finish_struct` in `check_call.agc`); a
+  plain struct takes the old path. `decodable?` refuses every instance with
+  arguments. `debug_text` keeps `Struct(Name)` for no arguments (the goldens).
+  `vm_type?` takes a `Var` as a VM value, because the default of a field
+  (`items: List[T] = []`) is typed with the parameter. No VM or bytecode change.
 - Enum cases require every variant or `_`. All non-enum scrutinees—including
   Bool and Nil—require `_`. Reject repeated/covered arms, require an unguarded
   `_` last (a guarded arm, or one with a literal or nested slot, covers nothing

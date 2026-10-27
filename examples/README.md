@@ -20,6 +20,9 @@ Run an example with `dist/agentica examples/<name>.agc`. The
   enum variants, and a last `Fn` parameter filled by a block.
 - [`type-aliases.agc`](type-aliases.agc): transparent aliases for long types,
   used in function signatures and annotations.
+- [`generic-structs.agc`](generic-structs.agc): a struct with a type parameter,
+  `Page[T]`, whose type argument comes from the field values or the expected
+  type.
 - [`case-guards.agc`](case-guards.agc): `case` guards (`pattern if condition
   ->`) and patterns inside patterns.
 - [`heredoc.agc`](heredoc.agc): heredocs `<<~NAME`: text of several lines with
