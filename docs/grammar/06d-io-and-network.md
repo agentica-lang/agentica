@@ -434,6 +434,15 @@ end
   05b-modules.md): `extern "NAME"` in a file of the package then opens the file
   it ships for the running system by its absolute path in `deps/`, or the
   system name it gives.
+- `Native.load("NAME") -> Result[Void]` opens a library before its first call.
+  Its argument is a string literal that means what `extern "NAME"` means (the
+  same name rule, and the manifest's `[native.NAME]`); anything else is
+  `CHECK-NATIVE-LOAD` at the argument. It gives `ok` and keeps the library open
+  for the extern functions, or `error` with the loader's text (`native: cannot
+  open NAME: ...`), so a program can report a missing library or fall back
+  before any side effect. A function missing from the library is still
+  `RUNTIME-NATIVE-LOAD` at its first call. `--deny-native` refuses a program
+  that calls it, as for every `Native.*` builtin.
 - An argument is checked before the call: an integer takes the bits of its type
   read as signed or as unsigned, as `put_int8` to `put_int32` do (a `C.UInt8` or
   `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
