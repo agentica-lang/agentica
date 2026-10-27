@@ -1132,7 +1132,7 @@ static agc_turn_result park_task(agc_task *t) {
 static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc_vm *vm, agc_jit *jit,
                                                                              agc_frame *frame) {
   if (!frame->pc && agc_jit_native_only(jit, frame->function)) return COMPILED_NONE;
-  agc_jit_code code = agc_jit_code_of(jit, frame->function);
+  agc_jit_code code = agc_jit_code_of(jit, frame->function, frame->pc);
   const agc_program *p = vm->rt->program;
   const agc_function *f = &p->functions[frame->function];
   if (!code || frame->pc >= f->count) return COMPILED_NONE;
