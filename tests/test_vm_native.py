@@ -1005,6 +1005,8 @@ BUFFER_EXTERN = """extern "{library}"
   compute def peer_floats_hold(xs: C.Pointer, n: C.Int32, limit_ms: C.Int32) -> C.Double
   def peer_res_holding() -> C.Int32
   def peer_set_flag() -> Void
+  def peer_text_sum(p: C.Pointer, len: C.Int32) -> C.Int64
+  def peer_tail(p: C.Pointer, len: C.Int32) -> C.Pointer
 end
 
 """
@@ -1196,6 +1198,38 @@ end
     result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr, result.stdout.splitlines()) == (0, "", [
         "[0, 0, -3, -2]", "3.5", "[8, 16]", "[]", "[false, false]", "<C.Pointer>", "-9", "4000", "-1", "true",
+    ])
+
+
+# Native.from_string copies the UTF-8 bytes of a String and a NUL into an owned buffer: C that takes the length
+# (text.bytesize) reads every byte, a NUL inside included, and a pointer that C returns into the buffer (SQLite's
+# pzTail) subtracts from the buffer's address to the bytes C read. Like a buffer of Native.memory_pointer, the free
+# closes its views, and its block form frees it when the block ends.
+@NATIVE_CALLS
+def test_from_string_gives_c_the_bytes_of_a_string_with_its_length(tmp_path, peer):
+    text = "é\x00😀 ok"
+    main = """def main() -> Void
+  text = "é#{String.from_code(0)}😀 ok"
+  buf = Native.from_string(text)
+  puts(peer_text_sum(buf, text.bytesize))
+  puts(Native.get_bytes(buf, text.bytesize, 1))
+  sql = "SELECT 'é'; SELECT 2"
+  used = Native.from_string(sql) do |s|
+    tail = peer_tail(s, sql.bytesize)
+    puts(Native.get_string(tail, 0))
+    Native.address(tail) - Native.address(s)
+  end
+  puts(used)
+  view = Native.offset(buf, 2)
+  Native.free(buf)
+  kept = Native.from_string("x") do |s| s end
+  puts([Native.closed?(buf), Native.closed?(view), Native.closed?(kept)])
+end
+"""
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    checksum = sum((k + 1) * b for k, b in enumerate(text.encode("utf-8")))
+    assert (result.code, result.stderr, result.stdout.splitlines()) == (0, "", [
+        str(checksum), "[0]", " SELECT 2", str(len("SELECT 'é';".encode("utf-8"))), "[true, true, true]",
     ])
 
 

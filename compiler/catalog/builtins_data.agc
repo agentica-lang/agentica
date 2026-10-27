@@ -2619,6 +2619,37 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.from_string",
+      parameters: [Model.Named(name: "text", type: Types.Type.String)],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.from_string",
+      effects: ["native"],
+      description: (
+        "A new owned buffer of the UTF-8 bytes of text and a NUL after them (text.bytesize + 1 bytes, a NUL inside " +
+        "text kept), as a C.Pointer that the calling task owns, like Native.memory_pointer. With a block, it is " +
+        "freed when the block ends and the call returns the block's value."
+      ),
+      alternatives: [
+        Model.Builtin(
+          name: "Native.from_string",
+          parameters: [
+            Model.Named(name: "text", type: Types.Type.String),
+            Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("C.Pointer")], Types.Type.Var("T"))),
+          ],
+          result: Types.Type.Var("T"),
+          rule: Model.Rule.NativeMemoryBlock,
+          implementation: "Native.from_string",
+          effects: ["native"],
+          description: (
+            "Yield a new owned buffer of the UTF-8 bytes of text and a NUL to the block, free it when the block " +
+            "ends (an error it returns included), and return the block's value."
+          ),
+          alternatives: [],
+        ),
+      ],
+    ),
+    Model.Builtin(
       name: "Native.get_array_of_float32",
       parameters: [
         Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
@@ -3933,6 +3964,16 @@ ROWS_40: List[Model.Builtin] = [
       implementation: "String.at",
       effects: [],
       description: "Read one character at a zero-based index; invalid indexes halt.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "String.bytesize",
+      parameters: [Model.Named(name: "s", type: Types.Type.String)],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "String.bytesize",
+      effects: [],
+      description: "Count UTF-8 bytes.",
       alternatives: [],
     ),
     Model.Builtin(

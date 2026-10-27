@@ -4,9 +4,9 @@
  * signature, converts values to C and back, calls a C function by name or through a function pointer, runs a fast call
  * on the scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
  * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
- * null?, Native.pointer and address, the owned buffers of Native.memory_pointer (and its block form), their views
- * (Native.offset) and Native.free, the reads and writes of memory (Native.get_string, get_bytes, get_*, put_*, the
- * array and struct forms, Native.size_of), and Native.wait_readable and wait_writable. Service layer.
+ * null?, Native.pointer and address, the owned buffers of Native.memory_pointer and from_string (with block forms),
+ * their views (Native.offset) and Native.free, the reads and writes of memory (Native.get_string, get_bytes, get_*,
+ * put_*, the array and struct forms, Native.size_of), and Native.wait_readable and wait_writable. Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -162,7 +162,8 @@ typedef struct {
   uint32_t offset_span, count_span;
 } memory_ask;
 
-/* The block form of Native.memory_pointer: the buffer it yields, and whether the block has been called. */
+/* The block form of Native.memory_pointer and Native.from_string: the buffer it yields, and whether the block has
+   been called. */
 typedef struct {
   agc_stepper stepper;
   agc_value buffer;
@@ -1403,19 +1404,18 @@ static agc_value builtin_native_offset(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_c_resource_value(view);
 }
 
-/* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a
-   resource: Native.free, the owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's
-   hand-made bytecode (no_files) may not make one, as it may not call. */
-static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  int64_t size = agc_as_int(vm, args[0]);
-  if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", span + 1);
+/* A new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a resource: Native.free, the
+   owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's hand-made bytecode (no_files)
+   may not make one, as it may not call: each caller checks no_files before it reads its argument. A bad size fails
+   at SIZE_SPAN. */
+static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t size_span) {
+  if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", size_span);
   /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
      program's error, not the VM's out of memory. */
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->parent = NULL;
   void *memory = (uint64_t)size <= BUFFER_MAX && (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
-  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", span + 1);
+  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", size_span);
   /* Zeroing the memory grows with the size, as the copy of a C.String argument does. */
   agc_charge_bytes(vm, (size_t)size);
   res->pointer = memory;
@@ -1429,6 +1429,24 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   res->state = agc_register(vm, res, release_resource);
   agc_own(vm, res->state, close_owned);
   return agc_c_resource_value(res);
+}
+
+/* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (new_buffer). */
+static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  return new_buffer(vm, agc_as_int(vm, args[0]), span + 1);
+}
+
+/* Native.from_string(text), Ruby ffi's MemoryPointer.from_string: a new owned buffer of the text's UTF-8 bytes and a
+   trailing NUL (new_buffer zeroes it), so its size is text.bytesize + 1. A NUL inside the text is copied like any
+   byte: C that takes the length reads it all, which a C.String cannot give. A String lies in memory, so bytes + 1
+   fits an int64_t; a size the system cannot give is new_buffer's to refuse (its BUFFER_MAX and SIZE_MAX check). */
+static agc_value builtin_from_string(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  const agc_string *text = agc_as_string(vm, args[0]);
+  agc_value buffer = new_buffer(vm, (int64_t)text->bytes + 1, span + 1);
+  if (text->bytes) memcpy(agc_as_c_resource(vm, buffer)->pointer, text->data, text->bytes);
+  return buffer;
 }
 
 /* The first step calls the block with the buffer; the second frees the buffer, as Native.free does, and ends the call
@@ -1447,14 +1465,24 @@ static agc_step buffer_block_step(agc_vm *vm, agc_stepper *self, agc_value last)
   return (agc_step){.kind = AGC_STEP_END, .value = last};
 }
 
-/* Native.memory_pointer(size) do |buf| ... end, Ruby ffi's MemoryPointer.new(size) { |p| ... }: a new owned buffer
-   for the block, freed when the block ends; the call returns the block's value. */
-static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint32_t span) {
+/* Yields BUFFER, a new owned buffer, to the block (the last argument) and frees it when the block ends. */
+static agc_value buffer_for_block(agc_vm *vm, agc_value buffer) {
   buffer_block *b = agc_alloc(sizeof *b);
-  b->buffer = builtin_memory_pointer(vm, args, span);
+  b->buffer = buffer;
   b->stepper.step = buffer_block_step;
   agc_task_stepper(vm, &b->stepper);
   return agc_void();
+}
+
+/* Native.memory_pointer(size) do |buf| ... end, Ruby ffi's MemoryPointer.new(size) { |p| ... }: a new owned buffer
+   for the block, freed when the block ends; the call returns the block's value. */
+static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  return buffer_for_block(vm, builtin_memory_pointer(vm, args, span));
+}
+
+/* Native.from_string(text) do |buf| ... end: the buffer of Native.from_string for the block, as above. */
+static agc_value builtin_from_string_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  return buffer_for_block(vm, builtin_from_string(vm, args, span));
 }
 
 /* Native.free(pointer): frees an owned buffer once, as Native.close frees a resource; a C.Pointer that C gave is not
@@ -1931,6 +1959,8 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.get_bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.memory_pointer", 2, builtin_memory_pointer_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.from_string", 1, builtin_from_string, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Native.from_string", 2, builtin_from_string_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

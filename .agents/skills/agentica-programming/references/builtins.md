@@ -61,6 +61,7 @@ Bit operations: `binary.md`.
 
 ```text
 String.length(s: String) -> Int                          # Unicode characters
+String.bytesize(s: String) -> Int                        # UTF-8 bytes (a C length); no list built
 String.empty?(s: String) -> Bool
 String.upcase(s: String) -> String
 String.downcase(s: String) -> String

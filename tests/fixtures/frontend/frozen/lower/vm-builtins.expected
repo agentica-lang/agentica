@@ -130,6 +130,7 @@ Native.address
 Native.close
 Native.closed?
 Native.free
+Native.from_string
 Native.get_array_of_float32
 Native.get_array_of_float64
 Native.get_array_of_int32
@@ -220,6 +221,7 @@ Set.to_a
 Set.union
 Std.source
 String.at
+String.bytesize
 String.code
 String.compare
 String.contains?
