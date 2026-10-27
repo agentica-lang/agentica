@@ -23,6 +23,7 @@
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c, vm/jit/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
+# make layout-check       the layout of the --jit off hot loop (plain_turn) against BASE, default the merge base with origin/master (tools/layout_check.py; Linux x86-64, release mode)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
 #                         non-Linux hosts do); pass it to every make command or export it. The Linux default AGENTICA_GC=system links the system
 #                         libgc 8.2 or newer found by pkg-config (Debian: libgc-dev pkg-config) and checks it before any vm/*.c compile

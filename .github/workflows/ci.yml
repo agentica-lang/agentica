@@ -80,6 +80,9 @@ jobs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    permissions:
+      contents: read
+      pull-requests: read
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
@@ -106,6 +109,27 @@ jobs:
         run: make -j"$(nproc)" vm-test test-bdd
         env:
           AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      # The loop of --jit off must not move silently (tools/layout_check.py). HEAD^1 is the base branch tip, so this compares
+      # what the merge changes. An intended change carries the `layout-change` label, which accepts only the exit code 4 of
+      # the check (build/layout-check.rc: make itself exits 2). The label is read here, not from the event, so adding it and
+      # re-running the job is enough.
+      - name: Layout of the --jit off hot loop against the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          rm -f build/layout-check.rc
+          rc=0
+          make -j"$(nproc)" layout-check BASE=HEAD^1 || rc=$?
+          # The labels go to a variable first: `gh ... | grep -q` can kill gh with SIGPIPE under pipefail.
+          labels=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name') || labels=
+          if [ "$rc" -ne 0 ] && [ "$(cat build/layout-check.rc 2>/dev/null)" = 4 ] \
+            && printf '%s\n' "$labels" | grep -qx layout-change; then
+            echo "::warning title=layout-check::the loop of --jit off changed; the layout-change label accepts it"
+            rc=0
+          fi
+          exit "$rc"
       - name: Filesystem removal regressions in Actions-owned scratch
         run: make test-remove-actions
         env:
