@@ -627,7 +627,7 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   if (b->cost == AGC_COST_SIZE)
     for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
 #if AGC_LEAF_CHECK
-  uint32_t frames = t->frame_count;
+  uint32_t frames = t->frame_count, depth = vm->sync_depth;
   bool retry = t->retry;
 #endif
   agc_value result;
@@ -636,6 +636,7 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   if (t->parking || t->retry != retry) direct_broken(b, "parked");
   if (t->stepper) direct_broken(b, "started a stepper");
   if (t->frame_count != frames) direct_broken(b, "moved the frames");
+  if (vm->sync_depth != depth) direct_broken(b, "left rt->sync taken");
 #endif
   args[0] = result;
   if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
