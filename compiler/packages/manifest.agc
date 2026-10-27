@@ -357,10 +357,10 @@ end
 # fine in a linux entry and is just never found there) or a name for the system loader, which has no folder in it (the
 # rule of `extern "name"`). A relative path would depend on the working directory, which is never searched.
 def system_problem(name: String) -> String
-  has_nul = name.contains?(String.from_code(0))
+  has_nul = name.split("").any? do |char: String| String.code(char) < 32 or String.code(char) == 127 end
   if Paths.rooted?(name)
     if name.length > MAX_SYSTEM_PATH or has_nul
-      return "a system library path has no NUL and at most #{MAX_SYSTEM_PATH} characters"
+      return "a system library path has no control character and at most #{MAX_SYSTEM_PATH} characters"
     end
 
     return ""

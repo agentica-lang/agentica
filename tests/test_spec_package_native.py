@@ -267,6 +267,7 @@ def test_an_extern_name_that_the_manifest_does_not_declare_stays_a_system_librar
     ('[native.pkgdemo]\nlinux = { system = ["libx.so", 3] }\n', "native.pkgdemo.linux.system[1]"),
     ('[native.pkgdemo]\nlinux = { system = ["/opt/libx.so", "C:libx.dll"] }\n', "native.pkgdemo.linux.system[1]"),
     ('[native.pkgdemo]\nlinux = { system = [] }\n', "native.pkgdemo.linux.system"),
+    ('[native.pkgdemo]\nlinux = { system = ["libx.so", "/opt/a\\nb.so"] }\n', "native.pkgdemo.linux.system[1]"),
     ('[native.pkgdemo]\nlinux = { url = "https://example.test/x.so" }\n', "native.pkgdemo.linux"),
     ('[native.Demo]\nlinux = { system = "libx.so" }\n', "native.Demo"),
     ('[native.pkgdemo]\nlinux = { file = "native/Thumbs.db" }\n', "native.pkgdemo.linux.file"),
@@ -369,3 +370,9 @@ def test_a_candidate_list_is_hashed_with_the_package_and_the_lock_holds_no_pick(
     assert install(ws, remotes)[1] is None
     assert problem_of(ws, remotes) is None
     assert lock.read_bytes() == written
+
+
+@pytest.mark.parametrize("path", [r"C:\x.dll", "C:/x.dll", r"\\srv\share\x.dll"])
+def test_an_absolute_path_of_any_system_is_a_valid_candidate_on_every_host(ws, path):
+    declare(ws, {"demo.agc": DEMO}, '[native.pkgdemo]\n%s = { system = [%s, "libx.so"] }\n' % (HERE, json.dumps(path)))
+    assert check(ws) is None

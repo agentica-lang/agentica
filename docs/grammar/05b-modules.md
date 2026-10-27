@@ -543,10 +543,11 @@ import Sqlite from "pkg/sqlite/db"
   is at most 1 MiB), `system`, a name for the system loader (no `/`, `\`
   or `:`; at most 128 characters) or an absolute path, or a list of them (1 to
   16), for a library the system has (`winsqlite3.dll`), or a download
-  `{ url, sha256, member }` (an https URL, or http to 127.0.0.1 or [::1]; 64 lowercase hex digits; a safe
-  relative TAR or ZIP member): the archive is verified by its SHA-256 and
-  the member is cached, pinned per system in `[[native-artifact]]` and fetched
-  by `install` and `update` for the host only. Another key, both shapes or
+  `{ url, sha256, member }` (an https URL, or http to 127.0.0.1 or [::1]; 64
+  lowercase hex digits; a safe relative TAR or ZIP member): the archive is
+  verified by its SHA-256 and the member is cached, pinned per system in
+  `[[native-artifact]]` and fetched by `install` and `update` for the host
+  only. Another key, both shapes or
   a half-written download are `PKG-MANIFEST-INVALID` at the key path
   (`native.sqlite3.linux.file`).
   ```toml
@@ -571,7 +572,10 @@ import Sqlite from "pkg/sqlite/db"
     ```
     When the file is compiled, the first absolute path that is a file is
     chosen, else the first bare name, else the first path (the program then
-    fails to open it, as `extern "/missing.so"` does). The choice is the
+    fails to open it, as `extern "/missing.so"` does). A macOS path such as
+    `/usr/lib/libz.dylib` lives in the dyld shared cache, not on disk, so it
+    does not count as existing: list it knowingly, before or after a path
+    that does. The choice is the
     machine's: the manifest is hashed as written, the lock holds no choice,
     and the bytecode cache misses when a candidate appears or goes away. A
     relative path (`lib/x.so`, `C:x.dll`), an empty list or an item that is

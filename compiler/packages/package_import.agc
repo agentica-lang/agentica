@@ -30,9 +30,9 @@ DEPS_FOLDER = "deps"
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
 ## files that the bytecode cache must watch because of it, and probed the paths whose presence decided a choice there.
-## blank_line_after_end is true for a file of a project whose
-## manifest turns on `[style] blank_line_after_end`; no other file has it. library is true for a file of a std/ or pkg/
-## library and for what such a file imports by a relative path: those files keep the style answer of their origin.
+## blank_line_after_end is true for a file of a project whose manifest turns on `[style] blank_line_after_end`; no
+## other file has it. library is true for a file of a std/ or pkg/ library and for what such a file imports by a
+## relative path: those files keep the style answer of their origin.
 export struct Origin
   package: String
   root: String
