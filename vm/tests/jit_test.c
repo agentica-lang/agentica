@@ -1,7 +1,7 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, direct builtins, map reads, lists, closures, globals,
- * structs, enums, `try`), the code memory sealed read-execute and never writable then, functions packed in it up to
+ * failures that leave the result register alone, native calls, tail calls, direct builtins, map reads, lists, closures,
+ * globals, structs and their updates, enums, `try`), the code memory sealed read-execute, functions packed in it up to
  * its cap, one copy made when threads compile a function at once, and the `on` decision settled in linear time.
  */
 #include "../jit/jit.h"
@@ -126,16 +126,23 @@ static void sum_loop(one_function *f) {
   emit(f, AGC_OP_RETURN, 2, 0, 0);
 }
 
+/* A CALL that cannot be native and a RETURN not called natively take their exits; every TAIL_CALL takes its own, and
+   one of a function past the program's table (hand-made code) leaves for the interpreter. */
 static AGC_JIT_CALLER void call_return_exits(void) {
   one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_CALL, 0, 0, 0);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  emit(&f, AGC_OP_TAIL_CALL, 1, 0, 0);
+  emit(&f, AGC_OP_TAIL_CALL, 1, 1, 0);
   agc_jit_code code = compile(&f);
   assert(code);
   agc_value R[8] = {agc_int(42)};
   expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_CALL, 0);
   expect_exit(code(&vm, R, f.constants, 1), AGC_JIT_EXIT_RETURN, 1);
+  expect_exit(code(&vm, R, f.constants, 2), AGC_JIT_EXIT_TAIL_CALL, 2);
+  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_INTERPRET, 3);
+  assert(same_bits(R[0], agc_int(42)));
 }
 
 /* Function 0 calls function 1, which adds 1 to its argument, natively: the frame is pushed and popped in compiled code
@@ -648,6 +655,56 @@ static AGC_JIT_CALLER void globals_structs_enums(void) {
   }
 }
 
+/* STRUCT_WITH copies the struct at R1 with the update's field set from R2 in compiled code. The copy charges its size
+   and applies it, as the interpreter's case does: 4 fields (64 bytes) take one unit of the turn, and a turn that the
+   charge ends leaves with YIELD after the result is written. A receiver that is not a struct of the update's type with
+   its declared field count, and an update past the program's table (hand-made code), leave for the interpreter, R3 and
+   the turn cost untouched. */
+static AGC_JIT_CALLER void struct_updates(void) {
+  agc_struct_def structs[2] = {{.count = 4}, {.count = 2}};
+  uint32_t fields[1] = {2};
+  agc_update_def updates[1] = {{.type = 0, .count = 1, .fields = fields}};
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_STRUCT_WITH, 3, 1, 0);
+  emit(&f, AGC_OP_RETURN, 3, 0, 0);
+  f.program.structs = structs;
+  f.program.struct_count = 2;
+  f.program.updates = updates;
+  f.program.update_count = 1;
+  agc_jit_code code = compile(&f);
+  const agc_program *saved = vm.rt->program;
+  vm.rt->program = &f.program;
+  agc_struct *old = agc_new_struct(0, 4);
+  for (int64_t k = 0; k < 4; k++) old->fields[k] = agc_int(k);
+  agc_value any = agc_nil(), R[8] = {agc_nil(), agc_struct_value(old), agc_int(9), any};
+  vm.task->turn_cost = 0;
+  vm.turn_left = vm.batch = vm.next_stop = vm.stop_set = 1000;
+  for (int pass = 0; pass < 2; pass++) {
+    expect_exit(code(&vm, R, f.constants, 0), pass ? AGC_JIT_EXIT_YIELD : AGC_JIT_EXIT_RETURN, pass ? 0 : 1);
+    const agc_struct *st = agc_as_struct(&vm, R[3]);
+    assert(st != old && st->type == 0 && st->n == 4 && same_bits(st->fields[1], agc_int(1)));
+    assert(same_bits(st->fields[2], agc_int(9)) && same_bits(old->fields[2], agc_int(2)));
+    assert(vm.task->turn_cost == 0 && vm.yield == (pass == 1));
+    if (!pass) assert(vm.turn_left == 999);
+    vm.turn_left = 1;
+    R[3] = any;
+  }
+  vm.yield = false;
+  agc_value wrong[3] = {agc_int(5), agc_struct_value(agc_new_struct(1, 2)), agc_struct_value(agc_new_struct(0, 2))};
+  for (size_t k = 0; k < 3; k++) {
+    R[1] = wrong[k];
+    expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+    assert(same_bits(R[3], any) && vm.task->turn_cost == 0);
+  }
+  f.program.update_count = 0;
+  R[1] = agc_struct_value(old);
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  assert(same_bits(R[3], any));
+  vm.rt->program = saved;
+  vm.next_stop = 1000;
+}
+
 /* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): one claims it and compiles
    it, and the others get NULL (they interpret it meanwhile) or the one copy that was published; no second copy takes
    code memory. The barrier lets them start together, so the losing side of the claim runs. */
@@ -758,6 +815,21 @@ static void ineligible(void) {
     f.code[f.fn.count - 1] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
     emit(&f, AGC_OP_JUMP, 0, 0, 0);
     assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  }
+  /* A TAIL_CALL counts as a call, by its callee: a loop that tail-calls a function that may get code does not leave,
+     and one whose callee leaves (a builtin that is neither leaf, direct nor a block call) does. */
+  agc_builtin other_row = {.leaf = false};
+  const agc_builtin *other_rows[1] = {&other_row};
+  agc_instr loop[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  agc_instr callee[2] = {{AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  for (uint32_t leaving = 0; leaving < 2; leaving++) {
+    agc_function fns[2] = {{.registers = 2, .code = loop, .count = 3},
+                           {.registers = 2, .code = callee + !leaving, .count = 1 + leaving}};
+    agc_program program = {.functions = fns, .function_count = 2, .builtins = other_rows};
+    bool callable[2], looped[2], calling[2];
+    agc_jit_settle(&program, callable, looped, calling);
+    assert(looped[0] && !looped[1] && calling[0] && !calling[1]);
+    assert(callable[0] == !leaving && callable[1] == !leaving);
   }
 }
 
@@ -986,6 +1058,7 @@ int main(void) {
   maps_and_lists();
   closures();
   globals_structs_enums();
+  struct_updates();
   ineligible();
   every_opcode_compiles();
 #else

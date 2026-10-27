@@ -90,8 +90,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`) and `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`).
 - Builtin records: `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`,
-  `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent`. `Name` is a
-  struct you declare; its fields are typed and immutable.
+  `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent`, `StructMember`.
+  `Name` is a struct you declare; its fields are typed and immutable.
 - Type names start uppercase; variables, functions and fields start lowercase
   or `_`. `Option[T]` is not builtin; declare an enum.
 
@@ -150,6 +150,12 @@ end
   below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
   is built again at each construction. `.with(...)` and `JSON.decode` are not
   affected: a decode still needs every key.
+- `User.members` (on the type, not a value) is a `List[StructMember]` of the
+  fields in declaration order; `StructMember` has `name: String` and
+  `type: String`, the field type as source with aliases expanded
+  (`List[String]`, `Address`). An enum or resource is `CHECK-UNKNOWN-METHOD`,
+  an alias `CHECK-UNKNOWN-TYPE`. A field called `members` is still read as
+  `user.members`.
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a

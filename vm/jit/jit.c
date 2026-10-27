@@ -44,7 +44,8 @@ static bool backward(agc_instr in, uint32_t pc, uint32_t *start) {
   return (op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && *start <= pc;
 }
 
-/* True when IN always has code of its own. CALL and RETURN have code that may exit (leaves_code). */
+/* True when IN always has code of its own. CALL and RETURN have code that may exit, and TAIL_CALL is an exit that
+   run_compiled handles (leaves_code). */
 static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
@@ -83,6 +84,7 @@ static bool has_code(uint32_t op) {
     case AGC_OP_RESULT_VALUE:
     case AGC_OP_CLOSURE:
     case AGC_OP_STRUCT:
+    case AGC_OP_STRUCT_WITH:
     case AGC_OP_ENUM:
     case AGC_OP_TRY:
     case AGC_OP_TRY_STEP:
@@ -93,15 +95,22 @@ static bool has_code(uint32_t op) {
   }
 }
 
-/* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a CALL of a function of the
-   program (settle counts those by their callee). A leaf builtin, and a block call (a row with a native kind, such as
+/* True for a CALL or a TAIL_CALL of a function of the program: run_compiled makes the frame transition of either and
+   goes on in the callee's code when it has some, so settle counts such a call by its callee. */
+static bool calls_function(const agc_program *p, agc_instr in) {
+  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  return (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) && bx < p->function_count;
+}
+
+/* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a call of a function of the
+   program (calls_function). A leaf builtin, and a block call (a row with a native kind, such as
    `filter`: its native frame and the block's frames), are started by run_compiled itself, which LEAF says to count or
    not, as their exit unwinds the native calls; a direct builtin is called by the code itself, which leaves only when
    the call ends the turn or fails; a RETURN runs once per call. */
 static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN) return false;
-  if (in.op == AGC_OP_CALL) return bx >= p->function_count;
+  if (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) return !calls_function(p, in);
   if (in.op != AGC_OP_CALL_BUILTIN) return true;
   const agc_builtin *b = p->builtins[bx];
   return !b->direct && (!(b->leaf || b->native) || leaf);
@@ -129,7 +138,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
       uint32_t start;
       agc_instr in = f->code[pc];
       jumps += backward(in, pc, &start);
-      calls += in.op == AGC_OP_CALL && ((uint32_t)in.b | ((uint32_t)in.c << 16)) < n;
+      calls += calls_function(p, in);
     }
     work += f->count;
   }
@@ -164,12 +173,11 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     }
     for (uint32_t pc = 0; pc < f->count; pc++) {
       agc_instr in = f->code[pc];
-      uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-      bool call = in.op == AGC_OP_CALL && bx < n;
+      bool call = calls_function(p, in);
       calling[k] |= call;
       if (at[pc] == UINT32_MAX) continue;
       if (call)
-        sites[site_count++] = (call_site){bx, at[pc]};
+        sites[site_count++] = (call_site){(uint32_t)in.b | ((uint32_t)in.c << 16), at[pc]};
       else
         regions[at[pc]].out += leaves_code(p, in, !looped[k]);
     }
@@ -268,6 +276,12 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
+      case AGC_OP_STRUCT_WITH:
+        if (in.c < p->update_count)
+          agc_emit_struct_with(e, in, pc, (uint64_t)(uintptr_t)&p->updates[in.c]);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_ENUM:
         if (in.c < p->variant_count)
           agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_enum, (uint64_t)(uintptr_t)&p->variants[in.c], in.c);
@@ -291,6 +305,10 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
           agc_emit_call(e, in, pc, (uint64_t)(uintptr_t)&jit->code[bx], p->functions[bx].registers);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_CALL, pc);
+        break;
+      case AGC_OP_TAIL_CALL:
+        /* As for CALL, the loader checks bx. */
+        agc_emit_exit(e, bx < p->function_count ? AGC_JIT_EXIT_TAIL_CALL : AGC_JIT_EXIT_INTERPRET, pc);
         break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
       case AGC_OP_CALL_BUILTIN:
@@ -721,6 +739,20 @@ void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint
   agc_struct *st = agc_new_struct(type, count);
   for (uint32_t k = 0; k < count; k++) st->fields[k] = fields[k];
   *dst = agc_struct_value(st);
+}
+
+uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u) {
+  const agc_program *p = vm->rt->program;
+  if (!agc_is(window[0], AGC_T_STRUCT)) return AGC_JIT_EXIT_INTERPRET;
+  const agc_struct *old = agc_as_struct(vm, window[0]);
+  if (old->type != u->type || old->n != p->structs[u->type].count) return AGC_JIT_EXIT_INTERPRET;
+  agc_struct *st = agc_new_struct(old->type, old->n);
+  memcpy(st->fields, old->fields, (size_t)old->n * sizeof(agc_value));
+  for (uint32_t k = 0; k < u->count; k++) st->fields[u->fields[k]] = window[1 + k];
+  /* The window is read in full before DST, which may be one of its registers, is written. */
+  *dst = agc_struct_value(st);
+  agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
+  return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 
 void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {

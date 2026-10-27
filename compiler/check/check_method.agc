@@ -33,12 +33,59 @@ end
 
 ## Checks target.name: a struct field, or a method without arguments (to_s, size, ...).
 export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess, expected: T.Type) -> Result[State.Out]
+  case node.target
+    Ast.Expr.TypeName(type_name) ->
+      if node.name == "members"
+        return check_members(cx, st, node, type_name)
+      end
+
+    _ -> st = st
+  end
+
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if field_target?(cx, target.type, node.name)
     return check_struct_field(cx, target.st, node, target.type)
   end
 
   return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
+end
+
+# Type.members: the fields of a struct type, in declaration order, as a List[StructMember]. Lowering builds the list
+# from the fields recorded here, so the program needs no runtime support. An alias is refused as a struct
+# construction is (CHECK-UNKNOWN-TYPE); an enum or a resource has no members (CHECK-UNKNOWN-METHOD).
+def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
+  name = type_name.name
+  display = T.display_name(name)
+  fields = cx.structs.get(name)
+  if fields.ok? and !cx.aliases.has_key?(name)
+    resolved = State.record_resolved(st, node.id, State.Resolved.Members(fields.unwrap!))
+    return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember"))))
+  end
+
+  if cx.aliases.has_key?(name)
+    target = try CheckTypes.alias_target_text(cx, st, name)
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "a type alias is not a declared struct",
+        node.span,
+        "#{display} names #{target}; use members on the underlying struct instead",
+      ),
+    )
+  end
+
+  return error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-UNKNOWN-METHOD",
+      "#{display} has no method \"members\"",
+      node.span,
+      "members lists the fields of a struct type; #{display} is not a struct",
+    ),
+  )
 end
 
 # A struct is read by field unless the name is to_s or inspect and the struct has no such field.

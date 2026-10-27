@@ -1,6 +1,7 @@
 ## Lists, maps, enum values, structs and struct updates Each is a `step`, the items computed into consecutive
 ## registers, and one instruction that gathers them.
 
+import Model from "../catalog/builtin_model"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
@@ -56,6 +57,51 @@ export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) 
       fx = State.emit_at(fx, "move", [want, base], span)
       dst = want
     end
+  end
+
+  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
+## Type.members: the list of StructMember for the fields the checker recorded, each name and type a constant text.
+## Like a list literal, one `list` instruction gathers at most MAX_CHUNK items and a struct with more fields is built
+## in chunks joined with List.concat.
+export def lower_members(
+  cx: State.Cx, fx: State.Fx, fields: List[Model.Named], span: Source.Span, want: Int
+) -> Result[State.Out]
+  index = cx.structs["StructMember"].index
+  fx = State.step(fx, span)
+  saved = fx.next
+  fx = State.alloc(fx)
+  base = fx.next - 1
+  count = fields.size
+  if count == 0
+    fx = State.emit_at(fx, "list", [base, base, 0], span)
+  end
+
+  at = 0
+  while at < count
+    size = count - at
+    if size > MAX_CHUNK
+      size = MAX_CHUNK
+    end
+
+    fx = fx.with(next: base + 1)
+    start = fx.next
+    fx = member_items(fx, fields, at, at + size, index, span)
+    if at == 0
+      fx = State.emit_at(fx, "list", [base, start, size], span)
+    else
+      fx = State.emit_at(fx, "list", [start, start, size], span)
+      fx = State.emit_builtin(fx, base, "List.concat", 2, [span, span, span])
+    end
+
+    at += size
+  end
+
+  dst = base
+  if want >= 0
+    fx = State.emit_at(fx, "move", [want, base], span)
+    dst = want
   end
 
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
@@ -204,6 +250,31 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
 
   fx = State.emit_at(fx, "struct-with", [dst, window, info.index].concat(positions), span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
+# The StructMember of fields[from, to) in consecutive registers: a register for each, then two scratch registers
+# above them for the name and the type, which the `struct` instruction reads as consecutive fields.
+def member_items(
+  fx: State.Fx, fields: List[Model.Named], from: Int, to: Int, index: Int, span: Source.Span
+) -> State.Fx
+  start = fx.next
+  at = from
+  while at < to
+    fx = State.alloc(fx)
+    at += 1
+  end
+
+  scratch = fx.next
+  fx = State.alloc(State.alloc(fx))
+  at = from
+  while at < to
+    fx = State.emit_const(fx, scratch, Ir.Imm.Text(fields[at].name), span)
+    fx = State.emit_const(fx, scratch + 1, Ir.Imm.Text(Types.to_text(fields[at].type)), span)
+    fx = State.emit_at(fx, "struct", [start + at - from, scratch, index], span)
+    at += 1
+  end
+
+  return fx.with(next: start + to - from)
 end
 
 # A default is an expression of the file that declares the struct, so it is lowered with that file's index (the spans
