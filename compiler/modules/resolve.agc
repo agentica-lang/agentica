@@ -107,6 +107,21 @@ export def alias_constant_identity(cx: Context, name: String) -> String
   return ""
 end
 
+## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
+## a builtin record such as HttpResponse.
+export def declared_type?(cx: Context, name: String) -> Bool
+  if cx.me.names.has_key?(name)
+    return right_kind?(cx.me.names[name], Want.Type)
+  end
+
+  if cx.me.named.has_key?(name)
+    entry = cx.me.named[name]
+    return right_kind?(cx.modules[entry.target].public[entry.name], Want.Type)
+  end
+
+  return RECORDS.has_key?(name)
+end
+
 ## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
 ## exist.
 export def unknown_constant?(cx: Context, name: String) -> Bool

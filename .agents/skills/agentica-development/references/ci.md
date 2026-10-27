@@ -281,8 +281,14 @@ Skip rules, checked by the report:
   `always`, via the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`, to stage2) on
   the release VM; job `jit-stress` runs `vm-gc-stress-jit` and
   `vm-sanitize-jit-test` (the goldens with `AGENTICA_JIT=always` on the GC
-  stress and the ASan binaries, sampled sweep). Nothing else runs on a
-  schedule.
+  stress and the ASan binaries, sampled sweep).
+- `jit-soak.yml`: daily 04:30 UTC and by hand, on the four systems,
+  `make test-jit-on`: the conformance areas plus the destructive group (on a
+  GitHub-hosted runner, after `vm-test-binaries`) with `AGENTICA_JIT=on`; the
+  report names the failed cases, and a canary in `tests/test_vm_jit.py` fails
+  if the variable stops reaching the VMs. A test that needs one mode passes
+  `--jit` itself (the flag wins). It is the only daily schedule; `sweep.yml`
+  is weekly.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.
 
 ## Release (`release.yml`)

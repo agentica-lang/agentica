@@ -71,7 +71,7 @@ these, for each job:
 
 - **Job:** State that several tasks update
   - **The one form:** one owner task that receives messages on a channel (27.5);
-    a shared table (§13) when a program needs it
+    an `ATS` table (the grammar's "Shared tables") for a counter or a cache
 
 ### 27.1 `Task.map`
 
@@ -200,7 +200,7 @@ and return a `Result`, and `close` and `closed?` are added.
   (`CHECK-VOID-TYPE`, as for a `List[Void]`; use `Nil` or `Bool` for a plain
   signal). `Fn`, `Task` and handles (files, sockets, processes, other channels)
   are allowed: handing a socket to a worker is a main use (an accept loop sends
-  each connection to a pool of workers). The shared table of §13 rejects them
+  each connection to a pool of workers). An `ATS` table rejects them
   because it is a mutable store that many tasks read again and again; a channel
   only moves a value from one task to another, and the GC handles cycles. Since
   a task can now receive its own handle, `Task.await` checks for await cycles
@@ -444,12 +444,12 @@ Each of these is decided; it gets a help that names the Agentica form.
 - **Elixir `Agent` and other shared mutable accumulators:** `Agent.start_link`,
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
-  - Shared mutable state, which the language does not have: values are
-    immutable. The one exception is the `std/logger` registry (the grammar's
-    logging section),
-    which only the Logger functions reach; the shared table of §13 waits until a
-    program needs it, with atomic calls. Unlike an `Agent`, the registry is not
-    a value that programs hold: a program never gets a reference to it.
+  - Shared mutable state beyond two forms: values are immutable. The
+    exceptions are the `std/logger` registry (the grammar's logging section),
+    which only the Logger functions reach, and the `ATS` tables (the grammar's
+    "Shared tables"), whose calls are atomic and take no block. Unlike an
+    `Agent`, the registry is not a value that programs hold: a program never
+    gets a reference to it.
   - A second way to accumulate: in one task, `reduce` or a loop variable; across
     tasks, each task returns its part (`Task.await`, `Task.map`) and the caller
     combines the parts with `reduce`; state that lives while tasks run belongs

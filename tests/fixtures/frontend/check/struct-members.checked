@@ -1,0 +1,24 @@
+program #20 0:1:1-137:11:1
+  module "struct-members.agc"
+    declaration: struct-decl #5 0:1:1-47:5:1 name="User"
+      field: field-decl #1 14:2:3-22:3:1 name="id"
+        type: type-ref #0 18:2:7-21:2:10 name="Int"
+      field: field-decl #4 24:3:3-43:4:1 name="tags"
+        type: type-ref #3 30:3:9-42:3:21 name="List"
+          arg: type-ref #2 35:3:14-41:3:20 name="String"
+    declaration: function-decl #19 48:6:1-137:11:1 name="main"
+      result: type-ref #6 62:6:15-66:6:19 name="Void"
+      body: expr-stmt #18 69:7:3-133:10:1
+        value: method-call #17 69:7:3-132:9:6 name="each" type=Void resolved=call("List.each", List(Struct(StructMember)))
+          target: field-access #7 69:7:3-81:7:15 name="members" type=List(Struct(StructMember)) resolved=members(id, tags)
+            target: type-expression #28 69:7:3-73:7:7 name="User"
+          arg: block-lit #16 87:7:21-132:9:6 type=Fn([Struct(StructMember)], Void)
+            param: block-param #8 91:7:25-92:7:26 name="m"
+            body: expr-stmt #15 98:8:5-127:9:1
+              value: call #14 98:8:5-126:8:33 name="puts" piped=false type=Void
+                arg: interpolation #13 103:8:10-125:8:32 type=String
+                  part: field-access #10 106:8:13-112:8:19 name="name" type=String
+                    target: name-ref #9 106:8:13-107:8:14 name="m" type=Struct(StructMember)
+                  part: text ": "
+                  part: field-access #12 117:8:24-123:8:30 name="type" type=String
+                    target: name-ref #11 117:8:24-118:8:25 name="m" type=Struct(StructMember)

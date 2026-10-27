@@ -1,0 +1,36 @@
+program 0:1:1-11:1 entry=0 globals=0
+source 0 "struct-members.agc" chars=137
+struct s0 "User" ["id","tags"]
+struct s1 "StructMember" ["name","type"] types=[String, String]
+fn0 "main" params=0 captures=0 slots=6 entry @ 0:6:1-11:1
+    step @ 0:7:3-10:1
+    step @ 0:7:3-9:6
+    step @ 0:7:3-7:15
+    const r4 "id" @ 0:7:3-7:15
+    const r5 "Int" @ 0:7:3-7:15
+    struct r2 r4 s1 @ 0:7:3-7:15
+    const r4 "tags" @ 0:7:3-7:15
+    const r5 "List[String]" @ 0:7:3-7:15
+    struct r3 r4 s1 @ 0:7:3-7:15
+    list r1 r2 2 @ 0:7:3-7:15
+    move r0 r1 @ 0:7:3-7:15
+    step @ 0:7:21-9:6
+    closure r1 fn1 @ 0:7:21-9:6
+    call-builtin r0 "List.each" 2 @ 0:7:3-9:6 0:7:3-7:15 0:7:21-9:6
+    const r0 void @ 0:6:1-11:1
+    return r0 @ 0:6:1-11:1
+fn1 "block@struct-members.agc:7:21" params=1 captures=0 slots=3 @ 0:7:21-9:6
+    step @ 0:8:5-9:1
+    step @ 0:8:5-8:33
+    step @ 0:8:10-8:32
+    step @ 0:8:13-8:19
+    step @ 0:8:13-8:14
+    field r1 r0 0 @ 0:8:13-8:19
+    const r2 ": " @ 0:8:10-8:32
+    concat r1 r1 r2 @ 0:8:10-8:32
+    step @ 0:8:24-8:30
+    step @ 0:8:24-8:25
+    field r2 r0 1 @ 0:8:24-8:30
+    concat r1 r1 r2 @ 0:8:10-8:32
+    call-builtin r1 "puts" 1 @ 0:8:5-8:33 0:8:10-8:32
+    return r1 @ 0:8:5-9:1

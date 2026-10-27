@@ -194,10 +194,12 @@ that still apply.
 - **Values are immutable**, so tasks on different schedulers share them without
   locks or copies (§16.7). Any in-place mutation inside the VM (caches, updates
   in place when a value is known to be unique, the faster lists of roadmap 8d)
-  must be proven unshared or made atomic. Future mutable structures, and the
-  shared tables of `docs/future/13-ats.md` §13, must use locks and atomics. A
-  table call does not yield, so it is atomic with N=1. Once N>1, each table call
-  needs a lock, or a persistent structure installed with compare-and-swap.
+  must be proven unshared or made atomic. Future mutable structures must use
+  locks and atomics. The `ATS` tables (the grammar's "Shared tables") are
+  built so: a table is one atomic pointer to an immutable state of persistent
+  trees, and a write builds the next state and installs it with
+  compare-and-swap, retrying when another write won (`vm/ats.c`). A table call
+  takes no lock and does not yield.
 - **The Globals table** (module constants, the grammar's `Module constants`
   section) is the one place a loaded program is written
   (`agc_program.globals`).

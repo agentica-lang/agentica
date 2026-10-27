@@ -1,0 +1,1 @@
+ERROR CHECK-ATS-VALUE 35:2:23-51:2:39 "an ATS value must be a data type with no Fn, Task, handle or ATS inside, found ATS[String, Int]" "keep plain data in the table (numbers, strings, lists, maps, structs and enums of those)" file="ats-value.agc"

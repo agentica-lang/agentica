@@ -29,6 +29,8 @@ export VM_BUILTINS = Set.new([
   "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
+  "ATS.new", "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.add", "ATS.size", "ATS.keys",
+  "ATS.to_map",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
   "Channel.close", "Channel.closed?", "Process.spawn", "Process.send", "Process.send_bytes", "Process.read_line",
   "Process.read_bytes", "Process.close_stdin", "Process.wait", "Process.close", "TCP.connect", "TCP.listen",
@@ -88,7 +90,7 @@ export NATIVE_STRUCTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply", "HttpWire.Job",
-  "HttpWire.Response"
+  "HttpWire.Response", "StructMember"
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

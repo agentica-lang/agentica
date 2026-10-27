@@ -6,7 +6,9 @@ type. The checker picks the module from the static type (`String`, `List`,
 there is no dynamic dispatch. `s.strip` is `String.trim(s)`, but `"a".from_int`
 is not a method. Without parentheses, `receiver.name` on a non-struct value is a
 method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
-Structs and enums have no methods.
+Structs and enums have no methods. The one form on a struct type is
+`Type.members`, the list of its fields (`docs/grammar/06-semantics.md`, "Structs
+and lists").
 
 Ruby aliases are the module functions named in the library pages: `strip`,
 `include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,

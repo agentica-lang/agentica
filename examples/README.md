@@ -28,6 +28,8 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`file-summary.agc`](file-summary.agc): read a file given as an argument.
 - [`concurrency.agc`](concurrency.agc): lightweight tasks with `Task.spawn` and
   `Task.await`.
+- [`shared-cache.agc`](shared-cache.agc): tasks that share a cache and a counter
+  in `ATS` tables.
 - [`process-tool.agc`](process-tool.agc): run another program.
 - [`tcp_echo.agc`](tcp_echo.agc): a TCP echo: read a line from a socket and send
   it back.

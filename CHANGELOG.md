@@ -8,6 +8,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `ATS[K, V]` shared tables for counters and caches that tasks update
+  (`examples/shared-cache.agc`).
+- `Type.members` lists the fields of a struct type as a `List[StructMember]`
+  (`name` and `type` as source), for tools such as an ORM.
+
+### Changed
+
+- **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
+  `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
+- **Breaking:** `StructMember` is a reserved type name, so a program cannot
+  declare a type of that name.
+- The experimental x86-64 JIT runs tail calls and struct updates
+  (`s.with(...)`) from compiled code, so functions that use them compile under
+  `--jit on`.
+
 ## [0.12.0] - 2026-10-27
 
 ### Added

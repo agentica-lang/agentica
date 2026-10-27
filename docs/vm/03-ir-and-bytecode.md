@@ -177,9 +177,10 @@ captures, slots, body, span), `Instr` (op, args, imm, name, spans), `StructDef`
     straight into its slot.
 
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
-`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
-only when the program names them or a checked type mentions them. Then they
-lower like user structs (`compiler/lower/lower_program.agc`).
+`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogEvent`,
+`StructMember`) join the struct table only when the program names them or a
+checked type mentions them. Then they lower like user structs
+(`compiler/lower/lower_program.agc`).
 
 ### 3.4 Closure conversion
 

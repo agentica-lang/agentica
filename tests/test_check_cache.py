@@ -496,3 +496,36 @@ def test_a_module_that_re_exports_answers_alike_cold_warm_and_off_and_after_edit
     assert settled(ws, **asked)[0][0] == 1
     edit(ws, "facade", "export Deep.SIZE", "export Deep.SIZES")
     assert settled(ws, **asked)[0][0] == 1
+
+
+# A module whose struct field and function use an `ATS` table type, which the stub of the module must carry.
+TABLES = '''export struct Shared
+  hits: ATS[String, Int]
+end
+
+export def fresh() -> Shared
+  hits: ATS[String, Int] = ATS.new()
+  return Shared(hits: hits)
+end
+'''
+
+THROUGH_TABLES = '''import Tables from "tables"
+
+def main() -> Void
+  shared = Tables.fresh()
+  count = shared.hits.add("home", 1)
+  puts(count.to_s)
+end
+'''
+
+
+def test_a_table_type_in_a_module_answers_alike_cold_warm_and_off(ws):
+    (ws.project / "tables.agc").write_text(TABLES, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_TABLES, encoding="utf-8")
+    # The type is asked inside `hits` of `shared.hits`.
+    asked = {"source": THROUGH_TABLES, "needle": "d.hits"}
+    first = settled(ws, **asked)
+    assert first[0] == (0, '{"ok":true}\n', "")
+    assert json.loads(first[1][1])["type"] == "ATS[String, Int]"
+    edit(ws, "tables", "hits: ATS[String, Int]\nend", "hits: ATS[String, Float]\nend")
+    assert settled(ws, **asked)[0][0] == 1

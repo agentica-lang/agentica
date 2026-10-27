@@ -454,6 +454,14 @@ void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_
   call_fn(e, fn);
 }
 
+/* STRUCT_WITH: agc_jit_struct_with(vm, &R[a], &R[b], update), which leaves for the interpreter on a receiver of
+   another struct, and applies the copy's charge itself, leaving with YIELD when that ends the turn. */
+void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t update) {
+  helper_args(e, in);
+  move_imm64(e, ARG3, update);
+  call_status(e, (uint64_t)(uintptr_t)agc_jit_struct_with, pc);
+}
+
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
    compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
    cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds

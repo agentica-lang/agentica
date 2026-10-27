@@ -148,6 +148,7 @@ def free_variables(type: T.Type) -> List[String]
     T.Type.List(item) -> return free_variables(item)
     T.Type.Set(item) -> return free_variables(item)
     T.Type.Map(key, value) -> return free_variables(key).concat(free_variables(value))
+    T.Type.ATS(key, value) -> return free_variables(key).concat(free_variables(value))
     T.Type.Fn(params, result) -> return free_variables_of(params).concat(free_variables(result))
     T.Type.Enum(name, args) -> return free_variables_of(args)
     _ -> return []

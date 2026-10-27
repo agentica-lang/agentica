@@ -1,5 +1,6 @@
 ## The text form of a check, for tests. See check.agc.
 
+import Model from "../catalog/builtin_model"
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
 import Paths from "../modules/import_path"
@@ -99,7 +100,13 @@ def resolved_text(resolved: State.Resolved) -> String
     State.Resolved.Text(type) -> return "text(#{T.debug_text(type)})"
     State.Resolved.Inspect(type) -> return "inspect(#{T.debug_text(type)})"
     State.Resolved.Call(name, type) -> return "call(#{Text.quote(name)}, #{T.debug_text(type)})"
+    State.Resolved.Members(fields) -> return members_text(fields)
   end
+end
+
+def members_text(fields: List[Model.Named]) -> String
+  names = fields.map do |field: Model.Named| field.name end
+  return "members(#{names.join(", ")})"
 end
 
 def note(label: String, text: String) -> String
