@@ -472,6 +472,7 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
     return false
   end
 
+  CacheFiles.sweep(entry.folder)
   suffix = RandomName.hex()
   if !suffix.ok?
     return false
@@ -480,19 +481,7 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   body = String.to_bytes(text)
   data = String.to_bytes(head(body.size)).concat(body).concat(program)
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
-  if !CacheFiles.write_private(temporary, data).ok?
-    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
-    return false
-  end
-
-  CacheFiles.sweep(entry.folder)
-  CacheFiles.remove_file(entry.file)
-  if !Path.rename(temporary, entry.file, CacheFiles.IO_TIMEOUT_MS).ok?
-    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
-    return false
-  end
-
-  return true
+  return CacheFiles.install(temporary, data, entry.file)
 end
 
 # Both folders must be ones this program may trust (private_kind), or be made now. The .gitignore goes in `_build/`

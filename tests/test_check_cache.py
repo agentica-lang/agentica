@@ -459,6 +459,20 @@ def test_runs_at_the_same_time_give_one_answer_and_leave_valid_entries(ws):
     assert stamps(ws) == kept
 
 
+def test_a_write_that_cannot_rename_into_place_leaves_no_temporary_file(ws):
+    expected = settled(ws)
+    taken = entries(ws)
+    assert taken
+    # A folder in the place of each entry: the read is a miss, the old entry is not removed and the rename fails, as it
+    # does for a run that finds the entry another run just made.
+    for path in taken:
+        path.unlink()
+        path.mkdir()
+    assert answers(ws) == expected
+    assert all(path.is_dir() for path in taken)
+    assert not list((folder_of(ws) / "check").glob("*tmp*"))
+
+
 # A facade that passes on a function, a type and a constant of deep.agc (`export Alias.name`), and a root that uses them
 # through it.
 FACADE = '''import Deep from "deep"

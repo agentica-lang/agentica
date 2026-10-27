@@ -31,6 +31,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`s.with(...)`) from compiled code, so functions that use them compile under
   `--jit on`.
 
+### Fixed
+
+- On Windows, runs at the same time no longer leave a `.tmp-` file in `_build/`
+  when a cache entry cannot be put in place.
+
 ## [0.12.0] - 2026-10-27
 
 ### Added
