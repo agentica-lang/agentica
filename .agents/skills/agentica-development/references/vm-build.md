@@ -37,6 +37,7 @@ make vm-gc-stress-jit                # the golden tests with AGENTICA_JIT=always
 make vm-jit-self-compile             # the front end compiles itself under --jit on and always to stage2 (AGENTICA_VM_TEST_FRONT_END_JIT)
 make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
 make test-multicore-modules          # the TCP, TLS, HTTP, process and BDD modules with every VM on 4 schedulers
+make layout-check BASE=REV         # the layout of plain_turn (the --jit off loop) against REV (default the merge base with origin/master), built in build/layout-base; references/ci.md
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
 make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tests.md`)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff

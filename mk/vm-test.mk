@@ -3,7 +3,7 @@
 
 .PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
   vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-jit-test vm-gc-stress-jit vm-jit-self-compile vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
-  vm-layers
+  vm-layers layout-check
 
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
@@ -256,3 +256,19 @@ vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
 	for h in vm/*.h vm/jit/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
 	sh vm/tools/check-layers.sh $(VM_OBJ)
 	sh vm/tools/check-layers-test.sh $(VM_OBJ) $(VM_CC) $(VM_CFLAGS)
+
+# The code layout of the `--jit off` hot loop (tools/layout_check.py has the rules): builds BASE (a Git revision, default
+# the merge base with origin/master) in a worktree under build/ with this make's variables, and compares the first binary
+# of the bootstrap, which has the text of dist/agentica, with this tree's. Release mode on Linux x86-64 only. Exit 1 when
+# plain_turn has other instructions or moved inside vm/interp.c; an intended change is labelled `layout-change` in CI.
+BASE ?=
+LAYOUT_TREE ?= $(CURDIR)/build/layout-base
+layout-check: $(BOOT)
+	@if [ -n "$(strip $(SANITIZE)$(TSAN)$(GC_STRESS)$(LIBFUZZ))" ] || [ "$$(uname -sm)" != "Linux x86_64" ]; then \
+	  echo "layout-check: release mode on Linux x86-64 only" >&2; exit 2; fi
+	@rc=0; $(PYTHON) tools/layout_check.py prepare '$(BASE)' '$(LAYOUT_TREE)' || rc=$$?; \
+	if [ $$rc -eq 0 ]; then \
+	  $(MAKE) --no-print-directory -C '$(LAYOUT_TREE)' $(BOOT) && $(PYTHON) tools/layout_check.py compare '$(LAYOUT_TREE)' $(BOOT) $(VM_OBJ)/interp.o; rc=$$?; \
+	  $(PYTHON) tools/layout_check.py clean '$(LAYOUT_TREE)'; \
+	elif [ $$rc -eq 3 ]; then rc=0; fi; \
+	exit $$rc

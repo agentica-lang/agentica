@@ -224,7 +224,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail` from
   jumping across compiled code; mark a row only if it never parks, starts a
   block or moves frames. An edit of `turn_loop`, even in its jit copy,
-  changes the plain copy's machine code: keep JIT logic in `run_compiled`
+  changes the plain copy's machine code: keep JIT logic in `run_compiled`, and
+  put new JIT exit handling there in out-of-line `noinline` helpers: growth of
+  `run_compiled` moves `plain_turn`, and a move of 128 bytes with the same
+  instructions cost `--jit off` up to 12% (`make layout-check` fails on it,
+  `references/ci.md`).
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere
