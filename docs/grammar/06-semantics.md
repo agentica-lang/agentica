@@ -263,7 +263,8 @@ A builtin can have defaults by the same rules, in its catalog row:
 `Zlib.crc32(data, seed = 0)` takes 1 or 2 arguments, in call, method and pipe
 form alike. The call site fills the arguments left out, so the VM always gets a
 full call; `CHECK-ARITY` names the range (`expects 1 to 2 argument(s)`). A
-builtin has no function value (`&Zlib.crc32` is `CHECK-UNKNOWN-NAME`).
+builtin has no function value (`&Zlib.crc32` is `CHECK-UNKNOWN-NAME`). A
+Lazy method row can have defaults too: `lz.deflate(level = 6, raw = false)`.
 `agentica help` shows the default (`seed: Int = 0`).
 
 ### Enums and pattern matching

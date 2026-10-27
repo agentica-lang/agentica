@@ -64,7 +64,8 @@ section says how the scheduler and the loop keep them.
   It changes only when tasks switch, never output, step counts or diagnostics,
   so `make vm-latency` can show that the latency test fails without the rule.
   `AGENTICA_VM_TEST_SHARED=1` calls `agc_share`, so a run on one scheduler takes
-  every lock (§16.9).
+  every lock (§16.9). `AGENTICA_VM_TEST_FRONT_END_JIT=on|always` runs the front
+  end with that JIT mode (`make vm-jit-self-compile`).
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
   compute. Tasks woken during a `NOWAIT` go behind the queued ones. With N=1 the

@@ -195,8 +195,9 @@ Text-form notes:
   arguments to parameters with `Defaults.param_of`; `lower_call` fills the
   omitted ones (`lower_builtin_default`) and emits `call-builtin` with the full
   count, so the VM and the bytecode never see a short call. A default is only
-  for a Plain row with no alternatives (`Builtins.default_problem`; the catalog
-  text prints a problem and `test_frontend_catalog.py` fails on it). The
+  for a Plain or Prelude row with no alternatives (`Builtins.default_problem`;
+  the catalog text prints a problem and `test_frontend_catalog.py` fails on
+  it); `check_prelude` maps a Prelude call the same way. The
   signature, `help`, its JSON (`default`) and the CHECK-ARITY range
   (`Builtins.arity_text`) show it. A builtin has no function value.
 - Import forms and the linker's `named` table: `references/stages.md` (Linker).

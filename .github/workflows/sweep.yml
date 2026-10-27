@@ -40,8 +40,49 @@ jobs:
           dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
       - run: make vm-diff-build
       - run: make sweep-full
+      - name: The front end compiles itself with the JIT on it (on and always) to the same stage2
+        if: ${{ !cancelled() }}
+        run: make vm-jit-self-compile
       - name: The 20x soak of the two heavy multicore race cases (the slow tier of CI runs them 5x)
+        if: ${{ !cancelled() }}
         env:
           AGENTICA_TEST_SLOW: '1'
           AGENTICA_HEAVY_RACE_REPEATS: '20'
         run: poetry run python -m pytest tests/test_vm_multicore.py -q -k 'spawns_racing_the_end or held_by_cancelled_descendants'
+
+  jit-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AGENTICA_TEST_TIMEOUT_SCALE: '4'
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: python3 -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
+      - run: |
+          clang --version
+          python3 --version
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
+          dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
+      - name: The goldens with AGENTICA_JIT=always on the GC stress binary
+        run: make -j"$(nproc)" vm-gc-stress-jit JOBS=4
+      - name: Build the sanitizer binary (ASan and UBSan, no GC) as dist/agentica
+        if: ${{ !cancelled() }}
+        env:
+          SANITIZE: '1'
+        run: make -j"$(nproc)" vm-sanitize-build
+      - name: The goldens and stack traces with AGENTICA_JIT=always on the sanitizer binary
+        if: ${{ !cancelled() }}
+        env:
+          SANITIZE: '1'
+        run: make vm-sanitize-jit-test

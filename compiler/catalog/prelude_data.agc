@@ -9,16 +9,19 @@ import Model from "builtin_model"
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.
 export PRELUDE_ONLY = [
-  "__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find",
-  "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce",
-  "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_lines",
+  "__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_chunks", "__lazy_count", "__lazy_each", "__lazy_file",
+  "__lazy_find", "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range",
+  "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_bytes", "__lazy_write_lines",
+  "__lazy_zlib",
 ]
 
 ## Every prelude function, sorted by name.
 export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Channel.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_channel"}),
+  Model.PreludeRow(name: "File.chunks", module: "lazy", limits: [], selector: "", bodies: {"": "from_chunks"}),
   Model.PreludeRow(name: "File.foreach", module: "lazy", limits: [], selector: "", bodies: {"": "from_file"}),
   Model.PreludeRow(name: "Lazy.chunk_while", module: "lazy", limits: [], selector: "", bodies: {"": "chunk_while"}),
+  Model.PreludeRow(name: "Lazy.deflate", module: "lazy", limits: [], selector: "", bodies: {"": "deflate"}),
   Model.PreludeRow(name: "Lazy.drop", module: "lazy", limits: [], selector: "", bodies: {"": "drop"}),
   Model.PreludeRow(name: "Lazy.drop_while", module: "lazy", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "Lazy.each", module: "lazy", limits: [], selector: "", bodies: {"": "each"}),
@@ -28,6 +31,9 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Lazy.find", module: "lazy", limits: [], selector: "", bodies: {"": "find"}),
   Model.PreludeRow(name: "Lazy.first", module: "lazy", limits: [], selector: "", bodies: {"": "first"}),
   Model.PreludeRow(name: "Lazy.flat_map", module: "lazy", limits: [], selector: "", bodies: {"": "flat_map"}),
+  Model.PreludeRow(name: "Lazy.gunzip", module: "lazy", limits: [], selector: "", bodies: {"": "gunzip"}),
+  Model.PreludeRow(name: "Lazy.gzip", module: "lazy", limits: [], selector: "", bodies: {"": "gzip"}),
+  Model.PreludeRow(name: "Lazy.inflate", module: "lazy", limits: [], selector: "", bodies: {"": "inflate"}),
   Model.PreludeRow(name: "Lazy.map", module: "lazy", limits: [], selector: "", bodies: {"": "map"}),
   Model.PreludeRow(name: "Lazy.produce", module: "lazy", limits: [], selector: "", bodies: {"": "produce"}),
   Model.PreludeRow(name: "Lazy.reduce", module: "lazy", limits: [], selector: "", bodies: {"": "reduce"}),
@@ -35,6 +41,7 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Lazy.take_while", module: "lazy", limits: [], selector: "", bodies: {"": "take_while"}),
   Model.PreludeRow(name: "Lazy.to_a", module: "lazy", limits: [], selector: "", bodies: {"": "to_a"}),
   Model.PreludeRow(name: "Lazy.with_index", module: "lazy", limits: [], selector: "", bodies: {"": "with_index"}),
+  Model.PreludeRow(name: "Lazy.write_bytes", module: "lazy", limits: [], selector: "", bodies: {"": "write_bytes"}),
   Model.PreludeRow(name: "Lazy.write_lines", module: "lazy", limits: [], selector: "", bodies: {"": "write_lines"}),
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),

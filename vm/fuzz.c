@@ -1,10 +1,12 @@
 /*
- * agc_fuzz_one: load one mutated .agcb file and, if it is accepted, run it.
+ * agc_fuzz_one: load one mutated .agcb file and, if it is accepted, run it, in the interpreter or with the JIT
+ * compiling every function it can (AGC_JIT_ALWAYS), so hostile bytecode reaches the emitter and compiled code.
  * Used by the libFuzzer target (vm/fuzz_libfuzzer.c) only, never in the release binary. Driver layer.
  * Design: docs/vm/11-build-ci-supply-chain.md (Fuzzing).
  */
 #include "core.h"
 #include "services.h"
+#include "jit/jit.h"
 
 #ifdef _WIN32
 #define NULL_DEVICE "NUL"
@@ -16,7 +18,7 @@
 
 static FILE *sink; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-int agc_fuzz_one(const uint8_t *data, size_t len) {
+int agc_fuzz_one(const uint8_t *data, size_t len, bool jit) {
   agc_init();
   if (!sink) sink = fopen(NULL_DEVICE, "w");
   if (!sink) return -1;
@@ -43,6 +45,8 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   vm->rt->deny_env = true;
   // Nor use the network: its waits are outside --max-steps and depend on the host.
   vm->rt->deny_net = true;
+  // The code memory of the JIT outlives agc_release_all: the libFuzzer entry point unmaps it (vm/fuzz_libfuzzer.c).
+  if (jit) vm->rt->jit = agc_jit_new(program, AGC_JIT_ALWAYS, &vm->rt->trace);
   agc_outcome outcome = agc_vm_run(vm);
   if (outcome.kind == AGC_FAILED)
     for (int style = AGC_STYLE_PLAIN; style <= AGC_STYLE_JSON; style++)
