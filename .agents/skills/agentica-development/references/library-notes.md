@@ -21,9 +21,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## JSON
 
-- Typed decoding uses a type-expression AST node accepted only in JSON
-  type argument positions. JSON.decode returns located-path Result errors for
-  bad data, validates signed Int/finite Float bounds, and ignores extra fields.
+- Typed decoding uses a type-expression AST node accepted only in JSON type
+  argument positions. JSON.decode returns located-path Result errors for bad
+  data, validates signed Int/finite Float bounds, and ignores extra fields.
   Recursive type validation visits each struct once. Decoded map keys are
   sorted. The source may be a String or a Json (two catalog forms, one rule and
   one VM builtin that skips the parse for a Json). JSON.schema uses the same
@@ -31,10 +31,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   types, and lists in required every field that is not a JsonField (no required
   key when that list is empty). JsonField[T] is only the direct type of a struct
   field (CHECK-JSON-FIELD-PLACE, checked before the decodable and encodable
-  walks). Builders
-  construct opaque Json directly; JSON.from shares encode eligibility and
-  non-finite diagnostics. Builtin record declarations participate in decoding
-  and schemas.
+  walks). Builders construct opaque Json directly; JSON.from shares encode
+  eligibility and non-finite diagnostics. Builtin record declarations
+  participate in decoding and schemas.
 
 - `Json` is opaque, not primitive for equality. `Json`, `JSON` and `JsonField`
   are reserved names.
