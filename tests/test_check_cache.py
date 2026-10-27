@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, cli, host_only, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, cli, host_only, run, vm_environment, wait_until
 from tests.package_support import Workspace, dependency
 from tests.span_support import where
 
@@ -452,7 +452,8 @@ def test_runs_at_the_same_time_give_one_answer_and_leave_valid_entries(ws):
     with ThreadPoolExecutor(max_workers=6) as pool:
         together = list(pool.map(lambda _: answers(ws), range(6)))
     assert together == [expected] * 6
-    assert not list((folder_of(ws) / "check").glob("*tmp*"))
+    # On Windows a scanner can keep the name of a removed temporary file in the folder for a moment.
+    assert wait_until(lambda: not list((folder_of(ws) / "check").glob("*tmp*")), 5)
     # Every entry is valid: another run finds all of them and writes nothing.
     kept = stamps(ws)
     assert answers(ws) == expected

@@ -33,8 +33,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- On Windows, runs at the same time no longer leave a `.tmp-` file in `_build/`
-  when a cache entry cannot be put in place.
+- On Windows, the check and bytecode caches retry removing a temporary file
+  that stays in `_build/` when an entry cannot be put in place.
 
 ## [0.12.0] - 2026-10-27
 
