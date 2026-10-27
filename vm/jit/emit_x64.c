@@ -287,6 +287,18 @@ void agc_emit_const(agc_emitter *e, uint32_t a, uint32_t k) {
   store(e, REGS, WORD(a), RDX);
 }
 
+/* GLOBAL: the value in the slot, a program table that is never written after the entry function, so no lock; a slot
+   with tag Void was never set (hand-made bytecode), and the interpreter fails on it as it does. */
+void agc_emit_global(agc_emitter *e, uint32_t a, uint64_t slot, uint32_t pc) {
+  move_imm64(e, RAX, slot);
+  compare_imm8(e, false, RAX, 0, AGC_T_VOID);
+  exit_if(e, CC_E, AGC_JIT_EXIT_INTERPRET, pc);
+  load(e, RCX, RAX, 0);
+  load(e, RDX, RAX, 8);
+  store(e, REGS, TAG(a), RCX);
+  store(e, REGS, WORD(a), RDX);
+}
+
 /* The STEP's fast path, as the interpreter's: while vm->next_stop > n, take n from it; else exit for the slow path
    (step_slow), which may stop the run, end the turn or take a new batch. next_stop is read from memory each time. */
 void agc_emit_step(agc_emitter *e, uint32_t n, uint32_t pc) {
@@ -425,6 +437,23 @@ void agc_emit_list(agc_emitter *e, agc_instr in) {
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_list);
 }
 
+/* CLOSURE: agc_jit_closure(&R[a], bx, captures), which never fails, so no status to test. */
+void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures) {
+  lea(e, ARG0, REGS, TAG(in.a));
+  move_imm64(e, ARG1, (uint32_t)in.b | ((uint32_t)in.c << 16));
+  move_imm64(e, ARG2, captures);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_closure);
+}
+
+/* STRUCT and ENUM: FN(&R[a], &R[b], x, y), which never fails, so no status to test. */
+void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_t y) {
+  lea(e, ARG0, REGS, TAG(in.a));
+  lea(e, ARG1, REGS, TAG(in.b));
+  move_imm64(e, ARG2, x);
+  move_imm64(e, ARG3, y);
+  call_fn(e, fn);
+}
+
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
    compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
    cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
@@ -478,8 +507,9 @@ static void item(agc_emitter *e, uint32_t a, size_t at, size_t first, uint32_t i
 }
 
 /* The instructions that read a value without a helper, as the interpreter's cases do: NOT (any payload other than 0
-   is true, as agc_as_bool reads it), FIELD and PAYLOAD (with the field count check), IS_VARIANT, IS_OK and
-   RESULT_VALUE. Any wrong tag or bad index leaves for the interpreter, and R[a] is written last. */
+   is true, as agc_as_bool reads it), FIELD and PAYLOAD (with the field count check), IS_VARIANT, IS_OK,
+   RESULT_VALUE, and TRY and TRY_STEP on an ok Result. Any wrong tag or bad index leaves for the interpreter, and so
+   does the error of a TRY, which returns from the frame; R[a] is written last. */
 void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   switch (op) {
     case AGC_OP_NOT:
@@ -508,8 +538,13 @@ void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
       op_mem(e, false, 0x0FB6, RAX, RCX, (int64_t)offsetof(agc_result, ok)); /* movzx eax, byte [rcx + ok] */
       store_value(e, in.a, AGC_T_BOOL);
       break;
-    default: /* RESULT_VALUE */
+    default: /* RESULT_VALUE, TRY and TRY_STEP */
       object(e, in.b, AGC_T_RESULT, pc);
+      if (op != AGC_OP_RESULT_VALUE) {
+        op_mem(e, false, 0x80, 7, RCX, (int64_t)offsetof(agc_result, ok)); /* cmp byte [rcx + ok], 0 */
+        byte(e, 0);
+        exit_if(e, CC_E, AGC_JIT_EXIT_INTERPRET, pc);
+      }
       load(e, RAX, RCX, (int64_t)offsetof(agc_result, value));
       load(e, RDX, RCX, (int64_t)offsetof(agc_result, value) + 8);
       store(e, REGS, TAG(in.a), RAX);

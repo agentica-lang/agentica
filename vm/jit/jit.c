@@ -49,6 +49,7 @@ static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
     case AGC_OP_CONST:
+    case AGC_OP_GLOBAL:
     case AGC_OP_STEP:
     case AGC_OP_ADD_I:
     case AGC_OP_SUB_I:
@@ -80,6 +81,11 @@ static bool has_code(uint32_t op) {
     case AGC_OP_PAYLOAD:
     case AGC_OP_IS_OK:
     case AGC_OP_RESULT_VALUE:
+    case AGC_OP_CLOSURE:
+    case AGC_OP_STRUCT:
+    case AGC_OP_ENUM:
+    case AGC_OP_TRY:
+    case AGC_OP_TRY_STEP:
     case AGC_OP_JUMP:
     case AGC_OP_JUMP_IF_FALSE:
     case AGC_OP_JUMP_IF_TRUE: return true;
@@ -88,15 +94,17 @@ static bool has_code(uint32_t op) {
 }
 
 /* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a CALL of a function of the
-   program (settle counts those by their callee). A leaf builtin is called by run_compiled itself, which LEAF says to
-   count or not; a direct builtin by the code itself, which leaves only when the call ends the turn or fails; a RETURN
-   runs once per call. */
+   program (settle counts those by their callee). A leaf builtin, and a block call (a row with a native kind, such as
+   `filter`: its native frame and the block's frames), are started by run_compiled itself, which LEAF says to count or
+   not, as their exit unwinds the native calls; a direct builtin is called by the code itself, which leaves only when
+   the call ends the turn or fails; a RETURN runs once per call. */
 static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN) return false;
   if (in.op == AGC_OP_CALL) return bx >= p->function_count;
   if (in.op != AGC_OP_CALL_BUILTIN) return true;
-  return !p->builtins[bx]->direct && (!p->builtins[bx]->leaf || leaf);
+  const agc_builtin *b = p->builtins[bx];
+  return !b->direct && (!(b->leaf || b->native) || leaf);
 }
 
 /* Why `on` keeps a function out:
@@ -205,6 +213,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL and
    RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
+  const agc_program *p = jit->program;
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
@@ -214,6 +223,13 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
     switch (op) {
       case AGC_OP_MOVE: agc_emit_move(e, in.a, in.b); break;
       case AGC_OP_CONST: agc_emit_const(e, in.a, bx); break;
+      case AGC_OP_GLOBAL:
+        /* The loader checks bx, and the indexes of STRUCT and ENUM below; the C tests' hand-made code may not. */
+        if (bx < p->global_count)
+          agc_emit_global(e, in.a, (uint64_t)(uintptr_t)&p->globals[bx], pc);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_STEP: agc_emit_step(e, in.a, pc); break;
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
@@ -238,28 +254,49 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_LIST_LEN:
       case AGC_OP_LIST_GET: agc_emit_helper(e, op, in, pc); break;
       case AGC_OP_LIST: agc_emit_list(e, in); break;
+      case AGC_OP_CLOSURE:
+        /* As for CALL, the loader checks bx. */
+        if (bx < p->function_count)
+          agc_emit_closure(e, in, p->functions[bx].captures);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_MAP_GET: agc_emit_map_get(e, in, pc); break;
+      case AGC_OP_STRUCT:
+        if (in.c < p->struct_count)
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_struct, in.c, p->structs[in.c].count);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
+      case AGC_OP_ENUM:
+        if (in.c < p->variant_count)
+          agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_enum, (uint64_t)(uintptr_t)&p->variants[in.c], in.c);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       case AGC_OP_NOT:
       case AGC_OP_FIELD:
       case AGC_OP_IS_VARIANT:
       case AGC_OP_PAYLOAD:
       case AGC_OP_IS_OK:
-      case AGC_OP_RESULT_VALUE: agc_emit_read(e, op, in, pc); break;
+      case AGC_OP_RESULT_VALUE:
+      case AGC_OP_TRY:
+      case AGC_OP_TRY_STEP: agc_emit_read(e, op, in, pc); break;
       case AGC_OP_JUMP: agc_emit_jump(e, bx); break;
       case AGC_OP_JUMP_IF_FALSE:
       case AGC_OP_JUMP_IF_TRUE: agc_emit_branch(e, in.a, op == AGC_OP_JUMP_IF_TRUE, bx, pc); break;
       case AGC_OP_CALL:
         /* The loader checks bx; the C tests' hand-made code may not. */
-        if (bx < jit->program->function_count)
-          agc_emit_call(e, in, pc, (uint64_t)(uintptr_t)&jit->code[bx], jit->program->functions[bx].registers);
+        if (bx < p->function_count)
+          agc_emit_call(e, in, pc, (uint64_t)(uintptr_t)&jit->code[bx], p->functions[bx].registers);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_CALL, pc);
         break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
       case AGC_OP_CALL_BUILTIN:
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
-        if (bx < jit->program->builtin_count && jit->program->builtins[bx]->direct)
-          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)jit->program->builtins[bx], f->spans[pc]);
+        if (bx < p->builtin_count && p->builtins[bx]->direct)
+          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc]);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
@@ -381,7 +418,7 @@ static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t s
   /* From the next turn on, every turn runs the jit copy of the turn loop (agc_jit_turn). */
   atomic_store_explicit(&jit->live, true, memory_order_release);
   /* From now on the reload tests a function compiled for native calls, and run_compiled enters it only to resume a
-     frame. */
+     frame, or at its first instruction when a native frame sits below (a block call). */
   if (agc_jit_native_only(jit, function)) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
   AGC_TRACE(jit->trace, AGC_TRACE_JIT, "compile function=%.*s instructions=%" PRIu32 " bytes=%zu",
             agc_trace_len(f->name->bytes), f->name->data, f->count, size);
@@ -466,12 +503,13 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc) {
   return compile(jit, function, true);
 }
 
-agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function) {
+agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block) {
   agc_jit_code code = atomic_load_explicit(&jit->code[function], memory_order_acquire);
   /* A function the interpreter enters gets its code (and its entries counted) at the reload. */
   if (code || !agc_jit_native_only(jit, function)) return code;
-  /* One that calls may run any number of instructions (it may recurse), so its first exit compiles it, at once. */
-  if (jit->calling[function]) return compile(jit, function, true);
+  /* One that calls may run any number of instructions (it may recurse), and a block runs once for each item of its
+     call, so its first exit compiles it, at once. */
+  if (block || jit->calling[function]) return compile(jit, function, true);
   uint32_t calls = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
   if (calls < AGC_JIT_CALLEE_THRESHOLD) return NULL;
   if (calls == AGC_JIT_CALLEE_THRESHOLD) return compile(jit, function, false);
@@ -540,6 +578,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   }
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) atomic_init(&jit->exits[op], 0);
   atomic_init(&jit->leaves, 0);
+  atomic_init(&jit->blocks, 0);
   atomic_init(&jit->transitions, 0);
   atomic_init(&jit->turns, 0);
   atomic_init(&jit->live, false);
@@ -587,6 +626,8 @@ void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc) {
 
 void agc_jit_count_leaf(agc_jit *jit) { atomic_fetch_add_explicit(&jit->leaves, 1, memory_order_relaxed); }
 
+void agc_jit_count_block(agc_jit *jit) { atomic_fetch_add_explicit(&jit->blocks, 1, memory_order_relaxed); }
+
 void agc_jit_count_transition(agc_jit *jit) { atomic_fetch_add_explicit(&jit->transitions, 1, memory_order_relaxed); }
 
 void agc_jit_report(agc_jit *jit) {
@@ -596,6 +637,8 @@ void agc_jit_report(agc_jit *jit) {
   }
   uint64_t leaves = atomic_load_explicit(&jit->leaves, memory_order_relaxed);
   if (leaves) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "leaf count=%" PRIu64, leaves);
+  uint64_t blocks = atomic_load_explicit(&jit->blocks, memory_order_relaxed);
+  if (blocks) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "block count=%" PRIu64, blocks);
   uint64_t transitions = atomic_load_explicit(&jit->transitions, memory_order_relaxed);
   if (transitions) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "transition count=%" PRIu64, transitions);
   uint64_t turns = atomic_load_explicit(&jit->turns, memory_order_relaxed);
@@ -666,6 +709,28 @@ uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const
 
 void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count) {
   *dst = count ? agc_list_value(agc_list_from_array(items, count)) : vm->rt->empty_list;
+}
+
+void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures) {
+  agc_fn *f = agc_new_fn(function, captures);
+  for (uint32_t k = 0; k < captures; k++) f->captured[k] = window[k];
+  window[0] = agc_fn_value(f);
+}
+
+void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count) {
+  agc_struct *st = agc_new_struct(type, count);
+  for (uint32_t k = 0; k < count; k++) st->fields[k] = fields[k];
+  *dst = agc_struct_value(st);
+}
+
+void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant) {
+  if (v->arity == 0) {
+    *dst = agc_enum_value(v->shared);
+    return;
+  }
+  agc_enum *e = agc_new_enum(variant, v->arity);
+  for (uint32_t k = 0; k < v->arity; k++) e->payload[k] = payload[k];
+  *dst = agc_enum_value(e);
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {

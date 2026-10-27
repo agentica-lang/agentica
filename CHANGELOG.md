@@ -12,77 +12,66 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `ATS[K, V]` shared tables for counters and caches that tasks update
   (`examples/shared-cache.agc`).
-- `resource Name, free_ref: c_function`: a resource freed by `void f(T **)`,
-  such as `duckdb_close`.
-- `Native.from_string(text)` and `text.bytesize`: pass text with its byte length
-  to C (NUL bytes included) and keep pointers into it (SQLite's `pzTail`).
-- `[native]` entries of `agentica.toml` may give `system` as an absolute path or
-  a list of candidates, such as a Homebrew path after the bare name: the first
-  absolute path that exists wins, else the first bare name.
-- Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
-- Builtins can have default arguments, with the rules of a default parameter of
-  a function: a call may leave out the trailing ones, and `agentica help` shows
-  them (`seed: Int = 0`). `Zlib.crc32(data)` starts from seed 0.
-- Extern types `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32` and
-  `C.Long` (C `long`, 32 bits on Windows) for parameters, results, out
-  parameters and struct fields; unsigned results are never negative.
-- `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
-  can return an `error`.
-- `Native.load("NAME")` opens a native library before its first call and
-  returns a `Result`, so a missing library can be handled.
-- `File.chunks(path)` reads a file as a `Lazy` of byte chunks, and
-  `lazy.write_bytes(path)` writes byte chunks to a file.
-- Lazy zlib steps `deflate`, `inflate`, `gzip` and `gunzip` compress and
-  decompress a stream of byte chunks with bounded memory; `raw = true` is raw
-  DEFLATE.
-- `Zlib.deflate`, `inflate`, `gzip` and `gunzip` take default `level` (6) and
-  `max_bytes` (1048576).
-- `Native.offset(p, n)` points into an owned buffer as a bounds-checked view,
-  and `Native.address(p)` gives a pointer's integer value.
-- `Native.size_of`, `Native.get_struct` and `Native.put_struct` read and write
-  a C struct of an extern block through a pointer, laid out as C does.
 
 ### Changed
 
 - **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
   `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
-- **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
-  `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
-  use the Lazy steps `deflate` and `gzip`.
-- **Breaking:** the Zlib streaming decoder (`inflate_init`, `inflate_next`,
-  `inflate_finish`, `decoder_close`) and the types `ZlibDecoder` and
-  `ZlibProgress` are removed: use the Lazy steps `inflate` and `gunzip`.
+
+## [0.12.0] - 2026-10-27
+
+### Added
+
+- `resource Name, free_ref: c_function` for a resource freed by `void f(T **)`,
+  such as `duckdb_close`.
+- `Native.from_string(text)` and `text.bytesize` pass text with its byte length
+  to C, and keep pointers into it.
+- `Native.load("NAME")` opens a native library and returns a `Result`;
+  `Native.closed?(x)` tells a closed resource or a freed buffer.
+- `Native.offset(p, n)` and `Native.address(p)` point into an owned buffer and
+  give a pointer's integer value.
+- `Native.size_of`, `Native.get_struct` and `Native.put_struct` read and write
+  a C struct of an extern block.
+- Extern types `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32` and
+  `C.Long`.
+- `[native]` entries of `agentica.toml` may give `system` as an absolute path
+  or a list of candidates.
+- Float literals take an exponent: `1.0e300`, `1.5e-3`, `1e5`.
+- Builtins can have default arguments, and `agentica help` shows them.
+- `File.chunks(path)` reads a file as a `Lazy` of byte chunks, and
+  `lazy.write_bytes(path)` writes them to a file.
+- Lazy zlib steps `deflate`, `inflate`, `gzip` and `gunzip` work on byte
+  chunks with bounded memory.
+- `Zlib.deflate`, `inflate`, `gzip` and `gunzip` take default `level` (6) and
+  `max_bytes` (1048576).
+
+### Changed
+
+- **Breaking:** the Zlib streaming encoder and decoder (`deflate_init`,
+  `inflate_init` and the rest) and the types `ZlibEncoder`, `ZlibDecoder` and
+  `ZlibProgress` are removed: use the Lazy steps.
 - **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
   `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`,
   which overwrites an existing `dst`.
 - **Breaking:** the Zlib errors name `max_bytes` instead of `max_out_bytes`.
 - An integer argument or struct field of an extern function takes the bits of
-  its type read as signed or unsigned, as `Native.put_int32` does: a
-  `C.Int32` takes up to 2^32 - 1.
-- The experimental x86-64 JIT (`--jit on`) calls compiled functions natively
-  and compiles small functions without a loop for its callers, so call-heavy
-  code runs in compiled code.
-- `--jit on` starts faster on large programs (deciding what to compile no
-  longer grows with the square of the program's size) and compiles less code
-  that would run only a few times, so it uses less memory.
-- `--jit on` no longer slows down a program that compiles nothing hot: such a
-  run spends nearly all of its turns in the interpreter loop of `--jit off`
-  (`logger-disabled` of `benchmarks/` was 1.5 times slower).
-- The experimental x86-64 JIT calls the String, List, Map and Set builtins that
-  only return a value from compiled code, so loops that use them compile under
-  `--jit on` and stay in compiled code.
-- The experimental x86-64 JIT reads maps by key (`counts[key]`) and builds list
-  literals in compiled code, so loops that do compile under `--jit on`.
-- A warm `agentica check` and `agentica type-at` do less work: the cache of
-  checked modules leaves out the private functions of the imports and does not
-  lex a file again for `blank_line_after_end` (2.3 times faster on
-  `compiler/`).
+  its type, signed or unsigned: a `C.Int32` takes up to 2^32 - 1.
+- The experimental x86-64 JIT (`--jit on`) runs more code compiled: native
+  calls, small functions, String, List, Map and Set builtins, map reads, list
+  literals, blocks with `map`, `filter` and `reduce`, module constants,
+  structs, enum values and `try`.
+- `--jit on` starts faster on large programs, uses less memory, and no longer
+  slows down a program that compiles nothing hot.
+- A warm `agentica check` and `agentica type-at` do less work (2.3 times faster
+  on `compiler/`).
+- The end of the run frees the native resources and buffers still open, so a C
+  stream that `main` never closed keeps what was written to it; a running
+  compute call that holds a resource delays the exit, at most the flush limit.
 
 ### Fixed
 
-- `agentica doc` and `agentica outline` list the re-exports of a facade file
-  with the doc of the original, and `agentica type-at` and `agentica refs`
-  write a re-exported type through the facade alias (`Web.Address`).
+- `agentica doc`, `outline`, `type-at` and `refs` handle the re-exports of a
+  facade file (`Web.Address`).
 - A block of unknown result type (`map`, `Native.memory_pointer`, `Task.map`)
   that returns `error(...)` before its `ok(...)` no longer needs an annotation.
 
@@ -570,7 +559,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.11.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.12.0...HEAD
+[0.12.0]: https://github.com/sonic182/agentica/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/sonic182/agentica/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...0.10.0
 [0.10.0-beta.1]: https://github.com/sonic182/agentica/compare/0.9.0...0.10.0-beta.1

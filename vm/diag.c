@@ -441,18 +441,23 @@ void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, ag
   fflush(err);
 }
 
-void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style) {
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, bool natives,
+                            agc_style style) {
+  const char *what = natives ? "native resources may not be freed" : "file data may not be written";
   if (style == AGC_STYLE_JSON)
-    fprintf(err, "{\"flush_failed\":\"%s\",\"warning\":\"file data may not be written\"}\n", code);
+    fprintf(err, "{\"flush_failed\":\"%s\",\"warning\":\"%s\"}\n", code, what);
   else
-    fprintf(err, "agentica: file data may not be written: the flush failed (%s: %.*s)\n", code, (int)len, message);
+    fprintf(err, "agentica: %s: the flush failed (%s: %.*s)\n", what, code, (int)len, message);
   fflush(err);
 }
 
-void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style) {
+void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, agc_style style) {
+  const char *what = !natives ? "file data may not be written"
+                     : files  ? "file data may not be written and native resources may not be freed"
+                              : "native resources may not be freed";
   if (style == AGC_STYLE_JSON)
-    fprintf(err, "{\"flush_timeout_ms\":%" PRId64 ",\"warning\":\"file data may not be written\"}\n", ms);
+    fprintf(err, "{\"flush_timeout_ms\":%" PRId64 ",\"warning\":\"%s\"}\n", ms, what);
   else
-    fprintf(err, "agentica: file data may not be written: the flush took longer than %" PRId64 " ms\n", ms);
+    fprintf(err, "agentica: %s: the flush took longer than %" PRId64 " ms\n", what, ms);
   fflush(err);
 }

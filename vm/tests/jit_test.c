@@ -1,8 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, direct builtins, map reads, list literals), the code
- * memory sealed read-execute and never writable then, functions packed in it up to its cap, one copy made when
- * several threads compile a function at once, and the `on` decision settled in time that follows the program's size.
+ * failures that leave the result register alone, native calls, direct builtins, map reads, lists, closures, globals,
+ * structs, enums, `try`), the code memory sealed read-execute and never writable then, functions packed in it up to
+ * its cap, one copy made when threads compile a function at once, and the `on` decision settled in linear time.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -465,6 +465,15 @@ static AGC_JIT_CALLER void reads(void) {
   binary(AGC_OP_IS_OK, agc_result_value(false, x), any, AGC_STATUS_OK, agc_bool(false));
   binary(AGC_OP_RESULT_VALUE, agc_result_value(false, y), any, AGC_STATUS_OK, y);
   binary(AGC_OP_RESULT_VALUE, y, any, out, any);
+  /* TRY gives an ok Result's value; an error (which returns from the frame) or a wrong tag leaves for the
+     interpreter. */
+  static const agc_opcode tries[] = {AGC_OP_TRY, AGC_OP_TRY_STEP};
+  for (size_t k = 0; k < 2; k++) {
+    agc_opcode op = tries[k];
+    binary(op, agc_result_value(true, y), any, AGC_STATUS_OK, y);
+    binary(op, agc_result_value(false, y), any, out, any);
+    binary(op, x, any, out, any);
+  }
 }
 
 /* A String compare charges its bytes to the task's turn cost, and the code leaves for the interpreter to apply it. */
@@ -562,6 +571,83 @@ static AGC_JIT_CALLER void maps_and_lists(void) {
   assert(same_bits(R[3], vm.rt->empty_list));
 }
 
+/* CLOSURE makes, in compiled code, a function value of bx that holds the CAPTURES registers from R[a] on. */
+static AGC_JIT_CALLER void closures(void) {
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_CLOSURE, 3, 0, 0);
+  emit(&f, AGC_OP_RETURN, 3, 0, 0);
+  f.fn.captures = 2;
+  agc_jit_code code = compile(&f);
+  agc_value R[8];
+  memset(R, 0, sizeof R);
+  R[3] = agc_int(7);
+  R[4] = agc_string_value(agc_make_string("held", 4, 4));
+  agc_value held = R[4];
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  const agc_fn *fn = agc_as_fn(&vm, R[3]);
+  assert(fn->function == 0 && fn->n == 2);
+  assert(same_bits(fn->captured[0], agc_int(7)) && same_bits(fn->captured[1], held) && same_bits(R[4], held));
+}
+
+/* GLOBAL reads its slot when it runs, and an unset one (tag Void) leaves for the interpreter, R3 untouched. STRUCT and
+   ENUM build their values from the window at R1 in compiled code; a variant without a payload gives its shared value.
+   An index past the program's tables (hand-made code) leaves for the interpreter. */
+static AGC_JIT_CALLER void globals_structs_enums(void) {
+  /* globals[1] is zeroed: tag Void, a slot never set. */
+  agc_value globals[2] = {agc_int(1)}, any = agc_nil(), R[8];
+  agc_struct_def structs[1] = {{.count = 2}};
+  agc_variant_def variants[2] = {{.arity = 0, .shared = agc_new_enum(0, 0)}, {.arity = 2}};
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_GLOBAL, 3, 1, 0);
+  emit(&f, AGC_OP_RETURN, 3, 0, 0);
+  f.program.globals = globals;
+  f.program.global_count = 2;
+  agc_jit_code code = compile(&f);
+  memset(R, 0, sizeof R);
+  R[3] = any;
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  assert(same_bits(R[3], any));
+  globals[1] = agc_int(9);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[3], agc_int(9)));
+  f.program.global_count = 1;
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  agc_value x = agc_int(5), y = agc_float(1.5);
+  static const agc_opcode makes[] = {AGC_OP_STRUCT, AGC_OP_ENUM};
+  for (size_t k = 0; k < 2; k++) {
+    agc_opcode op = makes[k];
+    for (uint32_t c = 0; c < 2; c++) {
+      memset(&f, 0, sizeof f);
+      emit(&f, op, 3, 1, c);
+      emit(&f, AGC_OP_RETURN, 3, 0, 0);
+      f.program.structs = structs;
+      f.program.struct_count = 1;
+      f.program.variants = variants;
+      f.program.variant_count = 2;
+      code = compile(&f);
+      memset(R, 0, sizeof R);
+      R[1] = x;
+      R[2] = y;
+      R[3] = any;
+      bool beyond = op == AGC_OP_STRUCT && c == 1;
+      expect_exit(code(&vm, R, f.constants, 0), beyond ? AGC_JIT_EXIT_INTERPRET : AGC_JIT_EXIT_RETURN, beyond ? 0 : 1);
+      if (beyond) {
+        assert(same_bits(R[3], any));
+      } else if (op == AGC_OP_STRUCT) {
+        const agc_struct *st = agc_as_struct(&vm, R[3]);
+        assert(st->type == 0 && st->n == 2 && same_bits(st->fields[0], x) && same_bits(st->fields[1], y));
+      } else if (c == 0) {
+        assert(agc_as_enum(&vm, R[3]) == variants[0].shared);
+      } else {
+        const agc_enum *e = agc_as_enum(&vm, R[3]);
+        assert(e->variant == 1 && e->n == 2 && same_bits(e->payload[0], x) && same_bits(e->payload[1], y));
+      }
+    }
+  }
+}
+
 /* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): one claims it and compiles
    it, and the others get NULL (they interpret it meanwhile) or the one copy that was published; no second copy takes
    code memory. The barrier lets them start together, so the losing side of the claim runs. */
@@ -643,8 +729,9 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
 }
 
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is neither
-   a leaf nor direct) more than once in AGC_JIT_SPACING instructions; a leaf builtin does not count, as run_compiled
-   calls it, nor a direct one, which compiled code calls. A program where no function is compiled has no JIT at all. */
+   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions; a leaf builtin does not count,
+   as run_compiled calls it, nor a block call, which run_compiled starts, nor a direct one, which compiled code calls.
+   A program where no function is compiled has no JIT at all. */
 static void ineligible(void) {
   static const agc_trace quiet = {0};
   one_function f;
@@ -657,8 +744,9 @@ static void ineligible(void) {
   f.code[1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
   assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
   agc_builtin leaf = {.leaf = true}, other = {.leaf = false}, direct = {.direct = true};
-  const agc_builtin *builtins[3] = {&leaf, &other, &direct};
-  for (uint32_t which = 0; which < 3; which++) {
+  agc_builtin block = {.native = AGC_NATIVE_FILTER};
+  const agc_builtin *builtins[4] = {&leaf, &other, &direct, &block};
+  for (uint32_t which = 0; which < 4; which++) {
     memset(&f, 0, sizeof f);
     emit(&f, AGC_OP_STEP, 1, 0, 0);
     emit(&f, AGC_OP_CALL_BUILTIN, 0, (uint16_t)which, 0);
@@ -812,13 +900,13 @@ static AGC_JIT_CALLER void batch(void) {
   agc_jit *jit = agc_jit_new(&program, AGC_JIT_ON, &quiet);
   assert(jit && agc_jit_native_only(jit, 1) && agc_jit_native_only(jit, 2));
   for (uint32_t call = 1; call <= AGC_JIT_CALLEE_THRESHOLD; call++)
-    assert(!agc_jit_callee_code(jit, 1) && !agc_jit_callee_code(jit, 2));
+    assert(!agc_jit_callee_code(jit, 1, false) && !agc_jit_callee_code(jit, 2, false));
   for (uint32_t call = AGC_JIT_CALLEE_THRESHOLD + 1; call < 2 * AGC_JIT_CALLEE_THRESHOLD; call++)
-    assert(!agc_jit_callee_code(jit, 1));
+    assert(!agc_jit_callee_code(jit, 1, false));
   assert(atomic_load(&jit->claimed[1]) && atomic_load(&jit->claimed[2]) && !atomic_load(&jit->code[2]));
   assert(!agc_jit_may_run(jit, 1) && atomic_load(&jit->used) == 0);
   size_t page = agc_jit_mem_page();
-  uint8_t *first = (uint8_t *)(uintptr_t)agc_jit_callee_code(jit, 1);
+  uint8_t *first = (uint8_t *)(uintptr_t)agc_jit_callee_code(jit, 1, false);
   uint8_t *second = (uint8_t *)(uintptr_t)atomic_load(&jit->code[2]);
   assert(first == atomic_load(&jit->arena) && second > first && second < first + page);
   assert((size_t)(second - first) % 16 == 0 && atomic_load(&jit->used) == page);
@@ -896,6 +984,8 @@ int main(void) {
   string_cost();
   string_build_cost();
   maps_and_lists();
+  closures();
+  globals_structs_enums();
   ineligible();
   every_opcode_compiles();
 #else

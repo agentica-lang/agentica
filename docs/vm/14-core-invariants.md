@@ -52,8 +52,9 @@ joined the pool, and the pool waited for a FIFO that never wrote.
 - **Native compute calls** (`compute def`) run on the compute pool, VM threads
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
-  never takes a libuv pool thread, and the end of the run does not wait for it
-  (§14.4). As built.
+  never takes a libuv pool thread. The end of the run never makes a queued call
+  and waits for a running one only while it holds a resource that the end
+  frees, within the flush limit and not after a stop signal (§14.4). As built.
 
 Known exceptions, as built (the mechanisms are in §10.2.2):
 
@@ -187,13 +188,36 @@ seconds by default, set with
 2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
 flush. **When `main` ends, the program ends.** The steps are:
 
+0. drop the compute calls that no pool thread has started
+   (`agc_ffi_stop_queued` in `vm/ffi.c`): a call is made in full or never, one
+   CAS on its phase decides;
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
    the file flush includes a handle's write or close whose deadline passed
    while its pool work had not ended, since that work holds bytes the program
    wrote;
-3. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
+3. free what native code still owns (`agc_ffi_end` in `vm/ffi.c`). First wait
+   for the running compute calls (started, not finished) that hold a resource or
+   owned buffer still open; calls that hold nothing, or only what is freed
+   already, are not waited for. Then free every resource and owned buffer still
+   open, whatever task owns it, in one pass, newest first (the reverse of
+   opening), as a task's end does. The pass stops at the first resource that a
+   running call still holds (after a stop signal or at the deadline) and never
+   skips past it, so an older resource that a held one points into (a database
+   under its statement) never goes while C still uses the newer one. The frees
+   run on a thread of their own, so a `free` that hangs holds the exit at most
+   until the deadline below. A resource that a held call returns during the wait
+   is never freed (its `done` half does not run). A stop signal, before or
+   during the wait, ends the wait, and the pass stops as above. Step 2 and this
+   step share one deadline, the flush limit from the start of step 2
+   (`rt->flush_by`); what is not freed by then is left to the exit, and the
+   warning line of the flush limit says so. With a limit of 0 nothing is freed.
+   A failure (the loop cannot start) prints the flush failure line instead. The
+   end of `main` frees what it owns as any task's end does, because a `free` may
+   write data out (`fclose`) that `_exit` would lose. It comes after the files
+   so that output the program wrote first goes out first;
+4. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush
    or the DLLs' detach code, which could wait for it. On Linux, each final C
@@ -203,16 +227,16 @@ flush. **When `main` ends, the program ends.** The steps are:
    outside Linux.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
-the file flush is waited for, no socket is read to its end. `System.exit` and a
-crash of `main` take the same path, and so does the first stop signal (SIGTERM,
-SIGINT, SIGHUP). After a stop signal the flush of stdout and stderr is one
-non-blocking write per stream, because a reader that never reads would otherwise
-hold the stopped VM for the whole flush limit. Files keep their wait. A second
-stop signal exits at once without flushing, so a stuck flush (a FIFO nobody
-reads, or a test child that gets the SIGTERM of `PR_SET_PDEATHSIG`,
-`agc_launch_bind` in `vm/launch.c`) need not wait for the flush limit. A second
-signal that comes before the children are stopped waits for step 1, so children
-are never left behind.
+the file flush and the compute calls of step 3 is waited for, no socket is read
+to its end. `System.exit` and a crash of `main` take the same path, and so does
+the first stop signal (SIGTERM, SIGINT, SIGHUP). After a stop signal the flush
+of stdout and stderr is one non-blocking write per stream, because a reader that
+never reads would otherwise hold the stopped VM for the whole flush limit. Files
+keep their wait. A second stop signal exits at once without flushing, so a stuck
+flush (a FIFO nobody reads, or a test child that gets the SIGTERM of
+`PR_SET_PDEATHSIG`, `agc_launch_bind` in `vm/launch.c`) need not wait for the
+flush limit. A second signal that comes before the children are stopped waits
+for step 1, so children are never left behind.
 
 As built, `agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
 run" and "Stop signals"). `main`'s return, `System.exit`, a diagnostic, the step
@@ -286,7 +310,8 @@ on `Native.close` or at its owner's end. A `compute def` call holds its
 resource arguments until the call returns: a close meanwhile marks the
 resource closed and takes it off its owner, and the end of the last such call
 runs the `free` on a scheduler, so C never sees the pointer freed while a pool
-thread uses it. There are no GC finalizers.
+thread uses it. The end of the run frees what is still open (§14.4, step 3).
+There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

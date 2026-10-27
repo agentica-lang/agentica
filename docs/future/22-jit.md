@@ -71,10 +71,11 @@ long loop body that runs a few times stays interpreted however many calls
 it makes; `always`, every
 function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
-every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
-and list opcodes (`LIST`, `LIST_LEN`, `LIST_GET`), `MAP_GET`, `EQ`, `NE`,
-`SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK`,
-`RESULT_VALUE` and the jumps have code. A `CALL` of a
+every mode runs the interpreter. `MOVE`, `CONST`, `GLOBAL`, `STEP`, the Int,
+Float and list opcodes (`LIST`, `LIST_LEN`, `LIST_GET`), `MAP_GET`, `CLOSURE`,
+`STRUCT`, `ENUM`, `EQ`, `NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`,
+`IS_VARIANT`, `PAYLOAD`, `IS_OK`, `RESULT_VALUE`, `TRY` (and `TRY_STEP`) and
+the jumps have code. A `CALL` of a
 function that has code is a native call: compiled code pushes the frame as
 `push_frame` does, in frames and registers the task already has, and calls the
 callee's code, up to 256 calls deep on the C stack (`AGC_JIT_NATIVE_DEPTH`); the
@@ -91,7 +92,17 @@ or a native frame, or move the frames) is called by compiled code itself,
 through `agc_jit_call_builtin` (below). Other unsupported instructions
 (including the other builtins and the other allocations) leave the code for the
 interpreter. A leaf builtin is called between two runs of compiled code,
-without the interpreter's loop.
+without the interpreter's loop, and a block call (a row with a native kind:
+`map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`, `times`, `upto`,
+`downto`, `Range#each`) starts there too: `run_compiled` starts its native frame
+as the interpreter's `CALL_BUILTIN` does, and the block's frame goes on in the
+block's code, compiled at that first call (with `on`, a block without a loop
+gets code only this way). Each `RETURN` of the block takes the `RETURN` exit,
+which resumes the native frame: the next call of the block, with its step and
+turn cost, or the result written and the native frame gone, and the caller's
+code goes on after the call. A turn that ends inside a block call resumes in the
+block's code: a frame with a native frame below it is entered at its first
+instruction.
 
 - Decided once: the JIT looks at every function when the run starts. A
   function that `on` will not compile is never counted or walked again, and
@@ -102,21 +113,24 @@ without the interpreter's loop.
   interpreter cost more than those few instructions save. Blocks of 3 to 7
   instructions that `filter`, `map` or `reduce` call a million times, and an
   empty function called 20 million times (about 13 ns more per call), ran
-  slower compiled. So `on` gives such a function code only for native calls,
-  when none of its instructions leaves (a leaf builtin counts here, as its
-  exit unwinds the native calls): at its first `CALL` exit from compiled
-  code when it calls a function (it may recurse), else at its 16th
-  (`AGC_JIT_CALLEE_THRESHOLD`), since a compile costs about as much as
-  interpreting thousands of instructions; the interpreter enters that code
-  only to resume a frame of it, never at its first instruction.
+  slower compiled. So `on` gives such a function code only for native calls
+  and block calls from compiled code, when none of its instructions leaves (a
+  leaf builtin or a block call counts here, as its exit unwinds the native
+  calls): at its first `CALL` exit from compiled code when it calls a function
+  (it may recurse), else at its 16th (`AGC_JIT_CALLEE_THRESHOLD`), since a
+  compile costs about as much as interpreting thousands of instructions; a
+  block at the first block call that compiled code starts with it, which calls
+  it for each item, each call returning to `run_compiled`, not the turn loop.
+  The interpreter enters that code only to resume a frame of it, or at the
+  first instruction of a frame that a native frame called.
 - Why `on` also keeps out a loop that often leaves: each trip to the
   interpreter and back costs more than interpreting the few instructions
   around it saves (`print-lines`, `small-values` and `strings` of
   `benchmarks/`, whose loops leave every 4 to 9 instructions, ran 3 to 8%
   slower compiled). A function stays out when one of its innermost loops has
-  more than one instruction that leaves (a leaf or direct builtin, a `RETURN`
-  and a `CALL` of a function that may get code do not count) in 16
-  (`AGC_JIT_SPACING`).
+  more than one instruction that leaves (a leaf or direct builtin, a block
+  call, a `RETURN` and a `CALL` of a function that may get code do not count)
+  in 16 (`AGC_JIT_SPACING`).
 - Why no JIT when nothing compiles: the jit copy of the turn loop has the same
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster
@@ -140,7 +154,8 @@ without the interpreter's loop.
   compare in `EQ`, `NE` or `SAME`, a join in `CONCAT`, a compound, String or
   Json form in `TO_TEXT`, a String key in `MAP_GET`), a failure (raised as the
   helper contract says), and an instruction without code or a slow path (a wrong
-  tag, a field index past the count, a missing key), which the interpreter runs;
+  tag, a field index past the count, a missing key, an unset global, the error
+  that a `try` returns from the frame), which the interpreter runs;
   the turn loop enters the code again when it reaches the next instruction, or
   at its next reload. A `CALL` or `RETURN` that is not native takes its own exit
   (above). A direct builtin leaves only when its call ended the turn (`YIELD`,
@@ -151,14 +166,15 @@ without the interpreter's loop.
   `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
   `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `MAP_GET`
   calls `agc_jit_map_get` (a missing key gives back a String key's charge and
-  leaves, so the interpreter fails as it does) and `LIST` `agc_jit_list`; `NOT`,
-  `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
-  inline after a tag check; `CALL_BUILTIN` of a direct row calls
-  `agc_jit_call_builtin`, which runs the interpreter's generic tail of the call:
-  it stores the pc after the call in the top frame (for the stack trace and the
-  error's span), charges an `AGC_COST_SIZE` row's cost, applies the turn cost
-  and writes the result. The registers stay in the frame's register file, so the
-  collector sees them during the call.
+  leaves, so the interpreter fails as it does), `LIST` `agc_jit_list`, `STRUCT`
+  `agc_jit_struct` and `ENUM` `agc_jit_enum`; `GLOBAL` reads its slot inline;
+  `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK`, `RESULT_VALUE` and `TRY` (an
+  ok Result's value) read the value inline after a tag check; `CALL_BUILTIN`
+  of a direct row calls `agc_jit_call_builtin`, which runs the interpreter's
+  generic tail of the call: it stores the pc after the call in the top frame
+  (for the stack trace and the error's span), charges an `AGC_COST_SIZE` row's
+  cost, applies the turn cost and writes the result. The registers stay in the
+  frame's register file, so the collector sees them during the call.
 - Code memory: at most 64 MiB per run (`AGC_JIT_CODE_CAP`, in bytes),
   reserved in chunks as it fills (1 MiB, then twice the last one, so the
   address space follows the code under an address space limit; after a
@@ -178,9 +194,10 @@ without the interpreter's loop.
   when the code memory failed (`pages=N`). At the end of the run,
   `exit op=OP count=N` counts generic `INTERPRET` exits by opcode,
   `leaf count=N` the leaf builtins called between two runs of compiled
-  code, `transition count=N` the `CALL` and `RETURN` exits (a native
-  call or return is not one), and `turn count=N` the turns that ran the jit
-  copy of the turn loop.
+  code, `block count=N` the block calls started there, `transition count=N`
+  the `CALL` and `RETURN` exits (a native call or return is not one; each
+  call of a block from a block call is one), and `turn count=N` the turns
+  that ran the jit copy of the turn loop.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a function without a loop
@@ -192,8 +209,15 @@ without the interpreter's loop.
   overflow and the depth limit inside natively called functions, compiled
   loops that call direct builtins with no `call-builtin` exit, with a
   `--max-steps` sweep and turns that end inside those calls, and their
-  failures, also inside a natively called function, and loops that read maps
-  by key and build list literals with no `map-get` or `list` exit),
+  failures, also inside a natively called function, loops that read maps
+  by key and build list literals with no `map-get` or `list` exit, and loops
+  that make closures with captures and pass them to `filter`, `map`, `reduce`
+  and `any?` with no `closure` or `call-builtin` exit, turns that end inside
+  the block calls and a `--max-steps` sweep, a failure inside a compiled block
+  and a cancel inside a long block call, and a loop that reads module
+  constants, builds structs and enums and unwraps Results with `try` with no
+  such exit but the errors, which fail with the interpreter's span and stack,
+  and a `--max-steps` sweep),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
   `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, functions
@@ -202,14 +226,19 @@ without the interpreter's loop.
   every opcode compiles, the results and statuses of the helper calls and inline
   reads, a native call's frame push and pop and its exits, a direct builtin's
   result, turn end and caught failure, a map read, its missing key and its
-  String key's charge, and list literals, also under
+  String key's charge, list literals and closures, globals, structs, enums and
+  `try`, also under
   `make vm-tsan`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
   each call; a leaf builtin still leaves the code (and unwinds the native
-  calls), and a builtin that is neither leaf nor direct (output, tasks,
-  channels, files, the block calls such as `map`) still goes back to the turn
-  loop; a direct call pays a `sigsetjmp` (`setjmp` on Windows) for its catch;
+  calls), and a builtin that is neither leaf, direct nor a block call (output,
+  tasks, channels, files, the steppers such as `File.each_line` and the Lazy
+  terminals) still goes back to the turn loop; each call of a block from a
+  block call takes the `RETURN` exit to `run_compiled`, whose native frame
+  starts the next one in C; a block call in a function without a loop counts
+  as leaving, so `on` keeps that function out; a direct call pays a
+  `sigsetjmp` (`setjmp` on Windows) for its catch;
   a function that `on` may compile but that never gets hot still
   runs the jit copy of the turn loop (and its layout effect) in the turns
   that start with it near the top of the stack and in the sampled turns; a
