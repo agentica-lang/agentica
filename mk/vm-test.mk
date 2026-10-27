@@ -62,11 +62,12 @@ vm-tsan-run: dist/agentica$(EXE)
 vm-test-binaries: $(VM_TESTS)
 
 # libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
-# With LIBFUZZ_JIT_WRAP (mk/vm.mk, Linux) each input also runs with the JIT (AGC_JIT_ALWAYS), and the link wraps
-# agc_jit_mem_reserve so that the entry point unmaps each input's code memory (vm/fuzz_libfuzzer.c).
+# With LIBFUZZ_JIT_WRAP (mk/vm.mk, Linux) each input also runs with the JIT (always and on) and is compared with the
+# interpreter's run; the link wraps agc_jit_mem_reserve so that the entry point unmaps each input's code memory, and the
+# C library's clocks so that it compares only runs that read none (vm/fuzz_libfuzzer.c).
 LIBFUZZ_LINK_FLAGS :=
 ifeq ($(LIBFUZZ_JIT_WRAP),1)
-LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve
+LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve,--wrap=agc_vm_run,--wrap=clock_gettime,--wrap=timespec_get
 endif
 $(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) -fsanitize=fuzzer $(LIBFUZZ_LINK_FLAGS)

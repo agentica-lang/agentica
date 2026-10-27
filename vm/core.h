@@ -388,7 +388,9 @@ void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, ag
 void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, bool natives,
                             agc_style style);
 
-/* vm/fuzz.c: one fuzz input, run in the interpreter or, with JIT, under AGC_JIT_ALWAYS. */
-int agc_fuzz_one(const uint8_t *data, size_t len, bool jit);
+/* vm/fuzz.c: one fuzz input, run in the interpreter or with the JIT in JIT_MODE (an agc_jit_mode of vm/jit/jit.h).
+   The program's stdout goes to OUT, its stderr, the diagnostic and the end of the run to ERR (NULL: discarded).
+   Returns 0 when the loader refuses the input, 1 after a run, 2 past the allocation limit, -1 without a sink. */
+int agc_fuzz_one(const uint8_t *data, size_t len, int jit_mode, FILE *out, FILE *err);
 
 #endif

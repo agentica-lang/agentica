@@ -219,7 +219,9 @@ instruction.
   such exit but the errors, which fail with the interpreter's span and stack,
   and a `--max-steps` sweep),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
-  with `AGENTICA_JIT=always`, which compiles every function, in CI) and
+  with `AGENTICA_JIT=always`, which compiles every function, in CI),
+  `make vm-libfuzz-run` (each mutant the loader accepts runs in the
+  interpreter, `always` and `on`, and the outputs must match) and
   `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, functions
   packed in one reservation up to its cap, a batch sealed in one page, the
   work of settling `on` bounded by the program's size, a compile race,
