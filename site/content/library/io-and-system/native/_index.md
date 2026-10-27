@@ -24,7 +24,7 @@ end
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does. A variadic function (`printf`) is declared with `...` ([variadic functions](/library/io-and-system/native/types/#variadic-functions-and-c-names)).
 - Put `##` docs on the `def` lines inside the block.
 
-A package can ship its library or name a system one in its `agentica.toml` (`[native.NAME]`, one entry for each of `linux`, `macos` and `windows`), and `extern "NAME"` in the package's files then opens the right one by its path in `deps/`. The files of its `native/` folder are hashed with the package, so the lock covers them. See [Packages](/tour/modules/).
+A package can ship its library or name a system one in its `agentica.toml` (`[native.NAME]`, one entry for each of `linux`, `macos` and `windows`), and `extern "NAME"` in the package's files then opens the right one by its path in `deps/`. The files of its `native/` folder are hashed with the package, so the lock covers them. A library of `native/` that loads a sibling library finds it on Windows (the DLL's folder), but on Linux it must be built with `RPATH=$ORIGIN` and on macOS with `@loader_path`. See [Packages](/tour/modules/).
 
 The rest of the section has its own pages:
 
@@ -47,4 +47,5 @@ The rest of the section has its own pages:
 
 - A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use [`compute def`](/library/io-and-system/native/compute/) for the long ones. `--max-steps` cannot stop a call in the middle.
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
+- A `RUNTIME-NATIVE-*` or `RUNTIME-INTEGER-OVERFLOW` error of an extern call has its primary span on the `extern def` line; the call site is in the stack.
 - Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.

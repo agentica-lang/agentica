@@ -778,6 +778,12 @@ def hold(res: Res) -> Result[Int]
   return ok(peer_res_hold(res, 20_000))
 end
 
+def use_and_close(res: Res) -> Int
+  value = peer_res_get(res)
+  Native.close(res)
+  return value
+end
+
 def wait_for(frees: Int) -> Void
   n = 0
   while peer_res_frees() < frees and n < 2000
@@ -1352,11 +1358,13 @@ end
 
 # A compute call holds its resource until C returns: a close by another task, or a cancel that ends the owning task,
 # marks it closed, and the free runs only when the call ends, never while the pool thread still uses the pointer.
+# The close may come from a task that did not open the resource (no owner check) after it used the resource.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("spawn, stop, awaited", [
     ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
     ("Task.spawn", "Native.close(res)", "ok(9)"),
+    ("Task.spawn", "Task.await(Task.spawn(&use_and_close, res))", "ok(9)"),
 ])
 def test_a_compute_call_keeps_its_resource_until_it_returns(tmp_path, peer, schedulers, spawn, stop, awaited):
     main = """def main() -> Void

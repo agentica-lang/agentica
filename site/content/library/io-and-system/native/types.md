@@ -169,7 +169,7 @@ end
 
 ## Resources
 
-A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`. The name is as in C and may start with a capital letter, such as `PQfinish` or `SSL_free`; only the dotted `C.Function` (below) is read as a type.
+A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`. On Windows `GetProcAddress` searches only the exports of that DLL, so `free: free` (a function of a dependency such as the C runtime) is `RUNTIME-NATIVE-LOAD` there although Linux and macOS find it: declare the free function from the library that exports it. The name is as in C and may start with a capital letter, such as `PQfinish` or `SSL_free`; only the dotted `C.Function` (below) is read as a type.
 
 ```agentica {mode="check"}
 extern "libc.so.6"
@@ -192,6 +192,9 @@ end
 - `Native.closed?(stream)` asks first, so a wrapper can return an `error` instead of stopping the task: it is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource; `false` for a live one, also while a `compute def` call holds it (closed during that call, it is `true` at once). It never stops the task. `true` is final; `false` can be out of date at once if another task may close the resource.
 - A resource the task did not close is freed when the task ends (return, crash or cancel), like a file. `Task.spawn_owning(&work, stream)` hands it to the new task. When `main` returns, the program ends without freeing what is still open.
 - A `compute def` call keeps its resource arguments until it returns: if the resource is closed meanwhile, or its task is cancelled, the free runs when the call ends.
+- Any task may pass a resource or an owned buffer to C, for instance one it got through a closure or a channel: nothing checks who owns it. Only the owner's end frees it, and `Native.close` or `Native.free` by any task closes it for all. Two tasks inside C on the same object at once race, as in C; `sqlite3_interrupt` or `duckdb_interrupt` from another task is the intended use.
+- A free function that blocks (`mysql_close`, a `duckdb_close` that checkpoints) runs on the scheduler at `Native.close` or at the owner's end, like a `def` call, and stalls the other tasks.
+- Each owner frees its resources newest first. A parent handed to another task with `Task.spawn_owning` may be freed before its children: close the children first, or keep a parent and its children in one task.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
 - A resource is a type: `export resource` makes it importable, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
 
