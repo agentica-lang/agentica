@@ -6,8 +6,9 @@ several calls from compiled code). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
 compile and run them at once. A call of a compiled function is a native call
-in compiled code; builtins and allocations without code run in the
-interpreter, and the code goes on after them.
+in compiled code, and so is a call of a builtin marked direct; other builtins
+and allocations without code run in the interpreter, and the code goes on
+after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
