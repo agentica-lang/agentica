@@ -107,7 +107,7 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
   expected type.
 - `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
-- `CHECK-EXPECTED-TYPE`: `Channel.new(n)` with no expected type.
+- `CHECK-EXPECTED-TYPE`: `Channel.new(n)` or `ATS.new()` with no expected type.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
 - `CHECK-MISSING-RETURN`: a path without `return` in a non-`Void` function.
@@ -122,7 +122,9 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.
-- `CHECK-MAP-KEY-TYPE`: a map key that is not `Int` or `String`.
+- `CHECK-MAP-KEY-TYPE`: a map or `ATS` key that is not `Int` or `String`.
+- `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or
+  holds a `Fn`, `Task`, `Channel`, handle or table anywhere inside.
 - `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`: a `Set` element type that is
   not `Int` or `String`; `Set.new([])` with no expected type.
 - `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
@@ -188,7 +190,7 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-CONSTANT-EXPRESSION`: a constant uses a call of your own function,
   `&f`, a block outside a builtin call, `while`, or a builtin with effects.
 - `CHECK-CONSTANT-TYPE`: a constant expression whose type is not data
-  (`Channel`, `Task`, `Fn`, handles, `Void`).
+  (`Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
 - `CHECK-CONSTANT-CYCLE`: constants that read each other in a loop.
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
@@ -224,7 +226,10 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-TYPE-ALIAS-CYCLE`: a type alias that expands to itself.
 - `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
   more than 1,000 type references in an expanded alias.
-- `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure.
+- `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure
+  (also an `ATS.add` past the 64-bit range, which leaves the table unchanged).
+- `RUNTIME-ATS-CONTEXT`: a table used outside the run that made it (no program
+  reaches it today).
 - `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`: a list index or map key
   not present.
 - `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative

@@ -1,0 +1,67 @@
+program #65 0:1:1-389:18:1
+  module "ats.agc"
+    declaration: function-decl #53 0:1:1-308:13:1 name="count"
+      param: param #3 10:1:11-32:1:33 name="hits"
+        type: type-ref #2 16:1:17-32:1:33 name="ATS"
+          arg: type-ref #0 20:1:21-26:1:27 name="String"
+          arg: type-ref #1 28:1:29-31:1:32 name="Int"
+      result: type-ref #4 37:1:38-40:1:41 name="Int"
+      body: expr-stmt #9 43:2:3-63:3:1
+        value: method-call #8 43:2:3-62:2:22 name="put" type=Void resolved=call("ATS.put", ATS(String, Int))
+          target: name-ref #5 43:2:3-47:2:7 name="hits" type=ATS(String, Int)
+          arg: literal #6 52:2:12-58:2:18 value=string:"home" type=String
+          arg: literal #7 60:2:20-61:2:21 value=int:1 type=Int
+      body: expr-stmt #14 65:3:3-89:4:1
+        value: method-call #13 65:3:3-88:3:26 name="put_new" type=Bool resolved=call("ATS.put_new", ATS(String, Int))
+          target: name-ref #10 65:3:3-69:3:7 name="hits" type=ATS(String, Int)
+          arg: literal #11 78:3:16-84:3:22 value=string:"away" type=String
+          arg: literal #12 86:3:24-87:3:25 value=int:2 type=Int
+      body: expr-stmt #19 91:4:3-111:5:1
+        value: method-call #18 91:4:3-110:4:22 name="add" type=Int resolved=call("ATS.add", ATS(String, Int))
+          target: name-ref #15 91:4:3-95:4:7 name="hits" type=ATS(String, Int)
+          arg: literal #16 100:4:12-106:4:18 value=string:"home" type=String
+          arg: literal #17 108:4:20-109:4:21 value=int:3 type=Int
+      body: expr-stmt #23 113:5:3-133:6:1
+        value: method-call #22 113:5:3-132:5:22 name="delete" type=Void resolved=call("ATS.delete", ATS(String, Int))
+          target: name-ref #20 113:5:3-117:5:7 name="hits" type=ATS(String, Int)
+          arg: literal #21 125:5:15-131:5:21 value=string:"away" type=String
+      body: if-stmt #34 135:6:3-196:9:1
+        branch: if-branch #33 135:6:3-190:8:1
+          condition: method-call #26 138:6:6-159:6:27 name="has_key?" type=Bool resolved=call("ATS.has_key?", ATS(String, Int))
+            target: name-ref #24 138:6:6-142:6:10 name="hits" type=ATS(String, Int)
+            arg: literal #25 152:6:20-158:6:26 value=string:"home" type=String
+          body: expr-stmt #32 164:7:5-190:8:1
+            value: call #31 164:7:5-189:7:30 name="puts" piped=false type=Void
+              arg: method-call #30 169:7:10-188:7:29 name="join" type=String resolved=call("String.join", List(String))
+                target: field-access #28 169:7:10-178:7:19 name="keys" type=List(String) resolved=call("ATS.keys", ATS(String, Int))
+                  target: name-ref #27 169:7:10-173:7:14 name="hits" type=ATS(String, Int)
+                arg: literal #29 184:7:25-187:7:28 value=string:"," type=String
+      body: binding #40 199:10:3-236:11:1 name="copy"
+        type: type-ref #37 205:10:9-221:10:25 name="Map"
+          arg: type-ref #35 209:10:13-215:10:19 name="String"
+          arg: type-ref #36 217:10:21-220:10:24 name="Int"
+        value: field-access #39 224:10:28-235:10:39 name="to_map" type=Map(String, Int) resolved=call("ATS.to_map", ATS(String, Int))
+          target: name-ref #38 224:10:28-228:10:32 name="hits" type=ATS(String, Int)
+      body: return-stmt #52 238:11:3-304:12:1
+        value: binary #51 245:11:10-303:11:68 op=plus op-span=267:11:32-268:11:33 type=Int
+          left: binary #45 245:11:10-266:11:31 op=plus op-span=255:11:20-256:11:21 type=Int
+            left: field-access #42 245:11:10-254:11:19 name="size" type=Int resolved=call("ATS.size", ATS(String, Int))
+              target: name-ref #41 245:11:10-249:11:14 name="hits" type=ATS(String, Int)
+            right: field-access #44 257:11:22-266:11:31 name="size" type=Int resolved=call("Map.size", Map(String, Int))
+              target: name-ref #43 257:11:22-261:11:26 name="copy" type=Map(String, Int)
+          right: method-call #50 269:11:34-303:11:68 name="unwrap_or" type=Int resolved=call("Result.unwrap_or", Result(Int))
+            target: call #48 269:11:34-290:11:55 name="ATS.get" piped=false type=Result(Int)
+              arg: name-ref #46 277:11:42-281:11:46 name="hits" type=ATS(String, Int)
+              arg: literal #47 283:11:48-289:11:54 value=string:"home" type=String
+            arg: literal #49 301:11:66-302:11:67 value=int:0 type=Int
+    declaration: function-decl #64 309:14:1-389:18:1 name="main"
+      result: type-ref #54 323:14:15-327:14:19 name="Void"
+      body: binding #59 330:15:3-365:16:1 name="hits"
+        type: type-ref #57 336:15:9-352:15:25 name="ATS"
+          arg: type-ref #55 340:15:13-346:15:19 name="String"
+          arg: type-ref #56 348:15:21-351:15:24 name="Int"
+        value: call #58 355:15:28-364:15:37 name="ATS.new" piped=false type=ATS(String, Int)
+      body: expr-stmt #63 367:16:3-385:17:1
+        value: call #62 367:16:3-384:16:20 name="puts" piped=false type=Void
+          arg: call #61 372:16:8-383:16:19 name="count" piped=false type=Int
+            arg: name-ref #60 378:16:14-382:16:18 name="hits" type=ATS(String, Int)

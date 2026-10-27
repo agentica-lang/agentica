@@ -285,7 +285,7 @@ c: 30
 
 ## State owned by one task
 
-Tasks share nothing, so state that several tasks update belongs to one owner task that receives messages on a channel and keeps the state in its own variables.
+Tasks share no mutable values except [ATS](/library/concurrency/ats/) tables, so state that several tasks update with more than one table call belongs to one owner task that receives messages on a channel and keeps the state in its own variables.
 
 ```agentica
 def count(inbox: Channel[Int]) -> Int

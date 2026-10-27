@@ -8,6 +8,8 @@ import Types from "../syntax/types"
 ## PreludeRow says which): the arguments are matched against the type variables of the row.
 export enum Rule
   Plain
+  AtsCall
+  AtsNew
   ChannelNew
   ChannelRecv
   ChannelSend

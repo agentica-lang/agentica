@@ -11070,6 +11070,334 @@
       "covers": "Zlib.inflate_init(15, 1073741824, 1073741824)"
     }
   ],
+  "ATS tables check keys, values and calls, stay out of data operations and reserve the ATS name": [
+    {
+      "program": [
+        "struct ATS",
+        "  size: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "import ATS from \"std/queue\"",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[Float, Int] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAP-KEY-TYPE",
+      "start": [2, 10],
+      "covers": "Float"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Fn[Int, Int]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 18],
+      "covers": "Fn[Int, Int]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Nil] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 18],
+      "covers": "Nil"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  task: Task[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: ATS[Int, List[Job]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [6, 15],
+      "covers": "List[Job]"
+    },
+    {
+      "program": [
+        "struct Cache",
+        "  tables: ATS[String, ATS[String, Int]]",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 23],
+      "covers": "ATS[String, Int]"
+    },
+    {
+      "program": [
+        "enum Box[T]",
+        "  Wrap(ATS[String, T])",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 20],
+      "covers": "T"
+    },
+    {
+      "program": [
+        "type Cache[X] = ATS[String, X]",
+        "",
+        "def main() -> Void",
+        "  t: Cache[Task[Int]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [4, 12],
+      "covers": "Task[Int]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EXPECTED-TYPE",
+      "start": [2, 7],
+      "covers": "ATS.new()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: ATS[String, Int] = ATS.new()",
+        "  b: ATS[String, Int] = ATS.new()",
+        "  same = a == b",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [4, 12],
+      "covers": "=="
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: ATS[String, Int] = ATS.new()",
+        "  text = a.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [3, 10]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: ATS[String, Int] = ATS.new()",
+        "  puts(a)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 8],
+      "covers": "a"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: ATS[String, Float] = ATS.new()",
+        "  a.add(\"x\", 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 3],
+      "covers": "a"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: ATS[String, Int] = ATS.new()",
+        "  a.put(\"x\", \"one\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 14],
+      "covers": "\"one\""
+    },
+    {
+      "program": [
+        "struct Holder",
+        "  table: ATS[String, Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  a: ATS[String, Int] = ATS.new()",
+        "  text = JSON.encode(Holder(table: a))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [7, 22]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Void] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE",
+      "start": [2, 18],
+      "covers": "Void"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Int] = ATS.new()",
+        "  puts(t.length)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Job",
+        "  Running(Task[Int])",
+        "  Done(Int)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: ATS[String, Job] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [7, 18],
+      "covers": "Job"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[String, Map[String, Fn[Int, Int]]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 18],
+      "covers": "Map[String, Fn[Int, Int]]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t: ATS[Int, Result[Task[Int]]] = ATS.new()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ATS-VALUE",
+      "start": [2, 15],
+      "covers": "Result[Task[Int]]"
+    },
+    {
+      "program": [
+        "TABLE: ATS[String, Int] = ATS.new()",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-TYPE",
+      "start": [1, 27],
+      "covers": "ATS.new()"
+    },
+    {
+      "program": [
+        "struct Shared",
+        "  hits: ATS[String, Int]",
+        "  cache: ATS[Int, List[Map[String, Result[Void]]]]",
+        "end",
+        "",
+        "type Counter[K] = ATS[K, Int]",
+        "",
+        "def work(shared: Shared) -> ATS[String, Int]",
+        "  shared.hits.add(\"home\", 1)",
+        "  shared.hits.put_new(\"away\", 0)",
+        "  shared.hits.put(\"x\", shared.hits.size + shared.hits.keys.size)",
+        "  shared.hits.delete(\"x\")",
+        "  copy: Map[String, Int] = shared.hits.to_map",
+        "  if shared.hits.has_key?(\"home\") and ATS.get(shared.hits, \"home\").unwrap_or(0) > copy.size",
+        "    shared.cache.put(1, [{\"ok\": ok()}])",
+        "  end",
+        "",
+        "  return shared.hits",
+        "end",
+        "",
+        "def main() -> Void",
+        "  hits: Counter[String] = ATS.new()",
+        "  cache: ATS[Int, List[Map[String, Result[Void]]]] = ATS.new()",
+        "  tables: Map[String, ATS[String, Int]] = {\"hits\": hits}",
+        "  task = Task.spawn(&work, Shared(hits: hits, cache: cache))",
+        "  IO.inspect([Task.await(task), tables[\"hits\"]])",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
   "JsonField is optional and nullable only as a direct struct field of a JSON type, and reserves its name": [
     {
       "program": [

@@ -54,6 +54,8 @@ VALID_EXAMPLES = [
                       "1: y\n"
                       "-1\n"
                       "[\"ana\"]\n"),
+    ("shared-cache.agc", "letters per worker: [87]\nlookups: 24\nstored: 6\n1 squared is 1\n2 squared is 4\n"
+                         "3 squared is 9\n4 squared is 16\n5 squared is 25\n6 squared is 36\n"),
     ("case-guards.agc", "big circle\nempty circle\ntwin\ndot\nnegative -3\nvalue 8\nmissing\n"
                         "timed out\n"),
     ("heredoc.agc", "Usage: tool [options] FILE\n\n  --verbose   print more\n"
@@ -376,7 +378,7 @@ def test_help_lists_the_method_form_first_and_answers_include():
 
 
 def test_help_answers_length_and_size_for_every_kind_that_has_them():
-    kinds = {"List.size", "Map.size", "Range.size", "Set.size", "String.length"}
+    kinds = {"ATS.size", "List.size", "Map.size", "Range.size", "Set.size", "String.length"}
     for name in ("length", "size"):
         found = {b["name"] for b in json.loads(cli_run("help", name, "--json").stdout)["builtins"]}
         assert found == kinds, name

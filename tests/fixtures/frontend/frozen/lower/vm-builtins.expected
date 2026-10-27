@@ -1,3 +1,13 @@
+ATS.add
+ATS.delete
+ATS.get
+ATS.has_key?
+ATS.keys
+ATS.new
+ATS.put
+ATS.put_new
+ATS.size
+ATS.to_map
 Channel.close
 Channel.closed?
 Channel.new

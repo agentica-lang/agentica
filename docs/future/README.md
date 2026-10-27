@@ -11,8 +11,8 @@ current status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
-Sections 1, 2, 5, 8–12, 14, 17, 21, 23, 24, 33, 35–37 and 49 have no file of
-their own: they are built or decided, and their content lives in the grammar,
+Sections 1, 2, 5, 8–14, 17, 21, 23, 24, 33, 35–37 and 49 have no file of their
+own: they are built or decided, and their content lives in the grammar,
 `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built small-value
 sharing. §40 (native code and FFI) was replaced by issue
@@ -38,11 +38,6 @@ sharing. §40 (native code and FFI) was replaced by issue
   - Title: Possible metatables: Ruby-style modules
   - File: [Decided against](25-ruby-typed-idioms.md#2513-decided-against-part-c)
   - Status: Not planned; rationale in §25.13
-
-- §: 13
-  - Title: Shared tables (ATS)
-  - File: [`13-ats.md`](13-ats.md)
-  - Status: On demand (row 17)
 
 - §: 15
   - Title: Adapters and JSON inspection

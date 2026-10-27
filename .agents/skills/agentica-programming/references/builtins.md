@@ -234,7 +234,8 @@ r.message() -> String                                    # the error message, or
 `receiver.name(args)` calls the builtin of the receiver's static type with the
 receiver first; the module is the type's name (`List[T]` uses `List`), except
 `Json`, which uses `JSON`. `Int` takes `times`, `upto`, `downto` and the bit
-functions; `Channel[T]` takes `send`, `recv`, `close`, `closed?`. Without
+functions; `Channel[T]` takes `send`, `recv`, `close`, `closed?`; `ATS[K, V]`
+takes every `ATS` function but `new`. Without
 parentheses, `receiver.name` on a non-struct value calls a method with no
 arguments (`s.length`, `xs.size`, `r.ok?`); on a struct it reads a field, and
 structs and enums have no methods. `.call(...)` invokes a function value. An
