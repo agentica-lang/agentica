@@ -1,4 +1,4 @@
-# Tasks and channels
+# Tasks, channels and shared tables
 
 ```text
 Task.spawn(f: Fn[R]) -> Task[R]
@@ -288,10 +288,11 @@ so tasks waiting on each other through channels get timeout errors, not a hang.
 A handle sent over a channel stays owned by the task that opened it, which must
 outlive its users, or hand the handle over with `Task.spawn_owning`.
 
-State that several tasks update belongs to one owner task that receives
+A counter or a cache that several tasks update goes in an `ATS` table (below).
+Other state that several tasks update belongs to one owner task that receives
 messages on a channel and keeps the state in local variables; others send it
-requests. There is no shared mutable state (the one exception is the
-`std/logger` registry) and no `Agent`, `Mutex`, `Thread`, `SizedQueue`,
+requests. Apart from `ATS` tables and the `std/logger` registry there is no
+shared mutable state, and there is no `Agent`, `Mutex`, `Thread`, `SizedQueue`,
 `Enumerator` or `Fiber`; a `Lazy` is a recipe one terminal runs in the calling
 task, not a producer. A producer task sending into a channel is the generator:
 its capacity gives backpressure and `recv` is `next`.
@@ -305,6 +306,43 @@ its capacity gives backpressure and `recv` is `next`.
   input order: `Task.map(items, limit, timeout_ms)`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in
   the order they end: tasks and a `Channel`.
-- State several tasks update: one owner task receiving messages on a channel.
+- A counter or cache several tasks update: an `ATS` table (`add`, `put_new`).
+- Other state several tasks update: one owner task receiving messages on a
+  channel.
 - Each line of a big file in bounded memory: `File.each_line`.
 - An endless sequence or a source too big for a list: `Lazy` (`lazy.md`).
+
+## Shared tables (ATS)
+
+```text
+ATS.new() -> ATS[K, V]                                   # needs an expected type
+ATS.put(table: ATS[K, V], key: K, value: V) -> Void      # insert or replace
+ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool  # false: key present, no change
+ATS.get(table: ATS[K, V], key: K) -> Result[V]
+ATS.has_key?(table: ATS[K, V], key: K) -> Bool
+ATS.delete(table: ATS[K, V], key: K) -> Void             # absent key ignored
+ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int       # absent counts as 0
+ATS.size(table: ATS[K, V]) -> Int
+ATS.keys(table: ATS[K, V]) -> List[K]                    # first-insertion order
+ATS.to_map(table: ATS[K, V]) -> Map[K, V]                # first-insertion order
+```
+
+An `ATS[K, V]` is one mutable table that tasks share through a handle: passing
+it shares it, never copies it. All but `new` are methods: `hits.add("home",
+1)`. `hits: ATS[String, Int] = ATS.new()`, else `CHECK-EXPECTED-TYPE`. Keys are
+`Int` or `String` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`, `Task`,
+`Channel`, handle or table anywhere inside, and not `Nil` (`CHECK-ATS-VALUE`).
+A table may be a struct field or a `Task.spawn` argument; no task owns it, the
+GC frees it, and there is no size limit or expiry. No `==`, text or JSON;
+inspect prints `<ATS>`; use `to_map` to see it.
+
+Each call is atomic on any scheduler; there are no multi-key transactions and
+no block-based update. `add` is the one atomic read-modify-write (`Int` values
+only, `CHECK-TYPE-MISMATCH` otherwise; overflow is `RUNTIME-INTEGER-OVERFLOW`
+and leaves the table unchanged), and `put_new` the one conditional insert: the
+cache pattern is `get`, compute on a miss, then `put_new`, which stores one
+value even when two tasks miss at once. `keys` and `to_map` are snapshots; a
+key deleted and put again goes to the end. `get`, `put`, `put_new`, `has_key?`,
+`delete` and `add` are O(log n). Sort `keys` before printing when tasks fill
+the table, since their order follows the schedule. In BDD, a table made in
+`main` and captured by step blocks starts fresh in each scenario.

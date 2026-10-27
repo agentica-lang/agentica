@@ -145,9 +145,9 @@ builtin with effects (`stdout`, `stdin`, `filesystem`, `network`, `subprocess`,
 initializer, not only the result, has a data type: numbers, `String`, `Bool`,
 `Nil`, `List`, `Map`, `Set`, `Range`, `Result` and `JSON` of data types, and
 structs and enums whose fields and payloads are data; a function, `Channel`,
-task or handle type (and `Void`) is `CHECK-CONSTANT-TYPE`, located at the
-expression. `Channel.new` has no effects, but it makes a value with identity and
-state, which is why the type rule exists.
+task, handle or `ATS` table type (and `Void`) is `CHECK-CONSTANT-TYPE`, located
+at the expression. `Channel.new` has no effects, but it makes a value with
+identity and state, which is why the type rule exists.
 
 A scalar literal constant is part of the bytecode. Every other constant is built
 once, in dependency order, before `main` starts, and only if a function that

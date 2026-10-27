@@ -214,7 +214,8 @@ type:
 - **Written:** `JOBS: Channel[Int] = Channel.new(1)` in a constant
   (`CHECK-CONSTANT-TYPE`)
   - **Help:** a constant holds data: numbers, text, collections, structs and
-    enums of those; functions, tasks, channels and handles are not data
+    enums of those; functions, tasks, channels, handles and tables are not
+    data
 
 - **Written:** `A = B + 1` with `B = A + 1` (`CHECK-CONSTANT-CYCLE`)
   - **Help:** break the loop; the help lists the constants around it, `A -> B ->
@@ -493,6 +494,9 @@ type:
 
 - **Written:** `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`)
   - **Help:** annotate it: `ch: Channel[Int] = Channel.new(8)`
+
+- **Written:** `ATS.new()` with no expected type (`CHECK-EXPECTED-TYPE`)
+  - **Help:** annotate it: `hits: ATS[String, Int] = ATS.new()`
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks:
 the frames of a stack are Agentica functions.

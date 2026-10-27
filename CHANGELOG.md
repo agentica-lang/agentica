@@ -8,6 +8,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `ATS[K, V]` shared tables for counters and caches that tasks update
+  (`examples/shared-cache.agc`).
+
+### Changed
+
+- **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
+  `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
+
 ## [0.12.0] - 2026-10-27
 
 ### Added

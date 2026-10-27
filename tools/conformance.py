@@ -161,8 +161,9 @@ AREAS = {
         ],
     ),
     "tasks": (
-        "tasks, channels and timers",
-        ["tests/test_vm_channel.py", "tests/test_vm_task_map.py", "tests/test_vm_latency.py", "tests/test_vm_shared.py"],
+        "tasks, channels, shared tables and timers",
+        ["tests/test_vm_channel.py", "tests/test_vm_task_map.py", "tests/test_vm_latency.py", "tests/test_vm_shared.py",
+         "tests/test_vm_ats.py"],
     ),
     "network": (
         "TCP, TLS and HTTP, client and server, against independent peers",

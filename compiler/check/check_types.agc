@@ -111,6 +111,30 @@ export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   return false
 end
 
+## True when the type may be the value of an ATS: a data type (data?, a deep walk that rejects Fn, Task, Channel, every
+## handle and ATS itself, so no table holds a table) that is not Nil and has no type variable. A variable is allowed
+## only where it is checked later: in the target of a generic alias (cx.prelude), whose uses are checked expanded. A
+## generic enum checks its arguments only with data?, which accepts a variable, so a payload ATS[String, T] is refused.
+export def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
+  if Types.is?(type, "Nil") or !data?(cx, type, [])
+    return false
+  end
+
+  return cx.prelude or !has_variables?(type)
+end
+
+## CHECK-ATS-VALUE for the value type of an ATS that ats_value? refuses, at span.
+export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> String
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-ATS-VALUE",
+    "an ATS value must be a data type with no Fn, Task, handle or ATS inside, found #{Types.to_text(type)}",
+    span,
+    "keep plain data in the table (numbers, strings, lists, maps, structs and enums of those)",
+  )
+end
+
 ## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, type variables, and lists,
 ## maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at
 ## ("Struct:name"), so a recursive type ends.
@@ -143,6 +167,7 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.List(item) -> return has_variables?(item)
     Types.Type.Set(item) -> return has_variables?(item)
     Types.Type.Map(key, value) -> return has_variables?(key) or has_variables?(value)
+    Types.Type.ATS(key, value) -> return has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
       return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
     Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
@@ -161,6 +186,10 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
     Types.Type.List(item) -> return Types.Type.List(substitute(item, substitutions))
     Types.Type.Set(item) -> return Types.Type.Set(substitute(item, substitutions))
     Types.Type.Map(key, value) -> return Types.Type.Map(
+      substitute(key, substitutions),
+      substitute(value, substitutions),
+    )
+    Types.Type.ATS(key, value) -> return Types.Type.ATS(
       substitute(key, substitutions),
       substitute(value, substitutions),
     )
@@ -484,6 +513,8 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
     return ok(Types.Type.List(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Map" and args.size == 2
     return resolve_map(cx, st, args)
+  elsif name == "ATS" and args.size == 2
+    return resolve_ats(cx, st, args)
   elsif name == "Set" and args.size == 1
     return resolve_set(cx, st, args[0])
   end
@@ -551,6 +582,17 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   end
 
   return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
+end
+
+# ATS[K, V]: the key as a Map key, and a value that ats_value? accepts (CHECK-ATS-VALUE on the value type).
+def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
+  map = try resolve_map(cx, st, args)
+  value = Types.value(map)
+  if !ats_value?(cx, value)
+    return error(ats_value_failure(cx, st, value, args[1].span))
+  end
+
+  return ok(Types.Type.ATS(Types.key(map), value))
 end
 
 def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType]
@@ -634,6 +676,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Task",
     "Channel",
     "Lazy",
+    "ATS",
     "Range",
   ].concat(OPAQUE_TYPES.to_a)
 end
@@ -746,6 +789,7 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.List(item) -> return [item]
     Types.Type.Set(item) -> return [item]
     Types.Type.Map(key, value) -> return [key, value]
+    Types.Type.ATS(key, value) -> return [key, value]
     Types.Type.Fn(params, result) -> return params.concat([result])
     Types.Type.Enum(name, args) -> return args
     _ -> return []

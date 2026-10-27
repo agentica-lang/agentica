@@ -569,8 +569,8 @@ same endpoint (a `Metrics` builtin module or `std/metrics`)?
 and HTTP on the VM. Reasons:
 
 - A counter is shared mutable state. Agentica values are immutable. Apart from
-  the logger registry, the language has no shared mutable state: shared
-  tables (`docs/future/13-ats.md` §13, phase 9) are the planned way, on demand.
+  the logger registry, the only shared mutable state is the `ATS` tables (the
+  grammar's "Shared tables"), the one way to share it.
   A `Metrics` builtin with hidden mutable state would be a second special form
   for sharing state between tasks, against the one-way rule, next to the logger
   registry.

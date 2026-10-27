@@ -314,7 +314,7 @@ error:
   `RUNTIME-INVALID-NUMBER` / `RUNTIME-INTEGER-OVERFLOW`.
 - Expected types must reach builtin calls for contextual ok/error and
   unwrap/default. An untyped error is CHECK-RESULT-TYPE, and a `Channel.new`
-  with no expected type is CHECK-EXPECTED-TYPE. `try` requires a
+  or `ATS.new` with no expected type is CHECK-EXPECTED-TYPE. `try` requires a
   Result-returning function and a Result operand; its payload type may differ
   from the enclosing success type. It does not guarantee a return. `try` also
   works in a block whose expected `Fn` has a fixed `Result` type (`Test.test`,
