@@ -541,14 +541,14 @@ import Sqlite from "pkg/sqlite/db"
   of the package (plain folder names, as a `subdir`; the files of `native/` are
   copied and hashed with the package, so the lock covers all systems, and each
   is at most 1 MiB), `system`, a name for the system loader (no `/`, `\`
-  or `:`; at most 128 characters), for a library the system has
-  (`winsqlite3.dll`), or a download `{ url, sha256, member }` (an https
-  URL, or http to 127.0.0.1 or [::1]; 64 lowercase hex digits; a safe
-  relative TAR or ZIP member): the archive is verified by its SHA-256 and
-  the member is cached, pinned per system in `[[native-artifact]]` and fetched
-  by `install` and `update` for the host only. Another key, both shapes or
-  a half-written download are `PKG-MANIFEST-INVALID` at the key path
-  (`native.sqlite3.linux.file`).
+  or `:`; at most 128 characters) or an absolute path, or a list of them (1 to
+  16), for a library the system has (`winsqlite3.dll`), or a download
+  `{ url, sha256, member }` (an https URL, or http to 127.0.0.1 or [::1]; 64
+  lowercase hex digits; a safe relative TAR or ZIP member): the archive is
+  verified by its SHA-256 and the member is cached, pinned per system in
+  `[[native-artifact]]` and fetched by `install` and `update` for the host
+  only. Another key, both shapes or a half-written download are
+  `PKG-MANIFEST-INVALID` at the key path (`native.sqlite3.linux.file`).
   ```toml
   [native.sqlite3]
   linux = { system = "libsqlite3.so.0" }
@@ -559,10 +559,27 @@ import Sqlite from "pkg/sqlite/db"
     declares means the entry of the running system, chosen when the file is
     compiled: a `file` becomes the absolute path of the file in
     `deps/<package>/`, which the VM opens as it opens any absolute library (no
-    search, and `LD_LIBRARY_PATH` plays no part); a `system` name stays as
+    search, and `LD_LIBRARY_PATH` plays no part); a `system` entry stays as
     written. A `NAME` it does not declare stays as written. Nothing else in the
     program changes, and `--deny-native` and `--sandbox` refuse the program as
     for any `extern`.
+  - A `system` list names candidates in order of preference, for a library
+    that lives at different places on one system, such as Homebrew's on macOS:
+    ```toml
+    [native.libpq]
+    macos = { system = ["libpq.5.dylib", "/opt/homebrew/lib/libpq.5.dylib"] }
+    ```
+    When the file is compiled, the first absolute path that is a file is
+    chosen, else the first bare name, else the first path (the program then
+    fails to open it, as `extern "/missing.so"` does). A macOS path such as
+    `/usr/lib/libz.dylib` lives in the dyld shared cache, not on disk, so it
+    does not count as existing: list it knowingly, before or after a path
+    that does. The choice is the
+    machine's: the manifest is hashed as written, the lock holds no choice,
+    and the bytecode cache misses when a candidate appears or goes away. A
+    relative path (`lib/x.so`, `C:x.dll`), an empty list or an item that is
+    not a string is `PKG-MANIFEST-INVALID` at the key path of the item
+    (`native.libpq.macos.system[1]`). The working directory is never searched.
   - A package that declares the library but has no entry for the running
     system is `PKG-NATIVE-PLATFORM`, and a `file` that the package lacks is
     `PKG-NATIVE-MISSING`, when a file of the package that is compiled uses

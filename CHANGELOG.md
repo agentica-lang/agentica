@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `[native]` entries of `agentica.toml` may give `system` as an absolute path or
+  a list of candidates, such as a Homebrew path after the bare name: the first
+  absolute path that exists wins, else the first bare name.
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
 - Builtins can have default arguments, with the rules of a default parameter of
   a function: a call may leave out the trailing ones, and `agentica help` shows

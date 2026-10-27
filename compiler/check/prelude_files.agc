@@ -130,6 +130,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       reexported: {},
       parsed: program,
       watched: [],
+      probed: [],
       blank_line_after_end: false,
     ),
   )

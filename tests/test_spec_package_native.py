@@ -66,6 +66,15 @@ def declare(ws, files, extra_manifest, name="pkgdemo"):
     (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
 
 
+def publish(ws, remotes, files):
+    """Publish the package as v1.0.0 of the remote, lock it and write the manifest and main.agc of the project."""
+    commit = remotes.publish(REPO, files, tag="v1.0.0")
+    lock_entry(ws, remotes, REPO, files, commit, tag="v1.0.0")
+    ws.write_manifest({"pkgdemo": dependency(remotes.url(REPO), tag="v1.0.0")})
+    ws.write_lock()
+    (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
+
+
 def files_of(library):
     """The package: the module, the library of this system and files for the other systems that this one never opens."""
     # The dotfile and Thumbs.db are never part of the package.
@@ -81,11 +90,7 @@ def table_of_all():
 @NATIVE_CALLS
 def test_a_package_ships_a_library_install_copies_it_and_a_build_opens_it_by_its_path(library, remotes, ws, tmp_path):
     files = {**files_of(library), "agentica.toml": manifest(table_of_all())}
-    commit = remotes.publish(REPO, files, tag="v1.0.0")
-    lock_entry(ws, remotes, REPO, files, commit, tag="v1.0.0")
-    ws.write_manifest({"pkgdemo": dependency(remotes.url(REPO), tag="v1.0.0")})
-    ws.write_lock()
-    (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
+    publish(ws, remotes, files)
 
     result, problem = install(ws, remotes)
     assert (result.code, problem) == (0, None), result.stderr
@@ -257,7 +262,12 @@ def test_an_extern_name_that_the_manifest_does_not_declare_stays_a_system_librar
     ('[native.pkgdemo]\nlinux = { file = "lib/x.so" }\n', "native.pkgdemo.linux.file"),
     ('[native.pkgdemo]\nlinux = { file = "native/../x.so" }\n', "native.pkgdemo.linux.file"),
     ('[native.pkgdemo]\nlinux = { file = "native/x.so", system = "libx.so" }\n', "native.pkgdemo.linux"),
-    ('[native.pkgdemo]\nlinux = { system = "/usr/lib/libx.so" }\n', "native.pkgdemo.linux.system"),
+    ('[native.pkgdemo]\nlinux = { system = "lib/libx.so" }\n', "native.pkgdemo.linux.system"),
+    ('[native.pkgdemo]\nlinux = { system = ["libx.so", "lib/libx.so"] }\n', "native.pkgdemo.linux.system[1]"),
+    ('[native.pkgdemo]\nlinux = { system = ["libx.so", 3] }\n', "native.pkgdemo.linux.system[1]"),
+    ('[native.pkgdemo]\nlinux = { system = ["/opt/libx.so", "C:libx.dll"] }\n', "native.pkgdemo.linux.system[1]"),
+    ('[native.pkgdemo]\nlinux = { system = [] }\n', "native.pkgdemo.linux.system"),
+    ('[native.pkgdemo]\nlinux = { system = ["libx.so", "/opt/a\\nb.so"] }\n', "native.pkgdemo.linux.system[1]"),
     ('[native.pkgdemo]\nlinux = { url = "https://example.test/x.so" }\n', "native.pkgdemo.linux"),
     ('[native.Demo]\nlinux = { system = "libx.so" }\n', "native.Demo"),
     ('[native.pkgdemo]\nlinux = { file = "native/Thumbs.db" }\n', "native.pkgdemo.linux.file"),
@@ -266,3 +276,103 @@ def test_an_extern_name_that_the_manifest_does_not_declare_stays_a_system_librar
 def test_a_bad_native_table_is_pkg_manifest_invalid_at_its_key(ws, text, key):
     declare(ws, {"demo.agc": DEMO}, text)
     assert_at_key(check(ws), "PKG-MANIFEST-INVALID", ws.deps / "pkgdemo" / "agentica.toml", key)
+
+
+def candidates(*names):
+    """A [native.pkgdemo] table whose entry for this system lists these `system` candidates."""
+    return "[native.pkgdemo]\n%s = { system = [%s] }\n" % (HERE, ", ".join(json.dumps(str(name)) for name in names))
+
+
+def compiled_text(ws, text):
+    """The bytes of main.agc of the project compiled with this [native] table in the package manifest."""
+    declare(ws, {"demo.agc": DEMO}, text)
+    out = ws.project / "main.agcb"
+    result = run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(out)], cwd=ws.project,
+                 env=environment_of(ws))
+    assert result.code == 0, result.stderr
+    return out.read_bytes()
+
+
+@pytest.mark.parametrize("case", range(5))
+def test_a_system_list_picks_an_existing_absolute_path_else_a_name_else_the_first_path(ws, tmp_path, case):
+    present, missing, other = tmp_path / "present.bin", tmp_path / "missing.bin", tmp_path / "absent.bin"
+    present.write_bytes(b"x")
+    # Each case: the `system` value and the one that `extern "pkgdemo"` must become.
+    cases = [
+        ([missing, present, "libbare.so"], present),
+        ([missing, "libbare.so", present], present),
+        ([missing, "libbare.so", other], "libbare.so"),
+        ([missing, other], missing),
+        (present, present),
+    ]
+    names, picked = cases[case]
+    value = json.dumps(str(names)) if not isinstance(names, list) else \
+        "[%s]" % ", ".join(json.dumps(str(name)) for name in names)
+    code = compiled_text(ws, "[native.pkgdemo]\n%s = { system = %s }\n" % (HERE, value))
+    for name in [missing, present, other, "libbare.so"]:
+        assert (str(name).encode() in code) == (str(name) == str(picked)), (names, picked, name)
+
+
+BOTH = """extern "pkgdemo"
+  export def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32
+end
+
+export def loaded?() -> Bool
+  return Native.load("pkgdemo").ok?
+end
+"""
+BOTH_MAIN = """import Demo from "pkg/pkgdemo/demo"
+
+def main() -> Void
+  if Demo.loaded?()
+    puts(Demo.pkgdemo_add(40, 2))
+  else
+    puts("missing")
+  end
+end
+"""
+
+
+@NATIVE_CALLS
+def test_extern_and_native_load_use_the_pick_and_a_cached_build_follows_the_machine(library, ws, tmp_path):
+    folder = tmp_path / "libs"
+    folder.mkdir()
+    target = folder / library_name("pkgdemo")
+    declare(ws, {"demo.agc": BOTH}, candidates(folder / "nothing" / "x", target, "libnothing-pkgdemo.so"))
+    (ws.project / "main.agc").write_text(BOTH_MAIN, encoding="utf-8")
+
+    def output():
+        ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment_of(ws))
+        assert ran.code == 0, ran.stderr
+        return ran.stdout
+
+    # Only the bare name is left, which no loader finds. The library then appears at the second candidate, and the
+    # cached program of the first run is not used; it goes away, and the third run picks again.
+    assert output() == "missing\n"
+    target.write_bytes(library)
+    assert output() == "42\n"
+    target.unlink()
+    assert output() == "missing\n"
+
+
+def test_a_candidate_list_is_hashed_with_the_package_and_the_lock_holds_no_pick(ws, remotes, tmp_path):
+    present = tmp_path / "present.bin"
+    files = {"demo.agc": DEMO, "agentica.toml": manifest(candidates(tmp_path / "missing.bin", present, "libbare.so"))}
+    publish(ws, remotes, files)
+    lock = ws.project / "agentica.lock"
+    written = lock.read_bytes()
+
+    assert install(ws, remotes)[1] is None
+    assert package_hash(ws.deps / "pkgdemo") == ws.locked[0]["hash"]
+    assert problem_of(ws, remotes) is None
+    # The pick depends on the machine: with the library there the lock and the hash are the same.
+    present.write_bytes(b"x")
+    assert install(ws, remotes)[1] is None
+    assert problem_of(ws, remotes) is None
+    assert lock.read_bytes() == written
+
+
+@pytest.mark.parametrize("path", [r"C:\x.dll", "C:/x.dll", r"\\srv\share\x.dll"])
+def test_an_absolute_path_of_any_system_is_a_valid_candidate_on_every_host(ws, path):
+    declare(ws, {"demo.agc": DEMO}, '[native.pkgdemo]\n%s = { system = [%s, "libx.so"] }\n' % (HERE, json.dumps(path)))
+    assert check(ws) is None

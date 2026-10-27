@@ -168,14 +168,21 @@ end
 # One `source` line for each file that a native library of the program may come from or load (the manifest that names
 # it and every file of native/), and one `tree` line for each package folder, with a digest of the names of its native/
 # files, so a change or an added file makes the entry miss and the build (which hashes the package against the lock)
-# runs again.
+# runs again. A path that a `system` list of candidates chose by (module.probed) is not read: it gets the line of an
+# import place, so the entry misses when the library appears, goes away or leads elsewhere, and the pick is made again.
 def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedModule]) -> Result[List[String]]
   paths: List[String] = []
+  probed: List[String] = []
   for module in modules
     paths = paths.concat(module.watched)
+    probed = probed.concat(module.probed)
   end
 
   lines: List[String] = []
+  for path in probed.uniq
+    lines = lines.push(try probe(workspace, path))
+  end
+
   for path in paths.uniq
     if !plain?(path)
       return error("the path has a line feed, a tab or a NUL")

@@ -307,7 +307,6 @@ end
 
 # The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an
 # error value then. A call made from a method call has no type of its own.
-
 def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Result[String]
   type = Lowering.type_of(cx, Ast.Expr.Call(node))
   if checked or Types.unknown?(type)

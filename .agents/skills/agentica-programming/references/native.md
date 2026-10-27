@@ -311,4 +311,5 @@ Keep the `extern` layer private and give the user a normal API; site page:
   choose a printf format: pass a constant format and the text as `%s`.
 - A package lists the library per system in `agentica.toml`
   (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
-  `{ file = "native/..." }`) and the `extern` block says `extern "NAME"`.
+  `{ file = "native/..." }`; `system` may be an absolute path or a list of
+  candidates, see `modules.md`) and the `extern` block says `extern "NAME"`.
