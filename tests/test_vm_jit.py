@@ -596,6 +596,16 @@ def compiled(bytecode, tmp_path, mode="always"):
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
 
 
+def tail_call_exits(bytecode, tmp_path, mode):
+    """(TAIL_CALL exits, those whose callee had code) in a run with --jit MODE: a tail call of a function with code is
+    native, so the second count stays 0 unless the register file has to grow."""
+    for line in jit_trace(bytecode, tmp_path, mode):
+        if " jit transition op=tail-call " in line:
+            fields = dict(field.split("=") for field in line.split(" jit transition op=tail-call ")[1].split())
+            return int(fields["count"]), int(fields["compiled"])
+    return 0, 0
+
+
 def assert_compiled_without_exits(bytecode, tmp_path, want, forbidden):
     """With `on` and `always`, the functions of WANT[mode] are compiled (none off x86-64), and no exit to the turn loop
     is at an opcode that FORBIDDEN(op) holds for."""
@@ -1187,10 +1197,10 @@ end
 
 # Two tasks whose compiled loop (drive) calls step, which tail-calls count_down (self tail calls that copy a struct of
 # five fields with `with`, each copy charging turn cost), noisy (a loop that prints, which `on` never compiles: a tail
-# call into a function without code) or calls is_even (mutual tail calls). With `on`, step, count_down, is_even and
-# is_odd have no loop and get code only from compiled code; their tail calls stay in compiled code there. Task 1's last
-# round and main's is_even make a million tail calls each, far past the depth limit of 10,000 frames if a tail call
-# kept its frame. The order of the lines shows where the turns end.
+# call into a function without code) or calls is_even (mutual tail calls). With `on`, count_down's self tail call is
+# its loop, and step, is_even and is_odd have no loop and get code only from compiled code; a tail call of a function
+# with code stays in compiled code. Task 1's last round and main's is_even make a million tail calls each, far past the
+# depth limit of 10,000 frames if a tail call kept its frame. The order of the lines shows where the turns end.
 TAIL = """struct State
   n: Int
   total: Int
@@ -1277,6 +1287,11 @@ def test_tail_calls_and_struct_updates_run_in_compiled_code_without_growing_the_
         "on": ["count_down", "drive", "is_even", "is_odd", "step"],
         "always": ["count_down", "drive", "is_even", "is_odd", "main", "noisy", "step"],
     }, lambda op: op in ("tail-call", "struct-with"))
+    # The tail calls that leave are those of noisy, which `on` never compiles, and the first of each callee, before
+    # its compile; of the 2.6 million, none whose callee has code.
+    for mode in ("on", "always"):
+        exits, with_code = tail_call_exits(bytecode, tmp_path, mode)
+        assert exits < 20 and with_code == 0, (mode, exits, with_code)
     for style in ((), ("--json",)):
         code, stdout, stderr = assert_same(bytecode, *style)
         assert code == 0 and stdout.count("\n") == 2 * 3 + 2 * 6 * 2 + 3, (style, stdout, stderr)
@@ -1310,6 +1325,8 @@ def main() -> Void
 end
 """, "tail_failure", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["drive", "fall"] if X86_64 else [])
+    for mode in ("on", "always"):
+        assert tail_call_exits(bytecode, tmp_path, mode) == (0, 0), mode
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "fall", "drive", "main")
 
 
@@ -1356,8 +1373,50 @@ def main() -> Void
 end
 """, "tail_cancel", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["chain", "churn", "warm"] if X86_64 else [])
+    for mode in ("on", "always"):
+        assert tail_call_exits(bytecode, tmp_path, mode) == (0, 0), mode
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
+
+
+def test_a_self_tail_call_is_a_loop_that_on_compiles(tmp_path):
+    # main has no loop and chain's only loop is its self tail call, which `on` counts as a loop: chain compiles at its
+    # entries and its million tail calls run as a jump in its code. is_even and is_odd tail-call each other a million
+    # times; with `always` that stays in their code too. No tail call of a function with code leaves.
+    bytecode = compile_text("""def chain(n: Int, acc: Int) -> Int
+  if n == 0
+    return acc
+  end
+  return chain(n - 1, (acc + n) % 1000003)
+end
+
+def is_even(n: Int) -> Bool
+  if n == 0
+    return true
+  end
+  return is_odd(n - 1)
+end
+
+def is_odd(n: Int) -> Bool
+  if n == 0
+    return false
+  end
+  return is_even(n - 1)
+end
+
+def main() -> Void
+  puts(chain(1000000, 0))
+  puts(is_even(1000001))
+  puts("steps #{Profile.steps()}")
+end
+""", "self_tail", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["chain"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["chain", "is_even", "is_odd", "main"] if X86_64 else [])
+    assert tail_call_exits(bytecode, tmp_path, "on")[1] == 0
+    assert tail_call_exits(bytecode, tmp_path, "always") == ((1, 0) if X86_64 else (0, 0))
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith(f"{sum(range(1000001)) % 1000003}\nfalse\nsteps "), (stdout, stderr)
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
 
 
 def test_on_stops_compiling_once_the_compile_budget_is_spent(tmp_path):

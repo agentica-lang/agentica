@@ -1145,7 +1145,7 @@ static __attribute__((noinline)) uint32_t call_exit(agc_vm *vm, agc_jit *jit, co
   if (out.status == AGC_JIT_EXIT_CALL_VALUE) return agc_jit_call_value_exit(vm, jit, f, out, base);
   agc_instr in = f->code[out.pc];
   uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
+  if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_call(jit, out.status, function);
   if (out.status == AGC_JIT_EXIT_TAIL_CALL)
     replace_frame(vm, function, in.a, f->spans[out.pc]);
   else
@@ -1179,15 +1179,13 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
     agc_jit_exit out = code(vm, R, p->constants, pc);
-    if (t->frame_count != depth) {
-      /* Native calls are on the frames, not on the C stack any more: the exit is the top frame's, whose function was
-         called natively, so it has code. */
-      depth = t->frame_count;
-      frame = &t->frames[depth - 1];
-      f = &p->functions[frame->function];
-      R = t->regs + frame->base;
-      code = atomic_load_explicit(&jit->code[frame->function], memory_order_acquire);
-    }
+    /* The exit is the top frame's: native calls are on the frames, not on the C stack any more, and a native tail call
+       may have made the frame another function's. That function was called or tail-called natively, so it has code. */
+    depth = t->frame_count;
+    frame = &t->frames[depth - 1];
+    f = &p->functions[frame->function];
+    R = t->regs + frame->base;
+    code = atomic_load_explicit(&jit->code[frame->function], memory_order_acquire);
     frame->pc = pc = out.pc + 1;
     switch (out.status) {
       case AGC_JIT_EXIT_STEP:

@@ -8,7 +8,7 @@
 
 #include "../core.h"
 
-/* --jit and AGENTICA_JIT: off, on (a function with a loop is compiled at its AGC_JIT_THRESHOLD-th entry once
+/* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself, is compiled at its AGC_JIT_THRESHOLD-th entry once
    AGC_JIT_PASSES of its entries landed at or before the previous one, unless an innermost loop leaves compiled code
    for the interpreter more than once in AGC_JIT_SPACING instructions) and always
    (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything
@@ -29,8 +29,9 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
    turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one without a
    compiled boundary, or a slow path), then enters code again. CALL and RETURN: a call or return that compiled code
    could not make natively (the callee has no code, an array would grow, the call would fail, or the function was not
-   called natively), whose shared frame handler run_compiled runs; TAIL_CALL: every TAIL_CALL, whose frame
-   replacement (replace_frame) run_compiled runs, as the interpreter does; CALL_VALUE: a call of a function value that
+   called natively), whose shared frame handler run_compiled runs; TAIL_CALL: a tail call that compiled code could not
+   make natively (the callee has no code, or the register file would grow), whose frame replacement (replace_frame)
+   run_compiled runs, as the interpreter does; CALL_VALUE: a call of a function value that
    compiled code could not make natively (agc_jit_call_value said no), whose frame push run_compiled runs with the
    interpreter's call_value (agc_jit_call_value_exit), failures included. RETURNED never reaches run_compiled: it is
    the answer of a natively called function's RETURN to its caller's code. YIELD and RAISE come from a builtin that
@@ -61,7 +62,9 @@ typedef struct {
    and it calls a builtin only through agc_jit_call_builtin, which catches the builtin's failure. A CALL of a function
    that has code, and a CALL_VALUE of a function value whose function has code (agc_jit_call_value), push its frame in
    room the task already has and call that code natively (at AGC_JIT_NATIVE_ENTRY), up to AGC_JIT_NATIVE_DEPTH calls
-   deep; its RETURN pops it. */
+   deep; its RETURN pops it. A TAIL_CALL of a function that has code replaces the top frame in place and jumps to that
+   code (at AGC_JIT_TAIL_ENTRY), or to instruction 0 for a call of itself, so the code that runs may belong to another
+   function than the one entered: an exit is about the top frame's function. */
 typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *K, uint32_t pc);
 
 /* On a function that calls compiled code: clang's -fsanitize=function reads a type word before each indirect call
@@ -83,8 +86,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    memory failed), `page` the host's page size, and `batch` the code that waits for a seal (jit.c), all under
    `lock`; `exits[op]` the INTERPRET exits at each opcode that went back to the turn loop, `leaves` the leaf builtins
    that run_compiled called itself, `blocks` the block calls (`map`, `filter`, `times` and the other rows with a native
-   kind) that it started itself and `transitions` the CALL, TAIL_CALL, CALL_VALUE and RETURN exits that it ran, all
-   counted only while the jit trace is on. `native_only[f]` is set when `on` gives a function without a loop code only
+   kind) that it started itself, `transitions` the CALL, TAIL_CALL, CALL_VALUE and RETURN exits that it ran, `tails`
+   the TAIL_CALL exits and `tails_compiled` those whose callee had code (agc_jit_count_call), all counted only while
+   the jit trace is on. `native_only[f]` is set when `on` gives a function without a loop code only
    for native calls and block calls: compiled at a CALL, TAIL_CALL or CALL_VALUE exit from compiled code (the first
    when `calling[f]`, set when f calls, tail-calls or calls a function value, else the AGC_JIT_CALLEE_THRESHOLD-th) or
    at the first block call that compiled code starts with it, and published at a seal, which clears its `skip`.
@@ -118,6 +122,7 @@ typedef struct agc_jit {
   _Atomic uint64_t work;
   uint64_t budget;
   _Atomic bool spent;
+  _Atomic uint64_t tails, tails_compiled;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -166,10 +171,14 @@ void agc_jit_count_leaf(agc_jit *jit);
 void agc_jit_count_block(agc_jit *jit);
 /* Counts a CALL, TAIL_CALL, CALL_VALUE or RETURN exit that run_compiled ran, when the jit trace is on. */
 void agc_jit_count_transition(agc_jit *jit);
+/* Counts the CALL or TAIL_CALL exit (STATUS) of a call of FUNCTION as a transition, and a TAIL_CALL exit in `tails`
+   too, and in `tails_compiled` when FUNCTION had code (so the register file had to grow), when the jit trace is on. */
+void agc_jit_count_call(agc_jit *jit, uint32_t status, uint32_t function);
 /* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
    turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, `block count=N`, the
    block calls started there, `transition count=N`, the calls, tail calls and returns that left compiled code (a
-   native call or return does not), and `turn count=N`, the turns that ran the jit copy of the turn loop. */
+   native call, tail call or return does not), `transition op=tail-call count=N compiled=M`, the tail calls among them
+   and those of a callee that had code, and `turn count=N`, the turns that ran the jit copy of the turn loop. */
 void agc_jit_report(agc_jit *jit);
 /* The CALL_BUILTIN of a row marked direct (agc_builtin.direct) in compiled code, as the interpreter's generic tail
    runs it: ARGS is the window R + a, WHERE the instruction's span in the high half and its pc + 1 in the low half,
@@ -227,9 +236,11 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #define AGC_JIT_HOST 0
 #endif
 
-/* The offset of the native entry in a function's code (after the 2-byte jump of the entry from C), and the most
-   native calls nested on the C stack: about 80 bytes each. A deeper CALL exits, which unwinds them all. */
-#define AGC_JIT_NATIVE_ENTRY 2
+/* The offsets of the tail entry (after the 2-byte jump of the entry from C) and of the native entry (after the 5-byte
+   jump of the tail entry) in a function's code, and the most native calls nested on the C stack: about 80 bytes each.
+   A deeper CALL exits, which unwinds them all; a native TAIL_CALL nests nothing. */
+#define AGC_JIT_TAIL_ENTRY 2
+#define AGC_JIT_NATIVE_ENTRY 7
 #define AGC_JIT_NATIVE_DEPTH 256
 
 /* The most code memory a run takes, counted in bytes, and so the most one function takes; past it, functions stay
@@ -310,6 +321,10 @@ void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
 void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span);
 /* CALL with SLOT the address of the callee's entry in the code table and REGISTERS the callee's register count. */
 void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers);
+/* TAIL_CALL with SLOT the address of the callee's entry in the code table, PARAMS and REGISTERS the callee's counts,
+   and SELF set when the callee is the function itself: a jump to instruction 0. */
+void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
+                        uint32_t registers);
 /* CALL_VALUE: a native call when agc_jit_call_value pushed the frame, else the CALL_VALUE exit. */
 void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc);
