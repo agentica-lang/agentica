@@ -54,7 +54,7 @@ chain duplex_os.h
 chain system_os.h
 chain net_os.h
 chain ffi_os.h
-# The JIT is core (docs/future/22-jit.md §22): jit.h is its one header, and it includes only core.h.
+# The JIT is core (docs/vm/05-values-execution-builtins.md §6.4): jit.h is its one header, and it includes only core.h.
 chain jit/jit.h ../core.h
 for f in jit/*.c; do chain "$f" jit.h; done
 if found -n "$inc(services|net|tls|digest|zlib_codec|http_parse|http_fields|file_io|process_os|duplex_os|system_os|net_os|ffi_os)\.h" $core; then bad "a core file includes a service or adapter header"; fi

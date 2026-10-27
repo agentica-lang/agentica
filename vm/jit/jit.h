@@ -1,7 +1,7 @@
 /*
- * The JIT's boundary (docs/future/22-jit.md §22): the interpreter compiles a function, enters its code and handles
- * the exit. The rest is private to vm/jit/, the C tests and the libFuzzer entry point: the emitter of each
- * architecture and the code memory. Core layer.
+ * The JIT's boundary (docs/vm/05-values-execution-builtins.md §6.4): the interpreter compiles a function, enters its
+ * code and handles the exit. The rest is private to vm/jit/, the C tests and the libFuzzer entry point: the emitter of
+ * each architecture and the code memory. Core layer.
  */
 #ifndef AGC_JIT_H
 #define AGC_JIT_H

@@ -344,7 +344,7 @@ Items in the plan to re-check with this rule before they start:
     add on the allocation path while nobody asks (§28.12): it must pass the
     overhead check or change rule 4 of §28.2 first.
 
-- **Item:** JIT (7m, §22)
+- **Item:** JIT (7m, §6.4)
   - **Question:** Required by the roadmap; it must keep the same five rules and
     add no runtime of its own.
 
