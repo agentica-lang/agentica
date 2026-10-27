@@ -146,6 +146,7 @@ Native.get_string
 Native.get_uint16
 Native.get_uint32
 Native.get_uint8
+Native.load
 Native.memory_pointer
 Native.null
 Native.null?

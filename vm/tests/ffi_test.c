@@ -1,7 +1,7 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one, calls and frees
    through C function pointers, structs by value, the memory reads, owned buffers with typed reads and writes (bounds, NULL, freed,
-   no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
+   no_files), Native.load, and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -346,8 +346,27 @@ static void test_reads(void) {
 /* Calls the row NAME/ARITY with ARGS. */
 static agc_value call_row(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)(&vm, args, 0); }
 
+/* Native.load: a library that opens is ok, and a name the loader cannot take is an error the program gets, an empty
+   one or one with a NUL (which only hand-made bytecode holds) included; under no_files it opens nothing. */
+static void test_load(void) {
+  agc_value name = text(LIBM);
+  assert(agc_as_result(&vm, call_row("Native.load", 1, &name))->ok == AGC_FFI_BUILT);
+  const char *bad[] = {"", "libnot_there_at_all.so"};
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
+    name = text(bad[k]);
+    assert(!agc_as_result(&vm, call_row("Native.load", 1, &name))->ok);
+  }
+  name = agc_string_value(agc_make_string("a\0b", 3, 3));
+  assert(!agc_as_result(&vm, call_row("Native.load", 1, &name))->ok);
+  vm.rt->no_files = true;
+  name = text(LIBM);
+  read_fails("Native.load", 1, &name, "RUNTIME-NATIVE-DENIED");
+  vm.rt->no_files = false;
+}
+
 /* An owned buffer: typed writes and reads at byte offsets, unaligned too, the bounds of its size and of a view, a
-   free that runs once and leaves every later use RUNTIME-NATIVE-CLOSED, of its views too; the same reads at a C pointer, which has no size but refuses
+   free that runs once and leaves every later use RUNTIME-NATIVE-CLOSED, of its views too; the same reads at a C
+   pointer, which has no size but refuses
    NULL and a negative offset; and nothing at all under no_files. */
 static void test_buffers(void) {
   agc_value size = agc_int(16);
@@ -587,6 +606,7 @@ int main(void) {
   test_compute_outs();
   test_reads();
   test_buffers();
+  test_load();
   test_pointers();
   test_structs();
   test_refusal();

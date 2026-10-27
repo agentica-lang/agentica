@@ -2305,13 +2305,19 @@ WAIT_ONLY = """def main() -> Void
   puts(Native.wait_writable(1, 1_000))
 end
 """
+LOAD_ONLY = """def main() -> Void
+  puts("started")
+  puts(Native.load("%s").ok?)
+end
+""" % LIBM
 
 
-# A wait needs a descriptor of native code and changes it (non-blocking mode), so --deny-native refuses a program
-# that waits, with no extern block, at load; other systems refuse it at load too.
+# A wait needs a descriptor of native code and changes it (non-blocking mode), and Native.load opens a library, so
+# --deny-native refuses a program that does either, with no extern block, at load; other systems refuse it at load too.
 @pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
-def test_a_program_that_waits_is_native_code(tmp_path, flag):
-    result = agentica("--json", flag, program(tmp_path, WAIT_ONLY))
+@pytest.mark.parametrize("text", [WAIT_ONLY, LOAD_ONLY], ids=["wait", "load"])
+def test_a_program_that_waits_or_loads_is_native_code(tmp_path, flag, text):
+    result = agentica("--json", flag, program(tmp_path, text))
     assert result.stdout == ""
     assert diagnostic(result, 2) == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED", (1, 1))
 
@@ -2371,6 +2377,38 @@ def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_outp
     result = agentica("--json", program(tmp_path, text % literal(library)))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
+
+
+LOAD_PEER = """extern "peer"
+  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32
+end
+
+def main() -> Void
+  case Native.load("libnot_there_at_all.so")
+    ok(_) -> puts("loaded")
+    error(_) -> puts("missing")
+  end
+  case Native.load("peer")
+    ok(_) -> puts(peer_add(40, 2))
+    error(message) -> puts(message)
+  end
+end
+"""
+
+
+# Native.load opens a library before its first call: a missing one is an error that the program handles, and a present
+# one stays open for the extern functions. Its literal means what extern "peer" means: the project's [native.peer]
+# names the file of this system.
+@NATIVE_CALLS
+def test_native_load_opens_a_library_or_gives_an_error(tmp_path, peer):
+    here = "windows" if WINDOWS else "macos" if MACOS else "linux"
+    folder = tmp_path / "native" / here
+    folder.mkdir(parents=True)
+    (folder / peer.name).write_bytes(peer.read_bytes())
+    manifest = 'name = "app"\n\n[native.peer]\n%s = { file = "native/%s/%s" }\n' % (here, here, peer.name)
+    (tmp_path / "agentica.toml").write_text(manifest, encoding="utf-8")
+    result = agentica(program(tmp_path, LOAD_PEER, "main.agc"), cwd=tmp_path)
+    assert (result.code, result.stdout, result.stderr) == (0, "missing\n42\n", "")
 
 
 EXTERN_FIRST = """def main() -> Void
