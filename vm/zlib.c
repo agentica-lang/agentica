@@ -56,14 +56,13 @@ static agc_value zlib_error(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
 }
 
-/* The bytes of a List[Int] argument of at most LIMIT items, or NULL with
-   *failed set to the call's error. A non-Int item fails through agc_as_int,
-   as in the other byte-list builtins. */
-static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, size_t limit, const char *too_big,
-                                 agc_value *failed) {
+/* The bytes of a List[Int] argument of at most ZLIB_ONE_SHOT_MAX items, or
+   NULL with *failed set to the call's error. A non-Int item fails through
+   agc_as_int, as in the other byte-list builtins. */
+static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, agc_value *failed) {
   const agc_list *values = agc_as_list(vm, list);
-  if (agc_list_len(values) > limit) {
-    *failed = zlib_error(too_big);
+  if (agc_list_len(values) > ZLIB_ONE_SHOT_MAX) {
+    *failed = zlib_error("zlib: input exceeds 1048576 bytes");
     return NULL;
   }
   const uint8_t *bytes = agc_byte_list(vm, values, agc_list_len(values));
@@ -179,7 +178,7 @@ static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int 
    1 MiB input and output bounds keeping each call's work bounded. */
 static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool compress) {
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], ZLIB_ONE_SHOT_MAX, "zlib: input exceeds 1048576 bytes", &failed);
+  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
   if (!input) return failed;
   size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t level = 0;
@@ -225,7 +224,7 @@ static agc_value builtin_gunzip(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], ZLIB_ONE_SHOT_MAX, "zlib: input exceeds 1048576 bytes", &failed);
+  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
   if (!input) return failed;
   size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t seed = agc_as_int(vm, args[1]);
@@ -350,32 +349,12 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   return AGC_ZSTEP_INPUT;
 }
 
-/* The rows the stage0 of the base branch names, kept so the new VM still loads it for `make stage0-check`. No
-   catalog row lowers to them, so a program never reaches one. Follow-up: remove these rows (and removed_builtin) once
-   the base branch's stage0 no longer names them (the first PR after this one merges). */
-static agc_value removed_builtin(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  agc_fail(vm, "RUNTIME-INTERNAL", "a removed Zlib builtin was called", span);
-}
-
 const agc_builtin agc_zlib_builtins[] = {
   {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_file", 5, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate_file", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gzip_file", 5, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gunzip_file", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_init", 4, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate_init", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_next", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate_next", 3, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.deflate_finish", 2, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate_finish", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.encoder_close", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.decoder_close", 1, removed_builtin, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];
