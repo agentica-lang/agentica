@@ -69,6 +69,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `--jit on` and stay in compiled code.
 - The experimental x86-64 JIT reads maps by key (`counts[key]`) and builds list
   literals in compiled code, so loops that do compile under `--jit on`.
+- The experimental x86-64 JIT makes blocks and starts `map`, `filter`, `reduce`
+  and the other block calls from compiled code, and runs the blocks compiled, so
+  loops that use them compile under `--jit on`.
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on
