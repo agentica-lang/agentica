@@ -83,9 +83,14 @@ the native calls are gone. A call that cannot be native (no code yet, an array
 to grow, the depth limit, the native depth) and a `RETURN` of a function not
 called natively take the `CALL` and `RETURN` exits: the interpreter runs the
 shared frame transition and goes on in the code of the new top frame when it
-has some. Other unsupported instructions (including builtins and allocations)
-leave the code for the interpreter. A leaf builtin is called between two runs
-of compiled code, without the interpreter's loop.
+has some. A builtin whose row is marked `direct` (the String, List, Map and Set
+operations that only return a value: they may allocate, do work that grows
+with their arguments, charge turn cost and fail, but never park, start a block
+or a native frame, or move the frames) is called by compiled code itself,
+through `agc_jit_call_builtin` (below). Other unsupported instructions
+(including the other builtins and allocations) leave the code for the
+interpreter. A leaf builtin is called between two runs of compiled code,
+without the interpreter's loop.
 
 - Decided once: the JIT looks at every function when the run starts. A
   function that `on` will not compile is never counted or walked again, and
@@ -108,8 +113,8 @@ of compiled code, without the interpreter's loop.
   around it saves (`print-lines`, `small-values` and `strings` of
   `benchmarks/`, whose loops leave every 4 to 9 instructions, ran 3 to 8%
   slower compiled). A function stays out when one of its innermost loops has
-  more than one instruction that leaves (a leaf builtin, a `RETURN` and a
-  `CALL` of a function that may get code do not count) in 16
+  more than one instruction that leaves (a leaf or direct builtin, a `RETURN`
+  and a `CALL` of a function that may get code do not count) in 16
   (`AGC_JIT_SPACING`).
 - Why no JIT when nothing compiles: the jit copy of the turn loop has the same
   handlers as the plain copy, but its machine code sits at other addresses,
@@ -137,14 +142,20 @@ of compiled code, without the interpreter's loop.
   tag, a field index past the count), which the interpreter runs; the turn
   loop enters the code again when it reaches the next instruction, or at its
   next reload. A `CALL` or `RETURN` that is not native takes its own exit
-  (above).
+  (above). A direct builtin leaves only when its call ended the turn (`YIELD`,
+  the result written) or failed (`RAISE`).
 - Code: one pass, fixed code per instruction, the VM in rbx, the registers in
   r12, the constants in r13 and the native call depth in r14, the Int fast paths
   inline with their overflow checks; `EQ` and `NE` call `agc_op_eq` and
   `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
   `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `NOT`,
   `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
-  inline after a tag check.
+  inline after a tag check; `CALL_BUILTIN` of a direct row calls
+  `agc_jit_call_builtin`, which runs the interpreter's generic tail of the
+  call: it stores the pc after the call in the top frame (for the stack trace
+  and the error's span), charges an `AGC_COST_SIZE` row's cost, applies the
+  turn cost and writes the result. The registers stay in the frame's register
+  file, so the collector sees them during the call.
 - Code memory: at most 64 MiB per run (`AGC_JIT_CODE_CAP`, in bytes),
   reserved in chunks as it fills (1 MiB, then twice the last one, so the
   address space follows the code under an address space limit; after a
@@ -175,18 +186,26 @@ of compiled code, without the interpreter's loop.
   only inside turns, string joins and text forms in compiled code, fields,
   lists, enums, Results and Floats read in compiled code with the exit counts
   of the trace, native calls with a `--max-steps` sweep, an
-  overflow and the depth limit inside natively called functions),
+  overflow and the depth limit inside natively called functions, compiled
+  loops that call direct builtins with no `call-builtin` exit, with a
+  `--max-steps` sweep and turns that end inside those calls, and their
+  failures, also inside a natively called function),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
   `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, functions
   packed in one reservation up to its cap, a batch sealed in one page, the
   work of settling `on` bounded by the program's size, a compile race,
   every opcode compiles, the results and statuses of the helper calls and inline
-  reads, a native call's frame push and pop and its exits, also under
+  reads, a native call's frame push and pop and its exits, a direct builtin's
+  result, turn end and caught failure, also under
   `make vm-tsan`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
-  each call; a function that `on` may compile but that never gets hot still
+  each call; a leaf builtin still leaves the code (and unwinds the native
+  calls), and a builtin that is neither leaf nor direct (output, tasks,
+  channels, files, the block calls such as `map`) still goes back to the turn
+  loop; a direct call pays a `sigsetjmp` (`setjmp` on Windows) for its catch;
+  a function that `on` may compile but that never gets hot still
   runs the jit copy of the turn loop (and its layout effect) in the turns
   that start with it near the top of the stack and in the sampled turns; a
   function that runs only inside turns compiles on average about 16 times as
@@ -212,7 +231,13 @@ the caller runs the `STEP`s, and after `EQ`, `NE`, `SAME`, `CONCAT` and
 `TO_TEXT`, which add the bytes of a String compare, a join, or a printed
 form to the task's turn cost, it applies the cost where the interpreter
 does. A helper never parks, yields or pushes a frame. Builtins
-fail with `agc_fail`, so compiled code does not call them directly. The C test
+fail with `agc_fail`, so compiled code calls a builtin only through
+`agc_jit_call_builtin`: it sets `vm->jit_catch` around the call, so that
+`agc_fail` (after it recorded the failure and the stack) and `agc_exit` jump
+back there instead of across compiled code, and it returns `RAISE`;
+`run_compiled` then jumps on to the turn's target, as the interpreter's
+failure would. The call either completes or raises, so no side effect runs
+twice. The C test
 `vm/tests/op_helpers_test.c` checks the statuses; the goldens check the
 failures that `agc_op_fail` makes of them.
 

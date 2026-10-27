@@ -287,8 +287,8 @@ static agc_value builtin_steps(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_profile_builtins[] = {
-  {"Profile.measure", 2, builtin_measure, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Profile.steps", 0, builtin_steps, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Profile.measure", 2, builtin_measure, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Profile.steps", 0, builtin_steps, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_profile_builtin_count = sizeof agc_profile_builtins / sizeof agc_profile_builtins[0];

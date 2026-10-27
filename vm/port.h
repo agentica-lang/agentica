@@ -487,6 +487,21 @@ struct agc_task {
   uint64_t held_walk;
 };
 
+/* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c), so that
+   no longjmp crosses compiled code, which has no unwind info for Windows x64. Only the fuzz build's hard allocation
+   limit (longjmp(*on_limit) in vm/value.c, Linux) may cross it, leaving jit_catch set, and agc_fuzz_one then discards
+   the vm. POSIX takes sigsetjmp without the signal mask, as macOS's setjmp saves the mask with a system call at each
+   call; Windows has setjmp only. */
+#ifdef _WIN32
+typedef jmp_buf agc_catch_buf;
+#define AGC_CATCH(buf) setjmp(buf)
+#define AGC_THROW(buf) longjmp((buf), 1)
+#else
+typedef sigjmp_buf agc_catch_buf;
+#define AGC_CATCH(buf) sigsetjmp((buf), 0)
+#define AGC_THROW(buf) siglongjmp((buf), 1)
+#endif
+
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
  * function of the program and one more, the last, for the steps that a counting loop (Range#each, times, upto, downto)
  * or a stepper builtin takes for each pass; the builtin arrays have one slot for each builtin the program lists.
@@ -553,6 +568,8 @@ struct agc_vm {
   /* Read at turn boundaries only, so it sits after every field the loop reads: a change of its size moves none of them
      (one such move cost logger-disabled 14%, #629). */
   agc_timers timers;
+  /* Set only while compiled code runs a builtin (agc_jit_call_builtin): a failure or an exit jumps there first. */
+  agc_catch_buf *jit_catch;
   jmp_buf fail, turn;
 };
 

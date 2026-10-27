@@ -332,6 +332,14 @@ typedef struct {
      (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds abort when a leaf call breaks the
      rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. */
   bool leaf;
+  /* A call that compiled code makes itself (agc_jit_call_builtin, vm/jit/jit.c), without leaving for the interpreter:
+     the builtin returns a value or fails with agc_fail, and never parks (nor asks to retry), never starts a stepper,
+     a block or a native frame, and never pushes or pops a frame. Unlike a leaf it may allocate a lot, do work that
+     grows with its arguments, charge turn cost (AGC_COST_SIZE or agc_charge) and fail. A direct row is not a leaf,
+     never shared and has AGC_NATIVE_NONE (vm/tests/sync_test.c checks the tables), and the builds of AGC_LEAF_CHECK
+     abort when a direct call parks or starts a stepper. When unsure, leave a row unmarked: it then takes the
+     INTERPRET exit. */
+  bool direct;
 } agc_builtin;
 
 /* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not

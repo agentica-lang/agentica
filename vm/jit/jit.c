@@ -87,12 +87,14 @@ static bool has_code(uint32_t op) {
 
 /* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a CALL of a function of the
    program (settle counts those by their callee). A leaf builtin is called by run_compiled itself, which LEAF says to
-   count or not; a RETURN runs once per call. */
+   count or not; a direct builtin by the code itself, which leaves only when the call ends the turn or fails; a RETURN
+   runs once per call. */
 static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN) return false;
   if (in.op == AGC_OP_CALL) return bx >= p->function_count;
-  return in.op != AGC_OP_CALL_BUILTIN || !p->builtins[bx]->leaf || leaf;
+  if (in.op != AGC_OP_CALL_BUILTIN) return true;
+  return !p->builtins[bx]->direct && (!p->builtins[bx]->leaf || leaf);
 }
 
 /* Why `on` keeps a function out:
@@ -250,6 +252,13 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
           agc_emit_exit(e, AGC_JIT_EXIT_CALL, pc);
         break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
+      case AGC_OP_CALL_BUILTIN:
+        /* As for CALL, the C tests' hand-made code may have no builtin table. */
+        if (bx < jit->program->builtin_count && jit->program->builtins[bx]->direct)
+          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)jit->program->builtins[bx], f->spans[pc]);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
+        break;
       default: agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc); break;
     }
   }
@@ -587,6 +596,52 @@ void agc_jit_report(agc_jit *jit) {
   if (transitions) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "transition count=%" PRIu64, transitions);
   uint64_t turns = atomic_load_explicit(&jit->turns, memory_order_relaxed);
   if (turns) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "turn count=%" PRIu64, turns);
+}
+
+#if AGC_LEAF_CHECK
+/* Names the direct builtin and what it did that a direct call must not (a row marked direct by mistake). */
+static _Noreturn __attribute__((noinline, cold)) void direct_broken(const agc_builtin *b, const char *what) {
+  char detail[160];
+  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked direct but %s", b->name, b->arity, what);
+  agc_internal_abort(detail);
+}
+#endif
+
+/* B's call into *RESULT with its failure or exit caught: false when agc_fail or agc_exit jumped back here. Apart, so
+   no local of the caller lives across the jump. */
+static __attribute__((noinline)) bool caught(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span,
+                                             agc_value *result) {
+  agc_catch_buf here;
+  vm->jit_catch = &here;
+  if (AGC_CATCH(here)) return false;
+  *result = b->fn(vm, args, span);
+  vm->jit_catch = NULL;
+  return true;
+}
+
+uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+  agc_task *t = vm->task;
+  uint32_t span = (uint32_t)(where >> 32);
+  t->frames[t->frame_count - 1].pc = (uint32_t)where;
+  uint64_t units = 0;
+  if (b->cost == AGC_COST_SIZE)
+    for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
+#if AGC_LEAF_CHECK
+  uint32_t frames = t->frame_count, depth = vm->sync_depth;
+  bool retry = t->retry;
+#endif
+  agc_value result;
+  if (!caught(vm, b, args, span, &result)) return AGC_JIT_EXIT_RAISE;
+#if AGC_LEAF_CHECK
+  if (t->parking || t->retry != retry) direct_broken(b, "parked");
+  if (t->stepper) direct_broken(b, "started a stepper");
+  if (t->frame_count != frames) direct_broken(b, "moved the frames");
+  if (vm->sync_depth != depth) direct_broken(b, "left rt->sync taken");
+#endif
+  args[0] = result;
+  if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
+  if (t->turn_cost) agc_turn_charge(vm);
+  return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {

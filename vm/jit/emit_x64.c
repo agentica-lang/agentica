@@ -354,6 +354,14 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   store_value(e, in.a, AGC_T_INT);
 }
 
+/* Calls FN, whose arguments are in place, and leaves with its status at PC when it is not 0. */
+static void call_status(agc_emitter *e, uint64_t fn, uint32_t pc) {
+  move_imm64(e, RAX, fn);
+  BYTES(e, 0xFF, 0xD0); /* call rax */
+  BYTES(e, 0x85, 0xC0); /* test eax, eax */
+  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+}
+
 /* HELPER(vm, &R[a], &R[b]) or, with C, HELPER(vm, &R[a], &R[b], &R[c]): an opcode helper writes R[a] only on
    success, and a status other than OK leaves with the pc, for the interpreter to raise. */
 static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, uint32_t pc) {
@@ -361,10 +369,7 @@ static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, u
   lea(e, ARG1, REGS, TAG(in.a));
   lea(e, ARG2, REGS, TAG(in.b));
   if (c) lea(e, ARG3, REGS, TAG(in.c));
-  move_imm64(e, RAX, helper);
-  BYTES(e, 0xFF, 0xD0); /* call rax */
-  BYTES(e, 0x85, 0xC0); /* test eax, eax */
-  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+  call_status(e, helper, pc);
 }
 
 /* After EQ, NE, SAME, CONCAT and TO_TEXT, as the interpreter does after each: a turn cost (a String compare charges
@@ -501,6 +506,16 @@ void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uin
 }
 
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1, status, pc); }
+
+/* agc_jit_call_builtin(vm, &R[a], builtin, span << 32 | pc + 1): it runs the builtin and answers 0 to go on, or the
+   exit (YIELD, RAISE) to return at PC, as an opcode helper's status. */
+void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
+  move_reg(e, true, ARG0, VM);
+  lea(e, ARG1, REGS, TAG(in.a));
+  move_imm64(e, ARG2, builtin);
+  move_imm64(e, ARG3, ((uint64_t)span << 32) | (pc + 1));
+  call_status(e, (uint64_t)(uintptr_t)agc_jit_call_builtin, pc);
+}
 
 /* CALL of function bx with the window at R[a], as a native call when it can be one: the callee has code (its slot in
    the code table at SLOT, read when the call runs), the native depth is below AGC_JIT_NATIVE_DEPTH, and the task has

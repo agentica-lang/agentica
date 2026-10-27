@@ -652,13 +652,13 @@ static agc_value builtin_parent_send(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 const agc_builtin agc_duplex_builtins[] = {
-  {"Process.parent_read_line", 1, builtin_parent_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Process.parent_send", 2, builtin_parent_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Process.parent_read_line", 1, builtin_parent_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.parent_send", 2, builtin_parent_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
 const size_t agc_duplex_builtin_count = sizeof agc_duplex_builtins / sizeof agc_duplex_builtins[0];
 #else
-const agc_builtin agc_duplex_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false}};
+const agc_builtin agc_duplex_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_duplex_builtin_count = 0;
 
