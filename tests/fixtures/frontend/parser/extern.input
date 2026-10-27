@@ -44,4 +44,7 @@ extern "/opt/lib/my peer.so"
   end
   def box_make(n: C.Int64) -> Box
   compute def box_area(fn: C.Function, b: Box, out area: C.Double) -> Box
+  ## Freed by a function that takes the address of the handle.
+  resource Handle, free_ref: handle_close
+  def handle_open(out handle: Handle) -> C.Int32
 end

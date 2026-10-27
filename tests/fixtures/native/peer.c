@@ -27,7 +27,7 @@
 
 static char shout[64];
 static int32_t bumps;
-static atomic_int flag, returned, naps, stalled;
+static atomic_int flag, returned, waiting, naps, stalled;
 
 /* Sleeps MS milliseconds. */
 static void sleep_ms(int32_t ms) {
@@ -107,8 +107,9 @@ double peer_vmix_out(int32_t *count, const char *kinds, ...) {
 }
 
 /* For compute defs, which run on a pool thread. peer_wait_flag returns 1 once peer_set_flag (a fast call from another
-   task) has run, or 0 after LIMIT_MS milliseconds; each return is counted. */
+   task) has run, or 0 after LIMIT_MS milliseconds; each start and each return is counted. */
 int32_t peer_wait_flag(int32_t limit_ms) {
+  atomic_fetch_add(&waiting, 1);
   int32_t found = 0;
   for (int32_t k = 0; k < limit_ms && !found; k++) {
     found = atomic_load(&flag);
@@ -120,6 +121,7 @@ int32_t peer_wait_flag(int32_t limit_ms) {
 
 void peer_set_flag(void) { atomic_store(&flag, 1); }
 int32_t peer_returned(void) { return atomic_load(&returned); }
+int32_t peer_waiting(void) { return atomic_load(&waiting); }
 
 /* The text is in a buffer of the calling thread, which the next call on that thread overwrites. */
 const char *peer_word(int32_t n) {
@@ -409,7 +411,7 @@ void peer_res_free(void *p) {
 /* The same free under a name that starts with a capital letter, as in libpq (PQfinish) and OpenSSL (SSL_free). */
 void PeerFree(void *p) { peer_res_free(p); }
 
-/* For free_address: a free that takes the address of the handle, as duckdb_close(duckdb_database *) does: it frees
+/* For free_ref: a free that takes the address of the handle, as duckdb_close(duckdb_database *) does: it frees
    the resource and writes NULL there. A call with a NULL handle, a second free of the same handle, is counted apart. */
 static atomic_int res_closes, res_null_closes;
 

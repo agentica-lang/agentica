@@ -111,11 +111,13 @@ end
   allowed: `free: PQfinish`; only `C.Function` is a type). On Windows a
   function of a dependency (`free` of the C runtime) is `RUNTIME-NATIVE-LOAD`,
   as `GetProcAddress` searches that DLL only: declare it from the library that
-  exports it. `resource Db, free_address: duckdb_close` is freed by `void
-  duckdb_close(void **)`: each free passes the address of the pointer (C may
-  write NULL there); a second free word is `PARSE-EXTERN-FREE`. Declare it above
-  the `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
-  `error("db_open returned NULL")`); the resource is owned by the calling task.
+  exports it. Declare it above the `def`s that use it.
+  `resource Db, free_ref: duckdb_close` is freed by
+  `void duckdb_close(void **)`: each free passes the address of the pointer (C
+  may write NULL there); a second free word is `PARSE-EXTERN-FREE`, and
+  `free_ref: C.Function` is `PARSE-EXTERN-FUNCTION`. `def db_open(...) -> Db`
+  gives `Result[Db]` (NULL is `error("db_open returned NULL")`); the resource
+  is owned by the calling task.
   `Native.close(db)` frees once (a second close does nothing); a call with a
   closed resource is `RUNTIME-NATIVE-CLOSED`. The owner's end frees
   what it did not close; `Task.spawn_owning(&f, db)` hands it on; `main`'s

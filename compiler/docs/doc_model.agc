@@ -301,8 +301,8 @@ end
 
 def resource_item(node: Ast.ResourceDecl, doc: Ast.Optional[String], span: Source.Span, exported: Bool) -> Item
   word = "free"
-  if node.address
-    word = "free_address"
+  if node.by_ref
+    word = "free_ref"
   end
 
   return Item(

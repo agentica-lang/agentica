@@ -24,9 +24,9 @@
 /* The free word of a resource kind declared `free: C.Function`: no C name holds a dot. */
 #define BY_POINTER "C.Function"
 #define BY_POINTER_LEN (sizeof BY_POINTER - 1)
-/* The mark in front of the free word of a resource kind declared `free_address:`: its free function takes the address
+/* The mark in front of the free word of a resource kind declared `free_ref:`: its free function takes the address
    of the pointer (void free(void **)). No C name starts with it. */
-#define BY_ADDRESS '&'
+#define BY_REF '&'
 /* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
 #define COMPUTE_PREFIX "compute "
 #define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
@@ -52,17 +52,17 @@
 
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
    declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. A
-   kind declared `free_address:` (by_address) gives its free function the address of the pointer instead. */
+   kind declared `free_ref:` (by_ref) gives its free function the address of the pointer instead. */
 typedef struct {
   agc_ffi_call *free;
   char *name;
-  bool by_pointer, by_address;
+  bool by_pointer, by_ref;
 } made_kind;
 
 /* A prepared signature. An out parameter (out[k]) is not an argument of Native.call: C gets a pointer to a zeroed slot
    of type params[k] and writes its value there. For the others, arg[k] is the index of the argument in the List of
    Native.call (`inputs` of them). For a function that returns a resource, `free` is the prepared call of the resource's
-   free function (`free_by_address` when it takes the pointer's address), `resource` the resource's name and `symbol`
+   free function (`free_by_ref` when it takes the pointer's address), `resource` the resource's name and `symbol`
    the C name of the function, which the error of a NULL result names; all three are NULL otherwise. `made` holds the
    kind of each out resource (NULL when the call has none). A function with out parameters (`outs` > 0) gives a List:
    the C result, unless Void, then each out value. `params` and the rest index the C parameters only. A call through a C
@@ -87,7 +87,7 @@ typedef struct {
   agc_c_struct *result_struct;
   size_t struct_bytes;
   uint32_t count, inputs, outs, holds;
-  bool compute, by_pointer, free_by_pointer, free_by_address, layout;
+  bool compute, by_pointer, free_by_pointer, free_by_ref, layout;
   int32_t free_input;
   agc_ffi_call *free;
   char *resource, *symbol;
@@ -119,7 +119,7 @@ typedef struct {
 } compute_call;
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
-   out resource's, as named by the signature (without the & of a free_address: kind, which sets by_address). */
+   out resource's, as named by the signature (without the & of a free_ref: kind, which sets by_ref). */
 typedef struct {
   const char *names[AGC_FFI_MAX_PARAMS + 1];
   size_t lens[AGC_FFI_MAX_PARAMS + 1];
@@ -127,7 +127,7 @@ typedef struct {
   size_t kind_lens[AGC_FFI_MAX_PARAMS + 1];
   agc_ffi_call *calls[AGC_FFI_MAX_PARAMS + 1];
   bool by_pointer[AGC_FFI_MAX_PARAMS + 1];
-  bool by_address[AGC_FFI_MAX_PARAMS + 1];
+  bool by_ref[AGC_FFI_MAX_PARAMS + 1];
   uint32_t count;
 } free_list;
 
@@ -474,7 +474,7 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
    are never an out parameter, a C.Bool, a C.Float or an integer narrower than an int, which C would promote. Each
    resource the call makes adds two words after the C name, the C name of its free function and the resource's name, an
    identifier: the result's first (code r), then each out resource's (code R), in order. A free word that starts with &
-   (`free_address:`) names a function that takes the address of the pointer, void free(void **). A call through a C
+   (`free_ref:`) names a function that takes the address of the pointer, void free(void **). A call through a C
    function pointer has the code c first: the argument is the address to call, and SYMBOL (the def's name) is only
    shown. The code e, only as the last code (a "." may follow), is the argument that holds the free function of each
    resource the call makes whose free word is C.Function; the call has one exactly when such a resource needs it. A
@@ -560,14 +560,14 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
         !next_word(&at, &left, &frees.kinds[k], &frees.kind_lens[k]) ||
         !identifier(frees.kinds[k], frees.kind_lens[k]))
       bad_signature(vm, span);
-    frees.by_address[k] = frees.lens[k] > 1 && frees.names[k][0] == BY_ADDRESS;
-    if (frees.by_address[k]) {
+    frees.by_ref[k] = frees.names[k][0] == BY_REF;
+    if (frees.by_ref[k]) {
       frees.names[k]++;
       frees.lens[k]--;
     }
     frees.by_pointer[k] = frees.lens[k] == BY_POINTER_LEN && memcmp(frees.names[k], BY_POINTER, BY_POINTER_LEN) == 0;
-    /* A free_address: kind is always a C name. */
-    if (frees.by_address[k] && frees.by_pointer[k]) bad_signature(vm, span);
+    /* A free_ref: kind is always a C name: a lone & or &C.Function is no signature of the front end. */
+    if (frees.by_ref[k] && (frees.lens[k] == 0 || frees.by_pointer[k])) bad_signature(vm, span);
     any_by_pointer = any_by_pointer || frees.by_pointer[k];
     frees.calls[k] = NULL;
   }
@@ -645,7 +645,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
         if (!e->made) agc_out_of_memory();
       }
       e->made[k] = (made_kind){frees.calls[kind], text_copy(frees.kinds[kind], frees.kind_lens[kind]),
-                               frees.by_pointer[kind], frees.by_address[kind]};
+                               frees.by_pointer[kind], frees.by_ref[kind]};
       kind++;
     }
   }
@@ -653,7 +653,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   if (made) {
     e->free = frees.calls[0];
     e->free_by_pointer = frees.by_pointer[0];
-    e->free_by_address = frees.by_address[0];
+    e->free_by_ref = frees.by_ref[0];
     e->resource = text_copy(frees.kinds[0], frees.kind_lens[0]);
     e->symbol = symbol_text;
   } else {
@@ -731,11 +731,10 @@ static ffi_entry *find_entry(agc_vm *vm, const agc_string *text, bool layout, ui
 }
 
 /* Runs FREE_CALL on the pointer in SLOT unless it is NULL: the function at AT, or the prepared one when AT is NULL. A
-   void free(void *) gets the pointer; a void free(void **) (BY_ADDRESS, free_address:) gets SLOT, where C may write
-   NULL. */
-static void free_pointer(agc_ffi_call *free_call, void *at, bool by_address, void **slot) {
+   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. */
+static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (!*slot) return;
-  agc_c_value arg = {.p = by_address ? (void *)slot : *slot}, unused;
+  agc_c_value arg = {.p = by_ref ? (void *)slot : *slot}, unused;
   agc_ffi_invoke(free_call, at, &arg, &unused);
 }
 
@@ -745,7 +744,7 @@ static void call_free(agc_c_resource *res) {
   if (res->buffer) {
     free(res->pointer);
   } else {
-    free_pointer(res->free, res->free_at, res->by_address, &res->pointer);
+    free_pointer(res->free, res->free_at, res->by_ref, &res->pointer);
   }
 }
 
@@ -782,18 +781,18 @@ static void release_resource(void *native) {
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
-   pointer when BY_ADDRESS) and owned by the calling task
-   (none for a detached compute call, whose result is dropped and so freed at once). A NULL pointer (an out resource
-   that C left NULL) gives a resource that is closed already and was never registered: no close, owner's end or end of
-   the run frees it, and a call that takes it is RUNTIME-NATIVE-CLOSED. */
-static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_address, const char *name,
+   pointer when BY_REF) and owned by the calling task (none for a detached compute call, whose result is dropped and so
+   freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is closed already and was
+   never registered: no close, owner's end or end of the run frees it, and a call that takes it is
+   RUNTIME-NATIVE-CLOSED. */
+static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
                                void *pointer) {
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->parent = NULL;
   res->pointer = pointer;
   res->free = free_call;
   res->free_at = free_at;
-  res->by_address = by_address;
+  res->by_ref = by_ref;
   res->name = name;
   res->size = 0;
   res->jobs = 0;
@@ -820,7 +819,7 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
     return agc_error_value(message);
   }
   return agc_result_value(true, make_resource(vm, e->free, free_address(e->free_by_pointer, free_at),
-                                              e->free_by_address, e->resource, pointer));
+                                              e->free_by_ref, e->resource, pointer));
 }
 
 /* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
@@ -1138,7 +1137,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
-      return make_resource(vm, kind->free, free_address(kind->by_pointer, free_at), kind->by_address, kind->name,
+      return make_resource(vm, kind->free, free_address(kind->by_pointer, free_at), kind->by_ref, kind->name,
                            slot->p);
     }
     case AGC_C_STRING:
@@ -1167,13 +1166,13 @@ static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r
 static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots, void *free_at) {
   if (e->result == AGC_C_RESOURCE) {
     void *pointer = r->p;
-    free_pointer(e->free, free_address(e->free_by_pointer, free_at), e->free_by_address, &pointer);
+    free_pointer(e->free, free_address(e->free_by_pointer, free_at), e->free_by_ref, &pointer);
   }
   for (uint32_t k = 0; k < e->count; k++) {
     if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
     const made_kind *kind = &e->made[k];
     void *pointer = slots[k].p;
-    free_pointer(kind->free, free_address(kind->by_pointer, free_at), kind->by_address, &pointer);
+    free_pointer(kind->free, free_address(kind->by_pointer, free_at), kind->by_ref, &pointer);
   }
 }
 
@@ -1420,7 +1419,7 @@ static agc_value builtin_native_offset(agc_vm *vm, agc_value *args, uint32_t spa
   view->pointer = (uint8_t *)res->pointer + n;
   view->free = NULL;
   view->free_at = NULL;
-  view->by_address = false;
+  view->by_ref = false;
   view->name = BUFFER_NAME;
   view->size = res->size - (size_t)n;
   view->jobs = 0;
@@ -1446,7 +1445,7 @@ static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t size_span) {
   res->pointer = memory;
   res->free = NULL;
   res->free_at = NULL;
-  res->by_address = false;
+  res->by_ref = false;
   res->name = BUFFER_NAME;
   res->size = (size_t)size;
   res->jobs = 0;

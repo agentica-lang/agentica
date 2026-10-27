@@ -10,9 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `resource Name, free_address: c_function` declares an extern resource whose
-  free function takes the address of the handle (`void f(T **)`), such as
-  `duckdb_close`.
+- `resource Name, free_ref: c_function`: a resource freed by `void f(T **)`,
+  such as `duckdb_close`.
 - `Native.from_string(text)` and `text.bytesize`: pass text with its byte length
   to C (NUL bytes included) and keep pointers into it (SQLite's `pzTail`).
 - `[native]` entries of `agentica.toml` may give `system` as an absolute path or

@@ -67,7 +67,7 @@ quotes, where a backslash stays literal, and a `'` in a path doubles to `''`.
 
 The database and the connection are resources. `duckdb_close` and
 `duckdb_disconnect` take the address of the handle, not the handle value, so
-the resources name them with `free_address:`, and the VM passes the address.
+the resources name them with `free_ref:`, and the VM passes the address.
 The helpers close each one with `Native.close` on success and on error alike;
 a cancel or an error that ends the owning task closes what is left, once. The
 result buffer (`Native.size_of(DuckdbResult)`, the `duckdb_result` struct

@@ -7,7 +7,7 @@
 # The extern block stays private in this file; main.agc only calls run_demo.
 # The database and the connection are resources: duckdb_close and
 # duckdb_disconnect take the address of the handle, so the resources name them
-# with free_address:. The helpers close each one on every normal path, and the
+# with free_ref:. The helpers close each one on every normal path, and the
 # end of the owning task (a cancel or an error included) closes what is left.
 # See README.md.
 VERSION_WANT = "v2.0.0"
@@ -46,8 +46,8 @@ end
 # duckdb_query fills: the program only sizes its buffer with it
 # (Native.size_of) and leaves the fields to the duckdb_* accessors.
 extern "duckdb"
-  resource Database, free_address: duckdb_close
-  resource Connection, free_address: duckdb_disconnect
+  resource Database, free_ref: duckdb_close
+  resource Connection, free_ref: duckdb_disconnect
 
   struct DuckdbResult
     deprecated_column_count: C.Int64

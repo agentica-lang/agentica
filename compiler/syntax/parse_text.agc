@@ -147,8 +147,8 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       return lines
     Ast.Decl.Resource(node) ->
       attrs = "#{name_attr(node.name)} free=#{Text.quote(node.free)}"
-      if node.address
-        attrs += " address=true"
+      if node.by_ref
+        attrs += " by_ref=true"
       end
 
       attrs += doc_attr(node.doc)

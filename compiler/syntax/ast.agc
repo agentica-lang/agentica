@@ -140,7 +140,7 @@ end
 ## f, b, p or a nested struct's layout code), then }), and whether it is a `compute def`, which runs on the VM's
 ## compute pool while the task waits.
 ## A function that returns a resource has the resource's name as written and the C name of its free function (or
-## "C.Function"; &NAME for a free_address: resource); both are "" otherwise. outs holds the same for each out resource,
+## "C.Function"; &NAME for a free_ref: resource); both are "" otherwise. outs holds the same for each out resource,
 ## in order. A function with out parameters has none of them in its params: it returns its record
 ## (StructDecl.record_of), with the C result first. with_types is true when the block of the function declares a
 ## resource or a struct, which puts all its functions with the types in the declaration order.
@@ -227,14 +227,14 @@ end
 
 ## A resource of an extern block (`resource Db, free: db_close`): a nominal type for the C pointers that the block's
 ## functions return, and the C name of the function of the same library that frees one, or "C.Function" when each
-## value has its own free function, a C function pointer that the call which makes it takes. address is true for
-## `free_address: db_close`, a free function that takes the address of the pointer (void f(T **)).
+## value has its own free function, a C function pointer that the call which makes it takes. by_ref is true for
+## `free_ref: db_close`, a free function that takes the address of the pointer (void f(T **)).
 export struct ResourceDecl
   id: Int
   name: String
   name_span: Source.Span
   free: String
-  address: Bool
+  by_ref: Bool
   doc: Optional[String]
   span: Source.Span
 end

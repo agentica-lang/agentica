@@ -89,23 +89,24 @@ the C pointers that the block's functions return, freed by the C function
 `c_name` of the same library (section 6d). `c_name` is any C identifier, also
 one that starts with a capital letter (`PQfinish`, `SSL_free`): only the dotted
 `C.Function` after the colon is a type, so a bare name is always a C name,
-whatever types the program declares. `resource Name, free_address: c_name` names
-a C function that takes the address of the pointer instead (`void c_name(T **)`,
-as `duckdb_close`), checked as a `free:` name; a resource has one free word, so
-a second one is `PARSE-EXTERN-FREE` at it, and `free_address: C.Function` is
-`PARSE-EXTERN-FUNCTION`. It is a type for the rest of the language: `export`
-makes it importable, and it takes the place of a type in the declaration order.
-So does every `def` of a block that declares a resource or a
-struct, exported or not: such a block is one declaration among the types, and
-its functions do not count as functions for the order (a block with neither
-keeps the rule of the `def`). A `def` of the block may use it in its signature
-after the line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes
-the resource, and a result of the resource is `Result[Name]` for the checker. A
-`def` of the block whose C name is the free function is `PARSE-EXTERN-FREE` at
-that name; the check is per block, so another block of the same library may
-still declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
-`C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
-keyword only at the start of a member of an extern block.
+whatever types the program declares. `resource Name, free_ref: c_name` names a
+C function that takes a reference to the pointer instead (`void c_name(T **)`,
+as `duckdb_close`; `ref` as in Ruby's `Fiddle::Pointer#ref`), checked as a
+`free:` name. A resource has one free word: a second one is `PARSE-EXTERN-FREE`
+at it, and `free_ref: C.Function` is `PARSE-EXTERN-FUNCTION`. It is a type for
+the rest of the language: `export` makes it importable, and it takes the place
+of a type in the declaration order. So does every `def` of a block that
+declares a resource or a struct, exported or not: such a block is one
+declaration among the types, and its functions do not count as functions for the
+order (a block with neither keeps the rule of the `def`). A `def` of the block
+may use it in its signature after the line that declares it (`PARSE-EXTERN-TYPE`
+before): a parameter takes the resource, and a result of the resource is
+`Result[Name]` for the checker. A `def` of the block whose C name is the free
+function is `PARSE-EXTERN-FREE` at that name; the check is per block, so another
+block of the same library may still declare it. `C.Pointer` is the type of a C
+pointer anywhere in a program; `C.Bytes` is a parameter only, a `List[Int]` for
+the checker. `resource` is a keyword only at the start of a member of an extern
+block.
 
 `out NAME: type` in an extern function is an out parameter: C gets a pointer to
 a slot and writes the value there (section 6d). The caller does not pass it.

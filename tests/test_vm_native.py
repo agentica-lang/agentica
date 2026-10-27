@@ -856,18 +856,26 @@ def test_a_resource_with_a_capital_free_name_is_freed_by_that_function(tmp_path,
     assert (result.code, result.stdout, result.stderr) == (0, "5\n0\n1\n", "")
 
 
-# A free_address: function gets the address of the handle (void f(T **)) and may write NULL there: Native.close,
-# the end of the owning task and the free of an out resource each call it once, and a second close calls nothing. A
-# free given the pointer itself would free what the handle points at, which crashes the run.
-ADDRESS_FREE_EXTERN = """extern "{library}"
-  resource Handle, free_address: peer_res_close
+# A free_ref: function gets the address of the handle (void f(T **)) and may write NULL there. Each free path calls
+# it once and never again, never with NULL and never while C uses the handle ([closes, NULL closes, busy frees]):
+# Native.close (twice), the end of the owning task, an out resource, a close while a compute call holds the handle
+# (the free waits for the call), and the result and the out resource of cancelled compute calls (dropped when C
+# returns). A free given the pointer itself would free what the handle points at, which crashes the run.
+REF_FREE_EXTERN = """extern "{library}"
+  resource Handle, free_ref: peer_res_close
   def peer_res_open(value: C.Int32) -> Handle
   def peer_res_get(handle: Handle) -> C.Int32
   def peer_out_all(
     n: C.Int32, out i: C.Int32, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Handle,
   ) -> C.Int32
+  compute def peer_res_hold(handle: Handle, limit_ms: C.Int32) -> C.Int32
+  compute def peer_res_open_later(value: C.Int32, limit_ms: C.Int32) -> Handle
+  compute def peer_out_open_later(value: C.Int32, limit_ms: C.Int32, out res: Handle) -> C.Int32
+  def peer_set_flag() -> Void
+  def peer_waiting() -> C.Int32
   def peer_res_closes() -> C.Int32
   def peer_res_null_closes() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
 end
 
 def open_one(n: Int) -> Int
@@ -875,26 +883,75 @@ def open_one(n: Int) -> Int
   return peer_res_get(handle)
 end
 
+def hold(handle: Handle) -> Result[Int]
+  return ok(peer_res_hold(handle, 20_000))
+end
+
+def open_later(n: Int) -> Result[Int]
+  handle = try peer_res_open_later(n, 20_000)
+  return ok(peer_res_get(handle))
+end
+
+def out_later(n: Int) -> Result[Int]
+  opened = peer_out_open_later(n, 20_000)
+  return ok(peer_res_get(opened.res))
+end
+
+def wait_waiting(calls: Int) -> Void
+  n = 0
+  while peer_waiting() < calls and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def wait_closes(closes: Int) -> Void
+  n = 0
+  while peer_res_closes() < closes and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def counts() -> List[Int]
+  return [peer_res_closes(), peer_res_null_closes(), peer_res_busy_frees()]
+end
+
 def main() -> Void
   handle = peer_res_open(7).unwrap!
-  puts(peer_res_get(handle))
   Native.close(handle)
   Native.close(handle)
-  puts(peer_res_closes())
   puts(Task.await(Task.spawn(&open_one, 5)))
-  puts(peer_res_closes())
   made = peer_out_all(3)
   puts(peer_res_get(made.res))
   Native.close(made.res)
-  puts([peer_res_closes(), peer_res_null_closes()])
+  puts(counts())
+  held = peer_res_open(9).unwrap!
+  holder = Task.spawn(&hold, held)
+  opener = Task.spawn(&open_later, 1)
+  out_opener = Task.spawn(&out_later, 2)
+  wait_waiting(3)
+  Native.close(held)
+  Task.cancel(opener)
+  Task.cancel(out_opener)
+  puts([Task.await(opener), Task.await(out_opener)])
+  puts(counts())
+  peer_set_flag()
+  puts(Task.await(holder))
+  wait_closes(6)
+  puts(counts())
 end
 """
 
 
 @NATIVE_CALLS
-def test_a_free_address_function_gets_the_address_of_the_handle_once(tmp_path, peer):
-    result = agentica(program(tmp_path, ADDRESS_FREE_EXTERN.format(library=literal(peer))))
-    assert (result.code, result.stdout, result.stderr) == (0, "7\n1\n5\n2\n3\n[3, 0]\n", "")
+def test_a_free_ref_function_gets_the_address_of_the_handle_once(tmp_path, peer):
+    result = agentica("--schedulers", "4", program(tmp_path, REF_FREE_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "5", "3", "[3, 0, 0]", '[error("task: cancelled"), error("task: cancelled")]', "[3, 0, 0]", "ok(9)",
+        "[6, 0, 0]", "",
+    ]
 
 
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
