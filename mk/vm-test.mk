@@ -62,11 +62,12 @@ vm-tsan-run: dist/agentica$(EXE)
 vm-test-binaries: $(VM_TESTS)
 
 # libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
-# With LIBFUZZ_JIT_WRAP (mk/vm.mk, Linux) each input also runs with the JIT (AGC_JIT_ALWAYS), and the link wraps
-# agc_jit_mem_reserve so that the entry point unmaps each input's code memory (vm/fuzz_libfuzzer.c).
+# With LIBFUZZ_JIT_WRAP (mk/vm.mk, Linux) each input also runs with the JIT (always and on) and is compared with the
+# interpreter's run; the link wraps agc_jit_mem_reserve so that the entry point unmaps each input's code memory, and the
+# C library's clocks so that it compares only runs that read none (vm/fuzz_libfuzzer.c).
 LIBFUZZ_LINK_FLAGS :=
 ifeq ($(LIBFUZZ_JIT_WRAP),1)
-LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve
+LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve,--wrap=agc_vm_run,--wrap=clock_gettime,--wrap=timespec_get
 endif
 $(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) -fsanitize=fuzzer $(LIBFUZZ_LINK_FLAGS)
@@ -76,8 +77,8 @@ LIBFUZZ_DIR := build/vm/libfuzz
 vm-libfuzz:
 	$(MAKE) $(LIBFUZZ_DIR)/agentica-vm-libfuzz LIBFUZZ=1
 
-# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time.
-FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
+# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time, and the seeds of tests/fixtures/fuzz/.
+FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*.agc tests/fixtures/fuzz/*.agc | xargs -P $(JOBS) -I{} sh -c \
   'dist/agentica$(EXE) compile "$$1" -o "$(LIBFUZZ_DIR)/seeds/$$(basename "$$1" .agc).agcb"' sh {}
 
 # A bounded run: LIBFUZZ_TIME seconds on LIBFUZZ_JOBS forked workers. New inputs go to corpus/, the compiled fixtures
@@ -246,8 +247,9 @@ LINT = printf '%s\n' $(VM_LINT_SRC) | xargs -P $(JOBS) -I{} $(CLANG_TIDY) --quie
 vm-lint-release:
 	$(LINT) -I $(GC_DIR)/include
 
+# With the define of the libFuzzer build on Linux (mk/vm.mk), so that the JIT comparison of vm/fuzz_libfuzzer.c is read.
 vm-lint-sanitize:
-	$(LINT) -DAGC_NO_GC -fsanitize=address,undefined
+	$(LINT) -DAGC_NO_GC -fsanitize=address,undefined $(if $(filter Linux,$(shell uname -s)),-DAGC_FUZZ_JIT_WRAP)
 
 vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS

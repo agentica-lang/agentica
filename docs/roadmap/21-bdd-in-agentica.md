@@ -16,6 +16,5 @@ that crashes, exits or loops fails only its scenario. Record:
   today.
 - [ ] Cache the compiled runner (about 1,500 lines of Agentica, compiled on
   every `agentica test`), if a measurement shows the start-up cost.
-- [ ] Once optional JSON fields land (10e), replace the `has_doc` and
-  `has_table` stand-ins of the step line (`stdlib/bdd.agc`) with optional
-  fields.
+- [ ] Replace the `has_doc` and `has_table` stand-ins of the step line
+  (`stdlib/bdd.agc`) with `JsonField` fields (10e).

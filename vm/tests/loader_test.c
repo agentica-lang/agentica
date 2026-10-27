@@ -5,6 +5,7 @@
  * source_root_tests covers agc_program_set_source_root.
  */
 #include "../core.h"
+#include "../jit/jit.h"
 
 #include <assert.h>
 #include <math.h>
@@ -543,7 +544,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 7 : 4);
+    u8(&t, which == 1 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -563,7 +564,27 @@ static buffer type_tables(int which) {
     str(&t, "P");
     u32(&t, 2);
   }
-  u32(&t, 0);
+  /* 13: a JsonField type (kind 7) and no enum; 14: with the JsonField enum; 15 to 18: a JsonField enum of the
+     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second JsonField enum. */
+  if (which < 14) {
+    u32(&t, 0);
+    return t;
+  }
+  u32(&t, which == 18 ? 2 : 1);
+  for (int copy = 0; copy < (which == 18 ? 2 : 1); copy++) {
+    str(&t, "JsonField");
+    u32(&t, which == 16 ? 4 : 3);
+    str(&t, which == 17 ? "Null" : "Absent");
+    u32(&t, 0);
+    str(&t, which == 17 ? "Absent" : "Null");
+    u32(&t, 0);
+    str(&t, "Value");
+    u32(&t, which == 15 ? 0 : 1);
+    if (which == 16) {
+      str(&t, "More");
+      u32(&t, 0);
+    }
+  }
   return t;
 }
 
@@ -1061,8 +1082,8 @@ static void test_fuzz_timed_waits(void) {
   s.registers = 3;
   buffer b = build(s);
   uint64_t start = agc_clock_ms();
-  assert(agc_fuzz_one(b.data, b.len, false) == 1);
-  assert(agc_fuzz_one(b.data, b.len, true) == 1);
+  assert(agc_fuzz_one(b.data, b.len, AGC_JIT_OFF, NULL, NULL) == 1);
+  assert(agc_fuzz_one(b.data, b.len, AGC_JIT_ALWAYS, NULL, NULL) == 1);
   assert(agc_clock_ms() - start < 5000);
   free(b.data);
 }
@@ -1957,7 +1978,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 7"));
+  assert(!loads_types(1, "unknown type kind 8"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));
@@ -1969,6 +1990,12 @@ int main(void) {
   assert(!loads_types(10, "type nesting too deep"));
   assert(!loads_types(11, "duplicate JSON type name"));
   assert(loads_types(12, NULL));
+  assert(!loads_types(13, "JsonField type without the JsonField enum"));
+  assert(loads_types(14, NULL));
+  assert(!loads_types(15, "bad JsonField enum"));
+  assert(!loads_types(16, "bad JsonField enum"));
+  assert(!loads_types(17, "bad JsonField enum"));
+  assert(!loads_types(18, "duplicate JsonField enum"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

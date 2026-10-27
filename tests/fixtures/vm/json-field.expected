@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 221,
+  "stdout": [
+    "age: keep",
+    "name: keep",
+    "{}",
+    "age: clear",
+    "name: keep",
+    "{\"age\":null}",
+    "age: set to 30",
+    "name: set to Ana",
+    "{\"name\":\"Ana\",\"age\":30}",
+    "{\"name\":\"Bo\",\"age\":null}",
+    "{\"age\":null,\"name\":\"Bo\"}",
+    "{}",
+    "UpdateUser(name: JsonField.Value(\"Bo\"), age: JsonField.Null)",
+    "{\"properties\":{\"age\":{\"anyOf\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},{\"type\":\"null\"}]},\"name\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"}",
+    "keep the title {}",
+    "clear the title {\"title\":null}",
+    "rename to Notes {\"title\":\"Notes\"}",
+    "{\"properties\":{\"title\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"type\":\"object\"}",
+    ""
+  ],
+  "stderr": []
+}

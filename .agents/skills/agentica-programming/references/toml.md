@@ -43,9 +43,9 @@ end
   `parse(encode(v))` gives the same values back, but the key order may be
   regrouped (plain keys first). Over 256 table parts or 256 inline levels is an
   error, and so is `to_json` over 2,048 levels.
-- To fill a struct: `JSON.decode(JSON.encode(try Toml.to_json(doc)), Config)`. A
-  `DateTime` becomes a string, `1.0` stays a float (so it does not decode into
-  an `Int` field), and `inf` or `nan` is an error.
+- To fill a struct: `JSON.decode(try Toml.to_json(doc), Config)`. A `DateTime`
+  becomes a string, `1.0` stays a float (so it does not decode into an `Int`
+  field), and `inf` or `nan` is an error.
 
 ```ruby
 import Toml from "std/toml"
@@ -58,7 +58,7 @@ end
 def load(text: String) -> Result[Config]
   doc = try Toml.parse(text)
   json = try Toml.to_json(doc)
-  return JSON.decode(JSON.encode(json), Config)
+  return JSON.decode(json, Config)
 end
 
 def main() -> Void

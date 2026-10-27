@@ -277,8 +277,10 @@ static uint32_t decodable_struct(agc_vm *vm, agc_value name, uint32_t span) {
   agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON type", span);
 }
 
+/* JSON.decode(source, Type): the source is JSON text or a Json value, which is decoded in place without text. */
 static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   uint32_t type = decodable_struct(vm, args[1], span + 2);
+  if (agc_is(args[0], AGC_T_JSON)) return agc_json_decode(vm, args[0], type);
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value root;
   agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &root);

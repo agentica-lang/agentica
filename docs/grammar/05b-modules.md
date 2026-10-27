@@ -703,9 +703,8 @@ With the alias `Toml`:
   path over 256 parts or an inline value nested over 256 levels is an error, as
   for `parse`, and so is a `to_json` value nested over 2,048 levels; none halts.
 - `Toml.to_json(value: Value) -> Result[Json]` converts a value for
-  `JSON.decode(JSON.encode(json), T)`. A `DateTime` becomes its string, an
-  integer stays an integer and a float stays a float, and `inf` or `nan` is an
-  error.
+  `JSON.decode(json, T)`. A `DateTime` becomes its string, an integer stays an
+  integer and a float stays a float, and `inf` or `nan` is an error.
 - `Toml.get(value: Value, path: String) -> Result[Value]` reads a dotted path of
   keys; a segment of plain digits (no sign, no leading zero) indexes an array.
 

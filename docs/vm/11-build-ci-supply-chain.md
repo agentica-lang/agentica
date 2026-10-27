@@ -85,11 +85,11 @@
 
 ### Fuzzing
 
-- `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if it is accepted,
-  runs it with `--max-steps 10000`, printing any diagnostic to `/dev/null`. So
-  the diagnostic printer is fuzzed too. Under `AGC_NO_GC` it frees every block
-  of that mutant afterwards, so the peak memory is that of one mutant plus
-  ASan's quarantine.
+- `agc_fuzz_one` (`vm/fuzz.c`) loads one file and, if it is accepted, runs it
+  with `--max-steps 10000`, printing any diagnostic to the stream it is given
+  (`/dev/null` by default). So the diagnostic printer is fuzzed too. Under
+  `AGC_NO_GC` it frees every block of that mutant afterwards, so the peak
+  memory is that of one mutant plus ASan's quarantine.
 - Steps bound instructions, not bytes, so a mutant can still grow a value to
   gigabytes. `agc_set_alloc_limit` gives each mutant 256 MB (each block counted
   with 64 bytes of overhead). The limit is soft: an allocation past it still
@@ -109,7 +109,14 @@
 - The fuzzer is libFuzzer (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
   calls `agc_fuzz_one`, so AFL++, honggfuzz and Centipede can drive it too.
   Where the build turns on the wrap (`AGC_FUZZ_JIT_WRAP`, Linux), each input
-  also runs under `AGC_JIT_ALWAYS`, and its code memory is unmapped after it.
+  that the loader accepts also runs under `AGC_JIT_ALWAYS` and `AGC_JIT_ON`
+  (on x86-64; `on` with thresholds low enough for 10,000 steps), and its code
+  memory is unmapped after each run. The test is differential: the input fails
+  when a JIT run's stdout, stderr, diagnostic or end differs from the
+  interpreter's run (in length, or in a hash of the first 16 MB) while a second
+  interpreter run agrees with the first. A run whose program read a clock
+  (`Time.now`, a timed wait) is not compared: the link wraps `clock_gettime`,
+  `timespec_get` and `agc_vm_run` to see it.
   `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
   `-fsanitize=fuzzer-no-link,address,undefined`, `AGC_NO_GC`) into
   `build/vm/libfuzz/` and links `agentica-vm-libfuzz` with libFuzzer's

@@ -1,7 +1,7 @@
 ## Reads and writes TOML 1.0 documents.
 ##
 ## Import it with `import Toml from "std/toml"`. `Toml.parse` turns text into a `Toml.Value`, `Toml.encode` writes a
-## `Toml.Value` back as text, and `Toml.to_json` bridges to typed decoding (`JSON.decode(JSON.encode(json), T)`). Every
+## `Toml.Value` back as text, and `Toml.to_json` bridges to typed decoding (`JSON.decode(json, T)`). Every
 ## function returns a `Result` and never halts. A parse error starts with the place, for example
 ## `line 3, column 7: expected '=' after key`; lines and columns count from 1, and a column counts characters. Arrays
 ## and inline tables nest at most 256 levels, and a key (a header or a dotted key) has at most 256 parts; a deeper
@@ -157,7 +157,7 @@ export def encode(value: Value) -> Result[String]
   end
 end
 
-## Converts a `Value` to `Json`, for typed decoding: `JSON.decode(JSON.encode(json), Config)`.
+## Converts a `Value` to `Json`, for typed decoding: `JSON.decode(json, Config)`.
 ## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays
 ## an integer and a float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse`
 ## reads is that deep) is an error, not a halt.

@@ -200,6 +200,9 @@ and a task's crash line (`"task":true`) carry it too.
   has unsupported field types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
   or Int-keyed maps.
+- `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
+  not the direct type of a struct field (a list item, a map value, a nested
+  `JsonField`, or the whole `JSON.encode` argument).
 - `CHECK-IMMUTABLE-ASSIGNMENT`: assignment to a `for` variable.
 - `CHECK-INT-RANGE`: an integer literal that does not fit in `Int`.
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for

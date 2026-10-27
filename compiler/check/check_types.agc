@@ -79,11 +79,59 @@ export def primitive?(type: ResolvedType) -> Bool
   return numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
 end
 
-## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, and structs of
-## those.
+## True for JsonField[T], the builtin enum of an optional and nullable JSON field.
+export def json_field?(type: ResolvedType) -> Bool
+  return Types.is?(type, "Enum") and Types.name(type) == "JsonField" and Types.args(type).size == 1
+end
+
+## Where the type has a JsonField that a JSON builtin does not allow, or "" when it has none: JsonField may only be the
+## direct type of a struct field. direct says the type is a struct field's own type, kind names its place when it is
+## not ("list item", "map value", "nested JsonField", "encode argument") and owner the struct field it sits in
+## ("Wrapper.items", "" outside a struct). seen holds the structs already walked ("Struct:name"), so a recursive type
+## ends. Runs before the decodable and encodable tests.
+export def json_field_place(
+  cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String, seen: List[String]
+) -> String
+  if json_field?(type)
+    if !direct
+      if owner == ""
+        return kind
+      end
+
+      return "#{kind} in #{owner}"
+    end
+
+    return json_field_place(cx, Types.args(type)[0], false, "nested JsonField", owner, seen)
+  elsif Types.is?(type, "List")
+    return json_field_place(cx, Types.item(type), false, "list item", owner, seen)
+  elsif Types.is?(type, "Map")
+    return json_field_place(cx, Types.value(type), false, "map value", owner, seen)
+  elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
+    key = "Struct:#{Types.name(type)}"
+    if seen.any? do |item: String| item == key end
+      return ""
+    end
+
+    inner = seen.push(key)
+    place = Types.display_name(Types.name(type))
+    for field in cx.structs[Types.name(type)]
+      found = json_field_place(cx, field.type, true, "struct field", "#{place}.#{field.name}", inner)
+      if found != ""
+        return found
+      end
+    end
+  end
+
+  return ""
+end
+
+## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
+## those, and JsonField of an encodable type other than Nil.
 export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if primitive?(type) or Types.is?(type, "Json")
     return true
+  elsif json_field?(type)
+    return !Types.is?(Types.args(type)[0], "Nil") and encodable?(cx, Types.args(type)[0], seen)
   elsif Types.is?(type, "List")
     return encodable?(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
@@ -95,11 +143,13 @@ export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   return false
 end
 
-## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, and
-## structs of those.
+## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, structs
+## of those, and JsonField of a decodable type (Nil is not one).
 export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
     return true
+  elsif json_field?(type)
+    return decodable?(cx, Types.args(type)[0], seen)
   elsif Types.is?(type, "List")
     return decodable?(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")

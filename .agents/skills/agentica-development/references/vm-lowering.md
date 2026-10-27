@@ -90,8 +90,12 @@ up by name.
   the bytecode writer interns them into the Types section. `$defs` names and the
   type-argument constant are the linked names (`@2::Point`), not display names:
   `JSON.schema` prints them, and two imported structs can share a display name.
-  A new decodable kind (enums, `JsonField`) needs a new type kind, loader rules
-  and a format bump.
+  A new decodable kind (enums) needs a new type kind and loader rules; an
+  appended kind keeps the format version, as type kind 7 (`JsonField`) did.
+  `JsonField[T]` is only the direct type of a field (`field_type`), and a
+  program whose decodable structs use it gets the `JsonField` enum in its table
+  even when no expression names it; the loader checks that enum's shape, and
+  the encoders find its variants through `agc_program.json_field`.
 - `value.with(...)` lowers to one `STRUCT_WITH`: the receiver
   goes in the first slot of a window, the values follow it in field order, and
   the Updates section interns each (struct, field indexes) pair. It beats a

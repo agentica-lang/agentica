@@ -65,3 +65,15 @@ for title, group_cases in GROUPS.items():
     name = method_name(title)
     assert name not in globals(), name
     globals()[name] = group_test(title, group_cases)
+
+
+def test_a_json_field_in_a_list_of_an_imported_struct_is_misplaced(agentica_check):
+    """The CHECK-JSON-FIELD-PLACE walk follows a struct of another module, and reports at the target."""
+    root = 'import Models from "models"\n\ndef main() -> Void\n  x = JSON.schema(Models.Patch)\nend\n'
+    files = {
+        "models.agc": "export struct Patch\n  ages: List[JsonField[Int]]\nend\n",
+        "root.agc": root,
+    }
+    found = agentica_check(files, "root.agc")
+    assert found is not None and found["code"] == "CHECK-JSON-FIELD-PLACE"
+    assert covered(root, found["range"]) == "Models.Patch"

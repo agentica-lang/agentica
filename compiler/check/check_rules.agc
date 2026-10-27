@@ -71,7 +71,15 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     name = RubyForm.shown(entry.name)
   end
 
-  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| Builtins.arity_text(form, skipped) end
+  # Forms of one arity (JSON.decode of text or of a Json) count once.
+  counts: List[String] = []
+  for form in [entry].concat(entry.alternatives)
+    text = Builtins.arity_text(form, skipped)
+    if !counts.any? do |seen: String| seen == text end
+      counts = counts.push(text)
+    end
+  end
+
   expected = counts.join(" or ")
   message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
   base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
@@ -251,13 +259,18 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   return ok(State.Out(st: message.st, type: expected))
 end
 
-# JSON.decode(text, Type) and JSON.schema(Type): the type argument is a struct name whose fields can all be decoded.
+# JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct name whose fields can all be
+# decoded. The source of JSON.decode is JSON text (String) or a Json value.
 def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) -> Result[State.Out]
   current = st
   target = site.args[0]
   if decode
-    text = try State.expr(cx, current, site.args[0], T.Type.String)
-    current = text.st
+    source = try State.expr(cx, current, site.args[0], T.Type.Unknown)
+    if !T.is?(source.type, "String") and !T.is?(source.type, "Json")
+      return error(decode_source_mismatch(cx, source.st, source.type, Ast.expr_span(site.args[0])))
+    end
+
+    current = source.st
     target = site.args[1]
   end
 
@@ -275,9 +288,18 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   end
 end
 
+# CHECK-TYPE-MISMATCH for a JSON.decode source that is neither JSON text nor a Json value.
+def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Source.Span) -> String
+  found = T.to_text(actual)
+  message = "expected String or Json, found #{found}"
+  base = Failure.problem(cx.file, st.signature, "CHECK-TYPE-MISMATCH", message, span, State.hint_of(""))
+  return Failure.pack(base.with(expected: "String or Json", actual: found))
+end
+
 def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) -> Result[State.Out]
   ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
+  try json_field_place(cx, st, type, "decode target", node.span)
   if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type, [])
     return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
   end
@@ -292,6 +314,7 @@ end
 # JSON.encode and JSON.from: any value that can be written as JSON.
 def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  try json_field_place(cx, out.st, out.type, "encode argument", Ast.expr_span(site.args[0]))
   if !CheckTypes.encodable?(cx, out.type, [])
     return error(
       State.fail(
@@ -309,6 +332,26 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
   end
 
   return ok(State.Out(st: out.st, type: T.Type.String))
+end
+
+# CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JsonField that is not the direct type of a
+# struct field. kind names the place of the whole type.
+def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, span: Source.Span) -> Result[Void]
+  place = CheckTypes.json_field_place(cx, type, false, kind, "", [])
+  if place == ""
+    return ok()
+  end
+
+  return error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-JSON-FIELD-PLACE",
+      "JsonField is only allowed as the direct type of a struct field, not as the #{place}",
+      span,
+      "JsonField tells an absent key from null, so it belongs to a struct field: name: JsonField[String]",
+    ),
+  )
 end
 
 # Test.eq: two values of one type that has equality.

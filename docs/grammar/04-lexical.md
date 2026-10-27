@@ -69,14 +69,14 @@ variables, functions and struct fields.
 
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names: `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`,
-`List`, `Map`, `Set`, `Result`, `Range`, `Fn`, `Json`, `JSON`, `Task`, `Await`,
-`Channel`, `Process`, `ProcessOutput`, `IO`, `System`, `Time`, `Random`, `Test`,
-`TestCase`, `File`, `Dir`, `Path`, `FileHandle`, `FileInfo`, `TCP`, `TLS`,
-`HttpWire`, `LogRegistry`, `LogEvent`, `LogLevel`, `StructMember`, `Socket`,
-`Listener`, `HttpClient`, `HttpServer`, `Header`, `HttpRequest`, `HttpResponse`,
-`HttpClientOptions` and `HttpServerOptions`. `HTTP` is not reserved: it is the
-usual alias of `std/http`. `ok` and `error` are names, but cannot be declared as
-functions, variables, parameters, loop variables or fields
+`List`, `Map`, `Set`, `Result`, `Range`, `Fn`, `Json`, `JSON`, `JsonField`,
+`Task`, `Await`, `Channel`, `Process`, `ProcessOutput`, `IO`, `System`, `Time`,
+`Random`, `Test`, `TestCase`, `File`, `Dir`, `Path`, `FileHandle`, `FileInfo`,
+`TCP`, `TLS`, `HttpWire`, `LogRegistry`, `LogEvent`, `LogLevel`, `StructMember`,
+`Socket`, `Listener`, `HttpClient`, `HttpServer`, `Header`, `HttpRequest`,
+`HttpResponse`, `HttpClientOptions` and `HttpServerOptions`. `HTTP` is not
+reserved: it is the usual alias of `std/http`. `ok` and `error` are names, but
+cannot be declared as functions, variables, parameters, loop variables or fields
 (`CHECK-REDEFINED-NAME`). The same holds for `puts`, `print`, `gets` and `gets!`
 as variables, parameters, loop variables and pattern bindings.
 

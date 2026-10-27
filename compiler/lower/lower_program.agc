@@ -37,6 +37,12 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
 
   builtin_types = builtin_decodable()
   decodable = user_decodable(struct_decls, builtin_types, type_value)
+  wanted = used
+  if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
+    # JSON.decode builds JsonField values, so the enum is in the table even when no expression names it.
+    wanted = used.add("JsonField")
+  end
+
   structs: List[Ir.StructDef] = []
   for decl in struct_decls
     fields = decl.fields.map do |field: Ast.FieldDecl| field.name end
@@ -60,7 +66,7 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
   end
 
   for name in ENUMS.keys
-    if used.include?(name)
+    if wanted.include?(name)
       variants = ENUMS[name].variants.map do |variant: Model.Variant|
         Ir.VariantDef(name: variant.name, size: variant.payload.size)
       end
@@ -176,7 +182,7 @@ def user_decodable(
     types: List[Types.Type] = []
     complete = true
     for field in decl.fields
-      found = json_field_type(field.type, names)
+      found = field_type(field.type, names)
       case found
         Ast.Optional.Present(type) -> types = types.push(type)
         Ast.Optional.Absent -> complete = false
@@ -217,18 +223,39 @@ def references_known?(types: List[Types.Type], table: Map[String, List[Types.Typ
   return true
 end
 
-# The struct a field type is made of, under any List or Map around it.
+# The struct a field type is made of, under any List, Map or JsonField around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
     Types.Type.Struct(name) -> return [name]
     Types.Type.List(item) -> return struct_names_in(item)
     Types.Type.Map(key, value) -> return struct_names_in(value)
+    Types.Type.Enum(name, args) -> return struct_names_in(args[0])
     _ -> return []
   end
 end
 
-# The type of a struct field as JSON.decode builds it, or Absent when it cannot.
-def json_field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
+# True for a JsonField field type.
+def json_field?(type: Types.Type) -> Bool
+  return Types.is?(type, "Enum") and Types.name(type) == "JsonField"
+end
+
+# The type of a struct field as JSON.decode builds it, or Absent when it cannot: a JsonField of a JSON type, or a JSON
+# type. JsonField is only allowed here, as the direct type of the field.
+def field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
+  if ref.name != "JsonField" or ref.args.size != 1
+    return json_field_inner(ref, names)
+  end
+
+  value = json_field_inner(ref.args[0], names)
+  case value
+    Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Enum("JsonField", [type]))
+    Ast.Optional.Absent -> return Ast.Optional.Absent
+  end
+end
+
+# The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JsonField[T]), or
+# Absent when it cannot.
+def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
   args = ref.args
   if args.size == 0 and ref.name == "Int"
     return Ast.Optional.Present(Types.Type.Int)
@@ -239,13 +266,13 @@ def json_field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.
   elsif args.size == 0 and ref.name == "String"
     return Ast.Optional.Present(Types.Type.String)
   elsif ref.name == "List" and args.size == 1
-    item = json_field_type(args[0], names)
+    item = json_field_inner(args[0], names)
     case item
       Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.List(type))
       Ast.Optional.Absent -> return Ast.Optional.Absent
     end
   elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0
-    value = json_field_type(args[1], names)
+    value = json_field_inner(args[1], names)
     case value
       Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Map(Types.Type.String, type))
       Ast.Optional.Absent -> return Ast.Optional.Absent

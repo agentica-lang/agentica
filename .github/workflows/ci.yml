@@ -236,7 +236,7 @@ jobs:
         run: make vm-trace-off
       - if: ${{ steps.changes.outputs.c != 'false' }}
         run: make -j"$(nproc)" vm-test
-      - name: vm-libfuzz-run, 60 s of libFuzzer (a crash, leak, RSS overrun or timeout fails it; the saved file reproduces it)
+      - name: vm-libfuzz-run, 60 s of libFuzzer (a crash, a JIT run that differs from the interpreter, a leak, RSS overrun or timeout fails it; the saved file reproduces it)
         if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}
         run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_TIMEOUT=30 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
       - if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}
