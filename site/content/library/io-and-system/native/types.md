@@ -22,7 +22,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 
 `C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`, or `C.Long` for a C `long`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
-- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows and any `Int` elsewhere), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows and any `Int` elsewhere), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`: for text with a NUL or a known length, use `Native.from_string` and `bytesize` (below).
 - A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`. The same bits cross, and a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
 - A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
@@ -104,7 +104,14 @@ end
 - The block form, `Native.memory_pointer(size) do |buf| ... end`, gives the buffer to the block and frees it when the block ends, also when the block ends early with an error that `try` returns. The call returns the block's value. A runtime error in the block stops the task, whose end frees the buffer. A buffer that the block hands to another task with `Task.spawn_owning` is not freed at the block's end: its new owner frees it.
 - The plain form, `buf = Native.memory_pointer(size)`, is for a buffer that outlives one block, such as one that C keeps between calls.
 
-A C function that takes text with its length, such as `sqlite3_bind_text`, `PQexecParams` or `mysql_real_query`, gets a buffer of `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) and `text.bytesize`. The buffer holds the UTF-8 bytes of the text and a NUL after them, so its size is `text.bytesize + 1`, and a NUL inside the text is copied like any other byte, which a `C.String` refuses. A pointer that C returns into the text, such as SQLite's `pzTail`, stays valid while the buffer lives: `Native.address(tail) - Native.address(buf)` is how many bytes C read. It is an owned buffer like the others, with the same block form and the same rules below.
+- The calling task owns a plain buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. When `main` returns, the program ends without freeing it.
+- A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
+- `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
+- A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
+- A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`, and `Native.closed?(buf)` is `true`. A `C.Pointer` that C gave is never closed (NULL included: test it with `Native.null?`). `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
+- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `MemoryPointer.from_string(text)`, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
+
+A C function that takes text with its length, such as `sqlite3_bind_text`, `PQexecParams` or `mysql_real_query`, gets a buffer of `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) and `text.bytesize`. The buffer holds the UTF-8 bytes of the text and a NUL after them, so its size is `text.bytesize + 1`, and a NUL inside the text is copied like any other byte, which a `C.String` refuses. A pointer that C returns into the text, such as SQLite's `pzTail`, stays valid while the buffer lives: `Native.address(tail) - Native.address(buf)` is how many bytes C read. It is an owned buffer like the others, with the same block form and the same rules above.
 
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
@@ -125,13 +132,6 @@ def main() -> Void
   Native.close(db)
 end
 ```
-
-- The calling task owns a plain buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. When `main` returns, the program ends without freeing it.
-- A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
-- `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
-- A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
-- A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`, and `Native.closed?(buf)` is `true`. A `C.Pointer` that C gave is never closed (NULL included: test it with `Native.null?`). `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
-- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `MemoryPointer.from_string(text)`, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
 
 Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
 

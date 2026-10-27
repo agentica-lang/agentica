@@ -449,10 +449,12 @@ end
   `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
   `C.Long` the same on Windows and any `Int` elsewhere), and C gets its low
   bits; one outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL
-  character is `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each
-  string, which it may read only during the call. A `C.String` result is copied;
-  `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A result
-  that may be NULL is declared `-> C.Pointer` and read with `Native.get_string`.
+  character is `RUNTIME-INVALID-CHARACTER` (for text with a NUL or a known
+  length, use `Native.from_string` and `bytesize`). The C function gets a copy
+  of each string, which it may read only during the call. A `C.String` result is
+  copied; `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A
+  result that may be NULL is declared `-> C.Pointer` and read with
+  `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.

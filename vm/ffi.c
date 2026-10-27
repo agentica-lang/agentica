@@ -1406,9 +1406,9 @@ static agc_value builtin_native_offset(agc_vm *vm, agc_value *args, uint32_t spa
 
 /* A new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a resource: Native.free, the
    owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's hand-made bytecode (no_files)
-   may not make one, as it may not call. A bad size fails at SIZE_SPAN. */
-static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t span, uint32_t size_span) {
-  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+   may not make one, as it may not call: each caller checks no_files before it reads its argument. A bad size fails
+   at SIZE_SPAN. */
+static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t size_span) {
   if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", size_span);
   /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
      program's error, not the VM's out of memory. */
@@ -1433,16 +1433,18 @@ static agc_value new_buffer(agc_vm *vm, int64_t size, uint32_t span, uint32_t si
 
 /* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (new_buffer). */
 static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
-  return new_buffer(vm, agc_as_int(vm, args[0]), span, span + 1);
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  return new_buffer(vm, agc_as_int(vm, args[0]), span + 1);
 }
 
 /* Native.from_string(text), Ruby ffi's MemoryPointer.from_string: a new owned buffer of the text's UTF-8 bytes and a
    trailing NUL (new_buffer zeroes it), so its size is text.bytesize + 1. A NUL inside the text is copied like any
-   byte: C that takes the length reads it all, which a C.String cannot give. The size never overflows: a String is
-   far smaller than the address space. */
+   byte: C that takes the length reads it all, which a C.String cannot give. A String lies in memory, so bytes + 1
+   fits an int64_t; a size the system cannot give is new_buffer's to refuse (its BUFFER_MAX and SIZE_MAX check). */
 static agc_value builtin_from_string(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   const agc_string *text = agc_as_string(vm, args[0]);
-  agc_value buffer = new_buffer(vm, (int64_t)text->bytes + 1, span, span + 1);
+  agc_value buffer = new_buffer(vm, (int64_t)text->bytes + 1, span + 1);
   if (text->bytes) memcpy(agc_as_c_resource(vm, buffer)->pointer, text->data, text->bytes);
   return buffer;
 }

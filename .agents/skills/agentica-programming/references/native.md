@@ -48,7 +48,8 @@ end
   are never negative (`C.UInt32` above 2^31 is positive). No unsigned 64-bit
   type: `uint64_t` and `size_t` are `C.Int64`, `unsigned long` is `C.Long`
   (same bits; above the signed maximum reads negative). A NUL in a `C.String`
-  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
+  is `RUNTIME-INVALID-CHARACTER` (for text with a NUL or a known length, use
+  `Native.from_string` and `bytesize`). A `NULL` string result reads as
   `""`: when NULL matters, declare `-> C.Pointer` and use `Native.get_string`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as

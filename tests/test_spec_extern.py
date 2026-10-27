@@ -208,6 +208,7 @@ end
      '  n: Int = Native.from_string("é") do |s| Native.get_uint8(s, 0) + "é".bytesize end\n  puts(n)',
      None, None, None),
     ("  n = Native.from_string(3) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 26), (10, 27)),
+    ('  n = Native.memory_pointer("x") do |buf| 1 end', "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
     ('  s: String = "ab".bytesize', "CHECK-TYPE-MISMATCH", (10, 15), (10, 28)),
 ])
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
