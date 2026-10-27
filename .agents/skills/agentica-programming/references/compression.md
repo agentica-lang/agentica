@@ -1,10 +1,10 @@
 # Compression
 
-`Zlib`, `ZlibDecoder` and `ZlibProgress` are reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950),
-`gzip`/`gunzip` are gzip (RFC 1952); the Lazy steps also speak raw DEFLATE
-(RFC 1951) with `raw = true`. Decoders take one stream or member with its
-checksum verified; trailing bytes (a second member included) are an error,
-unlike Python's `gzip.decompress`.
+`Zlib`, `ZlibDecoder` and `ZlibProgress` are reserved. `deflate`/`inflate` are
+the zlib wrapper (RFC 1950), `gzip`/`gunzip` are gzip (RFC 1952); the Lazy
+steps also speak raw DEFLATE (RFC 1951) with `raw = true`. Decoders take one
+stream or member with its checksum verified; trailing bytes (a second member
+included) are an error, unlike Python's `gzip.decompress`.
 
 ```text
 Zlib.deflate(data: List[Int], level: Int = 6, max_bytes: Int = 1048576) -> Result[List[Int]]

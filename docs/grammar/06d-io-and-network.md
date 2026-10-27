@@ -215,9 +215,9 @@ Signatures are in
   `ZlibDecoder` handle and the `ZlibProgress(output, consumed, finished,
   needs_input)` record (both reserved names), is kept for now; the Lazy steps
   will replace it. Its rules are on the library page.
-- The `Zlib` calls and the zlib steps run in any compute context; only
-  `File.chunks` and `Lazy.write_bytes` carry the filesystem effect, so
-  `--deny-fs` turns off only them.
+- The `Zlib` calls and the zlib steps run in any compute context; of the
+  zlib-related calls only `File.chunks` and `Lazy.write_bytes` touch the
+  filesystem, so `--deny-fs` turns off only them.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.
