@@ -6,6 +6,7 @@ import socketserver
 import ssl
 import sys
 import threading
+import time
 
 # Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
 sys.stdout.reconfigure(encoding="utf-8", newline="\n")
@@ -118,6 +119,7 @@ class Quiet(http.server.ThreadingHTTPServer):
 
 class Raw(socketserver.BaseRequestHandler):
     def handle(self):
+        began = time.monotonic()
         ARRIVED.set()
         data = b""
         while b"\r\n\r\n" not in data:
@@ -134,11 +136,20 @@ class Raw(socketserver.BaseRequestHandler):
             # 413 was read past the 5 s deadline (#692). The rest is then read to the end, so the close sends no
             # RST. The program of test_vm_http.py must open its next raw connection (/stale) after reading the 413.
             ARRIVED.clear()
+            answered = time.monotonic()
             self.request.sendall(b"HTTP/1.1 413 Payload Too Large\r\nConnection: close\r\nContent-Length: 4\r\n\r\nbig!")
             self.request.shutdown(socket.SHUT_WR)
-            ARRIVED.wait(10)
-            while self.request.recv(65536):
-                pass
+            released = ARRIVED.wait(10)
+            waited = time.monotonic()
+            drained = 0
+            try:
+                while chunk := self.request.recv(65536):
+                    drained += len(chunk)
+            finally:
+                # One line for the test, which prints it when the case fails: it tells a client that sent its head
+                # late from one that did not read the answer (seconds since this connection was accepted).
+                print("early: head at %.3f s, released by the next connection: %s at %.3f s, drained %d bytes"
+                      % (answered - began, released, waited - began, drained), flush=True)
             return
         if path == "/stale":
             self.request.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nstale")
