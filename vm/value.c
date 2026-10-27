@@ -361,6 +361,13 @@ agc_value agc_lazy_value(const void *node) {
   return v;
 }
 
+agc_value agc_ats_value(void *table) {
+  agc_value v;
+  v.tag = AGC_T_ATS;
+  v.as.p = table;
+  return v;
+}
+
 agc_value agc_c_pointer_value(void *pointer) {
   agc_value v;
   v.tag = AGC_T_C_POINTER;
@@ -494,6 +501,11 @@ agc_channel *agc_as_channel(agc_vm *vm, agc_value v) {
 
 const void *agc_as_lazy(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LAZY) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+void *agc_as_ats(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_ATS) agc_wrong_tag(vm);
   return v.as.p;
 }
 

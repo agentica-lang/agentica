@@ -152,6 +152,8 @@ Weighed later (no fixed order):
   (15f; `format`, 15k, is deferred to row 7.6), and the VM start-up cut
   ([vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83)).
 - **11:** multicore schedulers (`docs/vm/16-architecture.md` §16.9).
+- **17:** shared tables (phase 9): `ATS[K, V]`, the grammar's
+  [Shared tables](../grammar/06c-tasks-and-tests.md#shared-tables-ats).
 - **7.5, part:** logging (14c), `std/logger` on the std-only `LogRegistry`.
 
 ### Pending rows
@@ -285,11 +287,6 @@ Weighed later (no fixed order):
     enums, optional and nullable JSON fields
   - **Outcome:** Write adapters and read JSON of unknown shape without
     workarounds
-
-- **Order:** 17
-  - **Next work:** (On demand) Shared tables (phase 9): `Table[K, V]`; starts
-    when a real program needs it
-  - **Outcome:** Share a cache or a counter that tasks update
 
 - **Order:** 18
   - **Next work:** (On demand) Binary serialization (phase 11): typed

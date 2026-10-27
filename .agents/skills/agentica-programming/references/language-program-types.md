@@ -33,7 +33,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   a `def` call, `&name`, a block outside a builtin's argument, `while`,
   effectful builtins (`puts`, `IO.*`, `File.*`, `Time.*`, `Random.*`, `Task.*`,
   `Channel.*`). The value needs a data type (`CHECK-CONSTANT-TYPE` for
-  `Channel`, `Task`, `Fn`, handles, `Void`).
+  `Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
 - Scalar literal constants (`SIZE = 4`, `"x"`, `true`, `nil`) cost nothing to
   read. Others are built once, in dependency order, before `main`, and only if
   `main` can reach a reader. An initializer error (`BAD = [1][5]`) stops the
@@ -85,8 +85,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - `Json`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or `&name`, the
   last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process` (`<Process>`), `Lazy[T]`
-  (`lazy.md`), `Task[R]`, `Channel[T]` (`tasks.md`), `Socket`, `Listener`,
-  `HttpClient`, `HttpServer`.
+  (`lazy.md`), `Task[R]`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
+  `Listener`, `HttpClient`, `HttpServer`.
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`) and `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`).
 - Builtin records: `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`,

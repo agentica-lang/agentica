@@ -494,5 +494,8 @@ type:
 - **Written:** `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`)
   - **Help:** annotate it: `ch: Channel[Int] = Channel.new(8)`
 
+- **Written:** `ATS.new()` with no expected type (`CHECK-EXPECTED-TYPE`)
+  - **Help:** annotate it: `hits: ATS[String, Int] = ATS.new()`
+
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks:
 the frames of a stack are Agentica functions.

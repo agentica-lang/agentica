@@ -213,6 +213,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
   case type
     Types.Type.List(item) -> return vm_type?(cx, item)
     Types.Type.Map(key, value) -> return vm_type?(cx, value)
+    Types.Type.ATS(key, value) -> return vm_type?(cx, value)
     Types.Type.Set(item) -> return true
     Types.Type.Result(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
     Types.Type.Task(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)

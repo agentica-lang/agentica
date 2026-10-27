@@ -249,9 +249,9 @@ gives a handle the caller owns to the task it spawns, in the same call.
 group, through the one port function `agc_task_spawn_owning`; it has no group
 registration of its own. Ownership decides who closes a handle, not who may use
 it. Other tasks still use a shared handle (handle ownership, "Shared handles"),
-and `HttpClient` stays exempt (handle ownership). Planned (phase 9,
-[§13](../future/13-ats.md)): a `Table` is exempt too. It is not an OS resource,
-so no task owns it, and a task's end never closes it.
+and `HttpClient` stays exempt (handle ownership). An `ATS` table (the grammar's
+"Shared tables") is exempt too. It is not an OS resource, so no task owns it,
+and a task's end never closes it.
 
 As built, the owner is a field of the resource (`agc_own` in `vm/loop.c`), and
 each task keeps the list of the handles it owns, so a task's end costs the

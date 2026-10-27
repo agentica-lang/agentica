@@ -23,6 +23,7 @@ export enum Type
   List(Type)
   Set(Type)
   Map(Type, Type)
+  ATS(Type, Type)
   Fn(List[Type], Type)
   Struct(String)
   Enum(String, List[Type])
@@ -50,6 +51,7 @@ export def tag(type: Type) -> String
     Type.List(item) -> return "List"
     Type.Set(item) -> return "Set"
     Type.Map(key, value) -> return "Map"
+    Type.ATS(key, value) -> return "ATS"
     Type.Fn(params, result) -> return "Fn"
     Type.Struct(name) -> return "Struct"
     Type.Enum(name, args) -> return "Enum"
@@ -80,18 +82,20 @@ export def item(type: Type) -> Type
   end
 end
 
-## The key type of a Map; Unknown for any other type.
+## The key type of a Map or an ATS; Unknown for any other type.
 export def key(type: Type) -> Type
   case type
     Type.Map(inner, value) -> return inner
+    Type.ATS(inner, value) -> return inner
     _ -> return Type.Unknown
   end
 end
 
-## The value type of a Map; Unknown for any other type.
+## The value type of a Map or an ATS; Unknown for any other type.
 export def value(type: Type) -> Type
   case type
     Type.Map(key, inner) -> return inner
+    Type.ATS(key, inner) -> return inner
     _ -> return Type.Unknown
   end
 end
@@ -143,6 +147,7 @@ export def same?(a: Type, b: Type) -> Bool
     Type.Struct(found) -> return found == name(b)
     Type.Enum(found, list) -> return found == name(b) and same_all?(list, args(b))
     Type.Map(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
+    Type.ATS(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
     Type.Fn(list, last) -> return same_all?(list, params(b)) and same?(last, result(b))
     Type.Result(inner) -> return same?(inner, item(b))
     Type.Task(inner) -> return same?(inner, item(b))
@@ -285,6 +290,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.List(item) -> return "List[#{to_text_as(item, written)}]"
     Type.Set(item) -> return "Set[#{to_text_as(item, written)}]"
     Type.Map(key, value) -> return "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
+    Type.ATS(key, value) -> return "ATS[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
     Type.Fn(params, result) -> return "Fn[#{list_text_as(params.concat([result]), written)}]"
   end
 end
@@ -304,6 +310,7 @@ export def debug_text(type: Type) -> String
     Type.List(item) -> return "List(#{debug_text(item)})"
     Type.Set(item) -> return "Set(#{debug_text(item)})"
     Type.Map(key, value) -> return "Map(#{debug_text(key)}, #{debug_text(value)})"
+    Type.ATS(key, value) -> return "ATS(#{debug_text(key)}, #{debug_text(value)})"
     Type.Fn(params, result) -> return "Fn([#{debug_list(params)}], #{debug_text(result)})"
     _ -> return to_text(type)
   end

@@ -21,6 +21,11 @@ export def list_argument(cx: State.Cx, st: State.St, site: State.Site, context: 
   return shaped(cx, st, site, context, "List", T.Type.List(T.Type.Var("T")))
 end
 
+## Argument 0 as an ATS[K, V].
+export def ats_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  return shaped(cx, st, site, T.Type.Unknown, "ATS", T.Type.ATS(T.Type.Var("K"), T.Type.Var("V")))
+end
+
 ## Argument 0 as a Channel[T].
 export def channel_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   return shaped(cx, st, site, T.Type.Unknown, "Channel", T.Type.Channel(T.Type.Var("T")))

@@ -335,6 +335,108 @@ There is no `select`, no `for x in channel`, and no unbounded or unbuffered
 channel. To merge several sources, send them into one `Channel[Event]` of an
 enum type.
 
+### Shared tables (ATS)
+
+`ATS` (Agentica Table Storage) is reserved: a user `struct`, `enum` or import
+alias named `ATS` is `CHECK-REDEFINED-NAME`. An `ATS[K, V]` is a mutable table
+that tasks share through a handle, the role of Erlang's ETS. Values stay
+immutable; a table is the one place where shared data changes in place, so the
+name and the type say so. A `Channel` passes messages; a table is state that
+many tasks read and update, such as a counter or a cache.
+
+```agentica
+def count_visit(hits: ATS[String, Int]) -> Void
+  hits.add("home", 1)
+end
+
+def main() -> Void
+  hits: ATS[String, Int] = ATS.new()
+  a = Task.spawn(&count_visit, hits)
+  b = Task.spawn(&count_visit, hits)
+  Task.await(a)
+  Task.await(b)
+  IO.inspect(hits.get("home"))   # ok(2)
+end
+```
+
+```text
+ATS.new() -> ATS[K, V]
+ATS.put(table: ATS[K, V], key: K, value: V) -> Void
+ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool
+ATS.get(table: ATS[K, V], key: K) -> Result[V]
+ATS.has_key?(table: ATS[K, V], key: K) -> Bool
+ATS.delete(table: ATS[K, V], key: K) -> Void
+ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int
+ATS.size(table: ATS[K, V]) -> Int
+ATS.keys(table: ATS[K, V]) -> List[K]
+ATS.to_map(table: ATS[K, V]) -> Map[K, V]
+```
+
+All but `new` are also methods, with the table first: `hits.add("home", 1)`.
+Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
+
+- **A handle.** Assigning or passing a table shares the same table; it is never
+  copied. A table may be a struct field, a list element, a `Map` value, or a
+  `Task.spawn` argument or result, but not a value inside a table.
+- **Keys and values.** Keys are `Int` or `String`; any other key type is
+  `CHECK-MAP-KEY-TYPE`, as for `Map`. `V` must be a data type that is not
+  `Nil`, else `CHECK-ATS-VALUE` at the value type. The test is deep: it looks
+  through struct fields, list elements, enum payloads, `Map` values and
+  `Result`, and refuses `Fn` (a block can capture a handle), `Task`, `Channel`,
+  every handle, `Lazy` and `ATS` itself, so no table holds a table. A nested
+  `Result[Void]` is allowed; `V` itself as `Void` is `CHECK-VOID-TYPE`. A type
+  parameter is refused as `V` (a generic enum payload `ATS[String, T]`), since
+  its uses would not be checked; a generic alias is checked where it is used.
+- **`ATS.new`** needs an expected type, like `Channel.new`:
+  `hits: ATS[String, Int] = ATS.new()`; without one it is
+  `CHECK-EXPECTED-TYPE`.
+- **`put`** inserts or replaces. **`put_new`** inserts only when the key is
+  absent and returns `true`; `false` leaves the table unchanged (ETS
+  `insert_new`). **`get`** returns `ok(value)`, or an error when the key is
+  absent. **`delete`** ignores an absent key.
+- **`add`** works only on a table whose values are `Int` (any other value type
+  is `CHECK-TYPE-MISMATCH`): it adds `n` to the value of the key, an absent key
+  counting as 0, and returns the new value (ETS `update_counter`). A result
+  outside the 64-bit range halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the
+  table unchanged.
+- **Snapshots.** `size`, `keys` and `to_map` read the table as it is at the
+  call. `keys` and `to_map` list the keys in first-insertion order; a key that
+  is deleted and put again goes to the end, as in `Map`. `get` with a default
+  and `values` are left out on purpose: use `Result.unwrap_or` and `to_map`.
+- **Atomic calls.** Each call is atomic on its own, on any scheduler: a reader
+  sees the table before or after a write, never half of it. No user code runs
+  inside a call, so a call cannot deadlock or re-enter the table. There are no
+  transactions over several keys. `add` is the one atomic update and `put_new`
+  the one conditional insert; to update any other value safely, let one owner
+  task do the writes.
+- **Costs.** `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take
+  O(log n) in the table size, and `size` O(1). `keys` and `to_map` take their
+  snapshot in O(1) without holding back other tasks, and build their list or
+  map in O(n).
+- **Lifetime.** A table lives while any value refers to it, and the garbage
+  collector frees it then. It is not an OS resource, so the owner rule of
+  handle ownership does not apply: the task that made it does not own it, its
+  end does not close it, and `Task.spawn_owning` is not needed. There is no
+  named global table: a task reaches a table only through a handle it was
+  given. A table belongs to the run that made it; a call from another run halts
+  with `RUNTIME-ATS-CONTEXT`. One run is one execution on the VM, so no handle
+  reaches another run today.
+- **In BDD.** Each scenario runs in its own child VM and runs the step
+  program's `main` again, so a table made in `main` and captured by step blocks
+  is shared by the steps of one scenario and starts fresh in the next. A table
+  cannot go in the JSON state of `BDD.set`.
+- **No data operations.** `puts`, `print`, interpolation and `==` on a table
+  are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, a JSON encoding
+  of a struct with a table field is `CHECK-NOT-ENCODABLE`, and `IO.inspect`
+  prints `<ATS>` without the contents; use `to_map` to see them.
+- **No eviction.** A table has no size limit and no expiry. A bounded or
+  expiring cache belongs in a `std/` module on top of `ATS`.
+- **Effects.** `put`, `put_new`, `delete` and `add` carry `concurrency`, which
+  also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
+
+Not in this version: ordered tables, duplicate keys, a block-based `update`, a
+compare-and-swap `replace`, and tables shared between OS processes.
+
 ### Unit tests (`Test`)
 
 `Test` and `TestCase` are reserved. `Test` is a builtin module that needs no
@@ -419,3 +521,4 @@ fenced `agentica` examples of `std/` docs, are an option to evaluate later, with
 the doc-comment phase.
 
 [agentica-link-1]: ../../site/content/library/concurrency/channel.md
+[agentica-link-2]: ../../site/content/library/concurrency/ats.md

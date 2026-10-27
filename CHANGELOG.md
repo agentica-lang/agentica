@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `ATS[K, V]` shared tables: one mutable table that tasks share for a counter
+  or a cache, with atomic `put`, `put_new`, `get`, `delete`, `add`, `keys` and
+  `to_map` (`ATS.new()`; `examples/shared-cache.agc`).
 - `resource Name, free_ref: c_function`: a resource freed by `void f(T **)`,
   such as `duckdb_close`.
 - `Native.from_string(text)` and `text.bytesize`: pass text with its byte length
@@ -42,6 +45,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
+  `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
 - **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
   `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
   use the Lazy steps `deflate` and `gzip`.

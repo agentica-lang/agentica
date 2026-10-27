@@ -91,6 +91,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.List(item) -> return ok("L" + try written(item, keys, depth + 1))
     T.Type.Set(item) -> return ok("S" + try written(item, keys, depth + 1))
     T.Type.Map(key, value) -> return ok("M" + try written(key, keys, depth + 1) + try written(value, keys, depth + 1))
+    T.Type.ATS(key, value) -> return ok("A" + try written(key, keys, depth + 1) + try written(value, keys, depth + 1))
     T.Type.Fn(params, result) ->
       return ok("F#{params.size}:" + try list_text(params, keys, depth) + try written(result, keys, depth + 1))
     T.Type.Enum(name, args) ->
@@ -162,6 +163,10 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
       key = try read_type(text, after, depth + 1, prefixes)
       value = try read_type(text, key.next, depth + 1, prefixes)
       return ok(Read(type: T.Type.Map(key.type, value.type), next: value.next))
+    "A" ->
+      key = try read_type(text, after, depth + 1, prefixes)
+      value = try read_type(text, key.next, depth + 1, prefixes)
+      return ok(Read(type: T.Type.ATS(key.type, value.type), next: value.next))
     "F" ->
       count = try read_count(text, after)
       params = try read_list(text, count, depth, prefixes)
