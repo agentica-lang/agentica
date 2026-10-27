@@ -110,8 +110,9 @@ jobs:
         env:
           AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       # The loop of --jit off must not move silently (tools/layout_check.py). HEAD^1 is the base branch tip, so this compares
-      # what the merge changes. An intended change carries the `layout-change` label; it is read here, not from the event, so
-      # adding the label and re-running the job is enough.
+      # what the merge changes. An intended change carries the `layout-change` label, which accepts only the exit code 4 of
+      # the check (build/layout-check.rc: make itself exits 2). The label is read here, not from the event, so adding it and
+      # re-running the job is enough.
       - name: Layout of the --jit off hot loop against the base branch
         if: github.event_name == 'pull_request'
         env:
@@ -120,7 +121,8 @@ jobs:
         run: |
           rc=0
           make -j"$(nproc)" layout-check BASE=HEAD^1 || rc=$?
-          if [ "$rc" -ne 0 ] && gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx layout-change; then
+          if [ "$rc" -ne 0 ] && [ "$(cat build/layout-check.rc 2>/dev/null)" = 4 ] \
+            && gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx layout-change; then
             echo "::warning title=layout-check::the loop of --jit off changed; the layout-change label accepts it"
             rc=0
           fi

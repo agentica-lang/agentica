@@ -259,16 +259,26 @@ vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
 
 # The code layout of the `--jit off` hot loop (tools/layout_check.py has the rules): builds BASE (a Git revision, default
 # the merge base with origin/master) in a worktree under build/ with this make's variables, and compares the first binary
-# of the bootstrap, which has the text of dist/agentica, with this tree's. Release mode on Linux x86-64 only. Exit 1 when
-# plain_turn has other instructions or moved inside vm/interp.c; an intended change is labelled `layout-change` in CI.
+# of the bootstrap, which has the text of dist/agentica, with this tree's. Release mode on Linux x86-64 only. Its exit
+# code goes to build/layout-check.rc (make itself exits 2 on any failure): 4 when plain_turn has other instructions or
+# moved inside vm/interp.c, which an intended change accepts with the `layout-change` label in CI.
 BASE ?=
 LAYOUT_TREE ?= $(CURDIR)/build/layout-base
+LAYOUT_RC := build/layout-check.rc
+ifneq ($(filter layout-check,$(MAKECMDGOALS)),)
+ifneq ($(strip $(SANITIZE)$(TSAN)$(GC_STRESS)$(LIBFUZZ)),)
+$(error layout-check: release mode only)
+endif
+ifneq ($(shell uname -sm),Linux x86_64)
+$(error layout-check: Linux x86-64 only)
+endif
+endif
 layout-check: $(BOOT)
-	@if [ -n "$(strip $(SANITIZE)$(TSAN)$(GC_STRESS)$(LIBFUZZ))" ] || [ "$$(uname -sm)" != "Linux x86_64" ]; then \
-	  echo "layout-check: release mode on Linux x86-64 only" >&2; exit 2; fi
-	@rc=0; $(PYTHON) tools/layout_check.py prepare '$(BASE)' '$(LAYOUT_TREE)' || rc=$$?; \
+	@mkdir -p build; rm -f $(LAYOUT_RC); \
+	trap '$(PYTHON) tools/layout_check.py clean "$(LAYOUT_TREE)"' EXIT; \
+	rc=0; $(PYTHON) tools/layout_check.py prepare '$(BASE)' '$(LAYOUT_TREE)' || rc=$$?; \
 	if [ $$rc -eq 0 ]; then \
-	  $(MAKE) --no-print-directory -C '$(LAYOUT_TREE)' $(BOOT) && $(PYTHON) tools/layout_check.py compare '$(LAYOUT_TREE)' $(BOOT) $(VM_OBJ)/interp.o; rc=$$?; \
-	  $(PYTHON) tools/layout_check.py clean '$(LAYOUT_TREE)'; \
+	  $(MAKE) --no-print-directory -C '$(LAYOUT_TREE)' $(BOOT) \
+	    && $(PYTHON) tools/layout_check.py compare '$(LAYOUT_TREE)' $(BOOT) $(VM_OBJ)/interp.o; rc=$$?; \
 	elif [ $$rc -eq 3 ]; then rc=0; fi; \
-	exit $$rc
+	echo $$rc > $(LAYOUT_RC); exit $$rc

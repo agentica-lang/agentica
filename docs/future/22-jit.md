@@ -228,9 +228,7 @@ instruction.
   result, turn end and caught failure, a map read, its missing key and its
   String key's charge, list literals and closures, globals, structs, enums and
   `try`, also under
-  `make vm-tsan`), and `make layout-check` (PR CI): `plain_turn`, the loop of
-  `--jit off`, keeps its instructions and its place in `vm/interp.c`'s text
-  against the base branch (`references/ci.md` of the development skill).
+  `make vm-tsan`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
   each call; a leaf builtin still leaves the code (and unwinds the native

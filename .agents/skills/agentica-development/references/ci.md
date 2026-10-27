@@ -208,19 +208,22 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
   `vm/tests/trace_test.c`.
 - `test` also runs `make layout-check BASE=HEAD^1` right after the first build
   (the base branch tip; locally `BASE` is a revision, default the merge base
-  with `origin/master`, and `-j` helps). It builds the base in a worktree
-  under `build/layout-base` (about 20 s on four cores, skipped when nothing
-  under `vm/`, `Makefile` or `mk/` changed) and compares the first binary of
-  the bootstrap, which has the text of `dist/agentica`, with this tree's
-  (`tools/layout_check.py`). It fails when `plain_turn`, the loop of
-  `--jit off`, has other instructions (addresses, branch targets outside it,
-  rip-relative displacements and padding nops removed) or sits elsewhere in
+  with `origin/master`, and `-j` helps). It covers one function, `plain_turn`,
+  the loop of `--jit off`, in the release build on Linux x86-64. It builds the
+  base in a worktree under `build/layout-base` (about 20 s on four cores,
+  skipped when no `vm/*.c`, `vm/*.h`, `vm/jit/`, `Makefile` or `mk/` file
+  changed) and compares the first binary of the bootstrap, which has the text
+  of `dist/agentica`, with this tree's (`tools/layout_check.py`). It fails
+  (code 4, kept in `build/layout-check.rc` since make exits 2) when
+  `plain_turn` has other instructions (addresses, branch targets outside it,
+  memory displacements and padding nops removed) or sits elsewhere in
   `vm/interp.c`'s text: a 128-byte move with the same instructions and the
   same address modulo 64 made `arithmetic` 13% slower. A move from the objects
   linked before `interp.o`, and any change of `jit_turn` or `agc_run_turn`, is
   a note (a `::warning` for `plain_turn`). An intended change gets the
-  `layout-change` label (read through `gh` when the step runs, so label and
-  re-run the job) and its pinned `--jit off` numbers in the PR body.
+  `layout-change` label, which accepts only code 4, and its pinned `--jit off`
+  numbers in the PR body. Adding a label does not start CI: re-run the job,
+  which re-runs the whole `test` job.
 - Both jobs set `AGENTICA_SWEEP=sampled` (seed from `GITHUB_SHA`; a failure
   prints `AGENTICA_SWEEP_SEED`). The full sweep runs locally, in the release
   and weekly in `sweep.yml`.
