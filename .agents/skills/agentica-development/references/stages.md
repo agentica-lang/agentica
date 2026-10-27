@@ -455,10 +455,10 @@ alternatives field; `builtin-ref` optionally selects by arity. Map.get/2
 returns Result[V]; Map.get/3 returns V with an eagerly evaluated default. Text
 help lists both signatures, and its JSON help carries an `overloads` array;
 single-signature JSON output is unchanged. There is no user-function
-overloading. A Plain builtin may instead give its trailing parameters a
-default (`Model.Named.default`, `references/frontend.md`, "Builtin defaults"):
-one form takes every count from the required to all, and lowering fills the
-rest at the call site.
+overloading. A Plain or Prelude builtin may instead give its trailing
+parameters a default (`Model.Named.default`, `references/frontend.md`, "Builtin
+defaults"): one form takes every count from the required to all, and lowering
+fills the rest at the call site.
 
 ## Command line (`compiler/app/cli.agc` and `cli_*.agc`)
 

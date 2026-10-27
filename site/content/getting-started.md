@@ -183,7 +183,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--jit MODE` | `off` (the default), `on` or `always`: compiles supported operations to machine code on x86-64; a call between compiled functions is a native call. Experimental (elsewhere every mode runs the interpreter); output and step counts do not change. Env `AGENTICA_JIT`; `agentica test` takes only the env |
 | `--deny-run` | makes `Process.spawn` and the other starts return an error that begins with `denied: --deny-run` |
 | `--deny-net` | makes `TCP` and `TLS` connects and listens (so `std/http` too) return an error that begins with `denied: --deny-net` |
-| `--deny-fs` | makes every `File`, `Dir` and `Path` call except `Path.join`, and `Lazy.write_lines`, return an error that begins with `denied: --deny-fs` |
+| `--deny-fs` | makes every `File`, `Dir` and `Path` call except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, return an error that begins with `denied: --deny-fs` |
 | `--deny-env` | makes `System.env` return an error that begins with `denied: --deny-env`; the locale of error texts still follows `LANG` |
 | `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.*` builtin before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
 | `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. A program that can start processes escapes a single flag; use `--sandbox`, or add `--deny-run`. `agentica test` gives them to the test files, the step programs and the programs under test, not to its runner |

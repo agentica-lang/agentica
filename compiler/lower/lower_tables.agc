@@ -25,10 +25,8 @@ export VM_BUILTINS = Set.new([
   "File.read_bytes", "File.read_line", "File.write", "File.write_bytes", "File.flush", "File.close", "File.each_line",
   "File.read_text", "File.sha256", "File.write_text", "File.append_text", "File.stat", "File.lstat",
   "File.try_lock",
-  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.deflate_file", "Zlib.inflate_file",
-  "Zlib.gzip_file", "Zlib.gunzip_file", "Zlib.deflate_init", "Zlib.inflate_init", "Zlib.deflate_next",
-  "Zlib.inflate_next", "Zlib.deflate_finish", "Zlib.inflate_finish", "Zlib.encoder_close", "Zlib.decoder_close",
-  "Zlib.crc32",
+  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32", "Zlib.inflate_init", "Zlib.inflate_next",
+  "Zlib.inflate_finish", "Zlib.decoder_close",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
@@ -61,7 +59,7 @@ export VM_BUILTINS = Set.new([
   "__lazy_channel",
   "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group",
   "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a",
-  "__lazy_with_index", "__lazy_write_lines",
+  "__lazy_with_index", "__lazy_write_lines", "__lazy_chunks", "__lazy_zlib", "__lazy_write_bytes",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

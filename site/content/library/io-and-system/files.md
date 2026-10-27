@@ -7,7 +7,7 @@ description: Read and write files, list and create directories, and build paths.
 Every file function takes a timeout in milliseconds and returns a `Result`.
 
 - Text is UTF-8. One text call reads or writes at most 1 MiB (`File.sha256` streams bytes and has no cap). Files have the permissions of the user who runs the program.
-- With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines`, returns an error that begins with `denied: --deny-fs`.
+- With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
 - Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
 

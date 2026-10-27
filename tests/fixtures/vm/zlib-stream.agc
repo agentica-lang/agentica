@@ -1,39 +1,29 @@
-# Zlib streaming: a deflate/inflate round trip through 1-byte outputs, the
-# finish drain, and the close taxonomy; tests/test_vm_zlib.py checks the
-# progress flags against Python's stdlib zlib.
+# Zlib through the Lazy steps: round trips of each wrapper over chunks of any
+# size (empty ones too), the raw form, the caps and the strict decoders;
+# tests/test_vm_zlib.py checks the bytes against Python's stdlib zlib.
+def joined(chunks: List[List[Int]]) -> List[Int]
+  return chunks.flat_map do |c| c end
+end
+
 def main() -> Void
-  data: List[Int] = [104, 101]
-  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!
-  head = Zlib.deflate_next(enc, data, 1).unwrap!
-  puts("head #{head.output.size} consumed #{head.consumed} needs #{head.needs_input}")
-  out: List[Int] = head.output
-  rest: List[Int] = List.drop(data, head.consumed)
-  for i in 1..100
-    if rest.size == 0
-      break
-    end
-    step = Zlib.deflate_next(enc, List.take(rest, 7), 1).unwrap!
-    out = List.concat(out, step.output)
-    rest = List.drop(rest, step.consumed)
-  end
-  puts("fed rest #{rest.size} out #{out.size}")
-  tail: List[Int] = []
-  finished = false
-  for i in 1..100
-    fin = Zlib.deflate_finish(enc, 1).unwrap!
-    tail = List.concat(tail, fin.output)
-    finished = fin.finished
-    if finished
-      break
-    end
-  end
-  puts("tail finished #{finished} tail #{tail.size}")
-  packed = List.concat(out, tail)
-  puts("round #{Test.eq(Zlib.inflate(packed, 1048576).unwrap!, data)}")
-  puts("close #{Zlib.encoder_close(enc).ok?} again #{Zlib.encoder_close(enc).ok?}")
-  puts("feed after close -> #{Zlib.deflate_next(enc, [1], 1)}")
-  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!
-  puts("bad window -> #{Zlib.inflate_init(8, 1073741824, 1073741824).ok?}")
-  puts("bad total -> #{Zlib.inflate_init(15, 0, 1073741824).ok?}")
-  puts("close #{Zlib.decoder_close(dec).ok?}")
+  none: List[Int] = []
+  items: List[List[Int]] = [[104, 101], none, [108], [108, 111], none]
+  packed = items.lazy.deflate.to_a.unwrap!
+  puts("deflate #{joined(packed).size} round #{packed.lazy.inflate.to_a}")
+  raw = items.lazy.deflate(9, true).to_a.unwrap!
+  puts("raw #{joined(raw).size} round #{raw.lazy.inflate(true).to_a}")
+  puts("raw as zlib -> #{raw.lazy.inflate.to_a}")
+  gz = items.lazy.gzip(1).to_a.unwrap!
+  bytes = joined(gz)
+  puts("gzip #{bytes.size} one byte at a time #{bytes.map do |b| [b] end.lazy.gunzip.to_a}")
+  puts("one-shot agrees #{Test.eq(Zlib.gunzip(bytes).unwrap!, joined(items))}")
+  puts("small cap -> #{gz.lazy.gunzip(4).to_a}")
+  puts("exact cap -> #{gz.lazy.gunzip(5).to_a}")
+  puts("trailing -> #{[bytes, [0]].lazy.gunzip.to_a}")
+  puts("truncated -> #{[bytes.take(10)].lazy.gunzip.to_a}")
+  puts("nothing -> #{[none].lazy.inflate.to_a}")
+  puts("empty deflate #{joined([none].lazy.deflate.to_a.unwrap!)}")
+  puts("bad level -> #{items.lazy.gzip(10).to_a}")
+  puts("bad cap -> #{items.lazy.inflate(false, 0).to_a}")
+  puts("first #{gz.lazy.gunzip.first(1)}")
 end
