@@ -547,9 +547,8 @@ import Sqlite from "pkg/sqlite/db"
   lowercase hex digits; a safe relative TAR or ZIP member): the archive is
   verified by its SHA-256 and the member is cached, pinned per system in
   `[[native-artifact]]` and fetched by `install` and `update` for the host
-  only. Another key, both shapes or
-  a half-written download are `PKG-MANIFEST-INVALID` at the key path
-  (`native.sqlite3.linux.file`).
+  only. Another key, both shapes or a half-written download are
+  `PKG-MANIFEST-INVALID` at the key path (`native.sqlite3.linux.file`).
   ```toml
   [native.sqlite3]
   linux = { system = "libsqlite3.so.0" }
