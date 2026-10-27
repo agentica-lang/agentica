@@ -115,12 +115,14 @@ of compiled code, without the interpreter's loop.
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster
   than `off` (list-build slower, calls and string-library faster).
-- Plain until code: until some code is published, a turn runs the jit copy
-  only when one of its task's 64 top frames (`AGC_JIT_TOP_FRAMES`), or a
-  deeper stack, holds a function the reload may enter (`agc_jit_turn`); the
-  other turns run the plain copy of `off`. Entries are counted only in the jit
-  copy, and a function where the run spends its time is on the stack when its
-  turns start.
+- Plain until code: entries are counted only in the jit copy, so until some
+  code is published a turn runs it (`agc_jit_turn`) when one of its task's 64
+  top frames (`AGC_JIT_TOP_FRAMES`), or a deeper stack, holds a function the
+  reload may enter, which catches a long loop the turn starts in, and one turn
+  in 16 of each scheduler (`AGC_JIT_SAMPLE`) does in any case, which counts a
+  function that runs only inside turns (a callee that returns before the turn
+  ends, the work of a task that parks or ends within its turn). The other
+  turns run the plain copy of `off`.
 - Entry: at each reload of the turn loop (a call, a return, the start of a
   turn) the interpreter tests one byte of the function and enters its code at
   `frame->pc` through a table of entry offsets, so a turn that ended inside a
@@ -167,9 +169,10 @@ of compiled code, without the interpreter's loop.
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a function without a loop
   that `on` compiles only for a compiled caller, `on` in the plain turn loop
-  until a function that may get code runs, string joins and text forms in
-  compiled code, fields, lists, enums, Results and Floats read in compiled code
-  with the exit counts of the trace, native calls with a `--max-steps` sweep, an
+  but for sampled turns until code is published, a hot function that runs
+  only inside turns, string joins and text forms in compiled code, fields,
+  lists, enums, Results and Floats read in compiled code with the exit counts
+  of the trace, native calls with a `--max-steps` sweep, an
   overflow and the depth limit inside natively called functions),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
@@ -183,7 +186,9 @@ of compiled code, without the interpreter's loop.
   interpreter but whose loop rarely runs still pays the entry and the exit at
   each call; a function that `on` may compile but that never gets hot still
   runs the jit copy of the turn loop (and its layout effect) in the turns
-  that start with it near the top of the stack; and after an exit has unwound
+  that start with it near the top of the stack and in one turn in 16; a
+  function that runs only inside turns compiles up to 16 times as many turns
+  later as one a turn starts in; and after an exit has unwound
   native calls (a turn that ends, a builtin), each of those frames returns
   through the `RETURN` exit.
 

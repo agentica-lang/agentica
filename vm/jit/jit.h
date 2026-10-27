@@ -108,13 +108,17 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc);
 static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
   return !atomic_load_explicit(&jit->skip[function], memory_order_relaxed);
 }
-/* True when this turn of task T runs the jit copy of the turn loop; false, the plain copy, the code of --jit off.
-   Every turn does once some code is published. Before that, a turn does when one of T's AGC_JIT_TOP_FRAMES top frames
-   is of a function the reload may enter (or T has more frames than that): the entries of `on` are counted only in the
-   jit copy, and a function where the run spends its time is on the stack when its turns start. So a run whose
-   functions that may get code run seldom or never keeps the plain loop, without a test of the JIT inside it. */
+/* True when the turn VM is about to run for its task runs the jit copy of the turn loop; false, the plain copy, the
+   code of --jit off. Every turn does once some code is published. Before that, the entries of `on` are counted only in
+   the jit copy, so a turn runs it when one of the task's AGC_JIT_TOP_FRAMES top frames is of a function the reload may
+   enter (or the task has more frames than that), which catches a long loop the turn starts in, and one turn in
+   AGC_JIT_SAMPLE of each scheduler does in any case, which counts a function that runs only inside turns (a callee
+   that returns before the turn ends, the work of a task that parks or ends within its turn). So a run whose functions
+   that may get code run seldom or never keeps the plain loop for nearly every turn, without a test of the JIT inside
+   it. */
 #define AGC_JIT_TOP_FRAMES 64
-bool agc_jit_turn(agc_jit *jit, const agc_task *t);
+#define AGC_JIT_SAMPLE 16
+bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
 /* The code of FUNCTION for the frame a CALL exit just pushed: its code, or, for a function without a loop that `on`
    compiles only to be called from compiled code, its code compiled now if this exit makes it hot; NULL to interpret
    it. It counts an entry only for such a function. */

@@ -474,8 +474,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   if (mode == AGC_JIT_OFF || !AGC_JIT_HOST) return NULL;
   /* Each function is decided once, here: a function kept out is never counted or walked again, and a run where every
      function is kept out has no JIT (nothing is allocated), so it runs the plain copy of the turn loop, the code of
-     --jit off, as a turn of a run with a JIT does while no code is published and no top frame may get some
-     (agc_jit_turn). */
+     --jit off, as most turns of a run with a JIT do while no code is published (agc_jit_turn). */
   size_t n = program->function_count;
   _Atomic bool *skip = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *skip));
   _Atomic bool *native_only = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *native_only));
@@ -536,11 +535,18 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   return jit;
 }
 
-bool agc_jit_turn(agc_jit *jit, const agc_task *t) {
+/* AGC_JIT_SAMPLE divides the 256 values of the scheduler's 8-bit turn counter, so the sample stays regular when it
+   wraps. */
+_Static_assert(256 % AGC_JIT_SAMPLE == 0, "AGC_JIT_SAMPLE must divide 256");
+
+bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
+  const agc_task *t = vm->task;
   /* The flag only picks the loop, and the jit copy loads each code pointer with acquire, so the acquire here (a plain
      load on x86-64) only keeps "live" meaning "some code is visible" on every scheduler. */
   bool jit_copy = atomic_load_explicit(&jit->live, memory_order_acquire);
   uint32_t n = t->frame_count, low = n > AGC_JIT_TOP_FRAMES ? n - AGC_JIT_TOP_FRAMES : 0;
+  /* The sample: a per-scheduler count, no shared write. */
+  if (!jit_copy) jit_copy = (uint8_t)++vm->jit_sample % AGC_JIT_SAMPLE == 0;
   /* A deeper stack runs the jit copy, as every run did before: its frames below the top ones may be in a loop that
      gets hot, and walking all of them each turn would cost more than the plain loop saves. */
   if (!jit_copy) jit_copy = low > 0;

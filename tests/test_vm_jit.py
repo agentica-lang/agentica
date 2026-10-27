@@ -610,9 +610,10 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
 
 
 @pytest.mark.parametrize("calls", [0, 3000])
-def test_on_runs_the_jit_turn_loop_only_once_a_function_that_may_get_code_runs(tmp_path, calls):
-    # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the whole run in the plain turn
-    # loop: no `turn count` line. Called 3000 times, the turns that start in it run the jit copy, which compiles it.
+def test_on_runs_the_jit_turn_loop_only_in_sampled_turns_until_code_is_published(tmp_path, calls):
+    # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the run in the plain turn
+    # loop but for one turn in 16 (AGC_JIT_SAMPLE) of the steps / 2000 turns. Called 3000 times, the turns that start in
+    # it run the jit copy, which compiles it, and from then on every turn does.
     bytecode = compile_text(f"""def pad(n: Int, width: Int) -> String
   text = n.to_s
   while text.length < width
@@ -634,15 +635,78 @@ def main() -> Void
     k += 1
   end
   puts(total)
+  puts(Profile.steps())
 end
 """, "plain_until_live", tmp_path)
-    lines = jit_trace(bytecode, tmp_path, "on")
-    turns = [line for line in lines if " jit turn count=" in line]
-    assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
-    assert len(turns) == (1 if X86_64 and calls else 0), lines
-    assert any(" jit turn count=" in line for line in jit_trace(bytecode, tmp_path, "always")) == X86_64
     code, stdout, stderr = assert_same(bytecode)
-    assert code == 0 and stdout == f"{20000 + 6 * calls}\n", (stdout, stderr)
+    assert code == 0 and stdout.split("\n")[0] == f"{20000 + 6 * calls}", (stdout, stderr)
+    all_turns = int(stdout.split("\n")[1]) // 2000 + 1
+    lines = jit_trace(bytecode, tmp_path, "on")
+    turns = [int(line.split("count=")[1]) for line in lines if " jit turn count=" in line]
+    assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
+    if X86_64 and not calls:
+        assert len(turns) == 1 and 0 < turns[0] <= all_turns // 16 + 1, (turns, all_turns)
+    elif X86_64:
+        assert len(turns) == 1 and turns[0] > all_turns // 16 + 1, (turns, all_turns)
+    else:
+        assert turns == []
+
+
+MID_TURN_WORK = """def work(n: Int) -> Int
+  s = 0
+  i = 0
+  while i < n
+    s = s + i % 7
+    i += 1
+  end
+  return s
+end
+
+"""
+MID_TURN = {
+    # main's loop parks at each pass, and a map keeps it out, so every turn starts in main and work returns before it
+    # ends.
+    "park": (MID_TURN_WORK + """def main() -> Void
+  total = 0
+  k = 0
+  while k < 3000
+    Task.sleep(0)
+    total = total + {"k": k}.size * work(120)
+    k += 1
+  end
+  puts(total)
+end
+""", f"{3000 * sum(i % 7 for i in range(120))}\n"),
+    # Each task runs job, a function without a loop, and ends within its turn, so no turn starts in work.
+    "spawn": (MID_TURN_WORK + """def job(n: Int) -> Int
+  return work(n) + work(n) + work(n)
+end
+
+def main() -> Void
+  tasks: List[Task[Int]] = []
+  k = 0
+  while k < 1500
+    tasks = tasks.push(Task.spawn(&job, 45))
+    k += 1
+  end
+  total = 0
+  for t in tasks
+    total = total + Task.await(t)
+  end
+  puts(total)
+end
+""", f"{1500 * 3 * sum(i % 7 for i in range(45))}\n"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(MID_TURN))
+def test_on_compiles_a_hot_function_that_runs_only_inside_turns(tmp_path, case):
+    # No turn starts with work on the stack; the turns that the JIT samples count its entries, so it still compiles.
+    source, expected = MID_TURN[case]
+    bytecode = compile_text(source, f"mid_turn_{case}", tmp_path)
+    assert ("work" in compiled(bytecode, tmp_path, "on")) == X86_64
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == expected, (stdout, stderr)
 
 
 def test_compiled_code_calls_compiled_functions_natively(tmp_path):

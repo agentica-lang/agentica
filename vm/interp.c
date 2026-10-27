@@ -1672,10 +1672,9 @@ static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { retu
 static __attribute__((noinline)) agc_turn_result plain_turn(agc_vm *vm) { return turn_loop(vm, false, false); }
 
 /* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. A run with a JIT runs
-   the plain copy, the one of --jit off, while agc_jit_turn says no: no code yet, and no function near the top of the
-   stack that may get some. */
+   the plain copy, the one of --jit off, for the turns agc_jit_turn turns down while no code is published. */
 agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
-  if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm->task)) return jit_turn(vm);
+  if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
   return plain_turn(vm);
 }
