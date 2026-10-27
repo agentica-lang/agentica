@@ -27,6 +27,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `JsonField` is a reserved type name.
 - **Breaking:** `JSON.schema` leaves out `required` when no field is required,
   such as for a struct with no fields.
+- The experimental x86-64 JIT runs tail calls and struct updates
+  (`s.with(...)`) from compiled code, so functions that use them compile under
+  `--jit on`.
 
 ## [0.12.0] - 2026-10-27
 
