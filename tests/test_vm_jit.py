@@ -6,8 +6,9 @@ several calls from compiled code). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
 compile and run them at once. A call of a compiled function is a native call
-in compiled code; builtins and allocations without code run in the
-interpreter, and the code goes on after them.
+in compiled code, and so is a call of a builtin marked direct; other builtins
+and allocations without code run in the interpreter, and the code goes on
+after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -72,6 +73,7 @@ FAILURES = {
     "division": ("RUNTIME-DIVISION-BY-ZERO", "x = x / (7 - i)"),
     "float division": ("RUNTIME-DIVISION-BY-ZERO", "x = x + (1.0 / (7.0 - i.to_f)).to_i!"),
     "index": ("RUNTIME-INDEX-OUT-OF-RANGE", "x = x + items[i / 19]"),
+    "builtin": ("RUNTIME-INVALID-COUNT", "x = x + items.take(3 - i).size"),
 }
 
 # A task in a long compiled loop is cancelled between two of its turns.
@@ -341,11 +343,56 @@ end
 """
 
 # Failures inside natively called functions, after main's loop is hot: the diagnostic, its span and the stack (each
-# caller's pc is the one after its CALL) must not depend on the tier. down passes the call depth limit.
+# caller's pc is the one after its CALL) must not depend on the tier. down passes the call depth limit; a builtin that
+# compiled code calls in cut fails.
 NATIVE_FAILURES = {
     "overflow": ("RUNTIME-INTEGER-OVERFLOW", "if i < 150\n      x = grow(x % 1000)\n    else\n      x = grow(x)\n    end"),
     "depth": ("RUNTIME-STACK-OVERFLOW", "x = x % 1000 + down(i * 80)"),
+    "builtin": ("RUNTIME-INVALID-COUNT", "x = x % 1000 + cut(400 - i).length"),
 }
+
+# Two tasks whose compiled loops call String, List, Map and Set builtins that compiled code calls itself: they
+# allocate and charge turn cost (split, join, upcase, take), so turns end inside those calls as in the interpreter,
+# and the order of the lines shows where.
+DIRECT = """def tally(words: List[String], rounds: Int) -> Int
+  counts: Map[String, Int] = {}
+  seen = Set.new(words)
+  kept = words.take(0)
+  total = 0
+  i = 0
+  while i < rounds
+    word = words[i % words.size]
+    counts = counts.put(word, counts.get(word, 0) + 1)
+    parts = word.split("-")
+    total += parts.join("+").length + word.slice(0, 1).length
+    if seen.include?(word.upcase)
+      total += 1
+    end
+    kept = kept.concat(parts).take(40)
+    i += 1
+  end
+  return total + counts.get("b-c-d", 0) + kept.size + counts.size
+end
+
+def worker(id: Int) -> Int
+  words = "a-b,b-c-d,E,f-g-h-i,j-k".split(",")
+  total = 0
+  round = 0
+  while round < 3
+    total += tally(words, 3000 * id)
+    puts("task #{id} round #{round} total #{total}")
+    round += 1
+  end
+  puts("task #{id} steps #{Profile.steps()}")
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+"""
 
 
 # build joins Strings in a loop (each join charges its bytes, so turns end by cost in compiled code as in the
@@ -785,6 +832,10 @@ def test_a_failure_in_a_natively_called_function_matches_the_interpreter(tmp_pat
   return x * 3 + 1
 end
 
+def cut(n: Int) -> String
+  return "a,b,c".split(",").take(n).join("-")
+end
+
 def down(n: Int) -> Int
   if n == 0
     return 0
@@ -803,7 +854,7 @@ def main() -> Void
   puts(x)
 end
 """, "native_failure", tmp_path)
-    callee = "down" if case == "depth" else "grow"
+    callee = {"depth": "down", "builtin": "cut"}.get(case, "grow")
     assert compiled(bytecode, tmp_path, "on") == (sorted([callee, "main"]) if X86_64 else [])
     for style in ((), ("--json",)):
         status, stdout, stderr = assert_same(bytecode, *style)
@@ -848,6 +899,24 @@ def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
     assert_max_steps_sweep(bytecode, steps)
     code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(steps + 100))
     assert code == 0, stderr
+
+
+def test_compiled_loops_call_allocating_builtins_without_leaving(tmp_path):
+    bytecode = compile_text(DIRECT, "direct", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["tally"] if X86_64 else [])
+    full = assert_same(bytecode)
+    assert full[0] == 0 and full[1].count("\n") == 9, full
+    # Only main and worker call builtins that leave (Task, puts): the 243,000 calls of builtins in the 27,000 passes
+    # of tally's loop stay in compiled code, where one leaves only when it ends a turn.
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        calls = sum(int(line.split("count=")[1]) for line in lines if " jit exit op=call-builtin " in line)
+        assert calls < (20 if X86_64 else 1), (mode, calls)
+    # Limits below the two tasks' steps stop the run inside tally's loop, in either task.
+    steps = sum(int(line.split("steps ")[1]) for line in full[1].splitlines() if " steps " in line)
+    for limit in range(steps // 20, steps * 19 // 20, steps // 15):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):

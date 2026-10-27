@@ -1786,30 +1786,30 @@ agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {
 }
 
 const agc_builtin agc_tcp_builtins[] = {
-  {"TCP.connect", 3, builtin_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.listen", 2, builtin_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.accept", 2, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"TCP.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"TCP.recv_bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"HttpWire.read_text", 4, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"HttpWire.read_head", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"HttpWire.read_response", 4, builtin_read_response, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"HttpWire.clean_eof?", 1, builtin_clean_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"HttpWire.connect_tls", 4, builtin_connect_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"TCP.connect", 3, builtin_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.listen", 2, builtin_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.accept", 2, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.recv_bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.read_text", 4, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.read_head", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.read_response", 4, builtin_read_response, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.clean_eof?", 1, builtin_clean_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.connect_tls", 4, builtin_connect_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_builtins[0];
 #else
-const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false}};
+const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_tcp_builtin_count = 0;
 #endif

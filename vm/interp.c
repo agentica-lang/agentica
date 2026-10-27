@@ -47,9 +47,20 @@ struct agc_native {
   agc_stepper *stepper;
 };
 
+/* Where a failure or an exit jumps: the catch of a builtin that compiled code calls, which hands it on outside
+   compiled code (run_compiled), else the turn's or the run's target. */
+static _Noreturn void unwind(agc_vm *vm) {
+  agc_catch_buf *jit_catch = vm->jit_catch;
+  if (jit_catch) {
+    vm->jit_catch = NULL;
+    AGC_THROW(*jit_catch);
+  }
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+}
+
 static _Noreturn void raise_failure(agc_vm *vm) {
   agc_stack_capture(vm, vm->outcome);
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  unwind(vm);
 }
 
 /* A frame of the run of prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): a function with the prelude flag,
@@ -124,7 +135,7 @@ void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, 
 void agc_exit(agc_vm *vm, int64_t code) {
   vm->outcome->kind = AGC_EXITED;
   vm->outcome->exit_code = code;
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  unwind(vm);
 }
 
 void agc_stop(agc_vm *vm, int sig) {
@@ -1160,6 +1171,10 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       case AGC_JIT_EXIT_COST:
         if (apply_cost(vm)) return COMPILED_YIELD;
         break;
+      /* A builtin that compiled code called (agc_jit_call_builtin) returned and ended the turn, or failed: its
+         failure, recorded with the stack of that moment, goes on to the turn's target from here. */
+      case AGC_JIT_EXIT_YIELD: return COMPILED_YIELD;
+      case AGC_JIT_EXIT_RAISE: unwind(vm);
       case AGC_JIT_EXIT_CALL: {
         agc_instr in = f->code[out.pc];
         uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
