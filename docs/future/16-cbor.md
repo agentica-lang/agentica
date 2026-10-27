@@ -358,9 +358,8 @@ the data.
   has no plan yet; it must be planned there, and landed, before this section
   starts. That plan must also say how the byte builtins take and return `Bytes`,
   and give a slice and a concat, so the framing loops above are easy to write.
-- **Generic structs** (roadmap 10c, done: the grammar's "Generic structs"),
-  since the type check substitutes the type arguments of generic instances
-  (16.3).
+- **Generic structs** (roadmap 10c; the grammar's "Generic structs"), since the
+  type check substitutes the type arguments of generic instances (16.3).
 - **The JSON form of enums** (§15.4, roadmap 10d), for the shared tag and values
   order. This section spells out its own form (16.4), so it does not need §15.4
   to be read; it lands after 10d so both formats agree from the start.
@@ -383,7 +382,7 @@ the data.
 - One PR on the VM: `Term.encode`/`Term.decode` per §16.4 with enums as
   `[tag, values]` (§16.5 for hostile input); the Term type check with
   substituted type arguments; `Term` becomes a reserved name. Needs `Bytes` and
-  the JSON form of enums (10d) first; generic structs (10c) are done.
+  the JSON form of enums (10d) first.
 - Done when: an example writes a struct with an `Int`-keyed map, a Float NaN and
   an enum to bytes and reads it back, with the same bytes and output on the VM;
   every hostile-input case returns `error(...)`.

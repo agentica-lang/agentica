@@ -85,6 +85,24 @@ RULES = {
     "JSON.encode needs encodable fields after substitution": (
         declared("puts(JSON.encode(Box(value: &inc)))", header=BOX + INC), "CHECK-NOT-ENCODABLE",
         "Box(value: &inc)"),
+    "JSON.encode checks the arguments of a nested generic instance": (
+        declared("puts(JSON.encode(Box(value: Box(value: &inc))))", header=BOX + INC), "CHECK-NOT-ENCODABLE",
+        "Box(value: Box(value: &inc))"),
+    "JSON.from checks the arguments of a nested generic instance": (
+        declared("puts(JSON.from(Box(value: Box(value: &inc))).inspect)", header=BOX + INC), "CHECK-NOT-ENCODABLE",
+        "Box(value: Box(value: &inc))"),
+    "JSON.encode checks a Set inside a nested generic instance": (
+        declared("puts(JSON.encode(Box(value: Box(value: Set.new([1])))))"), "CHECK-NOT-ENCODABLE",
+        "Box(value: Box(value: Set.new([1])))"),
+    "JSON.encode checks a generic instance inside the fields of its own struct": (
+        "struct Bad[T]\n  v: T\n  rest: List[Bad[Fn[Int, Int]]]\nend\n\n"
+        + main("puts(JSON.encode(Bad(v: 1, rest: [])))"), "CHECK-NOT-ENCODABLE", "Bad(v: 1, rest: [])"),
+    "JSON.encode ends on a recursion that changes its type argument": (
+        "struct Deep[T]\n  v: T\n  rest: List[Deep[List[T]]]\nend\n\n"
+        + main("puts(JSON.encode(Deep(v: 1, rest: [])))"), None, None),
+    "JsonField is no type argument, however deep": (
+        declared("puts(JSON.encode(Box(value: Box(value: JsonField.Value(1)))))"), "CHECK-JSON-FIELD-PLACE",
+        "Box(value: Box(value: JsonField.Value(1)))"),
     "JSON.decode rejects a bare generic struct": (
         declared('r = JSON.decode("{}", Box)'), "CHECK-UNKNOWN-TYPE", "Box"),
     "JSON.schema rejects a bare generic struct": (declared("r = JSON.schema(Box)"), "CHECK-UNKNOWN-TYPE", "Box"),

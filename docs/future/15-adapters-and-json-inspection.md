@@ -266,9 +266,9 @@ the fields of a struct type is known at compile time and is `Type.members`
 - One PR per item (10a–10e), each with its own tests and docs. 10b, 10d and
   10e need the VM JSON work; 10e also needs 10b.
 - 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
-  `JsonValue` enum (§15.2); 10c generic structs (done, in the grammar: section
-  6, "Generic structs"); 10d JSON for enums (§15.4); 10e optional and nullable
-  JSON fields (the grammar's JSON section).
+  `JsonValue` enum (§15.2); 10c generic structs (the grammar: section 6,
+  "Generic structs"); 10d JSON for enums (§15.4); 10e optional and nullable JSON
+  fields (the grammar's JSON section).
 - Done when: two programs run. The VM program has a `Storage` adapter with a
   read-only memory backend and a walker over unknown JSON, using only builtin
   library calls (golden check). The disk program uses the same `Storage` shape

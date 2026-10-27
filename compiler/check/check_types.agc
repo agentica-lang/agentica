@@ -109,19 +109,21 @@ export def json_field_place(
     return json_field_place(cx, Types.value(type), false, "map value", owner, seen)
   elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
     key = "Struct:#{Types.name(type)}"
+    # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
+    # Box by an argument, and the fields below are walked once for each name.
+    for argument in Types.args(type)
+      found = json_field_place(cx, argument, false, "type argument", owner, seen)
+      if found != ""
+        return found
+      end
+    end
+
     if seen.any? do |item: String| item == key end
       return ""
     end
 
     inner = seen.push(key)
     place = Types.display_name(Types.name(type))
-    for argument in Types.args(type)
-      found = json_field_place(cx, argument, false, "type argument", owner, inner)
-      if found != ""
-        return found
-      end
-    end
-
     for field in cx.structs[Types.name(type)]
       found = json_field_place(cx, field.type, true, "struct field", "#{place}.#{field.name}", inner)
       if found != ""
@@ -793,11 +795,19 @@ def shared_type_names(cx: State.Cx) -> List[String]
   ].concat(OPAQUE_TYPES.to_a)
 end
 
-# True when every field of the struct type, with its type arguments put in, passes the test: 0 for encodable, 1 for
-# decodable. A struct already in seen is true (the type is recursive; seen holds names, so a recursion that changes its
-# type arguments each time still ends).
+# True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
+# each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
+# argument). Then every field with the arguments put in is tested, once for each name on the path: a struct already in
+# seen is true (the type is recursive), and since seen holds names, a recursion that changes its type arguments each
+# time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
 def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
   name = Types.name(type)
+  for argument in Types.args(type)
+    if test == 0 and !encodable?(cx, argument, seen)
+      return false
+    end
+  end
+
   if seen.any? do |item: String| item == name end
     return true
   end
