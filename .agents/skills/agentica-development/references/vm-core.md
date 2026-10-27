@@ -209,9 +209,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   as one cost arithmetic 20% by code layout alone)
   and handles the exits as the interpreter handles that instruction: STEP runs
   `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
-  leaf builtin itself or lets the loop run that one instruction, which enters
-  the code again at the next pc (`resume`), CALL and RETURN the shared frame
-  handlers. A CALL of a function with code is native (`agc_emit_call`): an
+  leaf builtin itself, starts a block call (a row with a native kind:
+  `start_native`, whose block then runs in its code, one RETURN exit per
+  call) or lets the loop run that one instruction, which enters the code
+  again at the next pc (`resume`), CALL and RETURN the shared frame handlers. A CALL of a function with code is native (`agc_emit_call`): an
   exit inside the callee comes back with the callee's frame on top.
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any

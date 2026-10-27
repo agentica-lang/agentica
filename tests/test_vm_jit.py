@@ -6,9 +6,10 @@ several calls from compiled code). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
 compile and run them at once. A call of a compiled function is a native call
-in compiled code, and so is a call of a builtin marked direct; other builtins
-and allocations without code run in the interpreter, and the code goes on
-after them.
+in compiled code, and so is a call of a builtin marked direct; a block call
+(`map`, `filter`, ...) starts between two runs of compiled code, and its block
+runs compiled; other builtins and allocations without code run in the
+interpreter, and the code goes on after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -432,6 +433,50 @@ def worker(id: Int) -> Int
   round = 0
   while round < 3
     total += lookup(table, keys, 400 * id)
+    puts("task #{id} round #{round} total #{total}")
+    round += 1
+  end
+  puts("task #{id} steps #{Profile.steps()}")
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+"""
+
+# Two tasks whose compiled loop makes closures that capture values (shift, bias) and passes them to filter, map,
+# reduce and any?, which compiled code starts itself; the blocks run in compiled code. Each call of a block charges
+# turn cost, so turns end inside the block calls (and resume in the block's code), as in the interpreter, and the order
+# of the lines shows where.
+BLOCKS = """def sweep(items: List[Int], rounds: Int, bias: Int) -> Int
+  total = 0
+  i = 0
+  while i < rounds
+    shift = i % 7
+    kept = items.filter do |x| (x + shift) % 3 == 0 end
+    total = (total + kept.map do |x| x * bias + shift end.reduce(0) do |acc, x| (acc + x) % 1000003 end) % 1000003
+    if items.any? do |x| x == shift + 900 end
+      total += 1
+    end
+    i += 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  items: List[Int] = []
+  n = 0
+  while n < 500 * id
+    items = items.push(n * 7 % 1009)
+    n += 1
+  end
+  total = 0
+  round = 0
+  while round < 3
+    total += sweep(items, 10 * id, id)
     puts("task #{id} round #{round} total #{total}")
     round += 1
   end
@@ -952,21 +997,26 @@ def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
     assert code == 0, stderr
 
 
-# Two tasks whose loop stays in compiled code under `on` and `always`: (program, compiled function, the opcodes of the
-# exits it must not take, fewer than this many of them). DIRECT: only main and worker call builtins that leave (Task,
-# puts), so the 243,000 builtin calls in the 27,000 passes of tally's loop stay in compiled code, where one leaves only
-# when it ends a turn. LOOKUP: no map read or list literal of lookup's loop leaves.
+# Two tasks whose loop stays in compiled code under `on` and `always`: (program, the functions `on` compiles, the first
+# naming the program, the opcodes of the exits they must not take, fewer than this many of them). DIRECT: only main and
+# worker call builtins that leave (Task, puts), so the 243,000 builtin calls in the 27,000 passes of tally's loop stay
+# in compiled code, where one leaves only when it ends a turn. LOOKUP: no map read or list literal of lookup's loop
+# leaves. BLOCKS: no closure or block call of sweep's loop leaves (its 360 block calls start between two runs of
+# compiled code, and their blocks, compiled at the first call, run there too); under `always` the calls of puts and
+# Task in main and worker do.
+SWEEP_BLOCKS = ["block@sweep.agc:6:25", "block@sweep.agc:7:31", "block@sweep.agc:7:69", "block@sweep.agc:8:19"]
 STAYS = {
-    "builtins": (DIRECT, "tally", ("call-builtin",), 20),
-    "map reads and lists": (LOOKUP, "lookup", ("map-get", "list"), 1),
+    "builtins": (DIRECT, ["tally"], ("call-builtin",), 20),
+    "map reads and lists": (LOOKUP, ["lookup"], ("map-get", "list"), 1),
+    "blocks": (BLOCKS, ["sweep", *SWEEP_BLOCKS], ("closure", "call-builtin"), 20),
 }
 
 
 @pytest.mark.parametrize("case", sorted(STAYS))
-def test_compiled_loops_run_builtins_map_reads_and_lists_without_leaving(tmp_path, case):
-    source, function, ops, most = STAYS[case]
-    bytecode = compile_text(source, function, tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == ([function] if X86_64 else [])
+def test_compiled_loops_run_builtins_map_reads_lists_and_blocks_without_leaving(tmp_path, case):
+    source, functions, ops, most = STAYS[case]
+    bytecode = compile_text(source, functions[0], tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (sorted(functions) if X86_64 else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 9, full
     for mode in ("on", "always"):
@@ -978,6 +1028,58 @@ def test_compiled_loops_run_builtins_map_reads_and_lists_without_leaving(tmp_pat
     for limit in range(steps // 20, steps * 19 // 20, steps // 15):
         code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
         assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+
+
+def test_a_failure_inside_a_compiled_block_matches_the_interpreter(tmp_path):
+    # The block fails at the 300th pass of main's compiled loop, inside the native frame of map: the diagnostic, its
+    # span (in the block) and the stack (main, map, the block) must not depend on the tier.
+    bytecode = compile_text("""def main() -> Void
+  puts("before")
+  total = 0
+  i = 0
+  while i < 1000
+    total += [i, i + 1, i + 2].map do |v| v * 3 / (300 - i) end.size
+    i += 1
+  end
+  puts(total)
+end
+""", "block_failure", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if X86_64 else [])
+    for style in ((), ("--json",), ("--ai",)):
+        status, stdout, stderr = assert_same(bytecode, *style)
+        assert status == 1 and stdout == "before\n" and "RUNTIME-DIVISION-BY-ZERO" in stderr, (style, stderr)
+
+
+def test_a_task_cancelled_inside_a_long_block_call_stops_as_in_the_interpreter(tmp_path):
+    # The spawned task's compiled loop runs a filter over a long list: the turns end inside the block calls, and the
+    # cancel lands there, between two of its turns.
+    bytecode = compile_text("""def scan(rounds: Int) -> Int
+  items: List[Int] = []
+  n = 0
+  while n < 20000
+    items = items.push(n)
+    n += 1
+  end
+  total = 0
+  r = 0
+  while r < rounds
+    total += items.filter do |x| (x + r) % 5 == 0 end.size
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&scan, 1000000)
+  puts(scan(3))
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "block_cancel", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["block@block_cancel.agc:11:27", "scan"] if X86_64 else [])
+    status, stdout, stderr = assert_same(bytecode, "--json")
+    assert status == 1 and stdout == "12000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):

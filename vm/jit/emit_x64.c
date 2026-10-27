@@ -425,6 +425,14 @@ void agc_emit_list(agc_emitter *e, agc_instr in) {
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_list);
 }
 
+/* CLOSURE: agc_jit_closure(&R[a], bx, captures), which never fails, so no status to test. */
+void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures) {
+  lea(e, ARG0, REGS, TAG(in.a));
+  move_imm64(e, ARG1, (uint32_t)in.b | ((uint32_t)in.c << 16));
+  move_imm64(e, ARG2, captures);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_closure);
+}
+
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
    compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
    cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds

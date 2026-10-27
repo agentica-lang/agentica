@@ -1137,18 +1137,22 @@ static agc_turn_result park_task(agc_task *t) {
    that function's frame on top, which is the frame the exit is about from then on. CALL and RETURN use the shared
    frame handlers and go on in the code of the new top frame when it has code, else reload; other unsupported
    instructions return to the opcode switch at frame->pc, after a reload when the top frame is not FRAME any more (the
-   reload enters the code at that instruction, which exits again at once). A function that `on` compiled for native
-   calls only is entered here only to resume it, never at its first instruction. Only the jit copy of the turn loop
-   calls it; nothing here changes that loop, whose plain copy's machine code follows every edit of it. */
+   reload enters the code at that instruction, which exits again at once). A block call (a builtin row with a native
+   kind, such as `filter`) starts here too, as a leaf builtin is called here: its native frame calls the block, whose
+   frames go on in the block's code, and each RETURN of the block resumes the native frame. A function that `on`
+   compiled for native calls only is entered here only to resume it, or at its first instruction when a native frame
+   called it (a block whose call began in a turn that ended). Only the jit copy of the turn loop calls it; nothing
+   here changes that loop, whose plain copy's machine code follows every edit of it. */
 static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc_vm *vm, agc_jit *jit,
                                                                              agc_frame *frame) {
-  if (!frame->pc && agc_jit_native_only(jit, frame->function)) return COMPILED_NONE;
+  agc_task *t = vm->task;
+  if (!frame->pc && agc_jit_native_only(jit, frame->function) && (frame == t->frames || !frame[-1].native))
+    return COMPILED_NONE;
   agc_jit_code code = agc_jit_code_of(jit, frame->function, frame->pc);
   const agc_program *p = vm->rt->program;
   const agc_function *f = &p->functions[frame->function];
   if (!code || frame->pc >= f->count) return COMPILED_NONE;
   agc_frame *const entry = frame;
-  agc_task *t = vm->task;
   agc_value *R = t->regs + frame->base;
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
@@ -1180,7 +1184,7 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
         uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
         if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
         call_instruction(vm, t, function, frame->base, in.a, f->spans[out.pc], false);
-        code = agc_jit_callee_code(jit, function);
+        code = agc_jit_callee_code(jit, function, false);
         if (!code) return COMPILED_RELOAD;
         pc = 0;
         break;
@@ -1210,6 +1214,21 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
           R[in.a] = call_leaf(vm, b, R + in.a, f->spans[out.pc]);
           break;
         }
+        /* A block call starts as the interpreter's CALL_BUILTIN starts it, with frame->pc already past the call (the
+           stack trace and the return read it). Its native frame has called the block (the frame on top now, which goes
+           on in its code when it has some), or, for no item, written the result and gone, and the code goes on after
+           the call. The native frame counts the steps and the turn cost of each call of the block. */
+        if (b && b->native) {
+          if (tracing) agc_jit_count_block(jit);
+          start_native(vm, b->native, frame->base + in.a, f->spans[out.pc]);
+          if (vm->yield) return COMPILED_YIELD;
+          if (t->frame_count == depth) break;
+          const agc_frame *top = &t->frames[t->frame_count - 1];
+          code = top->native ? NULL : agc_jit_callee_code(jit, top->function, true);
+          if (!code) return COMPILED_RELOAD;
+          pc = top->pc;
+          break;
+        }
         frame->pc = out.pc;
         if (frame != entry) return COMPILED_RELOAD;
         if (tracing) agc_jit_count_exit(jit, frame->function, out.pc);
@@ -1217,14 +1236,12 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       }
       default: op_failed(vm, (agc_status)out.status);
     }
-    if (out.status == AGC_JIT_EXIT_CALL || out.status == AGC_JIT_EXIT_RETURN) {
-      /* The top frame changed (a RETURN into a native frame may even push another one), and push_frame may have moved
-         the frames and the register file. */
-      depth = t->frame_count;
-      frame = &t->frames[depth - 1];
-      f = &p->functions[frame->function];
-      R = t->regs + frame->base;
-    }
+    /* The top frame may have changed (a RETURN into a native frame may even push another one, and a block call
+       pushes two or none), and new_frame and push_frame may have moved the frames and the register file. */
+    depth = t->frame_count;
+    frame = &t->frames[depth - 1];
+    f = &p->functions[frame->function];
+    R = t->regs + frame->base;
   }
 }
 
