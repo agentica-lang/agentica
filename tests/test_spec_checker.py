@@ -186,3 +186,22 @@ def test_type_members_reads_a_struct_imported_by_name_or_through_an_alias(agenti
     found = agentica_check({"main.agc": root % "  puts(Role.members.size)\n", "models.agc": models})
     assert found["code"] == "CHECK-UNKNOWN-METHOD"
     assert covered(root % "  puts(Role.members.size)\n", found["range"]) == "Role.members"
+
+
+def test_type_members_of_a_struct_past_the_chunk_size_keeps_every_field_in_order(tmp_path):
+    # One `list` instruction gathers 255 items, so 256 fields need a second chunk joined with List.concat.
+    fields = "".join("  f%d: Int\n" % number for number in range(256))
+    text = (
+        "struct Wide\n%send\n\n"
+        "def main() -> Void\n"
+        "  names = Wide.members.map do |m: StructMember| m.name end\n"
+        "  puts(names.size)\n"
+        "  puts(names[0])\n"
+        "  puts(names[255])\n"
+        "  puts(Wide.members.size)\n"
+        "end\n\n"
+    ) % fields
+    path = tmp_path / "wide.agc"
+    path.write_text(text, encoding="utf-8")
+    result = run(cli() + [str(path)])
+    assert (result.code, result.stdout.splitlines()) == (0, ["256", "f0", "f255", "256"]), result.stderr

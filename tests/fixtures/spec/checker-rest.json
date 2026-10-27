@@ -11183,6 +11183,37 @@
       ],
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1]
+    },
+    {
+      "program": [
+        "struct User",
+        "  id: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(User.members().size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [6, 8],
+      "covers": "User.members()"
+    },
+    {
+      "program": [
+        "extern \"libdb.so\"",
+        "  resource Conn, free: close_it",
+        "  def open_conn() -> Conn",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Conn.members.size)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [7, 8],
+      "covers": "Conn.members"
     }
   ]
 }
