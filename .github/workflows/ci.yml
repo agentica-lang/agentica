@@ -119,6 +119,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          rm -f build/layout-check.rc
           rc=0
           make -j"$(nproc)" layout-check BASE=HEAD^1 || rc=$?
           if [ "$rc" -ne 0 ] && [ "$(cat build/layout-check.rc 2>/dev/null)" = 4 ] \

@@ -266,7 +266,7 @@ BASE ?=
 LAYOUT_TREE ?= $(CURDIR)/build/layout-base
 LAYOUT_RC := build/layout-check.rc
 ifneq ($(filter layout-check,$(MAKECMDGOALS)),)
-ifneq ($(strip $(SANITIZE)$(TSAN)$(GC_STRESS)$(LIBFUZZ)),)
+ifneq ($(filter 1,$(SANITIZE) $(TSAN) $(GC_STRESS) $(LIBFUZZ)),)
 $(error layout-check: release mode only)
 endif
 ifneq ($(shell uname -sm),Linux x86_64)

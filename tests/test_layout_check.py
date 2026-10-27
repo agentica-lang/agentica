@@ -7,6 +7,7 @@ need no binary and no objdump.
 import importlib.util
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -76,27 +77,33 @@ def test_a_field_added_to_a_struct_does_not_show():
     assert disassembly(before) == disassembly(before.replace("0x8(%rdi)", "(%rdi)"))
 
 
-def test_a_longer_encoding_does_not_move_the_branches():
+def test_a_longer_encoding_is_a_change_of_length():
     short = """
 0000000000001000 <plain_turn>:
     1000:\tmov    0x8(%rdi),%rax
-    1004:\tcmp    %rax,%rbx
-    1007:\tjne    1004 <plain_turn+0x4>
-    1009:\tret
+    1004:\tjne    1000 <plain_turn+0x0>
+    1006:\tret
+    1007:\tnop
 """
     long = """
 0000000000001000 <plain_turn>:
     1000:\tmov    0x108(%rdi),%rax
-    1007:\tcmp    %rax,%rbx
-    100a:\tjne    1007 <plain_turn+0x7>
-    100c:\tret
+    1007:\tjne    1000 <plain_turn+0x0>
+    1009:\tret
+    100a:\tnopw   0x0(%rax,%rax,1)
 """
     assert disassembly(short) == disassembly(long)
-    assert disassembly(short) != disassembly(long.replace("<plain_turn+0x7>", "<plain_turn+0x0>").replace("jne    1007", "jne    1000"))
+    assert layout.body_length(short, 8) == 7
+    assert layout.body_length(long, 0x10) == 10  # the trailing padding nop is not counted
+
+    code = disassembly(short)
+    base = {"plain_turn": function(0x59860, 0x69A0, code)}
+    longer = {"plain_turn": function(0x59860, 0x69A0, code, length=0x2175)}
+    assert layout.compare(base, longer) == layout.EXIT_CHANGED
 
 
-def function(address, local, code):
-    return layout.Function(address=address, size=0x2000, local=local, code=code)
+def function(address, local, code, length=0x2135):
+    return layout.Function(address=address, size=0x2140, length=length, local=local, code=code)
 
 
 def test_compare_fails_with_exit_4_when_the_hot_loop_changes(capsys):
@@ -124,7 +131,7 @@ def test_prepare_builds_a_base_only_when_a_vm_input_changed(tmp_path):
     git(repo, "init", "-q")
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "base")
-    tree = tmp_path / "base"
+    tree = repo / "build" / "base"
 
     (repo / "tests.txt").write_text("b\n")
     assert layout.prepare(repo, "HEAD", tree) == layout.EXIT_NOTHING_TO_COMPARE
@@ -137,3 +144,10 @@ def test_prepare_builds_a_base_only_when_a_vm_input_changed(tmp_path):
     assert (tree / "vm" / "third_party" / "lib" / "lib.c").exists()
     layout.clean(repo, tree)
     assert not tree.exists()
+
+
+def test_the_base_tree_must_be_under_the_build_folder(tmp_path):
+    (tmp_path / "build").mkdir()
+    for tree in (Path(""), tmp_path, tmp_path / "build", tmp_path / "other"):
+        with pytest.raises(layout.LayoutError):
+            layout.clean(tmp_path, tree)

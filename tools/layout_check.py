@@ -17,7 +17,8 @@ What changes the verdict (the `--jit off` loop is `plain_turn`):
   1. its instructions changed, compared after removing what depends on where things sit: addresses, branch targets
      outside the function, rip-relative displacements, memory displacements (a field added to a struct moves every
      offset) and padding nops;
-  2. it sits at another place of vm/interp.c's text. That position is what the PR itself decides, and a move of 128
+  2. its length in bytes changed (a longer encoding with the same instructions);
+  3. it sits at another place of vm/interp.c's text. That position is what the PR itself decides, and a move of 128
      bytes with the same instructions was enough to cost 13%.
 What is only reported: where the other objects put interp.o (a PR that grows builtins.c moves every later function, and
 the author cannot undo that), and any change of `jit_turn` or `agc_run_turn`.
@@ -55,12 +56,16 @@ class LayoutError(Exception):
 class Function:
     address: int
     size: int
+    length: int  # bytes of the instructions, without the padding nops that end the symbol
     local: int | None  # offset in the .text of interp.o; None when the object has no such symbol
     code: list[str]  # the normalized instructions
 
 
 def run(command: list[str], *, cwd: Path = REPOSITORY) -> str:
-    result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+    except OSError as error:  # nm, objdump or git is not installed
+        raise LayoutError(f"{command[0]} cannot run: {error}") from error
     if result.returncode != 0:
         raise LayoutError(f"{' '.join(command)} failed:\n{result.stderr.strip()}")
     return result.stdout
@@ -72,13 +77,25 @@ def resolve_base(repo: Path, base: str) -> str:
     return run(["git", "rev-parse", "--verify", base + "^{commit}"], cwd=repo).strip()
 
 
+def checked_tree(repo: Path, tree: Path) -> Path:
+    """The folder to build the base in; `clean` deletes it, so it must be strictly under repo/build (an empty
+    LAYOUT_TREE resolves to the current folder)."""
+    tree = tree.resolve()
+    build = (repo / "build").resolve()
+    if tree == build or not tree.is_relative_to(build):
+        raise LayoutError(f"{tree} is not a folder under {build}: refusing to use it for the base tree")
+    return tree
+
+
 def clean(repo: Path, tree: Path) -> None:
+    tree = checked_tree(repo, tree)
     subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=repo, check=False, capture_output=True)
     shutil.rmtree(tree, ignore_errors=True)
     subprocess.run(["git", "worktree", "prune"], cwd=repo, check=False, capture_output=True)
 
 
 def prepare(repo: Path, base: str, tree: Path) -> int:
+    tree = checked_tree(repo, tree)
     sha = resolve_base(repo, base)
     # `git diff REV -- paths` compares the working tree too, so a local run sees uncommitted edits.
     if subprocess.run(["git", "diff", "--quiet", sha, "--", *INPUTS], cwd=repo, check=False).returncode == 0:
@@ -131,10 +148,15 @@ def normalized(text: str, name: str) -> list[str]:
     """The instructions of one function in `objdump -d` text, without what depends on its address.
 
     Dropped: addresses, padding nops (their length follows the address), the displacement of a rip-relative operand,
-    the displacement of any other memory operand, even a zero one (a struct field added elsewhere shifts it), the offset in a target
-    outside the function, and the symbol of a rip-relative target that is not at the start of one (a jump table in
-    .rodata is named after whatever symbol comes before it). A branch inside the function keeps the number of the
-    instruction it reaches, so a moved branch shows but a longer instruction does not."""
+    the displacement of any other memory operand, even a zero one (a struct field added elsewhere shifts it), the
+    offset in a target outside the function, and the symbol of a rip-relative target that is not at the start of one
+    (a jump table in .rodata is named after whatever symbol comes before it). A branch inside the function keeps the
+    number of the instruction it reaches, so a moved branch shows.
+
+    Not compared, on purpose: the constants of `lea` and the choice of the field behind a displacement (`0x8(%rdi)`
+    and `0x10(%rdi)` look the same). A change that keeps the instruction count, the registers and the length of the
+    function (see `body_length`) does not change the layout of the loop, and a field that moves must not fail every
+    pull request that touches its struct (a longer encoding still shows in the length)."""
     listing: list[tuple[int, str]] = []
     for raw in text.splitlines():
         match = re.match(r"^\s*([0-9a-f]+):\t(.*)$", raw)
@@ -159,6 +181,21 @@ def normalized(text: str, name: str) -> list[str]:
     return lines
 
 
+def body_length(text: str, size: int) -> int:
+    """Bytes of the function's instructions without the padding nops that end it; `size` is the symbol's."""
+    listing = [
+        (int(m.group(1), 16), m.group(2).strip())
+        for m in (re.match(r"^\s*([0-9a-f]+):\t(.*)$", raw) for raw in text.splitlines())
+        if m
+    ]
+    if not listing:
+        return 0
+    end = listing[0][0] + size
+    while listing and NOP.match(listing[-1][1]):
+        end = listing.pop()[0]
+    return end - listing[0][0] if listing else 0
+
+
 def load(binary: Path, interp_o: Path) -> dict[str, Function]:
     """The watched functions of a build: place in the binary, place in interp.o, instructions."""
     linked = text_symbols(binary)
@@ -169,7 +206,9 @@ def load(binary: Path, interp_o: Path) -> dict[str, Function]:
             continue
         text = run(["objdump", "-d", "--no-show-raw-insn", "-w", f"--disassemble={name}", str(binary)])
         address, size = linked[name]
-        functions[name] = Function(address, size, local[name][0] if name in local else None, normalized(text, name))
+        functions[name] = Function(
+            address, size, body_length(text, size), local[name][0] if name in local else None, normalized(text, name)
+        )
     return functions
 
 
@@ -221,6 +260,8 @@ def compare(base: dict[str, Function], head: dict[str, Function]) -> int:
             continue
         if old.code != new.code:
             failures.append(f"{name}: the instructions changed\n  " + first_difference(old.code, new.code))
+        elif old.length != new.length:
+            failures.append(f"{name}: same instructions, but {old.length:#x} bytes became {new.length:#x}")
         if own:
             failures.append(
                 f"{name} sits {own:+d} bytes from where it did in vm/interp.c's text (a function above it grew or"
