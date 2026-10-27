@@ -206,31 +206,31 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   its code takes pages of `AGC_JIT_CODE_CAP`; the first compile that fits
   neither claims every function not claimed yet (`spend`), so the rest of the
   run interprets them without another walk, and the jit trace says
-  `budget spent=work` or `spent=bytes` once. `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
-  table, for the SysV and Win64 argument registers (`AGC_JIT_HOST` is 0
-  elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X
-  pages, reserved, opened writable, then sealed read-execute. `run_compiled`
-  in `vm/interp.c` enters at each reload of the jit copy of `turn_loop`
-  (after the one-byte `agc_jit_may_run` test; the plain copy has no JIT test,
-  as one cost arithmetic 20% by code layout alone)
-  and handles the exits as the interpreter handles that instruction: STEP runs
-  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
-  leaf builtin itself, starts a block call (a row with a native kind:
-  `start_native`, whose block then runs in its code, one RETURN exit per
-  call) or lets the loop run that one instruction, which enters the code
-  again at the next pc (`resume`), CALL and RETURN the shared frame handlers.
-  A CALL of a function with code is native (`agc_emit_call`): an exit inside
-  the callee comes back with the callee's frame on top.
-  A new instruction with code: a case in `has_code` and in the walk, its
-  `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
-  slow path leaves for the interpreter; compiled code never fails,
-  allocates or parks, and pushes or pops a frame only in room the task
-  already has. It calls a builtin only when the row is marked `direct`
-  (`agc_builtin.direct`, checked by `sync_test.c`), through
-  `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail` from
-  jumping across compiled code; mark a row only if it never parks, starts a
-  block or moves frames. An edit of `turn_loop`, even in its jit copy,
-  changes the plain copy's machine code: keep JIT logic in `run_compiled`
+  `budget spent=work` or `spent=bytes` once. A function that costs more than
+  the whole budget only stays interpreted itself. `emit_x64.c`: the machine
+  code of each kind, the exit stubs and the entry table, for the SysV and
+  Win64 argument registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is
+  compiled). `mem_posix.c`, `mem_windows.c`: W^X pages, reserved, opened
+  writable, then sealed read-execute. `run_compiled` in `vm/interp.c` enters at
+  each reload of the jit copy of `turn_loop` (after the one-byte
+  `agc_jit_may_run` test; the plain copy has no JIT test, as one cost arithmetic
+  20% by code layout alone) and handles the exits as the interpreter handles
+  that instruction: STEP runs `step_slow`, COST `apply_cost`, a failure
+  `op_failed`, INTERPRET calls a leaf builtin itself, starts a block call (a row
+  with a native kind: `start_native`, whose block then runs in its code, one
+  RETURN exit per call) or lets the loop run that one instruction, which enters
+  the code again at the next pc (`resume`), CALL and RETURN the shared frame
+  handlers. A CALL of a function with code is native (`agc_emit_call`): an exit
+  inside the callee comes back with the callee's frame on top. A new instruction
+  with code: a case in `has_code` and in the walk, its `agc_emit_*`, a case in
+  `jit_test.c` and in `tests/test_vm_jit.py`; any slow path leaves for the
+  interpreter; compiled code never fails, allocates or parks, and pushes or pops
+  a frame only in room the task already has. It calls a builtin only when the
+  row is marked `direct` (`agc_builtin.direct`, checked by `sync_test.c`),
+  through `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail`
+  from jumping across compiled code; mark a row only if it never parks, starts a
+  block or moves frames. An edit of `turn_loop`, even in its jit copy, changes
+  the plain copy's machine code: keep JIT logic in `run_compiled`
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere

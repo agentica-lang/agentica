@@ -515,7 +515,13 @@ static void spend(agc_jit *jit, uint32_t function, const char *what) {
 static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
   if (!claim(jit, function)) return atomic_load_explicit(&jit->code[function], memory_order_acquire);
   const agc_function *f = &jit->program->functions[function];
-  if (!charge(jit, (uint64_t)f->count + AGC_JIT_COMPILE_BASE)) {
+  uint64_t cost = (uint64_t)f->count + AGC_JIT_COMPILE_BASE;
+  /* A function that could never fit stays interpreted alone: spending the budget on it would stop the small ones. */
+  if (cost > jit->budget) {
+    AGC_TRACE(jit->trace, AGC_TRACE_JIT, "skip function=%.*s budget", agc_trace_len(f->name->bytes), f->name->data);
+    return skip(jit, function);
+  }
+  if (!charge(jit, cost)) {
     spend(jit, function, "work");
     return skip(jit, function);
   }
