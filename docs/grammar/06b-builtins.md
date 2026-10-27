@@ -532,15 +532,17 @@ default, and checking never spends the budget. Exhaustion is
 timeout. Each scheduler takes steps in batches, so with more than one scheduler
 the limit can trip a little late; `--schedulers 1` keeps the exact count.
 
-At the end of a run the VM waits for the buffered writes of every open file, and
-for the output of stdout and stderr that a pipe has not taken yet. The wait is
-always bounded: 30000 milliseconds by default. `agentica --flush-timeout MS
-program.agc` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it (an
-integer from 0 to 86400000; the flag wins, a bad value exits 2, and there is no
-way to turn the limit off). On timeout, the run ends with the same exit code,
-and stderr gets `agentica: file data may not be written: the flush took longer
-than MS ms` (with `--json`, `{"flush_timeout_ms": MS, "warning": "file data may
-not be written"}`).
+At the end of a run the VM waits for the buffered writes of every open file, for
+the output of stdout and stderr that a pipe has not taken yet, and then for the
+frees of what native code still owns (section 6d). The wait is always bounded:
+30000 milliseconds by default. `agentica --flush-timeout MS program.agc` or the
+environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it (an integer from 0 to
+86400000; the flag wins, a bad value exits 2, and there is no way to turn the
+limit off). On timeout, the run ends with the same exit code, and stderr gets
+`agentica: file data may not be written: the flush took longer than MS ms` (with
+`--json`, `{"flush_timeout_ms": MS, "warning": "file data may not be
+written"}`); when a native free is what took too long, the warning says `native
+resources may not be freed` instead (both, joined by `and`, when both did).
 
 `agentica --schedulers N program.agc` or the environment variable
 `AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to

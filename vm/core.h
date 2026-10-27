@@ -384,8 +384,9 @@ void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outco
                           bool task);
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
-void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style);
-void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style);
+void agc_print_flush_timeout(FILE *err, int64_t ms, bool files, bool natives, agc_style style);
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, bool natives,
+                            agc_style style);
 
 /* vm/fuzz.c: one fuzz input, run in the interpreter or, with JIT, under AGC_JIT_ALWAYS. */
 int agc_fuzz_one(const uint8_t *data, size_t len, bool jit);
