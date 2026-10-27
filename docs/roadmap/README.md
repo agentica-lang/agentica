@@ -283,8 +283,9 @@ Weighed later (no fixed order):
 
 - **Order:** 16
   - **Next work:** Adapters and JSON inspection: call `Fn` fields without
-    `.call`, `JSON.kind`, generic structs, JSON for enums, optional and
-    nullable JSON fields
+    `.call`, `JSON.kind`, generic structs, generic functions (planned for
+    0.14.0, after generic structs), JSON for enums, optional and nullable JSON
+    fields
   - **Outcome:** Write adapters and read JSON of unknown shape without
     workarounds
 

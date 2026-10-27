@@ -219,6 +219,203 @@ it.
 - VM: no change. Type parameters exist only in the checker, as for generic
   enums; the struct table keeps field names and order.
 
+### 15.3a Generic functions
+
+Helpers over any type, such as `first_or` and `max_by`, declare type parameters
+on `def`. The rules follow generic enums and structs (15.3). They are planned
+for 0.14.0, with generic structs, which land first: the `Pool` example needs
+them.
+
+```agentica
+## The first item of xs, or fallback when xs is empty.
+def first_or[T](xs: List[T], fallback: T) -> T
+  if xs.length == 0
+    return fallback
+  end
+
+  return xs[0]
+end
+
+## The item with the largest key, or an error when xs is empty.
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+  if xs.length == 0
+    return error("empty list")
+  end
+
+  best = xs[0]
+  best_key = key.call(best)
+  for x in xs
+    k = key.call(x)
+    if k > best_key
+      best = x
+      best_key = k
+    end
+  end
+
+  return ok(best)
+end
+
+struct Pool[T]
+  items: List[T]
+end
+
+## Runs body on the first item of the pool, or fails when the pool is empty.
+def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
+  if pool.items.length == 0
+    return error("empty pool")
+  end
+
+  return body.call(pool.items[0])
+end
+
+def main() -> Void
+  names = ["ana", "ben"]
+  puts(first_or(names, "none"))   # T is String, from names
+  puts(first_or([], 0))           # T is Int, from 0; [] is checked last
+
+  words = ["pear", "fig", "banana"]
+  # w is String and the block gives Int
+  longest = max_by(words) do |w|
+    w.length
+  end
+  puts(longest.unwrap_or("none"))
+
+  pool = Pool(items: [3, 4])
+  # n is Int, and R is Int from ok(n * 2)
+  doubled = with(pool) do |n|
+    ok(n * 2)
+  end
+  puts(doubled.unwrap_or(0))
+end
+```
+
+- **Syntax.** `def NAME[T, U](params) -> R` puts the type parameters after the
+  name. Their names follow the enum rules: type names only. A repeated name or
+  a reserved one such as `Int` or `List` is `CHECK-REDEFINED-NAME`. `def f[]`
+  is `PARSE-UNEXPECTED-TOKEN`. A parameter may have the name of a struct or enum
+  of the file; inside the function it is then the parameter, as for enums.
+  `main` with type parameters is `CHECK-MAIN`. A type parameter that no
+  parameter type and no result type mentions cannot be inferred:
+  `CHECK-ENUM-TYPE-INFERENCE` at its name.
+- A `def` in an `extern` block takes no type parameters: the `[` is
+  `PARSE-UNEXPECTED-TOKEN`, as today.
+- **Modules.** Exported and imported generic functions are called as any
+  function: `M.first_or(xs, 0)` after `import M from "m"`, or
+  `import {first_or} from "m"`. Linking keeps the type parameters local, in the
+  signature and the body, as it does for enum payloads: a bare `T` does not get
+  the module's prefix.
+- **Calls.** Calls do not write type arguments: `first_or[Int](xs, 0)` is
+  `PARSE-UNEXPECTED-TOKEN` at the `(`, as today, because `first_or[Int]` reads
+  as an index.
+- The checker infers the type arguments in four steps:
+  1. The arguments that have a type of their own, from left to right. Each one
+     binds the type parameters of its parameter type. A conflict is
+     `CHECK-TYPE-MISMATCH`: in `first_or([1], "x")`, `"x"` is not an `Int`.
+  2. The expected type of the call (an annotation, a parameter, a field or a
+     return type) is matched with the result type, for the parameters still
+     open. The arguments win over it.
+  3. The arguments that need an expected type are checked last, against their
+     parameter type as far as it is known, and bind nothing. These are `[]`,
+     `{}`, `Set.new([])`, `error(...)`, a list or map literal that holds one of
+     them, and `&f` of a generic function. So `first_or([], 0)` gives `T` as
+     `Int`.
+  4. The block, the last argument, is checked after the others. Its parameter
+     types come from its `Fn` parameter. A parameter type still open must be
+     annotated in the block (`do |x: Int|`), which binds it; otherwise the block
+     is `CHECK-BLOCK-TYPE`. The block's result binds the open parameters of the
+     `Fn` result (`R` in `with`). A result that does not fit is
+     `CHECK-TYPE-MISMATCH`.
+
+  A parameter still open after step 4 is `CHECK-ENUM-TYPE-INFERENCE` at the
+  call, and its message names the function.
+- Enum constructors check their payloads from left to right and fail on an empty
+  collection while a variable is open (`compiler/check/check_call.agc`). A
+  function call differs on that point only: its empty literals wait for step 3.
+- The call has the substituted result type. A type parameter that appears only
+  in the result, as in `def empty_of[T]() -> List[T]`, comes from step 2:
+  `xs: List[Int] = empty_of()`.
+- Each call gets its own type variables, so the callee's `T` and the caller's
+  `T` do not mix. Recursion, mutual recursion and a generic function that calls
+  another generic one work. A recursive call may use other type arguments
+  (polymorphic recursion included), because the checker builds no copy per
+  type.
+- **Inside the body.** A type parameter is opaque: the body is checked once,
+  with `T` standing only for itself. A `T` value can be stored, returned, put in
+  a `List`, a `Result`, a `Map` value, a struct or enum payload, captured by a
+  block, and passed to any function or block that takes that type. `ok(x)` with
+  `x: T` is `Result[T]`.
+- These are errors:
+  - `==`, `!=`, arithmetic and ordering: `CHECK-TYPE-MISMATCH`.
+  - `to_s`, `inspect`, interpolation and `puts`: `CHECK-TYPE-MISMATCH`, as for a
+    `Fn`.
+  - a field or a method (`x.name`, `x.with(...)`): `CHECK-UNKNOWN-METHOD`, as
+    for `Int`.
+  - `x.call(...)`: `CHECK-TYPE-MISMATCH`, as for `Int`.
+  - a literal or variant arm in `case x`: `CHECK-PATTERN-TYPE`.
+  - `JSON.encode(x)`: `CHECK-NOT-ENCODABLE`. `JSON.decode(text, T)`:
+    `CHECK-NOT-DECODABLE`, as for `Int`.
+  - `T` as a `Map` key or a `Set` element: `CHECK-MAP-KEY-TYPE` and
+    `CHECK-SET-ELEMENT-TYPE`, wherever it is written, as for generic enums. A
+    call with `Int` does not help.
+- Behaviour comes from `Fn` parameters, as in `max_by`. There are no traits,
+  interfaces or constraints on a type parameter in this version.
+- **Data and effects.** `data-type?` (15.3) and the effect rules are judged on
+  the substituted type at each call. `puts(first_or(fns, &id))`, with
+  `fns: List[Fn[Int, Int]]`, is `CHECK-TYPE-MISMATCH`, because `T` is that `Fn`.
+  A generic function has the effects of its body, and no builtin's effect
+  depends on a type argument. A call of a generic function is not a constant
+  expression (`CHECK-CONSTANT-EXPRESSION`), as for any `def`.
+- A type argument may be `Void` where `Void` is valid after substitution: as a
+  result, as the last type of `Fn`, or as the completion of `Result` or `Task`.
+  So `ok()` binds `R` to `Void` in `Result[R]`. A parameter, field or list
+  element that becomes `Void` is `CHECK-VOID-TYPE` at the call.
+- A parameter whose type mentions a type parameter cannot have a default:
+  `CHECK-DEFAULT-VALUE` at the default, with the help to make the parameter
+  required.
+- `try` and `Result[T]` work as for any type: `try f(x)`, with `f` returning
+  `Result[T]`, gives `T`. `error(...)` takes its `Result[T]` from the expected
+  type, as today.
+- A function reference, `&first_or`, is a value only where the expected `Fn`
+  type fixes each type parameter. `f: Fn[List[Int], Int, Int] = &first_or` is
+  valid, and `f = &first_or` is `CHECK-ENUM-TYPE-INFERENCE` at the reference. A
+  type parameter of the enclosing function counts as fixed. A bare `first_or`
+  is `CHECK-UNKNOWN-NAME`, as for any function.
+- A block captures a `T` value by value, as any value does (§6).
+- Not in this version: constraints on type parameters, explicit type arguments
+  in calls, generic `extern` functions, and generic `Map` keys.
+- **Structs.** Both land in 0.14.0, structs first. `Pool[T]` needs type
+  arguments on struct types: `Struct(String)` has none today, while the enum
+  type `Enum(String, List[Type])` has them (`compiler/syntax/types.agc`).
+  Generic functions reuse the substitution that 15.3 adds.
+- **VM.** No VM change and no opcode; the bytecode of a body is the same for
+  any type argument. Lowering changes in one predicate: `vm_type?`
+  (`compiler/lower/lower_state.agc:236`) takes a type parameter of a user
+  function as a VM value, as it takes the prelude's today. No diagnostic code
+  changes.
+- **Front end.**
+  - Parser: `parse_function_decl` (`compiler/syntax/parser.agc:2050`) reads the
+    type parameters after the name with `parse_type_parameters`, and
+    `FunctionDecl` (`compiler/syntax/ast.agc:119`) gets `type_parameters`, as
+    `EnumDecl` has.
+  - Checker: `check_type_parameters` (`compiler/check/check_register.agc:174`)
+    also checks a `def`. `resolve_plain` (`compiler/check/check_types.agc:527`)
+    already maps a type parameter to `Types.Type.Var`. The four steps go in
+    `check_plain_call` (`compiler/check/check_call.agc:301`). `unify` and
+    `substitute` (`compiler/check/check_types.agc:213` and `:179`) are shared
+    with the enum path (`infer_arguments` and `finish_constructor`, in
+    `check_call.agc:403` and `:451`). `check_function_ref`
+    (`compiler/check/check_expr.agc:185`) takes the expected type, and
+    `check_function` (`compiler/check/check_stmt.agc:29`) checks the body once.
+  - Linker: `rewrite_function` (`compiler/modules/rewrite.agc:47`) keeps the
+    type parameters local, as `rewrite_payload` (`:125`) does for enums.
+  - Docs: `function_text` (`compiler/docs/signature.agc:38`) prints `[T]`.
+- **Tests.** `tests/test_spec_generics.py`: through `--json check`, one case per
+  code above with its span, the valid calls of the examples, and a cross-module
+  case (`M.first_or` and an imported name). A golden run of the examples,
+  written by `make goldens`.
+- **Done when:** the examples check and run, and each code above has a spec
+  case.
+
 ### 15.4 JSON for enums
 
 Today `JSON.decode` and `JSON.schema` take named structs only, and a struct with
@@ -305,11 +502,12 @@ name.
 
 ### 15.6 Implementation (row 7.6)
 
-- One PR per item (10a–10e), each with its own tests and docs. 10b, 10d and
+- One PR per item (10a–10f), each with its own tests and docs. 10b, 10d and
   10e, and the JSON part of 10c, need the VM JSON work; 10e also needs 10b.
 - 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
   `JsonValue` enum (§15.2); 10c generic structs (§15.3); 10d JSON for
-  enums (§15.4); 10e optional and nullable JSON fields (§17).
+  enums (§15.4); 10e optional and nullable JSON fields (§17); 10f generic
+  functions (§15.3a), after 10c.
 - Done when: two programs run. The VM program has a `Storage` adapter with a
   read-only memory backend and a walker over unknown JSON, using only builtin
   library calls (golden check). The disk program uses the same `Storage` shape

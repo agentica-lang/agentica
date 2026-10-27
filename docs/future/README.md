@@ -43,7 +43,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Adapters and JSON inspection
   - File:
     [`15-adapters-and-json-inspection.md`](15-adapters-and-json-inspection.md)
-  - Status: Planned (row 7.6)
+  - Status: Planned (row 7.6); generic functions (15.3a) for 0.14.0
 
 - §: 16
   - Title: Binary serialization (CBOR)
