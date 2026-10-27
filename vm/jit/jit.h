@@ -154,6 +154,14 @@ void agc_jit_report(agc_jit *jit);
    crosses compiled code, and run_compiled hands it on. The call either completes or raises, as in the interpreter;
    a direct row never parks, starts a stepper or a native frame, or moves the frames, so nothing is left half done. */
 uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
+/* MAP_GET in compiled code, as the interpreter's case runs it: *DST = the value of *KEY in *MAP, and AGC_STATUS_OK.
+   A missing key, or a wrong tag (hand-made bytecode), answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left
+   alone, so the interpreter runs the instruction and fails as it does. A String key charges its bytes to the task's
+   turn cost, which compiled code then leaves to apply, as after EQ. It never fails, allocates or parks. */
+uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key);
+/* LIST in compiled code, as the interpreter's case: *DST = a new List of the COUNT values at ITEMS (the window the
+   loader checked), or the run's empty List. It may allocate; it charges nothing and never fails or parks. */
+void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -222,6 +230,8 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
+void agc_emit_list(agc_emitter *e, agc_instr in);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);

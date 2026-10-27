@@ -72,6 +72,8 @@ static bool has_code(uint32_t op) {
     case AGC_OP_TO_TEXT:
     case AGC_OP_LIST_LEN:
     case AGC_OP_LIST_GET:
+    case AGC_OP_LIST:
+    case AGC_OP_MAP_GET:
     case AGC_OP_NOT:
     case AGC_OP_FIELD:
     case AGC_OP_IS_VARIANT:
@@ -235,6 +237,8 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_TO_TEXT:
       case AGC_OP_LIST_LEN:
       case AGC_OP_LIST_GET: agc_emit_helper(e, op, in, pc); break;
+      case AGC_OP_LIST: agc_emit_list(e, in); break;
+      case AGC_OP_MAP_GET: agc_emit_map_get(e, in, pc); break;
       case AGC_OP_NOT:
       case AGC_OP_FIELD:
       case AGC_OP_IS_VARIANT:
@@ -642,6 +646,26 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
   if (t->turn_cost) agc_turn_charge(vm);
   return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
+}
+
+uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
+  /* agc_key_hash takes only an Int or a String and fails on any other tag, so those leave before the lookup. */
+  if (!agc_is(*map, AGC_T_MAP) || !(agc_is(*key, AGC_T_INT) || agc_is(*key, AGC_T_STRING)))
+    return AGC_JIT_EXIT_INTERPRET;
+  /* A String key charges its bytes. A miss gives the charge back, as the interpreter runs the instruction again and
+     charges them itself; restoring turn_cost undoes the whole lookup, since agc_charge is its only side effect. */
+  int64_t cost = vm->task->turn_cost;
+  agc_value found;
+  if (!agc_map_get(vm, agc_as_map(vm, *map), *key, &found)) {
+    vm->task->turn_cost = cost;
+    return AGC_JIT_EXIT_INTERPRET;
+  }
+  *dst = found;
+  return AGC_STATUS_OK;
+}
+
+void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t count) {
+  *dst = count ? agc_list_value(agc_list_from_array(items, count)) : vm->rt->empty_list;
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {
