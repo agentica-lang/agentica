@@ -44,6 +44,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: make vm-jit-self-compile
       - name: The 20x soak of the two heavy multicore race cases (the slow tier of CI runs them 5x)
+        if: ${{ !cancelled() }}
         env:
           AGENTICA_TEST_SLOW: '1'
           AGENTICA_HEAVY_RACE_REPEATS: '20'

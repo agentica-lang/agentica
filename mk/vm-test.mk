@@ -62,10 +62,10 @@ vm-tsan-run: dist/agentica$(EXE)
 vm-test-binaries: $(VM_TESTS)
 
 # libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
-# On Linux each input also runs with the JIT (AGC_JIT_ALWAYS), and the link wraps agc_jit_mem_reserve so that the entry
-# point unmaps each input's code memory (vm/fuzz_libfuzzer.c).
+# With LIBFUZZ_JIT_WRAP (mk/vm.mk, Linux) each input also runs with the JIT (AGC_JIT_ALWAYS), and the link wraps
+# agc_jit_mem_reserve so that the entry point unmaps each input's code memory (vm/fuzz_libfuzzer.c).
 LIBFUZZ_LINK_FLAGS :=
-ifeq ($(shell uname -s),Linux)
+ifeq ($(LIBFUZZ_JIT_WRAP),1)
 LIBFUZZ_LINK_FLAGS := -Wl,--wrap=agc_jit_mem_reserve
 endif
 $(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
@@ -118,6 +118,12 @@ vm-gc-stress: dist/agentica$(EXE)
 	AGENTICA_VM_BINARY=build/vm/gcstress/agentica$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
 	  $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
+# The same goldens on the GC stress binary with AGENTICA_JIT=always (weekly in sweep.yml).
+vm-gc-stress-jit: dist/agentica$(EXE)
+	$(MAKE) build/vm/gcstress/agentica$(EXE) GC_STRESS=1 SANITIZE=0
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always \
+	  AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
+
 # Build the VM and its C tests with the trace points compiled out, and check that --version says so
 vm-trace-off:
 	$(MAKE) -j$(JOBS) dist/agentica$(EXE) vm-test TRACE=0
@@ -163,17 +169,13 @@ vm-jit-test: dist/agentica$(EXE)
 	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=on $(MAKE) --no-print-directory test-py TESTS="$$tests"
 
 # The goldens and the stack traces with AGENTICA_JIT=always on the sanitizer binary that an earlier step built
-# (SANITIZE=1, as vm-sanitize-test), and on the GC stress binary (collect every 64 allocations), each with the sampled
-# sweep: compiled code under ASan and UBSan, and under a collector that moves no object but runs at every chance.
-# Weekly in sweep.yml.
+# (SANITIZE=1, as vm-sanitize-test), with the sampled sweep: it checks the C helpers that compiled code calls and the
+# exits it takes under ASan and UBSan; the emitted machine code itself is not instrumented, so a fault there shows only
+# as a crash. Weekly in sweep.yml.
 vm-sanitize-jit-test: vm-sanitize-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=sampled $(MAKE) --no-print-directory test-py \
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py" JOBS=$(SANITIZE_JOBS)
 
-vm-gc-stress-jit: dist/agentica$(EXE)
-	$(MAKE) build/vm/gcstress/agentica$(EXE) GC_STRESS=1 SANITIZE=0
-	AGENTICA_VM_BINARY=build/vm/gcstress/agentica$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=sampled \
-	  $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # The front end compiling itself with the JIT on it (the test-only AGENTICA_VM_TEST_FRONT_END_JIT, vm/launch.c), once
 # with `on` and once with `always`: each must give stage2 byte for byte, and the jit trace must show compiled functions
@@ -181,7 +183,7 @@ vm-gc-stress-jit: dist/agentica$(EXE)
 vm-jit-self-compile: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	@mkdir -p $(STAGE_DIR)/jit
 	for mode in on always; do \
-	  out=$(STAGE_DIR)/jit/$$mode; \
+	  out=$(STAGE_DIR)/jit/$$mode; rm -f $$out.trace $$out.agcb; \
 	  AGENTICA_VM_TEST_FRONT_END_JIT=$$mode AGENTICA_VM_TRACE=jit AGENTICA_VM_TRACE_FILE=$$out.trace \
 	    $(RUN_PROGRAM) dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $$out.agcb || exit 1; \
 	  grep -q ' jit compile ' $$out.trace || { echo "vm-jit-self-compile: the JIT compiled nothing under --jit $$mode" >&2; exit 1; }; \

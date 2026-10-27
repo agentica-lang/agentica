@@ -127,6 +127,12 @@ VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=fuzzer-no-link
 VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)
 GC_MODE := none
 VM_BUILD := build/vm/libfuzz
+# On Linux each input also runs with the JIT: AGC_FUZZ_JIT_WRAP turns on the JIT run of vm/fuzz_libfuzzer.c, and the
+# link of agentica-vm-libfuzz wraps agc_jit_mem_reserve (mk/vm-test.mk) so that each input's code memory is unmapped.
+ifeq ($(shell uname -s),Linux)
+LIBFUZZ_JIT_WRAP := 1
+VM_CFLAGS += -DAGC_FUZZ_JIT_WRAP
+endif
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
 DEBUG_MAP := $(DEBUG_MAPS)
