@@ -971,6 +971,82 @@ def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     assert_max_steps_sweep(bytecode, steps)
 
 
+# walk's loop reads module constants (GLOBAL), builds structs and enums and unwraps Results with `try`, all in
+# compiled code, so `on` compiles it (before, these instructions left it every few instructions). Twice a `try` meets
+# an error: in the second call of walk, which main reads with `ok?`, and in the last call, at round 2500, which check
+# unwraps, so the run fails with check and main on the stack.
+VALUES = """WEIGHTS = [3, 1, 4, 1, 5]
+ORIGIN = Point(x: 2, y: -1)
+
+struct Point
+  x: Int
+  y: Int
+end
+
+enum Step
+  Stay
+  Move(Int, Int)
+end
+
+def parse(text: String, bias: Int) -> Result[Int]
+  n = try text.to_i
+  return ok(n + bias)
+end
+
+def walk(words: List[String], rounds: Int, fail_at: Int) -> Result[Int]
+  total = 0
+  i = 0
+  while i < rounds
+    p = Point(x: i % 7, y: WEIGHTS[i % WEIGHTS.size])
+    step = Step.Stay
+    if i % 3 == 0
+      step = Step.Move(p.x, p.y + ORIGIN.y)
+    end
+    case step
+      Step.Stay -> total += 1
+      Step.Move(dx, dy) -> total += dx * dy
+    end
+    text = words[i % words.size]
+    if i == fail_at
+      text = "x#{i}"
+    end
+    total += try parse(text, ORIGIN.x)
+    i += 1
+  end
+  return ok(total)
+end
+
+def check(rounds: Int, fail_at: Int) -> Int
+  return walk(["1", "22", "333"], rounds, fail_at).unwrap!
+end
+
+def main() -> Void
+  puts(check(3000, -1))
+  puts(walk(["4", "5"], 2000, 1500).ok?)
+  puts("steps #{Profile.steps()}")
+  puts(check(3000, 2500))
+end
+"""
+
+
+def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(VALUES, "values", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["walk"] if X86_64 else [])
+    # Only the two errors leave walk's code: the interpreter runs the `try` that returns them. Under `always` parse is
+    # compiled too, and each error leaves both functions' code.
+    for mode, want in (("on", ["try count=2"]), ("always", ["try count=4"])):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        exits = sorted(line.split("exit op=")[1] for line in lines
+                       if any(f" jit exit op={op} " in line for op in ("global", "struct", "enum", "try")))
+        assert exits == (want if X86_64 else []), (mode, exits)
+    for style in ((), ("--json",), ("--ai",)):
+        status, stdout, stderr = assert_same(bytecode, *style)
+        assert status == 1 and stdout.startswith("369396\nfalse\n"), (style, stdout)
+        # The diagnostic, its span and the stack are the interpreter's (assert_same); the stack holds check, then main.
+        assert "RUNTIME-UNWRAP-ERROR" in stderr and stderr.index("check") < stderr.index("main"), (style, stderr)
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1].split()[0]))
+
+
 def test_on_compiles_a_loop_that_builds_strings_in_compiled_code(tmp_path):
     bytecode = compile_text(DENSE, "dense", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["label"] if X86_64 else [])

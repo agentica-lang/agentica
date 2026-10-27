@@ -172,6 +172,13 @@ void agc_jit_list(agc_vm *vm, agc_value *dst, const agc_value *items, uint32_t c
    CAPTURES values at WINDOW (the window the loader checked). It allocates; it charges nothing and never fails or
    parks. */
 void agc_jit_closure(agc_value *window, uint32_t function, uint32_t captures);
+/* STRUCT in compiled code, as the interpreter's case: *DST = a new struct of TYPE that holds the COUNT values at FIELDS
+   (the window the loader checked). It allocates; it charges nothing and never fails or parks. */
+void agc_jit_struct(agc_value *dst, const agc_value *fields, uint32_t type, uint32_t count);
+/* ENUM in compiled code, as the interpreter's case: *DST = the shared value of V, the definition of VARIANT, when it
+   has no payload, else a new one that holds the V->arity values at PAYLOAD (the window the loader checked). It may
+   allocate; it charges nothing and never fails or parks. */
+void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_def *v, uint32_t variant);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -235,6 +242,8 @@ void agc_emit_begin(agc_emitter *e, uint32_t count);
 void agc_emit_label(agc_emitter *e, uint32_t pc);
 void agc_emit_move(agc_emitter *e, uint32_t a, uint32_t b);
 void agc_emit_const(agc_emitter *e, uint32_t a, uint32_t k);
+/* GLOBAL into R[a] from the slot at SLOT: an unset slot (tag Void) leaves for the interpreter. */
+void agc_emit_global(agc_emitter *e, uint32_t a, uint64_t slot, uint32_t pc);
 void agc_emit_step(agc_emitter *e, uint32_t n, uint32_t pc);
 void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
@@ -244,6 +253,8 @@ void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_list(agc_emitter *e, agc_instr in);
 /* CLOSURE of function bx, which holds CAPTURES values: a call of agc_jit_closure. */
 void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures);
+/* STRUCT or ENUM: a call of FN(&R[a], &R[b], X, Y) (agc_jit_struct, agc_jit_enum), which never fails. */
+void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_t y);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
