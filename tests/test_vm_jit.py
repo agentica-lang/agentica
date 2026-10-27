@@ -74,6 +74,7 @@ FAILURES = {
     "float division": ("RUNTIME-DIVISION-BY-ZERO", "x = x + (1.0 / (7.0 - i.to_f)).to_i!"),
     "index": ("RUNTIME-INDEX-OUT-OF-RANGE", "x = x + items[i / 19]"),
     "builtin": ("RUNTIME-INVALID-COUNT", "x = x + items.take(3 - i).size"),
+    "key": ("RUNTIME-KEY-NOT-FOUND", "x = x + {0: 1, 2: 3}[i / 19]"),
 }
 
 # A task in a long compiled loop is cancelled between two of its turns.
@@ -394,6 +395,56 @@ def main() -> Void
 end
 """
 
+
+# Two tasks whose compiled loop reads a Map by key (MAP_GET) and builds list literals (LIST), which have code of their
+# own, so `on` compiles lookup. The 256 KiB key charges more turn cost than a turn has steps each time it is hashed,
+# so turns end right after a read in compiled code, as in the interpreter, and the order of the lines shows where.
+LOOKUP = """def doubled(times: Int) -> String
+  s = "k"
+  k = 0
+  while k < times
+    s = s + s
+    k += 1
+  end
+  return s
+end
+
+def lookup(table: Map[String, Int], keys: List[String], rounds: Int) -> Int
+  total = 0
+  i = 0
+  while i < rounds
+    pair = [keys[i % keys.size], keys[(i + 1) % keys.size]]
+    empty: List[Int] = []
+    total = total + table[pair[0]] - table[pair[1]] + pair.size + empty.size
+    i += 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  big = doubled(18)
+  keys = ["a", "b", "c"]
+  if id == 2
+    keys = ["a", big, "b"]
+  end
+  table = {"a": 1, "b": 20, "c": 300, big: 4000}
+  total = 0
+  round = 0
+  while round < 3
+    total += lookup(table, keys, 400 * id)
+    puts("task #{id} round #{round} total #{total}")
+    round += 1
+  end
+  puts("task #{id} steps #{Profile.steps()}")
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+"""
 
 # build joins Strings in a loop (each join charges its bytes, so turns end by cost in compiled code as in the
 # interpreter); main prints the text form of every tag through TO_TEXT. The joins stay in compiled code under `on`,
@@ -901,18 +952,28 @@ def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
     assert code == 0, stderr
 
 
-def test_compiled_loops_call_allocating_builtins_without_leaving(tmp_path):
-    bytecode = compile_text(DIRECT, "direct", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["tally"] if X86_64 else [])
+# Two tasks whose loop stays in compiled code under `on` and `always`: (program, compiled function, the opcodes of the
+# exits it must not take, fewer than this many of them). DIRECT: only main and worker call builtins that leave (Task,
+# puts), so the 243,000 builtin calls in the 27,000 passes of tally's loop stay in compiled code, where one leaves only
+# when it ends a turn. LOOKUP: no map read or list literal of lookup's loop leaves.
+STAYS = {
+    "builtins": (DIRECT, "tally", ("call-builtin",), 20),
+    "map reads and lists": (LOOKUP, "lookup", ("map-get", "list"), 1),
+}
+
+
+@pytest.mark.parametrize("case", sorted(STAYS))
+def test_compiled_loops_run_builtins_map_reads_and_lists_without_leaving(tmp_path, case):
+    source, function, ops, most = STAYS[case]
+    bytecode = compile_text(source, function, tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == ([function] if X86_64 else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 9, full
-    # Only main and worker call builtins that leave (Task, puts): the 243,000 calls of builtins in the 27,000 passes
-    # of tally's loop stay in compiled code, where one leaves only when it ends a turn.
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
-        calls = sum(int(line.split("count=")[1]) for line in lines if " jit exit op=call-builtin " in line)
-        assert calls < (20 if X86_64 else 1), (mode, calls)
-    # Limits below the two tasks' steps stop the run inside tally's loop, in either task.
+        exits = sum(int(line.split("count=")[1]) for line in lines for op in ops if f" jit exit op={op} " in line)
+        assert exits < (most if X86_64 else 1), (mode, exits)
+    # Limits below the two tasks' steps stop the run inside the loop, in either task.
     steps = sum(int(line.split("steps ")[1]) for line in full[1].splitlines() if " steps " in line)
     for limit in range(steps // 20, steps * 19 // 20, steps // 15):
         code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))

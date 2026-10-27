@@ -1,8 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, direct builtin calls), the code memory sealed
- * read-execute and never writable then, functions packed in it up to its cap, one copy made when several threads
- * compile a function at once, and the `on` decision settled in time that follows the program's size.
+ * failures that leave the result register alone, native calls, direct builtins, map reads, list literals), the code
+ * memory sealed read-execute and never writable then, functions packed in it up to its cap, one copy made when
+ * several threads compile a function at once, and the `on` decision settled in time that follows the program's size.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -522,6 +522,46 @@ static AGC_JIT_CALLER void string_build_cost(void) {
   vm.task->turn_cost = 0;
 }
 
+/* MAP_GET reads a key in compiled code; a missing key or a wrong tag leaves for the interpreter at the instruction,
+   R3 and the turn cost untouched, so the interpreter fails as it does. A String key charges its bytes, and the code
+   leaves for the interpreter to apply them. LIST builds the window's values, or gives the run's empty List. */
+static AGC_JIT_CALLER void maps_and_lists(void) {
+  char text[200];
+  memset(text, 'k', sizeof text);
+  agc_value one = agc_int(1), ten = agc_int(10), any = agc_nil();
+  agc_value key = agc_string_value(agc_make_string(text, sizeof text, sizeof text));
+  agc_value same_key = agc_string_value(agc_make_string(text, sizeof text, sizeof text));
+  agc_value other_key = agc_string_value(agc_make_string(text, sizeof text - 1, sizeof text - 1));
+  agc_map *m = agc_map_put(&vm, agc_new_map(), one, ten);
+  m = agc_map_put(&vm, m, key, agc_int(20));
+  agc_value map = agc_map_value(m);
+  uint32_t out = AGC_JIT_EXIT_INTERPRET;
+  vm.task->turn_cost = 0;
+  binary(AGC_OP_MAP_GET, map, one, AGC_STATUS_OK, ten);
+  binary(AGC_OP_MAP_GET, map, agc_int(2), out, any);
+  binary(AGC_OP_MAP_GET, agc_int(3), one, out, any);
+  binary(AGC_OP_MAP_GET, map, agc_float(1.0), out, any);
+  binary(AGC_OP_MAP_GET, agc_set_value(m), one, out, any);
+  assert(vm.task->turn_cost == 0);
+  agc_value R[8];
+  expect_exit(run_two(AGC_OP_MAP_GET, map, same_key, R), AGC_JIT_EXIT_COST, 0);
+  assert(same_bits(R[3], agc_int(20)) && vm.task->turn_cost >= (int64_t)(sizeof text / AGC_COST_BYTES));
+  vm.task->turn_cost = 0;
+  expect_exit(run_two(AGC_OP_MAP_GET, map, other_key, R), out, 0);
+  assert(same_bits(R[3], any) && vm.task->turn_cost == 0);
+  expect_exit(run_two(AGC_OP_LIST, one, ten, R), AGC_JIT_EXIT_RETURN, 1);
+  const agc_list *l = agc_as_list(&vm, R[3]);
+  assert(agc_list_len(l) == 2 && same_bits(agc_list_get(l, 0), one) && same_bits(agc_list_get(l, 1), ten));
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_LIST, 3, 1, 0);
+  emit(&f, AGC_OP_RETURN, 3, 0, 0);
+  agc_jit_code code = compile(&f);
+  R[3] = any;
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[3], vm.rt->empty_list));
+}
+
 /* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): one claims it and compiles
    it, and the others get NULL (they interpret it meanwhile) or the one copy that was published; no second copy takes
    code memory. The barrier lets them start together, so the losing side of the claim runs. */
@@ -855,6 +895,7 @@ int main(void) {
   reads();
   string_cost();
   string_build_cost();
+  maps_and_lists();
   ineligible();
   every_opcode_compiles();
 #else
