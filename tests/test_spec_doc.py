@@ -203,16 +203,20 @@ def test_an_unreadable_path_or_a_wrong_command_line_exits_2(tmp_path):
     assert run(cli() + ["doc", "a.agc", "b.agc"], env=vm_environment()).code == 2
 
 
-# An exported resource is documented with its kind and signature; a private one is left out.
+# An exported resource is documented with its kind and signature (free_ref: as written); a private one is left out.
 def test_an_exported_resource_is_documented_and_a_private_one_is_not(tmp_path):
     path = tmp_path / "db.agc"
     path.write_text('extern "libdb.so"\n  ## An open database.\n  export resource Db, free: db_close\n'
-                    "  resource Row, free: row_free\n  export def db_open(path: C.String) -> Db\nend\n",
+                    "  resource Row, free: row_free\n  export resource Conn, free_ref: conn_close\n"
+                    "  export def db_open(path: C.String) -> Db\nend\n",
                     encoding="utf-8")
     result = doc(path, "--json")
     assert (result.code, result.stderr) == (0, "")
     report = json.loads(result.stdout)
-    assert [(item["kind"], item["name"]) for item in report["items"]] == [("resource", "Db"), ("function", "db_open")]
+    assert [(item["kind"], item["name"]) for item in report["items"]] == [
+        ("resource", "Db"), ("resource", "Conn"), ("function", "db_open"),
+    ]
+    assert items_by_name(report)["Conn"]["signature"] == "resource Conn, free_ref: conn_close"
     db = items_by_name(report)["Db"]
     assert (db["signature"], db["summary"], start(db["span"])) == (
         "resource Db, free: db_close", "An open database.", (3, 3))
