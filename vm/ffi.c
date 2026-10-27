@@ -808,7 +808,7 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_a
 
 /* The address that frees a resource of a kind: FREE_AT, the free function that the call got (code e), for a kind
    declared free: C.Function (BY_POINTER), else NULL, so its prepared call by name runs. */
-static void *free_address(bool by_pointer, void *free_at) { return by_pointer ? free_at : NULL; }
+static void *free_target(bool by_pointer, void *free_at) { return by_pointer ? free_at : NULL; }
 
 /* The resource that a call returned, as Result ok; NULL is an error that names the function. FREE_AT is the free
    function that the call got (code e), else NULL. */
@@ -818,7 +818,7 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
     return agc_error_value(message);
   }
-  return agc_result_value(true, make_resource(vm, e->free, free_address(e->free_by_pointer, free_at),
+  return agc_result_value(true, make_resource(vm, e->free, free_target(e->free_by_pointer, free_at),
                                               e->free_by_ref, e->resource, pointer));
 }
 
@@ -1137,7 +1137,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
-      return make_resource(vm, kind->free, free_address(kind->by_pointer, free_at), kind->by_ref, kind->name,
+      return make_resource(vm, kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, kind->name,
                            slot->p);
     }
     case AGC_C_STRING:
@@ -1166,13 +1166,13 @@ static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r
 static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots, void *free_at) {
   if (e->result == AGC_C_RESOURCE) {
     void *pointer = r->p;
-    free_pointer(e->free, free_address(e->free_by_pointer, free_at), e->free_by_ref, &pointer);
+    free_pointer(e->free, free_target(e->free_by_pointer, free_at), e->free_by_ref, &pointer);
   }
   for (uint32_t k = 0; k < e->count; k++) {
     if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
     const made_kind *kind = &e->made[k];
     void *pointer = slots[k].p;
-    free_pointer(kind->free, free_address(kind->by_pointer, free_at), kind->by_ref, &pointer);
+    free_pointer(kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, &pointer);
   }
 }
 

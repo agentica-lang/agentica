@@ -939,6 +939,7 @@ def main() -> Void
   peer_set_flag()
   puts(Task.await(holder))
   wait_closes(6)
+  Task.sleep(20)
   puts(counts())
 end
 """

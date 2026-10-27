@@ -111,7 +111,7 @@ end
   allowed: `free: PQfinish`; only `C.Function` is a type). On Windows a
   function of a dependency (`free` of the C runtime) is `RUNTIME-NATIVE-LOAD`,
   as `GetProcAddress` searches that DLL only: declare it from the library that
-  exports it. Declare it above the `def`s that use it.
+  exports it. Declare the resource above the `def`s that use it.
   `resource Db, free_ref: duckdb_close` is freed by
   `void duckdb_close(void **)`: each free passes the address of the pointer (C
   may write NULL there); a second free word is `PARSE-EXTERN-FREE`, and
