@@ -39,9 +39,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   and `Native.address(p)` gives a pointer's integer value.
 - `Native.size_of`, `Native.get_struct` and `Native.put_struct` read and write
   a C struct of an extern block through a pointer, laid out as C does.
+- `Type.members` lists the fields of a struct type as a `List[StructMember]`
+  (`name` and `type` as source), for tools such as an ORM.
 
 ### Changed
 
+- **Breaking:** `StructMember` is a reserved type name, so a program cannot
+  declare a type of that name.
 - **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
   `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
   use the Lazy steps `deflate` and `gzip`.

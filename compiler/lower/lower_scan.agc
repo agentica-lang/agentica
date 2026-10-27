@@ -66,10 +66,28 @@ def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan) -> Scan
       ConstWalk.Node.Stmt(stmt) -> found = see_stmt(found, stmt, watched)
     end
 
-    work = work.concat(ConstWalk.children(node))
+    work = work.concat(walked_children(node))
   end
 
   return found
+end
+
+# The children of a node, except the type name of Type.members, which is no type used as a value.
+def walked_children(node: ConstWalk.Node) -> List[ConstWalk.Node]
+  case node
+    ConstWalk.Node.Expr(expr) ->
+      case expr
+        Ast.Expr.FieldAccess(access) ->
+          case access.target
+            Ast.Expr.TypeName(found) -> return []
+            _ -> return ConstWalk.children(node)
+          end
+
+        _ -> return ConstWalk.children(node)
+      end
+
+    _ -> return ConstWalk.children(node)
+  end
 end
 
 def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan

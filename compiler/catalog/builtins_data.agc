@@ -183,6 +183,13 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "truncated", type: Types.Type.Bool),
       ],
     ),
+    Model.Record(
+      name: "StructMember",
+      fields: [
+        Model.Named(name: "name", type: Types.Type.String),
+        Model.Named(name: "type", type: Types.Type.String),
+      ],
+    ),
   ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -260,6 +267,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Socket",
     "Std",
     "String",
+    "StructMember",
     "System",
     "TCP",
     "TLS",

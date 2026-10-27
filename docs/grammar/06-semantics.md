@@ -64,6 +64,10 @@ programs are valid and how they run.
     `level: LogLevel`, `message: String`, `fields: Map[String, String]`,
     `time_ms: Int` and `task: Int`; it is not JSON-decodable
 
+- **Type:** `StructMember`
+  - **Rule:** Builtin record of `Type.members`: `name: String` and
+    `type: String`, the field name and its type written as source
+
 - **Type:** `Channel[T]`
   - **Rule:** Opaque bounded queue of `T` values that tasks send into and
     receive from
@@ -391,6 +395,22 @@ the ones it names). A field named `with` is allowed when its type is not a
 function type: a field of type `Fn[...]` named `with` is `CHECK-REDEFINED-NAME`,
 because `value.with(...)` is always the update; `value.with` without parentheses
 reads a data field of that name.
+
+`Type.members` lists the fields of a struct type, in declaration order, as a
+`List[StructMember]`. `StructMember` is a builtin record, reserved like
+`LogEvent`, with two `String` fields: `name`, the field name, and `type`, its
+type written as source (`Int`, `List[String]`, `Map[String, Int]`,
+`Result[Int]`, `Address`, `Shape[String]`). The type is the one the checker
+prints: an alias is expanded (`type Id = Int` gives `Int`) and a struct or
+enum from another module is written by its own name, without the import alias.
+`Type` is a struct you declare, one you import by name or through an alias
+(`Models.User.members`), or a builtin record such as `HttpResponse`. There is
+no form on a value: `user.members` is the field of that name, so a struct may
+have a field called `members`. The list is a constant of the program, with no
+runtime cost beyond building it. Any other type name is an error: an enum or a
+resource is `CHECK-UNKNOWN-METHOD`, an alias is `CHECK-UNKNOWN-TYPE` (name the
+struct itself), and a name that is no declared type, or a builtin type such as
+`Int`, is `CHECK-UNKNOWN-NAME`.
 
 A list index runs from zero to length minus one; a negative or out-of-range
 index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most

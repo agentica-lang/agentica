@@ -167,3 +167,22 @@ def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
         path.write_text(text, encoding="utf-8")
         result = run(cli() + [str(path)])
         assert (result.code, result.stdout.splitlines()) == (0, lines), (text, result.stderr)
+
+
+def test_type_members_reads_a_struct_imported_by_name_or_through_an_alias(agentica_check):
+    models = "export struct User\n  id: Int\nend\n\nexport enum Role\n  Admin\nend\n\n"
+    root = (
+        'import {User, Role} from "models"\n'
+        'import Models from "models"\n\n'
+        "def main() -> Void\n"
+        "  by_name: List[StructMember] = User.members\n"
+        "  through_alias: List[StructMember] = Models.User.members\n"
+        "  puts(by_name.size + through_alias.size)\n"
+        "%s"
+        "end\n\n"
+    )
+    assert agentica_check({"main.agc": root % "", "models.agc": models}) is None
+
+    found = agentica_check({"main.agc": root % "  puts(Role.members.size)\n", "models.agc": models})
+    assert found["code"] == "CHECK-UNKNOWN-METHOD"
+    assert covered(root % "  puts(Role.members.size)\n", found["range"]) == "Role.members"

@@ -274,6 +274,50 @@ end
 order 7: 8
 ```
 
+## List the fields
+
+`Type.members` is a `List[StructMember]` with one entry per field of a struct type, in declaration order. A `StructMember` has two `String` fields: `name` and `type`, the field type written as source. A tool such as a table mapper can build SQL from a struct with it.
+
+```agentica
+type Id = Int
+
+struct Address
+  city: String
+end
+
+struct User
+  id: Id
+  name: String
+  tags: List[String]
+  home: Address
+end
+
+def main() -> Void
+  User.members.each do |m|
+    puts("#{m.name}: #{m.type}")
+  end
+end
+```
+
+```output
+id: Int
+name: String
+tags: List[String]
+home: Address
+```
+
+The type is the one the checker prints, so an alias is expanded (`Id` gives `Int`). `members` is on the type and not on a value: `user.members` reads a field of that name, and a struct may have one. An enum, a resource or an alias is not a struct, so `Color.members` is `CHECK-UNKNOWN-METHOD` and `Id.members` is `CHECK-UNKNOWN-TYPE`.
+
+```agentica {expect="CHECK-UNKNOWN-METHOD"}
+enum Color
+  Red
+end
+
+def main() -> Void
+  puts(Color.members.size)
+end
+```
+
 ## No methods
 
 Structs have fields only. A field named `to_s` shadows the text form, so write functions that take the struct:

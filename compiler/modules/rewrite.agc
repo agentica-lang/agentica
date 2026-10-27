@@ -283,6 +283,10 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
     return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
   end
 
+  if parts.size == 2 and parts[1] == "members" and node.args.size == 0 and Resolve.declared_type?(cx, parts[0])
+    return rewrite_members(cx, node, parts[0])
+  end
+
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
   args = try rewrite_exprs(cx, node.args)
   if name == "Native.load" and args.size == 1
@@ -290,6 +294,25 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   end
 
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
+end
+
+# Type.members on a type of this file, or one it imports by name, is a field access on the type name, as for a type
+# behind an alias (`Alias.Type.members`). The checker decides whether the type is a struct. The type name takes an id
+# past the ids of the program, like the receiver of a constant.
+def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
+  linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
+  start = node.span.start
+  size = written.length
+  stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
+  receiver = Ast.Expr.TypeName(
+    Ast.TypeName(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
+  )
+  name_span = member_span(cx, node, size, "members")
+  return ok(
+    Ast.Expr.FieldAccess(
+      Ast.FieldAccess(id: node.id, target: receiver, name: "members", name_span: name_span, span: node.span),
+    ),
+  )
 end
 
 # The library of Native.load is a string literal that means what it means in `extern "NAME"`: a name or an absolute
