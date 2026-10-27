@@ -224,30 +224,39 @@ is its only boundary with the interpreter: the interpreter asks for a function's
 code, enters it at the frame's `pc`, and handles the exit it returns.
 
 - **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
-  or `always`. `off`, the default, has no JIT. `on` compiles a function with a
+  or `always`. `off`, the default, has no JIT. An entry of a function is a call,
+  a return into it, or a turn that starts in it. `on` compiles a function with a
   loop at its 100th entry, once 32 of its entries were passes (an entry at or
-  before the previous one: a call, or a loop that went round). It keeps a
+  before the previous one: a new call, or a loop that went round). It keeps a
   function out when one of its innermost loops has more than one instruction
   that leaves compiled code within 16 instructions. A function without a loop
   gets code only for native calls, and only when none of its instructions
   leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
-  from compiled code when it calls a function, else at its 16th entry. `always`
-  compiles every function at its first entry, for tests. A host without an
-  emitter runs every mode in the interpreter.
+  from compiled code when it calls a function, else at its 16th call that
+  leaves compiled code. `always` compiles every function at its first entry,
+  for tests. A host without an emitter runs every mode in the interpreter.
 - **Native calls.** A `CALL` of a function that has code is a native call. So is
   a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
   Compiled code pushes the frame and calls the callee's code, up to 256 deep
   (`AGC_JIT_NATIVE_DEPTH`); the callee's `RETURN` pops it. A call that cannot be
   native takes an exit. `on` counts a `CALL_VALUE` as a call, not as leaving.
-- **Exits.** Compiled code returns `{status, pc}` at its first exit.
-  `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
-  instruction at `pc`:
+- **Exits.** Three kinds of builtin matter here:
+  - A *direct* builtin only returns a value. It may allocate, do work that grows
+    with its arguments, charge turn cost and fail. It never parks, starts a
+    block or a native frame, or moves frames.
+  - A *leaf* builtin is a plain C call. It never parks, starts a block or a
+    stepper, or charges turn cost, and its work is bounded.
+  - A *block call* is a builtin row with a native kind (`map`, `filter`,
+    `reduce` and the others). Its native frame calls a block, and the block's
+    frames run in compiled code.
+
+  Compiled code returns `{status, pc}` at its first exit. `run_compiled`
+  (`vm/interp.c`) handles it as the interpreter handles the instruction at `pc`:
   - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
-    interpreter runs. A leaf builtin is called by `run_compiled` itself. A block
-    call (`map`, `filter`, `reduce` and the other rows with a native kind)
-    starts there, and each `RETURN` of the block takes the `RETURN` exit.
+    interpreter runs. `run_compiled` calls a leaf builtin itself. It starts a
+    block call, and each `RETURN` of the block takes the `RETURN` exit.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
@@ -256,18 +265,30 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     turn or failed.
 - **Helper contract.** The machine code never fails itself. Its `agc_op_*`
   helpers (`vm/core.h`) return an `agc_status`: `OK`, `OVERFLOW`,
-  `DIVISION_BY_ZERO`, `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. Any other status is
-  an exit, and the interpreter raises the failure at the span of the instruction
-  at `pc`. Helpers charge no step and no turn cost; the caller does. A direct
-  builtin is called through `agc_jit_call_builtin`, which sets `vm->jit_catch`,
-  so a failure inside the builtin jumps back to it and not across compiled code.
+  `DIVISION_BY_ZERO`, `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. A status other than
+  `OK` makes compiled code return as an exit. The interpreter then raises the
+  failure at the span of the instruction at `pc`; `WRONG_TAG` fails at span 0.
+  Before the exit, `frame->pc` is set past that instruction, which the stack
+  trace reads. Helpers charge no step and no turn cost; the caller does.
+
+  Compiled code never calls `agc_fail`. On Windows x64, `longjmp` unwinds the
+  stack, and JIT frames have no unwind info. A direct builtin is called through
+  `agc_jit_call_builtin`, which sets `vm->jit_catch`, so a failure inside the
+  builtin jumps back to it and not across compiled code. The builtin's registers
+  stay in the frame's register file during the call, so the collector sees them.
+- **Code.** Each instruction has fixed code, emitted in one pass over the
+  bytecode. The register convention is in the header of `vm/jit/emit_x64.c`.
 - **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
   reserved in chunks of 1 MiB, each twice the last, so the address space follows
   the code. Code is written read-write, then sealed read-execute (`mprotect` on
   Linux and macOS, `VirtualProtect` on Windows). No page is writable and
-  executable at once, and a sealed page is never written again. A function
-  without a loop waits in a 16 KiB batch, so the callees of one loop body can
-  share a seal. After a memory failure nothing more compiles.
+  executable at once, and a sealed page is never written again. Only the
+  scheduler that claims a function compiles it; another scheduler interprets the
+  function until its code is published. A function without a loop waits in a
+  16 KiB batch. The batch is sealed when 16 more `CALL` exits hit a function in
+  it, when the interpreter enters a function that just compiled, or when the
+  batch holds 16 KiB. So the callees of one loop body can share a seal. After a
+  memory failure nothing more compiles.
 - **Compile budget.** Each compile first takes the function's instruction count
   plus 32 units from `AGC_JIT_BUDGET` (1,000,000 units). A unit is a count of
   work, not a time, so every host compiles the same functions. The first compile
@@ -275,6 +296,24 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   of the run, and the functions not yet compiled stay interpreted. A function
   whose cost alone exceeds the budget stays interpreted.
   `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
+- **Why.**
+  - A function without a loop runs each instruction once per entry. The entry,
+    the exit and the `RETURN` cost more than the few instructions they save.
+    Blocks of a few instructions that `filter`, `map` or `reduce` call, and an
+    empty function called many times, ran slower compiled. So `on` gives such a
+    function code only for native calls.
+  - `on` keeps out a function whose loop leaves compiled code often: each trip
+    out and back costs more than the instructions it saves. The loops of
+    `benchmarks/programs/print-lines.agc`, `small-values.agc` and `strings.agc`
+    leave every few instructions, and ran slower compiled.
+  - A block call in a function without a loop counts as leaving, so `on` keeps
+    that function out. A block without a loop gets code at the first block call
+    that compiled code starts with it, since that call runs it once per item.
+  - The jit copy of the turn loop has the same handlers as the plain copy, but
+    its machine code sits at other addresses. That alone changed the timings of
+    programs that compiled nothing. So a run with no function to compile has no
+    JIT: `agc_jit_new` returns NULL, for `off` and for an `on` run that keeps
+    every function out. `make layout-check` guards the layout of the plain copy.
 - **Trace.** `AGENTICA_VM_TRACE=jit` (or `all`) writes these lines:
   - `skip function=F loop=none` or `loop=exits` at the start, for each function
     that `on` keeps out.
@@ -294,11 +333,15 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   helpers and exits; `make vm-tsan` runs it under ThreadSanitizer. `make
   vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
   with `on`, in CI. `make vm-jit-self-compile` compiles the front end under each
-  mode and compares the bytes. `make vm-libfuzz` runs each accepted input with
-  `always` and `on` and compares it with the interpreter (Linux). `make
-  test-jit-on` runs the conformance areas with `on`, and `jit-soak.yml` runs it
-  daily on four systems. `make layout-check` guards the layout of the `--jit
-  off` loop, which an edit of the turn loop can move.
+  mode and compares the bytes. `make test-jit-on` runs the conformance areas
+  with `on`, and `jit-soak.yml` runs it daily on four systems.
+- **Fuzzing and layout.** `make vm-libfuzz` needs clang and runs on Linux. It
+  runs each accepted input with `always` and `on` and compares the result with
+  the interpreter's. Only runs that read no clock are compared. A JIT run that
+  stops at the allocation limit, where the interpreter's run did not, is counted
+  and not compared. `make layout-check` runs on Linux x86-64, release build
+  only. It compares the layout of the `--jit off` loop with a base revision. An
+  intended move carries the `layout-change` label in CI, which accepts it.
 - **Known limits.**
   - Only x86-64 has an emitter; the other hosts run the interpreter, arm64 macOS
     included.

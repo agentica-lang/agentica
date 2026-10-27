@@ -1,13 +1,13 @@
 name: JIT on soak
 
-# The evidence for making `--jit on` the default (docs/vm/05-values-execution-builtins.md §6.4):
-# every day, the Python tests of each system
-# (the conformance areas of platforms.yml, plus the destructive group) run with AGENTICA_JIT=on in the environment of
-# every VM they start, on the four systems. `on` must change no exit code, output or diagnostic, so any failure is a JIT
-# bug or a test that depends on the mode. While the emitter is x86-64 only, `on` falls back to the interpreter on macOS
-# arm64, and that job only shows that the setting is harmless. A failure fails the job, and the report in the job
-# summary names the failed cases. Not on pull requests, so their CI time does not change; run it by hand on a branch with
-# `gh workflow run jit-soak.yml --ref BRANCH`. A manual run never cancels the scheduled one (cancel-in-progress: false).
+# The evidence for making `--jit on` the default (docs/vm/05-values-execution-builtins.md §6.4): every day, the Python
+# tests of each system (the conformance areas of platforms.yml, plus the destructive group) run with AGENTICA_JIT=on in
+# the environment of every VM they start, on the four systems. `on` must change no exit code, output or diagnostic, so
+# any failure is a JIT bug or a test that depends on the mode. While the emitter is x86-64 only, `on` falls back to the
+# interpreter on macOS arm64, and that job only shows that the setting is harmless. A failure fails the job, and the
+# report in the job summary names the failed cases. Not on pull requests, so their CI time does not change; run it by
+# hand on a branch with `gh workflow run jit-soak.yml --ref BRANCH`. A manual run never cancels the scheduled one
+# (cancel-in-progress: false).
 on:
   schedule:
     - cron: '30 4 * * *'
