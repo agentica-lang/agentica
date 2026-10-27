@@ -279,7 +279,11 @@ Skip rules, checked by the report:
   `always`, via the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`, to stage2) on
   the release VM; job `jit-stress` runs `vm-gc-stress-jit` and
   `vm-sanitize-jit-test` (the goldens with `AGENTICA_JIT=always` on the GC
-  stress and the ASan binaries, sampled sweep). Nothing else runs on a
+  stress and the ASan binaries, sampled sweep).
+- `jit-soak.yml`: daily 04:30 UTC and by hand, on the four systems,
+  `make test-jit-on` (the conformance areas and the destructive group with
+  `AGENTICA_JIT=on`; the report names the failed cases). A test that needs
+  one mode passes `--jit` itself (the flag wins). Nothing else runs on a
   schedule.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.
 
