@@ -334,7 +334,8 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
     Ast.Expr.Call(node) -> return name_sites(scan, node.name, node.span.start, "call")
     Ast.Expr.FunctionRef(node) -> return name_sites(scan, node.name, after(node.span.start, 1), "value")
     Ast.Expr.ConstRef(node) -> return placed(scan, named(node.name), "value", node.span, node.span)
-    Ast.Expr.TypeName(node) -> return type_name_sites(scan, node.name, node.span.start, "type")
+    Ast.Expr.TypeName(node) ->
+      return bounded_type_sites(scan, node.name, node.span.start, node.span.stop.offset, "type")
     Ast.Expr.EnumConstructor(node) ->
       return enum_part_sites(scan, node.enum_name, node.variant_name, node.span, "construct")
     Ast.Expr.Construct(node) ->
@@ -419,11 +420,17 @@ end
 
 # The name of a declared type written from `start`, or of a builtin one when the scan wants those.
 def type_name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
+  return bounded_type_sites(scan, name, start, scan.text.length, kind)
+end
+
+# The same, reading only the names that end by offset `limit`: `Models.User.members` holds the type `Models.User`
+# and then a method, which the text read from the start of the type would take for part of the type name.
+def bounded_type_sites(scan: Scan, name: String, start: Source.Position, limit: Int, kind: String) -> List[Site]
   if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
     return []
   end
 
-  parts = written(scan.text, start)
+  parts = written(scan.text, start).select do |part: Source.Span| part.stop.offset <= limit end
   if parts.size == 0
     return []
   end

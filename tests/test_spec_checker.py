@@ -167,3 +167,46 @@ def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
         path.write_text(text, encoding="utf-8")
         result = run(cli() + [str(path)])
         assert (result.code, result.stdout.splitlines()) == (0, lines), (text, result.stderr)
+
+
+def test_type_members_reads_a_struct_imported_by_name_or_through_an_alias(agentica_check):
+    models = "export struct User\n  id: Int\nend\n\nexport enum Role\n  Admin\nend\n\n"
+    root = (
+        'import {User, Role} from "models"\n'
+        'import Models from "models"\n\n'
+        "def main() -> Void\n"
+        "  by_name: List[StructMember] = User.members\n"
+        "  through_alias: List[StructMember] = Models.User.members\n"
+        "  puts(by_name.size + through_alias.size)\n"
+        "%s"
+        "end\n\n"
+    )
+    assert agentica_check({"main.agc": root % "", "models.agc": models}) is None
+
+    called = "import Models from \"models\"\n\ndef main() -> Void\n  puts(Models.User.members().size)\nend\n\n"
+    found = agentica_check({"main.agc": called, "models.agc": models})
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert covered(called, found["range"]) == "Models.User"
+
+    found = agentica_check({"main.agc": root % "  puts(Role.members.size)\n", "models.agc": models})
+    assert found["code"] == "CHECK-UNKNOWN-METHOD"
+    assert covered(root % "  puts(Role.members.size)\n", found["range"]) == "Role.members"
+
+
+def test_type_members_of_a_struct_past_the_chunk_size_keeps_every_field_in_order(tmp_path):
+    # One `list` instruction gathers 255 items, so 256 fields need a second chunk joined with List.concat.
+    fields = "".join("  f%d: Int\n" % number for number in range(256))
+    text = (
+        "struct Wide\n%send\n\n"
+        "def main() -> Void\n"
+        "  names = Wide.members.map do |m: StructMember| m.name end\n"
+        "  puts(names.size)\n"
+        "  puts(names[0])\n"
+        "  puts(names[255])\n"
+        "  puts(Wide.members.size)\n"
+        "end\n\n"
+    ) % fields
+    path = tmp_path / "wide.agc"
+    path.write_text(text, encoding="utf-8")
+    result = run(cli() + [str(path)])
+    assert (result.code, result.stdout.splitlines()) == (0, ["256", "f0", "f255", "256"]), result.stderr

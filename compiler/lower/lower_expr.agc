@@ -688,6 +688,7 @@ def lower_resolved(
       return lower_expression(cx, fx, receiver, want, false, false)
     State.Resolved.Text(type) -> return lower_text(cx, fx, receiver, type, span, want)
     State.Resolved.Inspect(type) -> return lower_inspect(cx, fx, receiver, type, span, want)
+    State.Resolved.Members(fields) -> return Data.lower_members(cx, fx, fields, span, want)
     State.Resolved.Call(name, type) ->
       target = Ast.TypedTarget(id: Ast.expr_id(receiver), target: receiver, type: type, span: Ast.expr_span(receiver))
       call = Ast.Call(

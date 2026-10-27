@@ -689,3 +689,25 @@ def test_the_name_of_a_re_export_is_the_original_declaration_and_its_uses_throug
     assert (definition["kind"], definition["name"], definition["module"]) == ("function", "make", "models.agc")
     assert start(definition["name_span"]) == where(MODELS, "make(name")
     assert ("through.agc", *where(THROUGH, "make", 0), "call", "build") in places(report)
+
+
+def test_type_members_is_a_use_of_the_type_name_alone(tmp_path):
+    models = "export struct User\n  name: String\nend\n"
+    main = (
+        'import Models from "models"\n'
+        'import {User} from "models"\n\n'
+        "def main() -> Void\n"
+        "  puts(User.members.size)\n"
+        "  puts(Models.User.members.size)\n"
+        "end\n"
+    )
+    (tmp_path / "models.agc").write_text(models, encoding="utf-8")
+    (tmp_path / "main.agc").write_text(main, encoding="utf-8")
+    report = answer(("main.agc", where(main, "User.members", 1)), cwd=tmp_path)
+    assert (report["definition"]["kind"], report["definition"]["name"]) == ("struct", "User")
+    found = [(start(item["span"]), end(item["span"]))
+             for item in report["references"] if item["span"]["file"] == "main.agc"]
+    assert found == [
+        (where(main, "User.members", 0), where(main, "User.members", 4)),
+        (where(main, "Models.User.members", 7), where(main, "Models.User.members", 11)),
+    ]
