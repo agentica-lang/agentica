@@ -300,6 +300,12 @@ static agc_value builtin_length(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_string(vm, args[0])->chars);
 }
 
+/* The number of UTF-8 bytes, which the String keeps: no walk over the text. */
+static agc_value builtin_bytesize(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_string(vm, args[0])->bytes);
+}
+
 /* Upper or lower case of the String in args[0]. A String of no characters is its own result, and one ASCII character
    maps by itself (no special casing applies to ASCII), so neither allocates. */
 static agc_value change_case(agc_vm *vm, agc_value *args, bool up) {
@@ -613,6 +619,7 @@ static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
 
 const agc_builtin agc_string_builtins[] = {
   {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
+  {"String.bytesize", 1, builtin_bytesize, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
   {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"String.downcase", 1, builtin_downcase, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"String.trim", 1, builtin_trim, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},

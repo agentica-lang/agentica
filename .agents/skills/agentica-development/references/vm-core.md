@@ -104,6 +104,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   an extern call passes it and a compute call holds it. Its block form (arity 2)
   is a stepper (`buffer_block_step`) that calls the block with the buffer and
   closes it when the block returns, if the task still owns it.
+  `Native.from_string` is the same buffer (`new_buffer`, a shared row too) with
+  the String's bytes copied in and a NUL after them, and the same block form.
   `Native.offset` of a buffer makes a view: an `agc_c_resource` with `parent`
   set to the buffer (`root_of`) and no state, whose `pointer` and `size` are the
   bytes from its offset to the buffer's end; every closed check and hold

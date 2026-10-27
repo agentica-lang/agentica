@@ -493,6 +493,15 @@ end
   pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
   address that nothing tracks, so the buffer it names must outlive C's use.
   `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
+- `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) makes an
+  owned buffer of the UTF-8 bytes of `text` and a NUL after them, so its size
+  is `text.bytesize + 1`; a NUL inside `text` is copied like any byte. It is an
+  owned buffer in every other way, block form `Native.from_string(text) do |p|
+  ... end` included. It serves C functions that take text with a length
+  (`sqlite3_bind_text`, `PQexecParams`, `mysql_real_query`), which a
+  `C.String` cannot give, and pointers that C returns into the text: they stay
+  valid while the buffer lives, and `Native.address(tail) -
+  Native.address(p)` is the bytes before `tail` (SQLite's `pzTail`).
 - `Native.offset(p, n)` is the `C.Pointer` `n` bytes past `p`. For a pointer
   that C gave it is the plain sum (wrapping on overflow), trusted like `p`. For
   an owned buffer it is a view of the same memory, from byte `n` to the buffer's

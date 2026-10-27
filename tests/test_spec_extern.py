@@ -183,7 +183,8 @@ end
 # An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, Task.spawn_owning hands it over, and the
 # typed reads and writes take any C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
 # The block form yields a C.Pointer and has the type of the block's value (a Result from a `try` in it included); the
-# block or function must take one C.Pointer.
+# block or function must take one C.Pointer. Native.from_string takes a String in place of the size, and
+# text.bytesize is an Int.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
@@ -203,6 +204,11 @@ end
     ("  n = Native.memory_pointer(8) do |buf: Int| buf end", "CHECK-TYPE-MISMATCH", (10, 36), (10, 44)),
     ("  Native.memory_pointer(8, &main)", "CHECK-TYPE-MISMATCH", (10, 28), (10, 33)),
     ("  n = Native.memory_pointer(8.5) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
+    ('  buf: C.Pointer = Native.from_string("ab")\n  fill(buf, 0)\n'
+     '  n: Int = Native.from_string("é") do |s| Native.get_uint8(s, 0) + "é".bytesize end\n  puts(n)',
+     None, None, None),
+    ("  n = Native.from_string(3) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 26), (10, 27)),
+    ('  s: String = "ab".bytesize', "CHECK-TYPE-MISMATCH", (10, 15), (10, 28)),
 ])
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
     assert_checks(check(source(tmp_path, MEMORY % body)), code, start, stop)

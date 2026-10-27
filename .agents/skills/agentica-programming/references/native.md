@@ -75,8 +75,13 @@ end
   that never frees grows. `Native.memory_pointer(size) do |buf| ... end` frees
   it when the block ends (an error returned with `try` too) and gives the
   block's value: prefer it for a buffer of one call (one handed to another
-  task is left to its new owner). `Task.spawn_owning(&f, buf)` hands a buffer
-  over; a channel send or a task's result does not. A
+  task is left to its new owner). `Native.from_string(text)` (block form too)
+  is a buffer of the UTF-8 bytes of `text` and a NUL (`text.bytesize + 1`
+  bytes, NULs inside kept): pass it with `text.bytesize` to C that takes a
+  length (`sqlite3_bind_text`, `PQexecParams`, `mysql_real_query`); a pointer C
+  returns into it (`pzTail`) stays valid while it lives.
+  `Task.spawn_owning(&f, buf)` hands a buffer over; a channel send or a task's
+  result does not. A
   `compute def` call holds it (reading or writing it meanwhile races with C). A
   freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of C's pointer
   `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an untracked address: keep
@@ -309,7 +314,8 @@ Keep the `extern` layer private and give the user a normal API; site page:
   functions): put it at the end of the file. A `String` with a NUL stops
   the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first in a wrapper that must not
-  stop.
+  stop, or pass `Native.from_string(s)` and `s.bytesize` when C takes a
+  length.
 - A C struct of options with a defaults function: the wrapper takes the
   defaults, sets the caller's fields with `.with` and passes the record on;
   the caller sees a struct of its own with only the options it may set.

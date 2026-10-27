@@ -28,7 +28,9 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
     Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
     Model.Rule.ProfileMeasure -> return check_block_value(cx, st, site, T.Type.String, [])
-    Model.Rule.NativeMemoryBlock -> return check_block_value(cx, st, site, T.Type.Int, [T.Type.Opaque("C.Pointer")])
+    Model.Rule.NativeMemoryBlock ->
+      first = site.selected.parameters[0].type
+      return check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
     Model.Rule.NativeStruct -> return check_native_struct(cx, st, site)
     _ -> return check_map_rule(cx, st, site, rule)
   end
@@ -414,9 +416,9 @@ def check_target(
   return ok(State.Out(st: target.st, type: site.selected.result))
 end
 
-# Profile.measure(label) do ... end and Native.memory_pointer(size) do |buf| ... end: the first argument has the type
-# `first`, then a block or a function that takes `params`; the call has the type the block returns. The context of the
-# call is the block's expected result.
+# Profile.measure(label) do ... end, Native.memory_pointer(size) do |buf| ... end and Native.from_string(text) do |buf|
+# ... end: the first argument has the type `first`, then a block or a function that takes `params`; the call has the
+# type the block returns. The context of the call is the block's expected result.
 def check_block_value(
   cx: State.Cx,
   st: State.St,

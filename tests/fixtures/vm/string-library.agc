@@ -71,6 +71,7 @@ def main() -> Void
   puts(String.to_bytes("aé€😀").inspect)
   puts("".to_bytes.inspect)
   puts("hi".to_bytes.size)
+  puts(["hi".bytesize, "aé€😀".bytesize, "".bytesize, "a#{String.from_code(0)}b".bytesize])
   for sample in ["", "plain ascii", "é", "€ and ñ", "😀", "a#{String.from_code(0)}b", "aé€😀 mixed"]
     puts(String.from_bytes(String.to_bytes(sample)).unwrap! == sample)
   end
