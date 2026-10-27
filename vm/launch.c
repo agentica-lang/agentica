@@ -709,6 +709,12 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
   }
   rt->jit = agc_jit_new(program, mode, &rt->trace);
+  /* Test-only: AGENTICA_VM_TEST_JIT_BUDGET=N gives the JIT a compile budget of N units instead of AGC_JIT_BUDGET, so a
+     test can spend it with a small program. parse_count, not strtoull: a new libc import moves the whole text, and so
+     the turn loops' layout. */
+  const char *budget = getenv("AGENTICA_VM_TEST_JIT_BUDGET");
+  int64_t units = 0;
+  if (rt->jit && budget && parse_count(budget, &units)) rt->jit->budget = (uint64_t)units;
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");

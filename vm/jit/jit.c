@@ -1,8 +1,8 @@
 /*
  * The JIT tier (docs/future/22-jit.md §22): which functions to compile and when, the walk over a function's bytecode
- * that drives the host's emitter, and the code cache of a run. Every function can be compiled: an instruction without
- * code of its own leaves for the interpreter, which runs it and comes back. With `on`, only a function with a loop
- * that seldom leaves is compiled, and the small functions it calls. Core layer.
+ * that drives the host's emitter, and the code cache and compile budget of a run. Every function can be compiled: an
+ * instruction without code of its own leaves for the interpreter, which runs it and comes back. With `on`, only a
+ * function with a loop that seldom leaves is compiled, and the small functions it calls. Core layer.
  */
 #include "jit.h"
 
@@ -471,14 +471,54 @@ static void seal_batch(agc_jit *jit, uint32_t function, const uint8_t *code, siz
   b->len = b->count = 0;
 }
 
-/* Compiles FUNCTION: its code runs from now on when NOW is set, else it joins the batch. Returns its code, or NULL
-   while it waits in the batch, when it stays interpreted, or when another scheduler compiles it. */
-static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
+/* True when FUNCTION claims it now: only that scheduler compiles it, or keeps it out for good. */
+static bool claim(agc_jit *jit, uint32_t function) {
   bool unclaimed = false;
-  if (!atomic_compare_exchange_strong_explicit(&jit->claimed[function], &unclaimed, true, memory_order_acq_rel,
-                                               memory_order_acquire))
-    return atomic_load_explicit(&jit->code[function], memory_order_acquire);
+  return atomic_compare_exchange_strong_explicit(&jit->claimed[function], &unclaimed, true, memory_order_acq_rel,
+                                                 memory_order_acquire);
+}
+
+/* Takes COST units of the compile budget, or nothing and false when they do not fit what is left. A compare-and-swap,
+   so schedulers that compile at once never take more than the budget together. */
+static bool charge(agc_jit *jit, uint64_t cost) {
+  uint64_t work = atomic_load_explicit(&jit->work, memory_order_relaxed);
+  do {
+    if (work > jit->budget || cost > jit->budget - work) return false;
+  } while (!atomic_compare_exchange_weak_explicit(&jit->work, &work, work + cost, memory_order_relaxed,
+                                                  memory_order_relaxed));
+  return true;
+}
+
+/* Stops compiling for the rest of the run, once, as FUNCTION (claimed by the caller, which keeps it out) did not fit
+   the budget's WHAT, "work" or "bytes": every function that no scheduler claimed is claimed here and stays
+   interpreted, so the reload no longer asks for it and nothing walks it. A function claimed before (compiled, in the
+   batch, or being compiled on another scheduler) goes on as it was. The trace's `functions` are those that could
+   still have been compiled. */
+static void spend(agc_jit *jit, uint32_t function, const char *what) {
+  if (atomic_exchange_explicit(&jit->spent, true, memory_order_relaxed)) return;
+  uint32_t left = 1;
+  for (uint32_t k = 0; k < jit->program->function_count; k++) {
+    if (!claim(jit, k)) continue;
+    if (agc_jit_may_run(jit, k) || agc_jit_native_only(jit, k)) left++;
+    skip(jit, k);
+  }
   const agc_function *f = &jit->program->functions[function];
+  AGC_TRACE(jit->trace, AGC_TRACE_JIT,
+            "budget spent=%s function=%.*s work=%" PRIu64 " bytes=%zu functions=%" PRIu32, what,
+            agc_trace_len(f->name->bytes), f->name->data, atomic_load_explicit(&jit->work, memory_order_relaxed),
+            atomic_load_explicit(&jit->used, memory_order_relaxed), left);
+}
+
+/* Compiles FUNCTION: its code runs from now on when NOW is set, else it joins the batch. Returns its code, or NULL
+   while it waits in the batch, when it stays interpreted, or when another scheduler compiles it. The budget is taken
+   before the walk, so a compile past it costs nothing. */
+static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
+  if (!claim(jit, function)) return atomic_load_explicit(&jit->code[function], memory_order_acquire);
+  const agc_function *f = &jit->program->functions[function];
+  if (!charge(jit, (uint64_t)f->count + AGC_JIT_COMPILE_BASE)) {
+    spend(jit, function, "work");
+    return skip(jit, function);
+  }
   agc_emitter e;
   size_t size = emit_function(&e, jit, f);
   if (!size) {
@@ -487,8 +527,8 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
   }
   struct agc_jit_batch *b = jit->batch;
   agc_lock_take(jit->lock);
-  if (!fits(jit, size)) {
-    AGC_TRACE(jit->trace, AGC_TRACE_JIT, "full function=%.*s", agc_trace_len(f->name->bytes), f->name->data);
+  bool full = !fits(jit, size);
+  if (full) {
     skip(jit, function);
   } else if (now) {
     seal_batch(jit, function, e.code, size);
@@ -497,6 +537,7 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
     if (b->len >= AGC_JIT_BATCH) seal_batch(jit, 0, NULL, 0);
   }
   agc_lock_drop(jit->lock);
+  if (full) spend(jit, function, "bytes");
   return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
 
@@ -600,6 +641,9 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   atomic_init(&jit->transitions, 0);
   atomic_init(&jit->turns, 0);
   atomic_init(&jit->live, false);
+  atomic_init(&jit->spent, false);
+  atomic_init(&jit->work, 0);
+  jit->budget = AGC_JIT_BUDGET;
   atomic_init(&jit->arena, NULL);
   atomic_init(&jit->used, 0);
   return jit;
