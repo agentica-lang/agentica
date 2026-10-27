@@ -56,6 +56,8 @@ VALID_EXAMPLES = [
                       "[\"ana\"]\n"),
     ("shared-cache.agc", "letters per worker: [87]\nlookups: 24\nstored: 6\n1 squared is 1\n2 squared is 4\n"
                          "3 squared is 9\n4 squared is 16\n5 squared is 25\n6 squared is 36\n"),
+    ("generic-structs.agc", "[20, 40, 60]\nANA\npage 2: 2 item(s)\npage 3: 0 item(s)\n"
+                            "Page(items: [\"ana\", \"ben\"], number: 9)\n"),
     ("case-guards.agc", "big circle\nempty circle\ntwin\ndot\nnegative -3\nvalue 8\nmissing\n"
                         "timed out\n"),
     ("heredoc.agc", "Usage: tool [options] FILE\n\n  --verbose   print more\n"

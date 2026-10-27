@@ -178,11 +178,13 @@ end
 ## makes for an extern function with `out` parameters the name of that function: a field `result` with the C result
 ## (none for Void), then one field per out parameter, named after it. The record has the function's span and name
 ## span, and comes right after the function. layout is "" for every struct but a C struct of an extern block, which has
-## its layout code (Native.codes): { then the code of each field in order, then }.
+## its layout code (Native.codes): { then the code of each field in order, then }. type_parameters are the names of
+## a generic struct (struct Box[T]); empty for any other, and always for a record or a C struct.
 export struct StructDecl
   id: Int
   name: String
   name_span: Source.Span
+  type_parameters: List[String]
   fields: List[FieldDecl]
   doc: Optional[String]
   record_of: String

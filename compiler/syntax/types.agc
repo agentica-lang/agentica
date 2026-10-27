@@ -1,10 +1,10 @@
 ## The types the checker works with, as an enum.
 
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
-## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name;
-## Enum carries its type arguments (none for a plain enum). Var is a type variable of a builtin signature or a generic
-## enum. Fn lists the parameters, then the result. Unknown is no type: the expected type when none is known (Unknown),
-## and the type of a literal the lexer could not classify.
+## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
+## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
+## generic struct or a generic enum. Fn lists the parameters, then the result. Unknown is no type: the expected type
+## when none is known (Unknown), and the type of a literal the lexer could not classify.
 export enum Type
   Int
   Float
@@ -25,7 +25,7 @@ export enum Type
   Map(Type, Type)
   ATS(Type, Type)
   Fn(List[Type], Type)
-  Struct(String)
+  Struct(String, List[Type])
   Enum(String, List[Type])
   Var(String)
 end
@@ -53,7 +53,7 @@ export def tag(type: Type) -> String
     Type.Map(key, value) -> return "Map"
     Type.ATS(key, value) -> return "ATS"
     Type.Fn(params, result) -> return "Fn"
-    Type.Struct(name) -> return "Struct"
+    Type.Struct(name, args) -> return "Struct"
     Type.Enum(name, args) -> return "Enum"
     Type.Var(name) -> return "Var"
   end
@@ -121,15 +121,16 @@ export def name(type: Type) -> String
   case type
     Type.Opaque(found) -> return found
     Type.Var(found) -> return found
-    Type.Struct(found) -> return found
+    Type.Struct(found, list) -> return found
     Type.Enum(found, args) -> return found
     _ -> return ""
   end
 end
 
-## The type arguments of an Enum type; empty for any other type.
+## The type arguments of a Struct or Enum type; empty for any other type.
 export def args(type: Type) -> List[Type]
   case type
+    Type.Struct(found, list) -> return list
     Type.Enum(found, list) -> return list
     _ -> return []
   end
@@ -144,7 +145,7 @@ export def same?(a: Type, b: Type) -> Bool
   case a
     Type.Opaque(found) -> return found == name(b)
     Type.Var(found) -> return found == name(b)
-    Type.Struct(found) -> return found == name(b)
+    Type.Struct(found, list) -> return found == name(b) and same_all?(list, args(b))
     Type.Enum(found, list) -> return found == name(b) and same_all?(list, args(b))
     Type.Map(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
     Type.ATS(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
@@ -281,8 +282,8 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Unknown -> return "?"
     Type.Opaque(name) -> return written_name(name, written)
     Type.Var(name) -> return name
-    Type.Struct(name) -> return written_name(name, written)
-    Type.Enum(name, args) -> return enum_text(name, args, written)
+    Type.Struct(name, args) -> return generic_text(name, args, written)
+    Type.Enum(name, args) -> return generic_text(name, args, written)
     Type.Result(item) -> return "Result[#{to_text_as(item, written)}]"
     Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
     Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
@@ -295,13 +296,13 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
   end
 end
 
-## The type with its variant written out, for tests: Struct(Header), Enum(Await, [Var(T)]), Fn([Int], Void). Unlike
-## to_text, two variants never print the same.
+## The type with its variant written out, for tests: Struct(Header), Struct(Box, [Int]), Enum(Await, [Var(T)]),
+## Fn([Int], Void). Unlike to_text, two variants never print the same.
 export def debug_text(type: Type) -> String
   case type
     Type.Opaque(name) -> return "Opaque(#{name})"
     Type.Var(name) -> return "Var(#{name})"
-    Type.Struct(name) -> return "Struct(#{name})"
+    Type.Struct(name, args) -> return struct_debug(name, args)
     Type.Enum(name, args) -> return "Enum(#{name}, [#{debug_list(args)}])"
     Type.Result(item) -> return "Result(#{debug_text(item)})"
     Type.Task(item) -> return "Task(#{debug_text(item)})"
@@ -321,11 +322,20 @@ export def list_text(types: List[Type]) -> String
   return types.map do |type: Type| to_text(type) end.join(", ")
 end
 
+# A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
+def struct_debug(name: String, args: List[Type]) -> String
+  if args.size == 0
+    return "Struct(#{name})"
+  end
+
+  return "Struct(#{name}, [#{debug_list(args)}])"
+end
+
 def debug_list(types: List[Type]) -> String
   return types.map do |type: Type| debug_text(type) end.join(", ")
 end
 
-def enum_text(name: String, args: List[Type], written: Map[String, String]) -> String
+def generic_text(name: String, args: List[Type], written: Map[String, String]) -> String
   if args.size == 0
     return written_name(name, written)
   end

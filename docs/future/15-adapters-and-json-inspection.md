@@ -1,8 +1,9 @@
 ## 15. Adapters and JSON inspection
 
 Small language items for adapters (one interface, several backends), facades,
-and JSON of unknown shape. 15.1 and 15.3 serve adapters; 15.2 reads unknown
-JSON; 15.4 gives enums a JSON form, which typed decoding lacks today.
+and JSON of unknown shape. 15.1 serves adapters (generic structs, which they
+need, are in the grammar); 15.2 reads unknown JSON; 15.4 gives enums a JSON
+form, which typed decoding lacks today.
 
 ### 15.1 Calling `Fn` fields without `.call`
 
@@ -44,8 +45,9 @@ end
   because a `Fn` is not printable. Today `s.put(a, b)` is `CHECK-UNKNOWN-METHOD`
   (with the help "put is a function field; call it with .put.call(...)"), so no
   valid program changes meaning.
-- On a generic struct (15.3) the rule applies after substitution: for
-  `b: Box[Fn[Int, Int]]`, `b.value(1)` calls the field.
+- On a generic struct (`docs/grammar/06-semantics.md`, "Generic structs") the
+  rule applies after substitution: for `b: Box[Fn[Int, Int]]`, `b.value(1)`
+  calls the field.
 - Arity and type errors are the same as for `.call`: a wrong number of arguments
   is `CHECK-ARITY`, a wrong argument type is `CHECK-TYPE-MISMATCH`. A name that
   is not a field, or a field that is not a `Fn`, stays `CHECK-UNKNOWN-METHOD`
@@ -173,52 +175,6 @@ it.
   `JSON.kind` is a builtin that builds the variant from the parsed node; lists
   and maps hold the child nodes as `Json` values without copying them.
 
-### 15.3 Generic structs
-
-- Same rules as generic enums: `struct Name[T, ...]` declares type parameters;
-  their names may not repeat or reuse a reserved type name. Construction infers
-  them from the field values; when it cannot (an empty list or map), it needs an
-  expected type from an annotation, parameter, field or return. Type arguments
-  are checked like enum type arguments.
-- A field named `with` whose type is a type parameter is `CHECK-REDEFINED-NAME`
-  at the declaration, since the parameter could be an `Fn`, and
-  `value.with(...)` is the struct update of
-  [`docs/grammar/06-semantics.md`](../grammar/06-semantics.md#structs-and-lists)
-  (which already bans `Fn` fields named `with`).
-- `Map` keys must still be `Int` or `String`. A type parameter used as a `Map`
-  key (`items: Map[K, V]`) is rejected at the declaration with
-  `CHECK-MAP-KEY-TYPE`, as for generic enums today.
-- All rules apply after substitution. Field access returns the substituted type:
-  `b.value` is `Int` for a `Box[Int]`. `data-type?` is checked on the
-  substituted type, so `Box[Int]` has `to_s` and `inspect`, and
-  `Box[Fn[Int, Int]]` does not.
-- An imported generic struct is written `M.Box[Int]`, as for enums. Import
-  linking (in `compiler/`) must carry the type parameters through: a bare `T` in
-  a field type must not get the module prefix, as for enums (a parameter name
-  with no type arguments stays as it is).
-- Diagnostics reuse the enum codes: a wrong number of type arguments, or a bare
-  `Box` in a type, is `CHECK-UNKNOWN-TYPE`; a repeated or reserved parameter
-  name is `CHECK-REDEFINED-NAME`; a parameter that cannot be inferred is
-  `CHECK-ENUM-TYPE-INFERENCE` (the message names the struct); conflicting field
-  types are `CHECK-TYPE-MISMATCH`.
-- `CHECK-ENUM-TYPE-INFERENCE` is reused for structs and keeps its name.
-- They enable a reusable adapter: `struct Storage[T]` with
-  `get: Fn[String, Result[T]]` and `put: Fn[String, T, Result[Void]]`, filled
-  once per backend.
-- JSON: `JSON.encode` and `JSON.from` work on any generic instance, struct or
-  enum (with 15.4), whose fields or payloads are encodable after substitution,
-  because encoding needs no `$defs`. Only `JSON.decode` and `JSON.schema` reject
-  a generic instance, struct or enum, anywhere in the target, with
-  `CHECK-NOT-DECODABLE` (except `JsonField[T]` as a direct struct field, in
-  the grammar), until a real program needs it. The reason: `$defs` is keyed by
-  the bare type name, so `Box[Int]` and `Box[String]` would collide. A direct
-  target would also need type arguments in expression position (`Box[Int]`
-  reads as indexing). A bare generic target with no type arguments, such as
-  `JSON.decode(text, Box)` or `JSON.schema(Option)`, is `CHECK-UNKNOWN-TYPE`, as
-  type resolution gives today.
-- VM: no change. Type parameters exist only in the checker, as for generic
-  enums; the struct table keeps field names and order.
-
 ### 15.4 JSON for enums
 
 Today `JSON.decode` and `JSON.schema` take named structs only, and a struct with
@@ -252,7 +208,8 @@ end
 - Only non-generic enums are decodable, and only when their payload types are. A
   generic enum instance such as `Option[Int]` anywhere in a decode or schema
   target is `CHECK-NOT-DECODABLE` (except `JsonField[T]` as a direct struct
-  field; 15.3 gives the reason); a bare `Option` is `CHECK-UNKNOWN-TYPE`.
+  field; the grammar's "Generic structs" gives the reason); a bare `Option` is
+  `CHECK-UNKNOWN-TYPE`.
   `Result` stays out. `JsonValue` stays out of all four functions (15.2).
 - The decode target may be a non-generic enum: `JSON.decode(text, Shape)`.
 - Errors return `error(...)` with the same paths as struct fields
@@ -307,11 +264,11 @@ the fields of a struct type is known at compile time and is `Type.members`
 ### 15.6 Implementation (row 7.6)
 
 - One PR per item (10a–10e), each with its own tests and docs. 10b, 10d and
-  10e, and the JSON part of 10c, need the VM JSON work; 10e also needs 10b.
+  10e need the VM JSON work; 10e also needs 10b.
 - 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
-  `JsonValue` enum (§15.2); 10c generic structs (§15.3); 10d JSON for
-  enums (§15.4); 10e optional and nullable JSON fields (the grammar's JSON
-  section).
+  `JsonValue` enum (§15.2); 10c generic structs (the grammar: section 6,
+  "Generic structs"); 10d JSON for enums (§15.4); 10e optional and nullable JSON
+  fields (the grammar's JSON section).
 - Done when: two programs run. The VM program has a `Storage` adapter with a
   read-only memory backend and a walker over unknown JSON, using only builtin
   library calls (golden check). The disk program uses the same `Storage` shape

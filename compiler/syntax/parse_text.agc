@@ -102,7 +102,13 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = print_type(lines, child, "result", node.result)
       return print_stmts(lines, child, "body", node.body)
     Ast.Decl.Struct(node) ->
-      attrs = name_attr(node.name) + doc_attr(node.doc)
+      attrs = name_attr(node.name)
+      if node.type_parameters.size > 0
+        parameters = node.type_parameters.map do |name| Text.quote(name) end
+        attrs += " type-parameters=#{list_text(parameters)}"
+      end
+
+      attrs += doc_attr(node.doc)
       if node.record_of != ""
         attrs += " record-of=#{Text.quote(node.record_of)}"
       end

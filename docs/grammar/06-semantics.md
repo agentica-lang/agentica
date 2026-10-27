@@ -392,9 +392,10 @@ updated by an importer (`CHECK-IMPORT-NAME`, as for constructing it), and the
 importer needs the struct's own module among its imports, by an alias or by
 names (a module imported by names counts with all its exported structs, not only
 the ones it names). A field named `with` is allowed when its type is not a
-function type: a field of type `Fn[...]` named `with` is `CHECK-REDEFINED-NAME`,
-because `value.with(...)` is always the update; `value.with` without parentheses
-reads a data field of that name.
+function type: a field of type `Fn[...]` named `with` (or of a type parameter,
+see "Generic structs") is `CHECK-REDEFINED-NAME`, because `value.with(...)` is
+always the update; `value.with` without parentheses reads a data field of that
+name.
 
 `Type.members` lists the fields of a struct type, in declaration order, as a
 `List[StructMember]`. `StructMember` is a builtin record, reserved like
@@ -421,6 +422,70 @@ index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most
 four steps for a million items; `for` visits the items in order. `for` iterates
 a `List` in order, a `Set` in first-insertion order, or a `Range`. The core has
 no slices and no string indexing.
+
+### Generic structs
+
+A struct declares type parameters after its name, as an enum does:
+`struct Box[T] ... end`, `struct Pair[A, B] ... end`. The parameter names follow
+the enum rules: type names that are not repeated and not reserved
+(`CHECK-REDEFINED-NAME`). A field may use a parameter anywhere a type goes
+(`value: T`, `items: List[T]`, `get: Fn[String, Result[T]]`, `next:
+Option[Box[T]]`), and a struct may mention itself (`kids: List[Tree[T]]`). A
+parameter may be a `Map` key or a `Set` element nowhere in the declaration
+(`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`, as for enums). A field named
+`with` whose type is a parameter is `CHECK-REDEFINED-NAME` at the field, since
+the parameter could be an `Fn` and `value.with(...)` is always the update.
+
+```ruby
+struct Storage[T]
+  get: Fn[String, Result[T]]
+  put: Fn[String, T, Result[Void]]
+end
+
+struct Box[T]
+  value: T
+  items: List[T] = []
+end
+
+b = Box(value: 41)                     # Box[Int]
+e: Box[List[String]] = Box(value: [])  # T from the annotation
+```
+
+A type is written with one argument for each parameter: `Box[Int]`,
+`Pair[String, List[Int]]`. A bare `Box` and a wrong number of arguments are
+`CHECK-UNKNOWN-TYPE` at the type, and an argument is checked as an enum
+argument is (`Void` is `CHECK-VOID-TYPE`). An imported struct is written
+`M.Box[Int]`, or `Box[Int]` after `import {Box} from "m"`; a parameter name in
+its fields keeps its own meaning in the importing file.
+
+A construction takes the arguments from the values, from left to right as they
+are written, and from the expected type (an annotation, a parameter, a field or
+a return type): `Box(value: 41)` is `Box[Int]`. A value of the wrong type for an
+argument already known is `CHECK-TYPE-MISMATCH` at the value
+(`Pair(a: 1, b: "x")` for `struct Pair[T]` with two `T` fields). An empty
+list or map cannot say what an argument is, so it needs the expected type:
+without one it is `CHECK-ENUM-TYPE-INFERENCE` at the value, and so is a
+parameter that no given value fixes (a parameter no field uses, or a field left
+out by its default), at the construction. The code keeps its enum name.
+
+Every rule applies after substitution. `b.value` is `Int` for a `Box[Int]`;
+`b.with(value: 7)` has the type of `b` and checks the new value against `Int`. A
+generic instance has `to_s`, `inspect` and `Test.eq` when its arguments are data
+types, so `Box[Int]` prints and `Box[Fn[Int, Int]]` does not
+(`CHECK-TYPE-MISMATCH`). `Type.members` is on the bare name (`Box.members`) and
+writes the field types as declared, so `value: T` gives `T`.
+
+`JSON.encode` and `JSON.from` accept a generic instance whose fields are
+encodable after substitution (`Box[List[Int]]`), and give `CHECK-NOT-ENCODABLE`
+when one is not (`Box[Fn[Int, Int]]`). `JSON.decode` and `JSON.schema` reject a
+generic instance anywhere in the target (a field `b: Box[Int]`, or an alias of
+one) with `CHECK-NOT-DECODABLE`, because the schema is keyed by the bare struct
+name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
+the target is `CHECK-UNKNOWN-TYPE`. `JsonField[T]` is allowed only as the type
+of a struct field, so it is also refused as a type argument
+(`CHECK-JSON-FIELD-PLACE`). A C struct of an `extern` block takes no type
+parameters (`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in
+the checker: the VM sees a struct of its field names and order, as before.
 
 ### Ranges
 

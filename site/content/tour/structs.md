@@ -318,6 +318,86 @@ def main() -> Void
 end
 ```
 
+## Type parameters
+
+A struct can take type parameters after its name, as an enum does. A field may use a parameter as its type, and the type argument comes from the values you give:
+
+```agentica
+struct Box[T]
+  value: T
+end
+
+struct Pair[A, B]
+  first: A
+  second: B
+end
+
+def main() -> Void
+  count = Box(value: 41)
+  puts(count.value + 1)
+  pair = Pair(first: "one", second: count)
+  puts(pair.second.value)
+  puts(pair)
+  puts(count.with(value: 7))
+end
+```
+
+```output
+42
+41
+Pair(first: "one", second: Box(value: 41))
+Box(value: 7)
+```
+
+`count` is a `Box[Int]`, so `count.value` is an `Int`. A type names all its arguments: `Box[Int]`, `Pair[String, Box[Int]]`. A bare `Box` or the wrong number of arguments is `CHECK-UNKNOWN-TYPE`.
+
+```agentica
+struct Box[T]
+  value: T
+end
+
+def total(box: Box[List[Int]]) -> Int
+  return box.value.sum
+end
+
+def main() -> Void
+  puts(total(Box(value: [1, 2, 3])))
+  puts(total(Box(value: [])))
+end
+```
+
+```output
+6
+0
+```
+
+An empty list or map cannot say what the argument is, so it needs a type from the place where the struct is used: a parameter, as above, a return type, a field or a variable with a type. Without one it is `CHECK-ENUM-TYPE-INFERENCE`.
+
+```agentica {expect="CHECK-ENUM-TYPE-INFERENCE"}
+struct Box[T]
+  value: T
+end
+
+def main() -> Void
+  box = Box(value: [])
+end
+```
+
+Values that disagree are `CHECK-TYPE-MISMATCH`:
+
+```agentica {expect="CHECK-TYPE-MISMATCH"}
+struct Pair[T]
+  first: T
+  second: T
+end
+
+def main() -> Void
+  pair = Pair(first: 1, second: "two")
+end
+```
+
+A parameter cannot be a `Map` key (`CHECK-MAP-KEY-TYPE`), and a field named `with` cannot have a parameter as its type (`CHECK-REDEFINED-NAME`), since the argument could be a function. `JSON.encode` writes a generic instance, but `JSON.decode` and `JSON.schema` refuse one (`CHECK-NOT-DECODABLE`). An imported struct is written `Models.Box[Int]`.
+
 ## No methods
 
 Structs have fields only. A field named `to_s` shadows the text form, so write functions that take the struct:

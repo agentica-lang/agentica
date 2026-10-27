@@ -361,7 +361,7 @@ end
 
 def names_in(type: Types.Type, watched: Set[String]) -> List[String]
   case type
-    Types.Type.Struct(name) -> return only(name, watched)
+    Types.Type.Struct(name, args) -> return only(name, watched).concat(names_in_all(args, watched))
     Types.Type.Enum(name, args) -> return only(name, watched).concat(names_in_all(args, watched))
     Types.Type.List(item) -> return names_in(item, watched)
     Types.Type.Set(item) -> return names_in(item, watched)

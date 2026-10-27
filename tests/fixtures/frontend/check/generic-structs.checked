@@ -1,0 +1,59 @@
+program #57 0:1:1-373:23:1
+  module "generic-structs.agc"
+    declaration: struct-decl #6 0:1:1-51:5:1 name="Box" type-parameters=["T"]
+      field: field-decl #1 16:2:3-25:3:1 name="value"
+        type: type-ref #0 23:2:10-24:2:11 name="T"
+      field: field-decl #5 27:3:3-47:4:1 name="items"
+        type: type-ref #3 34:3:10-41:3:17 name="List"
+          arg: type-ref #2 39:3:15-40:3:16 name="T"
+        default: list-lit #4 44:3:20-46:3:22 type=List(Var(T))
+    declaration: struct-decl #11 52:6:1-97:10:1 name="Pair" type-parameters=["A","B"]
+      field: field-decl #8 72:7:3-81:8:1 name="first"
+        type: type-ref #7 79:7:10-80:7:11 name="A"
+      field: field-decl #10 83:8:3-93:9:1 name="second"
+        type: type-ref #9 91:8:11-92:8:12 name="B"
+    declaration: function-decl #19 98:11:1-154:14:1 name="unwrap"
+      param: param #14 109:11:12-122:11:25 name="box"
+        type: type-ref #13 114:11:17-122:11:25 name="Box"
+          arg: type-ref #12 118:11:21-121:11:24 name="Int"
+      result: type-ref #15 127:11:30-130:11:33 name="Int"
+      body: return-stmt #18 133:12:3-150:13:1
+        value: field-access #17 140:12:10-149:12:19 name="value" type=Int
+          target: name-ref #16 140:12:10-143:12:13 name="box" type=Struct(Box, [Int])
+    declaration: function-decl #56 155:15:1-373:23:1 name="main"
+      result: type-ref #20 169:15:15-173:15:19 name="Void"
+      body: binding #24 176:16:3-196:17:1 name="box"
+        value: construct #23 182:16:9-195:16:22 type="Box" type=Struct(Box, [Int])
+          arg: named-arg #22 186:16:13-194:16:21 name="value"
+            value: literal #21 193:16:20-194:16:21 value=int:1 type=Int
+      body: expr-stmt #28 198:17:3-216:18:1
+        value: call #27 198:17:3-215:17:20 name="puts" piped=false type=Void
+          arg: call #26 203:17:8-214:17:19 name="unwrap" piped=false type=Int
+            arg: name-ref #25 210:17:15-213:17:18 name="box" type=Struct(Box, [Int])
+      body: binding #34 218:18:3-255:19:1 name="pair"
+        value: construct #33 225:18:10-254:18:39 type="Pair" type=Struct(Pair, [String, Struct(Box, [Int])])
+          arg: named-arg #30 230:18:15-240:18:25 name="first"
+            value: literal #29 237:18:22-240:18:25 value=string:"x" type=String
+          arg: named-arg #32 242:18:27-253:18:38 name="second"
+            value: name-ref #31 250:18:35-253:18:38 name="box" type=Struct(Box, [Int])
+      body: expr-stmt #39 257:19:3-281:20:1
+        value: call #38 257:19:3-280:19:26 name="puts" piped=false type=Void
+          arg: field-access #37 262:19:8-279:19:25 name="value" type=Int
+            target: field-access #36 262:19:8-273:19:19 name="second" type=Struct(Box, [Int])
+              target: name-ref #35 262:19:8-266:19:12 name="pair" type=Struct(Pair, [String, Struct(Box, [Int])])
+      body: binding #46 283:20:3-325:21:1 name="empty"
+        type: type-ref #42 290:20:10-307:20:27 name="Box"
+          arg: type-ref #41 294:20:14-306:20:26 name="List"
+            arg: type-ref #40 299:20:19-305:20:25 name="String"
+        value: construct #45 310:20:30-324:20:44 type="Box" type=Struct(Box, [List(String)])
+          arg: named-arg #44 314:20:34-323:20:43 name="value"
+            value: list-lit #43 321:20:41-323:20:43 type=List(String)
+      body: expr-stmt #55 327:21:3-369:22:1
+        value: call #54 327:21:3-368:21:44 name="puts" piped=false type=Void
+          arg: field-access #53 332:21:8-367:21:43 name="size" type=Int resolved=call("List.size", List(String))
+            target: field-access #52 332:21:8-362:21:38 name="value" type=List(String)
+              target: struct-update #51 332:21:8-356:21:32 visible=["Box","Pair"] type=Struct(Box, [List(String)])
+                target: name-ref #47 332:21:8-337:21:13 name="empty" type=Struct(Box, [List(String)])
+                arg: named-arg #50 343:21:19-355:21:31 name="value"
+                  value: list-lit #49 350:21:26-355:21:31 type=List(String)
+                    element: literal #48 351:21:27-354:21:30 value=string:"a" type=String

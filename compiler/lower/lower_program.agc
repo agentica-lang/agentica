@@ -226,7 +226,7 @@ end
 # The struct a field type is made of, under any List, Map or JsonField around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
-    Types.Type.Struct(name) -> return [name]
+    Types.Type.Struct(name, args) -> return [name]
     Types.Type.List(item) -> return struct_names_in(item)
     Types.Type.Map(key, value) -> return struct_names_in(value)
     Types.Type.Enum(name, args) -> return struct_names_in(args[0])
@@ -278,7 +278,7 @@ def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types
       Ast.Optional.Absent -> return Ast.Optional.Absent
     end
   elsif args.size == 0 and names.include?(ref.name)
-    return Ast.Optional.Present(Types.Type.Struct(ref.name))
+    return Ast.Optional.Present(Types.Type.Struct(ref.name, []))
   end
 
   return Ast.Optional.Absent

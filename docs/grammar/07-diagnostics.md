@@ -273,8 +273,19 @@ type:
   - **Help:** `with` needs the fields to change, as in `.with(field: value)`;
     the help lists the fields
 
-- **Written:** a field named `with` of type `Fn[...]` (`CHECK-REDEFINED-NAME`)
+- **Written:** a field named `with` of type `Fn[...]` or of a type parameter
+  (`CHECK-REDEFINED-NAME`)
   - **Help:** rename the field: `value.with(...)` is always the struct update
+
+- **Written:** `Box` or `Box[Int, Int]` for `struct Box[T]`
+  (`CHECK-UNKNOWN-TYPE`)
+  - **Help:** the message says how many type arguments the struct expects
+    (`struct Box expects 1 type argument(s), found 2`)
+
+- **Written:** `Box(value: [])` with no expected type, or a type parameter that
+  no field value fixes (`CHECK-ENUM-TYPE-INFERENCE`)
+  - **Help:** give the struct a type where it is used, such as a variable with
+    a type annotation
 
 - **Written:** a parameter without a default after one with a default, such as
   `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)

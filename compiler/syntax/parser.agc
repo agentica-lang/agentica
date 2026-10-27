@@ -2388,7 +2388,7 @@ def parse_extern_struct(
   doc: Ast.Optional[String],
   block: ExternBlock,
 ) -> Result[ExternStructAt]
-  parsed = try parse_struct(e, pos, ids, doc)
+  parsed = try parse_struct(e, pos, ids, doc, false)
   node = parsed.node
   codes: List[String] = []
   fields: List[Ast.FieldDecl] = []
@@ -2708,6 +2708,7 @@ def parse_extern_function(
       id: next_id,
       name: record,
       name_span: e.tokens[pos + 1].span,
+      type_parameters: [],
       fields: fields,
       doc: Ast.Optional.Present("The result of `#{name}`."),
       record_of: name,
@@ -3118,14 +3119,20 @@ def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
 end
 
 def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
-  parsed = try parse_struct(e, pos, ids, doc)
+  parsed = try parse_struct(e, pos, ids, doc, true)
   return decl_at(Ast.Decl.Struct(parsed.node), parsed.pos, parsed.ids)
 end
 
-# struct Name NL fields end NL at pos, with the next position and the next free node id.
-def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[StructAt]
+# struct Name NL fields end NL at pos, with the next position and the next free node id. generic says the name may
+# be followed by type parameters (struct Box[T]); a C struct of an extern block takes none.
+def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], generic: Bool) -> Result[StructAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a struct name", false)
-  cursor = try Base.expect(e, after_name, "NL", "a newline after the struct name", false)
+  parameters = TypeParametersAt(names: [], pos: after_name)
+  if generic
+    parameters = try parse_type_parameters(e, after_name)
+  end
+
+  cursor = try Base.expect(e, parameters.pos, "NL", "a newline after the struct name", false)
   fields: List[Ast.FieldDecl] = []
   next_id = ids
   looping = true
@@ -3151,6 +3158,7 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> 
     id: next_id,
     name: e.tokens[pos + 1].lexeme,
     name_span: e.tokens[pos + 1].span,
+    type_parameters: parameters.names,
     fields: fields,
     doc: doc,
     record_of: "",

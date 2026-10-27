@@ -59,7 +59,7 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
   fields = cx.structs.get(name)
   if fields.ok? and !cx.aliases.has_key?(name)
     resolved = State.record_resolved(st, node.id, State.Resolved.Members(fields.unwrap!))
-    return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember"))))
+    return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember", []))))
   end
 
   if cx.aliases.has_key?(name)
@@ -103,7 +103,7 @@ end
 
 # The type of the field, CHECK-UNKNOWN-FIELD when the struct has none of that name.
 def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target: T.Type) -> Result[State.Out]
-  fields = cx.structs[T.name(target)]
+  fields = CheckTypes.fields_of(cx, target)
   field = Calls.find_field(fields, node.name)
   if !field.ok?
     return error(
@@ -232,7 +232,7 @@ end
 
 # A struct has no methods: the help says what the name could be instead.
 def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
-  fields = cx.structs[T.name(target)]
+  fields = CheckTypes.fields_of(cx, target)
   field = Calls.find_field(fields, name)
   if cx.functions.has_key?(name)
     return "structs have no methods; call #{name}(...) with the struct as an argument"

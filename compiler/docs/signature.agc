@@ -40,9 +40,9 @@ export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
   return "#{declaration.name}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
 end
 
-## `struct Name`.
+## `struct Name` or `struct Name[T, U]`.
 export def struct_text(declaration: Ast.StructDecl) -> String
-  return "struct #{declaration.name}"
+  return "struct #{declaration.name}#{parameters_text(declaration.type_parameters)}"
 end
 
 ## `enum Name` or `enum Name[T, U]`.
