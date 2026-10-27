@@ -1,5 +1,5 @@
-# A seed of make vm-libfuzz-run: 3.2 GB on stdout in a few hundred steps, which the
-# fuzzer's comparison must hash, not keep (vm/fuzz_libfuzzer.c).
+# A seed of make vm-libfuzz-run: one 32 MB line on stdout, past the part the fuzzer's
+# comparison hashes, which it must count, not keep (vm/fuzz_libfuzzer.c).
 def main() -> Void
   line = "x"
   i = 0
@@ -7,9 +7,5 @@ def main() -> Void
     line = line + line
     i += 1
   end
-  i = 0
-  while i < 100
-    puts(line)
-    i += 1
-  end
+  puts(line)
 end

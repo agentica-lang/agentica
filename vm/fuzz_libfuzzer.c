@@ -128,7 +128,8 @@ int __wrap_timespec_get(struct timespec *ts, int base) {
 
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
-static ssize_t stream_write(void *cookie, const char *bytes, size_t size) {
+/* No coverage hooks: the hash loop is not fuzzed code, and with them it costs two hook calls per byte. */
+__attribute__((no_sanitize("coverage"))) static ssize_t stream_write(void *cookie, const char *bytes, size_t size) {
   stream *s = cookie;
   if (s->size < HEAD) memcpy(s->head + s->size, bytes, smaller(size, HEAD - s->size));
   size_t hashed = s->size < HASHED ? smaller(size, HASHED - s->size) : 0;
