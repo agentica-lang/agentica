@@ -229,7 +229,7 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   loop at its 100th entry, once 32 of its entries were passes (an entry at or
   before the previous one: a new call, or a loop that went round). It keeps a
   function out when one of its innermost loops has more than one instruction
-  that leaves compiled code within 16 instructions. A function without a loop
+  that leaves compiled code per 16 instructions. A function without a loop
   gets code only for native calls, and only when none of its instructions
   leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
   from compiled code when it calls a function, else at its 16th call that
@@ -248,7 +248,7 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     stepper, or charges turn cost, and its work is bounded.
   - A *block call* is a builtin row with a native kind (`map`, `filter`,
     `reduce` and the others). Its native frame calls a block, and the block's
-    frames run in compiled code.
+    frames run in compiled code when the block has code.
 
   Compiled code returns `{status, pc}` at its first exit. `run_compiled`
   (`vm/interp.c`) handles it as the interpreter handles the instruction at `pc`:
@@ -268,8 +268,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   `DIVISION_BY_ZERO`, `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. A status other than
   `OK` makes compiled code return as an exit. The interpreter then raises the
   failure at the span of the instruction at `pc`; `WRONG_TAG` fails at span 0.
-  Before the exit, `frame->pc` is set past that instruction, which the stack
-  trace reads. Helpers charge no step and no turn cost; the caller does.
+  Before it raises, `run_compiled` sets `frame->pc` past that instruction,
+  which the stack trace reads. Helpers charge no step and no turn cost; the
+  caller does.
 
   Compiled code never calls `agc_fail`. On Windows x64, `longjmp` unwinds the
   stack, and JIT frames have no unwind info. A direct builtin is called through
@@ -285,10 +286,11 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   executable at once, and a sealed page is never written again. Only the
   scheduler that claims a function compiles it; another scheduler interprets the
   function until its code is published. A function without a loop waits in a
-  16 KiB batch. The batch is sealed when 16 more `CALL` exits hit a function in
-  it, when the interpreter enters a function that just compiled, or when the
-  batch holds 16 KiB. So the callees of one loop body can share a seal. After a
-  memory failure nothing more compiles.
+  16 KiB batch. The batch is sealed with the next function compiled to run at
+  once (a hot function the interpreter enters, a callee that calls, or a block
+  at its first block call), when a function in it reaches its 32nd call that
+  leaves compiled code, or when the batch holds 16 KiB. So the callees of one
+  loop body can share a seal. After a memory failure nothing more compiles.
 - **Compile budget.** Each compile first takes the function's instruction count
   plus 32 units from `AGC_JIT_BUDGET` (1,000,000 units). A unit is a count of
   work, not a time, so every host compiles the same functions. The first compile
