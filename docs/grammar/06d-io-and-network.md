@@ -189,77 +189,35 @@ Signatures are in
   ends owns nothing. There is no snapshot: bytes are hashed in read order,
   so a concurrent writer changes the digest; to verify an archive, write it
   to a temporary name first, hash it, then `Path.rename` it into place.
-- `Zlib` compresses and decompresses bytes, files and streams, with the
-  opaque `ZlibEncoder` and `ZlibDecoder` handles and the
-  `ZlibProgress(output, consumed, finished, needs_input)` record; all three
-  names are reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950,
-  the Ruby and Python default), `gzip`/`gunzip` are gzip (RFC 1952), and
-  the streaming `deflate_init`/`inflate_init` take `window_bits` 15 (zlib),
-  -15 (raw deflate, RFC 1951) or 31 (gzip). There is no auto-detect, no
-  dictionary and no metadata option. Signatures are in
-  [`library/text-and-data/zlib.md`][agentica-link-5].
-- `Zlib.deflate(data, level, max_out_bytes)` and `Zlib.gzip(data, level,
-  max_out_bytes)` give `Result[List[Int]]` with `level` 0 to 9; empty input
-  is valid and gives the empty stream or member. `Zlib.inflate(data,
-  max_out_bytes)` and `Zlib.gunzip(data, max_out_bytes)` give
-  `Result[List[Int]]`: one stream or member only, with its checksum (zlib)
-  or CRC and size (gzip) checked. Empty compressed input fails, and any
-  unused or trailing bytes after the single stream or member (a second
-  member or zeros alike) are an error, on purpose: unlike Python's
-  `gzip.decompress`, concatenated members never decode. One-shot `data` is
-  at most 1048576 bytes and `max_out_bytes` is 1 to 1048576, otherwise a
-  contract error; output past the cap is an error.
+- `Zlib` compresses and decompresses bytes; files and streams go through the
+  Lazy steps (§6b). `Zlib` is a reserved name. `deflate`/`inflate` are the
+  zlib wrapper (RFC 1950, the Ruby and Python default) and `gzip`/`gunzip`
+  are gzip (RFC 1952). There is no auto-detect, no dictionary and no metadata
+  option. Signatures are in [`library/text-and-data/zlib.md`][agentica-link-5].
+- `Zlib.deflate(data, level = 6, max_bytes = 1048576)` and `Zlib.gzip(data,
+  level = 6, max_bytes = 1048576)` give `Result[List[Int]]` with `level` 0 to
+  9; empty input is valid and gives the empty stream or member.
+  `Zlib.inflate(data, max_bytes = 1048576)` and `Zlib.gunzip(data, max_bytes
+  = 1048576)` give `Result[List[Int]]`: one stream or member only, with its
+  checksum (zlib) or CRC and size (gzip) checked. Empty compressed input
+  fails, and any trailing byte after the single stream or member (a second
+  member or zeros alike) is an error, on purpose: unlike Python's
+  `gzip.decompress`, concatenated members never decode. `data` is at most
+  1048576 bytes and `max_bytes`, the cap of the output, is 1 to 1048576,
+  otherwise a contract error; output past the cap is an error.
 - `Zlib.crc32(data, seed = 0)` gives `Result[Int]`, the CRC32 (RFC 1952) of
   `data` chained after `seed`: leave the seed out first, then pass each next
   chunk the previous result. Empty input returns `seed` unchanged. `data` is at
   most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
-- `Zlib.deflate_file(src, dst, level, max_out_bytes, timeout_ms)` and
-  `Zlib.gzip_file(src, dst, level, max_out_bytes, timeout_ms)` compress a
-  file and give `Result[Int]`, the bytes written; `Zlib.inflate_file(src,
-  dst, max_out_bytes, timeout_ms)` and `Zlib.gunzip_file(src, dst,
-  max_out_bytes, timeout_ms)` decompress one stream or member the same way.
-  The raw input of compression never exceeds 1073741824 bytes and the
-  compressed input of decompression never exceeds 268435456 bytes, enforced
-  while reading even when the source grows; `max_out_bytes` is 1 to
-  1073741824, and output past it is cut while streaming so a partial file
-  never grows past it and is kept on error (never removed). The source is
-  read like `File.sha256` reads it (regular files only) and the destination
-  opens like `create_private` (an existing path, a dangling link included,
-  is an error and stays intact). `timeout_ms` covers the whole call; expiry
-  or a cancel detaches like the other whole-file calls, while work already
-  running runs to its end and its result is dropped. Only the file
-  functions carry the filesystem effect, so `--deny-fs` turns off only
-  them; the bytes and streaming calls run in any compute context.
-- `Zlib.deflate_init(window_bits, level, max_total_in, max_total_out)` gives
-  `Result[ZlibEncoder]` and `Zlib.inflate_init(window_bits,
-  max_total_in, max_total_out)` gives `Result[ZlibDecoder]`; each total cap
-  is 1 to 1073741824, enforced before the output or state could exceed it.
-  A call of `Zlib.deflate_next(enc, data, max_out)` or
-  `Zlib.inflate_next(dec, data, max_out)` takes at most 65536 input bytes
-  with room for `max_out` 1 to 65536 output bytes and gives
-  `Result[ZlibProgress]`. `consumed` may be less than `data.size`; the
-  caller owns the rest and presents it again, and trailing bytes after the
-  stream end stay caller-owned through `consumed` and are never silently
-  dropped. `needs_input` is true only when the call took all it was given
-  and left room in the output without finishing: it asks for more input
-  (or a finish), never for a spin. When it is false and bytes remain
-  unconsumed, the caller presents the remainder again with fresh room
-  first; when nothing remains, the caller drains with empty input and
-  fresh room. A 0-consumed and 0-produced call is either finished or asks
-  for input; an empty drain that asks for input never becomes a spin by
-  retrying the same empty input. A refused encoder quantum changes
-  nothing and may run again with a smaller positive `max_out`. A decoder
-  at its exact output budget still completes a trailer that produces no
-  bytes, while a true overflow fails without returning extra bytes.
-  `Zlib.deflate_finish(enc, max_out)` drains the end of a stream; repeat it
-  until `finished` is true, and new input after finishing starts is an
-  error. `Zlib.inflate_finish(dec)` gives `Result[Void]`: `ok()` only once
-  a whole checked stream end arrived, else a truncation error. Empty drains
-  after `finished` answer finished again; nonempty input after `finished` is
-  an error. `Zlib.encoder_close(enc)` and `Zlib.decoder_close(dec)` give
-  `Result[Void]` and are idempotent; feeding or finishing a closed, failed
-  or finished handle is an error. Both handles move across tasks with
-  `Task.spawn_owning`, and a task that ends frees what it did not close.
+- The streaming decoder `Zlib.inflate_init(window_bits, max_total_in,
+  max_total_out)`, `Zlib.inflate_next(dec, data, max_out)`,
+  `Zlib.inflate_finish(dec)` and `Zlib.decoder_close(dec)`, with the
+  `ZlibDecoder` handle and the `ZlibProgress(output, consumed, finished,
+  needs_input)` record (both reserved names), is kept for now; the Lazy steps
+  will replace it. Its rules are on the library page.
+- The `Zlib` calls and the zlib steps run in any compute context; of the
+  zlib-related calls only `File.chunks` and `Lazy.write_bytes` touch the
+  filesystem, so `--deny-fs` turns off only them.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.

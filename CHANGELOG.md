@@ -21,11 +21,25 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   can return an `error`.
 - `Native.load("NAME")` opens a native library before its first call and
   returns a `Result`, so a missing library can be handled.
+- `File.chunks(path)` reads a file as a `Lazy` of byte chunks, and
+  `lazy.write_bytes(path)` writes byte chunks to a file.
+- Lazy zlib steps `deflate`, `inflate`, `gzip` and `gunzip` compress and
+  decompress a stream of byte chunks with bounded memory; `raw = true` is raw
+  DEFLATE.
+- `Zlib.deflate`, `inflate`, `gzip` and `gunzip` take default `level` (6) and
+  `max_bytes` (1048576).
 - `Native.offset(p, n)` points into an owned buffer as a bounds-checked view,
   and `Native.address(p)` gives a pointer's integer value.
 
 ### Changed
 
+- **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
+  `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
+  use the Lazy steps `deflate` and `gzip`.
+- **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
+  `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`,
+  which overwrites an existing `dst`.
+- **Breaking:** the Zlib errors name `max_bytes` instead of `max_out_bytes`.
 - An integer argument or struct field of an extern function takes the bits of
   its type read as signed or unsigned, as `Native.put_int32` does: a
   `C.Int32` takes up to 2^32 - 1.

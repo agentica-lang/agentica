@@ -3,7 +3,8 @@
 ## to right: the receiver gives A, a block is checked with the parameter types the variables already have, and what the
 ## block gives binds the next variable. A variable the row limits (the key of group_by is an Int or a String) must end
 ## up as one of its allowed types. The checker records which function of stdlib/prelude/ the call runs, by the id of
-## the call.
+## the call. A row may give defaults to its last parameters, as a Plain row does: the arguments fill the parameters
+## by the rules of check/defaults.agc, and the lowering fills the rest.
 
 import Model from "../catalog/builtin_model"
 import {PRELUDE} from "../catalog/builtins"
@@ -13,6 +14,7 @@ import T from "../syntax/types"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
+import Defaults from "defaults"
 
 # What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
 # bound it (the limits are reported there).
@@ -27,10 +29,13 @@ end
 export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   form = site.selected
   row = PRELUDE[form.name]
+  count = site.args.size
+  shape = Defaults.builtin_shape(form)
   bound = Bound(st: st, types: {}, spans: {})
   index = 0
-  while index < form.parameters.size
-    bound = try check_argument(cx, bound, site.args[index], form.parameters[index].type, row.module == "lazy")
+  while index < count
+    param = Defaults.param_of(shape, count, index)
+    bound = try check_argument(cx, bound, site.args[index], form.parameters[param].type, row.module == "lazy")
     index += 1
   end
 

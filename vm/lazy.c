@@ -3,15 +3,17 @@
  * (docs/future/27-iteration-and-concurrency.md §27.4). The prelude (stdlib/prelude/lazy.agc) gives the typed names;
  * the builtins here are prelude-only. Nodes never change after they are made, so a Lazy can be shared by tasks on
  * any scheduler and run more than once: each terminal call has its own run state, and its callbacks run on the task
- * that called it. The I/O sources (File.foreach, ch.lazy) open or read only inside a terminal; their terminal parks
- * on the file job or the channel like any other wait, and so does write_lines, the terminal that writes to a file. A
- * failed `try` in a block ends the run with its error (agc_stepper.escaped). Service layer.
+ * that called it. The I/O sources (File.foreach, File.chunks, ch.lazy) open or read only inside a terminal; their
+ * terminal parks on the file job or the channel like any other wait, and so do write_lines and write_bytes, the
+ * terminals that write to a file. The zlib steps (deflate, inflate, gzip, gunzip) hold a codec of vm/zlib.c for the
+ * run. A failed `try` in a block ends the run with its error (agc_stepper.escaped). Service layer.
  */
 #include "services.h"
 
 typedef enum {
   LAZY_LIST, LAZY_RANGE, LAZY_PRODUCE, LAZY_MAP, LAZY_FILTER, LAZY_TAKE_WHILE, LAZY_DROP_WHILE, LAZY_TAKE, LAZY_DROP,
-  LAZY_EACH_SLICE, LAZY_EACH_CONS, LAZY_WITH_INDEX, LAZY_FLAT_MAP, LAZY_CHUNK_WHILE, LAZY_FILE, LAZY_CHANNEL
+  LAZY_EACH_SLICE, LAZY_EACH_CONS, LAZY_WITH_INDEX, LAZY_FLAT_MAP, LAZY_CHUNK_WHILE, LAZY_FILE, LAZY_CHANNEL,
+  LAZY_CHUNKS, LAZY_ZLIB
 } lazy_kind;
 
 typedef struct lazy_node lazy_node;
@@ -20,10 +22,13 @@ struct lazy_node {
   lazy_kind kind;
   const lazy_node *parent; /* NULL for a source */
   size_t depth;            /* nodes from the source to this one, both included */
-  agc_value value;         /* the list or range of a source, the seed of produce, the path of a file, the channel */
+  agc_value value;         /* the list or range of a source, the seed of produce, the path of a file, the channel;
+                              a zlib step: Void, or the error of its level or max_bytes (agc_zstep_check) */
   agc_value fn;            /* the callback of a step, or of produce */
-  int64_t count;           /* the count of take and drop, the size of each_slice and each_cons, a file's buffer */
+  int64_t count;           /* the count of take and drop, the size of each_slice and each_cons, a file's buffer or
+                              chunk size, the kind of a zlib step (__lazy_zlib) */
   int64_t timeout;         /* a file or channel source: the timeout of each wait */
+  int64_t level, cap;      /* a zlib step: the level of an encoder, the max_bytes of a decoder */
 };
 
 /* The state of one stage in one run. */
@@ -34,14 +39,18 @@ typedef struct {
   size_t len, cap, head;  /* items used, allocated, and (each_cons) the oldest */
   agc_value prev;         /* chunk_while: the item before */
   agc_list_cursor rest;   /* flat_map: the rest of the list the callback gave */
-  bool pending;
+  bool pending;           /* flat_map: rest has items; a zlib step: its stream has more to give for the last item */
+  const uint8_t *in;      /* a zlib step: the bytes of the last item, of which in_at went into the codec */
+  size_t in_len, in_at;
+  agc_resource *zlib;     /* a zlib step: its stream, NULL once freed */
 } lazy_stage;
 
-typedef enum { LAZY_TO_A, LAZY_EACH, LAZY_REDUCE, LAZY_FIND, LAZY_WRITE } lazy_terminal;
+typedef enum { LAZY_TO_A, LAZY_EACH, LAZY_REDUCE, LAZY_FIND, LAZY_WRITE, LAZY_WRITE_BYTES } lazy_terminal;
 
 /* What the run waits for: a callback of the source (produce), of a stage or of the terminal; a file job or a channel
    value of an I/O source (WAIT_IO); the close of the source's file before the terminal returns (WAIT_CLOSE); a file
-   job of write_lines (WAIT_SINK: the open or a write; WAIT_SINK_CLOSE: its flush and close at the end). */
+   job of write_lines or write_bytes (WAIT_SINK: the open or a write; WAIT_SINK_CLOSE: its flush and close at the
+   end). */
 typedef enum {
   WAIT_NONE, WAIT_SOURCE, WAIT_STAGE, WAIT_TERMINAL, WAIT_IO, WAIT_CLOSE, WAIT_SINK, WAIT_SINK_CLOSE
 } lazy_wait;
@@ -66,10 +75,12 @@ typedef struct {
   bool more, started;     /* a range source has values left; produce gave its seed */
   agc_value seed;         /* produce: the last item it gave */
   agc_line_reader *lines; /* a file source: its reader, which owns the open file */
-  agc_line_writer *sink;  /* write_lines: its writer, which owns the file it writes */
-  bool sink_ready;        /* write_lines: the file is open, so items may be pulled */
+  agc_line_writer *sink;  /* write_lines and write_bytes: the writer, which owns the file it writes */
+  bool sink_ready;        /* write_lines and write_bytes: the file is open, so items may be pulled */
+  int64_t written;        /* write_bytes: the bytes given to the writer */
   agc_value io_last;      /* a file source: the result of the job it waited on */
   agc_value final;        /* the result, kept while the files close */
+  agc_value refused;      /* Void, or the error of a zlib step's arguments, which ends the run before it reads */
   uint32_t span;
 } lazy_run;
 
@@ -89,7 +100,7 @@ static agc_value lazy_error(const char *message) {
 }
 
 /* Argument 1 of the prelude function is the bad one: the count of take, drop, first, each_slice and each_cons, the
-   buffer_bytes of File.foreach, the timeout_ms of ch.lazy. */
+   buffer_bytes of File.foreach, the size of File.chunks, the timeout_ms of ch.lazy. */
 static _Noreturn void lazy_fail_argument(agc_vm *vm, const char *code, const char *message, uint32_t span) {
   size_t len = strlen(message);
   agc_fail_argument(vm, code, agc_make_string(message, len, len), 1, span);
@@ -112,7 +123,7 @@ static agc_value lazy_source(lazy_kind kind, agc_value value, agc_value fn) {
   return agc_lazy_value(lazy_new_source(kind, value, fn));
 }
 
-static agc_value lazy_step_node(agc_vm *vm, agc_value parent, lazy_kind kind, agc_value fn, int64_t count) {
+static lazy_node *lazy_new_step(agc_vm *vm, agc_value parent, lazy_kind kind, agc_value fn, int64_t count) {
   const lazy_node *before = agc_as_lazy(vm, parent);
   lazy_node *node = agc_alloc(sizeof(lazy_node));
   node->kind = kind;
@@ -120,7 +131,11 @@ static agc_value lazy_step_node(agc_vm *vm, agc_value parent, lazy_kind kind, ag
   node->depth = agc_size_add(before->depth, 1);
   node->fn = fn;
   node->count = count;
-  return agc_lazy_value(node);
+  return node;
+}
+
+static agc_value lazy_step_node(agc_vm *vm, agc_value parent, lazy_kind kind, agc_value fn, int64_t count) {
+  return agc_lazy_value(lazy_new_step(vm, parent, kind, fn, count));
 }
 
 static agc_value builtin_list(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -150,6 +165,17 @@ static agc_value builtin_file(agc_vm *vm, agc_value *args, uint32_t span) {
     lazy_fail_count(vm, "buffer_bytes must be between 1024 and 16777216", span);
   lazy_node *node = lazy_new_source(LAZY_FILE, args[0], agc_void());
   node->count = buffer;
+  node->timeout = agc_as_int(vm, args[2]);
+  return agc_lazy_value(node);
+}
+
+/* __lazy_chunks(path, size, timeout_ms): File.chunks. Nothing is opened here, as for File.foreach. */
+static agc_value builtin_chunks(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_as_string(vm, args[0]);
+  int64_t size = agc_as_int(vm, args[1]);
+  if (!agc_chunks_size_ok(size)) lazy_fail_count(vm, "size must be between 1 and 16777216", span);
+  lazy_node *node = lazy_new_source(LAZY_CHUNKS, args[0], agc_void());
+  node->count = size;
   node->timeout = agc_as_int(vm, args[2]);
   return agc_lazy_value(node);
 }
@@ -217,6 +243,18 @@ static agc_value builtin_group(agc_vm *vm, agc_value *args, uint32_t span) {
   return lazy_step_node(vm, args[0], which == 0 ? LAZY_EACH_SLICE : LAZY_EACH_CONS, agc_void(), size);
 }
 
+/* __lazy_zlib(lazy, kind, level, max_bytes): the zlib steps (stdlib/prelude/lazy.agc). A bad level or max_bytes is
+   kept on the node and becomes the terminal's error, as Zlib.deflate returns it; no codec starts before a terminal. */
+static agc_value builtin_zlib(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t kind = agc_as_int(vm, args[1]);
+  if (kind < 0 || kind > 5) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown Lazy zlib step", span);
+  lazy_node *node = lazy_new_step(vm, args[0], LAZY_ZLIB, agc_void(), kind);
+  node->level = agc_as_int(vm, args[2]);
+  node->cap = agc_as_int(vm, args[3]);
+  node->value = agc_zstep_check(kind, node->level, node->cap);
+  return agc_lazy_value(node);
+}
+
 /* Room for one more item in a stage's buffer. The buffer grows as items come, never past the size of the step, so a
    large size with few items allocates little. */
 static void lazy_grow(lazy_stage *s, size_t limit) {
@@ -262,6 +300,7 @@ static agc_value lazy_finish(lazy_run *run) {
     case LAZY_EACH: return agc_result_value(true, agc_void());
     case LAZY_REDUCE: return agc_result_value(true, run->acc);
     case LAZY_WRITE: return agc_result_value(true, agc_void());
+    case LAZY_WRITE_BYTES: return agc_result_value(true, agc_int(run->written));
     case LAZY_FIND: break;
   }
   return lazy_error("not found");
@@ -292,12 +331,23 @@ static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_val
   return status;
 }
 
-/* Closes the file of a file source, then the file of write_lines, then ends the terminal with `result` (kept in
-   run->final while a close waits). Every end of a run comes here, so the files are closed whatever ended it: the end
-   of the items, a take or find that had enough, an error from a callback, a failed `try` in a block, a failed read
-   or write. A raise, a cancel or --max-steps ends the task instead, and the task's end closes the files it owns. The
-   writer's own error (a failed flush or close) is the result when the run had none. */
+/* Frees the streams of the zlib steps; a second call finds none. */
+static void lazy_free_streams(agc_vm *vm, lazy_run *run) {
+  for (size_t i = 0; i < run->count; i++) {
+    if (!run->stages[i].zlib) continue;
+    agc_zstep_close(vm, run->stages[i].zlib);
+    run->stages[i].zlib = NULL;
+  }
+}
+
+/* Frees the zlib streams, closes the file of a file source, then the file of the writer, then ends the terminal with
+   `result` (kept in run->final while a close waits). Every end of a run comes here, so the streams are freed and the
+   files closed whatever ended it: the end of the items, a take or find that had enough, an error from a callback, a
+   failed `try` in a block, a failed read, write or zlib pass. A raise, a cancel or --max-steps ends the task instead,
+   and the task's end frees the streams and closes the files it owns. The writer's own error (a failed flush or
+   close) is the result when the run had none. */
 static agc_step lazy_done(agc_vm *vm, lazy_run *run, agc_value result, agc_value last) {
+  lazy_free_streams(vm, run);
   if (!run->lines && !run->sink) return lazy_end(result);
   lazy_wait waiting = run->waiting;
   if (waiting != WAIT_CLOSE && waiting != WAIT_SINK_CLOSE) {
@@ -320,7 +370,7 @@ static agc_step lazy_done(agc_vm *vm, lazy_run *run, agc_value result, agc_value
       run->waiting = WAIT_SINK_CLOSE;
       return (agc_step){.kind = AGC_STEP_WAIT};
     }
-    if (agc_as_result(vm, run->final)->ok) run->final = outcome;
+    if (agc_as_result(vm, run->final)->ok && !agc_as_result(vm, outcome)->ok) run->final = outcome;
   }
   return lazy_end(run->final);
 }
@@ -467,15 +517,50 @@ static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc
   return NEXT_STEP;
 }
 
-/* The next item for the first stage that is not ended: the rest of a flat_map list (the one nearest the terminal
-   first, since its items came from an older item), then what an ended stage still holds, then the source. NEXT_NONE
-   with run->at still 0 when no item came yet (a stage was ended); NEXT_STEP with *call when the run must call produce,
-   wait for an I/O source, or end. */
+/* Runs the stream of the zlib step at stage j over the rest of its last item, or with `finish` to its end (no item
+   will come). NEXT_ITEM with run->item, a chunk for stage j + 1; NEXT_NONE when the stream wants the next item or has
+   ended; NEXT_STEP with *call when a pass failed. A pass that gave no bytes and has more to do runs again here: each
+   pass consumes, produces or ends, and agc_zstep_next stops a stream that stays still. */
+static lazy_pull lazy_zlib(agc_vm *vm, lazy_run *run, size_t j, bool finish, agc_step *call) {
+  lazy_stage *s = &run->stages[j];
+  for (;;) {
+    size_t used = 0;
+    agc_value out = agc_void();
+    const uint8_t *in = s->in ? s->in + s->in_at : NULL;
+    agc_zstep_status status = agc_zstep_next(vm, s->zlib, in, s->in_len - s->in_at, &used, finish, &out);
+    s->in_at += used;
+    if (status == AGC_ZSTEP_FAILED) {
+      *call = lazy_end(out);
+      return NEXT_STEP;
+    }
+    if (status != AGC_ZSTEP_AGAIN) {
+      s->pending = false;
+      s->in = NULL;
+      s->in_len = s->in_at = 0;
+    }
+    if (!agc_is(out, AGC_T_VOID)) {
+      run->item = out;
+      return NEXT_ITEM;
+    }
+    if (status != AGC_ZSTEP_AGAIN) return NEXT_NONE;
+  }
+}
+
+/* The next item for the first stage that is not ended: the rest of a flat_map list or of a zlib step's last item
+   (the one nearest the terminal first, since its items came from an older item), then what an ended stage still holds
+   (a zlib step finishes its stream there), then the source. NEXT_NONE with run->at still 0 when no item came yet (a
+   stage was ended); NEXT_STEP with *call when the run must call produce, wait for an I/O source, or end. */
 static lazy_pull lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
   size_t low = run->ended > 1 ? run->ended : 1;
   for (size_t j = run->count; j-- > low;) {
     lazy_stage *s = &run->stages[j];
     if (!s->pending) continue;
+    if (run->nodes[j]->kind == LAZY_ZLIB) {
+      lazy_pull pulled = lazy_zlib(vm, run, j, false, call);
+      if (pulled == NEXT_ITEM) run->at = j + 1;
+      if (pulled != NEXT_NONE) return pulled;
+      continue;
+    }
     if (agc_list_cursor_next(&s->rest, &run->item)) {
       run->at = j + 1;
       return NEXT_ITEM;
@@ -484,6 +569,11 @@ static lazy_pull lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
   }
   if (run->ended > 0) {
     size_t f = run->ended;
+    if (f < run->count && run->nodes[f]->kind == LAZY_ZLIB) {
+      lazy_pull pulled = lazy_zlib(vm, run, f, true, call);
+      if (pulled == NEXT_ITEM) run->at = f + 1;
+      if (pulled != NEXT_NONE) return pulled;
+    }
     run->ended++;
     if (f >= run->count) return NEXT_NONE;
     lazy_stage *s = &run->stages[f];
@@ -523,6 +613,7 @@ static lazy_pull lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
       run->item = source->value;
       break;
     case LAZY_FILE:
+    case LAZY_CHUNKS:
     case LAZY_CHANNEL: {
       lazy_pull pulled = lazy_io(vm, run, source, call);
       if (pulled == NEXT_NONE) run->ended = 1;
@@ -550,7 +641,12 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   lazy_run *run = (lazy_run *)self;
   agc_step step;
   if (run->waiting != WAIT_NONE && lazy_resume(vm, run, last, &step)) return step;
-  /* write_lines opens its file before it pulls the first item, so a failed open reads nothing. */
+  if (!agc_is(run->refused, AGC_T_VOID)) {
+    agc_value refused = run->refused;
+    run->refused = agc_void();
+    return lazy_done(vm, run, refused, agc_void());
+  }
+  /* The writer opens its file before it pulls the first item, so a failed open reads nothing. */
   if (run->sink && !run->sink_ready && lazy_sink(vm, run, agc_void(), agc_void(), &step)) return step;
   for (;;) {
     if (run->at == 0) {
@@ -575,7 +671,9 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         case LAZY_FIND: run->waiting = WAIT_TERMINAL; return lazy_call(run->fn, run->item);
         case LAZY_REDUCE: run->waiting = WAIT_TERMINAL; return lazy_call2(run->fn, run->acc, run->item);
         case LAZY_WRITE:
+        case LAZY_WRITE_BYTES:
           run->at = 0;
+          if (run->terminal == LAZY_WRITE_BYTES) run->written += (int64_t)agc_list_len(agc_as_list(vm, run->item));
           if (lazy_sink(vm, run, agc_void(), run->item, &step)) return step;
           continue;
       }
@@ -655,6 +753,19 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         run->at++;
         break;
       }
+      case LAZY_ZLIB: {
+        /* The item's bytes go to the stream; lazy_next gives its output, so the item itself goes no further. */
+        const agc_list *chunk = agc_as_list(vm, run->item);
+        size_t n = agc_list_len(chunk);
+        const uint8_t *bytes = agc_byte_list(vm, chunk, n);
+        if (!bytes) return lazy_done(vm, run, lazy_error("zlib: bytes must be between 0 and 255"), agc_void());
+        s->in = bytes;
+        s->in_len = n;
+        s->in_at = 0;
+        s->pending = true;
+        run->at = 0;
+        break;
+      }
       default: agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy source in the middle of a recipe", run->span);
     }
     /* Every stage that reaches here passed (or held, or dropped) the item without a callback. */
@@ -663,11 +774,12 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
 }
 
 /* Starts a terminal on the calling task. fn is the callback (none for to_a) and acc the initial value of reduce;
-   write_lines passes its path and timeout in them. */
+   write_lines and write_bytes pass their path and timeout in them. */
 static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal, agc_value fn, agc_value acc,
                             uint32_t span) {
   const lazy_node *node = agc_as_lazy(vm, recipe);
-  if (terminal != LAZY_TO_A && terminal != LAZY_WRITE) agc_as_fn(vm, fn);
+  bool writes = terminal == LAZY_WRITE || terminal == LAZY_WRITE_BYTES;
+  if (terminal != LAZY_TO_A && !writes) agc_as_fn(vm, fn);
   lazy_run *run = agc_alloc(sizeof(lazy_run));
   run->stepper.step = lazy_step;
   run->stepper.no_block = true;
@@ -676,6 +788,7 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   run->fn = fn;
   run->acc = acc;
   run->span = span;
+  run->refused = agc_void();
   run->count = node->depth;
   run->nodes = agc_alloc(agc_size_mul(run->count, sizeof(lazy_node *)));
   run->stages = agc_alloc(agc_size_mul(run->count, sizeof(lazy_stage)));
@@ -693,7 +806,16 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
   if (source->kind == LAZY_FILE) run->lines = agc_lines_new(vm, source->value, source->count, source->timeout, span);
-  if (terminal == LAZY_WRITE) run->sink = agc_writer_new(vm, fn, agc_as_int(vm, acc), span);
+  if (source->kind == LAZY_CHUNKS) run->lines = agc_chunks_new(vm, source->value, source->count, source->timeout, span);
+  if (writes) run->sink = agc_writer_new(vm, fn, agc_as_int(vm, acc), terminal == LAZY_WRITE_BYTES, span);
+  /* The streams start with the run and belong to the calling task until lazy_done frees them; a bad argument of a
+     zlib step starts none and ends the run at its first step. */
+  for (size_t i = 0; i < run->count; i++)
+    if (run->nodes[i]->kind == LAZY_ZLIB && agc_is(run->refused, AGC_T_VOID)) run->refused = run->nodes[i]->value;
+  for (size_t i = 0; i < run->count && agc_is(run->refused, AGC_T_VOID); i++) {
+    const lazy_node *n = run->nodes[i];
+    if (n->kind == LAZY_ZLIB) run->stages[i].zlib = agc_zstep_open(vm, n->count, n->level, n->cap);
+  }
   /* A run reads immutable nodes and writes only this run, which belongs to the calling task. An I/O source also starts
      file jobs, closes the file and parks on channel lists, and write_lines starts file jobs: they take rt->sync around
      those calls only (lazy_lines_next, lazy_receive, lazy_write), so a long to_a or a chain of steps never holds it. */
@@ -725,9 +847,17 @@ static agc_value builtin_write_lines(agc_vm *vm, agc_value *args, uint32_t span)
   return lazy_start(vm, args[0], LAZY_WRITE, args[1], args[2], span);
 }
 
+/* __lazy_write_bytes(lazy, path, timeout_ms): as write_lines, with byte chunks written as they are. */
+static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_as_string(vm, args[1]);
+  agc_as_int(vm, args[2]);
+  return lazy_start(vm, args[0], LAZY_WRITE_BYTES, args[1], args[2], span);
+}
+
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
    takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file or a channel, and in
-   write_lines, they take it around the reader, the receive and the writer only. Callbacks run as bytecode. */
+   write_lines and write_bytes, they take it around the reader, the receive and the writer only, and vm/zlib.c takes
+   it to register and free a zlib stream. Callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
@@ -746,6 +876,9 @@ const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_reduce", 3, builtin_reduce, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"__lazy_find", 2, builtin_find, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"__lazy_write_lines", 3, builtin_write_lines, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"__lazy_chunks", 3, builtin_chunks, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"__lazy_zlib", 4, builtin_zlib, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"__lazy_write_bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_lazy_builtin_count = sizeof agc_lazy_builtins / sizeof agc_lazy_builtins[0];

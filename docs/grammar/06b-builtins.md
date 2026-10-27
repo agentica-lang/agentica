@@ -139,6 +139,13 @@ be read twice. The library page is
   buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
   `File.foreach(...).each do ... end`, with no step in between, written as one
   chain, is `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
+- `File.chunks(path, size = 65536, timeout_ms = 30000)`
+  (`Lazy[List[Int]]`): the bytes of a regular file in chunks of `size` bytes,
+  the last one shorter. It opens and closes as `File.foreach` does; a missing
+  file or one that is not regular (decided on the open descriptor) ends the
+  terminal with `error("filesystem: path does not refer to a regular
+  file")`. A size outside 1..16777216 is `RUNTIME-INVALID-COUNT` at the
+  argument.
 - `ch.lazy(timeout_ms)` (`Channel[T]` to `Lazy[T]`): the values of a channel
   until it is closed and drained. Each wait for a value obeys the timeout; a
   timeout ends the terminal with `error("channel: timed out")`. A negative
@@ -173,6 +180,22 @@ be read twice. The library page is
   or close, and a line over 1 MiB end the terminal with that error. What was
   written before an error stays in the file. A line holding a line feed reads
   back as two lines.
+- `lz.write_bytes(path, timeout_ms = 30000)` (on a `Lazy[List[Int]]`,
+  `Result[Int]`) writes each chunk of bytes to a file as `write_lines` writes
+  lines and gives the bytes written. A chunk may have any size, empty
+  included; a byte outside 0..255 ends the terminal with `error("filesystem:
+  bytes must be between 0 and 255")`.
+- The zlib steps, on a `Lazy[List[Int]]` of byte chunks, give one:
+  `lz.deflate(level = 6, raw = false)`, `lz.inflate(raw = false, max_bytes =
+  1073741824)`, `lz.gzip(level = 6)` and `lz.gunzip(max_bytes = 1073741824)`.
+  `raw` is raw deflate (RFC 1951); otherwise the formats are those of the
+  `Zlib` calls (§6d). A chunk may have any size, empty included; an output
+  chunk is at most 65536 bytes. A decoder is strict and checks `max_bytes`
+  (at least 1) while it streams, before a byte past it is handed on.
+  Truncation, a checksum, a trailing byte, output past `max_bytes`, a level
+  outside 0..9 and `max_bytes` below 1 end the terminal with an error that
+  begins with `zlib: `. A run frees its zlib streams before the terminal
+  returns, whatever ended it; a crash or cancel frees them at the task's end.
 - `try` works in every block of a `Lazy` method, whatever the block's result
   type: a failed `try` ends the pipeline at once, no later item is pulled, and
   the terminal returns its error. A file the run opened is closed first.
@@ -532,15 +555,15 @@ Everything is allowed by default. `--deny-run`, `--deny-net`, `--deny-fs` and
 begins with `denied: ` and the flag (`denied: --deny-fs`), and the program goes
 on. `--deny-run` turns off the `Process` starts; `--deny-net` every connect and
 listen of `TCP` and `TLS`, so `std/http` too, before any DNS lookup; `--deny-fs`
-every `File`, `Dir` and `Path` call but `Path.join`, `Lazy.write_lines`, and a
-TLS call that names a file; `--deny-env` `System.env` (`System.os` and
-`System.pid` stay on: they hold no secret; the locale of error texts still
-follows `LANG`). Each turns on `--deny-native`, since native code could do the
-same. A program that can start processes escapes a single flag; use
+every `File`, `Dir` and `Path` call but `Path.join`, `Lazy.write_lines`,
+`Lazy.write_bytes`, and a TLS call that names a file; `--deny-env` `System.env`
+(`System.os` and `System.pid` stay on: they hold no secret; the locale of error
+texts still follows `LANG`). Each turns on `--deny-native`, since native code
+could do the same. A program that can start processes escapes a single flag; use
 `--sandbox`, or add `--deny-run`. `--sandbox` is all of them: the one flag for
 code you do not trust. They apply to the program, not to the front end.
-`agentica test` gives them to the test files, the step programs and the
-programs under test, not to its runner.
+`agentica test` gives them to the test files, the step programs and the programs
+under test, not to its runner.
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user
