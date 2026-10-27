@@ -209,9 +209,9 @@ Signatures are in
   `data` chained after `seed`: leave the seed out first, then pass each next
   chunk the previous result. Empty input returns `seed` unchanged. `data` is at
   most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
-- The `Zlib` calls and the zlib steps run in any compute context; only
-  `File.chunks` and `Lazy.write_bytes` carry the filesystem effect, so
-  `--deny-fs` turns off only them.
+- The `Zlib` calls and the zlib steps run in any compute context; of the
+  zlib-related calls only `File.chunks` and `Lazy.write_bytes` touch the
+  filesystem, so `--deny-fs` turns off only them.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.

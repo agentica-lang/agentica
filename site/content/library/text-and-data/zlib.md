@@ -71,7 +71,7 @@ A stream is a `Lazy[List[Int]]` of byte chunks. `File.chunks` reads a regular fi
 ```agentica {mode="check"}
 def main() -> Void
   case File.chunks("notes.txt").gzip.write_bytes("notes.txt.gz")
-    ok(bytes) -> puts("#{bytes > 0} bytes written")
+    ok(bytes) -> puts("#{bytes} bytes written")
     error(message) -> IO.warn("cannot compress: #{message}")
   end
   puts(File.chunks("notes.txt.gz").gunzip.reduce(0) do |n, chunk| n + chunk.size end)
