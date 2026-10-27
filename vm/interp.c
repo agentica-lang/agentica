@@ -1663,16 +1663,19 @@ reload:
 #undef FUSED_NEXT
 #undef SPAN
 
-/* The jit and the profiling copies of the turn loop are functions of their own, and agc_run_turn holds only the plain
-   copy that --jit off runs: the compiler lays out blocks and allocates registers for each function apart, so a change
-   to the JIT's copy does not reshape the plain one. With the three copies in agc_run_turn, a change to the jit copy
-   alone made case 7% slower with --jit off. */
+/* The three copies of the turn loop are functions of their own: the compiler lays out blocks and allocates registers
+   for each function apart, so a change to the JIT's copy, or to the choice in agc_run_turn, does not reshape the plain
+   one. With the three copies in agc_run_turn, a change to the jit copy alone made case 7% slower with --jit off, and
+   with the plain copy inline there, one more test before it changed a third of its instructions. */
 static __attribute__((noinline)) agc_turn_result jit_turn(agc_vm *vm) { return turn_loop(vm, false, true); }
 static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { return turn_loop(vm, true, false); }
+static __attribute__((noinline)) agc_turn_result plain_turn(agc_vm *vm) { return turn_loop(vm, false, false); }
 
-/* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. */
+/* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. A run with a JIT runs
+   the plain copy, the one of --jit off, while agc_jit_turn says no: no code yet, and no function near the top of the
+   stack that may get some. */
 agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
-  if (vm->rt->jit) return jit_turn(vm);
-  return turn_loop(vm, false, false);
+  if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm->task)) return jit_turn(vm);
+  return plain_turn(vm);
 }

@@ -609,6 +609,42 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
     assert code == 0 and stdout == "4576500\n", (stdout, stderr)
 
 
+@pytest.mark.parametrize("calls", [0, 3000])
+def test_on_runs_the_jit_turn_loop_only_once_a_function_that_may_get_code_runs(tmp_path, calls):
+    # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the whole run in the plain turn
+    # loop: no `turn count` line. Called 3000 times, the turns that start in it run the jit copy, which compiles it.
+    bytecode = compile_text(f"""def pad(n: Int, width: Int) -> String
+  text = n.to_s
+  while text.length < width
+    text = "0#{{text}}"
+  end
+  return text
+end
+
+def main() -> Void
+  total = 0
+  i = 0
+  while i < 20000
+    total = total + {{"k": i}}.size * {{"j": i}}.size
+    i += 1
+  end
+  k = 0
+  while k < {calls}
+    total = total + pad(k, 6).length
+    k += 1
+  end
+  puts(total)
+end
+""", "plain_until_live", tmp_path)
+    lines = jit_trace(bytecode, tmp_path, "on")
+    turns = [line for line in lines if " jit turn count=" in line]
+    assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
+    assert len(turns) == (1 if X86_64 and calls else 0), lines
+    assert any(" jit turn count=" in line for line in jit_trace(bytecode, tmp_path, "always")) == X86_64
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == f"{20000 + 6 * calls}\n", (stdout, stderr)
+
+
 def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     bytecode = compile_text(NATIVE, "native", tmp_path)
     for mode in ("on", "always"):
