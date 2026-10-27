@@ -348,9 +348,14 @@ static _Noreturn void bad_signature(agc_vm *vm, uint32_t span) {
   agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: bad native signature", span);
 }
 
+/* The String of a message of the system loader, whose bytes (a path, the OS text) may not be UTF-8: those become
+   U+FFFD. */
+static agc_string *loader_text(const char *error) {
+  return agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
+}
+
 static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) {
-  agc_string *text = agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
-  agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", text, span);
+  agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", loader_text(error), span);
 }
 
 /* The length of the struct "{...}" at the start of TEXT (LEN bytes), up to its closing brace, or 0 when its braces do
@@ -1759,18 +1764,19 @@ static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t spa
 static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   char *library = agc_cstr(agc_as_string(vm, args[0]));
-  char error[512];
+  /* The error has the "native: " prefix of the other Native.* results, then the loader's message. */
+  char error[512] = "native: ";
+  size_t prefix = strlen(error);
   bool opened = false;
   if (!library || !*library) {
-    snprintf(error, sizeof error, "cannot open the library: its name is empty or holds a NUL character");
+    snprintf(error + prefix, sizeof error - prefix, "cannot open the library: its name is empty or holds a NUL");
   } else {
-    opened = agc_ffi_open(library, error, sizeof error);
+    opened = agc_ffi_open(library, error + prefix, sizeof error - prefix);
   }
   free(library);
   agc_charge(vm, FFI_CALL_COST);
   if (opened) return agc_result_value(true, agc_void());
-  agc_string *text = agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
-  return agc_result_value(false, agc_string_value(text));
+  return agc_result_value(false, agc_string_value(loader_text(error)));
 }
 
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {

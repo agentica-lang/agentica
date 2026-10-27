@@ -306,14 +306,14 @@ def native_load_library(cx: Resolve.Context, arg: Ast.Expr) -> Result[Ast.Expr]
           end
 
           return ok(Ast.Expr.Literal(node.with(value: Ast.LitValue.Text(try native_target(cx, library)))))
-        _ -> return error(not_literal(cx, arg))
+        _ -> return error(literal_required(cx, arg))
       end
 
-    _ -> return error(not_literal(cx, arg))
+    _ -> return error(literal_required(cx, arg))
   end
 end
 
-def not_literal(cx: Resolve.Context, arg: Ast.Expr) -> String
+def literal_required(cx: Resolve.Context, arg: Ast.Expr) -> String
   help = "write the library as a \"...\" string, such as Native.load(\"libm.so.6\")"
   return native_load_failure(cx, arg, "the library of Native.load is a string literal", help)
 end

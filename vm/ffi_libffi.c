@@ -6,6 +6,10 @@
  * docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
+#ifdef __APPLE__
+/* RTLD_NOLOAD is outside POSIX. */
+#define _DARWIN_C_SOURCE
+#endif
 #include "ffi_os.h"
 #include "value.h"
 
@@ -204,6 +208,13 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 
 /* LoadLibraryExW counts references like dlopen: freeing drops only this one. */
 static void library_close(void *lib) { (void)FreeLibrary((HMODULE)lib); }
+
+/* Not asked on Windows: each Native.load of a loaded DLL adds a hold to its 32-bit count, which only billions of loads
+   in one run could wrap. */
+static bool library_loaded(const char *library) {
+  (void)library;
+  return false;
+}
 #else
 #ifdef __APPLE__
 /* dyld looks a bare name up in DYLD_LIBRARY_PATH, then in /usr/lib (on disk or in the dyld shared cache, where the
@@ -235,7 +246,10 @@ static void *library_open(const char *library, char *error, size_t size) {
   if (!path) return NULL;
   void *lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (!lib) {
+    /* glibc starts its text with the path, which the message names already. */
     const char *why = dlerror();
+    size_t len = strlen(path);
+    if (why && strncmp(why, path, len) == 0 && strncmp(why + len, ": ", 2) == 0) why += len + 2;
     snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
   }
   return lib;
@@ -253,12 +267,24 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 
 /* dlopen counts references: closing drops only this one, so a failing call repeated in a loop leaks nothing. */
 static void library_close(void *lib) { dlclose(lib); }
+
+/* True when LIBRARY is loaded already: RTLD_NOLOAD finds it without loading it, and the hold it takes is given back. */
+static bool library_loaded(const char *library) {
+  char buf[PATH_BUF], error[1];
+  const char *path = loader_path(library, buf, error, sizeof error);
+  void *lib = path ? dlopen(path, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD) : NULL;
+  if (lib) dlclose(lib);
+  return lib != NULL;
+}
 #endif
 
 bool agc_ffi_supported(void) { return true; }
 
-/* The hold is never given back: the system loader counts it, and a library opened again shares the one copy. */
-bool agc_ffi_open(const char *library, char *error, size_t size) { return library_open(library, error, size) != NULL; }
+/* A library that is loaded already keeps the holds it has (a prepared call's or an earlier load's), so a load repeated in
+   a loop adds none; another one keeps the hold it takes here until the process ends. */
+bool agc_ffi_open(const char *library, char *error, size_t size) {
+  return library_loaded(library) || library_open(library, error, size) != NULL;
+}
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, uint32_t fixed, agc_c_struct *result_struct,

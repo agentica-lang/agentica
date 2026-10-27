@@ -249,16 +249,19 @@ def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop)
 
 
 # The library of Native.load is a string literal with the rule of an extern library, so the front end can resolve it
-# like one; anything else is CHECK-NATIVE-LOAD at the argument.
-@pytest.mark.parametrize("library, code, stop", [
-    ('"libm.so.6"', None, None),
-    ("name", "CHECK-NATIVE-LOAD", 24),
-    ('"lib/m.so"', "CHECK-NATIVE-LOAD", 30),
-    ('"m#{1}"', "CHECK-NATIVE-LOAD", 27),
+# like one; anything else (a variable or a constant too) is CHECK-NATIVE-LOAD at the argument.
+@pytest.mark.parametrize("before, local, library, code", [
+    ("", "", '"libm.so.6"', None),
+    ("", "", '""', "CHECK-NATIVE-LOAD"),
+    ("", '  name = "libm.so.6"\n', "name", "CHECK-NATIVE-LOAD"),
+    ('LIB = "libm.so.6"\n\n', "", "LIB", "CHECK-NATIVE-LOAD"),
+    ("", "", '"lib/m.so"', "CHECK-NATIVE-LOAD"),
+    ("", "", '"m#{1}"', "CHECK-NATIVE-LOAD"),
 ])
-def test_native_load_takes_a_library_literal(tmp_path, library, code, stop):
-    text = 'def main() -> Void\n  name = "x"\n  puts(Native.load(%s).ok? or name == "")\nend\n' % library
-    assert_checks(check(source(tmp_path, text)), code, (3, 20), (3, stop))
+def test_native_load_takes_a_library_literal(tmp_path, before, local, library, code):
+    text = "%sdef main() -> Void\n%s  puts(Native.load(%s).ok?)\nend\n" % (before, local, library)
+    line = next(k for k, row in enumerate(text.split("\n"), 1) if "Native.load" in row)
+    assert_checks(check(source(tmp_path, text)), code, (line, 20), (line, 20 + len(library)))
 
 
 def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
