@@ -20,6 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `--jit on` stops compiling once a run has spent its compile budget (about a
+  million bytecode instructions, or 64 MiB of code); the rest of the program
+  runs in the interpreter, and `AGENTICA_VM_TRACE=jit` prints a `budget` line.
 - **Breaking:** `ATS` is a reserved type and module name: a user `struct`,
   `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
 - **Breaking:** `StructMember` is a reserved type name, so a program cannot

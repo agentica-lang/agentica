@@ -199,7 +199,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `agc_emit_*` function; the scheduler that claims a function compiles it,
   seals it in the run's code memory chunks (functions without a loop wait in a
   batch to share pages) and publishes it with a release store
-  (`agc_jit_code_of`, which also counts entries and passes for `on`).
+  (`agc_jit_code_of`, which also counts entries and passes for `on`). The
+  compile budget of a run: each compile first takes the function's
+  instructions plus `AGC_JIT_COMPILE_BASE` units of `AGC_JIT_BUDGET` (a count,
+  not a time; `AGENTICA_VM_TEST_JIT_BUDGET` sets a small one for tests), and
+  its code takes pages of `AGC_JIT_CODE_CAP`; the first compile that fits
+  neither claims every function not claimed yet (`spend`), so the rest of the
+  run interprets them without another walk, and the jit trace says
+  `budget spent=work` or `spent=bytes` once. A function that costs more than
+  the whole budget only stays interpreted itself.
   `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
   table, for the SysV and Win64 argument registers (`AGC_JIT_HOST` is 0
   elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X
