@@ -1,7 +1,7 @@
 /*
  * The JIT's boundary (docs/future/22-jit.md §22): the interpreter compiles a function, enters its code and handles
- * the exit. The rest is private to vm/jit/ and the C tests: the emitter of each architecture and the code memory.
- * Core layer.
+ * the exit. The rest is private to vm/jit/, the C tests and the libFuzzer entry point: the emitter of each
+ * architecture and the code memory. Core layer.
  */
 #ifndef AGC_JIT_H
 #define AGC_JIT_H
@@ -81,8 +81,10 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    block calls: compiled at a CALL exit from compiled code (the first when `calling[f]`, set when f calls a function,
    else the AGC_JIT_CALLEE_THRESHOLD-th) or at the first block call that compiled code starts with it, and published at
    a seal, which clears its `skip`. `live` is set by the first code published (agc_jit_turn), and `turns` counts the
-   turns that ran the jit copy of the turn loop while the jit trace is on. The code lives until the process exits,
-   like the program. */
+   turns that ran the jit copy of the turn loop while the jit trace is on. `hot_entries`, `hot_passes` and `hot_calls`
+   are the thresholds of `on` (AGC_JIT_THRESHOLD, AGC_JIT_PASSES and AGC_JIT_CALLEE_THRESHOLD, all at least 1), which
+   only agc_fuzz_one lowers, so that a mutant's 10,000 steps reach them. The code lives until the process exits, like
+   the program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -102,6 +104,7 @@ typedef struct agc_jit {
   struct agc_jit_batch *batch;
   agc_lock *lock;
   size_t page, cap, chunk, chunk_used;
+  uint32_t hot_entries, hot_passes, hot_calls;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -182,7 +185,7 @@ void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_de
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
-/* Private to vm/jit/ and the C tests from here. */
+/* Private to vm/jit/, the C tests and the libFuzzer entry point (vm/fuzz_libfuzzer.c) from here. */
 
 /* The architecture that has an emitter: x86-64 (emit_x64.c). Elsewhere the JIT compiles nothing. */
 #if defined(__x86_64__) || defined(_M_X64)

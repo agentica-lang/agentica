@@ -150,7 +150,10 @@ static agc_step map_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   (void)last;
   map_group *g = (map_group *)self;
   collect(vm, g);
-  uint64_t now = agc_clock_ms();
+  /* The clock only for a deadline to check (a running item) or to set (an item to start): the last wake, after every
+     item ended, needs none, and the fuzz driver compares only runs that read no clock (vm/fuzz_libfuzzer.c). */
+  bool deadlines = g->oldest || (g->running < g->limit && g->next < g->count);
+  uint64_t now = deadlines ? agc_clock_ms() : 0;
   expire(vm, g, now);
   start(vm, g, now);
   if (g->settled == g->count) {

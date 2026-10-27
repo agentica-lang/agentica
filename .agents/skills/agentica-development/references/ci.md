@@ -268,9 +268,11 @@ Skip rules, checked by the report:
 
 ## Other workflows
 
-- `vm-libfuzz-run` runs each input in the interpreter, then on Linux with
-  `AGC_JIT_ALWAYS`; the link wraps `agc_jit_mem_reserve` so each input's code
-  memory is unmapped (`vm/fuzz_libfuzzer.c`).
+- `vm-libfuzz-run` runs each input in the interpreter, then on Linux x86-64
+  with the JIT (`always`, and `on` at low thresholds) and compares the outputs;
+  the link wraps `agc_jit_mem_reserve` so each input's code memory is unmapped
+  (`vm/fuzz_libfuzzer.c`). Seeds: the compiled `tests/fixtures/vm/` and
+  `tests/fixtures/fuzz/`.
 - `fuzz.yml` (by hand): `make vm-libfuzz-run` for an hour (the `seconds`
   input) on every core, random seed; a crash, leak or timeout fails it;
   uploads `build/vm/libfuzz/crashes/` unless cancelled.

@@ -324,11 +324,11 @@ static agc_jit_code skip(agc_jit *jit, uint32_t function) {
 /* Code memory is sealed by whole pages, and a sealed page is read-execute for good (another scheduler may be running
    its code), so no later function can be written into it. To share pages, the code of a function without a loop that
    `on` compiles for native calls waits in the batch, a buffer of ordinary memory, and is sealed with the functions
-   after it: at AGC_JIT_CALLEE_THRESHOLD more CALL exits of a function in it, when the interpreter enters a function
-   that just compiled (which must run now), or when the batch holds AGC_JIT_BATCH bytes. So functions that get hot
-   about together, such as the callees of one long loop body, share a seal, even when several schedulers run them.
-   Each seal takes the next pages of the run's code memory, each function at a multiple of 16 bytes. The batch, the
-   chunks, `cap` and `used` change under the lock. */
+   after it: at `hot_calls` (AGC_JIT_CALLEE_THRESHOLD) more CALL exits of a function in it, when the interpreter enters
+   a function that just compiled (which must run now), or when the batch holds AGC_JIT_BATCH bytes. So functions that
+   get hot about together, such as the callees of one long loop body, share a seal, even when several schedulers run
+   them. Each seal takes the next pages of the run's code memory, each function at a multiple of 16 bytes. The batch,
+   the chunks, `cap` and `used` change under the lock. */
 #define CODE_ALIGN ((size_t)16)
 #define AGC_JIT_BATCH ((size_t)16 * 1024)
 /* The first chunk of code memory; each next one is twice as big, so the address space follows the code (an address
@@ -492,13 +492,13 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc) {
     uint32_t last = atomic_load_explicit(&jit->last[function], memory_order_relaxed);
     atomic_store_explicit(&jit->last[function], pc, memory_order_relaxed);
     uint32_t passes = atomic_load_explicit(&jit->passes[function], memory_order_relaxed);
-    if (pc <= last && passes < AGC_JIT_PASSES)
+    if (pc <= last && passes < jit->hot_passes)
       passes = atomic_fetch_add_explicit(&jit->passes[function], 1, memory_order_relaxed) + 1;
     /* The counts stop at their thresholds, so they never wrap. */
     uint32_t entries = atomic_load_explicit(&jit->entries[function], memory_order_relaxed);
-    if (entries < AGC_JIT_THRESHOLD)
+    if (entries < jit->hot_entries)
       entries = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
-    if (entries < AGC_JIT_THRESHOLD || passes < AGC_JIT_PASSES) return NULL;
+    if (entries < jit->hot_entries || passes < jit->hot_passes) return NULL;
   }
   return compile(jit, function, true);
 }
@@ -511,9 +511,9 @@ agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block) {
      call, so its first exit compiles it, at once. */
   if (block || jit->calling[function]) return compile(jit, function, true);
   uint32_t calls = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
-  if (calls < AGC_JIT_CALLEE_THRESHOLD) return NULL;
-  if (calls == AGC_JIT_CALLEE_THRESHOLD) return compile(jit, function, false);
-  if (calls < 2 * AGC_JIT_CALLEE_THRESHOLD) return NULL;
+  if (calls < jit->hot_calls) return NULL;
+  if (calls == jit->hot_calls) return compile(jit, function, false);
+  if (calls < 2 * jit->hot_calls) return NULL;
   /* Still in the batch (or still compiling on another scheduler): seal what is there. */
   agc_lock_take(jit->lock);
   seal_batch(jit, 0, NULL, 0);
@@ -568,6 +568,9 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->page = agc_jit_mem_page();
   jit->cap = AGC_JIT_CODE_CAP;
   jit->chunk = jit->chunk_used = 0;
+  jit->hot_entries = AGC_JIT_THRESHOLD;
+  jit->hot_passes = AGC_JIT_PASSES;
+  jit->hot_calls = AGC_JIT_CALLEE_THRESHOLD;
   jit->exits = agc_alloc_atomic(sizeof *jit->exits * AGC_OP_COUNT);
   for (uint32_t k = 0; k < n; k++) {
     atomic_init(&jit->code[k], NULL);

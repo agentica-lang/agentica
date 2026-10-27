@@ -1,8 +1,8 @@
 /*
  * agc_fuzz_one: load one mutated .agcb file and, if it is accepted, run it, in the interpreter or with the JIT
- * (AGC_JIT_ALWAYS compiles every function it can, AGC_JIT_ON only the hot ones), so hostile bytecode reaches the
- * emitter and compiled code. Used by the libFuzzer target (vm/fuzz_libfuzzer.c) only, never in the release binary.
- * Driver layer. Design: docs/vm/11-build-ci-supply-chain.md (Fuzzing).
+ * (AGC_JIT_ALWAYS compiles every function it can, AGC_JIT_ON the hot ones, at low thresholds), so hostile bytecode
+ * reaches the emitter and compiled code. Used by the libFuzzer target (vm/fuzz_libfuzzer.c) only, never in the
+ * release binary. Driver layer. Design: docs/vm/11-build-ci-supply-chain.md (Fuzzing).
  */
 #include "core.h"
 #include "services.h"
@@ -49,6 +49,13 @@ int agc_fuzz_one(const uint8_t *data, size_t len, int jit_mode, FILE *out, FILE 
   vm->rt->deny_net = true;
   // The code memory of the JIT outlives agc_release_all: the libFuzzer entry point unmaps it (vm/fuzz_libfuzzer.c).
   if (jit_mode != AGC_JIT_OFF) vm->rt->jit = agc_jit_new(program, (agc_jit_mode)jit_mode, &vm->rt->trace);
+  /* A mutant's 10,000 steps seldom reach the thresholds of `on`, so here a function with a loop compiles at its second
+     entry, after one interpreted, and one without at its first CALL exit from compiled code. */
+  if (vm->rt->jit) {
+    vm->rt->jit->hot_entries = 2;
+    vm->rt->jit->hot_passes = 1;
+    vm->rt->jit->hot_calls = 1;
+  }
   agc_outcome outcome = agc_vm_run(vm);
   if (outcome.kind == AGC_FAILED)
     for (int style = AGC_STYLE_PLAIN; style <= AGC_STYLE_JSON; style++)
