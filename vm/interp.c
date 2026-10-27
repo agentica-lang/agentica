@@ -1226,6 +1226,8 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
           const agc_frame *top = &t->frames[t->frame_count - 1];
           code = top->native ? NULL : agc_jit_callee_code(jit, top->function, true);
           if (!code) return COMPILED_RELOAD;
+          /* No `top->pc >= count` test, unlike RETURN: the block's frame is new, at pc 0, and the loader rejects an
+             empty function. */
           pc = top->pc;
           break;
         }

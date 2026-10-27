@@ -129,8 +129,7 @@ instruction.
   slower compiled). A function stays out when one of its innermost loops has
   more than one instruction that leaves (a leaf or direct builtin, a block
   call, a `RETURN` and a `CALL` of a function that may get code do not count)
-  in 16
-  (`AGC_JIT_SPACING`).
+  in 16 (`AGC_JIT_SPACING`).
 - Why no JIT when nothing compiles: the jit copy of the turn loop has the same
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster

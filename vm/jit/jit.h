@@ -132,8 +132,9 @@ bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
    entry only for such a function. A block is hot at once, as a function that calls is: the block call calls it for
    each item. */
 agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block);
-/* True when FUNCTION gets code only for native calls from compiled code (a function without a loop, with `on`): the
-   interpreter enters that code only to resume a frame of it. */
+/* True when FUNCTION gets code only for native calls and block calls from compiled code (a function without a loop,
+   with `on`): the interpreter enters that code only to resume a frame of it, or at its first instruction when a native
+   frame sits below that frame (a block call; run_compiled). */
 static inline bool agc_jit_native_only(agc_jit *jit, uint32_t function) {
   return atomic_load_explicit(&jit->native_only[function], memory_order_relaxed);
 }

@@ -391,7 +391,7 @@ static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t s
   /* From the next turn on, every turn runs the jit copy of the turn loop (agc_jit_turn). */
   atomic_store_explicit(&jit->live, true, memory_order_release);
   /* From now on the reload tests a function compiled for native calls, and run_compiled enters it only to resume a
-     frame. */
+     frame, or at its first instruction when a native frame sits below (a block call). */
   if (agc_jit_native_only(jit, function)) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
   AGC_TRACE(jit->trace, AGC_TRACE_JIT, "compile function=%.*s instructions=%" PRIu32 " bytes=%zu",
             agc_trace_len(f->name->bytes), f->name->data, f->count, size);
