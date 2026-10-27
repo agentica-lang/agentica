@@ -31,6 +31,10 @@ GROUP_OTHER_WRITE = 18
 export TEMP_MARK = ".agcb.tmp-"
 STALE_TEMP_SECONDS = 3600
 
+# How often, and how far apart, discard tries on Windows to remove a temporary file that cannot be removed yet.
+DISCARD_TRIES = 5
+DISCARD_PAUSE_MS = 30
+
 ## Where the caches of a root file are kept and what their entries must match. `build` is the `_build/` folder and
 ## `beside` is true for the `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR. `libs_dir` is the
 ## folder whose agc_libs/ the build reads first. `binary` and `inputs` are lines of the key of an entry: the size, time
@@ -154,6 +158,48 @@ export def write_private(path: String, data: List[Int]) -> Result[Void]
   end
 
   return File.close(out, IO_TIMEOUT_MS)
+end
+
+# Puts `data` at `target` through the new private file `temporary` (beside the target, named with TEMP_MARK). A rename
+# never replaces (Path.rename), so the old entry is removed first: a reader that comes in between finds none, which is
+# a miss, and a run that dies in between leaves no entry. False when anything fails, and then `temporary` is removed:
+# a run that lost the race to another one (its rename finds the entry the other made) must not leave its file. The
+# write handle is closed by then (write_private closes it on every path).
+export def install(temporary: String, data: List[Int], target: String) -> Bool
+  if !write_private(temporary, data).ok?
+    discard(temporary)
+    return false
+  end
+
+  remove_file(target)
+  if !Path.rename(temporary, target, IO_TIMEOUT_MS).ok?
+    discard(temporary)
+    return false
+  end
+
+  return true
+end
+
+# Removes a temporary file of this run. Only this run opens it, but on Windows a scanner (an antivirus or an indexer)
+# can hold a file just written or renamed for a moment, and the removal then fails with a sharing violation; there it
+# is tried again a few times. Elsewhere it is tried once: a failure there is permanent. A scanner that shares the file
+# for deletion lets the removal succeed and keeps the name in the folder until it lets go, which no retry shortens.
+# A file that cannot be removed is left for the sweep.
+export def discard(path: String) -> Void
+  tries = 1
+  if System.os() == "windows"
+    tries = DISCARD_TRIES
+  end
+
+  for attempt in 0...tries
+    if Path.remove(path, IO_TIMEOUT_MS).ok?
+      return
+    end
+
+    if attempt + 1 < tries
+      Task.sleep(DISCARD_PAUSE_MS)
+    end
+  end
 end
 
 # Removes the file or the link at `path` (a link is removed as a link, never followed). A folder in its place stays

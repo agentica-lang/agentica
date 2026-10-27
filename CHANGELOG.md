@@ -34,6 +34,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`s.with(...)`) from compiled code, so functions that use them compile under
   `--jit on`.
 
+### Fixed
+
+- On Windows, the check and bytecode caches retry removing a temporary file
+  that stays in `_build/` when an entry cannot be put in place.
+
 ## [0.12.0] - 2026-10-27
 
 ### Added
