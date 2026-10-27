@@ -752,21 +752,26 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
 
 
 # Native.size_of(T) is an Int, Native.get_struct(p, offset, T) a T and Native.put_struct(p, offset, value) Void, for a
-# struct of an extern block; a struct of the program, a resource or a value in place of the type is CHECK-TYPE-MISMATCH
-# at it.
+# struct of an extern block, also through a type alias or from another module; a struct of the program, a resource, a
+# value in place of the type or a type name in place of the value is CHECK-TYPE-MISMATCH at it.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(2 * Native.size_of(Outer))\n"
-     "  Native.put_struct(buf, Native.size_of(Outer), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
-     "  o: Outer = Native.get_struct(buf, 0, Outer)\n  puts(o.inner.n)", None, None, None),
-    ("  puts(Native.size_of(Plain))", "CHECK-TYPE-MISMATCH", (28, 23), (28, 28)),
-    ("  puts(Native.get_struct(Native.null(), 0, Plain))", "CHECK-TYPE-MISMATCH", (28, 44), (28, 49)),
-    ("  Native.put_struct(Native.null(), 0, Plain(x: 1))", "CHECK-TYPE-MISMATCH", (28, 39), (28, 50)),
-    ("  puts(Native.size_of(Model))", "CHECK-TYPE-MISMATCH", (28, 23), (28, 28)),
-    ("  puts(Native.size_of(3))", "CHECK-TYPE-MISMATCH", (28, 23), (28, 24)),
-    ("  s: String = Native.get_struct(Native.null(), 0, Inner)", "CHECK-TYPE-MISMATCH", (28, 15), (28, 57)),
+     "  Native.put_struct(buf, Native.size_of(OuterAlias), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
+     "  o: Outer = Native.get_struct(buf, 0, OuterAlias)\n  puts(o.inner.n)", None, None, None),
+    ("  buf = Native.memory_pointer(Native.size_of(Raw.ModelParams))\n"
+     "  p: Raw.ModelParams = Native.get_struct(buf, 0, Raw.ModelParams)\n  Native.put_struct(buf, 0, p)",
+     None, None, None),
+    ("  puts(Native.size_of(Plain))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
+    ("  puts(Native.get_struct(Native.null(), 0, Plain))", "CHECK-TYPE-MISMATCH", (32, 44), (32, 49)),
+    ("  Native.put_struct(Native.null(), 0, Plain(x: 1))", "CHECK-TYPE-MISMATCH", (32, 39), (32, 50)),
+    ("  Native.put_struct(Native.null(), 0, Outer)", "CHECK-TYPE-MISMATCH", (32, 39), (32, 44)),
+    ("  puts(Native.size_of(Model))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
+    ("  puts(Native.size_of(3))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 24)),
+    ("  s: String = Native.get_struct(Native.null(), 0, Inner)", "CHECK-TYPE-MISMATCH", (32, 15), (32, 57)),
 ])
 def test_structs_through_pointers_take_a_struct_of_an_extern_block(tmp_path, body, code, start, stop):
-    text = "struct Plain\n  x: Int\nend\n\n" + STRUCTS % body
+    source(tmp_path, STRUCTS % "  puts(1)", "raw.agc")
+    text = 'import Raw from "./raw"\n\nstruct Plain\n  x: Int\nend\n\ntype OuterAlias = Outer\n\n' + STRUCTS % body
     assert_checks(check(source(tmp_path, text)), code, start, stop)
 
 

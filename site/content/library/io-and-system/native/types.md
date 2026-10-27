@@ -290,7 +290,7 @@ A C struct that sits in memory, such as an array of MySQL binds or the result th
 - `Native.get_struct(p, offset, Name)` reads the struct at `offset` bytes past `p` into a new record, as a struct result is read.
 - `Native.put_struct(p, offset, value)` writes the record there, as a struct argument is written. Every field is checked before the first byte is written: an integer outside its bits fails with `RUNTIME-INTEGER-OVERFLOW`, a freed buffer in a `C.Pointer` field with `RUNTIME-NATIVE-CLOSED`. A buffer stored in a `C.Pointer` field is an address that nothing tracks, as with `put_pointer`.
 - The bounds are those of the typed reads and writes above, for the size of the struct: checked in an owned buffer or a view, trusted at a pointer that C returned.
-- The type is a struct of an extern block; any other type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH`.
+- The type is a struct of an extern block, or a type alias of one; any other type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH`.
 
 ```agentica {mode="check"}
 extern "/opt/db/libdb.so"

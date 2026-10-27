@@ -207,6 +207,19 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 
   last = site.args[site.args.size - 1]
   if name == "Native.put_struct"
+    if type_name?(last)
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-TYPE-MISMATCH",
+          "Native.put_struct writes a value of a struct of an extern block, found a type name",
+          Ast.expr_span(last),
+          "pass a value of the struct, not its name: Native.put_struct(p, 0, Name(field: value))",
+        ),
+      )
+    end
+
     value = try State.expr(cx, current, last, T.Type.Unknown)
     if !c_struct?(cx, value.type)
       return error(not_c_struct(cx, value.st, name, T.to_text(value.type), Ast.expr_span(last)))
@@ -223,12 +236,21 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
         return error(not_c_struct(cx, current, name, T.to_text(type), node.span))
       end
 
+      # The lowering reads the struct from the type name's own type, so an alias gives the struct it names.
+      current = State.record_type(current, node.id, type)
       if name == "Native.size_of"
         return ok(State.Out(st: current, type: T.Type.Int))
       end
 
       return ok(State.Out(st: current, type: type))
     _ -> return error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
+  end
+end
+
+def type_name?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.TypeName(node) -> return true
+    _ -> return false
   end
 end
 

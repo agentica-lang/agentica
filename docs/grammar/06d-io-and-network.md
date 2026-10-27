@@ -596,8 +596,8 @@ end
   (`RUNTIME-INTEGER-OVERFLOW` or `RUNTIME-NATIVE-CLOSED` at the value). The
   bounds, NULL and freed checks are those of `get_int32`, for the struct's
   size. A `C.Pointer` field stores an address that nothing tracks, as
-  `put_pointer` does. Any type but a struct of an extern block, or a value in
-  place of the type name, is `CHECK-TYPE-MISMATCH` at it.
+  `put_pointer` does. `Name` may be a type alias of such a struct. Any other
+  type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH` at it.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

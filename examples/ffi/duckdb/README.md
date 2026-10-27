@@ -71,8 +71,9 @@ Each handle instead lives in an 8-byte slot the task owns; the helpers pass
 the slot where C wants the pointer, read the handle out for the calls that
 want the value, and close through the slot before freeing it, on success and
 on error alike. The result buffer (`Native.size_of(DuckdbResult)`, the
-`duckdb_result` struct declared in the file) is freed with `duckdb_destroy_result` after the error text is
-copied; `duckdb_value_varchar` results are copied and then `duckdb_free`d.
+`duckdb_result` struct declared in the file) is freed with
+`duckdb_destroy_result` after the error text is copied; `duckdb_value_varchar`
+results are copied and then `duckdb_free`d.
 
 A halt, a task cancel, or a runtime abort does not run this cleanup: raw C
 handles have no destructor here. That is the known limit of the pattern, so

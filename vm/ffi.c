@@ -663,9 +663,11 @@ static void cache_grow(agc_ffi_cache *c) {
 }
 
 /* The entry of the layout code TEXT, exactly one struct "{N:CODES}" (parse_signature has the codes), laid out as a
-   struct argument is, at most STRUCT_MAX_SIZE bytes. */
+   struct argument is, at most STRUCT_MAX_SIZE bytes. Its braces go through group_length first, as a struct of a
+   signature does, so the depth limit is the same. */
 static ffi_entry *parse_layout(agc_vm *vm, const agc_string *text, uint32_t span) {
-  agc_c_struct *s = layout_of(vm, text->data, text->bytes);
+  bool grouped = text->bytes && text->data[0] == '{' && group_length(text->data, text->bytes) == text->bytes;
+  agc_c_struct *s = grouped ? layout_of(vm, text->data, text->bytes) : NULL;
   if (s && (!agc_ffi_layout(s) || s->size > STRUCT_MAX_SIZE)) {
     struct_free(s);
     s = NULL;

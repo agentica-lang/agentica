@@ -137,8 +137,9 @@ export def lower_call(
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    if laid_out and type_name_of(node.args[index]) != ""
-      fx = emit_layout(cx, fx, type_name_of(node.args[index]), Ast.expr_span(node.args[index]))
+    if laid_out and type_name?(node.args[index])
+      arg = node.args[index]
+      fx = try emit_layout(cx, fx, Lowering.type_of(cx, arg), Ast.expr_span(arg))
     elsif defaulted
       out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
       fx = out.fx
@@ -155,8 +156,7 @@ export def lower_call(
     # The VM gets the layout of the value's struct as a fourth argument, with the span of the value.
     fx = Lowering.alloc(fx.with(next: base + total))
     value_span = Ast.expr_span(node.args[2])
-    value_type = Lowering.type_of(cx, node.args[2])
-    fx = emit_layout(cx, fx, Types.name(value_type), value_span)
+    fx = try emit_layout(cx, fx, Lowering.type_of(cx, node.args[2]), value_span)
     spans = spans.push(value_span)
     total += 1
   end
@@ -282,21 +282,31 @@ def typed(cx: Lowering.Cx, expr: Ast.Expr, known: Bool) -> Result[Bool]
   return Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
 end
 
-# The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an
-# error value then. A call made from a method call has no type of its own.
-# The linked name of a type name used as a value, else "".
-def type_name_of(expr: Ast.Expr) -> String
+def type_name?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.TypeName(node) -> return node.name
-    _ -> return ""
+    Ast.Expr.TypeName(node) -> return true
+    _ -> return false
   end
 end
 
-# The layout code of the C struct NAME ("{N:CODES}") as a constant in the last register taken. The checker lets only a
-# C struct of an extern block through, so cx.layouts has it.
-def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, name: String, span: Source.Span) -> Lowering.Fx
-  return Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(cx.layouts.get(name, "")), span)
+# The layout code ("{N:CODES}") of the C struct TYPE as a constant in the last register taken. TYPE is the struct that
+# the checker resolved (for a type name, an alias gives the struct it names), and the checker lets only a C struct of
+# an extern block through, so a missing layout is LOWER-INTERNAL.
+def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, type: Types.Type, span: Source.Span) -> Result[Lowering.Fx]
+  layout = ""
+  if Types.is?(type, "Struct")
+    layout = cx.layouts.get(Types.name(type), "")
+  end
+
+  if layout == ""
+    return error(Lowering.internal(cx, "lower: no C struct layout for #{Types.to_text(type)}", span))
+  end
+
+  return ok(Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(layout), span))
 end
+
+# The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an
+# error value then. A call made from a method call has no type of its own.
 
 def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Result[String]
   type = Lowering.type_of(cx, Ast.Expr.Call(node))

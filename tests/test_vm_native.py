@@ -2102,11 +2102,13 @@ end
 
 
 # Structs through pointers: Native.size_of is C's sizeof, so an array of structs with a C.Long field (16 bytes on
-# Windows, 24 elsewhere) is put_struct at k times the size and C reads it, C fills one that get_struct reads, and a
-# struct whose C.Pointer field holds an owned buffer reads back (through a view too) as C sees it.
+# Windows, 24 elsewhere) is put_struct at k times the size and C reads it, C fills one that get_struct reads (through
+# a view and a type alias too), and a struct whose C.Pointer field holds an owned buffer reads back as C sees it.
 @NATIVE_CALLS
 def test_c_structs_through_pointers_have_the_c_layout(tmp_path, peer):
-    main = """def main() -> Void
+    main = """type Row = PeerRow
+
+def main() -> Void
   size = Native.size_of(PeerRow)
   puts(size == peer_row_size())
   rows = Native.memory_pointer(3 * size)
@@ -2116,7 +2118,7 @@ def test_c_structs_through_pointers_have_the_c_layout(tmp_path, peer):
   puts(peer_rows_text(rows, 3))
   peer_rows_fill(rows, 3)
   puts(Native.get_struct(rows, 2 * size, PeerRow))
-  puts(Native.get_struct(Native.offset(rows, size), 0, PeerRow).id)
+  puts(Native.get_struct(Native.offset(rows, Native.size_of(Row)), 0, Row).id)
   tokens = Native.memory_pointer(8)
   Native.put_array_of_int32(tokens, 0, [40, 2])
   batches = Native.memory_pointer(2 * Native.size_of(PeerBatch))
