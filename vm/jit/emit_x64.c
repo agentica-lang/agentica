@@ -651,10 +651,14 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
    calls never grows the C stack. Anything else takes the TAIL_CALL exit with nothing changed, for run_compiled. The
    tail call itself charges nothing, as in the interpreter: the callee's STEPs do (the loader makes every function that
    calls start with one). The window is copied upwards one register at a time, which is right as R[k] is never above
-   R[a + k]. */
+   R[a + k]; a callee of more than AGC_JIT_TAIL_PARAMS arguments always takes the exit, so that copy stays short. */
 void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
                         uint32_t registers) {
   uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  if (params > AGC_JIT_TAIL_PARAMS) {
+    agc_emit_exit(e, AGC_JIT_EXIT_TAIL_CALL, pc);
+    return;
+  }
   if (!self) {
     move_imm64(e, RAX, slot);
     load(e, R11, RAX, 0);

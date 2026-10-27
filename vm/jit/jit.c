@@ -37,13 +37,14 @@ static uint32_t plain_op(uint32_t op) {
   return op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
 }
 
-/* True when IN at PC of function SELF jumps back to *START or before it: the end of a loop. A TAIL_CALL of SELF is one
-   too, back to instruction 0, as its code is a jump there (agc_emit_tail_call). */
-static bool backward(agc_instr in, uint32_t pc, uint32_t self, uint32_t *start) {
+/* True when IN at PC of function SELF of P jumps back to *START or before it: the end of a loop. A TAIL_CALL of SELF
+   is one too, back to instruction 0, when its code is a jump there (agc_emit_tail_call: at most AGC_JIT_TAIL_PARAMS
+   arguments). */
+static bool backward(const agc_program *p, agc_instr in, uint32_t pc, uint32_t self, uint32_t *start) {
   uint32_t op = plain_op(in.op);
   *start = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (op == AGC_OP_TAIL_CALL) {
-    bool again = *start == self;
+    bool again = *start == self && p->functions[self].params <= AGC_JIT_TAIL_PARAMS;
     *start = 0;
     return again;
   }
@@ -146,7 +147,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     for (uint32_t pc = 0; pc < f->count; pc++) {
       uint32_t start;
       agc_instr in = f->code[pc];
-      jumps += backward(in, pc, k, &start);
+      jumps += backward(p, in, pc, k, &start);
       calls += calls_function(p, in);
     }
     work += f->count;
@@ -164,7 +165,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     ends[0] = 0;
     for (uint32_t pc = 0; pc < f->count; pc++) {
       uint32_t start;
-      ends[pc + 1] = ends[pc] + backward(f->code[pc], pc, k, &start);
+      ends[pc + 1] = ends[pc] + backward(p, f->code[pc], pc, k, &start);
       at[pc] = UINT32_MAX;
     }
     looped[k] = ends[f->count] > 0;
@@ -175,7 +176,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     }
     for (uint32_t pc = 0; looped[k] && pc < f->count; pc++) {
       uint32_t start;
-      if (!backward(f->code[pc], pc, k, &start) || ends[pc] - ends[start] > 0) continue;
+      if (!backward(p, f->code[pc], pc, k, &start) || ends[pc] - ends[start] > 0) continue;
       regions[region_count] = (region){k, pc - start + 1, 0};
       for (uint32_t q = start; q <= pc; q++) at[q] = (uint32_t)region_count;
       region_count++;
@@ -722,6 +723,7 @@ void agc_jit_count_call(agc_jit *jit, uint32_t status, uint32_t function) {
   agc_jit_count_transition(jit);
   if (status != AGC_JIT_EXIT_TAIL_CALL) return;
   atomic_fetch_add_explicit(&jit->tails, 1, memory_order_relaxed);
+  /* A trace hint: another scheduler may have published the callee's code since the exit, which then counts here. */
   if (atomic_load_explicit(&jit->code[function], memory_order_relaxed))
     atomic_fetch_add_explicit(&jit->tails_compiled, 1, memory_order_relaxed);
 }

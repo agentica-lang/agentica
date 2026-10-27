@@ -244,8 +244,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   does (same base, `ret` and depth, `tail` set), and jumps to the callee's code;
   a `TAIL_CALL` of the function itself jumps to its first instruction. It nests
   nothing on the C stack and charges nothing; the callee's `STEP`s do. A call
-  that cannot be native (no code, or the frames or registers would grow) takes
-  an exit. `on` counts a `CALL_VALUE` as a call, not as leaving.
+  that cannot be native (no code, the frames or registers would grow, or a tail
+  call of more than 32 arguments, `AGC_JIT_TAIL_PARAMS`) takes an exit. `on`
+  counts a `CALL_VALUE` as a call, not as leaving.
 - **Exits.** Three kinds of builtin matter here:
   - A *direct* builtin only returns a value. It may allocate, do work that grows
     with its arguments, charge turn cost and fail. It never parks, starts a

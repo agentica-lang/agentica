@@ -8,12 +8,12 @@
 
 #include "../core.h"
 
-/* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself, is compiled at its AGC_JIT_THRESHOLD-th entry once
-   AGC_JIT_PASSES of its entries landed at or before the previous one, unless an innermost loop leaves compiled code
-   for the interpreter more than once in AGC_JIT_SPACING instructions) and always
-   (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything
-   in the interpreter. With `on`, a function without a loop gets code only for native calls, at its first CALL,
-   TAIL_CALL or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
+/* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself, is compiled at its
+   AGC_JIT_THRESHOLD-th entry once AGC_JIT_PASSES of its entries landed at or before the previous one, unless an
+   innermost loop leaves compiled code for the interpreter more than once in AGC_JIT_SPACING instructions) and always
+   (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything in
+   the interpreter. With `on`, a function without a loop gets code only for native calls, at its first CALL, TAIL_CALL
+   or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
    AGC_JIT_CALLEE_THRESHOLD-th: one without calls runs at most its own few instructions per call, and a compile costs
    about as much as interpreting thousands of them, so one called only a few times from compiled code stays
    interpreted. */
@@ -243,6 +243,11 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #define AGC_JIT_NATIVE_ENTRY 7
 #define AGC_JIT_NATIVE_DEPTH 256
 
+/* The most arguments of a native TAIL_CALL: its code moves each one, so a callee with more (the loader allows 65,534)
+   takes the TAIL_CALL exit instead, and the code of one TAIL_CALL stays small, as the compile budget counts it as one
+   instruction. */
+#define AGC_JIT_TAIL_PARAMS 32
+
 /* The most code memory a run takes, counted in bytes, and so the most one function takes; past it, functions stay
    interpreted. It is reserved in chunks as it fills, and each seal takes the next whole pages of a chunk, which the
    functions sealed together share. */
@@ -322,7 +327,8 @@ void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builti
 /* CALL with SLOT the address of the callee's entry in the code table and REGISTERS the callee's register count. */
 void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers);
 /* TAIL_CALL with SLOT the address of the callee's entry in the code table, PARAMS and REGISTERS the callee's counts,
-   and SELF set when the callee is the function itself: a jump to instruction 0. */
+   and SELF set when the callee is the function itself: a jump to instruction 0. Past AGC_JIT_TAIL_PARAMS, the
+   TAIL_CALL exit. */
 void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
                         uint32_t registers);
 /* CALL_VALUE: a native call when agc_jit_call_value pushed the frame, else the CALL_VALUE exit. */

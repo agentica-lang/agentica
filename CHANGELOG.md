@@ -12,8 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
   a closure or `&name`) from compiled code.
-- The experimental x86-64 JIT runs tail calls inside compiled code, and
-  `--jit on` compiles a function whose loop is a tail call of itself.
+- The experimental x86-64 JIT runs tail calls inside compiled code.
 
 ## [0.13.0] - 2026-10-27
 

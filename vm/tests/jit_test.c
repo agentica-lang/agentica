@@ -274,6 +274,53 @@ static AGC_JIT_CALLER void native_tail_calls(void) {
   vm.next_stop = 1000;
 }
 
+/* A TAIL_CALL of a callee with more than AGC_JIT_TAIL_PARAMS arguments takes the TAIL_CALL exit, even when the callee
+   has code and the registers have room, and its code is a few bytes, however many arguments (65,534 at most); a self
+   TAIL_CALL like that is no loop for `on`. */
+static AGC_JIT_CALLER void wide_tail_calls(void) {
+  agc_emitter e;
+  agc_jit_code none = NULL;
+  agc_instr call = {AGC_OP_TAIL_CALL, 1, 0, 0};
+  size_t size[3];
+  for (int k = 0; k < 3; k++) {
+    agc_emit_begin(&e, 1);
+    size_t start = e.len;
+    uint32_t params = k == 2 ? AGC_JIT_TAIL_PARAMS : 65534;
+    agc_emit_tail_call(&e, call, 0, k == 1, (uint64_t)(uintptr_t)&none, params, params + 1);
+    size[k] = e.len - start;
+  }
+  assert(size[0] <= 8 && size[1] <= 8 && size[2] > 32 * AGC_JIT_TAIL_PARAMS);
+  static agc_instr caller[] = {{AGC_OP_TAIL_CALL, 1, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static agc_instr callee[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static uint32_t spans[2] = {0};
+  agc_value constants[1] = {agc_int(0)};
+  uint32_t wide = AGC_JIT_TAIL_PARAMS + 1;
+  agc_function fns[2] = {
+    {.name = agc_make_string("caller", 6, 6), .registers = wide + 1, .code = caller, .spans = spans, .count = 2},
+    {.name = agc_make_string("callee", 6, 6), .registers = wide, .params = wide, .code = callee, .spans = spans,
+     .count = 2},
+  };
+  agc_program program = {.functions = fns, .function_count = 2, .constants = constants, .constant_count = 1};
+  agc_jit *jit;
+  agc_jit_code code = first_two(&program, &jit);
+  agc_task *t = vm.task, saved = *vm.task;
+  agc_value regs[64] = {0};
+  agc_frame frames[2] = {{.function = 0}};
+  run_on(t, frames, regs);
+  t->reg_capacity = 64;
+  regs[0] = agc_int(99);
+  regs[1] = agc_int(7);
+  vm.next_stop = 1000;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_TAIL_CALL, 0);
+  assert(t->frame_count == 1 && frames[0].function == 0 && !frames[0].tail && same_bits(regs[0], agc_int(99)));
+  *t = saved;
+  callee[1] = (agc_instr){AGC_OP_TAIL_CALL, 0, 1, 0};
+  bool callable[2], looped[2], calling[2];
+  agc_jit_settle(&program, callable, looped, calling);
+  assert(!looped[1]);
+  callee[1] = (agc_instr){AGC_OP_RETURN, 0, 0, 0};
+}
+
 /* Function 0 calls the function value in R2 with R3 as its argument: function 1, which adds its capture to it. The
    call is native once function 1 has code (agc_jit_call_value pushes the frame, base 3 and result to R2, with the
    capture after the argument) and the result lands in R2. A callee without code yet, a task without room for the
@@ -1249,6 +1296,7 @@ int main(void) {
   call_return_exits();
   native_calls();
   native_tail_calls();
+  wide_tail_calls();
   call_values();
   direct_calls();
   loops_and_steps();
