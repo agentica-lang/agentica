@@ -42,6 +42,10 @@ keeps their records.
      callbacks.
   3. JIT tier 2 (§22) with our own emitter for x86-64 (no sljit); the arm64
      emitter is deferred beyond 0.10.0.
+- **0.14.0** (owner), in this order:
+  1. Generic structs (§15.3), then generic functions (§15.3a), which need
+     them.
+  2. The decision whether `--jit on` becomes the default for x86-64 (§22).
 
 ### Next, after 0.8.0 (owner, 2026-10-21)
 

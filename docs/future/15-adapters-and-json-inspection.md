@@ -289,14 +289,18 @@ def main() -> Void
 end
 ```
 
+`with` follows Ruby's `pool.with { |conn| ... }` (connection_pool gem). As a
+function it does not clash with the struct update `value.with(...)`.
+
 - **Syntax.** `def NAME[T, U](params) -> R` puts the type parameters after the
   name. Their names follow the enum rules: type names only. A repeated name or
-  a reserved one such as `Int` or `List` is `CHECK-REDEFINED-NAME`. `def f[]`
-  is `PARSE-UNEXPECTED-TOKEN`. A parameter may have the name of a struct or enum
-  of the file; inside the function it is then the parameter, as for enums.
-  `main` with type parameters is `CHECK-MAIN`. A type parameter that no
-  parameter type and no result type mentions cannot be inferred:
-  `CHECK-ENUM-TYPE-INFERENCE` at its name.
+  a reserved one such as `Int` or `List` is `CHECK-REDEFINED-NAME`, and so is a
+  name that a struct, enum or alias in scope already has, at the parameter: it
+  would hide that type. Enums accept such a name today (`enum Holder[Item]`
+  beside `struct Item`) and may be aligned later. `def f[]` is
+  `PARSE-UNEXPECTED-TOKEN`. `main` with type parameters is `CHECK-MAIN`. A
+  type parameter that no parameter type and no result type mentions cannot be
+  inferred: `CHECK-ENUM-TYPE-INFERENCE` at its name.
 - A `def` in an `extern` block takes no type parameters: the `[` is
   `PARSE-UNEXPECTED-TOKEN`, as today.
 - **Modules.** Exported and imported generic functions are called as any
@@ -331,6 +335,8 @@ end
 - Enum constructors check their payloads from left to right and fail on an empty
   collection while a variable is open (`compiler/check/check_call.agc`). A
   function call differs on that point only: its empty literals wait for step 3.
+  Enum constructors keep their left-to-right rule; this design does not change
+  it.
 - The call has the substituted result type. A type parameter that appears only
   in the result, as in `def empty_of[T]() -> List[T]`, comes from step 2:
   `xs: List[Int] = empty_of()`.
@@ -412,7 +418,8 @@ end
 - **Tests.** `tests/test_spec_generics.py`: through `--json check`, one case per
   code above with its span, the valid calls of the examples, and a cross-module
   case (`M.first_or` and an imported name). A golden run of the examples,
-  written by `make goldens`.
+  written by `make goldens`. No Node or Python peer: the feature is
+  checker-only and adds no runtime behaviour.
 - **Done when:** the examples check and run, and each code above has a spec
   case.
 
