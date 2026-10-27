@@ -18,7 +18,7 @@ found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 
 only() {
   globs=""
   for f in $2; do globs="$globs --glob !$f"; done
-  if found -n --max-depth 1 "$inc$1" --glob '*.c' --glob '*.h' $globs .; then bad "include of $1 outside $2"; fi
+  if found -n --max-depth 1 "$inc$1" --glob '*.c' --glob '*.h' $globs . jit; then bad "include of $1 outside $2"; fi
 }
 chain() {
   f="$1"; shift; s=0
