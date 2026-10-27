@@ -365,6 +365,8 @@ static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t s
     return;
   }
   atomic_store_explicit(&jit->code[function], code, memory_order_release);
+  /* From the next turn on, every turn runs the jit copy of the turn loop (agc_jit_turn). */
+  atomic_store_explicit(&jit->live, true, memory_order_release);
   /* From now on the reload tests a function compiled for native calls, and run_compiled enters it only to resume a
      frame. */
   if (agc_jit_native_only(jit, function)) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
@@ -472,7 +474,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   if (mode == AGC_JIT_OFF || !AGC_JIT_HOST) return NULL;
   /* Each function is decided once, here: a function kept out is never counted or walked again, and a run where every
      function is kept out has no JIT (nothing is allocated), so it runs the plain copy of the turn loop, the code of
-     --jit off. */
+     --jit off, as most turns of a run with a JIT do while no code is published (agc_jit_turn). */
   size_t n = program->function_count;
   _Atomic bool *skip = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *skip));
   _Atomic bool *native_only = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *native_only));
@@ -526,9 +528,43 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) atomic_init(&jit->exits[op], 0);
   atomic_init(&jit->leaves, 0);
   atomic_init(&jit->transitions, 0);
+  atomic_init(&jit->turns, 0);
+  atomic_init(&jit->live, false);
   atomic_init(&jit->arena, NULL);
   atomic_init(&jit->used, 0);
   return jit;
+}
+
+/* True for a turn drawn at random, one in AGC_JIT_SAMPLE on average (a power of two): a xorshift16 with the shifts 7,
+   9, 8, whose period is all 65535 non-zero states, seeded with an odd number made of the scheduler's index. A counter
+   would sample every 16th turn, and two tasks that take turns could then put every sample on the one that idles. */
+static bool sampled(agc_vm *vm) {
+  uint16_t x = vm->jit_sample ? vm->jit_sample : (uint16_t)(vm->index * 2 + 1);
+  x ^= (uint16_t)(x << 7);
+  x ^= (uint16_t)(x >> 9);
+  x ^= (uint16_t)(x << 8);
+  vm->jit_sample = x;
+  return (x & (AGC_JIT_SAMPLE - 1)) == 0;
+}
+
+bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
+  const agc_task *t = vm->task;
+  /* The flag only picks the loop, and the jit copy loads each code pointer with acquire, so the acquire here (a plain
+     load on x86-64) only keeps "live" meaning "some code is visible" on every scheduler. */
+  bool jit_copy = atomic_load_explicit(&jit->live, memory_order_acquire);
+  uint32_t n = t->frame_count, low = n > AGC_JIT_TOP_FRAMES ? n - AGC_JIT_TOP_FRAMES : 0;
+  /* The sample: a per-scheduler draw, no shared write. */
+  if (!jit_copy) jit_copy = sampled(vm);
+  /* A deeper stack runs the jit copy, as every run did before: its frames below the top ones may be in a loop that
+     gets hot, and walking all of them each turn would cost more than the plain loop saves. */
+  if (!jit_copy) jit_copy = low > 0;
+  for (uint32_t k = n; !jit_copy && k > low; k--) {
+    const agc_frame *frame = &t->frames[k - 1];
+    jit_copy = !frame->native && agc_jit_may_run(jit, frame->function);
+  }
+  if (jit_copy && AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT))
+    atomic_fetch_add_explicit(&jit->turns, 1, memory_order_relaxed);
+  return jit_copy;
 }
 
 void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc) {
@@ -549,6 +585,8 @@ void agc_jit_report(agc_jit *jit) {
   if (leaves) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "leaf count=%" PRIu64, leaves);
   uint64_t transitions = atomic_load_explicit(&jit->transitions, memory_order_relaxed);
   if (transitions) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "transition count=%" PRIu64, transitions);
+  uint64_t turns = atomic_load_explicit(&jit->turns, memory_order_relaxed);
+  if (turns) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "turn count=%" PRIu64, turns);
 }
 
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode) {

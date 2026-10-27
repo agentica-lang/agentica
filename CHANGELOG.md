@@ -55,6 +55,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `--jit on` starts faster on large programs (deciding what to compile no
   longer grows with the square of the program's size) and compiles less code
   that would run only a few times, so it uses less memory.
+- `--jit on` no longer slows down a program that compiles nothing hot: such a
+  run spends nearly all of its turns in the interpreter loop of `--jit off`
+  (`logger-disabled` of `benchmarks/` was 1.5 times slower).
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on

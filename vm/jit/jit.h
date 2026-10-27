@@ -74,7 +74,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    exits that it ran, all counted only while the jit trace is on. `native_only[f]` is set when `on` gives a function
    without a loop code only for native calls: compiled at a CALL exit from compiled code (the first when
    `calling[f]`, set when f calls a function, else the AGC_JIT_CALLEE_THRESHOLD-th) and published at a seal, which
-   clears its `skip`. The code lives until the process exits, like the program. */
+   clears its `skip`. `live` is set by the first code published (agc_jit_turn), and `turns` counts the turns that ran
+   the jit copy of the turn loop while the jit trace is on. The code lives until the process exits, like the
+   program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -84,7 +86,8 @@ typedef struct agc_jit {
   _Atomic uint32_t *entries;
   _Atomic size_t used;
   _Atomic uint64_t *exits;
-  _Atomic uint64_t leaves, transitions;
+  _Atomic uint64_t leaves, transitions, turns;
+  _Atomic bool live;
   _Atomic bool *native_only;
   _Atomic bool *claimed;
   const bool *calling;
@@ -105,6 +108,18 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc);
 static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
   return !atomic_load_explicit(&jit->skip[function], memory_order_relaxed);
 }
+/* True when the turn VM is about to run for its task runs the jit copy of the turn loop; false, the plain copy, the
+   code of --jit off. Every turn does once some code is published. Before that, the entries of `on` are counted only in
+   the jit copy, so a turn runs it when one of the task's AGC_JIT_TOP_FRAMES top frames is of a function the reload may
+   enter (or the task has more frames than that), which catches a long loop the turn starts in, and a turn drawn at
+   random, one in AGC_JIT_SAMPLE on average, on each scheduler does in any case, which counts a function that runs only
+   inside turns (a callee that returns before the turn ends, the work of a task that parks or ends within its turn).
+   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a
+   run whose functions that may get code run seldom or never keeps the plain loop for nearly every turn, without a test
+   of the JIT inside it. */
+#define AGC_JIT_TOP_FRAMES 64
+#define AGC_JIT_SAMPLE 16
+bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
 /* The code of FUNCTION for the frame a CALL exit just pushed: its code, or, for a function without a loop that `on`
    compiles only to be called from compiled code, its code compiled now if this exit makes it hot; NULL to interpret
    it. It counts an entry only for such a function. */
@@ -121,8 +136,9 @@ void agc_jit_count_leaf(agc_jit *jit);
 /* Counts a CALL or RETURN exit that run_compiled ran, when the jit trace is on. */
 void agc_jit_count_transition(agc_jit *jit);
 /* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
-   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, and `transition count=N`,
-   the calls and returns that left compiled code (a native one does not). */
+   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, `transition count=N`,
+   the calls and returns that left compiled code (a native one does not), and `turn count=N`, the turns that ran the
+   jit copy of the turn loop. */
 void agc_jit_report(agc_jit *jit);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);

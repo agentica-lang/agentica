@@ -115,6 +115,16 @@ of compiled code, without the interpreter's loop.
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster
   than `off` (list-build slower, calls and string-library faster).
+- Plain until code: entries are counted only in the jit copy, so until some
+  code is published a turn runs it (`agc_jit_turn`) when one of its task's 64
+  top frames (`AGC_JIT_TOP_FRAMES`), or a deeper stack, holds a function the
+  reload may enter, which catches a long loop the turn starts in, and a turn
+  drawn at random, one in 16 on average (`AGC_JIT_SAMPLE`, a xorshift16 per
+  scheduler), does in any case, which counts a function that runs only inside
+  turns (a callee that returns before the turn ends, the work of a task that
+  parks or ends within its turn). The draw is random so that tasks taking
+  turns in a fixed rhythm (a ping-pong) cannot all fall between samples. The
+  other turns run the plain copy of `off`.
 - Entry: at each reload of the turn loop (a call, a return, the start of a
   turn) the interpreter tests one byte of the function and enters its code at
   `frame->pc` through a table of entry offsets, so a turn that ended inside a
@@ -154,14 +164,17 @@ of compiled code, without the interpreter's loop.
   when the code memory failed (`pages=N`). At the end of the run,
   `exit op=OP count=N` counts generic `INTERPRET` exits by opcode,
   `leaf count=N` the leaf builtins called between two runs of compiled
-  code, and `transition count=N` the `CALL` and `RETURN` exits (a native
-  call or return is not one).
+  code, `transition count=N` the `CALL` and `RETURN` exits (a native
+  call or return is not one), and `turn count=N` the turns that ran the jit
+  copy of the turn loop.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a function without a loop
-  that `on` compiles only for a compiled caller, string joins and text forms in
-  compiled code, fields, lists, enums, Results and Floats read in compiled code
-  with the exit counts of the trace, native calls with a `--max-steps` sweep, an
+  that `on` compiles only for a compiled caller, `on` in the plain turn loop
+  but for sampled turns until code is published, a hot function that runs
+  only inside turns, string joins and text forms in compiled code, fields,
+  lists, enums, Results and Floats read in compiled code with the exit counts
+  of the trace, native calls with a `--max-steps` sweep, an
   overflow and the depth limit inside natively called functions),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
@@ -173,10 +186,13 @@ of compiled code, without the interpreter's loop.
   `make vm-tsan`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
-  each call; a program with one function that `on` may compile keeps the jit
-  copy of the turn loop (and its layout effect) even if that function never
-  gets hot; and after an exit has unwound native calls (a turn that ends, a
-  builtin), each of those frames returns through the `RETURN` exit.
+  each call; a function that `on` may compile but that never gets hot still
+  runs the jit copy of the turn loop (and its layout effect) in the turns
+  that start with it near the top of the stack and in the sampled turns; a
+  function that runs only inside turns compiles on average about 16 times as
+  many turns later as one a turn starts in; and after an exit has unwound
+  native calls (a turn that ends, a builtin), each of those frames returns
+  through the `RETURN` exit.
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and
