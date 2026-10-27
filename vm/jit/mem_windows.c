@@ -1,7 +1,8 @@
 /*
- * The JIT's code memory on Windows (docs/future/22-jit.md §22, "Memory"): pages reserved with VirtualAlloc, committed
- * read-write when opened, then sealed execute-read with VirtualProtect and FlushInstructionCache, so no page is ever
- * writable and executable at once. The Linux and macOS side is mem_posix.c. Core layer.
+ * The JIT's code memory on Windows (docs/vm/05-values-execution-builtins.md §6.4, "Code memory"): pages reserved with
+ * VirtualAlloc, committed read-write when opened, then sealed execute-read with VirtualProtect and
+ * FlushInstructionCache, so no page is ever writable and executable at once. The Linux and macOS side is mem_posix.c.
+ * Core layer.
  */
 #ifdef _WIN32
 #include "jit.h"

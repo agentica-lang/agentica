@@ -5,14 +5,14 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Sections 19 and 22 are VM implementation proposals, not language changes;
+Section 19 is a VM implementation proposal, not a language change;
 section 20 adds crypto without changing the grammar. The Files index carries
 current status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
-Sections 1, 2, 5, 8–14, 17, 21, 23, 24, 33, 35–37 and 49 have no file of their
-own: they are built or decided, and their content lives in the grammar,
+Sections 1, 2, 5, 8–14, 17, 21, 22, 23, 24, 33, 35–37 and 49 have no file of
+their own: they are built or decided, and their content lives in the grammar,
 `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
 small-value sharing. §40 (native code and FFI) was replaced by issue
@@ -64,11 +64,6 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Crypto module
   - File: [`20-crypto.md`](20-crypto.md)
   - Status: Planned (row 7.5)
-
-- §: 22
-  - Title: JIT
-  - File: [`22-jit.md`](22-jit.md)
-  - Status: Required (row 9.1)
 
 - §: 25
   - Title: Ruby typed idioms

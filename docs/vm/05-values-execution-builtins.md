@@ -214,6 +214,108 @@ buffered stdout is lost. The VM keeps no list of children, so it does not kill
 them: they see EOF or `EPIPE` and end by themselves (10.4). libgc warnings are
 ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 
+### 6.4 JIT
+
+The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64
+machine code. The front end runs in the interpreter, except under the
+test-only `AGENTICA_VM_TEST_FRONT_END_JIT`. The JIT changes no exit code,
+output, diagnostic, span or step count (`tests/test_vm_jit.py`). `vm/jit/jit.h`
+is its only boundary with the interpreter: the interpreter asks for a function's
+code, enters it at the frame's `pc`, and handles the exit it returns.
+
+- **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
+  or `always`. `off`, the default, has no JIT. `on` compiles a function with a
+  loop at its 100th entry, once 32 of its entries were passes (an entry at or
+  before the previous one: a call, or a loop that went round). It keeps a
+  function out when one of its innermost loops has more than one instruction
+  that leaves compiled code within 16 instructions. A function without a loop
+  gets code only for native calls, and only when none of its instructions
+  leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
+  from compiled code when it calls a function, else at its 16th entry. `always`
+  compiles every function at its first entry, for tests. A host without an
+  emitter runs every mode in the interpreter.
+- **Native calls.** A `CALL` of a function that has code is a native call. So is
+  a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
+  Compiled code pushes the frame and calls the callee's code, up to 256 deep
+  (`AGC_JIT_NATIVE_DEPTH`); the callee's `RETURN` pops it. A call that cannot be
+  native takes an exit. `on` counts a `CALL_VALUE` as a call, not as leaving.
+- **Exits.** Compiled code returns `{status, pc}` at its first exit.
+  `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
+  instruction at `pc`:
+  - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
+  - `COST`: applies a turn cost.
+  - `INTERPRET`: an instruction without code or with a slow path, which the
+    interpreter runs. A leaf builtin is called by `run_compiled` itself. A block
+    call (`map`, `filter`, `reduce` and the other rows with a native kind)
+    starts there, and each `RETURN` of the block takes the `RETURN` exit.
+  - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
+    transitions, then the code of the new top frame if it has some.
+  - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
+    `run_compiled`.
+  - `YIELD` and `RAISE`: a direct builtin that compiled code called ended the
+    turn or failed.
+- **Helper contract.** The machine code never fails itself. Its `agc_op_*`
+  helpers (`vm/core.h`) return an `agc_status`: `OK`, `OVERFLOW`,
+  `DIVISION_BY_ZERO`, `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. Any other status is
+  an exit, and the interpreter raises the failure at the span of the instruction
+  at `pc`. Helpers charge no step and no turn cost; the caller does. A direct
+  builtin is called through `agc_jit_call_builtin`, which sets `vm->jit_catch`,
+  so a failure inside the builtin jumps back to it and not across compiled code.
+- **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
+  reserved in chunks of 1 MiB, each twice the last, so the address space follows
+  the code. Code is written read-write, then sealed read-execute (`mprotect` on
+  Linux and macOS, `VirtualProtect` on Windows). No page is writable and
+  executable at once, and a sealed page is never written again. A function
+  without a loop waits in a 16 KiB batch, so the callees of one loop body can
+  share a seal. After a memory failure nothing more compiles.
+- **Compile budget.** Each compile first takes the function's instruction count
+  plus 32 units from `AGC_JIT_BUDGET` (1,000,000 units). A unit is a count of
+  work, not a time, so every host compiles the same functions. The first compile
+  that does not fit the budget or the code memory stops compiling for the rest
+  of the run, and the functions not yet compiled stay interpreted. A function
+  whose cost alone exceeds the budget stays interpreted.
+  `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
+- **Trace.** `AGENTICA_VM_TRACE=jit` (or `all`) writes these lines:
+  - `skip function=F loop=none` or `loop=exits` at the start, for each function
+    that `on` keeps out.
+  - `compile function=F instructions=N bytes=B` for each compile.
+  - `skip function=F size` when the emitter cannot encode the function, or
+    `skip function=F budget` when it costs more than the budget.
+  - `memory pages=N` when the code memory fails.
+  - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
+    budget, `bytes` for the code memory.
+  - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
+    count=N`, `block count=N`, `transition count=N` (the `CALL`, `CALL_VALUE`,
+    `TAIL_CALL` and `RETURN` exits; a native call or return is not one) and
+    `turn count=N` (the turns that ran the jit copy of the turn loop).
+- **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
+  that end inside compiled code, native and block calls, tail calls and the exit
+  counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,
+  helpers and exits; `make vm-tsan` runs it under ThreadSanitizer. `make
+  vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
+  with `on`, in CI. `make vm-jit-self-compile` compiles the front end under each
+  mode and compares the bytes. `make vm-libfuzz` runs each accepted input with
+  `always` and `on` and compares it with the interpreter (Linux). `make
+  test-jit-on` runs the conformance areas with `on`, and `jit-soak.yml` runs it
+  daily on four systems. `make layout-check` guards the layout of the `--jit
+  off` loop, which an edit of the turn loop can move.
+- **Known limits.**
+  - Only x86-64 has an emitter; the other hosts run the interpreter, arm64 macOS
+    included.
+  - No native tail call: every `TAIL_CALL` takes its exit, which unwinds the
+    native calls below it.
+  - A leaf builtin exits compiled code and unwinds the native calls below it. A
+    builtin that is neither leaf, direct nor a block call (for example output,
+    tasks, channels and files) also returns to the turn loop.
+  - Each call of a block from a block call takes a `RETURN` exit to
+    `run_compiled`, which starts the next call from C.
+  - A function with a loop that is called often but whose loop rarely runs still
+    pays the entry and the exit at each call.
+  - Until some code is published, only turns that start near a function that may
+    get code, and a turn drawn at random (one in 16 on average), run the jit
+    copy of the turn loop. Code that runs only inside turns therefore compiles
+    later.
+
 ## 7. Builtins in C
 
 ### 7.1 Calling convention

@@ -53,7 +53,7 @@ typedef struct {
    followed by the diagnostic and the end of the run (vm/fuzz.c). A run that reads no clock is deterministic (one
    scheduler, the fixed seed and hash key, 10,000 steps, no files, network, environment or processes) and the JIT
    keeps the interpreter's safe points, so the tiers must agree byte for byte (black-box parity,
-   docs/future/22-jit.md). */
+   docs/vm/05-values-execution-builtins.md §6.4). */
 typedef struct {
   int status;
   bool clocked;

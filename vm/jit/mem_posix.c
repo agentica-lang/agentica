@@ -1,8 +1,7 @@
 /*
- * The JIT's code memory on Linux and macOS (docs/future/22-jit.md §22, "Memory"): anonymous pages reserved without
- * access, opened read-write, then sealed read-execute with mprotect, so no page is ever writable and executable at
- * once. The Windows side is
- * mem_windows.c. Core layer.
+ * The JIT's code memory on Linux and macOS (docs/vm/05-values-execution-builtins.md §6.4, "Code memory"): anonymous
+ * pages reserved without access, opened read-write, then sealed read-execute with mprotect, so no page is ever writable
+ * and executable at once. The Windows side is mem_windows.c. Core layer.
  */
 #ifndef _WIN32
 #ifdef __APPLE__

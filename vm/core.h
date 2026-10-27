@@ -211,12 +211,12 @@ bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
 /* Opcode helpers: the arithmetic, comparison, equality, string and list opcodes, shared by the interpreter
- * (vm/interp.c inlines them) and the JIT (docs/future/22-jit.md §22, "Helper contract"). Values go by pointer: `dst`
- * is the result register, written only on AGC_STATUS_OK, and it may be an operand. A helper never fails itself (no
- * agc_fail, no longjmp): it returns a status, and the caller turns a status other than OK into the failure with
- * agc_op_fail, outside compiled code. The caller also keeps the step count and the turn cost: EQ, NE and SAME on
- * Strings add to the task's turn cost (agc_charge), as do CONCAT (the joined bytes) and TO_TEXT (agc_text charges a
- * compound, String or Json form itself), which the caller applies after the instruction as the
+ * (vm/interp.c inlines them) and the JIT (docs/vm/05-values-execution-builtins.md §6.4, "Helper contract"). Values go
+ * by pointer: `dst` is the result register, written only on AGC_STATUS_OK, and it may be an operand. A helper never
+ * fails itself (no agc_fail, no longjmp): it returns a status, and the caller turns a status other than OK into the
+ * failure with agc_op_fail, outside compiled code. The caller also keeps the step count and the turn cost: EQ, NE and
+ * SAME on Strings add to the task's turn cost (agc_charge), as do CONCAT (the joined bytes) and TO_TEXT (agc_text
+ * charges a compound, String or Json form itself), which the caller applies after the instruction as the
  * interpreter's apply_cost does. */
 typedef enum {
   AGC_STATUS_OK = 0,
