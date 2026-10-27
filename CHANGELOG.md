@@ -55,6 +55,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `--jit on` no longer slows down a program that compiles nothing hot: such a
   run spends nearly all of its turns in the interpreter loop of `--jit off`
   (`logger-disabled` of `benchmarks/` was 1.5 times slower).
+- The experimental x86-64 JIT calls the String, List, Map and Set builtins that
+  only return a value from compiled code, so loops that use them compile under
+  `--jit on` and stay in compiled code.
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on

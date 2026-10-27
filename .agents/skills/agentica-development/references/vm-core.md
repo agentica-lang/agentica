@@ -209,8 +209,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
   slow path leaves for the interpreter; compiled code never fails,
-  allocates, parks or calls a builtin, and pushes or pops a frame only in
-  room the task already has. An edit of `turn_loop`, even in its jit copy,
+  allocates or parks, and pushes or pops a frame only in room the task
+  already has. It calls a builtin only when the row is marked `direct`
+  (`agc_builtin.direct`, checked by `sync_test.c`), through
+  `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail` from
+  jumping across compiled code; mark a row only if it never parks, starts a
+  block or moves frames. An edit of `turn_loop`, even in its jit copy,
   changes the plain copy's machine code: keep JIT logic in `run_compiled`
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)

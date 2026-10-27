@@ -2251,31 +2251,31 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_file_builtins[] = {
-  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"File.try_lock", 2, builtin_try_lock, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Dir.mkdir_private", 2, builtin_dir_mkdir_private, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.try_lock", 2, builtin_try_lock, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Dir.mkdir_private", 2, builtin_dir_mkdir_private, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   /* New rows go last: a C test may index a table by position. */
-  {"File.sha256", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"File.sha256", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
@@ -2343,7 +2343,7 @@ void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
   (void)outcome;
 }
 
-const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false}};
+const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false}};
 
 const size_t agc_file_builtin_count = 0;
 #endif

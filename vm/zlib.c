@@ -350,11 +350,11 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
 }
 
 const agc_builtin agc_zlib_builtins[] = {
-  {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Zlib.deflate", 3, builtin_deflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.inflate", 2, builtin_inflate, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];

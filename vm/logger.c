@@ -164,16 +164,16 @@ static agc_value builtin_task_id(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_logger_builtins[] = {
-  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"LogRegistry.task_id", 0, builtin_task_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"LogRegistry.task_id", 0, builtin_task_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_logger_builtin_count = sizeof agc_logger_builtins / sizeof agc_logger_builtins[0];

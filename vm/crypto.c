@@ -26,7 +26,7 @@ static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_crypto_builtins[] = {
-  {"Crypto.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Crypto.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];
