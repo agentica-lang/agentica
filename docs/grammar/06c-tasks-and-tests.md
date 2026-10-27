@@ -101,9 +101,9 @@ crash, or `error("no unobserved crash")`; calling it does not observe the crash.
 Returning from the entrypoint ends the run, and pending tasks never run again.
 At the end of any run the VM flushes and closes open files and waits for the
 buffered output of stdout and stderr to reach the pipe or file (bounded by the
-flush limit, 30 seconds by default, `--flush-timeout`), closes sockets and
-listeners, and stops and reaps the child processes it started. Standard streams
-stay open.
+flush limit, 30 seconds by default, `--flush-timeout`), frees what native code
+still owns within the same limit (section 6d), closes sockets and listeners, and
+stops and reaps the child processes it started. Standard streams stay open.
 
 `Task.sleep` takes nonnegative milliseconds; zero yields. A negative duration is
 `RUNTIME-INVALID-DURATION`. Tasks inherit ports, arguments and builtin services.

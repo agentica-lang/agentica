@@ -108,29 +108,36 @@ end
   an owned buffer holds a lock.
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library (any C name, capitals
-  allowed: `free: PQfinish`; only `C.Function` is a type). On Windows a
-  function of a dependency (`free` of the C runtime) is `RUNTIME-NATIVE-LOAD`,
-  as `GetProcAddress` searches that DLL only: declare it from the library that
-  exports it. Declare the resource above the `def`s that use it.
-  `resource Db, free_ref: duckdb_close` is freed by
-  `void duckdb_close(void **)`: each free passes the address of the pointer (C
-  may write NULL there); a second free word is `PARSE-EXTERN-FREE`, and
-  `free_ref: C.Function` is `PARSE-EXTERN-FUNCTION`. `def db_open(...) -> Db`
-  gives `Result[Db]` (NULL is `error("db_open returned NULL")`); the resource
-  is owned by the calling task.
-  `Native.close(db)` frees once (a second close does nothing); a call with a
-  closed resource is `RUNTIME-NATIVE-CLOSED`. The owner's end frees
-  what it did not close; `Task.spawn_owning(&f, db)` hands it on; `main`'s
-  return frees nothing. A `compute def` call keeps its resource until it
-  returns (a close or cancel meanwhile defers the free). Any task may pass a
-  resource or buffer to C (no owner check); only the owner's end frees it, and
-  `Native.close`/`free` by any task closes it for all. Two tasks inside C on one
-  object race, as in C (`sqlite3_interrupt` from another task is the intended
-  use). A free that blocks (`mysql_close`, a `duckdb_close` checkpoint) runs on
-  the scheduler and stalls other tasks. Each owner frees newest first, but a
-  parent handed to another task may be freed before its children: close the
-  children first, or keep them in one task. A function that
-  returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
+  allowed: `free: PQfinish`; only `C.Function` is a type). On Windows a function
+  of a dependency (`free` of the C runtime) is `RUNTIME-NATIVE-LOAD`, as
+  `GetProcAddress` searches that DLL only: declare it from the library that
+  exports it. Declare the resource above the `def`s that use it. `resource Db,
+  free_ref: duckdb_close` is freed by `void duckdb_close(void **)`: each free
+  passes the address of the pointer (C may write NULL there); a second free word
+  is `PARSE-EXTERN-FREE`, and `free_ref: C.Function` is `PARSE-EXTERN-FUNCTION`.
+  `def db_open(...) -> Db` gives `Result[Db]` (NULL is `error("db_open returned
+  NULL")`); the resource is owned by the calling task. `Native.close(db)` frees
+  once (a second close does nothing); a call with a closed resource is
+  `RUNTIME-NATIVE-CLOSED`. The owner's end frees what it did not close;
+  `Task.spawn_owning(&f, db)` hands it on. A `compute def` call keeps its
+  resource until it returns (a close or cancel meanwhile defers the free). The
+  end of the run (`main` returns, `System.exit`, a crash of `main`, the step
+  limit, the first stop signal) drops compute calls not started, stops children,
+  writes files, waits for running calls that hold a resource, then frees every
+  resource and buffer still open (any task's), newest first (the reverse of
+  opening); it stops at the first one a running call still holds and never skips
+  past it, so that one and all older ones stay unfreed. A resource such a call
+  returns then is never freed. After a stop signal it does not wait. The wait
+  and the frees share the files' flush limit (`--flush-timeout`; 0 frees
+  nothing): what is slower is left, with one stderr warning line. Any task may
+  pass a resource or buffer to C (no owner check); only the owner's end frees
+  it, and `Native.close`/`free` by any task closes it for all. Two tasks inside
+  C on one object race, as in C (`sqlite3_interrupt` from another task is the
+  intended use). A free that blocks (`mysql_close`, a `duckdb_close` checkpoint)
+  runs on the scheduler and stalls other tasks. Each owner frees newest first,
+  but a parent handed to another task may be freed before its children: close
+  the children first, or keep them in one task. A function that returns a
+  borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no
   `to_s` or JSON; inspects as `<Db>`.

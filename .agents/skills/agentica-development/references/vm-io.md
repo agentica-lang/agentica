@@ -383,7 +383,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     when both reach zero.
   - With such a count, `close` may unregister the resource at once, as
     `Process.close` and `TCP.close` do: the native state outlives the handle.
-  - The VM's own exit path frees nothing (`_exit`)
+  - The VM's own exit path frees nothing but the native resources still open
+    (`agc_ffi_end`, docs/vm/14 §14.4 step 3), then `_exit`s
   - `agc_io_close`, for the in-process harnesses, runs `uv_run` NOWAIT so the
     callbacks still fire there.
   - Request buffers stay owned by the request until its callback.

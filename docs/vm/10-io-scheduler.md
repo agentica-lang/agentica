@@ -307,17 +307,21 @@ section says how the scheduler and the loop keep them.
      stopped cannot keep the run open for ever. When it runs out, the VM prints
      `agentica: file data may not be written: the flush took longer than MS ms`
      (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). The exit code
-     does not change;
+     does not change. Then free what native code still owns, within the same
+     deadline (§14.4, step 3; the compute calls not started were dropped
+     before step 1); a free that does not end in time turns the warning into
+     `native resources may not be freed` (both, joined by `and`, when the files
+     ran out too);
   4. print what is only known now without blocking (the flush-timeout warning, a
      `RUNTIME-INTERNAL` diagnostic for a stdout or stderr write error), and end
      with `_exit`, so libuv's destructor never joins the pool. These go through
-     `agc_notice_end` as final notices (Notices, below). No task, pool job or
-     socket is waited for. Killing the children first means data buffered for a
-     FIFO's reader is lost. A file close that fails here prints `agentica: file
-     data may not be written: the flush failed (CODE: message)` (or
-     `{"flush_failed":"CODE","warning":...}`); the exit code does not change.
-     `agc_io_close`, which closes every resource and frees the loop, is only for
-     the in-process harnesses.
+     `agc_notice_end` as final notices (Notices, below). No task, socket or pool
+     job other than those of step 3 is waited for. Killing the children first
+     means data buffered for a FIFO's reader is lost. A file close that fails
+     here prints `agentica: file data may not be written: the flush failed
+     (CODE: message)` (or `{"flush_failed":"CODE","warning":...}`); the exit
+     code does not change. `agc_io_close`, which closes every resource and frees
+     the loop, is only for the in-process harnesses.
 - **Stop signals.** One `sigaction` handler covers `SIGINT`, `SIGTERM` and
   `SIGHUP`, except a signal the VM started ignored (`nohup`). Its state is one
   process-wide record (`stop_status()` in `vm/loop.c`, lock-free atomics). The
