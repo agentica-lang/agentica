@@ -79,6 +79,8 @@ EXTERN_OUT_HELP = (
 )
 # The type name of a function pointer, and the free word of a resource whose values each have their own free function.
 FUNCTION_TYPE = "C.Function"
+# The word of a resource whose free function takes the address of the pointer: resource Db, free_ref: db_close.
+FREE_REF = "free_ref"
 FUNCTION_HELP = (
   "a C.Function parameter is first, the function the def calls, or last, the free function of the resource of a " +
   "free: C.Function kind that the call makes"
@@ -2201,12 +2203,7 @@ def parse_extern_member(
 ) -> Result[MemberAt]
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
-    free = e.tokens[pos + 5].lexeme
-    if e.tokens[pos + 5].kind == "type-name" and e.tokens[pos + 6].kind == "dot"
-      free = FUNCTION_TYPE
-    end
-
-    named = block.resources.put(e.tokens[pos + 1].lexeme, free)
+    named = block.resources.put(e.tokens[pos + 1].lexeme, kept_free(member.node))
     return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
 
@@ -2234,21 +2231,59 @@ def parse_extern_member(
   return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
+# The free word that the block keeps for a resource, which Native.free and NativeResource.free carry to the lowering:
+# the C name or C.Function, with & in front for free_ref:.
+def kept_free(decl: Ast.Decl) -> String
+  case decl
+    Ast.Decl.Resource(node) ->
+      # The VM (vm/ffi.c) reads the & and passes the address of the pointer.
+      if node.by_ref
+        return "&#{node.free}"
+      end
+
+      return node.free
+    _ -> return ""
+  end
+end
+
 # `resource` is a plain name: inside an extern block, before a type name, it declares a resource.
 def resource_start?(e: Base.Env, at: Int) -> Bool
   return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "resource" and Base.kind_at(e, at + 1) == "type-name"
 end
 
 # resource Name, free: c_name NL in an extern block, or free: C.Function, when each value has its own free function,
-# which the call that makes it takes. pos is the word resource. The C name may start with a capital letter
-# (PQfinish, SSL_free): only a dotted type after the colon (C.Function) is read as a type, so a bare name is always a C
-# name, whatever types the program declares.
+# which the call that makes it takes, or free_ref: c_name, a function that takes the address of the pointer
+# (void f(T **)). pos is the word resource. The C name may start with a capital letter (PQfinish, SSL_free): only a
+# dotted type after the colon (C.Function) is read as a type, so a bare name is always a C name, whatever types the
+# program declares. A resource has one free function: a second free word after it is PARSE-EXTERN-FREE.
 def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], block: ExternBlock) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
   after_comma = try Base.expect(e, after_name, "comma", "\",\"", false)
-  after_word = try expect_word(e, after_comma, "free", "write resource Name, free: c_function")
+  by_ref = free_word?(e, after_comma) and e.tokens[after_comma].lexeme == FREE_REF
+  after_word = after_comma + 1
+  if !by_ref
+    after_word = try expect_word(
+      e,
+      after_comma,
+      "free",
+      "write resource Name, free: c_function, or free_ref: c_function when it takes the address of the pointer",
+    )
+  end
+
   after_colon = try Base.expect(e, after_word, "colon", "\":\"", false)
   if Base.kind_at(e, after_colon) == "type-name" and Base.kind_at(e, after_colon + 1) == "dot"
+    if by_ref
+      type = try Base.parse_type(e, after_colon, ids)
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-FUNCTION",
+          "the free function of free_ref: is a C name, not #{type.node.name}",
+          type.node.span,
+          Base.hint("write free_ref: c_function, a function that takes the address of the pointer"),
+        ),
+      )
+    end
+
     return parse_resource_by_pointer(e, pos, ids, doc, after_colon)
   end
 
@@ -2262,6 +2297,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], b
     return error(free_failure(e, after_colon, free))
   end
 
+  try one_free_word(e, after_free)
   stop = try expect_statement_end(e, after_free, "a newline after the resource")
   node = Ast.Decl.Resource(
     Ast.ResourceDecl(
@@ -2269,11 +2305,35 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], b
       name: e.tokens[pos + 1].lexeme,
       name_span: e.tokens[pos + 1].span,
       free: free,
+      by_ref: by_ref,
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
   )
   return decl_at(node, stop, ids)
+end
+
+# PARSE-EXTERN-FREE at a second free word after the free function of a resource (at is the token after it): a resource
+# has one free function.
+def one_free_word(e: Base.Env, at: Int) -> Result[Void]
+  if Base.kind_at(e, at) == "comma" and free_word?(e, at + 1)
+    return error(
+      Base.bail(
+        e,
+        at + 1,
+        "PARSE-EXTERN-FREE",
+        "a resource has one free function: free: or free_ref:, not both",
+        Base.hint("write free: c_function for void f(T *), or free_ref: c_function for void f(T **)"),
+      ),
+    )
+  end
+
+  return ok()
+end
+
+# Whether the token at pos is free or free_ref, a word that names the free function of a resource.
+def free_word?(e: Base.Env, pos: Int) -> Bool
+  return Base.kind_at(e, pos) == "name" and (e.tokens[pos].lexeme == "free" or e.tokens[pos].lexeme == FREE_REF)
 end
 
 # The position after a C name at pos: a name (with a ? or ! left for the caller to reject) or a type-name, which is
@@ -2301,6 +2361,7 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional
     )
   end
 
+  try one_free_word(e, type.pos)
   stop = try expect_statement_end(e, type.pos, "a newline after the resource")
   node = Ast.Decl.Resource(
     Ast.ResourceDecl(
@@ -2308,6 +2369,7 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional
       name: e.tokens[pos + 1].lexeme,
       name_span: e.tokens[pos + 1].span,
       free: FUNCTION_TYPE,
+      by_ref: false,
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -2483,7 +2545,7 @@ def parse_extern_function(
     )
   end
 
-  if !callee and block.resources.values.any? do |free: String| free == symbol end
+  if !callee and block.resources.values.any? do |free: String| free == symbol or free == "&#{symbol}" end
     return error(free_failure(e, symbol_at, symbol))
   end
 

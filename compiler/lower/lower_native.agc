@@ -1,13 +1,14 @@
 ## Extern functions: the body of a function of an `extern "library"` block is one call of the Native.call builtin,
 ## which the VM answers with libffi (vm/ffi.c). Its arguments are the signature string and a List of the parameters:
 ## "CODES SYMBOL LIBRARY", the codes of Ast.Native, the C name and the library as written (it may hold spaces, so it is
-## last). Each resource that the call makes adds two words after SYMBOL, the C name of its free function and the
-## resource's name as written: the result's first (result code r), then each out resource's (code R) in order,
-## "CODES SYMBOL FREE NAME ... LIBRARY". A compute def puts "compute " in front: the VM then runs the call on its
-## compute pool while the task waits. A function with out parameters gets from Native.call a List of the record's
-## fields, in order (the C result, unless Void, then each out value), and builds its record from it. A struct passed
-## or returned by value gets the index of its record in the struct table after its {: "{N:CODES}", so the VM reads and
-## makes the record itself (nested structs too); the parser wrote the field codes in the record's field order.
+## last). Each resource that the call makes adds two words after SYMBOL, the C name of its free function (&NAME for a
+## free_ref: resource, whose function takes the pointer's address) and the resource's name as written: the result's
+## first (result code r), then each out resource's (code R) in order, "CODES SYMBOL FREE NAME ... LIBRARY". A compute
+## def puts "compute " in front: the VM then runs the call on its compute pool while the task waits. A function with
+## out parameters gets from Native.call a List of the record's fields, in order (the C result, unless Void, then each
+## out value), and builds its record from it. A struct passed or returned by value gets the index of its record in the
+## struct table after its {: "{N:CODES}", so the VM reads and makes the record itself (nested structs too); the parser
+## wrote the field codes in the record's field order.
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
