@@ -563,6 +563,16 @@ def assert_max_steps_sweep(bytecode, steps):
         assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
 
 
+def assert_same_failure(bytecode, code, *stack):
+    """Every tier prints "before", then fails with CODE, its span and stack the same in plain, --json and --ai
+    output; the functions of STACK, innermost first, come in that order."""
+    for style in ((), ("--json",), ("--ai",)):
+        status, stdout, stderr = assert_same(bytecode, *style)
+        assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
+        at = [stderr.index(name) for name in stack]
+        assert at == sorted(at), (style, stderr)
+
+
 def jit_trace(bytecode, tmp_path, mode):
     """The jit trace lines of a run with --jit MODE."""
     trace = tmp_path / "jit.trace"
@@ -1121,9 +1131,7 @@ def test_a_failure_inside_a_compiled_block_matches_the_interpreter(tmp_path):
 end
 """, "block_failure", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if X86_64 else [])
-    for style in ((), ("--json",), ("--ai",)):
-        status, stdout, stderr = assert_same(bytecode, *style)
-        assert status == 1 and stdout == "before\n" and "RUNTIME-DIVISION-BY-ZERO" in stderr, (style, stderr)
+    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO")
 
 
 def test_a_task_cancelled_inside_a_long_block_call_stops_as_in_the_interpreter(tmp_path):
@@ -1157,6 +1165,187 @@ end
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout == "12000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
+
+# Two tasks whose compiled loop (drive) calls step, which tail-calls count_down (self tail calls that copy a struct of
+# five fields with `with`, each copy charging turn cost), noisy (a loop that prints, which `on` never compiles: a tail
+# call into a function without code) or calls is_even (mutual tail calls). With `on`, step, count_down, is_even and
+# is_odd have no loop and get code only from compiled code; their tail calls stay in compiled code there. Task 1's last
+# round and main's is_even make a million tail calls each, far past the depth limit of 10,000 frames if a tail call
+# kept its frame. The order of the lines shows where the turns end.
+TAIL = """struct State
+  n: Int
+  total: Int
+  odd: Int
+  even: Int
+  last: Int
+end
+
+def count_down(s: State) -> Int
+  if s.n == 0
+    return s.total + s.odd - s.even + s.last
+  end
+  if s.n % 2 == 0
+    return count_down(s.with(n: s.n - 1, total: (s.total + s.n % 7) % 1000003, even: s.even + 1))
+  end
+  return count_down(s.with(n: s.n - 1, total: (s.total + s.n % 7) % 1000003, odd: s.odd + 1, last: s.n))
+end
+
+def is_even(n: Int) -> Bool
+  if n == 0
+    return true
+  end
+  return is_odd(n - 1)
+end
+
+def is_odd(n: Int) -> Bool
+  if n == 0
+    return false
+  end
+  return is_even(n - 1)
+end
+
+def noisy(id: Int, r: Int) -> Int
+  i = 0
+  while i < 2
+    puts("task #{id} noisy #{r} #{i}")
+    i += 1
+  end
+  return r
+end
+
+def step(id: Int, r: Int) -> Int
+  if r % 50 == 7
+    return noisy(id, r)
+  end
+  if r == 299 and id == 1
+    return count_down(State(n: 1000001, total: r, odd: 0, even: 0, last: 0))
+  end
+  if r % 2 == 0
+    return count_down(State(n: r * 10 + id, total: r, odd: 0, even: 0, last: 0))
+  end
+  if is_even(r * 31 + id)
+    return 1
+  end
+  return 2
+end
+
+def drive(id: Int) -> Int
+  total = 0
+  r = 0
+  while r < 300
+    total = (total + step(id, r)) % 1000003
+    if r % 100 == 99
+      puts("task #{id} round #{r} total #{total}")
+    end
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&drive, 1)
+  y = Task.spawn(&drive, 2)
+  puts(Task.await(x) + Task.await(y))
+  puts(is_even(1000001))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_tail_calls_and_struct_updates_run_in_compiled_code_without_growing_the_stack(tmp_path):
+    bytecode = compile_text(TAIL, "tail", tmp_path)
+    want = {"on": ["count_down", "drive", "is_even", "is_odd", "step"],
+            "always": ["count_down", "drive", "is_even", "is_odd", "main", "noisy", "step"]}
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        names = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+        assert names == (want[mode] if X86_64 else []), (mode, names)
+        exits = [line for line in lines if " jit exit op=tail-call " in line or " jit exit op=struct-with " in line]
+        assert exits == [], (mode, exits)
+    for style in ((), ("--json",)):
+        code, stdout, stderr = assert_same(bytecode, *style)
+        assert code == 0 and stdout.count("\n") == 2 * 3 + 2 * 6 * 2 + 3, (style, stdout, stderr)
+        assert "\nfalse\nsteps " in stdout, stdout
+    steps = int(stdout.split("steps ")[1])
+    for limit in (*range(1, 12), *range(steps // 9, steps, steps // 9), steps - 1):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+
+
+def test_a_failure_after_many_compiled_tail_calls_matches_the_interpreter(tmp_path):
+    # fall divides by zero in compiled code at the end of a million tail calls: the diagnostic, its span and the stack
+    # (fall after a tail call, drive, main) are the interpreter's.
+    bytecode = compile_text("""def fall(n: Int, acc: Int) -> Int
+  if n == 0
+    return 1000 / acc
+  end
+  return fall(n - 1, acc - 1)
+end
+
+def drive(rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total += fall(r % 50, r % 50 + 1)
+    r += 1
+  end
+  return total + fall(1000000, 1000000)
+end
+
+def main() -> Void
+  puts("before")
+  puts(drive(300))
+end
+""", "tail_failure", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["drive", "fall"] if X86_64 else [])
+    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "fall", "drive", "main")
+
+
+def test_a_task_cancelled_in_a_long_compiled_tail_call_loop_stops_as_in_the_interpreter(tmp_path):
+    # The spawned task's loop reaches a chain of a billion tail calls in compiled code; main's own loop runs meanwhile,
+    # and its cancel lands between two turns of the chain.
+    bytecode = compile_text("""def chain(n: Int, acc: Int) -> Int
+  if n == 0
+    return acc
+  end
+  return chain(n - 1, (acc + n) % 1000003)
+end
+
+def churn(rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    n = 10
+    if r >= 150
+      n = 1000000000
+    end
+    total = (total + chain(n, r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def warm(rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total = (total + chain(10, r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&churn, 1000000)
+  puts(warm(400))
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "tail_cancel", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["chain", "churn", "warm"] if X86_64 else [])
+    status, stdout, stderr = assert_same(bytecode, "--json")
+    assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 def test_a_bad_jit_mode_is_refused(tmp_path):
     bytecode = compile_text("def main() -> Void\n  puts(1)\nend\n", "plain", tmp_path)

@@ -25,7 +25,8 @@
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 /* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
-   for the opcode switch, or the new top frame (after a CALL or RETURN exit, or an exit from a native call) reloads. */
+   for the opcode switch, or the new top frame (after a CALL, TAIL_CALL or RETURN exit, or an exit from a native call)
+   reloads. */
 typedef enum { COMPILED_NONE, COMPILED_YIELD, COMPILED_PARKED, COMPILED_ONE, COMPILED_RELOAD, COMPILED_DONE } compiled_result;
 
 typedef struct {
@@ -1131,11 +1132,28 @@ static agc_turn_result park_task(agc_task *t) {
   return AGC_TURN_PARKED;
 }
 
+/* The frame transition of a CALL or TAIL_CALL exit of run_compiled at instruction OUT.pc of F, whose frame (at BASE)
+   is on top: a CALL pushes the callee's frame as the interpreter's CALL does; a TAIL_CALL replaces the top frame (a
+   natively called one too, as the exit unwound the native calls) as the interpreter's TAIL_CALL does, with no step,
+   turn cost or depth. Either may grow the arrays or fail as it does there. Returns the callee. Out of line so that
+   run_compiled keeps its size: the turn loops after it keep their addresses, and so --jit off its code layout. */
+static __attribute__((noinline)) uint32_t call_exit(agc_vm *vm, agc_jit *jit, const agc_function *f, agc_jit_exit out,
+                                                    uint32_t base) {
+  agc_instr in = f->code[out.pc];
+  uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
+  if (out.status == AGC_JIT_EXIT_TAIL_CALL)
+    replace_frame(vm, function, in.a, f->spans[out.pc]);
+  else
+    call_instruction(vm, vm->task, function, base, in.a, f->spans[out.pc], false);
+  return function;
+}
+
 /* Runs the top frame in compiled code (vm/jit/jit.h) when its function has some, from frame->pc, and handles the
    exits as the interpreter would handle the instruction at the exit's pc: a slow STEP runs step_slow, a turn cost is
    applied, and a failure is raised here, outside compiled code. An exit from a natively called function comes with
-   that function's frame on top, which is the frame the exit is about from then on. CALL and RETURN use the shared
-   frame handlers and go on in the code of the new top frame when it has code, else reload; other unsupported
+   that function's frame on top, which is the frame the exit is about from then on. CALL, TAIL_CALL and RETURN use the
+   shared frame handlers and go on in the code of the new top frame when it has code, else reload; other unsupported
    instructions return to the opcode switch at frame->pc, after a reload when the top frame is not FRAME any more (the
    reload enters the code at that instruction, which exits again at once). A block call (a builtin row with a native
    kind, such as `filter`) starts here too, as a leaf builtin is called here: its native frame calls the block, whose
@@ -1179,11 +1197,10 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
          failure, recorded with the stack of that moment, goes on to the turn's target from here. */
       case AGC_JIT_EXIT_YIELD: return COMPILED_YIELD;
       case AGC_JIT_EXIT_RAISE: unwind(vm);
-      case AGC_JIT_EXIT_CALL: {
-        agc_instr in = f->code[out.pc];
-        uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
-        if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
-        call_instruction(vm, t, function, frame->base, in.a, f->spans[out.pc], false);
+      /* The callee's frame is on top (call_exit), and goes on in its code when it has some, else reloads. */
+      case AGC_JIT_EXIT_CALL:
+      case AGC_JIT_EXIT_TAIL_CALL: {
+        uint32_t function = call_exit(vm, jit, f, out, frame->base);
         code = agc_jit_callee_code(jit, function, false);
         if (!code) return COMPILED_RELOAD;
         pc = 0;
