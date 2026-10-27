@@ -6,6 +6,7 @@
 ## manifest: the manifest of a package skips it. `[native]` is the other way round: only a package's is used.
 
 import Workspace from "../modules/workspace"
+import Paths from "../modules/import_path"
 import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
 import PackageHash from "package_hash"
@@ -22,6 +23,9 @@ SYSTEMS = Set.new(["linux", "macos", "windows"])
 # The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
 NATIVE_FOLDER = "native"
 MAX_SYSTEM_NAME = 128
+MAX_SYSTEM_PATH = 1024
+# The most candidates a `system` list holds: each one is looked up on disk when the library is used.
+MAX_CANDIDATES = 16
 
 ## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from.
 export struct Dependency
@@ -29,14 +33,15 @@ export struct Dependency
   source: GitSource.Source
 end
 
-## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, a name
-## for the system loader, or a downloaded artifact (`url`, `sha256` and `member`). Exactly one shape is present:
-## `file` and `system` keep their meaning, and a downloaded row names the archive URL, its expected SHA-256 (64
-## lowercase hex digits) and the member to use from it. The other fields are "" when the shape does not use them.
+## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, one or more
+## candidates (names for the system loader or absolute paths, in order of preference, as written), or a downloaded
+## artifact (`url`, `sha256` and `member`). Exactly one shape is present: `file` and `system` keep their meaning, and
+## a downloaded row names the archive URL, its expected SHA-256 (64 lowercase hex digits) and the member to use from
+## it. The other fields are "" (names is empty) when the shape does not use them.
 export struct Place
   system: String
   file: String
-  name: String
+  names: List[String]
   url: String
   sha256: String
   member: String
@@ -272,7 +277,7 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
 
     member = try Reader.text(reading, entries["member"], Reader.child(path, "member"))
     case NativeArtifact.canonical_member(member)
-      ok(_) -> return ok(Place(system: system, file: "", name: "", url: url, sha256: sha, member: member))
+      ok(_) -> return ok(Place(system: system, file: "", names: [], url: url, sha256: sha, member: member))
       error(_) ->
         message = "the member is not a safe relative path"
         return error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
@@ -290,16 +295,43 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
       return error(Reader.fail_help(reading, Reader.child(path, "file"), "not a native file", problem))
     end
 
-    return ok(Place(system: system, file: file, name: "", url: "", sha256: "", member: ""))
+    return ok(Place(system: system, file: file, names: [], url: "", sha256: "", member: ""))
   end
 
-  name = try Reader.text(reading, entries["system"], Reader.child(path, "system"))
+  names = try system_names(reading, entries["system"], Reader.child(path, "system"))
+  return ok(Place(system: system, file: "", names: names, url: "", sha256: "", member: ""))
+end
+
+# `system`: a name or an absolute path, or a list of them (1 to MAX_CANDIDATES), kept as written. A failure in a list
+# is at the key path of its item (`native.libpq.macos.system[1]`).
+def system_names(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[List[String]]
+  case value
+    Toml.Value.Array(items) ->
+      if items.size == 0 or items.size > MAX_CANDIDATES
+        help = "write between 1 and #{MAX_CANDIDATES} names or absolute paths"
+        return error(Reader.fail_help(reading, path, "not a list of library candidates", help))
+      end
+
+      names: List[String] = []
+      for index in 0...items.size
+        names = names.push(try system_name(reading, items[index], Reader.item(path, index)))
+      end
+
+      return ok(names)
+    _ ->
+      name = try system_name(reading, value, path)
+      return ok([name])
+  end
+end
+
+def system_name(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[String]
+  name = try Reader.text(reading, value, path)
   problem = system_problem(name)
   if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "system"), "not a library name", problem))
+    return error(Reader.fail_help(reading, path, "not a library name", problem))
   end
 
-  return ok(Place(system: system, file: "", name: name, url: "", sha256: "", member: ""))
+  return ok(name)
 end
 
 # A file of the native/ folder, in plain folder names (the rules of a subdir), so the hash covers it.
@@ -321,11 +353,25 @@ def file_problem(file: String) -> String
   return ""
 end
 
-# The loader looks the name up, so it has no folder in it (the rule of `extern "name"`).
+# A candidate is an absolute path (of any system: the manifest reads the same on every machine, so a Windows path is
+# fine in a linux entry and is just never found there) or a name for the system loader, which has no folder in it (the
+# rule of `extern "name"`). A relative path would depend on the working directory, which is never searched.
 def system_problem(name: String) -> String
-  bad = name.contains?("/") or name.contains?("\\") or name.contains?(":") or name.contains?(String.from_code(0))
+  has_nul = name.contains?(String.from_code(0))
+  if Paths.rooted?(name)
+    if name.length > MAX_SYSTEM_PATH or has_nul
+      return "a system library path has no NUL and at most #{MAX_SYSTEM_PATH} characters"
+    end
+
+    return ""
+  end
+
+  bad = name.contains?("/") or name.contains?("\\") or name.contains?(":") or has_nul
   if name.length == 0 or name.length > MAX_SYSTEM_NAME or bad
-    return "a system library is a name such as libz.so.1, with no / \\ or : and at most #{MAX_SYSTEM_NAME} characters"
+    return (
+      "a system library is a name such as libz.so.1 (no / \\ or :, at most #{MAX_SYSTEM_NAME} characters) " +
+      "or an absolute path such as /usr/lib/libz.so"
+    )
   end
 
   return ""

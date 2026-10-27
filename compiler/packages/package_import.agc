@@ -29,7 +29,8 @@ DEPS_FOLDER = "deps"
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
-## files that the bytecode cache must watch because of it. blank_line_after_end is true for a file of a project whose
+## files that the bytecode cache must watch because of it, and probed the paths whose presence decided a choice there.
+## blank_line_after_end is true for a file of a project whose
 ## manifest turns on `[style] blank_line_after_end`; no other file has it. library is true for a file of a std/ or pkg/
 ## library and for what such a file imports by a relative path: those files keep the style answer of their origin.
 export struct Origin
@@ -38,6 +39,7 @@ export struct Origin
   label: String
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  probed: List[String]
   blank_line_after_end: Bool
   library: Bool
 end
@@ -50,6 +52,7 @@ export struct Opened
   names: List[String]
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  probed: List[String]
 end
 
 ## What a build knows when it resolves an import: the deps/ folder of the project ("" when it has no manifest), the
@@ -64,6 +67,7 @@ export struct Scope
   os: String
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  probed: List[String]
   direct: List[String]
   lock: Lock.Lock
   members: Members.Members
@@ -104,6 +108,7 @@ export def scope_of(project: Project.Project) -> Scope
         os: "",
         natives: {},
         watched: [],
+        probed: [],
         direct: [],
         lock: Lock.Lock(file: "", packages: [], artifacts: []),
         members: Members.none(),
@@ -118,6 +123,7 @@ export def scope_of(project: Project.Project) -> Scope
         os: "",
         natives: {},
         watched: [],
+        probed: [],
         direct: Project.direct_names(project),
         lock: found.lock,
         members: found.members,
@@ -139,7 +145,7 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
       native = NativeLibrary.resolve(
         workspace, found.manifest, found.dir, scope.os, false, false, "", scope.lock, scope.native_root,
       )
-      return scope.with(natives: native.targets, watched: native.watched)
+      return scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
   end
 end
 
@@ -152,6 +158,7 @@ export def project_origin(scope: Scope) -> Origin
     label: "",
     natives: scope.natives,
     watched: scope.watched,
+    probed: scope.probed,
     blank_line_after_end: scope.style_dir != "",
     library: false,
   )
@@ -172,7 +179,9 @@ end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
-  return Origin(package: "", root: "", label: "", natives: {}, watched: [], blank_line_after_end: false, library: true)
+  return Origin(
+    package: "", root: "", label: "", natives: {}, watched: [], probed: [], blank_line_after_end: false, library: true,
+  )
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -235,6 +244,7 @@ export def open_package(
         label: package.label,
         natives: package.natives,
         watched: package.watched,
+        probed: package.probed,
         blank_line_after_end: false,
         library: false,
       ),
@@ -359,6 +369,7 @@ def load(
       names: names,
       natives: native.targets,
       watched: native.watched,
+      probed: native.probed,
     ),
   )
 end
@@ -472,7 +483,7 @@ def natives_of(
         workspace, manifest, root, scope.os, true, member, package_name, scope.lock, scope.native_root,
       )
       return ok(found)
-    _ -> return ok(NativeLibrary.Found(targets: {}, watched: []))
+    _ -> return ok(NativeLibrary.Found(targets: {}, watched: [], probed: []))
   end
 end
 
