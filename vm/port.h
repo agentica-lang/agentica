@@ -334,6 +334,9 @@ typedef struct {
   /* The loop clock (ms) at which the one short wait that a stuck stream gets at exit ends; 0 until it starts. A stop
      signal and the final diagnostics share it, so that the exit does not wait once per stream and notice. */
   uint64_t settle_by;
+  /* The loop clock (ms) at which the end of the run stops waiting for files, output and native frees (agc_ffi_end): one
+     flush limit after the file flush starts (agc_io_flush_files sets it). */
+  uint64_t flush_by;
   agc_front_end *front_end;
   /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
   struct agc_ffi_cache *ffi;
@@ -635,6 +638,17 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
 void agc_disown(agc_resource *r);
 void agc_unregister(agc_vm *vm, agc_resource *r);
+/* A copy of the registry in GC memory, which keeps its resources alive, for a walk at the end of the run (*COUNT
+   entries, in no order). */
+agc_resource **agc_registry_copy(agc_vm *vm, size_t *count);
+/* For the end of the run (docs/vm/14-core-invariants.md §14.4), on the I/O thread once the schedulers have joined.
+   compute_each calls FN(DATA, ARG) for the data of each compute call whose job still holds it (agc_io_compute).
+   wait_for drives the loop until READY(VM, ARG) or BY (agc_clock_ms); true when READY. run_aside runs FN(DATA) on a
+   thread of its own and waits for it until BY: true when it ended; else the thread is left to the exit, with DATA,
+   and FN may still run. */
+void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg);
+bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by);
+bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
 /* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */

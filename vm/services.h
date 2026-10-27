@@ -208,6 +208,15 @@ extern const size_t agc_ffi_builtin_count;
    imports a native builtin (Native.call for its extern functions, or another Native.*) and this build cannot call
    native code or DENY (--deny-native) refuses it. */
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span);
+/* The end of the run (docs/vm/14-core-invariants.md §14.4), once the schedulers have joined. stop_queued, first:
+   the compute calls that no pool thread took are never made. end, after the file flush: waits for the running compute
+   calls that hold a resource, then frees every resource and owned buffer of native code still open, whatever task owns
+   it, newest first (the reverse of opening), on a thread apart. The wait ends at rt->flush_by, or once STOP_SIGNAL()
+   is nonzero; the frees then stop at the first resource that a running call still holds and never skip past it, so
+   that one and all older ones are not freed. False when the deadline ran out first; the frees not made are left to the
+   exit. */
+void agc_ffi_stop_queued(agc_vm *vm);
+bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void));
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
 extern const agc_builtin agc_std_builtins[];

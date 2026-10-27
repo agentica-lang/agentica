@@ -178,7 +178,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 |---|---|
 | `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`). Each scheduler takes steps in batches, so the limit can trip a little late; `--schedulers 1` keeps the exact count |
 | `--seed N` | makes `Random` repeat the same numbers |
-| `--flush-timeout MS` | waits at most `MS` ms for file data and output at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
+| `--flush-timeout MS` | waits at most `MS` ms for file data, output and native frees at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--jit MODE` | `off` (the default), `on` or `always`: compiles supported operations to machine code on x86-64; a call between compiled functions is a native call. Experimental (elsewhere every mode runs the interpreter); output and step counts do not change. Env `AGENTICA_JIT`; `agentica test` takes only the env |
 | `--deny-run` | makes `Process.spawn` and the other starts return an error that begins with `denied: --deny-run` |

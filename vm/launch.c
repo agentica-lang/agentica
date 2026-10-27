@@ -169,16 +169,31 @@ static launch_flush_result flush_stdio(FILE *stream) {
   return ok ? LAUNCH_FLUSHED : LAUNCH_FLUSH_FAILED;
 }
 
+/* A failure of the file flush or of the native frees: the run's outcome is kept, and one line says what may be lost. */
+static void flush_failed(agc_vm *vm, bool natives) {
+  agc_sync_reset(vm);
+  const agc_outcome *o = &vm->rt->outcome;
+  agc_notice notice;
+  agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, natives,
+                         vm->rt->style);
+  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
+}
+
 static void flush_files(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_io_flush_files(vm);
     return;
   }
-  agc_sync_reset(vm);
-  const agc_outcome *o = &vm->rt->outcome;
-  agc_notice notice;
-  agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
-  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
+  flush_failed(vm, false);
+}
+
+/* What native code still owns, freed after the files (agc_ffi_end); false when the flush limit ran out first. After a
+   stop signal, also one that comes during the wait, the frees do not wait for running compute calls: what they hold is
+   not freed. A failure (the loop cannot start) frees nothing more and says so; it is not a timeout. */
+static bool free_natives(agc_vm *vm) {
+  if (setjmp(vm->fail) == 0) return agc_ffi_end(vm, agc_io_stop_signal);
+  flush_failed(vm, true);
+  return true;
 }
 
 static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
@@ -206,11 +221,12 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
     *outcome = *vm->outcome;
 }
 
-/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
-   then standard output and the files, then the exit. Nothing else is
-   drained: the sockets are closed in goodbye (agc_io_goodbye), and the OS
-   frees the other descriptors and the memory. */
+/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the queued
+   compute calls are dropped, then the children, then standard output and the
+   files, then what native code still owns, then the exit. Nothing else is drained: the sockets are closed in goodbye
+   (agc_io_goodbye), and the OS frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
+  agc_ffi_stop_queued(vm);
   agc_processes_stop(vm);
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
@@ -219,10 +235,12 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
+  bool freed = free_natives(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
-  if (vm->rt->flush_expired) {
+  if (vm->rt->flush_expired || !freed) {
     agc_notice notice;
-    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
+    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->flush_expired,
+                            !freed, vm->rt->style);
     agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
   }
   const char *write_error = NULL;
