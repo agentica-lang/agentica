@@ -48,7 +48,7 @@ export VM_BUILTINS = Set.new([
   "FrontEnd.stdin_bytes", "Task.map", "Task.cancel", "Profile.measure", "Profile.steps", "Std.source",
   "String.compare", "Crypto.sha256", "Native.wait_readable", "Native.wait_writable", "Native.load",
   "Native.close", "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.address",
-  "Native.offset", "Native.memory_pointer",
+  "Native.offset", "Native.memory_pointer", "Native.size_of", "Native.get_struct", "Native.put_struct",
   "Native.free", "Native.get_int8", "Native.get_int16", "Native.get_int32", "Native.get_int64", "Native.get_uint8",
   "Native.get_uint16", "Native.get_uint32", "Native.get_float32", "Native.get_float64", "Native.get_pointer",
   "Native.put_int8", "Native.put_int16", "Native.put_int32", "Native.put_int64", "Native.put_float32",
@@ -77,6 +77,10 @@ export FLOAT_OPS: Map[String, String] = {
   "plus": "add-f", "minus": "sub-f", "multiply": "mul-f", "divide": "div-f",
   "less": "lt-f", "less-equal": "le-f", "greater": "lt-f", "greater-equal": "le-f"
 }
+
+## The builtins that take the layout code of a C struct of an extern block: a type name argument lowers to it, and
+## Native.put_struct gets the layout of its value's struct as one more argument (lower_expr.agc).
+export NATIVE_STRUCTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct"])
 
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [

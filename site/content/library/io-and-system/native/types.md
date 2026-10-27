@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, and C structs passed by value.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, and C structs passed by value or through a pointer.
 ---
 
 ## Types
@@ -280,7 +280,41 @@ end
 
 - A field is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block, and your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
 - The struct is laid out as the C compiler of the system lays it out, padding included. Declare every field of the header, in its order: a wrong field list is undefined behavior, like a wrong signature. A struct has one field at least (`PARSE-EXTERN-TYPE`) and at most 1024, nested ones counted, in at most 16 levels (`PARSE-EXTERN-ARITY`).
-- A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_*`) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
+- A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_struct`, [below](#structs-through-pointers)) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
 - Each field of an argument is checked as an argument is, before C runs: an integer outside the bits of its type fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
 - A `C.Pointer` field is an address that nothing tracks: the memory it names must outlive C's use. A `compute def` call holds the owned buffers in the fields of its struct arguments until it returns, as it holds its buffer arguments.
 - The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before), and `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.
+
+### Structs through pointers
+
+A C struct that sits in memory, such as an array of MySQL binds or the result that `duckdb_query` fills, is read and written with the struct of the block (Ruby ffi's `Struct.size` and `Struct.new(pointer)`):
+
+- `Native.size_of(Name)` is the size of the struct in bytes, as C's `sizeof` gives it on this system, padding included: a `C.Long` field makes it differ between Windows and the others. Item `k` of a C array of structs is at `k * Native.size_of(Name)`.
+- `Native.get_struct(p, offset, Name)` reads the struct at `offset` bytes past `p` into a new record, as a struct result is read.
+- `Native.put_struct(p, offset, value)` writes the record there, as a struct argument is written. Every field is checked before the first byte is written: an integer outside its bits fails with `RUNTIME-INTEGER-OVERFLOW`, a freed buffer in a `C.Pointer` field with `RUNTIME-NATIVE-CLOSED`. A buffer stored in a `C.Pointer` field is an address that nothing tracks, as with `put_pointer`.
+- The bounds are those of the typed reads and writes above, for the size of the struct: checked in an owned buffer or a view, trusted at a pointer that C returned.
+- The type is a struct of an extern block, or a type alias of one; any other type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH`.
+
+```agentica {mode="check"}
+extern "/opt/db/libdb.so"
+  struct Bind
+    buffer: C.Pointer
+    length: C.Long
+    is_null: C.Bool
+  end
+  def db_bind_params(binds: C.Pointer, count: C.Int32) -> C.Int32
+end
+
+def main() -> Void
+  size = Native.size_of(Bind)
+  Native.memory_pointer(2 * size) do |binds|
+    Native.memory_pointer(8) do |text|
+      Native.put_string(text, 0, "hello")
+      Native.put_struct(binds, 0, Bind(buffer: text, length: 5, is_null: false))
+      Native.put_struct(binds, size, Bind(buffer: Native.null(), length: 0, is_null: true))
+      puts(db_bind_params(binds, 2))
+      puts(Native.get_struct(binds, size, Bind).is_null)
+    end
+  end
+end
+```

@@ -254,10 +254,11 @@ end
   (`Int`, `Float`, `Bool`, `C.Pointer` fields; defaults and `.with` work),
   copied into C for each call and back from a struct result. A parameter or a
   result (also `compute def` and through a `C.Function`), never `out`
-  (`PARSE-EXTERN-OUT`: pass an owned buffer) or variadic. Fields are checked
-  like arguments (`RUNTIME-INTEGER-OVERFLOW`, a freed buffer
-  `RUNTIME-NATIVE-CLOSED`). No field: `PARSE-EXTERN-TYPE`; over 1024 fields or
-  16 levels: `PARSE-EXTERN-ARITY`. A wrong field list is undefined behavior.
+  (`PARSE-EXTERN-OUT`: pass an owned buffer, read it with `get_struct`) or
+  variadic. Fields are checked like arguments (`RUNTIME-INTEGER-OVERFLOW`, a
+  freed buffer `RUNTIME-NATIVE-CLOSED`). No field: `PARSE-EXTERN-TYPE`; over
+  1024 fields or 16 levels: `PARSE-EXTERN-ARITY`. A wrong field list is
+  undefined behavior.
 
   ~~~ruby
   extern "/opt/infer/libinfer.so"
@@ -276,6 +277,14 @@ end
     puts(infer_context_size(params))
   end
   ~~~
+- Such a struct in memory (Ruby ffi's `Struct.size`, `Struct.new(ptr)`):
+  `Native.size_of(Name) -> Int` is C's `sizeof` (a `C.Long` field differs on
+  Windows), `Native.get_struct(p, off, Name) -> Name` reads one,
+  `Native.put_struct(p, off, value)` writes one (fields checked first, as for a
+  call; a `C.Pointer` field is untracked, as with `put_pointer`). An array:
+  item `k` at `k * Native.size_of(Name)`. Bounds as for `get_int32`. `Name`
+  may be an alias of such a struct; another type, or a value for the type name:
+  `CHECK-TYPE-MISMATCH`.
 - Functions count as `def`s for the declaration order, resources and structs
   as types; a block with a resource or a struct counts as types as a whole. A
   wrong signature is undefined behavior in C: copy it from the C header.

@@ -116,7 +116,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   takes rt->sync only for a buffer, and the caller drops it after the copy
   (`memory_done`), so no free comes between the check and the copy while a read
   of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
-  and `Native.free` are shared rows. `C.Float` is code `f` (`F` out), refused
+  and `Native.free` are shared rows. `Native.size_of`, `get_struct` and
+  `put_struct` are shared rows too: their last argument is a `{N:CODES}` code
+  that lowering writes for the type name (for `put_struct`, a fourth argument
+  from the value's type), laid out once by `agc_ffi_layout` and kept in the
+  signature cache as a `layout` entry; they reuse `memory_at`, `struct_value`,
+  `check_argument` and `struct_write`. `C.Float` is code `f` (`F` out), refused
   after `.`. The integer codes are `i l g h u w j n` (`C.Int32`, `C.Int64`,
   `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32`, `C.Long`; capitals
   out); `fits_bits` is the one range rule of arguments, fields and `put_*`, and

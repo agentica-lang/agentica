@@ -587,6 +587,18 @@ end
   must outlive C's use; a `compute def` call holds the owned buffers in the
   fields of its struct arguments as it holds its buffer arguments. A struct with
   a fixed array field (`char name[16]`) cannot be declared yet.
+- Such a struct also goes through a pointer (Ruby ffi's `Struct.size` and
+  `Struct.new(pointer)`): `Native.size_of(Name)` is its size in bytes as C's
+  `sizeof` gives it, tail padding included, so item `k` of a C array of them is
+  at `k * Native.size_of(Name)`. `Native.get_struct(p, offset, Name)` reads one
+  at `offset` bytes past `p` as a struct result is read, and
+  `Native.put_struct(p, offset, value)` writes `value` as a struct argument is
+  written, every field checked before the first byte is written
+  (`RUNTIME-INTEGER-OVERFLOW` or `RUNTIME-NATIVE-CLOSED` at the value). The
+  bounds, NULL and freed checks are those of `get_int32`, for the struct's
+  size. A `C.Pointer` field stores an address that nothing tracks, as
+  `put_pointer` does. `Name` may be a type alias of such a struct. Any other
+  type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH` at it.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

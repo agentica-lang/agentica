@@ -2850,6 +2850,23 @@ ROWS_28: List[Model.Builtin] = [
       ],
     ),
     Model.Builtin(
+      name: "Native.get_struct",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "type", type: Types.Type.Var("T")),
+      ],
+      result: Types.Type.Var("T"),
+      rule: Model.Rule.NativeStruct,
+      implementation: "Native.get_struct",
+      effects: ["native"],
+      description: (
+        "Read a struct of an extern block, laid out as C does, at offset bytes past the C.Pointer; see " +
+        "Native.memory_pointer for the bounds of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.get_uint16",
       parameters: [
         Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
@@ -3195,6 +3212,33 @@ ROWS_28: List[Model.Builtin] = [
         "Write the bytes of text and a NUL after them at offset bytes past the C.Pointer, a C string; a NUL in text " +
         "is RUNTIME-INVALID-CHARACTER."
       ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_struct",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Var("T")),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.NativeStruct,
+      implementation: "Native.put_struct",
+      effects: ["native"],
+      description: (
+        "Write a struct of an extern block, laid out as C does, at offset bytes past the C.Pointer; a field is " +
+        "checked as for an extern call."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.size_of",
+      parameters: [Model.Named(name: "type", type: Types.Type.Var("T"))],
+      result: Types.Type.Int,
+      rule: Model.Rule.NativeStruct,
+      implementation: "Native.size_of",
+      effects: ["native"],
+      description: "The size in bytes of a struct of an extern block as C lays it out (sizeof), padding included.",
       alternatives: [],
     ),
     Model.Builtin(

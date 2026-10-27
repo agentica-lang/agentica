@@ -66,8 +66,8 @@ STRUCT_FIELD_HELP = (
   "the block; declare a char * field as C.Pointer and read the text with Native.get_string"
 )
 STRUCT_OUT_HELP = (
-  "pass a struct that C fills as a C.Pointer to a buffer of Native.memory_pointer, and read its fields with " +
-  "Native.get_*"
+  "pass a struct that C fills as a C.Pointer to a buffer of Native.memory_pointer(Native.size_of(Name)), and read " +
+  "it with Native.get_struct"
 )
 # The most fields of a C struct, nested ones counted, and the deepest nesting (STRUCT_MAX_FIELDS and STRUCT_MAX_DEPTH
 # in vm/ffi.c).
@@ -2358,7 +2358,7 @@ def parse_extern_struct(
 
   layout = "{#{codes.join("")}}"
   try struct_size(node, layout)
-  decl = try decl_at(Ast.Decl.Struct(node.with(fields: fields)), parsed.pos, parsed.ids)
+  decl = try decl_at(Ast.Decl.Struct(node.with(fields: fields, layout: layout)), parsed.pos, parsed.ids)
   return ok(ExternStructAt(decl: decl, layout: layout))
 end
 
@@ -2649,6 +2649,7 @@ def parse_extern_function(
       fields: fields,
       doc: Ast.Optional.Present("The result of `#{name}`."),
       record_of: name,
+      layout: "",
       span: span,
     )
     records = records.push(Ast.Decl.Struct(made))
@@ -3091,6 +3092,7 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> 
     fields: fields,
     doc: doc,
     record_of: "",
+    layout: "",
     span: Base.span_from(e, pos, stop),
   )
   return ok(StructAt(node: node, pos: stop, ids: next_id))

@@ -292,8 +292,17 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     fields = fields.push(Model.Named(name: field.name, type: type))
   end
 
+  c_structs = cx.c_structs
+  if node.layout != ""
+    c_structs = c_structs.add(node.name)
+  end
+
   return ok(
-    cx.with(structs: cx.structs.put(node.name, fields), field_defaults: cx.field_defaults.put(node.name, defaulted)),
+    cx.with(
+      structs: cx.structs.put(node.name, fields),
+      field_defaults: cx.field_defaults.put(node.name, defaulted),
+      c_structs: c_structs,
+    ),
   )
 end
 

@@ -160,6 +160,7 @@ def start(linked: Linker.Linked) -> State.Cx
     enums: ENUMS,
     aliases: {},
     resources: Set.new([]),
+    c_structs: Set.new([]),
     functions: {},
     constants: {},
     type_params: [],

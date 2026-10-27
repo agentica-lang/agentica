@@ -143,6 +143,7 @@ Native.get_int64
 Native.get_int8
 Native.get_pointer
 Native.get_string
+Native.get_struct
 Native.get_uint16
 Native.get_uint32
 Native.get_uint8
@@ -165,6 +166,8 @@ Native.put_int64
 Native.put_int8
 Native.put_pointer
 Native.put_string
+Native.put_struct
+Native.size_of
 Native.wait_readable
 Native.wait_writable
 Path.cwd

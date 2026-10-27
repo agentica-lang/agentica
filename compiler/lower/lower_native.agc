@@ -10,6 +10,7 @@
 ## makes the record itself (nested structs too); the parser wrote the field codes in the record's field order.
 
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Ir from "ir"
 import Lowering from "lower_state"
 
@@ -86,6 +87,13 @@ export def lower(
   return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
 end
 
+## The layout code of the C struct of this name with the index of each struct after its {, "{N:CODES}" as in a
+## signature, for Native.size_of, get_struct and put_struct: the VM lays it out as it lays out a struct argument.
+export def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast.StructDecl]) -> Result[String]
+  decl = structs[name]
+  return indexed(cx, decl.layout, nested_structs(name, structs), name, decl.span)
+end
+
 # Whether the function has out parameters: one of the codes is a capital (no other code holds one).
 def record?(native: Ast.Native) -> Bool
   return native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(code) end
@@ -116,8 +124,14 @@ def indexed_codes(
     names = names.concat(nested_structs(param.type.name, structs))
   end
 
+  return indexed(cx, native.codes, names, function.name, function.span)
+end
+
+# The codes with the index of the struct names, in order, after each {; LOWER-INTERNAL when they do not match.
+def indexed(cx: Lowering.Cx, codes: String, names: List[String], owner: String, span: Source.Span) -> Result[String]
+  pieces = codes.split("{")
   if names.size != pieces.size - 1
-    return error(Lowering.internal(cx, "the structs of #{function.name} do not match its codes", function.span))
+    return error(Lowering.internal(cx, "the structs of #{owner} do not match its codes", span))
   end
 
   out = pieces[0]
