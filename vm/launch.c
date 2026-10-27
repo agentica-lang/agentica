@@ -188,10 +188,10 @@ static void flush_files(agc_vm *vm) {
 }
 
 /* What native code still owns, freed after the files (agc_ffi_end); false when the flush limit ran out first. After a
-   stop signal the frees do not wait for running compute calls: what they hold is not freed. A failure (the loop cannot
-   start) frees nothing more and says so; it is not a timeout. */
+   stop signal, also one that comes during the wait, the frees do not wait for running compute calls: what they hold is
+   not freed. A failure (the loop cannot start) frees nothing more and says so; it is not a timeout. */
 static bool free_natives(agc_vm *vm) {
-  if (setjmp(vm->fail) == 0) return agc_ffi_end(vm, !agc_io_stop_signal());
+  if (setjmp(vm->fail) == 0) return agc_ffi_end(vm, agc_io_stop_signal);
   flush_failed(vm, true);
   return true;
 }

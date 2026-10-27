@@ -1480,35 +1480,33 @@ end
     assert (tmp_path / "task.txt").read_text(encoding="utf-8") == "from a task\n"
 
 
-# A resource that a running compute call holds is freed once the call returns, as at a task's end: the note's tag comes
-# after the line that the call writes before it returns. A compute call still queued behind it is never made.
+# The end waits for a running compute call that holds a resource, then frees in one pass, newest first, as a task's end
+# does: the held "child" goes after the line the call writes before it returns, and before the older "parent" (which a
+# real child could point into), never while C still uses it.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_the_end_of_main_frees_a_held_resource_when_the_call_returns(tmp_path, peer, schedulers):
     main = """def hold(note: Note) -> Int
-  return peer_note_hold(note, 1000)
+  return peer_note_hold(note, 500)
 end
 
 def main() -> Void
-  note = peer_note_open("NOTES", "held").unwrap!
-  holders: List[Task[Int]] = []
-  for k in 1..SCHEDULERS
-    holders = holders.push(Task.spawn(&hold, note))
-  end
+  parent = peer_note_open("NOTES", "parent").unwrap!
+  child = peer_note_open("NOTES", "child").unwrap!
+  holder = Task.spawn(&hold, child)
   n = 0
-  while peer_note_holding() < SCHEDULERS and n < 2000
+  while peer_note_holding() < 1 and n < 2000
     Task.sleep(1)
     n += 1
   end
-  queued = Task.spawn(&hold, note)
-  Task.sleep(20)
+  last = peer_note_open("NOTES", "last").unwrap!
   puts(peer_note_holding())
 end
-""".replace("SCHEDULERS", schedulers)
+"""
     source, notes = note_program(tmp_path, peer, main)
     result = agentica("--schedulers", schedulers, source, timeout=20)
-    assert (result.code, result.stdout, result.stderr) == (0, schedulers + "\n", "")
-    assert notes_of(notes) == ["returned"] * int(schedulers) + ["held", ""]
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
+    assert notes_of(notes) == ["returned", "last", "child", "parent", ""]
 
 
 # The end waits only for the compute calls that run and hold a resource it frees: with every pool thread busy in a long

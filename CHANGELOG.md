@@ -36,7 +36,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   limit, a stop signal) frees the native resources and buffers still open,
   after the files are written and within the flush limit, so a C stream that
   `main` never closed keeps what was written to it. Compute calls not yet
-  started at the end are never made.
+  started at the end are never made, and a running compute call that holds a
+  resource delays the exit until it returns, at most the flush limit (default
+  30 s, then a warning).
 
 ### Fixed
 

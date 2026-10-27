@@ -47,6 +47,11 @@
    signature needs more than. */
 #define STRUCT_ROUND(size) (((size) + 15) & ~(size_t)15)
 
+/* How agc_ffi_end tells a stop signal (agc_io_stop_signal, which the driver passes): nonzero once one came. */
+typedef struct {
+  int (*signal)(void);
+} stop_check;
+
 /* The resources and owned buffers that running compute calls hold, gathered at the end of the run (running_holds). */
 typedef struct {
   const agc_c_resource **items;
@@ -814,9 +819,11 @@ static bool in_held_set(const held_set *set, const agc_c_resource *res) {
   return false;
 }
 
-/* Whether no running compute call holds a resource or owned buffer that is still to free. */
+/* Whether no running compute call holds a resource or owned buffer that is still to free, or a stop signal came
+   (ARG is agc_ffi_end's stop_check): then the end waits no longer. */
 static bool holds_released(agc_vm *vm, void *arg) {
-  (void)arg;
+  const stop_check *stop = arg;
+  if (stop->signal()) return true;
   held_set set = running_holds(vm);
   bool released = true;
   for (size_t k = 0; k < set.count && released; k++) released = set.items[k]->freed;
@@ -842,6 +849,8 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
       *skipped = true;
       continue;
     }
+    /* Marked freed now: on a timeout or a failure below the free never runs, which the exit that follows does not
+       mind. */
     res->closed = res->freed = true;
     batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer};
   }
@@ -855,19 +864,21 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
   return done;
 }
 
-bool agc_ffi_end(agc_vm *vm, bool wait_held) {
+bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   /* agc_io_flush_files, which runs first, set the deadline. */
   uint64_t by = vm->rt->flush_by;
   size_t count;
   agc_resource **items = agc_registry_copy(vm, &count);
   if (!count) return true;
   qsort(items, count, sizeof *items, newest_first);
+  /* One pass, newest first, as at a task's end, after the running calls that hold a resource have returned: an older
+     resource that a held one points into (a database under its statement) is never freed while C still uses it. */
+  stop_check stop = {stop_signal};
+  (void)agc_io_wait_for(vm, holds_released, &stop, by);
   bool skipped = false;
-  if (!end_step(vm, items, count, &skipped, by)) return false;
-  if (!skipped || !wait_held) return true;
-  bool released = agc_io_wait_for(vm, holds_released, NULL, by);
-  skipped = false;
-  return end_step(vm, items, count, &skipped, by) && released && !skipped;
+  bool done = end_step(vm, items, count, &skipped, by);
+  /* After a stop signal what a running call holds is left on purpose: no timeout to report. */
+  return done && (!skipped || stop_signal());
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL) and owned by the calling task

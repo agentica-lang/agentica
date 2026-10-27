@@ -93,12 +93,13 @@ end
   def` call keeps its resource until it returns (a close or cancel meanwhile
   defers the free). The end of the run (`main` returns, `System.exit`, a crash
   of `main`, the step limit, the first stop signal) drops compute calls not
-  started, stops children, writes files, then frees every resource and buffer
-  still open (any task's), newest first; one a running call holds when the call
-  returns (not after a stop signal: it stays unfreed). The frees share the
-  files' flush limit (`--flush-timeout`; 0 frees nothing): a slower free is
-  left, with one stderr warning line. A function that returns a borrowed pointer
-  must be `-> C.Pointer`, or it is freed twice. A
+  started, stops children, writes files, waits for running calls that hold a
+  resource, then frees every resource and buffer still open (any task's), newest
+  first; a resource such a call returns then is never freed. After a stop signal
+  it does not wait, and what a running call holds stays unfreed. The wait and
+  the frees share the files' flush limit (`--flush-timeout`; 0 frees nothing):
+  what is slower is left, with one stderr warning line. A function that returns
+  a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no
   `to_s` or JSON; inspects as `<Db>`.

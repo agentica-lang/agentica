@@ -569,15 +569,16 @@ end
   meanwhile marks them closed, and `free` runs when the call ends. When the run
   ends (`main` returns, `System.exit`, a crash of `main`, the step limit, or the
   first `SIGINT`, `SIGTERM` or `SIGHUP`), a compute call that has not started is
-  never made; child programs stop, files are written, and then every resource
-  and owned buffer still open is freed, whatever task owns it, newest first. One
-  that a running `compute def` call holds is freed when the call returns; after
-  a stop signal the end does not wait for such a call and that resource is not
-  freed. These frees and the file writes share one flush limit
-  (`--flush-timeout`): a `free` that takes longer is left behind and stderr gets
-  one warning line; with `--flush-timeout 0` nothing is freed, and the line says
-  so. A second stop signal ends the run at once. A resource and a `C.Pointer` do
-  not convert into each other. Every resource result is a new pointer that the
+  never made; child programs stop, files are written, the end waits for the
+  running `compute def` calls that hold a resource, and then every resource and
+  owned buffer still open is freed, whatever task owns it, newest first. A
+  resource that such a call returns at that point is never freed. After a stop
+  signal the end does not wait for those calls, and what they hold is not freed.
+  These frees and the file writes share one flush limit (`--flush-timeout`): a
+  call or a `free` that takes longer is left behind and stderr gets one warning
+  line; with `--flush-timeout 0` nothing is freed, and the line says so. A
+  second stop signal ends the run at once. A resource and a `C.Pointer` do not
+  convert into each other. Every resource result is a new pointer that the
   program owns: a function that returns a pointer it keeps (a
   borrowed one) must be declared `-> C.Pointer`, or its pointer is freed twice.
   A `def` of `db_close` in the same block is `PARSE-EXTERN-FREE`; the check

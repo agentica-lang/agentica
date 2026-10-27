@@ -1827,16 +1827,15 @@ static void close_files(agc_vm *vm) {
 
 /* Every file close flushes its buffer in a pool job; the run waits for them,
    at most the flush limit (30 seconds, --flush-timeout or AGENTICA_FLUSH_TIMEOUT_MS). */
+static bool flushed(agc_vm *vm, void *arg) {
+  (void)arg;
+  drain(vm);
+  return !flushing(vm);
+}
+
 static void finish_flushes(agc_vm *vm) {
   if (!flushing(vm)) return;
-  uint64_t by = vm->rt->flush_by;
-  for (;;) {
-    drain(vm);
-    if (!flushing(vm)) break;
-    uint64_t now = agc_clock_ms();
-    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
-  }
-  vm->rt->flush_expired = flushing(vm);
+  vm->rt->flush_expired = !agc_io_wait_for(vm, flushed, NULL, vm->rt->flush_by);
 }
 
 void agc_io_flush_files(agc_vm *vm) {
