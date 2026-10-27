@@ -305,7 +305,6 @@ GATED = (
     ("Zlib.deflate", 'Zlib.deflate([1])', None),
     ("Zlib.gzip", 'Zlib.gzip([1], 6, 100)', None),
     ("Lazy.gzip", '[[1]].lazy.gzip.gunzip.to_a', None),
-    ("Zlib.inflate_init", 'Zlib.inflate_init(15, 1073741824, 1073741824)', None),
     ("File.write_text", 'File.write_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.append_text", 'File.append_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.stat", 'File.stat("x.txt", 1000)', "--deny-fs"),

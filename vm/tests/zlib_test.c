@@ -1,6 +1,5 @@
-/* Zlib bytes, the streaming decoder handle and the streams of the Lazy steps
-   (agc_zstep_*), with their shared-VM interleavings, against independently
-   generated vectors. */
+/* Zlib bytes and the streams of the Lazy steps (agc_zstep_*), with their
+   shared-VM interleavings, against independently generated vectors. */
 #include "builtin_test.h"
 #include "../file_io.h"
 #include "../services.h"
@@ -22,8 +21,6 @@
 
 static agc_vm vm;
 static agc_program program;
-static agc_struct_def progress_def;
-static agc_string *progress_names[4];
 
 /* The bytes a stream produced, gathered across its chunks, with the largest
    chunk: no chunk is empty or over the 64 KiB quantum. */
@@ -90,31 +87,8 @@ static void check_list_bytes(agc_value list, const uint8_t *data, size_t n) {
   for (size_t k = 0; k < n; k++) assert(agc_as_int(&vm, agc_list_get(got, k)) == data[k]);
 }
 
-/* Appends the output list of a progress record to DEST at *TOTAL. */
-static void gather(agc_vm *v, const agc_struct *p, uint8_t *dest, size_t *total) {
-  const agc_list *out = agc_as_list(v, p->fields[0]);
-  for (size_t j = 0; j < agc_list_len(out); j++) dest[(*total)++] = (uint8_t)agc_as_int(v, agc_list_get(out, j));
-}
-
-static const agc_struct *progress_of(agc_value result) {
-  const agc_struct *p = agc_as_struct(&vm, ok(result));
-  assert(p->n == 4);
-  return p;
-}
-
-/* A progress record in the contract's field order: output, consumed,
-   finished, needs_input. The struct lookup already enforces the names and
-   order against the program; the kinds below pin the value side. */
-static void check_progress(const agc_struct *p, size_t produced, int64_t consumed, bool finished, bool needs_input) {
-  assert(agc_list_len(agc_as_list(&vm, p->fields[0])) == produced);
-  assert(agc_as_int(&vm, p->fields[1]) == consumed);
-  assert(agc_as_bool(&vm, p->fields[2]) == finished);
-  assert(agc_as_bool(&vm, p->fields[3]) == needs_input);
-}
-
-/* The public rows in the contract's order, with their arities and shared
-   marks: the one-shot and checksum calls are pure, while the streaming
-   decoder touches the shared registry and runs under rt->sync. */
+/* The 5 public rows in the contract's order, with their arities: pure
+   calls, never shared, since the streams of the Lazy steps have no row. */
 static void test_table(void) {
   struct {
     const char *name;
@@ -122,12 +96,11 @@ static void test_table(void) {
     bool shared;
   } expected[] = {
     {"Zlib.deflate", 3, false}, {"Zlib.inflate", 2, false}, {"Zlib.gzip", 3, false}, {"Zlib.gunzip", 2, false},
-    {"Zlib.crc32", 2, false}, {"Zlib.inflate_init", 3, true}, {"Zlib.inflate_next", 3, true},
-    {"Zlib.inflate_finish", 1, true}, {"Zlib.decoder_close", 1, true},
+    {"Zlib.crc32", 2, false},
   };
-  /* The 8 rows past these are the stubs of the removed calls that the old stage0 names; they share one function. */
+  /* The 12 rows past these are the stubs of the removed calls that the old stage0 names; they share one function. */
   size_t count = sizeof expected / sizeof expected[0];
-  assert(agc_zlib_builtin_count == count + 8);
+  assert(agc_zlib_builtin_count == count + 12);
   for (size_t k = count + 1; k < agc_zlib_builtin_count; k++)
     assert(agc_zlib_builtins[k].fn == agc_zlib_builtins[count].fn);
   for (size_t k = 0; k < count; k++) {
@@ -382,218 +355,6 @@ static void check_step_error(agc_zstep_status status, agc_value error, const cha
   check_error(error, message);
 }
 
-/* A zlib decoder over two-byte chunks and a two-byte output quantum: unused
-   input stays caller-owned through consumed, and the verified end reports
-   finished with the checksum checked. */
-static void test_stream_decode(void) {
-  agc_value init[] = {agc_int(15), agc_int(100), agc_int(100)};
-  agc_value dec = ok(call("Zlib.inflate_init", 3, init));
-  /* An empty feed while awaiting input drains nothing and fails nothing. */
-  agc_value drain[] = {dec, byte_list(NULL, 0), agc_int(64)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, drain)), 0, 0, false, true);
-  uint8_t gathered[64];
-  size_t total = 0, at = 0;
-  bool done = false;
-  while (!done) {
-    size_t take = sizeof zlib_abc - at > 2 ? 2 : sizeof zlib_abc - at;
-    agc_value feed[] = {dec, byte_list(zlib_abc + at, take), agc_int(2)};
-    const agc_struct *p = progress_of(call("Zlib.inflate_next", 3, feed));
-    int64_t consumed = agc_as_int(&vm, p->fields[1]);
-    assert(consumed >= 0 && (size_t)consumed <= take);
-    at += (size_t)consumed;
-    done = agc_as_bool(&vm, p->fields[2]);
-    const agc_list *out = agc_as_list(&vm, p->fields[0]);
-    for (size_t j = 0; j < agc_list_len(out); j++) gathered[total++] = (uint8_t)agc_as_int(&vm, agc_list_get(out, j));
-    /* needs_input is false while output may still drain: with a full two
-       bytes out, the caller drains before feeding more. */
-    if (!done) assert(agc_as_bool(&vm, p->fields[3]) == (agc_list_len(out) < 2 && (size_t)consumed == take));
-  }
-  assert(total == sizeof abc_bytes && memcmp(gathered, abc_bytes, total) == 0);
-  agc_value finish[] = {dec};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish))->ok);
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish))->ok);
-  check_progress(progress_of(call("Zlib.inflate_next", 3, drain)), 0, 0, true, false);
-  agc_value late[] = {dec, byte_list(abc_bytes, 1), agc_int(64)};
-  check_error(call("Zlib.inflate_next", 3, late), "zlib: stream already finished");
-  agc_value close[] = {dec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close))->ok);
-}
-
-/* Finishing before the verified end is a truncation, and trailing input is
-   never discarded: the last feed reports it through consumed. */
-static void test_stream_truncation_trailing(void) {
-  agc_value init[] = {agc_int(31), agc_int(100), agc_int(100)};
-  agc_value dec = ok(call("Zlib.inflate_init", 3, init));
-  agc_value finish[] = {dec};
-  check_error(call("Zlib.inflate_finish", 1, finish), "zlib: stream is truncated");
-  agc_value half[] = {dec, byte_list(zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc / 2), agc_int(64)};
-  const agc_struct *p = progress_of(call("Zlib.inflate_next", 3, half));
-  assert(!agc_as_bool(&vm, p->fields[2]));
-  assert(agc_as_int(&vm, p->fields[1]) == (int64_t)(sizeof zlib_vec_gzip_abc / 2));
-  check_error(call("Zlib.inflate_finish", 1, finish), "zlib: stream is truncated");
-  static uint8_t trailed[sizeof zlib_vec_gzip_abc + 1];
-  memcpy(trailed, zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc);
-  trailed[sizeof zlib_vec_gzip_abc] = 0x00;
-  size_t first_half = sizeof zlib_vec_gzip_abc / 2;
-  agc_value full[] = {dec, byte_list(trailed + first_half, sizeof trailed - first_half), agc_int(64)};
-  const agc_struct *end = progress_of(call("Zlib.inflate_next", 3, full));
-  assert(agc_as_bool(&vm, end->fields[2]));
-  /* The trailing zero stays with the caller: consumed stops at the member. */
-  assert(agc_as_int(&vm, end->fields[1]) == (int64_t)(sizeof zlib_vec_gzip_abc - first_half));
-  uint8_t gathered[8];
-  size_t total = 0;
-  for (uint32_t f = 0; f < 2; f++) {
-    const agc_list *out = agc_as_list(&vm, (f == 0 ? p : end)->fields[0]);
-    for (size_t j = 0; j < agc_list_len(out); j++) gathered[total++] = (uint8_t)agc_as_int(&vm, agc_list_get(out, j));
-  }
-  assert(total == sizeof abc_bytes && memcmp(gathered, abc_bytes, total) == 0);
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish))->ok);
-  agc_value close[] = {dec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close))->ok);
-}
-
-/* A decoder whose output budget exactly fits the payload must still reach
-   the verified end: the wrapper trailer (or a raw final empty block)
-   produces no bytes, so once the budget is full a bounded one-byte probe
-   consumes it, whatever quantum the call asked for. A byte past the full
-   budget instead fails the handle without leaking the probe byte, and the
-   trailer error and input-cap legs stay errors. */
-static void test_stream_decoder_full_budget(void) {
-  /* gzip "abc" with a 3-byte budget, the 8-byte trailer split into a later
-     chunk: the payload call is not done yet, then the trailer call
-     finishes with no output. */
-  agc_value init[] = {agc_int(31), agc_int(100), agc_int(3)};
-  agc_value dec = ok(call("Zlib.inflate_init", 3, init));
-  agc_value head[] = {dec, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
-  const agc_struct *first = progress_of(call("Zlib.inflate_next", 3, head));
-  check_progress(first, 3, 15, false, false);
-  check_list_bytes(first->fields[0], abc_bytes, sizeof abc_bytes);
-  /* A 1-byte quantum finishes the trailer... */
-  agc_value tail[] = {dec, byte_list(zlib_vec_gzip_abc + 15, sizeof zlib_vec_gzip_abc - 15), agc_int(1)};
-  const agc_struct *end = progress_of(call("Zlib.inflate_next", 3, tail));
-  check_progress(end, 0, 8, true, false);
-  agc_value finish[] = {dec};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish))->ok);
-  agc_value close[] = {dec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close))->ok);
-  /* ... and so does a full 64 KiB quantum: the probe runs a private byte,
-     never the requested quantum with no room. */
-  agc_value dec_big = ok(call("Zlib.inflate_init", 3, init));
-  agc_value head_big[] = {dec_big, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, head_big)), 3, 15, false, false);
-  agc_value tail_big[] = {dec_big, byte_list(zlib_vec_gzip_abc + 15, sizeof zlib_vec_gzip_abc - 15),
-                          agc_int(65536)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, tail_big)), 0, 8, true, false);
-  agc_value finish_big[] = {dec_big};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish_big))->ok);
-  agc_value close_big[] = {dec_big};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close_big))->ok);
-  /* The zlib wrapper splits the same way: 7 payload bytes, then the 4-byte
-     Adler trailer at the full budget. */
-  agc_value zinit[] = {agc_int(15), agc_int(100), agc_int(3)};
-  agc_value zdec = ok(call("Zlib.inflate_init", 3, zinit));
-  agc_value zhead[] = {zdec, byte_list(zlib_abc, 7), agc_int(3)};
-  const agc_struct *zfirst = progress_of(call("Zlib.inflate_next", 3, zhead));
-  check_progress(zfirst, 3, 7, false, false);
-  check_list_bytes(zfirst->fields[0], abc_bytes, sizeof abc_bytes);
-  agc_value ztail[] = {zdec, byte_list(zlib_abc + 7, sizeof zlib_abc - 7), agc_int(1)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, ztail)), 0, 4, true, false);
-  agc_value zfinish[] = {zdec};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, zfinish))->ok);
-  agc_value zclose[] = {zdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, zclose))->ok);
-  /* Raw has no trailer, but its final empty block still needs a zero-output
-     termination once the budget is full. */
-  agc_value rinit[] = {agc_int(-15), agc_int(100), agc_int(3)};
-  agc_value rdec = ok(call("Zlib.inflate_init", 3, rinit));
-  agc_value rhead[] = {rdec, byte_list(zlib_vec_raw_abc, 4), agc_int(3)};
-  const agc_struct *rfirst = progress_of(call("Zlib.inflate_next", 3, rhead));
-  check_progress(rfirst, 3, 4, false, false);
-  check_list_bytes(rfirst->fields[0], abc_bytes, sizeof abc_bytes);
-  agc_value rtail[] = {rdec, byte_list(zlib_vec_raw_abc + 4, sizeof zlib_vec_raw_abc - 4), agc_int(1)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, rtail)), 0, 1, true, false);
-  agc_value rfinish[] = {rdec};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, rfinish))->ok);
-  agc_value rclose[] = {rdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, rclose))->ok);
-  /* One byte at a time with a 1-byte quantum and an exact budget: only the
-     trailer call is done, the gathered output is exactly the payload, and
-     the end verifies. */
-  agc_value binit[] = {agc_int(31), agc_int(100), agc_int(3)};
-  agc_value bdec = ok(call("Zlib.inflate_init", 3, binit));
-  uint8_t gathered[8];
-  size_t total = 0;
-  bool done = false;
-  for (size_t at = 0; at < sizeof zlib_vec_gzip_abc; at++) {
-    agc_value feed[] = {bdec, byte_list(zlib_vec_gzip_abc + at, 1), agc_int(1)};
-    const agc_struct *p = progress_of(call("Zlib.inflate_next", 3, feed));
-    assert(agc_as_int(&vm, p->fields[1]) <= 1);
-    done = agc_as_bool(&vm, p->fields[2]);
-    assert(done == (at == sizeof zlib_vec_gzip_abc - 1));
-    gather(&vm, p, gathered, &total);
-  }
-  assert(total == sizeof abc_bytes && memcmp(gathered, abc_bytes, total) == 0);
-  agc_value bfinish[] = {bdec};
-  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, bfinish))->ok);
-  agc_value bclose[] = {bdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, bclose))->ok);
-  /* A genuine overflow past the full budget fails sticky: with a 2-byte
-     budget the third payload byte never leaks, and the handle never
-     resumes. */
-  agc_value oinit[] = {agc_int(31), agc_int(100), agc_int(2)};
-  agc_value odec = ok(call("Zlib.inflate_init", 3, oinit));
-  uint8_t kept[8];
-  size_t kept_total = 0;
-  bool overflowed = false;
-  for (size_t at = 0; at < sizeof zlib_vec_gzip_abc; at++) {
-    agc_value feed[] = {odec, byte_list(zlib_vec_gzip_abc + at, 1), agc_int(1)};
-    agc_value result = call("Zlib.inflate_next", 3, feed);
-    if (!agc_as_result(&vm, result)->ok) {
-      check_error(result, "zlib: total output exceeds max_total_out");
-      overflowed = true;
-      break;
-    }
-    gather(&vm, agc_as_struct(&vm, ok(result)), kept, &kept_total);
-  }
-  assert(overflowed);
-  assert(kept_total == 2 && memcmp(kept, abc_bytes, kept_total) == 0);
-  agc_value retry[] = {odec, byte_list(zlib_vec_gzip_abc, 1), agc_int(1)};
-  check_error(call("Zlib.inflate_next", 3, retry), "zlib: handle failed");
-  agc_value ofinish[] = {odec};
-  check_error(call("Zlib.inflate_finish", 1, ofinish), "zlib: handle failed");
-  agc_value oclose[] = {odec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, oclose))->ok);
-  /* A corrupt trailer at the full budget is still a checksum failure, and a
-     truncated one still truncates: the probe changes neither verdict. */
-  uint8_t bad[sizeof zlib_vec_gzip_abc];
-  memcpy(bad, zlib_vec_gzip_abc, sizeof bad);
-  bad[sizeof bad - 1] ^= 0x01;
-  agc_value cdec = ok(call("Zlib.inflate_init", 3, init));
-  agc_value chead[] = {cdec, byte_list(bad, 15), agc_int(3)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, chead)), 3, 15, false, false);
-  agc_value ctail[] = {cdec, byte_list(bad + 15, sizeof bad - 15), agc_int(1)};
-  check_error(call("Zlib.inflate_next", 3, ctail), "zlib: checksum mismatch");
-  check_error(call("Zlib.inflate_next", 3, ctail), "zlib: handle failed");
-  agc_value cclose[] = {cdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, cclose))->ok);
-  agc_value tdec = ok(call("Zlib.inflate_init", 3, init));
-  agc_value thead[] = {tdec, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, thead)), 3, 15, false, false);
-  agc_value ttail[] = {tdec, byte_list(zlib_vec_gzip_abc + 15, 4), agc_int(1)};
-  check_progress(progress_of(call("Zlib.inflate_next", 3, ttail)), 0, 4, false, true);
-  agc_value tfinish[] = {tdec};
-  check_error(call("Zlib.inflate_finish", 1, tfinish), "zlib: stream is truncated");
-  agc_value tclose[] = {tdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, tclose))->ok);
-  /* The input total cap is still enforced before any probe runs. */
-  agc_value sinit[] = {agc_int(15), agc_int(5), agc_int(100)};
-  agc_value sdec = ok(call("Zlib.inflate_init", 3, sinit));
-  agc_value over[] = {sdec, byte_list(zlib_abc, 6), agc_int(100)};
-  check_error(call("Zlib.inflate_next", 3, over), "zlib: total input exceeds max_total_in");
-  agc_value sclose[] = {sdec};
-  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, sclose))->ok);
-}
-
 /* A bad level is an encoder's error and a bad max_bytes a decoder's; each
    kind ignores the other argument. Lazy max_bytes has no upper bound. */
 static void test_zstep_check(void) {
@@ -827,22 +588,12 @@ int main(void) {
   agc_test_deadline(120);
   agc_init();
   agc_io_init();
-  static const char *const names[] = {"output", "consumed", "finished", "needs_input"};
-  for (size_t k = 0; k < 4; k++) progress_names[k] = agc_make_string(names[k], strlen(names[k]), strlen(names[k]));
-  progress_def.name = agc_make_string("ZlibProgress", 12, 12);
-  progress_def.count = 4;
-  progress_def.fields = progress_names;
-  program.structs = &progress_def;
-  program.struct_count = 1;
   agc_vm_init(&vm, &program, stdout, stderr, INT64_MAX);
   vm.in_turn = true;
   test_table();
   test_oneshot_compress();
   test_oneshot_decode();
   test_crc32();
-  test_stream_decode();
-  test_stream_truncation_trailing();
-  test_stream_decoder_full_budget();
   test_zstep_check();
   test_zstep_vectors();
   test_zstep_round_trip();

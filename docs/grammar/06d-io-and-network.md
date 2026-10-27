@@ -209,12 +209,6 @@ Signatures are in
   `data` chained after `seed`: leave the seed out first, then pass each next
   chunk the previous result. Empty input returns `seed` unchanged. `data` is at
   most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
-- The streaming decoder `Zlib.inflate_init(window_bits, max_total_in,
-  max_total_out)`, `Zlib.inflate_next(dec, data, max_out)`,
-  `Zlib.inflate_finish(dec)` and `Zlib.decoder_close(dec)`, with the
-  `ZlibDecoder` handle and the `ZlibProgress(output, consumed, finished,
-  needs_input)` record (both reserved names), is kept for now; the Lazy steps
-  will replace it. Its rules are on the library page.
 - The `Zlib` calls and the zlib steps run in any compute context; only
   `File.chunks` and `Lazy.write_bytes` carry the filesystem effect, so
   `--deny-fs` turns off only them.
