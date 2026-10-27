@@ -115,14 +115,16 @@ conformance: $(PRODUCT)
 	done; \
 	$(MAKE) --no-print-directory conformance-report || status=1; exit $$status
 
-# The soak of the JIT default (docs/future/22-jit.md §22, jit-soak.yml): the conformance areas of this system, and in CI the
-# destructive group, with AGENTICA_JIT=on in the environment of every VM the tests start (run_vm, Child, `agentica test`
-# and its VMs inherit it; vm_environment() keeps it). A test that passes --jit or sets AGENTICA_JIT itself keeps its own
-# mode, since the flag wins. `on` must change no result, so a failure here is a JIT bug or a test that depends on the
-# mode; the report in the job summary names the failed cases. Locally: `AGENTICA_JIT=on make test` runs the whole suite.
-test-jit-on: $(PRODUCT)
+# The soak of the JIT default (docs/future/22-jit.md §22, jit-soak.yml): the conformance areas of this system, plus the
+# destructive group on a GitHub-hosted runner (it needs the prebuilt C test binaries, so vm-test-binaries comes first
+# there), with AGENTICA_JIT=on in the environment of every VM the tests start (run_vm, Child, `agentica test` and its VMs
+# inherit it; vm_environment() keeps it). A test that passes --jit or sets AGENTICA_JIT itself keeps its own mode, since the
+# flag wins; tests/test_vm_jit.py has a canary that fails if the variable stops reaching the VMs. `on` must change no result,
+# so a failure here is a JIT bug or a test that depends on the mode; the report in the job summary names the failed cases.
+# Locally: `AGENTICA_JIT=on make test` runs the whole suite (the conformance areas leave out the source checks).
+test-jit-on: $(PRODUCT) $(if $(filter true,$(GITHUB_ACTIONS)),vm-test-binaries)
 	@status=0; export AGENTICA_JIT=on; \
-	  if [ -n "$$CI" ]; then $(MAKE) --no-print-directory test-remove-actions || status=1; fi; \
+	  if [ "$${GITHUB_ACTIONS:-}" = true ]; then $(MAKE) --no-print-directory test-remove-actions || status=1; fi; \
 	  $(MAKE) --no-print-directory conformance || status=1; exit $$status
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"

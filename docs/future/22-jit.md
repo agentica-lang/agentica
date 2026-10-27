@@ -228,8 +228,9 @@ instruction.
   result, turn end and caught failure, a map read, its missing key and its
   String key's charge, list literals and closures, globals, structs, enums and
   `try`, also under
-  `make vm-tsan`), and `make test-jit-on` (the Python tests of the system with
-  `AGENTICA_JIT=on`, daily on the four systems in `jit-soak.yml`).
+  `make vm-tsan`), and `make test-jit-on` (the conformance areas plus the
+  destructive group with `AGENTICA_JIT=on`, daily on the four systems in
+  `jit-soak.yml`).
 - Known limits: a function with a loop that is called very often from the
   interpreter but whose loop rarely runs still pays the entry and the exit at
   each call; a leaf builtin still leaves the code (and unwinds the native
