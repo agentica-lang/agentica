@@ -227,6 +227,8 @@ for 0.14.0, with generic structs, which land first: the `Pool` example needs
 them.
 
 ```agentica
+import Pool from "pool"
+
 ## The first item of xs, or fallback when xs is empty.
 def first_or[T](xs: List[T], fallback: T) -> T
   if xs.length == 0
@@ -255,19 +257,6 @@ def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
   return ok(best)
 end
 
-struct Pool[T]
-  items: List[T]
-end
-
-## Runs body on the first item of the pool, or fails when the pool is empty.
-def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
-  if pool.items.length == 0
-    return error("empty pool")
-  end
-
-  return body.call(pool.items[0])
-end
-
 def main() -> Void
   names = ["ana", "ben"]
   puts(first_or(names, "none"))   # T is String, from names
@@ -280,17 +269,39 @@ def main() -> Void
   end
   puts(longest.unwrap_or("none"))
 
-  pool = Pool(items: [3, 4])
-  # n is Int, and R is Int from ok(n * 2)
-  doubled = with(pool) do |n|
-    ok(n * 2)
+  db = Pool.new([3, 4])
+  # conn is Int, and R is Int from ok(conn * 2)
+  doubled = Pool.with(db) do |conn|
+    ok(conn * 2)
   end
   puts(doubled.unwrap_or(0))
 end
 ```
 
-`with` follows Ruby's `pool.with { |conn| ... }` (connection_pool gem). As a
-function it does not clash with the struct update `value.with(...)`.
+The `Pool` part is a module, `pool.agc`, that the caller imports as `Pool`:
+
+```agentica
+export struct Pool[T]
+  items: List[T]
+end
+
+export def new[T](items: List[T]) -> Pool[T]
+  return Pool(items: items)
+end
+
+## Runs body on the first item of the pool, or fails when the pool is empty.
+export def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
+  if pool.items.length == 0
+    return error("empty pool")
+  end
+
+  return body.call(pool.items[0])
+end
+```
+
+`with` follows Ruby's `pool.with { |conn| ... }` (connection_pool gem).
+`Pool.with(db)` is a call of the module's function, so it does not clash with
+the struct update `value.with(...)`.
 
 - **Syntax.** `def NAME[T, U](params) -> R` puts the type parameters after the
   name. Their names follow the enum rules: type names only. A repeated name or
