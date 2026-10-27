@@ -401,6 +401,23 @@ void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   cost_exit(e, pc);
 }
 
+/* MAP_GET: a call of agc_jit_map_get, which leaves for the interpreter on a missing key or a wrong tag; a String key's
+   charge leaves to be applied, as the interpreter applies it after the instruction. */
+void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc) {
+  call_helper(e, (uint64_t)(uintptr_t)agc_jit_map_get, in, true, pc);
+  cost_exit(e, pc);
+}
+
+/* LIST: agc_jit_list(vm, &R[a], &R[b], c), which never fails, so no status to test. */
+void agc_emit_list(agc_emitter *e, agc_instr in) {
+  move_reg(e, true, ARG0, VM);
+  lea(e, ARG1, REGS, TAG(in.a));
+  lea(e, ARG2, REGS, TAG(in.b));
+  move_imm64(e, ARG3, in.c);
+  move_imm64(e, RAX, (uint64_t)(uintptr_t)agc_jit_list);
+  BYTES(e, 0xFF, 0xD0); /* call rax */
+}
+
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
    compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
    cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
