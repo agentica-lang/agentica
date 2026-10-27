@@ -449,10 +449,12 @@ end
   `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
   `C.Long` the same on Windows and any `Int` elsewhere), and C gets its low
   bits; one outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL
-  character is `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each
-  string, which it may read only during the call. A `C.String` result is copied;
-  `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A result
-  that may be NULL is declared `-> C.Pointer` and read with `Native.get_string`.
+  character is `RUNTIME-INVALID-CHARACTER` (for text with a NUL or a known
+  length, use `Native.from_string` and `bytesize`). The C function gets a copy
+  of each string, which it may read only during the call. A `C.String` result is
+  copied; `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A
+  result that may be NULL is declared `-> C.Pointer` and read with
+  `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -493,6 +495,15 @@ end
   pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
   address that nothing tracks, so the buffer it names must outlive C's use.
   `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
+- `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) makes an
+  owned buffer of the UTF-8 bytes of `text` and a NUL after them, so its size
+  is `text.bytesize + 1`; a NUL inside `text` is copied like any byte. It is an
+  owned buffer in every other way, block form `Native.from_string(text) do |p|
+  ... end` included. It serves C functions that take text with a length
+  (`sqlite3_bind_text`, `PQexecParams`, `mysql_real_query`), which a
+  `C.String` cannot give, and pointers that C returns into the text: they stay
+  valid while the buffer lives, and `Native.address(tail) -
+  Native.address(p)` is the bytes before `tail` (SQLite's `pzTail`).
 - `Native.offset(p, n)` is the `C.Pointer` `n` bytes past `p`. For a pointer
   that C gave it is the plain sum (wrapping on overflow), trusted like `p`. For
   an owned buffer it is a view of the same memory, from byte `n` to the buffer's

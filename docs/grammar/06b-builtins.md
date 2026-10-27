@@ -216,7 +216,9 @@ be read twice. The library page is
 Expected types flow into these operations for empty collections and Results.
 
 - `String.length` and `String.slice` count characters, not bytes. An
-  out-of-range `slice` is a runtime error.
+  out-of-range `slice` is a runtime error. `s.bytesize` (`String.bytesize`) is
+  the number of UTF-8 bytes of `s`, a NUL included (`"é".bytesize` is 2): the
+  length that a C function taking `(pointer, length)` wants.
 - `String.split(s, sep)` keeps empty parts, so `String.join(String.split(s,
   sep), sep)` gives `s`. `String.split("", sep)` is `[""]`; `String.split(s,
   "")` gives one character per element.

@@ -4,7 +4,7 @@ weight: 1
 description: Functions for text. Each one is also a method on String values.
 ---
 
-Strings are Unicode text. Lengths and indexes count characters, not bytes.
+Strings are Unicode text. Lengths and indexes count characters, not bytes; `bytesize` counts the UTF-8 bytes.
 
 ## Aliases
 
@@ -397,4 +397,26 @@ end
 ```output
 [104, 195, 169]
 ok("hé")
+```
+
+## bytesize
+
+```text
+String.bytesize(s: String) -> Int
+```
+
+Counts the UTF-8 bytes of the text, as many as `String.to_bytes(s)` gives, without building the list. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).
+
+```agentica
+def main() -> Void
+  puts("hello".bytesize)
+  puts("café".bytesize)
+  puts("".bytesize)
+end
+```
+
+```output
+5
+5
+0
 ```

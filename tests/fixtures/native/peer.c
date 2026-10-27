@@ -539,6 +539,18 @@ int64_t peer_strs_len(const char *const *strs, int32_t n) {
   for (int32_t k = 0; k < n; k++) sum += (int64_t)strlen(strs[k]);
   return sum;
 }
+/* Text with a length (sqlite3_bind_text, mysql_real_query): the sum of each of the LEN bytes times its place from 1,
+   so a byte cut off or out of order changes it. */
+int64_t peer_text_sum(const char *p, int32_t len) {
+  int64_t sum = 0;
+  for (int32_t k = 0; k < len; k++) sum += (int64_t)(k + 1) * (uint8_t)p[k];
+  return sum;
+}
+/* SQLite's pzTail: a pointer into the input past the first ';' of its LEN bytes, or at its end when it has none. */
+const char *peer_tail(const char *p, int32_t len) {
+  const char *semi = memchr(p, ';', (size_t)len);
+  return semi ? semi + 1 : p + len;
+}
 /* Memory that C owns, read through a plain C.Pointer: 1.5, -2.25 and 1e30 as floats, then 7 and -9 as int64. */
 static const float static_floats[] = {1.5f, -2.25f, 1e30f};
 static const int64_t static_int64s[] = {7, -9};

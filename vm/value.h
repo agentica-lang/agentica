@@ -262,16 +262,16 @@ struct agc_ffi_call;
    the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
    entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
    it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
-   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer) is one
-   too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with free(), and `free` is NULL; the
-   program sees it as a C.Pointer. A resource declared `free: C.Function` has its own free function at `free_at`, the
-   address that the call which made it got (`free` is then a call prepared without a symbol); NULL for the others.
+   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer or
+   Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
+   free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared `free: C.Function` has its own
+   free function at `free_at`, the address that the call which made it got (`free` is then a call prepared without a
+   symbol); NULL for the others.
    A resource declared `free_address:` (`by_address`) gives its free function the address of `pointer`, where C may
    write NULL.
-   A view of a buffer (Native.offset) is a buffer too, with `parent` set to the buffer of Native.memory_pointer whose
-   memory it shows: `pointer` and `size` are the bytes from its offset to the parent's end, and it has no state, no
-   owner and no `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others. Changes
-   under rt->sync. */
+   A view of a buffer (Native.offset) is a buffer too, with `parent` set to the owned buffer whose memory it shows:
+   `pointer` and `size` are the bytes from its offset to the parent's end, and it has no state, no owner and no
+   `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
   agc_resource *state;

@@ -9,13 +9,14 @@ def text_of(codes: List[Int]) -> String
   return codes.reduce("") do |acc, code| acc + String.from_code(code) end
 end
 
-# One vector: String.to_bytes must give the expected bytes, and String.from_bytes must give the String back.
+# One vector: String.to_bytes must give the expected bytes, text.bytesize their count, and String.from_bytes the String
+# back.
 def check(line: String) -> Int
   f = line.split(";")
   text = text_of(numbers_of(f[0]))
   want = numbers_of(f[1])
   bytes = String.to_bytes(text)
-  if bytes.inspect == want.inspect && String.from_bytes(bytes).unwrap! == text
+  if bytes.inspect == want.inspect && text.bytesize == want.size && String.from_bytes(bytes).unwrap! == text
     return 0
   end
   puts("mismatch: " + line)
