@@ -427,7 +427,8 @@ end
   (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in
   `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared
   cache (`"libSystem.B.dylib"` has libc and libm); any other library needs an
-  absolute path. macOS drops `DYLD_*` variables when a protected program
+  absolute path (a package lists the places in its manifest,
+  05b-modules.md). macOS drops `DYLD_*` variables when a protected program
   (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
   pass through a shebang line or a shell.
 - A package names its libraries in its manifest (`[native.NAME]`,

@@ -1,9 +1,12 @@
 ## The native libraries of a package (docs/grammar/05b-modules.md): `[native.NAME]` in its manifest says where the
 ## library that `extern "NAME"` means is on each system, either a file in the package's native/ folder (hashed with the
 ## package, so the lock covers it) or a name for the system loader. A file is turned into its absolute path, which the
-## VM opens as it opens any absolute library; never a search. Only the entry of this system is looked at, and only when
-## a file of the package uses the library, so a package works on the systems it names and is refused on the others
-## where it is used. This does no I/O of its own: it asks the Workspace.
+## VM opens as it opens any absolute library; never a search. A `system` entry lists one or more candidates: the first
+## absolute path that exists is chosen, else the first bare name, so a library the loader cannot find by name (a
+## Homebrew one on macOS) is found by its path. The choice is made here, from the machine, and never written to the
+## manifest or the lock, which stay the same on every machine. Only the entry of this system is looked at, and only
+## when a file of the package uses the library, so a package works on the systems it names and is refused on the
+## others where it is used. This does no I/O of its own: it asks the Workspace.
 
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
@@ -22,14 +25,17 @@ export enum Target
   Unusable(String)
 end
 
-## What a manifest's [native] table means on one system: the target of each library it declares, and what the bytecode
-## cache must watch because the program opens it. For a package that is the folder itself (the cache digests the
-## names of its native/ files, so an added file is seen), every file of native/ (a library may load others), and the
-## manifest when the package hash covers it. For the project it is only the declared files for this system: its
-## manifest is in the cache key already, and its folder is not walked. watched is empty when there is nothing to open.
+## What a manifest's [native] table means on one system: the target of each library it declares, what the bytecode
+## cache must watch because the program opens it, and the absolute candidates of a `system` list (probed), whose
+## presence the choice depended on: the cache notes whether each exists, not what it holds. watched, for a package, is
+## the folder itself (the cache digests the names of its native/ files, so an added file is seen), every file of
+## native/ (a library may load others), and the manifest when the package hash covers it. For the project it is only
+## the declared files for this system: its manifest is in the cache key already, and its folder is not walked. watched
+## is empty when there is nothing to open.
 export struct Found
   targets: Map[String, Target]
   watched: List[String]
+  probed: List[String]
 end
 
 ## The libraries a manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the real folder of
@@ -55,15 +61,16 @@ export def resolve(
     targets = targets.put(library.name, target)
   end
 
+  probed = probes(manifest, os)
   if !package
     extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-    return Found(targets: targets, watched: files(targets).concat(extra))
+    return Found(targets: targets, watched: files(targets).concat(extra), probed: probed)
   end
 
   names = PackageHash.native_files(workspace, root)
   hashed = !member and PackageHash.manifest_hashed?(workspace, root, names)
   if names.size == 0 and !hashed and manifest.natives.size == 0
-    return Found(targets: targets, watched: [])
+    return Found(targets: targets, watched: [], probed: probed)
   end
 
   watched = [root].concat(names.map do |path: String| Paths.join(root, path) end)
@@ -72,7 +79,40 @@ export def resolve(
   end
 
   extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-  return Found(targets: targets, watched: watched.concat(extra))
+  return Found(targets: targets, watched: watched.concat(extra), probed: probed)
+end
+
+# The absolute candidates of the `system` lists of this system. A list of one is not a choice, so it is not probed.
+def probes(manifest: Manifest.Manifest, os: String) -> List[String]
+  found: List[String] = []
+  for library in manifest.natives
+    for place in library.places
+      if place.system == os and place.names.size > 1
+        found = found.concat(place.names.filter do |name: String| Paths.rooted?(name) end)
+      end
+    end
+  end
+
+  return found
+end
+
+# The first candidate that is an absolute path to a file that exists, else the first bare name for the loader, else the
+# first candidate: an absolute path that is missing, which the VM reports when the program opens it, as it does for
+# `extern "/missing.so"`.
+def pick(workspace: Workspace.Workspace, names: List[String]) -> String
+  for name in names
+    if Paths.rooted?(name) and workspace.file_exists.call(name)
+      return name
+    end
+  end
+
+  for name in names
+    if !Paths.rooted?(name)
+      return name
+    end
+  end
+
+  return names[0]
 end
 
 # The files that the targets name.
@@ -110,7 +150,7 @@ def target_of(
     end
 
     if place.file == ""
-      return Target.System(place.name)
+      return Target.System(pick(workspace, place.names))
     end
 
     path = Paths.join(root, place.file)
