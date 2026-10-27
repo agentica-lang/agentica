@@ -354,20 +354,30 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   store_value(e, in.a, AGC_T_INT);
 }
 
-/* Calls FN, whose arguments are in place, and leaves with its status at PC when it is not 0. */
-static void call_status(agc_emitter *e, uint64_t fn, uint32_t pc) {
+/* Calls FN, whose arguments are in place. */
+static void call_fn(agc_emitter *e, uint64_t fn) {
   move_imm64(e, RAX, fn);
   BYTES(e, 0xFF, 0xD0); /* call rax */
+}
+
+/* Calls FN, whose arguments are in place, and leaves with its status at PC when it is not 0. */
+static void call_status(agc_emitter *e, uint64_t fn, uint32_t pc) {
+  call_fn(e, fn);
   BYTES(e, 0x85, 0xC0); /* test eax, eax */
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+}
+
+/* The first three arguments of a helper call: vm, &R[a], &R[b]. */
+static void helper_args(agc_emitter *e, agc_instr in) {
+  move_reg(e, true, ARG0, VM);
+  lea(e, ARG1, REGS, TAG(in.a));
+  lea(e, ARG2, REGS, TAG(in.b));
 }
 
 /* HELPER(vm, &R[a], &R[b]) or, with C, HELPER(vm, &R[a], &R[b], &R[c]): an opcode helper writes R[a] only on
    success, and a status other than OK leaves with the pc, for the interpreter to raise. */
 static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, uint32_t pc) {
-  move_reg(e, true, ARG0, VM);
-  lea(e, ARG1, REGS, TAG(in.a));
-  lea(e, ARG2, REGS, TAG(in.b));
+  helper_args(e, in);
   if (c) lea(e, ARG3, REGS, TAG(in.c));
   call_status(e, helper, pc);
 }
@@ -410,12 +420,9 @@ void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc) {
 
 /* LIST: agc_jit_list(vm, &R[a], &R[b], c), which never fails, so no status to test. */
 void agc_emit_list(agc_emitter *e, agc_instr in) {
-  move_reg(e, true, ARG0, VM);
-  lea(e, ARG1, REGS, TAG(in.a));
-  lea(e, ARG2, REGS, TAG(in.b));
+  helper_args(e, in);
   move_imm64(e, ARG3, in.c);
-  move_imm64(e, RAX, (uint64_t)(uintptr_t)agc_jit_list);
-  BYTES(e, 0xFF, 0xD0); /* call rax */
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_list);
 }
 
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
