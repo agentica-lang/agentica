@@ -36,6 +36,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
   `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
   use the Lazy steps `deflate` and `gzip`.
+- **Breaking:** the Zlib streaming decoder (`inflate_init`, `inflate_next`,
+  `inflate_finish`, `decoder_close`) and the types `ZlibDecoder` and
+  `ZlibProgress` are removed: use the Lazy steps `inflate` and `gunzip`.
 - **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
   `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`,
   which overwrites an existing `dst`.

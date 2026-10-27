@@ -32,7 +32,7 @@ HELLO_WORLD = b"hello zip world"
 
 
 def raw_deflate(data, level=6):
-    """Raw deflate bytes (method 8), the peer of the streaming decoder."""
+    """Raw deflate bytes (method 8), the peer of `inflate(true, ...)`."""
     compressor = zlib.compressobj(level, zlib.DEFLATED, -15)
     return compressor.compress(data) + compressor.flush()
 

@@ -277,14 +277,10 @@ Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
 Zlib.crc32
-Zlib.decoder_close
 Zlib.deflate
 Zlib.gunzip
 Zlib.gzip
 Zlib.inflate
-Zlib.inflate_finish
-Zlib.inflate_init
-Zlib.inflate_next
 __fail_arg
 __lazy_channel
 __lazy_chunk_while

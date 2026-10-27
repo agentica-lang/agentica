@@ -679,7 +679,7 @@ def test_compressed_cap_counts_physical_bytes_exactly(tmp_path):
     write_capped(work, "archive_short.agc", 32, len(blob) - 1)
     lines = run_driver(work, "capped", CAPPED_SHOW)
     # The 32-byte reads fragment every feed, so the exact cap must still succeed while one byte less must fail:
-    # raw_read counts physical file bytes (first chunk plus each read), never decoder consumption.
+    # within_input counts the file bytes read so far (index * CHUNK plus the chunk), never decoded bytes.
     assert lines[0] == "exact ok [16]"
     assert lines[1].startswith("short error archive: compressed input exceeds ")
     assert (work / "o1" / "a.txt").read_bytes() == b"0123456789ABCDEF"
