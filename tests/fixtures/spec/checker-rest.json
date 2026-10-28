@@ -10648,7 +10648,7 @@
       "start": [1, 1]
     }
   ],
-  "The Digest hashes take a List[Int]; the plain form gives a List[Int], the _hexdigest form a String; Crypto stays a reserved name": [
+  "The Digest hashes take a List[Int]; the plain form gives a List[Int], the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto stays a reserved name": [
     {
       "program": [
         "def main() -> Void",
@@ -10755,11 +10755,13 @@
     {
       "program": [
         "def main() -> Void",
-        "  old: List[Int] = Crypto.sha256([1])",
-        "  puts(old.size)",
+        "  puts(Crypto.sha256([1]))",
         "end"
       ],
-      "code": null
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Crypto.sha256([1])",
+      "help": true
     },
     {
       "program": [

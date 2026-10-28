@@ -383,16 +383,6 @@ ROWS_2: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
-      name: "Crypto.sha256",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
-      rule: Model.Rule.Plain,
-      implementation: "Digest.sha256",
-      effects: [],
-      description: "Same as Digest.sha256; VM only.",
-      alternatives: [],
-    ),
-    Model.Builtin(
       name: "Dir.list",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),

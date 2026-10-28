@@ -231,7 +231,7 @@ export def sweep(folder: String) -> Void
 end
 
 export def digest(data: List[Int]) -> String
-  return RandomName.hex_of(Crypto.sha256(data))
+  return RandomName.hex_of(Digest.sha256(data))
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places

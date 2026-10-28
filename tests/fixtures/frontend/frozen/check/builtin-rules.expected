@@ -19,7 +19,6 @@ Channel.closed? ChannelTarget
 Channel.new ChannelNew
 Channel.recv ChannelRecv
 Channel.send ChannelSend
-Crypto.sha256 Plain
 Digest.hexdecode Plain
 Digest.hexencode Plain
 Digest.md5 Plain
