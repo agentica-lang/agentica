@@ -6,8 +6,7 @@ whole response, and a handler returns a whole response (decided by the user on
 2026-10-12): a `String` body is simple for programs and keeps all byte work in
 C. What is built is not in this file: the API, options, limits and answers are
 in the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md),
-"HTTP client and server (`std/http`)"), the migration table in the site's
-[network page][agentica-link-1], and the parsing rules, design, errors and tests
+"HTTP client and server (`std/http`)"), and the parsing rules, design, errors and tests
 in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7. This file
 keeps what is not built: streaming on channels (20e to 20g, 30.11) and what
 comes later (30.12 to 30.13).
@@ -156,5 +155,3 @@ plus Node peers (no Python server for chunked uploads). Done when: a download
 bigger than 64 MiB, a chunked upload and an SSE stream run through channels with
 one form for each job, every hostile case of §10.6 is rejected with its code,
 and client and server work with Python and Node peers over HTTP and HTTPS.
-
-[agentica-link-1]: ../../site/content/library/io-and-system/network.md

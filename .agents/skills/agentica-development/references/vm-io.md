@@ -54,9 +54,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   limit.
 
 - `vm/loop.c`: the event loop and the resource registry
-  (`docs/vm/10-io-scheduler.md` §10.2.2). With `vm/stdio_windows.c`,
-  `vm/stream.c`, `vm/process.c`, `vm/system.c` and `vm/tcp.c` it is the only
-  file that includes `uv.h` (`vm/http_server.c` reaches libuv only through
+  (`docs/vm/10-io-scheduler.md` §10.2.2). It, `vm/stdio_windows.c`,
+  `vm/stream.c`, `vm/process.c`, `vm/system.c` and `vm/tcp.c` are the only
+  files that include `uv.h` (`vm/http_server.c` reaches libuv only through
   `vm/net.h` and jobs). `rg 'agc_io_|agc_loop_' vm/*.h` lists the API; the
   rules that code does not show:
   - `agc_io_init` sets `UV_USE_IO_URING=0` at start-up and returns whether it
@@ -129,8 +129,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     in `vm/interp.c`, which `agc_write` and `agc_flush` also call on `EINTR`. A
     second signal ends the VM at once, except while `held`; a driven VM whose
     driver is gone takes that path on its first signal.
-  - `agc_poller_*`: a `malloc`'d `uv_poll_t` that owns a descriptor that can wait
-    forever (open, wait readable or writable with a callback, pause, close,
+  - `agc_poller_*`: a `malloc`'d `uv_poll_t` that owns a descriptor that can
+    wait forever (open, wait readable or writable with a callback, pause, close,
     which closes the descriptor). `agc_io_start_then`: a pool job's `more` step,
     run on the loop thread after its work, may keep the job waiting on the loop
     until `agc_io_ready`; its `on_loop` flag then makes its `expired` and

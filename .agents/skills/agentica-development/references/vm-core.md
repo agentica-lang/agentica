@@ -92,8 +92,8 @@ rules those comments do not carry.
   are a wait on the loop (`agc_io_start_then`, a poller on a duplicate of the
   descriptor from `agc_poller_open_copy`).
 - `vm/numbers.c` (`Float`, `Time` and `Random` builtins) and `vm/random.c`
-  (xoshiro256** seeded with splitmix64; `docs/vm/05-values-execution-builtins.md`
-  §7.4).
+  (xoshiro256** seeded with splitmix64;
+  `docs/vm/05-values-execution-builtins.md` §7.4).
 - `vm/crypto.c`, `vm/digest.h`, `vm/digest_openssl.c`: the `Digest`, `HMAC` and
   `Base64` builtins; `digest.h` is the adapter interface (also an incremental
   SHA-256 for the `File` hash), the OpenSSL code is only in `digest_openssl.c`.
@@ -121,9 +121,9 @@ rules those comments do not carry.
   seeds, `agc_launch_vm` (a runtime from a loaded program; a front end gets
   `rt->front_end`, no stdin and no parent channel), `agc_launch_settle` /
   `agc_launch_exit` (the one exit path).
-- `vm/agentica.c`, `vm/embedded.h`: the single binary: loads the front end with
-  `agc_load_front_end`, runs it, and when it called `FrontEnd.hand_off` and ended
-  with status 0 retires it (`agc_launch_settle`, `agc_io_close`,
+- `vm/agentica.c`, `vm/embedded.h`: the single binary: loads the front end
+  with `agc_load_front_end`, runs it, and when it called `FrontEnd.hand_off`
+  and ended with status 0 retires it (`agc_launch_settle`, `agc_io_close`,
   `agc_gc_collect`) and runs the handed program in a new runtime;
   `--front-end FILE.agcb` replaces the carried front end; the embedded data is
   `agc_embedded_data` and `agc_embedded_index` (`vm/tools/gen-embedded.sh`).

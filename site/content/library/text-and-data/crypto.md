@@ -45,7 +45,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 - A system OpenSSL in FIPS-only mode has no MD5 or SHA-1; `Digest.md5` and `Digest.sha1` (and their `_hexdigest` forms) then stop the program with `RUNTIME-INTERNAL`. The release binaries use their own OpenSSL, which has all four.
 - The time grows with the list. A call is never split, but it counts toward the task's turn, so other tasks run soon after a large hash.
 - They need no effect label: they read nothing outside their argument.
-- `Digest` is a reserved type name.
+- `Crypto` and `Digest` are reserved type names.
 
 ```agentica {expect="RUNTIME-INVALID-NUMBER"}
 def main() -> Void

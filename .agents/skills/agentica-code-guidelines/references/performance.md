@@ -38,7 +38,8 @@ A key-to-value `if` chain is a `Map` constant read with `get`:
 ## Strings and dense tables
 
 Build text with `push` and one `join`; `s = s + piece` in a loop copies the
-text each time (quadratic: 6,112 ms against 96 ms for 100,000 appends).
+text each time (quadratic: 6,112 ms against 96 ms for 100,000 appends; release
+VM 0.4.0, one run).
 
 ```ruby
 # bad

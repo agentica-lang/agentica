@@ -120,8 +120,7 @@ The command lines, the files they write and the `PKG-` codes are in
 
 The rules are in [05b](../grammar/05b-modules.md), Packages (issue
 [#534](https://github.com/agentica-lang/agentica/issues/534)). Packages stay
-pure Agentica
-unless the manifest names a native library. Decided (2026-10-23, the smallest
+pure Agentica unless the manifest names a native library. Decided (2026-10-23, the smallest
 rule that works on Linux, macOS and Windows):
 
 - **Declaration.** `[native.NAME]` in the manifest of the package, one inline
@@ -129,9 +128,9 @@ rule that works on Linux, macOS and Windows):
   package's `native/` folder) or `system` (a name for the loader). The key is
   the operating system only, because `System.os()` is all the front end can ask:
   a macOS library is a universal binary (`lipo`), and the VM supports one Linux
-  architecture. The tables are inline so that a downloaded prebuilt library
+  architecture. The tables are inline, so a downloaded prebuilt library
   (`url`, `sha256`, `member`; issue
-  [#594](https://github.com/agentica-lang/agentica/issues/594) H) was one more
+  [#594](https://github.com/agentica-lang/agentica/issues/594) H) is one more
   key; the rules are in 05b.
 - **Lookup.** `extern "NAME"` in a file of the package means that entry. The
   front end rewrites the library to an absolute path in `deps/<package>/`

@@ -404,6 +404,16 @@ Per run, `skill` against `typed-python` on the tasks both ran:
 input plus the cache reads (Pi reported no cache writes). The cache reads are
 most of it, so "tokens in" understates the gap between the arms.
 
+Cost over the same runs (39 per arm for DeepSeek, 60 for GLM), split as Pi
+reports it:
+
+| Model | Arm | Input | Cache read | Output | Total |
+|---|---|---|---|---|---|
+| DeepSeek | `skill` | $0.259 | $0.030 | $0.271 | $0.561 |
+| DeepSeek | `typed-python` | $0.096 | $0.006 | $0.207 | $0.308 |
+| GLM | `skill` | $0.084 | $0.149 | $0.086 | $0.318 |
+| GLM | `typed-python` | $0.025 | $0.030 | $0.044 | $0.099 |
+
 - **The commands were not used.** `query_runs` is 0 in all 225 Pi runs. In the
   raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
   `type-at`, `symbol` or `refs`, no call names `queries.md` or `analysis.md`,
