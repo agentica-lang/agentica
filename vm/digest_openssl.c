@@ -60,8 +60,10 @@ size_t agc_hmac(agc_digest_kind kind, const unsigned char *key, size_t key_n, co
   static const unsigned char none = 0;
   const EVP_MD *md = digest_method(kind);
   size_t len = 0;
-  /* EVP_Q_mac takes the key length as a size_t (HMAC() takes an int). Its key goes to EVP_MAC_init, which reads a NULL
-     key as "keep the key already set", so an empty key is passed as a pointer to no bytes, never as NULL. */
+  /* EVP_Q_mac does the fetch, init and final in one call. The HMAC provider still hands the key length to HMAC_Init_ex
+     as an int, so a key of 2^31 bytes or more would be cut; no byte list of that size fits in memory here. Its key goes
+     to EVP_MAC_init, which reads a NULL key as "keep the key already set", so an empty key is passed as a pointer to no
+     bytes, never as NULL. */
   bool done = md && digest_ready() &&
               EVP_Q_mac(NULL, "HMAC", NULL, EVP_MD_get0_name(md), NULL, key_n ? key : &none, key_n, n ? data : &none,
                         n, out, AGC_DIGEST_MAX_BYTES, &len) != NULL &&

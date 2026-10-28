@@ -4,8 +4,9 @@
  * (HMAC-SHA256 and HMAC-SHA512, RFC 2104), the first parts of
  * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
  * forms of bytes, in plain C. The hash and the HMAC themselves are the digest
- * adapter (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
- * Base64 and hex follow RFC 4648 and Ruby's Base64 module.
+ * adapter (digest.h). Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
+ * Ruby's Base64 module.
  */
 #include "services.h"
 #include "digest.h"

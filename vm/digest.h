@@ -1,8 +1,8 @@
 /*
  * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
- * the Digest and HMAC builtins (crypto.c), and an incremental SHA-256 for the File hash
- * (files.c), which streams a whole file in fixed chunks. The OpenSSL code is
- * in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
+ * the Digest and HMAC builtins (crypto.c), and an incremental SHA-256 for the
+ * File hash (files.c), which streams a whole file in fixed chunks. The OpenSSL
+ * code is in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
