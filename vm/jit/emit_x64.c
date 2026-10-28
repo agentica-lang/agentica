@@ -64,6 +64,8 @@ _Static_assert(FIELD_SIZE(agc_task, frame_count) == 4 && FIELD_SIZE(agc_task, fr
                  FIELD_SIZE(agc_task, depth) == 4 && FIELD_SIZE(agc_task, reg_capacity) == 8,
                "the native CALL reads the task's counts with these sizes");
 
+_Static_assert(FIELD_SIZE(agc_string, chars) == 8, "a plain leaf's one-character check compares chars as a qword");
+
 /* The two shapes of the opcode helpers (agc_op_* in core.h). */
 typedef agc_status (*binary_helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *);
 typedef agc_status (*unary_helper)(agc_vm *, agc_value *, const agc_value *);
@@ -598,15 +600,21 @@ void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builti
   call_status(e, (uint64_t)(uintptr_t)(leaf ? agc_jit_call_leaf : agc_jit_call_builtin), pc);
 }
 
-/* agc_jit_call_plain(vm, &R[a], builtin, span << 32 | pc + 1) once each argument has its tag in TAGS; the arity is
-   at most 2 (agc_jit_plain_tags), so the code has a fixed size. */
+/* agc_jit_call_plain(vm, &R[a], builtin, span << 32 | pc + 1) once each argument has its tag in PLAIN and, for
+   ONE_CHAR, the String in R[a] (its tag checked first) has one character; the arity is at most 2 (agc_jit_plain_of),
+   so the code has a fixed size. */
 void agc_emit_plain_leaf(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span,
-                         const uint8_t *tags) {
+                         const agc_jit_plain *plain) {
   for (uint32_t k = 0; k < 2; k++)
-    if (tags[k] != AGC_T_VOID) {
-      compare_imm8(e, false, REGS, TAG((uint32_t)in.a + k), (int8_t)tags[k]);
+    if (plain->tags[k] != AGC_T_VOID) {
+      compare_imm8(e, false, REGS, TAG((uint32_t)in.a + k), (int8_t)plain->tags[k]);
       exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
     }
+  if (plain->one_char) {
+    load(e, RCX, REGS, WORD(in.a));
+    compare_imm8(e, true, RCX, (int64_t)offsetof(agc_string, chars), 1); /* cmp qword [rcx + chars], 1 */
+    exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
+  }
   builtin_args(e, in, pc, builtin, span);
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_plain);
 }

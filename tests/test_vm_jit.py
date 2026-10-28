@@ -1089,6 +1089,60 @@ def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
     assert_max_steps_sweep(bytecode, steps)
 
 
+# scan calls String.code (`s.code`) in its loop, itself or through letter. Under `on`, main has no code, so scan runs
+# at native depth 0 and letter below scan's native call; under `always` main calls scan natively too. String.code is a
+# plain leaf whose check is the tag and one character: compiled code calls it at any depth without an exit, and an
+# empty or longer String takes the INTERPRET exit, so the interpreter fails with its own diagnostic, span and stack.
+CODES = """def letter(n: Int, words: List[String]) -> Int
+  return words[n % 3].code
+end
+
+def scan(words: List[String], n: Int, nested: Bool) -> Int
+  total = 0
+  i = 0
+  while i < n
+    if nested
+      total += letter(i, words)
+    else
+      total += words[i % 3].code
+    end
+    i += 1
+  end
+  return total
+end
+
+def main() -> Void
+  good = ["a", "é", "z"]
+  warm = scan(good, 3000, true) + scan(good, 3000, false)
+  puts("before")
+  END
+end
+"""
+
+
+def test_string_code_runs_in_compiled_code_without_leaving(tmp_path):
+    bytecode = compile_text(CODES.replace("END", 'puts(warm)\n  puts("steps #{Profile.steps()}")'), "codes", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("before\n904000\n"), stdout
+    assert compiled(bytecode, tmp_path, "on") == (["letter", "scan"] if X86_64 else [])
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
+        # None of the 6,000 calls takes a leaf exit (no line for a count of 0); before String.code was a plain leaf,
+        # the 3,000 at native depth 0 did.
+        assert leaves == [], (mode, leaves)
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
+@pytest.mark.parametrize("word", ["", "ab"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_a_failure_of_string_code_in_compiled_code_matches_the_interpreter(tmp_path, word, nested):
+    call = f'puts(scan(["a", "b", "{word}"], 3000, {str(nested).lower()}))'
+    bytecode = compile_text(CODES.replace("END", call), "code_failure", tmp_path)
+    stack = ("letter", "scan", "main") if nested else ("scan", "main")
+    assert_same_failure(bytecode, "RUNTIME-INVALID-CHARACTER", *stack)
+
+
 def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     bytecode = compile_text(READS, "reads", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["scan"] if X86_64 else [])

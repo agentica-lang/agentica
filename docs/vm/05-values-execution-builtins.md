@@ -261,10 +261,11 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   call is below it, so the native calls stay on the C stack. A leaf at native
   depth 0 takes the `INTERPRET` exit, which unwinds nothing and costs less than
   the catch of the call. The hottest leaves that cannot fail once their
-  arguments have the right tags (`size` of a List, `append`, `ok`, `ok?`,
-  `length` of a String; `plain_leaves` in `vm/jit/jit.c`) are called at any
-  depth, with no catch, after a check of the tags; a wrong tag takes the
-  `INTERPRET` exit. Compiled code returns `{status, pc}` at its first exit.
+  arguments pass a check (`plain_leaves` in `vm/jit/jit.c`) are called at any
+  depth, with no catch, after that check: the tags for `size` of a List,
+  `append`, `ok`, `ok?` and `length` of a String, and for `code` of a String
+  also that the String has one character. A failed check takes the `INTERPRET`
+  exit. Compiled code returns `{status, pc}` at its first exit.
   `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
   instruction at `pc`:
   - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
@@ -353,7 +354,7 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
     budget, `bytes` for the code memory.
   - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
-    count=N` (the leaf exits at native depth 0, and the plain leaves whose tag
+    count=N` (the leaf exits at native depth 0, and the plain leaves whose
     check failed), `block count=N`, `transition count=N` (the `CALL`,
     `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native call, tail call or
     return is not one), `transition op=tail-call count=N compiled=M` (the
