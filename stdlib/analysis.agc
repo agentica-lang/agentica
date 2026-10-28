@@ -29,13 +29,17 @@
 ## files, the least recently refreshed leaving first, and the parsed modules that these reach. It lives in the value:
 ## there is no task or lock. The caller owns the loop: run `refresh` in a task, one at a time, and store the session it
 ## returns; two refreshes of one session give two caches, and keeping one drops the work of the other (it costs time,
-## not correctness).
+## not correctness). To share the cache between tasks, `entry` takes from a refreshed session what it kept for a file,
+## as plain data that an `ATS` table can hold, and `adopt` puts such an entry in another session: tasks that refresh
+## different files lose nothing.
 ##
 ## A refresh does not check again a module whose text is the same as in the last program of the file that checked, when
 ## every module it imports is the same too: it takes what that check left for the module, so an edit of the file costs
 ## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
 ## are those of a check from the start.
 
+import Ast from "std/internal/compiler/syntax/ast"
+import Cache from "std/internal/compiler/analysis/cache"
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"
 import DiagnosticModel from "std/internal/compiler/diagnostics/diagnostic_model"
@@ -127,6 +131,13 @@ export struct Session
   internal: Sessions.Session
 end
 
+## What `refresh` kept for one file: the program it linked and checked and the modules it parsed. Unlike a `Session`,
+## which holds functions, it is plain data, so an `ATS` table can hold it and tasks can share it. Its field is not API.
+export struct Entry
+  ## The state of the entry.
+  internal: Cache.Root
+end
+
 ## Returns the workspace of the disk, with no buffer.
 export def workspace() -> Workspace
   none: Map[String, String] = {}
@@ -154,6 +165,25 @@ end
 ## the cache as it was, and the questions say why. Run one `refresh` at a time per session and keep what it returns.
 export def refresh(session: Session, path: String) -> Session
   return Session(internal: Sessions.refresh(session.internal, path))
+end
+
+## Returns the entry that the cache of `session` holds for the file `path`, as the last `refresh` of it left it. It is
+## an error when the cache holds none: the file was not refreshed, could not be linked, or its entry left the cache.
+export def entry(session: Session, path: String) -> Result[Entry]
+  case Sessions.entry(session.internal, path)
+    Ast.Optional.Present(root) -> return ok(Entry(internal: root))
+    Ast.Optional.Absent -> return error("the cache holds no entry for #{path}")
+  end
+end
+
+## Returns `session` with the cache of `entry` alone in place of its own, and the same buffers. A `refresh` or a
+## question about the file of `entry` that follows takes the program from it when the files and buffers are as they
+## were when it was made, and else works as usual, checking again only the modules that changed or import one that did.
+## The answers are the same with any entry, so one that is stale costs time and never gives a wrong answer. An entry
+## made by one session can be adopted by another over the same folder: tasks that each `refresh` their own session and
+## keep the entries in an `ATS` table share the work, where two refreshes of one session would drop one of the caches.
+export def adopt(session: Session, entry: Entry) -> Session
+  return Session(internal: Sessions.adopt(session.internal, entry.internal))
 end
 
 ## Returns the answer of `agentica check` for the file `path`: it links and checks the program, and its `diagnostics`

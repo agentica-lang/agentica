@@ -11,6 +11,8 @@ Analysis.open(files: Analysis.Workspace) -> Analysis.Session
 Analysis.update(session, path: String, text: String) -> Analysis.Session
 Analysis.close(session, path: String) -> Analysis.Session
 Analysis.refresh(session, path: String) -> Analysis.Session   # fills the cache for path
+Analysis.entry(session, path: String) -> Result[Analysis.Entry]   # what refresh kept for path
+Analysis.adopt(session, entry: Analysis.Entry) -> Analysis.Session   # cache = that entry alone
 Analysis.check(session, path: String) -> Analysis.Checked
 Analysis.outline(session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
@@ -39,6 +41,16 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   the stages from the start. Run one `refresh` at a time and store the session
   it returns: two refreshes of one session give two caches, and keeping one
   drops the other's work, not correctness. There is no task or lock.
+- Sharing the cache between tasks: a `Session` holds functions, so an `ATS`
+  cannot hold one, but an `Analysis.Entry` is data. A task refreshes its own
+  session and puts `Analysis.entry(refreshed, path)` in an
+  `ATS[String, Analysis.Entry]`; a task that asks about `path` first does
+  `Analysis.adopt(session, entry)`, which keeps the buffers and replaces the
+  cache by that entry alone. An entry is a hit while the files and buffers are
+  as they were, else the usual incremental check runs, so a stale entry costs
+  time only. `entry` is an error when `path` has none (not refreshed, did not
+  link). Entries of two files are separate caches (the modules they both import
+  are not shared). The program deletes the entries it no longer wants.
 - Answers are structs with no enum. An absent text is `""` (where the JSON has
   `null`), an absent definition an empty list (`TypeAt.definition` holds 0 or
   1). `Checked.passed` is true when there is no problem, else `diagnostics`

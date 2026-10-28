@@ -7,6 +7,7 @@
 
 import Env from "../modules/link_env"
 import Overlay from "../modules/overlay"
+import Ast from "../syntax/ast"
 import SourceFile from "../syntax/source_file"
 import Cache from "cache"
 import Front from "front"
@@ -52,6 +53,23 @@ end
 ## and keep the session it returns (the cache has no merge of two).
 export def refresh(session: Session, path: String) -> Session
   return session.with(cache: Front.refresh(session.cache, path, asking(session)))
+end
+
+## The root that the cache of `session` holds for the file `path`, as the last `refresh` of it left it.
+export def entry(session: Session, path: String) -> Ast.Optional[Cache.Root]
+  known = asking(session).workspace.real_path.call(path)
+  if !known.ok?
+    return Ast.Optional.Absent
+  end
+
+  return Cache.root_of(session.cache, known.unwrap!)
+end
+
+## `session` with the cache of `root` alone in place of its own cache. The buffers stay. A later `refresh` or question
+## about the file of `root` takes the program from it when the files still say what they said, else it checks again as
+## usual, taking what the unchanged modules left.
+export def adopt(session: Session, root: Cache.Root) -> Session
+  return session.with(cache: Cache.alone(root))
 end
 
 ## The settings a question runs with: those of the session, over a Workspace that answers for its buffers.
