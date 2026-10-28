@@ -53,140 +53,94 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `agc_runtime.settle_by`); the normal end of the run waits within the flush
   limit.
 
-- `vm/loop.c`
-  - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
-    §10.2.2), with `vm/stdio_windows.c`, `vm/stream.c`, `vm/process.c`,
-    `vm/system.c` and `vm/tcp.c` the only files that include `uv.h`
-    (`vm/http_server.c` reaches libuv only through `vm/net.h` and jobs)
-    - `agc_io_init` (
-      - the `UV_USE_IO_URING=0` setenv at start-up
-      - returns whether it set it)
-    - `agc_io_uv` (
-      - the scheduler's `uv_loop_t`, for handle code; aborts off the I/O
-        thread, so at N > 1 a libuv step goes through `agc_io_call`)
-    - `agc_io_loop`, `agc_loop_call`, `agc_loop_uv`, `agc_loop_of_uv` (
-      - the loop for a service's `malloc`'d state, a step posted to it from a
-        hook with no vm (`release`, `drop`), its `uv_loop_t` on the I/O thread
-        only, and back)
-    - `agc_io_here` (
-      - true where a posted step runs at once (N = 1): the test of a
-        service's fast path)
-    - `agc_io_ready` (
-      - completes an `external` job from a libuv callback)
-    - `agc_io_run_for` (
-      - runs the loop once for at most N ms with one reusable timer, then hands
-        the finished jobs on; the flush wait, the last writes after a stop
-        signal and the native close all wait with it (`alive_required`: a
-        loop with nothing alive is not run); the idle step of a scheduler
-        with a timer waits with it too, alive or not)
-    - `agc_register`/`agc_unregister` (
-      - GC `agc_resource` objects owning `malloc` memory
-      - a job keeps its registry slot index, fixed when an entry moves)
-    - job outcome and count (`core.h`)
-      - `agc_job_settle` sets the outcome once by CAS from PENDING (DONE,
-        EXPIRED or CANCELLED), the first writer wins; the count has the owner,
-        the wait piece, the ready list and each request in flight as holders;
-        the holder that drops the last one puts the job on the loop's dead
-        list, and `sweep` (loop's thread only) walks that list and frees after
-        the timer closed
-      - a START finds `ended` set when the owner ended the job first, and
-        starts nothing
-      - the libuv steps are requests (START, CLOSE_TIMER, RELEASE):
-        inline on the loop's thread, queued in the inbox from any other
-    - `agc_io_start` (
-      - one `uv_queue_work` job plus an optional timer per blocking call
-      - a kind needs `work` or `external`; a bare deadline is a task timer
-      - parks the current task through `r->task` and `task->parked`)
-    - `agc_io_poll` (
-      - `uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes
-        their tasks
-      - a non-empty ready list is drained even when the loop has nothing alive,
-        and makes the run NOWAIT)
-    - `agc_io_finish` (
-      - the request's `done` or `expired` half when the parked task runs again
-      - it first releases a handle the request held, handing it to the head
-        waiter as `next_owner`)
-    - `agc_io_detach` (
-      - the job of a cancelled task is detached
-      - it ends between turns when the drain meets it, runs `done` and drops the
-        result (closing a new handle in it, except a process: `process.c` sets
-        `keep_detached` on its resource), never `expired`, so it never closes a
-        task's handle
-      - a kind's optional `cancel(vm, data, context, deadline)` half, refused on
-        pool kinds, may end it early through `drop`, also when its timer fired
-        before the cancel
-      - a queued job is never swept)
-    - `agc_io_detached` (a job with no task from the start, for a crashed
-      task's file close), handle ownership (`agc_own` records a
-      handle's owner and close and puts it on the owner task's list
-      (`owned_prev` and `owned_next` in the resource, `owned` in the task),
-      `agc_unregister` takes it off,
-      `agc_owned_of` finds the owned resource of a handle value, `agc_hand_over`
-      moves it to another task, `agc_close_owned(vm, t)` closes what a task
-      still owns when it ends), `close_pending` runs a file's pending close
-      after the job that held it
-  - `agc_own` sets no owner outside a turn
-  - at the end `close_files` starts the same close job for every open file (
-    - `agc_resource.pool_close`)
-    - and `finish_flushes` waits for all of them with `uv_run` ONCE until the
-      flush-limit deadline timer (
-      - 30000 ms, `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`)
-    - setting `rt->flush_expired` for the warning line of `vm/launch.c`),
-      `agc_handle_leave` (
-      - a cancelled lock waiter leaves the FIFO
-      - a cancelled `next_owner` passes the lock on)
-    - `agc_handle_wait` (
-      - the per-handle FIFO lock: take it as `next_owner` or when free, else
-        queue and park with retry on the task's own timer
-        (`agc_task_park_until`) at its deadline
-      - a `closing` handle lets every caller through, so the builtin returns its
-        closed error)
-    - the one exit path (
-      - `docs/vm/10-io-scheduler.md` §10.2.2 "End of run"
-      - `agc_launch_settle` in `vm/launch.c` (then `agc_launch_exit`):
-        `agc_processes_stop` kills the children,
-        `agc_io_children_stopped` acts on a second signal recorded meanwhile,
-        `agc_io_goodbye` calls each resource's `goodbye` hook (TCP: one TLS
-        `close_notify` by `uv_try_write`), stdout and stderr flush (retried on
-        `EINTR`), `agc_io_flush_files` closes the files and waits for their
-        flush jobs until the flush limit under a fresh `setjmp`, then `_exit`,
-        or the stop signal raised again with the stop signals blocked for the
-        last read
-      - nothing else is joined or drained)
-    - stop signals (
-      - `agc_io_watch_stop`: a `sigaction` handler for
-        `SIGINT`/`SIGTERM`/`SIGHUP`, not for one inherited as ignored, and a
-        `SIGALRM` backstop, installed and armed only when a second signal is
-        recorded
-      - the one global `stop`, marked `NOLINT`, holds lock-free atomics (first
-        signal, a second one, `held` until the children are stopped), the driver
-        pid and an unreferenced `uv_async_t` that wakes the loop
-      - `check_stop` in `vm/task.c` ends the run between turns, before a wait
-        and before a stall error, through `agc_stop` in `vm/interp.c`, which
-        `agc_write` and `agc_flush` also call on `EINTR`
-      - a second signal ends the VM at once, except while `held`
-      - a driven VM whose driver is gone takes that path on its first signal)
-    - `agc_poller_*` (a `malloc`'d `uv_poll_t` that owns a descriptor that can
-      wait forever: open (returns the libuv error), wait readable or writable
-      with a callback, pause, close, which closes the descriptor),
-    - `agc_fs_realpath` (in the `file_io.c` adapter, for `Path.real`:
-      `uv_fs_realpath` without a callback, so it
-      runs on the calling pool thread; it returns a `malloc`'d string, or NULL
-      with errno; `files.c` includes no libuv header), `agc_io_start_then` (a
-      pool job's `more` step, run on the loop thread after its work, may keep
-      the job waiting on the loop until `agc_io_ready`; the job's `on_loop` flag
-      then makes its `expired` and end-of-run paths treat it like an `external`
-      job),
-    - `agc_io_close` (only for in-process harnesses, the fuzzer and the C tests:
-      flush the files, then close handles and timers and free the loop; the
-      process guard's release kills children; false while a job is stuck in the
-      OS)
-  - resources have a `kind` (native or job)
-  - non-Linux builds get stubs
+- `vm/loop.c`: the event loop and the resource registry
+  (`docs/vm/10-io-scheduler.md` §10.2.2). With `vm/stdio_windows.c`,
+  `vm/stream.c`, `vm/process.c`, `vm/system.c` and `vm/tcp.c` it is the only
+  file that includes `uv.h` (`vm/http_server.c` reaches libuv only through
+  `vm/net.h` and jobs). `rg 'agc_io_|agc_loop_' vm/*.h` lists the API; the
+  rules that code does not show:
+  - `agc_io_init` sets `UV_USE_IO_URING=0` at start-up and returns whether it
+    set it. `agc_io_uv` aborts off the I/O thread, so at N > 1 a libuv step goes
+    through `agc_io_call` or `agc_loop_call` (a step posted to the loop from a
+    hook with no vm: `release`, `drop`). `agc_io_here` is true where a posted
+    step runs at once (N = 1): the test of a service's fast path.
+  - `agc_io_run_for` runs the loop once for at most N ms with one reusable
+    timer, then hands the finished jobs on; the flush wait, the last writes
+    after a stop signal and the native close all wait with it (`alive_required`:
+    a loop with nothing alive is not run).
+  - `agc_register`/`agc_unregister`: GC `agc_resource` objects owning `malloc`
+    memory; a job keeps its registry slot index, fixed when an entry moves.
+    Resources have a `kind` (native or job); non-Linux builds get stubs.
+  - Job outcome and count (`core.h`): `agc_job_settle` sets the outcome once by
+    CAS from PENDING (DONE, EXPIRED or CANCELLED), the first writer wins. The
+    count has the owner, the wait piece, the ready list and each request in
+    flight as holders; the holder that drops the last one puts the job on the
+    loop's dead list, and `sweep` (loop thread only) frees after the timer
+    closed. A START finds `ended` set when the owner ended the job first, and
+    starts nothing. The libuv steps are requests (START, CLOSE_TIMER, RELEASE):
+    inline on the loop's thread, queued in the inbox from any other.
+  - `agc_io_start`: one `uv_queue_work` job plus an optional timer per blocking
+    call; a kind needs `work` or `external`; a bare deadline is a task timer.
+    `agc_io_poll` runs `uv_run` NOWAIT or ONCE, then wakes the tasks of the
+    ready list (a non-empty list is drained even when the loop has nothing
+    alive, and makes the run NOWAIT). `agc_io_finish` runs the request's `done`
+    or `expired` half when the parked task runs again; it first releases a
+    handle the request held, handing it to the head waiter as `next_owner`.
+  - `agc_io_detach`: the job of a cancelled task is detached. It ends between
+    turns when the drain meets it, runs `done` and drops the result (closing a
+    new handle in it, except a process: `process.c` sets `keep_detached`),
+    never `expired`, so it never closes a task's handle. A kind's optional
+    `cancel(vm, data, context, deadline)` half, refused on pool kinds, may end
+    it early through `drop`, also when its timer fired before the cancel. A
+    queued job is never swept. `agc_io_detached` is a job with no task from the
+    start (a crashed task's file close).
+  - Handle ownership: `agc_own` records a handle's owner and close and puts it
+    on the owner task's list (sets no owner outside a turn); `agc_unregister`
+    takes it off; `agc_owned_of` finds the owned resource of a handle value;
+    `agc_hand_over` moves it to another task; `agc_close_owned(vm, t)` closes
+    what a task still owns when it ends.
+  - At the end `close_files` starts the same close job for every open file
+    (`agc_resource.pool_close`) and `finish_flushes` waits for all of them with
+    `uv_run` ONCE until the flush-limit deadline timer (30000 ms,
+    `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`), setting
+    `rt->flush_expired` for the warning line of `vm/launch.c`.
+  - `agc_handle_wait` is the per-handle FIFO lock: take it as `next_owner` or
+    when free, else queue and park with retry on the task's own timer
+    (`agc_task_park_until`) at its deadline. `agc_handle_leave`: a cancelled
+    waiter leaves the FIFO, a cancelled `next_owner` passes the lock on. A
+    `closing` handle lets every caller through, so the builtin returns its
+    closed error.
+  - The one exit path (`docs/vm/10-io-scheduler.md` §10.2.2 "End of run";
+    `agc_launch_settle` in `vm/launch.c`, then `agc_launch_exit`):
+    `agc_processes_stop` kills the children, `agc_io_children_stopped` acts on
+    a second signal recorded meanwhile, `agc_io_goodbye` calls each resource's
+    `goodbye` hook (TCP: one TLS `close_notify` by `uv_try_write`), stdout and
+    stderr flush (retried on `EINTR`), `agc_io_flush_files` closes the files and
+    waits for their flush jobs until the flush limit under a fresh `setjmp`,
+    then `_exit`, or the stop signal raised again with the stop signals blocked
+    for the last read. Nothing else is joined or drained.
+  - Stop signals: `agc_io_watch_stop` installs a `sigaction` handler for
+    `SIGINT`/`SIGTERM`/`SIGHUP` (not one inherited as ignored) and a `SIGALRM`
+    backstop, armed only when a second signal is recorded. The one global `stop`
+    (marked `NOLINT`) holds lock-free atomics (first signal, a second one,
+    `held` until the children are stopped), the driver pid and an unreferenced
+    `uv_async_t` that wakes the loop. `check_stop` in `vm/task.c` ends the run
+    between turns, before a wait and before a stall error, through `agc_stop`
+    in `vm/interp.c`, which `agc_write` and `agc_flush` also call on `EINTR`. A
+    second signal ends the VM at once, except while `held`; a driven VM whose
+    driver is gone takes that path on its first signal.
+  - `agc_poller_*`: a `malloc`'d `uv_poll_t` that owns a descriptor that can wait
+    forever (open, wait readable or writable with a callback, pause, close,
+    which closes the descriptor). `agc_io_start_then`: a pool job's `more` step,
+    run on the loop thread after its work, may keep the job waiting on the loop
+    until `agc_io_ready`; its `on_loop` flag then makes its `expired` and
+    end-of-run paths treat it like an `external` job. `agc_fs_realpath` (in
+    `file_io.c`, for `Path.real`) runs on the calling pool thread.
+    `agc_io_close` is for in-process harnesses, the fuzzer and the C tests only.
   - `drain` counts the jobs that are ready when it starts and pops one at a
     time, so a long jump out of the flush (a `done` half that calls `agc_fail`)
-    loses only the job in hand, not the rest of the batch
-  - jobs readied while it runs wait for the next drain
+    loses only the job in hand; jobs readied while it runs wait for the next
+    drain.
 - `vm/files.c`
   - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, shared with
     Windows;
@@ -306,61 +260,50 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     buffer going out as one `OP_WRITE` (`write_out` with `newline`), then
     `close_handle`, whose error is the outcome when there was none. A line over
     `LIMIT` is an error; the handle is private, so no handle lock is taken
-- `vm/output.c`
-  - the only writer of stdout and stderr (`agc_write`, `agc_output_waiting`,
-    `agc_drain` for `IO.flush`, `agc_flush`; `docs/vm/10-io-scheduler.md`
-    §10.2.2). `agc_output_forward` takes a child's
-    stderr on the I/O thread into the notice queue; the bytes take only the
-    room the FIFO's head does not need (`spare`), so a waiting print goes
-    first. Past `AGC_FORWARD_BOUND` queued it keeps the caller's
-    `agc_forward_wait` and posts its resume once the queue is down to
-    `AGC_FORWARD_RESUME` (half) or the stream failed or closed. `sent` and
-    `own_end` are positions in the stream: text of the program or the VM is
-    pending while `own_end > sent`, so a failure that lost only forwarded bytes
-    does not fail the run, and queued bytes before `own_end` (a VM notice) go
-    ahead of a waiting print.
+- `vm/output.c`: the only writer of stdout and stderr (`agc_write`,
+  `agc_output_waiting`, `agc_drain` for `IO.flush`, `agc_flush`;
+  `docs/vm/10-io-scheduler.md` §10.2.2).
   - Per stream an `agc_output` (`vm->rt->out` and `err`) with a 64 KiB ring
-    (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers
-  - a print that fits and has nobody ahead of it is copied and returns,
-    otherwise the task keeps a pointer to its text in `task->output` and parks
-    (retry; `agc_output_waiting` tells the builtin to pass no text), the head is
-    woken when its whole text fits (`wake_head`), a print longer than the ring
+    (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers. A print that fits and
+    has nobody ahead of it is copied and returns; otherwise the task keeps a
+    pointer to its text in `task->output` and parks (retry;
+    `agc_output_waiting` tells the builtin to pass no text), the head is woken
+    when its whole text fits (`wake_head`), and a print longer than the ring
     copies in pieces and holds the stream.
   - `agc_output_open` (from `main`, after `agc_input_open`) reopens a pipe, FIFO
     or terminal through `agc_fd_reopen` (`/proc/self/fd/N`, `O_NONBLOCK`), or
-    duplicates a socket (`F_DUPFD_CLOEXEC`, `send` with `MSG_DONTWAIT`; on macOS
-    every write is first guarded by `poll` and cut to `PIPE_BUF` or
-    `SO_SNDLOWAT`), and writes it from an `agc_poller` (one `external` detached
-    job per writable event, the request holds the stream index)
-  - it drains a regular file, a block device or a device epoll refuses
-    (`/dev/null`) by one pool job on the original descriptor
-  - and it leaves the others (read-only descriptor, failed reopen or `dup`,
-    systems other than Linux, macOS and Windows) on the blocking `fwrite` of
-    their `FILE`.
+    duplicates a socket, and writes it from an `agc_poller` (one `external`
+    detached job per writable event; on macOS every write is first guarded by
+    `poll` and cut to `PIPE_BUF` or `SO_SNDLOWAT`). A regular file, a block
+    device or a device epoll refuses (`/dev/null`) drains by one pool job on
+    the original descriptor. The others (read-only descriptor, failed reopen,
+    other systems) stay on the blocking `fwrite` of their `FILE`.
   - When stderr is the same file as stdout (`st_dev`, `st_ino`), `err.base`
-    points to the stdout stream and they share one ring and FIFO.
-  - A write error sets `failed`, drops the data and the notices, and wakes the
-    waiters
-  - `agc_output_leave` (from `unlink_task`) takes a cancelled waiter out
+    points to the stdout stream and they share one ring and FIFO. A write error
+    sets `failed`, drops the data and the notices, and wakes the waiters.
+  - `agc_output_forward` takes a child's stderr on the I/O thread into the
+    notice queue; the bytes take only the room the FIFO's head does not need
+    (`spare`), so a waiting print goes first. Past `AGC_FORWARD_BOUND` queued it
+    keeps the caller's `agc_forward_wait` and posts its resume once the queue is
+    down to `AGC_FORWARD_RESUME` or the stream failed or closed. `sent` and
+    `own_end` are positions in the stream: text of the program or the VM is
+    pending while `own_end > sent`, so a failure that lost only forwarded bytes
+    does not fail the run.
   - `agc_output_busy` keeps `flushing()` in `vm/loop.c` waiting while a buffer
     holds data (it pumps queued notices with force and kicks the writer, since
-    no task runs any more to finish a cut print), and once a stop signal is set
-    it makes one non-blocking write per stream and stops waiting.
-  - `advance` always ends with `kick`.
-  - The poller's per-event jobs are quiet (`AGC_JOB_QUIET`)
-  - the trace has `output_start` and `output_done` lines per run of data.
+    no task runs any more to finish a cut print); once a stop signal is set it
+    makes one non-blocking write per stream and stops waiting. `advance` always
+    ends with `kick`. The trace has `output_start` and `output_done` lines per
+    run of data.
   - `agc_notice_begin` and `agc_notice_end` (mode `AGC_NOTICE_QUEUED`,
-    `AGC_NOTICE_KEPT` or `AGC_NOTICE_FINAL`) write the text of the VM itself:
-    queued notices (task crash diagnostics, the unobserved summary) join a queue
-    of at most 1 MiB
-  - a kept notice (the diagnostic of a failed run) is queued even when the queue
-    is at its limit that enters the ring ahead of waiting writers, never inside
-    a print that holds the stream
-  - the diagnostic of a failed run is queued as a kept notice after the blocking
-    streams are flushed and before the end-of-run wait (`announce_outcome` in
-    `vm/launch.c`), and final notices (the flush warnings, the flush-timeout
-    warning, a write-error diagnostic) are written after it with non-blocking
-    writes, and the rest a stuck pipe will not take is dropped
+    `AGC_NOTICE_KEPT` or `AGC_NOTICE_FINAL`) write the text of the VM itself.
+    Queued notices (task crash diagnostics, the unobserved summary) join a
+    queue of at most 1 MiB. A kept notice (the diagnostic of a failed run) is
+    queued even at the limit, ahead of waiting writers but never inside a print
+    that holds the stream; it is queued after the blocking streams are flushed
+    and before the end-of-run wait (`announce_outcome` in `vm/launch.c`). Final
+    notices (the flush warnings, a write-error diagnostic) are written after it
+    with non-blocking writes; what a stuck pipe will not take is dropped.
 
 ## Design notes
 

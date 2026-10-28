@@ -8,54 +8,45 @@ User docs and the runner protocol are in `docs/bdd.md`.
 ## BDD (`agentica test`)
 
 `agentica test` runs on the VM and is written in Agentica. `std/bdd` is the
-public step API; `std/bdd/gherkin` and `std/bdd/match` (Gherkin parsing and
-step matching), `std/bdd/tags` (`--tags` expressions), `std/test/runner` and
-`std/test/report` (the runner and report, shared by BDD and unit tests) are
-internal (importable through `std/`
-like any registered module, but not in the programming skill or the site). All
-are registered in `stdlib/MODULES`.
+public step API; `std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`,
+`std/test/runner` and `std/test/report` are internal (importable like any
+module registered in `stdlib/MODULES`, but not in the programming skill or the
+site).
 
 - `agentica test` is part of the front end of the binary (§18.3;
   `compiler/app/cli.agc` calls `Driver.run(options, settings)` in its own
-  process, with the settings of the command line: the version, the provider of
-  the `std/` sources and `self_path`, the path of the binary). The runner and
-  each program under test are children of the same binary: `settings.self_path
-  run [--seed N] --driver-pid PID --embedded runner -- config.jsonl` (the binary
-  carries the compiled runner; see "Embedded programs" below), and `self_path
-  ... FILE.agc` for a program under test (`std/bdd`). The user's `--deny-*`
-  flags do not reach the front end, so it can start them; the user's program
-  never runs in that runtime. `agentica test` takes every `--deny-*` flag and
-  `--sandbox`, in front of `test` or after it, once each (`DENY` in
-  `bdd_options.agc`). The driver adds them after the binary in the config's
-  `agentica` words (no new config field, so the stage0 driver still works with
-  this runner): `std/bdd` starts each program under test with them, and the
-  runner gives them (`deny`, the words after the binary) to every child of the
-  user's code. The runner runs without them. Under `--deny-fs`, `std/bdd`
-  cannot stat a program under test, so its `agentica` command reports a missing
-  file. A front end that stops on a
-  runtime error (a bug in the driver) ends the process with status 2 and the
-  error on stderr, never the 1 of a failed test run. Without `--self` (the front
-  end started as an ordinary program) `test` says so and exits 2.
-  - the tests that need a fake runner run the front end as an ordinary program
-    (the `std/` sources from a folder, so the runner is compiled into the run
-    dir) with `--self` naming a shell script that fakes the runner when it is
-    asked for `runner.agcb` and runs the real binary otherwise (on Windows a
-    copy of `node.exe` with a preloaded script, since the VM starts only `.exe`
-    and `.com` files there) (`front_end_command` in `tests/agentica_test.py`,
-    `fake_binary` in `tests/test_bdd.py`);
+  process). The runner and each program under test are children of the same
+  binary: `settings.self_path run [--seed N] --driver-pid PID --embedded
+  runner -- config.jsonl`, and `self_path ... FILE.agc` for a program under
+  test (`std/bdd`). The user's `--deny-*` flags do not reach the front end, so
+  it can start them; the user's program never runs in that runtime.
+  `agentica test` takes every `--deny-*` flag and `--sandbox`, in front of
+  `test` or after it, once each (`DENY` in `bdd_options.agc`). The driver adds
+  them after the binary in the config's `agentica` words (no new config
+  field, so the stage0 driver still works with this runner): `std/bdd` starts
+  each program under test with them, and the runner gives them (`deny`) to
+  every child of the user's code. The runner runs without them. Under
+  `--deny-fs`, `std/bdd` cannot stat a program under test, so its `agentica`
+  command reports a missing file. A front end that stops on a runtime error
+  (a driver bug) ends the process with status 2 and the error on stderr,
+  never the 1 of a failed test run. Without `--self` `test` says so and exits
+  2.
+  - tests that need a fake runner run the front end as an ordinary program
+    (the `std/` sources from a folder) with `--self` naming a script that
+    fakes the runner when asked for `runner.agcb` and runs the real binary
+    otherwise (`front_end_command` in `tests/agentica_test.py`, `fake_binary`
+    in `tests/test_bdd.py`; on Windows a copy of `node.exe`, since the VM
+    starts only `.exe` and `.com` files there);
   - a missing binary is the driver's `cannot find agentica at PATH`
     infrastructure report in the chosen format.
 - `compiler/bdd/bdd_driver.agc` (the driver; `bdd_options.agc` reads the
   arguments, usage errors included)
   - `bdd_rundir.agc` makes the run dir (the rules: `docs/bdd.md`, "Isolation
-    and process lifetime"): a private 0700 `agentica-bdd-new-<hex>` (16 bytes
-    of `/dev/urandom`, 16 tries; on Windows 8 bytes of `Random.int`, 4 of the
-    clock and the pid), refuses a group-writable `TMPDIR` unless it has the
-    user's uid and gid and no setgid bit (the user-private-group case), locks
-    `lock` for the whole run, then renames the dir with `Path.rename` (never
-    replaces), so the sweep never sees an unlocked new dir. Links and dirs
-    without `lock` are left alone. On Windows the sweep closes the lock before
-    removing the dir (a folder with an open file cannot be removed)
+    and process lifetime"): a private 0700 dir, locked with `lock` for the
+    whole run, then renamed with `Path.rename` (never replaces), so the sweep
+    never sees an unlocked new dir. Links and dirs without `lock` are left
+    alone. On Windows the sweep closes the lock before removing the dir (a
+    folder with an open file cannot be removed)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program and discovers the feature files (`bdd_discover.agc`;
     `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the
@@ -224,28 +215,22 @@ are registered in `stdlib/MODULES`.
     reads the channel to its end after `Process.channel_close`).
   - A child that dies prints its diagnostic on stderr with `--json`; the runner
     reads the last line with `Report.from_json`, else `PREMATURE-EXIT`.
-- `stdlib/bdd.agc` (`std/bdd`): `step`, `run`, the `Context` value passed
-  through each handler (scenario state, the step's doc string or table, the
-  program under test), `assert`, `set`/`get`, `keep`/`call` (closures of type
-  `Fn[Json, Result[Json]]` that capture a scenario's non-JSON values; `Context`
-  cannot hold the step program's own type, since functions and structs are not
-  generic), `read_line` (the next output line as a `Result`; `then_line` shares
-  its read through `next_line`) and the program steps. The `then_*`
-  checks compare with `Test.eq` (`agc_equal`; a `Json` line by its canonical
-  text) and put the inspect texts of expected and actual in the `fail` record
-  (`Json` as `JSON.encode`, the same text `agc_test_text` gives), so BDD and
-  unit tests show values the same way. `run` puts the predefined steps first;
-  in the child it checks the step index and pattern, calls the handler, then
-  fails on pending tasks (`Task.pending_count`) and on an unobserved task crash
-  (`Task.unobserved_crash`), probes the program's output limit and sends `end`.
+- `stdlib/bdd.agc` (`std/bdd`): `step`, `run`, the `Context` passed through
+  each handler, `assert`, `set`/`get`, `keep`/`call` (closures of type
+  `Fn[Json, Result[Json]]` that capture a scenario's non-JSON values:
+  `Context` cannot hold the step program's own type, since functions and
+  structs are not generic), `read_line` and the program steps. The `then_*`
+  checks compare with `Test.eq` (a `Json` line by its canonical text) and put
+  the inspect texts of expected and actual in the `fail` record, so BDD and
+  unit tests show values the same way. In the child, `run` checks the step
+  index and pattern, calls the handler, then fails on pending tasks and an
+  unobserved task crash, probes the program's output limit and sends `end`.
   Every record is one JSON line sent with `Process.parent_send` after
-  `IO.flush()` (list mode sends one `step` record per step, then `ready`; the
-  scenario mode reads the settings line and the step lines with
-  `Process.parent_read_line`, 24 h timeout, `idle_ms()`, since the runner holds
-  the deadline; the send timeout is `send_ms()`). Every failure sends one `fail`
-  record and exits 1. When `deliver` cannot send, it warns on stderr with the
-  reason and exits 1; a record over 1 MiB (`process: send exceeds`) is replaced
-  by a small `RUNTIME-BDD-OUTPUT-LIMIT` fail record.
+  `IO.flush()`; the scenario mode reads step lines with
+  `Process.parent_read_line` and a 24 h timeout, since the runner holds the
+  deadline. Every failure sends one `fail` record and exits 1. A record over
+  1 MiB (`process: send exceeds`) is replaced by a small
+  `RUNTIME-BDD-OUTPUT-LIMIT` fail record.
 - Codes: `RUNTIME-BDD-*`, `CHECK-BDD-*` and `PARSE-GHERKIN-*` (the list:
   `docs/bdd.md`, "Diagnostics"). Tests: `tests/test_bdd.py` (the step
   program, isolation, registration, usage), `tests/test_bdd_integration.py`
@@ -253,36 +238,23 @@ are registered in `stdlib/MODULES`.
   process, the `bdd-*` goldens for `std/bdd/gherkin` and `std/bdd/match`, and
   the `test-report-*` goldens for `std/test/report`.
 - `stdlib/bdd/gherkin.agc` (`std/bdd/gherkin`) parses the English Gherkin
-  subset with stable codes, the first error and spans. `parse(file, text)`
-  returns `Outcome.Done(Feature)` or `Outcome.Failed(Diagnostic)` (the
-  `std/test/report` types); a `Span` is file, line, column 1 (a step's: its
-  keyword's) and the end column of the raw line, with no offset. An outline
-  row's name gets ` (values)` of the columns its name does not show. Table rows
-  and `<name>` substitution split the text and join it once, with no `+=` or
-  `push` per character or cell, so they cost linear time in the line. Building
-  the step, row, Examples, draft and scenario lists with `push` per line is
-  still quadratic in the line count. Goldens: `bdd-gherkin-outline`, `-sections`
-  and `-arguments`.
-- `stdlib/bdd/match.agc` (`std/bdd/match`) compiles and matches step patterns
-  and runs the duplicate and resolve checks, by hand with no regular
-  expressions; it imports `gherkin` for `Diagnostic`, `Outcome` and `Step`, and
-  `std/test/report` for `Span`. `compile(texts, where)` returns
-  `Outcome.Done(List[Pattern])` or the first problem in order: a text seen
-  before is `RUNTIME-BDD-DUPLICATE`, a bad one `RUNTIME-BDD-PATTERN` (the
-  reason, then `: ` and the pattern), both at `where`, the span the caller gives
-  (the step program's first line). A `Pattern` is its `text`, the `head` literal
-  and one `Slot` (an `{int}` or `{string}` capture, then a literal) per
-  placeholder, split on `{` with `List.map`. `captures(pattern, text)` is
-  `ok(List[String])` or `error("no match")`: a whole-text match that backtracks
+  subset with stable codes and the first error. `parse` returns
+  `Outcome.Done(Feature)` or `Outcome.Failed(Diagnostic)`; a `Span` is file,
+  line and columns, with no offset. Table rows and `<name>` substitution
+  split and join once (linear). Building the step, row, Examples, draft and
+  scenario lists with `push` per line is still quadratic in the line count.
+  Goldens: `bdd-gherkin-*`.
+- `stdlib/bdd/match.agc` (`std/bdd/match`) compiles and matches step
+  patterns by hand (no regular expressions). `compile` returns the first
+  problem in order: a repeated text is `RUNTIME-BDD-DUPLICATE`, a bad one
+  `RUNTIME-BDD-PATTERN`, both at the `where` span the caller gives (the step
+  program's first line). `captures` is a whole-text match that backtracks
   (`{int}` from the longest digit run down, `{string}` up to the first
-  unescaped closing quote, each `\X` decoded to `X`). `resolve(patterns, step)`
-  matches every pattern and returns `Resolved(index, captures)`, or
-  `CHECK-BDD-UNDEFINED` or `CHECK-BDD-AMBIGUOUS` at the step's span (the
-  report's `actual` is the step text, added by the caller). Goldens:
-  `bdd-match-captures`, `-resolve` and `-errors`; `json-canonical` pins the
-  JSON rule that `Test.eq` on `Json`, and so `then_json_line`, relies on
-  (`JSON.encode(JSON.parse(x))` sorts keys and keeps the last duplicate,
-  `sort_members` in `vm/json.c`).
+  unescaped closing quote). `resolve` gives `Resolved`, `CHECK-BDD-UNDEFINED`
+  or `CHECK-BDD-AMBIGUOUS` at the step's span (the caller adds `actual`).
+  Goldens: `bdd-match-*`; `json-canonical` pins the JSON rule that `Test.eq`
+  on `Json`, and so `then_json_line`, relies on (`JSON.encode(JSON.parse(x))`
+  sorts keys and keeps the last duplicate, `sort_members` in `vm/json.c`).
 - A crash record carries the stack: `Test.test` bodies that crash send `stack`,
   `stack_omitted` and `spawned_at` in the `fail` record; `record_error` in
   `stdlib/test/units.agc` keeps them as the error's `original`
@@ -292,46 +264,22 @@ are registered in `stdlib/MODULES`.
   The records of an assertion, a returned error and the pending-task and
   unobserved-crash failures have no stack.
 - `stdlib/test/report.agc` (`std/test/report`) builds the report and imports
-  nothing; it owns `Span` and `Example`, which `std/bdd/gherkin` and
-  `std/bdd/match` import from it. Its input is the run as data, which the
-  runner fills (`FileResult`, `ScenarioResult`, `StepResult`; the types are in
-  the module).
-  - A `Verdict` is `Pass` or `Fail(Error)`: a file's own error (parse error,
-    step program), or a scenario's first failure; it can also be
-    `Skipped(reason)`, a scenario ended by `BDD.skip` (not a failure: the exit
-    code stays 0, and the totals have `skipped`), or `NotExecuted`, a test that
-    never ran.
-  - An `Error` is the diagnostic as the VM's `--json` writes it, with
-    `expected` and `actual` as `Detail` (`Unknown` or `Known(String)`), and
-    `original`, `JSON.null()` or the whole object `from_json` parsed.
-    `from_json(text)` reads a diagnostic as `--json` writes it (a front-end
-    error of the step program) and keeps that object, so the report writes every
-    key unchanged (`help`, `function`, `callee`, `labels`); `error_at(code,
-    message, span)` builds one from fields (the runner turns a
-    `Gherkin.Diagnostic` into one with it); `with_actual` adds the text it is
-    given as `actual` (the runner passes the step text's inspect form,
-    `step.text.inspect`) to an undefined or ambiguous step (an error built from
-    fields; it returns an error with a non-null `original` unchanged);
-    `file_error(path, kind, error)` builds a file entry.
-  - `json(files, seed)` builds the report with `JSON.object` (keys come out
-    sorted, the canonical form; the statuses, totals, `ok`, `skipped` and
-    `not_executed` are derived, not passed in; a file has `kind`, a scenario
-    `output`); `text(files, ai, seed)` is the plain or `--ai` text (a test
-    file's lines name its path where a feature name goes, `SKIP` for a skipped
-    scenario (its reason on one line, below it or after ` | ` with `--ai`), `NOT
-    RUN` for a test not run, a failed test's output indented below it or after `
-    | output`, and `, seed N` on the last line when the exit code is not 0)
-    without the final newline (`expected` and `actual` as they are: a BDD or
-    `Test` assertion already wrote them in the inspect form, once, so the report
-    does not quote them again); `exit_code(files)` is 0 when at least one
-    scenario ran and nothing failed, 2 when a file or scenario error is
-    `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
-  - Every list is built with `List.map` and joined once, so a report costs
-    linear time.
-  - Goldens: `test-report-run` and `test-report-exit`.
-  - `original` must only come from `from_json`: any other error keeps
-    `JSON.null()` there, or `json` would write the stale object instead of its
-    fields.
+  nothing; it owns `Span` and `Example`, which `gherkin` and `match` import.
+  Its input is the run as data, which the runner fills.
+  - A `Verdict` is `Pass`, `Fail(Error)`, `Skipped(reason)` (`BDD.skip`: not a
+    failure, exit code stays 0) or `NotExecuted` (a test that never ran).
+  - An `Error` is the diagnostic as `--json` writes it. `original` must only
+    come from `from_json` (it keeps the whole parsed object, so every key is
+    written unchanged); any other error keeps `JSON.null()` there, or `json`
+    would write the stale object instead of its fields.
+  - `json` sorts keys (canonical form) and derives statuses and totals.
+    `text` writes `expected` and `actual` as they are: a BDD or `Test`
+    assertion already wrote them in the inspect form, so the report does not
+    quote them again. `exit_code` is 0 when a scenario ran and nothing
+    failed, 2 when an error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`,
+    else 1.
+  - Every list is built with `List.map` and joined once (linear time).
+    Goldens: `test-report-run`, `test-report-exit`.
 
 ## Step handlers and programs under test
 

@@ -238,27 +238,7 @@ end
 Three or more steps on one value: a chain in parentheses, the value first (a
 name, a literal or the call that makes it), one step per line.
 
-```ruby
-# bad
-def trim_all(text: String) -> String
-  return text
-end
-
-def shout(text: String) -> String
-  return text.upcase
-end
-
-def wrap(text: String, mark: String) -> String
-  return "#{mark}#{text}#{mark}"
-end
-
-def banner(text: String) -> String
-  out = trim_all(text)
-  out = shout(out)
-  out = wrap(out, "*")
-  return out
-end
-```
+Instead of rebinding `out = f(out)` three times:
 
 ```ruby
 # good
@@ -285,22 +265,6 @@ end
 ```
 
 Nested calls three deep read inside out. A single step is a plain call.
-
-```ruby
-# bad
-def inc(n: Int) -> Int
-  return n + 1
-end
-
-def double(n: Int) -> Int
-  return n * 2
-end
-
-def main() -> Void
-  puts(double(inc(inc(1))))
-  puts(1 |> inc())
-end
-```
 
 ```ruby
 # good
@@ -505,18 +469,6 @@ end
 # good
 def line(name: String, count: Int) -> String
   return "#{name}: #{count} items"
-end
-```
-
-Text of several lines is a heredoc.
-
-```ruby
-# good
-def help() -> String
-  return <<~TEXT
-    usage: tool FILE
-    prints the lines of FILE
-  TEXT
 end
 ```
 

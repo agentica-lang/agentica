@@ -83,29 +83,19 @@ rule that a site page shows.
 ## Markdown and llms.txt
 
 - Every page is also published as Markdown next to its HTML
-  (`/tour/variables/index.md`), through Hugo's built-in `markdown` output
-  format and `layouts/all.markdown.md`. `_partials/page-markdown.html` builds
-  it from the page source.
-- `_partials/markdown-links.html` points links at the other pages' `.md` URLs
-  (and `#anchor` links at the page's own `.md`), sharing
-  `_partials/link-target.html` with `render-link.html`. It skips top-level
-  ``` fences, backtick code spans and images, but not `~~~` fences, fences of
-  4 or more backticks, or indented fences. `home.llms.txt` runs
-  `_partials/markdown-links-check.html`, which fails the build if that
-  rewrite changes.
-- Fence attributes become plain text. `{expect="CHECK-X"}` adds
-  ``Does not compile: `error[CHECK-X]` `` after the block,
-  `{expect="RUNTIME-X"}` adds ``Runtime error: `error[RUNTIME-X]` ``, and
-  `{file="a.agc"}` adds ``File `a.agc`:`` before it unless the prose right
-  above already ends with `` `a.agc`: ``. A section lists its pages.
-- The home page also renders `/llms.txt` (`home.llms.txt`, an index) and
-  `/llms-full.txt` (`home.llmsfull.txt`, every page's Markdown with its source
-  URL), both in the order of `_partials/llms-groups.html`, with absolute URLs
-  from `baseURL`.
-- `_partials/page-actions.html` is the "Copy page" split button next to each
-  page's `<h1>`; `assets/js/page-actions.js` fetches the `.md` for the
-  clipboard and adds the `ready` class that shows the button, so it stays
-  hidden without the script.
+  (`/tour/variables/index.md`, Hugo's `markdown` output format and
+  `layouts/all.markdown.md`). `_partials/markdown-links.html` points links at
+  the other pages' `.md` URLs; it skips top-level ``` fences, backtick code
+  spans and images, but not `~~~` fences, fences of 4 or more backticks, or
+  indented fences, and `home.llms.txt` fails the build if that rewrite changes
+  (`markdown-links-check.html`).
+- Fence attributes become plain text: `{expect="CHECK-X"}` adds ``Does not
+  compile: `error[CHECK-X]` `` after the block (`RUNTIME-X`: ``Runtime error:
+  ...``), and `{file="a.agc"}` adds ``File `a.agc`:`` before it unless the
+  prose right above already ends with `` `a.agc`: ``.
+- The home page also renders `/llms.txt` (an index) and `/llms-full.txt` (every
+  page's Markdown with its source URL), in the order of
+  `_partials/llms-groups.html`, with absolute URLs from `baseURL`.
 
 ## Examples are tests
 

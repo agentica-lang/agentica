@@ -20,9 +20,8 @@ both linked into one binary. The repo tree is in `AGENTS.md`; this file says
 how to work and which reference to read. Load only the references your change
 needs.
 
-- The rules of `AGENTS.md` apply (front end in `compiler/`, hand-edited data
-  files, no placeholders for later phases). Read the active phase in
-  `docs/roadmap/` first and build only what it asks.
+- The rules of `AGENTS.md` apply. Read the active phase in `docs/roadmap/`
+  first and build only what it asks.
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
   different Agentica name is only the internal builtin name, with the Ruby
   name as its alias (`method_aliases` in `check_tables.agc`); every
@@ -60,11 +59,11 @@ One pytest process runs per module, so keep xdist off.
 
 ## Stage contract
 
-- One entry per stage: `Lexer.lex`, `Parser.parse`, `Linker.link_file`,
-  `Checker.check`, `Lowering.lower`, `Writer.write` (`references/stages.md`).
-- The contract is in `AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints
-  the diagnostic and exits 1. Thread spans through; an impossible state is a
-  `*-INTERNAL` diagnostic.
+One entry per stage: `Lexer.lex`, `Parser.parse`, `Linker.link_file`,
+`Checker.check`, `Lowering.lower`, `Writer.write` (`references/stages.md`). The
+contract is in `AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints the
+diagnostic and exits 1. Thread spans through; an impossible state is a
+`*-INTERNAL` diagnostic.
 
 ## Where new code goes
 
