@@ -24,7 +24,8 @@ pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="VM
 VM_FIXTURES = FIXTURES / "vm"
 WAIT_SECONDS = scaled(60)
 
-# `jit` lines appear when the JIT is on (AGENTICA_JIT=on in the environment, as in make test-jit-on), since `all` includes them.
+# `jit` lines appear when the JIT is on (the default, unless AGENTICA_JIT=off as in make test-jit-off), since `all`
+# includes them.
 TRACE_LINE = re.compile(
     rb'^agc-trace \+[0-9]+\.[0-9]{6} (sched|io|proc|tls|loader|gc|jit) [a-z_]+'
     rb'( [a-z_]+=([^ ="\\\x00-\x20\x7f]+|"([^"\\\x00-\x1f\x7f]|\\["\\bfnrt]|\\u[0-9a-f]{4})*"))*$')

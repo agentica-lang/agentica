@@ -146,7 +146,7 @@ byte of a file with a type table, an Updates section or Globals.
   end itself always runs on one scheduler; `check` and `compile` ignore the
   flag. `agentica test` refuses the flag (exit 2), since the VMs it starts would
   not get it; they read the variable.
-- `--jit MODE` (`off`, the default, `on` or `always`; the variable
+- `--jit MODE` (`off`, `on`, the default, or `always`; the variable
   `AGENTICA_JIT` too, the flag wins) compiles functions of the user's program to
   machine code (§6.4). A bad flag or variable exits 2.
   `agentica test` refuses the flag, as it refuses `--schedulers`.

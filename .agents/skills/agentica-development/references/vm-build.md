@@ -32,7 +32,7 @@ make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run from
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
 make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads, jit compile race) under TSan
 make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the modules of test-multicore-modules
-make vm-jit-test                     # the golden tests, tests/test_vm_stack.py and tests/test_vm_multicore.py with AGENTICA_JIT=always (docs/vm/05-values-execution-builtins.md §6.4), then half the golden shards with AGENTICA_JIT=on
+make vm-jit-test                     # the golden tests, tests/test_vm_stack.py and tests/test_vm_multicore.py with AGENTICA_JIT=always (docs/vm/05-values-execution-builtins.md §6.4), then half the golden shards with AGENTICA_JIT=off
 make vm-gc-stress-jit                # the golden tests with AGENTICA_JIT=always on the GC stress binary; vm-sanitize-jit-test (SANITIZE=1) on the ASan one
 make vm-jit-self-compile             # the front end compiles itself under --jit on and always to stage2 (AGENTICA_VM_TEST_FRONT_END_JIT)
 make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
