@@ -354,7 +354,7 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
     ConstWalk.Node.Stmt(stmt) -> return ok(true)
     ConstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
-      if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type, [])
+      if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
         return ok(true)
       end
 

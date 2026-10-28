@@ -309,3 +309,42 @@ def test_a_deep_nest_of_generic_instances_checks_fast(agentica_check, use):
     started = time.monotonic()
     assert agentica_check(nest(12, use)) is None
     assert time.monotonic() - started < scaled(2)
+
+
+def cluster(size: int, use: str) -> str:
+    """`size` generic structs that each hold a list of every one of them, with the parameter and with Nil, and a
+    function that prints or encodes the first."""
+    structs = ""
+    for level in range(size):
+        fields = "".join(
+            "  a%d: List[S%d[T]]\n  b%d: List[S%d[Nil]]\n" % (other, other, other, other) for other in range(size))
+        structs += "struct S%d[T]\n  v: T\n%send\n\n" % (level, fields)
+    action = {"puts": "puts(x)", "json": "puts(JSON.encode(x))"}[use]
+    return structs + "def f(x: S0[Int]) -> Void\n  %s\nend\n\n" % action + main("puts(1)")
+
+
+def shapes(count: int) -> str:
+    """One struct of `count` parameters with a list of itself for every mix of Nil and Int arguments."""
+    names = ["T%d" % index for index in range(count)]
+    fields = "".join(
+        "  r%d: List[W[%s]]\n" % (mix, ", ".join("Nil" if mix >> bit & 1 else "Int" for bit in range(count)))
+        for mix in range(2 ** count))
+    kind = "W[%s]" % ", ".join(["Int"] * count)
+    return (
+        "struct W[%s]\n  v: T0\n%send\n\n" % (", ".join(names), fields)
+        + "def f(x: %s) -> Void\n  puts(JSON.encode(x))\nend\n\n" % kind + main("puts(1)"))
+
+
+@pytest.mark.parametrize("use", ["puts", "json"])
+def test_a_cluster_of_structs_that_use_one_another_checks_fast(agentica_check, use):
+    # The walk keeps the structs it entered for the whole call; one that kept only the path walked the cluster once for
+    # each path through it (a minute at this size).
+    started = time.monotonic()
+    assert agentica_check(cluster(6, use)) is None
+    assert time.monotonic() - started < scaled(2)
+
+
+def test_a_struct_with_every_nil_shape_of_its_arguments_checks_fast(agentica_check):
+    started = time.monotonic()
+    assert agentica_check(shapes(4)) is None
+    assert time.monotonic() - started < scaled(2)

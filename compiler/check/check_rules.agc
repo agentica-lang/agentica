@@ -41,7 +41,7 @@ end
 
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
 export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
-  if !CheckTypes.data?(cx, type, [])
+  if !CheckTypes.data?(cx, type)
     return error(
       State.fail_help(
         cx,
@@ -300,7 +300,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) ->
   ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
   try json_field_place(cx, st, type, "decode target", node.span)
-  if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type, [])
+  if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type)
     return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
   end
 
@@ -315,7 +315,7 @@ end
 def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try json_field_place(cx, out.st, out.type, "encode argument", Ast.expr_span(site.args[0]))
-  if !CheckTypes.encodable?(cx, out.type, [])
+  if !CheckTypes.encodable?(cx, out.type)
     return error(
       State.fail(
         cx,
@@ -337,7 +337,7 @@ end
 # CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JsonField that is not the direct type of a
 # struct field. kind names the place of the whole type.
 def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, span: Source.Span) -> Result[Void]
-  place = CheckTypes.json_field_place(cx, type, false, kind, "", [])
+  place = CheckTypes.json_field_place(cx, type, false, kind, "")
   if place == ""
     return ok()
   end
@@ -362,7 +362,7 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     return error(State.mismatch(cx, wanted.st, actual.type, wanted.type, Ast.expr_span(site.args[1])))
   end
 
-  if !CheckTypes.data?(cx, actual.type, [])
+  if !CheckTypes.data?(cx, actual.type)
     return error(
       State.fail_help(
         cx,

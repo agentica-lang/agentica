@@ -19,6 +19,18 @@ struct Expansion
   remaining: Int
 end
 
+# What place_walk found: the place ("" for none) and the structs walked so far.
+struct Placed
+  place: String
+  seen: Map[String, Bool]
+end
+
+# What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk).
+struct Walk
+  passes: Bool
+  seen: Map[String, Bool]
+end
+
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
@@ -88,89 +100,23 @@ end
 ## Where the type has a JsonField that a JSON builtin does not allow, or "" when it has none: JsonField may only be the
 ## direct type of a struct field. direct says the type is a struct field's own type, kind names its place when it is
 ## not ("list item", "map value", "nested JsonField", "encode argument") and owner the struct field it sits in
-## ("Wrapper.items", "" outside a struct). seen holds the structs already walked ("Struct:name"), so a recursive type
-## ends. Runs before the decodable and encodable tests.
-export def json_field_place(
-  cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String, seen: List[String]
-) -> String
-  if json_field?(type)
-    if !direct
-      if owner == ""
-        return kind
-      end
-
-      return "#{kind} in #{owner}"
-    end
-
-    return json_field_place(cx, Types.args(type)[0], false, "nested JsonField", owner, seen)
-  elsif Types.is?(type, "List")
-    return json_field_place(cx, Types.item(type), false, "list item", owner, seen)
-  elsif Types.is?(type, "Map")
-    return json_field_place(cx, Types.value(type), false, "map value", owner, seen)
-  elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
-    key = "Struct:#{Types.name(type)}"
-    # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
-    # Box by an argument, and the fields below are walked once for each name.
-    for argument in Types.args(type)
-      found = json_field_place(cx, argument, false, "type argument", owner, seen)
-      if found != ""
-        return found
-      end
-    end
-
-    if seen.any? do |item: String| item == key end
-      return ""
-    end
-
-    inner = seen.push(key)
-    place = Types.display_name(Types.name(type))
-    for field in cx.structs[Types.name(type)]
-      found = json_field_place(cx, field.type, true, "struct field", "#{place}.#{field.name}", inner)
-      if found != ""
-        return found
-      end
-    end
-  end
-
-  return ""
+## ("Wrapper.items", "" outside a struct). Runs before the decodable and encodable tests.
+export def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
+  return place_walk(cx, type, direct, kind, owner, {}).place
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
 ## those (a generic struct by its fields with the type arguments put in), and JsonField of an encodable type other than
 ## Nil.
-export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if primitive?(type) or Types.is?(type, "Json")
-    return true
-  elsif json_field?(type)
-    return !Types.is?(Types.args(type)[0], "Nil") and encodable?(cx, Types.args(type)[0], seen)
-  elsif Types.is?(type, "List")
-    return encodable?(cx, Types.item(type), seen)
-  elsif Types.is?(type, "Map")
-    return Types.is?(Types.key(type), "String") and encodable?(cx, Types.value(type), seen)
-  elsif Types.is?(type, "Struct")
-    return struct_all?(cx, type, seen, 0)
-  end
-
-  return false
+export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool
+  return encode_walk(cx, type, {}).passes
 end
 
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
 ## structs of those, and JsonField of a decodable type (Nil is not one). A generic struct is not decodable: the schema
 ## of the structs is keyed by their bare names, which Box[Int] and Box[String] would share.
-export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
-    return true
-  elsif json_field?(type)
-    return decodable?(cx, Types.args(type)[0], seen)
-  elsif Types.is?(type, "List")
-    return decodable?(cx, Types.item(type), seen)
-  elsif Types.is?(type, "Map")
-    return Types.is?(Types.key(type), "String") and decodable?(cx, Types.value(type), seen)
-  elsif Types.is?(type, "Struct")
-    return Types.args(type).size == 0 and struct_all?(cx, type, seen, 1)
-  end
-
-  return false
+export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool
+  return decode_walk(cx, type, {}).passes
 end
 
 ## True when the type may be the value of an ATS: a data type (data?, a deep walk that rejects Fn, Task, Channel, every
@@ -178,7 +124,7 @@ end
 ## only where it is checked later: in the target of a generic alias (cx.prelude), whose uses are checked expanded. A
 ## generic enum checks its arguments only with data?, which accepts a variable, so a payload ATS[String, T] is refused.
 export def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
-  if Types.is?(type, "Nil") or !data?(cx, type, [])
+  if Types.is?(type, "Nil") or !data?(cx, type)
     return false
   end
 
@@ -199,26 +145,9 @@ end
 
 ## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, and lists, maps, sets,
 ## Results, structs and enums of those. A type variable is one only in the files of the prelude: in the body of a
-## generic function it stands for any type, which could be an Fn. seen holds the structs and enums already being looked
-## at ("Struct:name"), so a recursive type ends.
-export def data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range")
-    return true
-  elsif Types.is?(type, "Var")
-    return cx.prelude
-  elsif Types.is?(type, "List")
-    return data?(cx, Types.item(type), seen)
-  elsif Types.is?(type, "Map")
-    return data?(cx, Types.key(type), seen) and data?(cx, Types.value(type), seen)
-  elsif Types.is?(type, "Set")
-    return true
-  elsif Types.is?(type, "Result")
-    return Types.is?(Types.item(type), "Void") or data?(cx, Types.item(type), seen)
-  elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
-    return nominal_data?(cx, type, seen)
-  end
-
-  return false
+## generic function it stands for any type, which could be an Fn.
+export def data?(cx: State.Cx, type: ResolvedType) -> Bool
+  return data_walk(cx, type, {}).passes
 end
 
 ## True when the type has a type variable inside.
@@ -865,71 +794,260 @@ def shared_type_names(cx: State.Cx) -> List[String]
   ].concat(OPAQUE_TYPES.to_a)
 end
 
-# True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
-# each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
-# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each name on the
-# path: a struct already in seen is true (the type is recursive), and since seen holds names, a recursion that changes
-# its type arguments each time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
-def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
-  name = Types.name(type)
-  for argument in Types.args(type)
-    if test == 0 and !encodable?(cx, argument, seen)
-      return false
+# json_field_place for one type. seen holds every struct walked in the whole call ("Struct:name"), not only the ones on
+# the path: the walk stops at the first place found, so a struct walked before had none, and a recursive type ends.
+def place_walk(
+  cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String, seen: Map[String, Bool]
+) -> Placed
+  if json_field?(type)
+    if !direct
+      if owner == ""
+        return Placed(place: kind, seen: seen)
+      end
+
+      return Placed(place: "#{kind} in #{owner}", seen: seen)
+    end
+
+    return place_walk(cx, Types.args(type)[0], false, "nested JsonField", owner, seen)
+  elsif Types.is?(type, "List")
+    return place_walk(cx, Types.item(type), false, "list item", owner, seen)
+  elsif Types.is?(type, "Map")
+    return place_walk(cx, Types.value(type), false, "map value", owner, seen)
+  elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
+    key = "Struct:#{Types.name(type)}"
+    # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
+    # Box by an argument, and the fields below are walked once for each name.
+    for argument in Types.args(type)
+      found = place_walk(cx, argument, false, "type argument", owner, seen)
+      if found.place != ""
+        return found
+      end
+
+      seen = found.seen
+    end
+
+    if seen.has_key?(key)
+      return Placed(place: "", seen: seen)
+    end
+
+    seen = seen.put(key, true)
+    place = Types.display_name(Types.name(type))
+    for field in cx.structs[Types.name(type)]
+      found = place_walk(cx, field.type, true, "struct field", "#{place}.#{field.name}", seen)
+      if found.place != ""
+        return found
+      end
+
+      seen = found.seen
     end
   end
 
-  if seen.any? do |item: String| item == name end
-    return true
-  end
-
-  inner = seen.push(name)
-  for field in stand_in_fields(cx, type)
-    if test == 0 and !encodable?(cx, field.type, inner)
-      return false
-    elsif test == 1 and !decodable?(cx, field.type, inner)
-      return false
-    end
-  end
-
-  return true
+  return Placed(place: "", seen: seen)
 end
 
-def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
+def passed(seen: Map[String, Bool]) -> Walk
+  return Walk(passes: true, seen: seen)
+end
+
+def refused(seen: Map[String, Bool]) -> Walk
+  return Walk(passes: false, seen: seen)
+end
+
+def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+  if primitive?(type) or Types.is?(type, "Json")
+    return passed(seen)
+  elsif json_field?(type)
+    if Types.is?(Types.args(type)[0], "Nil")
+      return refused(seen)
+    end
+
+    return encode_walk(cx, Types.args(type)[0], seen)
+  elsif Types.is?(type, "List")
+    return encode_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Map")
+    if !Types.is?(Types.key(type), "String")
+      return refused(seen)
+    end
+
+    return encode_walk(cx, Types.value(type), seen)
+  elsif Types.is?(type, "Struct")
+    return struct_walk(cx, type, seen, 0)
+  end
+
+  return refused(seen)
+end
+
+def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+  if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
+    return passed(seen)
+  elsif json_field?(type)
+    return decode_walk(cx, Types.args(type)[0], seen)
+  elsif Types.is?(type, "List")
+    return decode_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Map")
+    if !Types.is?(Types.key(type), "String")
+      return refused(seen)
+    end
+
+    return decode_walk(cx, Types.value(type), seen)
+  elsif Types.is?(type, "Struct")
+    if Types.args(type).size != 0
+      return refused(seen)
+    end
+
+    return struct_walk(cx, type, seen, 1)
+  end
+
+  return refused(seen)
+end
+
+# data? for one type. seen holds every struct and enum walked in the whole call ("Struct:name"), not only the ones on
+# the path (struct_walk says why that is sound), and a recursive type ends.
+def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range")
+    return passed(seen)
+  elsif Types.is?(type, "Var")
+    return Walk(passes: cx.prelude, seen: seen)
+  elsif Types.is?(type, "List")
+    return data_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Map")
+    key = data_walk(cx, Types.key(type), seen)
+    if !key.passes
+      return key
+    end
+
+    return data_walk(cx, Types.value(type), key.seen)
+  elsif Types.is?(type, "Set")
+    return passed(seen)
+  elsif Types.is?(type, "Result")
+    if Types.is?(Types.item(type), "Void")
+      return passed(seen)
+    end
+
+    return data_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
+    return nominal_walk(cx, type, seen)
+  end
+
+  return refused(seen)
+end
+
+# The walk of a struct type for the test: 0 for encodable, 1 for decodable. The type arguments are tested first, each
+# as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
+# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each key in the
+# whole call (walk_key: the name and which arguments are Nil, the one thing the stand-ins keep), so W[Int] and W[Nil]
+# are walked once each and a JsonField[Nil] behind W[Nil] is found. seen is passed in and returned, and it holds every
+# key entered so far, not only the keys on the path: a cluster of structs that use one another is walked once and not
+# once for each path through it. That is sound because a walk is a conjunction that stops at the first failure: a key
+# entered before either passed or aborted the whole walk, and a key still being walked counts as passed, as the type is
+# recursive. A key has only two shapes for each parameter, so a recursion that changes its type arguments each time
+# (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
+  if test == 0
+    for argument in Types.args(type)
+      found = encode_walk(cx, argument, seen)
+      if !found.passes
+        return found
+      end
+
+      seen = found.seen
+    end
+  end
+
+  key = walk_key(type)
+  if seen.has_key?(key)
+    return passed(seen)
+  end
+
+  seen = seen.put(key, true)
+  for field in stand_in_fields(cx, type)
+    found = test_walk(cx, field.type, seen, test)
+    if !found.passes
+      return found
+    end
+
+    seen = found.seen
+  end
+
+  return passed(seen)
+end
+
+# encode_walk for test 0, decode_walk for test 1.
+def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
+  if test == 0
+    return encode_walk(cx, type, seen)
+  end
+
+  return decode_walk(cx, type, seen)
+end
+
+# The name of a struct type and an N for each Nil argument and an I for each other one ("W[IN]"): what the stand-ins
+# (stand_ins) tell apart, so the walks of W[Int] and W[Nil] do not stop one another.
+def walk_key(type: ResolvedType) -> String
+  name = Types.name(type)
+  if Types.args(type).size == 0
+    return name
+  end
+
+  marks = ""
+  for argument in Types.args(type)
+    if Types.is?(argument, "Nil")
+      marks += "N"
+    else
+      marks += "I"
+    end
+  end
+
+  return "#{name}[#{marks}]"
+end
+
+def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   name = Types.name(type)
   key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
     builtin_void = Types.is?(argument, "Void") and ENUMS.has_key?(name)
-    if !builtin_void and !data?(cx, argument, seen)
-      return false
+    if !builtin_void
+      found = data_walk(cx, argument, seen)
+      if !found.passes
+        return found
+      end
+
+      seen = found.seen
     end
   end
 
-  if seen.any? do |item: String| item == key end
-    return true
+  if seen.has_key?(key)
+    return passed(seen)
   end
 
-  inner = seen.push(key)
+  seen = seen.put(key, true)
   if Types.is?(type, "Struct")
     for field in stand_in_fields(cx, type)
-      if !data?(cx, field.type, inner)
-        return false
+      found = data_walk(cx, field.type, seen)
+      if !found.passes
+        return found
       end
+
+      seen = found.seen
     end
 
-    return true
+    return passed(seen)
   end
 
   definition = cx.enums[name]
   stand = stand_ins(definition.parameters, Types.args(type))
   for variant in definition.variants
     for payload in variant.payload
-      if !data?(cx, substitute(payload, stand), inner)
-        return false
+      found = data_walk(cx, substitute(payload, stand), seen)
+      if !found.passes
+        return found
       end
+
+      seen = found.seen
     end
   end
 
-  return true
+  return passed(seen)
 end
 
 # The fields of a struct type to walk after its type arguments were tested: each type parameter is replaced by a
