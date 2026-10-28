@@ -8,8 +8,8 @@
   can land at any time.
 - [ ] `Crypto` module ([`docs/future/20-crypto.md` section
   20](../future/20-crypto.md#20-crypto-module)), on demand: after TLS on the VM
-  (7h) and `Bytes`. Started: `Crypto.sha256` on `List[Int]` (#455), for the
-  package hash.
+  (7h) and `Bytes`. Started: the `Digest` hashes on `List[Int]` (#455, #757),
+  SHA-256 for the package hash.
 
 ### Enums and pattern matching: implemented
 

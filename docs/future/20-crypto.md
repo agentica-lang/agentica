@@ -12,35 +12,23 @@ error `Result` that names the missing feature. Likewise, when `EVP_KDF_fetch`
 still returns `NULL` (an algorithm left out of the build), the call returns an
 error `Result` that names the missing feature.
 
-**Landed:** `Crypto.sha256(data: List[Int]) -> List[Int]` (#455,
+**Landed:** the `Digest` hashes `md5`, `sha1`, `sha256` and `sha512`, each
+with a `_hexdigest` form (`Digest.sha256(data: List[Int]) -> List[Int]`,
 `docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
-`vm/digest_openssl.c`. It takes and gives `List[Int]` until `Bytes` exists, and
-moves to `Bytes` with the other byte APIs.
+`vm/digest_openssl.c`. They take and give `List[Int]` until `Bytes` exists, and
+move to `Bytes` with the other byte APIs.
 
-**Sketch** (names are not final):
-
-```text
-Crypto.sha256(data: Bytes) -> Bytes          # also sha512; blake2b if needed
-Crypto.hmac_sha256(key: Bytes, data: Bytes) -> Bytes
-Crypto.equal?(a: Bytes, b: Bytes) -> Bool     # constant time
-Crypto.random_bytes(n: Int) -> Result[Bytes]  # OS-backed CSPRNG
-Crypto.password_hash(password: String) -> Result[String]
-Crypto.password_verify(password: String, hash: String) -> Result[Bool]
-Crypto.seal(key: Bytes, plain: Bytes) -> Result[Bytes]   # AEAD
-Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
-```
+**Plan** (issue #757, one PR each): HMAC-SHA256 and HMAC-SHA512, secure
+random bytes, a constant-time compare, PBKDF2 and AES-256-GCM. Their names
+follow Ruby's (`OpenSSL::HMAC`, `SecureRandom`, `OpenSSL::PKCS5.pbkdf2_hmac`),
+flattened as `Digest` is (`Digest::SHA256.hexdigest` is
+`Digest.sha256_hexdigest`); each PR settles its names. `Crypto` stays a
+reserved type name only.
 
 - Hex and Base64 are the `Digest.hexencode`/`hexdecode` and `Base64` builtins
   (`docs/grammar/06b-builtins.md`).
-- `password_hash` uses Argon2id (OpenSSL 3.2 or later, so always with the
-  vendored 3.5); the hash string carries its algorithm and parameters, so verify
-  needs no settings. Argon2 uses `OSSL_set_max_threads` for its lanes.
-- AEAD is AES-256-GCM or ChaCha20-Poly1305. The nonce rule is fixed by the
-  module: `seal` makes a random nonce for each call and puts it in front of the
-  output, so a user never picks or reuses one. `open` fails with `error(...)` on
-  a wrong key or changed data.
 - No low-level primitives: no raw block ciphers, no ECB, no unauthenticated
   modes.
-- Errors are `Result` values. Hashes and HMAC have no effect label;
-  `random_bytes`, `password_hash` and `seal` use the existing `random` label.
+- Errors are `Result` values. Hashes and HMAC have no effect label; the
+  calls that draw random bytes use the existing `random` label.
 

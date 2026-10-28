@@ -242,7 +242,7 @@ and a task's crash line (`"task":true`) carry it too.
   `Int.shift_left`/`shift_right`/`shift_right_unsigned` count.
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
   `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
-  0..4294967295, a `Crypto.sha256`, `Base64` or `Digest.hexencode` item
+  0..4294967295, a `Digest` hash, `Base64` or `Digest.hexencode` item
   outside 0..255.
 - `RUNTIME-INVALID-RANGE`: `Random.int` with `min > max`.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or

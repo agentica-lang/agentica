@@ -19,9 +19,16 @@ Channel.closed?
 Channel.new
 Channel.recv
 Channel.send
-Crypto.sha256
 Digest.hexdecode
 Digest.hexencode
+Digest.md5
+Digest.md5_hexdigest
+Digest.sha1
+Digest.sha1_hexdigest
+Digest.sha256
+Digest.sha256_hexdigest
+Digest.sha512
+Digest.sha512_hexdigest
 Dir.list
 Dir.mkdir
 Dir.mkdir_private
