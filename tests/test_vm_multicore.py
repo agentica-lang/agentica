@@ -173,6 +173,32 @@ def test_sha256_in_eight_tasks_on_four_schedulers_matches_hashlib(tmp_path):
     assert [json.loads(line) for line in result.stdout.splitlines()] == expected
 
 
+# SecureRandom runs without the shared lock (vm/crypto.c; OpenSSL 3 keeps one generator per thread), so eight tasks
+# draw at once. 64 KiB of bytes and a uuid from each task repeat with negligible chance (2 ** -122 per uuid pair).
+SECURE_RANDOM_TASKS = """\
+def draw(seed: Int) -> Result[String]
+  data = SecureRandom.random_bytes(65536)
+  return ok("#{Digest.hexencode(data)} #{SecureRandom.uuid}")
+end
+
+def main() -> Void
+  results = Task.map((1..8).to_a, 8, 30000, &draw)
+  for r in results
+    puts(r.unwrap!)
+  end
+end
+"""
+
+
+def test_secure_random_in_eight_tasks_on_four_schedulers_gives_distinct_draws(tmp_path):
+    result = vm(program(tmp_path, "secure_random", SECURE_RANDOM_TASKS))
+    assert (result.code, result.stderr) == (0, "")
+    draws = [line.split(" ") for line in result.stdout.splitlines()]
+    assert len(draws) == 8
+    assert all(len(data) == 2 * 65536 and len(uuid) == 36 for data, uuid in draws)
+    assert len({data for data, _ in draws}) == len({uuid for _, uuid in draws}) == 8
+
+
 PRINTERS = """\
 def printer(id: Int) -> Int
   i = 0

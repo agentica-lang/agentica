@@ -25,19 +25,15 @@ make CCACHE=                         # without ccache (used when installed and i
 make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-test TRACE=0                 # trace points compiled out (still type-checked); `agentica run --version` says "trace off"
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
-AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # steps and calls per function and source file, time per builtin, Profile.measure sections, at the end of the run (not part of `all`)
-AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=out.folded dist/agentica prog.agc   # folded stacks for flamegraph.pl, inferno, speedscope; AGENTICA_PROFILE_SAMPLE=N (default 1000 steps)
+AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # the step profile at the end of the run; folded stacks and Profile.measure: agentica-programming, references/performance.md
 make vm-libfuzz                      # libFuzzer target: LIBFUZZ=1 objects (clang, coverage hooks, ASan+UBSan) in build/vm/libfuzz/
 make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run from the compiled fixtures; failures in build/vm/libfuzz/crashes/ (60 s per C PR; fuzz.yml by hand); on Linux x86-64 each accepted input also runs with the JIT (always, on) and must match the interpreter (docs/vm/11-build-ci-supply-chain.md, Fuzzing)
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads, jit compile race) under TSan
-make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the modules of test-multicore-modules
-make vm-jit-test                     # the golden tests, tests/test_vm_stack.py and tests/test_vm_multicore.py with AGENTICA_JIT=always (docs/vm/05-values-execution-builtins.md §6.4), then half the golden shards with AGENTICA_JIT=off
-make vm-gc-stress-jit                # the golden tests with AGENTICA_JIT=always on the GC stress binary; vm-sanitize-jit-test (SANITIZE=1) on the ASan one
-make vm-jit-self-compile             # the front end compiles itself under --jit on and always to stage2 (AGENTICA_VM_TEST_FRONT_END_JIT)
-make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
-make test-multicore-modules          # the TCP, TLS, HTTP, process and BDD modules with every VM on 4 schedulers
-make layout-check BASE=REV         # the layout of plain_turn (the --jit off loop) against REV (default the merge base with origin/master), built in build/layout-base; references/ci.md
+make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests under TSan
+make vm-tsan-run                     # a TSan agentica running tests/test_vm_multicore.py and the modules of test-multicore-modules
+make vm-jit-test                     # goldens with AGENTICA_JIT=always, then half the shards with off; the other JIT targets: references/ci.md
+make test-multicore                  # tests/test_vm_multicore.py (--schedulers 4), then test-multicore-modules
+make layout-check BASE=REV           # the layout of plain_turn (the --jit off loop) against REV (references/ci.md)
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
 make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tests.md`)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
@@ -50,10 +46,9 @@ dist/agentica --dump-ir prog.agc
 dist/agentica prog.agc               # front end + VM in one step, in one process
 ```
 
-- CI runs `vm-sanitizers` only when a pull request (never a `master` push)
-  touches the VM paths listed in the `changes` step of
-  `.github/workflows/ci.yml`; a new VM source or test file outside those paths
-  must be added there (`references/ci.md`).
+- CI runs `vm-sanitizers` only for the VM paths listed in the `changes` step
+  of `.github/workflows/ci.yml`; a new VM source or test file outside those
+  paths must be added there (`references/ci.md`).
 - `agentica file.agc` runs in one process
   (`docs/vm/08-loader-and-cli.md` §9): the front end of the binary
   (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
@@ -137,17 +132,13 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
     (`system-env.env`); a program reads only the names it lists and never prints
     the whole environment.
   - `.channel`: the golden run goes through `tests/fixtures/channel-run.py`
-    (Python 3). The wrapper opens a socket pair, hands one end to the VM as fd
-    3 with `AGENTICA_CHANNEL=3`, sends the first line of the file and one more
-    after each line the VM sends back, closes its sending side after the last,
-    and writes everything to its stdout in the order the child produced it: the
-    child's stdout as it is, each channel line as `channel> ` and the line.
-    Stdout is drained before each channel line is shown, which is why the order
-    is fixed. On Windows the wrapper is `channel-run.js` (Node; two pipes at fd
-    3 and 4, `AGENTICA_CHANNEL=3,4`, the child's stdout a file read before each
-    channel line). The `test-*` fixtures use it; the plain golden reads of
-    `agentica test` modes (`--agentica-test run`) need a `.channel` file, and a
-    fixture without one is the no-channel case (`test-no-channel`).
+    (Python 3; `channel-run.js` with Node on Windows). The wrapper hands a
+    socket to the VM as fd 3 (`AGENTICA_CHANNEL=3`), sends the first line of
+    the file and one more after each line the VM sends back, and writes
+    everything to its stdout in a fixed order: the child's stdout as it is,
+    each channel line as `channel> ` and the line. The `test-*` fixtures use
+    it; a fixture of the `agentica test` modes (`--agentica-test run`) without
+    a `.channel` file is the no-channel case (`test-no-channel`).
   - `spawn-denied` name prefix: runs with `--deny-run`. A `process-` fixture's
     children must be on every CI runner (`/bin/sh`, `cat`, `sleep`) and must
     end or be closed.
@@ -164,48 +155,35 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
 - The `tests/test_vm_diff_*.py` shards need a built VM (`make test` builds it;
   `make vm-diff-test` does not): a local run skips them when it is missing,
   and CI fails (`AGENTICA_REQUIRE_VM=1`). `AGENTICA_FIXTURES` does not filter
-  a shard run, only `make goldens` and `make vm-golden-check`.
-  They run each fixture on the VM with `--json` and compare exit code,
-  stdout, stderr without the final JSON diagnostic line, and the diagnostic
-  code parsed from that line (`outcome`), with the fixture's golden. One more
-  VM run each in the plain and `--ai` formats must match exit code, stdout and
-  program stderr, and name the same code (task crash blocks, with their stack
-  lines, and the unobserved summary line are taken out of both sides first, and
-  their codes must match). Crash lines and crash texts carry the fixture's
-  path, so `unfixture` replaces the `tests/fixtures/` directory with
-  `@fixtures/` in stdout and stderr before any compare. The `--max-steps`
-  sweep, around the golden's step count T (`"steps"`, the smallest limit that
-  finished when `make goldens` searched for it): each limit must give the
-  golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr
-  that are prefixes of the golden's; once a limit finishes, larger ones must
-  too (`check_sweep`). The test does not search: one run under
-  `T + max(10, T / 10)` must finish (`check_step_allowance`, which catches
-  over-charging), and the last sweep limit, `max(2T + 100, T + 2 * 2000)`,
-  must finish. With `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and
-  `make vm-gc-stress`) each fixture runs only 1, 2, T - 1, T, the last limit
-  and 8 limits drawn one from each eighth of 3 to T - 2 (`sampled_limits`);
-  local `make test`, the release and the weekly `sweep.yml` keep the full
-  sweep. `AGENTICA_SWEEP=ends` (`make test-shared`) runs only 1, T - 1, T and
-  the last limit, as do the fixtures of `ENDS_ONLY_FIXTURES` in every mode
-  (`task-map-flushed`, `http-client-queue`: costly runs, whose stops
-  `task-map-steps` and `http-client` sweep). The draw comes
-  from `AGENTICA_SWEEP_SEED`, else the first 8 hex digits of `GITHUB_SHA` or
-  `git rev-parse HEAD`, plus the fixture name, so it rotates with the commit
-  and is fixed within a run. Each shard prints the seed, and a failed limit
-  names it: rerun with that `AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=...`.
+  a shard run, only `make goldens` and `make vm-golden-check`. Each shard runs
+  the fixture with `--json` and compares exit code, stdout, stderr without the
+  final JSON diagnostic line, and the diagnostic code with the golden; one
+  more run each in the plain and `--ai` formats must match exit code, stdout
+  and program stderr and name the same code. Crash lines carry the fixture's
+  path, so `unfixture` replaces `tests/fixtures/` with `@fixtures/` first.
+  The `--max-steps` sweep, around the golden's step count T (the smallest
+  limit that finished when `make goldens` searched for it): each limit must
+  give the golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and output
+  that is a prefix of the golden's; once a limit finishes, larger ones must
+  too (`check_sweep`). A run under `T + max(10, T / 10)` must finish
+  (`check_step_allowance`, which catches over-charging). With
+  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`)
+  each fixture runs only some limits, drawn from `AGENTICA_SWEEP_SEED` (else
+  `GITHUB_SHA`, so it rotates with the commit); a failed limit names the seed:
+  rerun with that `AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=...`. Local
+  `make test`, the release and the weekly `sweep.yml` keep the full sweep.
+  `AGENTICA_SWEEP=ends` (`make test-shared`) runs only the ends, as do the
+  fixtures of `ENDS_ONLY_FIXTURES` in every mode (costly runs).
   A new fixture needs its golden: run `make goldens`, read the new `.expected`
   by hand, and commit it; a changed golden is a reviewed behaviour change.
-  `make goldens` refuses a run that timed out, died by a signal (status
-  129 to 159) or ends in `RUNTIME-INTERNAL`, and names `.expected` files
-  with no `.agc` next to them. Every program the tests run gets
-  `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` (`vm_environment` in
-  `tests/agentica_test.py`), so OS error text is the untranslated C text. The
-  VM runs have the scratch folder of the test as working directory. Sweep and
-  runaway VM runs time out after 60 seconds; after the first timeout (or exit
-  124 or 137) the rest of the batch is skipped and recorded as 124. Output is
-  decoded with one U+FFFD for each byte that is not part of a valid sequence
-  (`decode`), which is how the goldens were written. Fixture stdin comes from a
-  file; pipe stdin is covered by the extras of shard 8 and the CLI tests.
+  `make goldens` refuses a run that timed out, died by a signal or ends in
+  `RUNTIME-INTERNAL`, and names `.expected` files with no `.agc` next to them.
+  Every test program gets `LC_ALL=C.UTF-8` and `LANG=C.UTF-8`
+  (`vm_environment` in `tests/agentica_test.py`), so OS error text is the
+  untranslated C text. Sweep and runaway runs time out after 60 seconds; the
+  rest of the batch is then skipped and recorded as 124. Fixture stdin comes
+  from a file; pipe stdin is covered by the extras of shard 8 and the CLI
+  tests.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION
   -DGC_THREADS -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK -DTHREAD_LOCAL_ALLOC`

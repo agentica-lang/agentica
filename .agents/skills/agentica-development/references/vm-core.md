@@ -4,272 +4,184 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
+Each `vm/` file starts with a comment saying what it owns; this list keeps the
+rules those comments do not carry.
+
 - `vm/value.h`, `vm/port.h`, `vm/core.h`, `vm/services.h`: the layer headers
   ("Which layer" in `vm.md`). `value.h` has `agc_opcode`, in the same order as
   `OPCODES` in `compiler/bytecode/bytecode_tables.agc`. `port.h` has the stepper
   protocol (`agc_stepper`, `agc_step_fn`, `agc_task_stepper`; "Adding a
   builtin").
-- `vm/tools/check-layers.sh`, `vm/tools/check-layers-test.sh`: the layer check
-  run by `make vm-layers` (`docs/vm/15-layers.md` §15.5); link rules use `nm` on
-  the objects (Linux only). The self-test plants one violation at a time in a
-  temporary copy and rebuilds the object for the link cases
+- `vm/tools/check-layers.sh`, `check-layers-test.sh`: the layer check run by
+  `make vm-layers` (`docs/vm/15-layers.md` §15.5); link rules use `nm` on the
+  objects (Linux only).
 - `vm/loader.c`: full validation of untrusted `.agcb` input
   (`docs/vm/08-loader-and-cli.md` §8). It holds the collector off with
-  `agc_gc_pause` and `agc_gc_resume` while it loads (value.c; the GC-stress
-  build ignores them). The struct and enum tables use one variant array sized by
-  a first pass and one shared empty value per nullary variant. Updates
-  (`load_updates`): strictly increasing field indexes below the field count, and
-  the `STRUCT_WITH` operand check against it. Types (`load_types`):
-  back-pointing List/Map entries at most 1024 deep, struct records with unique
-  `json_name`s and `field_types`. Globals (`load_globals`): at most
-  `AGC_MAX_GLOBALS` slots; `check_function` and `check_not_entry` enforce the
-  `GLOBAL_SET` and entry rules (Gotchas of `references/vm-lowering.md`)
-- `vm/value.c`: allocation (and the GC stress hook), `agc_wrong_tag` and the
-  constructors and accessors of the service resources (the common ones are
-  `static inline` in `value.h`), String allocation (`agc_small_string` returns
-  the shared empty String for no bytes and the shared one-character String for
-  one ASCII byte, else a new one; use it wherever a builtin cuts or builds a
-  String from bytes it does not own), UTF-8 checks and code point count
-  (`agc_utf8_count`), `agc_error_value` (an `error` Result from C text),
-  OOM/abort handlers
+  `agc_gc_pause` and `agc_gc_resume` while it loads. The struct and enum tables
+  use one variant array sized by a first pass and one shared empty value per
+  nullary variant. Updates (`load_updates`): strictly increasing field indexes
+  below the field count, and the `STRUCT_WITH` operand check against it. Types
+  (`load_types`): back-pointing List/Map entries at most 1024 deep, struct
+  records with unique `json_name`s and `field_types`. Globals (`load_globals`):
+  at most `AGC_MAX_GLOBALS` slots; `check_function` and `check_not_entry`
+  enforce the `GLOBAL_SET` and entry rules (Gotchas of `vm-lowering.md`).
+- `vm/value.c`: allocation (and the GC stress hook), the constructors and
+  accessors of the service resources, String allocation (`agc_small_string`
+  returns the shared empty String for no bytes and the shared one-character
+  String for one ASCII byte, else a new one: use it wherever a builtin cuts or
+  builds a String from bytes it does not own), UTF-8 checks, `agc_error_value`
+  (an `error` Result from C text), OOM/abort handlers.
 - `vm/map.c`: maps and sets: SipHash-1-3 keyed by `vm->hash_key` (from OS
-  entropy in `vm/launch.c`, else a fixed key), the persistent HAMT (`_hash`
-  variants take a given hash, for tests; `agc_map_add_hash` puts only a new key
-  and returns the same map for a member, which `Set.add` and `Set.new` use), and
-  `agc_map_keys` (insertion order from the reversed key list)
+  entropy in `vm/launch.c`), the persistent HAMT (`_hash` variants take a given
+  hash, for tests; `agc_map_add_hash` puts only a new key and returns the same
+  map for a member, which `Set.add` and `Set.new` use), and `agc_map_keys`
+  (insertion order from the reversed key list).
 - `vm/list_impl.h`: private to the core: `struct agc_list`, the trie node type
-  and the `static inline` accessors (`list_at` has no bounds check; it reads the
-  tail in line and calls `agc_list_trie_get` of `list.c` for the trie).
-  `list.c`, `interp.c` (`LIST_LEN`, `LIST_GET`, hot in `for` loops) and
-  `vm/tests/list_test.c` include it; `make vm-layers` fails any other include
+  and the `static inline` accessors (`list_at` has no bounds check). `list.c`,
+  `interp.c` (`LIST_LEN`, `LIST_GET`, hot in `for` loops) and
+  `vm/tests/list_test.c` include it; `make vm-layers` fails any other include.
 - `vm/text.c`: text and debug forms (`agc_text`, `agc_debug`, and
   `agc_test_text`, the debug form with each `Json` as its canonical text, for
-  `Test.eq`) through one explicit `agc_alloc`'d stack and a growing String,
-  `agc_concat`, and `agc_write_form`, the one `write`-form escaper for Strings
+  `Test.eq`) through one explicit `agc_alloc`'d stack and a growing String;
+  `agc_write_form` is the one `write`-form escaper for Strings.
 - `vm/unicode_data.c`: frozen, checked-in Unicode 17.0 data (see its header);
-  edit by hand only for a deliberate Unicode update: write-escape ranges, full
-  case maps, cased and case-ignorable ranges (final sigma)
-- `vm/strings.c`: the `String` builtins (`agc_string_builtins`, one of the
-  tables `agc_find_builtin` loops over) and their helpers. The shared Strings of
-  `rt->chars` and `rt->empty_string` (made in `agc_vm_init`) come back through
-  `agc_small_string` (or an inline check in the hot `piece`), and `trim`,
-  `reverse` and the case maps return their argument when nothing changes. Also
-  UTF-8 encode, `agc_utf8_offset` with each task's one-entry cursor (string,
-  code point index, byte offset), KMP search (`agc_text_find`),
-  `agc_change_case`, `agc_parse_int`, `agc_parse_float`
+  edit by hand only for a deliberate Unicode update.
+- `vm/strings.c`: the `String` builtins. The shared Strings of `rt->chars` and
+  `rt->empty_string` (made in `agc_vm_init`) come back through
+  `agc_small_string`, and `trim`, `reverse` and the case maps return their
+  argument when nothing changes. Also `agc_utf8_offset` with each task's
+  one-entry cursor (string, code point index, byte offset) and the KMP search
+  (`agc_text_find`).
 - `vm/builtins.c`: the core builtins (`agc_core_builtins`: `IO`, `System`,
   `List`, `Map`, `Set`, `Result`, `Range`) and `agc_find_builtin`, which matches
-  by implementation key and arity from the import table over
-  `agc_builtin_tables`; `agc_builtin_struct` and `agc_builtin_variant` find a
-  builtin struct or an enum variant by name in the program's tables, else
-  `RUNTIME-INTERNAL`
-- `vm/builtin_tables.c`: `agc_builtin_tables`, the list of every library's own
-  table in lookup order (the first match wins): the one place that names the
-  services' tables; a new builtin library adds its table here and its `extern`
-  to `vm/services.h`
-- `vm/ffi.c`, `vm/ffi_os.h`, `vm/ffi_libffi.c`, `vm/ffi_none.c`: native calls:
-  `Native.call` (`agc_ffi_builtins`, the builtin that each `extern` function
-  lowers to, with a signature string `"CODES SYMBOL LIBRARY"` from
-  `compiler/lower/lower_native.agc`), the cache of prepared calls, the resources
-  that extern functions return (`agc_c_resource` in `vm/value.h`: a registry
-  entry owned like a handle, freed by `Native.close` or the owner's end; a
-  compute call holds its resource arguments in `jobs` and the last one runs a
-  deferred free), the zeroed slots of `out` parameters (capital codes; the call
-  gives a List that the lowered body turns into the function's record, and a
-  detached compute call frees its out resources in `done`), the `.` code that
-  starts the variadic part (`ffi_prep_cif_var`; no `.agcb` format change, the
-  signature is a string constant), the `c` code of a call through a C function
-  pointer (argument 0 is the address, `function_at` refuses NULL and owned
-  buffers, the call is prepared with no symbol and `agc_ffi_invoke` takes the
-  address), the `e` code and the free word `C.Function` of a resource kind
-  freed through a pointer (the address of that argument, kept in
-  `agc_c_resource.free_at`), the `{N:CODES}` code of a C struct by value (N
-  the record's index in the struct table, which lowering writes; the VM checks
-  it against the program, builds an `agc_c_struct` layout per signature that
-  `vm/ffi_libffi.c` turns into an `FFI_TYPE_STRUCT` and fills with libffi's
-  offsets, copies a record's fields into C memory and builds a record from a
-  struct result, nested ones too), and `agc_ffi_refusal`, which
-  `agc_launch_native` calls at load (`--deny-native`, systems without libffi). A `compute def`'s signature starts with `compute `:
-  the call goes to the compute pool (`vm/compute.c`) through `agc_io_compute` in
-  `vm/loop.c`, and the task parks. `Native.wait_readable` and `wait_writable`
-  are a wait on the loop (`agc_io_start_then`, a poller on a new open or a
-  duplicate of the descriptor from `agc_poller_open_copy` in `vm/loop.c`, whose
-  OS side is `vm/poll_posix.c` and `vm/poll_windows.c`; on Windows a duplicate
-  Winsock socket, one wait per socket), the job's timer, the `cancel` half.
-  `Native.get_string`, `get_bytes` and `pointer` read memory at a `C.Pointer`
-  and make one. `Native.memory_pointer` makes an owned buffer: an
-  `agc_c_resource` with `buffer` set (calloc'd memory of `size` bytes, freed
-  with free() by `Native.free`, the owner's end or the run's end), which the
-  program types as a `C.Pointer` (`buffer_of` and `pointer_of` take either), so
-  an extern call passes it and a compute call holds it. Its block form (arity 2)
-  is a stepper (`buffer_block_step`) that calls the block with the buffer and
-  closes it when the block returns, if the task still owns it.
-  `Native.from_string` is the same buffer (`new_buffer`, a shared row too) with
-  the String's bytes copied in and a NUL after them, and the same block form.
-  `Native.offset` of a buffer makes a view: an `agc_c_resource` with `parent`
-  set to the buffer (`root_of`) and no state, whose `pointer` and `size` are the
-  bytes from its offset to the buffer's end; every closed check and hold
-  (`held_by`, `struct_held`) goes to the parent. The typed reads
-  and writes (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`,
-  `put_string`, `put_bytes`) and `get_string`/`get_bytes` go through
-  `memory_at`, which checks a buffer's
-  bounds and freed state (`RUNTIME-NATIVE-BOUNDS`, `-CLOSED`) and only NULL and
-  a negative offset of a raw pointer. Their rows are not shared: `memory_at`
-  takes rt->sync only for a buffer, and the caller drops it after the copy
-  (`memory_done`), so no free comes between the check and the copy while a read
-  of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
-  and `Native.free` are shared rows. `Native.size_of`, `get_struct` and
-  `put_struct` are shared rows too: their last argument is a `{N:CODES}` code
-  that lowering writes for the type name (for `put_struct`, a fourth argument
-  from the value's type), laid out once by `agc_ffi_layout` and kept in the
-  signature cache as a `layout` entry; they reuse `memory_at`, `struct_value`,
-  `check_argument` and `struct_write`. `C.Float` is code `f` (`F` out), refused
-  after `.`. The integer codes are `i l g h u w j n` (`C.Int32`, `C.Int64`,
-  `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32`, `C.Long`; capitals
-  out); `fits_bits` is the one range rule of arguments, fields and `put_*`, and
-  the four narrower than an int are refused after `.`. Every `Native.*` import
-  counts as native code for the refusal at load. The adapter `vm/ffi_libffi.c`
-  (`AGC_FFI`, Linux x86_64, Windows x64 and macOS) opens libraries with `dlopen`
-  or `LoadLibraryExW` and calls with libffi; `vm/ffi_none.c` refuses elsewhere
-- `vm/numbers.c`: `Float`, `Time` and `Random` builtins (`agc_number_builtins`)
-- `vm/random.c`: xoshiro256** seeded with splitmix64, both public domain
-  (`docs/vm/05-values-execution-builtins.md` §7.4)
-- `vm/json.c`: the `JSON` builtins (`agc_json_builtins`) and `agc_json_parse`
-  (the control-character pass, top-level numbers and literals by hand, strings,
-  arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`,
-  then a copy into GC nodes with an explicit stack;
-  `docs/vm/02-reference-behavior.md` §2.6)
-- `vm/json_value.c`: the `Json` value (`agc_json` nodes, 5.1), in the core
-  because `text.c` and `equal.c` print and compare a Json: `agc_json_encode`
-  (the one `write-json` writer, for `JSON.encode` and the text form of a Json)
-  and `agc_json_from` (builders), both over one explicit stack. The node
-  functions that the parser and the builtins share: `agc_json_pair` is also used
-  by `diag.c` and `testing.c`, and `agc_json_finish` sorts the members by key
-  bytes and drops repeated keys. Also the buffer, stack growth and ASCII helpers
-  (`agc_json_put`, `agc_json_grow`, `agc_json_ascii`)
-- `vm/json_typed.c`: `agc_json_decode` and `agc_json_schema`
-  (`docs/vm/02-reference-behavior.md` §2.7): one explicit frame stack over the
-  Json tree and the type table, the error path built from the frames only on
-  failure; schema marks the types and structs reachable from the target with a
-  queue, then builds their schemas in index order. The builtins in `vm/json.c`
-  find the struct by its linked name (`json_name`)
+  by implementation key and arity over `agc_builtin_tables`;
+  `agc_builtin_struct` and `agc_builtin_variant` find a builtin struct or an
+  enum variant by name in the program's tables, else `RUNTIME-INTERNAL`.
+  `vm/builtin_tables.c` lists every library's own table in lookup order (the
+  first match wins): a new builtin library adds its table there and its
+  `extern` to `vm/services.h`.
+- `vm/ffi.c`, `vm/ffi_os.h`, `vm/ffi_libffi.c`, `vm/ffi_none.c`: native calls.
+  `Native.call` (`agc_ffi_builtins`) is the builtin that each `extern`
+  function lowers to, with a signature string `"CODES SYMBOL LIBRARY"` from
+  `compiler/lower/lower_native.agc` (the codes: `i l g h u w j n` for the
+  integer types, capitals for `out`, `f` for `C.Float`, `.` for the variadic
+  part, `c` for a call through a C function pointer, `e` for a resource freed
+  through a pointer, `{N:CODES}` for a C struct by value, N the record's index
+  in the struct table; the VM checks it against the program). A `compute def`'s
+  signature starts with `compute `: the call goes to the compute pool
+  (`vm/compute.c`) through `agc_io_compute` in `vm/loop.c`, and the task parks.
+  Resources that extern functions return are `agc_c_resource` (`vm/value.h`):
+  a registry entry owned like a handle, freed by `Native.close` or the owner's
+  end; a compute call holds its resource arguments in `jobs`, and the last one
+  runs a deferred free. `Native.memory_pointer` and `Native.from_string` make
+  an owned buffer (an `agc_c_resource` with `buffer` set; the program types it
+  as a `C.Pointer`; `buffer_of` and `pointer_of` take either); `Native.offset`
+  of a buffer makes a view with `parent` set (`root_of`), and every closed check
+  and hold (`held_by`, `struct_held`) goes to the parent. Typed reads and
+  writes go through `memory_at`, which checks a buffer's bounds and freed state
+  and only NULL and a negative offset of a raw pointer; those rows are not
+  shared: `memory_at` takes `rt->sync` only for a buffer, and the caller drops
+  it after the copy (`memory_done`), so no free comes between the check and the
+  copy. `Native.memory_pointer`, `Native.free`, `size_of`, `get_struct` and
+  `put_struct` are shared rows. `fits_bits` is the one range rule of
+  arguments, fields and `put_*`. Every `Native.*` import counts as native code
+  for the refusal at load (`agc_ffi_refusal`, called by `agc_launch_native`).
+  `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and macOS) opens
+  libraries with `dlopen` or `LoadLibraryExW` and calls with libffi;
+  `vm/ffi_none.c` refuses elsewhere. `Native.wait_readable` and `wait_writable`
+  are a wait on the loop (`agc_io_start_then`, a poller on a duplicate of the
+  descriptor from `agc_poller_open_copy`).
+- `vm/numbers.c` (`Float`, `Time` and `Random` builtins) and `vm/random.c`
+  (xoshiro256** seeded with splitmix64;
+  `docs/vm/05-values-execution-builtins.md` §7.4).
+- `vm/crypto.c`, `vm/digest.h`, `vm/digest_openssl.c`: the `Digest`, `HMAC` and
+  `Base64` builtins; `digest.h` is the adapter interface (also an incremental
+  SHA-256 for the `File` hash), the OpenSSL code is only in `digest_openssl.c`.
+- `vm/json.c`: the `JSON` builtins and `agc_json_parse` (the control-character
+  pass, top-level numbers and literals by hand, strings, arrays and objects
+  through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC
+  nodes with an explicit stack; `docs/vm/02-reference-behavior.md` §2.6).
+  `vm/json_value.c` is the `Json` value (`agc_json` nodes), in the core because
+  `text.c` and `equal.c` print and compare a Json: `agc_json_encode` (the one
+  writer, for `JSON.encode` and the text form of a Json) and `agc_json_from`,
+  both over one explicit stack; `agc_json_finish` sorts the members by key bytes
+  and drops repeated keys. `vm/json_typed.c` is `agc_json_decode` and
+  `agc_json_schema` (§2.7): one explicit frame stack over the Json tree and the
+  type table, the error path built from the frames only on failure.
 - `vm/equal.c`: `agc_equal`, the deep compare of §25.4 for `Test.eq`: one
-  explicit stack of value pairs, one turn unit per pair, Strings through
-  `agc_same_string` (also used by `EQ` and the map key compare), Floats by IEEE
-  754, maps by key in any order, a `Json` by its canonical `agc_json_encode`
-  text, `RUNTIME-INTERNAL` for values with no equality
-- `vm/trace.h`, `vm/trace.c`: VM tracing (`AGENTICA_VM_TRACE`, as built in
-  `docs/vm/08-loader-and-cli.md` §9): the `agc_trace` struct, category bits,
-  `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_emit` writes one 512-byte stack
-  line with one `write(2)`
-- `vm/profile.c`: the profile category (`AGENTICA_VM_TRACE=profile`): its
-  counters, the end-of-run report, the `Profile.measure` sections, the folded
-  stacks (`AGENTICA_PROFILE_FORMAT=folded`) and the `Profile` builtins
-- `vm/launch.c`, `vm/launch.h`: driver code shared by the two runs of the binary
-  (`agentica run` and the front end): `agc_launch_parse` (the VM options, with
-  the program name in the messages), seeds, the trace file,
-  `agc_launch_ignore_sigpipe`, `agc_launch_vm` (a runtime from a loaded program;
-  a front end gets `rt->front_end`, no stdin and no parent channel),
-  `agc_launch_settle` / `agc_launch_exit` (the one exit path)
-- `vm/agentica.c`, `vm/embedded.h`: the single binary (Linux): loads the front
-  end with `agc_load_front_end` (any Agentica version), runs it, and when it
-  called `FrontEnd.hand_off` and ended with status 0 retires it
-  (`agc_launch_settle`, `agc_io_close`, `agc_gc_collect`) and runs the handed
-  program in a new runtime; `--front-end FILE.agcb` replaces the carried front
-  end; the embedded data is described by `agc_embedded_data` and
-  `agc_embedded_index` (written by `vm/tools/gen-embedded.sh`)
+  explicit stack of value pairs, one turn unit per pair, Floats by IEEE 754,
+  maps by key in any order, a `Json` by its canonical `agc_json_encode` text,
+  `RUNTIME-INTERNAL` for values with no equality.
+- `vm/trace.[ch]`, `vm/profile.c`: VM tracing (`AGENTICA_VM_TRACE`, as built in
+  `docs/vm/08-loader-and-cli.md` §9; `agc_trace_emit` writes one 512-byte stack
+  line with one `write(2)`) and the `profile` category (counters, the report,
+  `Profile.measure` sections, folded stacks).
+- `vm/launch.[ch]`: driver code shared by the two runs of the binary
+  (`agentica run` and the front end): `agc_launch_parse` (the VM options),
+  seeds, `agc_launch_vm` (a runtime from a loaded program; a front end gets
+  `rt->front_end`, no stdin and no parent channel), `agc_launch_settle` /
+  `agc_launch_exit` (the one exit path).
+- `vm/agentica.c`, `vm/embedded.h`: the single binary: loads the front end
+  with `agc_load_front_end`, runs it, and when it called `FrontEnd.hand_off`
+  and ended with status 0 retires it (`agc_launch_settle`, `agc_io_close`,
+  `agc_gc_collect`) and runs the handed program in a new runtime;
+  `--front-end FILE.agcb` replaces the carried front end; the embedded data is
+  `agc_embedded_data` and `agc_embedded_index` (`vm/tools/gen-embedded.sh`).
 - `vm/front_end.c`: `FrontEnd.hand_off`, `FrontEnd.std_source` and
-  `FrontEnd.stdin_bytes` (a service, `agc_front_end_builtins`): they fail with
-  `RUNTIME-FRONT-END-ONLY` when `rt->front_end` is NULL, which it is for every
-  runtime except the front end of the single binary; also `Std.source`
-  (`agc_std_builtins`, not guarded), which reads the std sources of `rt->std`
+  `FrontEnd.stdin_bytes`: they fail with `RUNTIME-FRONT-END-ONLY` when
+  `rt->front_end` is NULL (every runtime except the front end of the single
+  binary); `Std.source` (not guarded) reads the std sources of `rt->std`.
 - `vm/fuzz.c`, `vm/fuzz_libfuzzer.c`: `agc_fuzz_one` and the libFuzzer entry
-  point (not in the release binary)
+  point (not in the release binary).
 - `vm/jit/` (core, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit`,
-  `AGENTICA_JIT`):
-  `jit.h` is the one header, the interpreter's boundary first, then the emitter
-  and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. For `on`,
-  a call of a builtin that may park (`agc_jit_parking`, a sorted name list that
-  `jit_test.c` checks against the tables) counts as `AGC_JIT_PARK_WEIGHT` trips
-  out of the code. `jit.c` decides every function once in `agc_jit_new` (for
-  `on`, a backward jump and innermost loops that seldom leave the code, a fixed
-  point that `agc_jit_settle` reaches in time linear in the program), sets
-  `skip` for the rest and returns NULL when no function is left, so that run takes the plain
-  turn loop, as a turn does while no code is published, no top frame may get
-  some and it is not one of the turns sampled at random, one in 16 on average,
-  down to one in 256 while the samples count no entry (`agc_jit_turn`, called
-  by `agc_run_turn`; the jit copy interprets up to 1.4 times slower than the
-  plain one); it walks a function
-  once: each instruction (fused ones as their STEP or CONST) calls one
-  `agc_emit_*` function; the scheduler that claims a function compiles it,
-  seals it in the run's code memory chunks (functions without a loop wait in a
-  batch to share pages) and publishes it with a release store
-  (`agc_jit_code_of`, which also counts entries and passes for `on`). The
-  compile budget of a run: each compile first takes the function's
-  instructions plus `AGC_JIT_COMPILE_BASE` units of `AGC_JIT_BUDGET` (a count,
-  not a time; `AGENTICA_VM_TEST_JIT_BUDGET` sets a small one for tests), and
-  its code takes pages of `AGC_JIT_CODE_CAP`; the first compile that fits
-  neither claims every function not claimed yet (`spend`), so the rest of the
-  run interprets them without another walk, and the jit trace says
-  `budget spent=work` or `spent=bytes` once. A function that costs more than
-  the whole budget only stays interpreted itself.
-  `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
-  table, for the SysV and Win64 argument registers (`AGC_JIT_HOST` is 0
-  elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X pages,
-  reserved, opened writable, then sealed read-execute. `run_compiled` in
-  `vm/interp.c` enters at each reload of the jit copy of `turn_loop` (after the
-  one-byte `agc_jit_may_run` test; the plain copy has no JIT test, as one cost
-  arithmetic 20% by code layout alone) and handles the exits as the interpreter
-  handles that instruction: STEP runs `step_slow`, COST `apply_cost`, a failure
-  `op_failed`, INTERPRET calls a leaf builtin itself at native depth 0 or after
-  a failed tag check, starts a block call (a row with a native kind:
-  `start_native`, whose block then runs in its code) or lets the loop run that
-  one instruction, which enters the code again at the next pc (`resume`), CALL
-  and RETURN the shared frame handlers. A block's RETURN at native depth 0 first
-  calls `agc_jit_block_return` (below `plain_turn`): while the block call goes
-  on with the same function and nothing can fail or take a slow step
-  (`block_goes_on`, which lists the kinds it handles), it does the native
-  frame's work for that kind and restarts the block's frame in place at
-  instruction 0 (no exit; a turn it ends takes the YIELD exit at
-  `AGC_JIT_PC_RESTART`, which `run_compiled` turns into pc 0). A frame with the
-  tail flag set takes the RETURN exit: `run_compiled` reloads the running code
-  only while that flag is set. A change to `resume_native` or `call_value` needs
-  the same change there.
-  A CALL of a function with code is native (`agc_emit_call`): an exit inside
-  the callee comes back with the callee's frame on top. So is a CALL_VALUE
-  whose function value has code (`agc_jit_call_value` pushes the frame in room
-  the task has); otherwise its CALL_VALUE exit runs the interpreter's
-  `call_value` (`agc_task_call`, through `agc_jit_call_value_exit` in `jit.c`,
-  so `call_exit` stays small) and goes on in the callee's code; `on` counts a
-  CALL_VALUE as a call that does not leave. A TAIL_CALL of a function with
-  code is native too (`agc_emit_tail_call`): it replaces the top frame in place
-  (base, ret and depth kept, tail set) and jumps to the callee's tail entry
-  (`AGC_JIT_TAIL_ENTRY`), or to instruction 0 for a call of itself, so the
-  frame's function changes without an exit and `run_compiled` reads the top
-  frame again after an exit when the frame count changed or the tail flag is
-  set (a one-test change, as `run_compiled`'s size moves `plain_turn`); its
-  trace count is emitted by the code (`agc_jit_count_tail`), so `call_exit`
-  stays as it is. It exits only when the callee has no code, the register file
-  would grow or it takes more than `AGC_JIT_TAIL_PARAMS` (32) arguments. `on`
-  counts a self TAIL_CALL within that limit as a loop (`backward` in `jit.c`).
-  A new instruction with code: a case in `has_code` and in the walk, its
-  `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
-  slow path leaves for the interpreter; compiled code never fails,
-  allocates or parks, and pushes or pops a frame only in room the task
-  already has. It calls a builtin only when the row is marked `direct`
-  (`agc_builtin.direct`, checked by `sync_test.c`) or `leaf` (only below a
-  native call, so its exit never unwinds one; at depth 0 the INTERPRET exit is
-  cheaper than the catch; the rows of `plain_leaves`, which cannot fail once
-  their `agc_jit_plain` checks pass (the tags, and one character for
-  `String.code`), at any depth through `agc_jit_call_plain`, with no catch),
-  through `agc_jit_call_builtin` or `agc_jit_call_leaf`, whose catch
-  (`vm->jit_catch`) keeps `agc_fail` from jumping across compiled code; mark a
-  row only if it never parks, starts a block or moves frames. An edit of
-  `turn_loop`, even in its jit copy, changes the plain copy's machine code:
-  keep JIT logic in `run_compiled`, and put new JIT exit handling there in
-  out-of-line `noinline` helpers: growth of `run_compiled` moves `plain_turn`,
-  and a move of 128 bytes with the same instructions cost `--jit off` up to 12%
-  (`make layout-check` fails on it, `references/ci.md`).
+  `AGENTICA_JIT`; `on` is the default on x86-64): `jit.h` is the one header
+  (the interpreter's boundary first, then the emitter and code memory that
+  only `vm/jit/` and `vm/tests/jit_test.c` use). `jit.c` decides every function
+  once in `agc_jit_new` (for `on`: a backward jump and innermost loops that
+  seldom leave the code; a call of a builtin that may park, from the sorted
+  `agc_jit_parking` list that `jit_test.c` checks against the tables, counts as
+  `AGC_JIT_PARK_WEIGHT` trips out of the code), and returns NULL when no
+  function is left, so the run takes the plain turn loop. `agc_jit_turn` (from
+  `agc_run_turn`) samples turns at random for `on`; the jit copy interprets up
+  to 1.4 times slower than the plain one. The scheduler that claims a function
+  compiles it (one `agc_emit_*` call per instruction; fused ones as their STEP
+  or CONST), seals it in the run's code chunks and publishes it with a release
+  store (`agc_jit_code_of`). The compile budget of a run (`AGC_JIT_BUDGET`
+  work units and `AGC_JIT_CODE_CAP` bytes; `AGENTICA_VM_TEST_JIT_BUDGET` sets a
+  small one for tests): the first compile that fits neither claims every
+  function not claimed yet (`spend`), so the rest of the run interprets them,
+  and the jit trace says `budget spent=work` or `spent=bytes` once.
+  `emit_x64.c` has the machine code of each kind for the SysV and Win64
+  registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is compiled);
+  `mem_posix.c` and `mem_windows.c` give W^X pages.
+  - `run_compiled` in `vm/interp.c` enters at each reload of the jit copy of
+    `turn_loop` (after the one-byte `agc_jit_may_run` test; the plain copy has
+    no JIT test, as one cost arithmetic 20% by code layout alone) and handles
+    each exit as the interpreter handles that instruction (STEP `step_slow`,
+    COST `apply_cost`, a failure `op_failed`, INTERPRET a leaf builtin or a
+    block call, CALL and RETURN the shared frame handlers). A change to
+    `resume_native` or `call_value` needs the same change there.
+  - A CALL, CALL_VALUE or TAIL_CALL of a function with code is native
+    (`agc_emit_call`, `agc_jit_call_value`, `agc_emit_tail_call`); a tail call
+    replaces the top frame in place and exits only when the callee has no code,
+    the register file would grow or it takes more than `AGC_JIT_TAIL_PARAMS`
+    (32) arguments. `on` counts a self TAIL_CALL within that limit as a loop
+    (`backward` in `jit.c`).
+  - A new instruction with code: a case in `has_code` and in the walk, its
+    `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`. Any
+    slow path leaves for the interpreter: compiled code never fails, allocates
+    or parks, and pushes or pops a frame only in room the task already has. It
+    calls a builtin only when the row is marked `direct` (`agc_builtin.direct`,
+    checked by `sync_test.c`) or `leaf` (through `agc_jit_call_builtin`,
+    `agc_jit_call_leaf` or `agc_jit_call_plain`; their catch `vm->jit_catch`
+    keeps `agc_fail` from jumping across compiled code). Mark a row only if it
+    never parks, starts a block or moves frames.
+  - An edit of `turn_loop`, even in its jit copy, changes the plain copy's
+    machine code: keep JIT logic in `run_compiled`, and put new JIT exit
+    handling there in out-of-line `noinline` helpers. Growth of `run_compiled`
+    moves `plain_turn`, and a move of 128 bytes with the same instructions cost
+    `--jit off` up to 12% (`make layout-check` fails on it,
+    `references/ci.md`).
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere

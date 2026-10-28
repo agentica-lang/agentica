@@ -53,41 +53,18 @@ accepted ways again. The discard `_` (`_ = f(...)`, `for _ in ...`, `|_, v|`,
 `error(_)`) is the one way to drop a value on purpose, and a name that starts
 with `_` is the one way to keep a name that is unused on purpose (26.2).
 
-**How it lands.**
-
-- Each item is its own small PR, in the order 26.1, 26.3, 26.2, 26.4: the two
-  small migrations first; 26.2 after 26.3, so a read in dead code never has to
-  be counted (26.2, "Code that never runs"); and 26.4 last, because its one
-  explicit discard, `_ = f(...)`, is already there (#381); before 26.2, `sent =
-  f(...)` would silence 26.4 and leave no trace. All four are front end only:
-  the linker for 26.1, the checker for 26.2, 26.3 and 26.4; the bytecode format
-  and the VM do not change.
-
-- Each PR is a breaking change and migrates the repo in the same PR: the
-  programs in `examples/`, `stdlib/`, `benchmarks/`, `tests/` (the `.agc`
-  fixtures and the Agentica programs written inline in the Python tests), the
-  `agentica` blocks of `site/content`, and the examples of the programming
-  skill. The `CHANGELOG.md` gets one "Changed" entry per item. The 26.1 entry
-  also speaks to package authors: an unused import in a `pkg/` library now
-  fails the build of every program that uses the library, so a library should
-  be checked with the new release before its users update.
-
-- **Tests** in each PR cover each code three ways: checker or linker tests that
-  assert the code and the span (`tests/test_spec_checker.py`,
-  `tests/test_spec_modules.py`), never the message text; an `{expect="CODE"}`
-  site example, which `tests/test_site_examples.py` runs end to end; and one
-  CLI-level check: `dist/agentica --json check file.agc` exits 1 and its JSON
-  diagnostic has the code. There is no golden fixture per code: compiling stops
-  with an error on any front-end diagnostic, so a program that fails checking
-  cannot be a VM golden.
-
-- **Docs** in each PR: `docs/grammar/` (the rule, and "Diagnostics for agents"
-  gets the no-warnings principle with whichever item lands first), the
-  programming skill (`references/diagnostics.md` for the code, and one line in
-  `SKILL.md`, since these rules apply to every program), the matching site page
-  and the development skill's notes. The PR also checks the examples in the
-  grammar and `README.md`, so none shows a form the item now rejects. When an
-  item lands, its text moves to the grammar and is deleted here.
+**How it lands.** Each item is its own small PR, in the order 26.1, 26.3, 26.2,
+26.4: the two small migrations first; 26.2 after 26.3, so a read in dead code
+never has to be counted; 26.4 last, because its one explicit discard, `_ =
+f(...)`, already exists (#381), and before 26.2 a `sent = f(...)` would silence
+26.4 and leave no trace. All four are front end only (the linker for 26.1, the
+checker for the rest): the bytecode format and the VM do not change. Each PR is
+a breaking change and migrates the repo in the same PR (`examples/`, `stdlib/`,
+`benchmarks/`, `tests/`, the site blocks, the skill examples), adds a CHANGELOG
+"Changed" entry, and tests the code and the span through the CLI. The 26.1
+entry also speaks to package authors: an unused import in a `pkg/` library fails
+the build of every program that uses it. The "Diagnostics for agents" section of
+the grammar gets the no-warnings principle with the first item that lands.
 
 - **§:** 26.1
   - **Item:** Unused imports
@@ -351,8 +328,7 @@ end
 ```
 
 `puts("done")` can never run, so it is `CHECK-UNREACHABLE-CODE` at that
-statement, with a secondary span on the `if`: "every branch returns here". Today
-the checker accepts it.
+statement, with a secondary span on the `if`: "every branch returns here".
 
 **Rule:** a statement that follows a terminator in the same block is
 `CHECK-UNREACHABLE-CODE`, at the first such statement.
@@ -393,12 +369,9 @@ lambdas check each statement, then, before the next one, fail if the one just
 checked is a terminator. So errors before the terminator come first, and the
 unreachable statement itself is not checked.
 
-**Today** the checker accepts code after a `return`, a `break` or an exhaustive
-`if`/`case`. After this item a terminator can only be the last statement of its
-block, so `block_returns?` may look at the last statement only (a
-simplification, not a change in behavior). `contains_return?`
-(`compiler/check/check_flow.agc`) stays a deep search: `missing_return_help`
-uses it to tell "no `return` anywhere" from "a `return` on some paths only".
+After this item a terminator can only be the last statement of its block, so
+`block_returns?` may look at the last statement only. `contains_return?` stays a
+deep search: `missing_return_help` uses it.
 
 **Help idea:**
 `this statement never runs, because the block ends at the return on line 5;
@@ -426,8 +399,7 @@ or the last statement of a `Void` block, and whose type is `Result[...]`, is
 `Result`: a builtin with effects (`File.close`, `File.write_text`, `TCP.send`,
 `HTTP.respond`, `Process.close_stdin`, `Process.wait`, ...), a user function, a
 method, or `Task.await` on a task that returns a `Result`. The one exception is
-`IO.inspect`, which prints its argument and returns it, so nothing is lost (the
-scan found 188 such statements, all printing a `Result` on purpose).
+`IO.inspect`, which prints its argument and returns it, so nothing is lost.
 
 **Why.** Builtins with effects are exempt from `CHECK-UNUSED-VALUE`
 (`grammar.md`, "Methods on builtin types"), and most of them return a `Result`.
@@ -489,23 +461,12 @@ principle above:
 
 ### Impact on existing code
 
-A scan of 2026-10-12 (a throwaway script on the real front end, over
-`examples/`, `stdlib/`, `benchmarks/`, `tests/`, the site blocks, the
-programming skill examples and the programs written inline in the tests)
-found: 26.2 is the large migration (about 30 program and test files and 17 site
-blocks on 7 pages: tasks spawned and never awaited, values computed to test a
-step limit, unused `for` and block variables, and `Result` values of
-`TCP.send`, `Process.send`, `Process.close_stdin` and `Process.wait` on the
-site); 26.1 and 26.3 touch one test or fixture each; 26.4 touches 6 files and
-one inline test (calls with effects used as statements: `File.close`,
-`File.write_text`, `File.write_bytes`, `HTTP.respond`, `TCP.send`). The fixes
-are the discard `_`, a `_name`, a bare call statement (only for a value that is
-not a `Result`) or using the value; a `Result` gets a 26.4 handling form or
-`_ = ...`.
-
-The counts are old: each PR counts again, since programs landed after the scan
-(phase 17, HTTP streaming, `TlsContext`, `std/binary`, `std/logger`), and puts
-its count in its PR description. A fixture that is broken on purpose and fails
-earlier is not affected (`tests/eval/tasks/t5-scope-return/start.agc` has an
-unused `last` and fails with `CHECK-MISSING-RETURN` first); neither are
-`{expect="..."}` site blocks that fail earlier with another checker code.
+26.2 is the large migration (tasks spawned and never awaited, values computed
+to test a step limit, unused `for` and block variables, and dropped `Result`
+values of `TCP.send`, `Process.send`, `Process.close_stdin` and `Process.wait`).
+26.1 and 26.3 touch one test or fixture each; 26.4 touches a few files. The
+fixes are the discard `_`, a `_name`, a bare call statement (only for a value
+that is not a `Result`) or using the value; a `Result` gets a 26.4 handling form
+or `_ = ...`. Each PR counts the affected programs again and puts its count in
+its description. A fixture that fails earlier with another code, or an
+`{expect="..."}` site block that does, is not affected.

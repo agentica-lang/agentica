@@ -20,28 +20,12 @@ dropped):
 
 ## Done
 
-Each phase is specified in the grammar (`docs/grammar/`) and tested in
-`tests/test_*.py`; git history keeps the per-phase records.
-
-- **1 to 5:** lexer (`LEX-`), parser (`PARSE-`, every node carries a span),
-  checker (`CHECK-`), the core evaluator (`RUNTIME-`, replaced by the VM in
-  phase 7) and the CLI (the first diagnostic to stderr and exit 1; a missing
-  file or bad usage exits 2). Every grammar example is a test
-  (`tests/test_examples.py`).
-- **5b to 5h:** maps, strings, `IO` and `System`, consistency fixes
-  (`--max-steps`), the agent API of `agentica check` (plain, `--ai`, `--json`;
-  grounded suggestions only), `Result` and `try` with the builtin catalog, JSON,
-  TCP and TLS, and HTTP (now `std/http`, phase 20).
-- **6a:** the first agent evaluation (`docs/eval.md`, `tests/eval/`).
-- **5j, 5j2, 5k, 5n:** function values (`Fn`, `&name`, `.call`), BDD features
-  (now `std/bdd`, [phase 21](21-bdd-in-agentica.md)), lightweight tasks, `try`,
-  and the collection primitives.
-
-Rules from these phases that stay: each stage takes the previous stage's output
-and returns data or exactly one diagnostic, stops at the first error, never
-prints and never lets a front-end exception escape (also in `AGENTS.md`).
-Diagnostic codes are stable and prefixed by stage. Internal checker cases that
-should never happen have their own code, `CHECK-INTERNAL`.
+Phases 1 to 5n and 6a (lexer, parser, checker, CLI, the agent API of `agentica
+check`, `Result` and `try`, JSON, TCP, TLS, HTTP, function values, tasks, the
+collection primitives and the first evaluation, `docs/eval.md`) are specified
+in the grammar and tested in `tests/test_*.py`; git history keeps the per-phase
+records. Internal checker cases that should never happen have their own code,
+`CHECK-INTERNAL`. The stage and diagnostic-code rules are in `AGENTS.md`.
 
 **Decisions of this period** (all closed):
 
@@ -57,12 +41,5 @@ should never happen have their own code, `CHECK-INTERNAL`.
 - Network and filesystem access use host permissions, with no separate
   capability flag.
 
-**Independent integration fixtures** (the rule that came with 5g and 5h, kept in
-`AGENTS.md`): TCP/HTTP interoperability tests use a protocol implementation
-independent of the Agentica code under test (Node's `http`, `https`, `net`,
-Python's `http.server` and `socket`, or curl), standard libraries only,
-localhost, port 0, no external services, with cleanup of processes and ports on
-every exit. Fixtures live in `tests/fixtures/`. Local runs may skip with a
-visible message when the tool is missing; CI installs Node and must fail rather
-than skip. A test against the official MCP SDK needs `npx` and the network, so
-it stays manual and out of CI.
+A test against the official MCP SDK needs `npx` and the network, so it stays
+manual and out of CI. The rules for independent peers are in `AGENTS.md`.

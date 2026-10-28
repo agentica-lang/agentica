@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
 - `HMAC.sha256` and `HMAC.sha512` (HMAC-SHA256 and HMAC-SHA512), each with a
   `_hexdigest` form.
+- `SecureRandom.random_bytes`, `hex` and `uuid` draw secure random bytes for
+  keys and tokens.
 - `JSON.codec(User)` gives a `JSON.Codec[User]` with `decode`, `encode` and
   `from`, so generic code can read and write JSON of its type parameter.
 
@@ -21,6 +23,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `Base64` and `Digest` are reserved names.
 - **Breaking:** `HMAC` is a reserved name.
+- **Breaking:** `SecureRandom` is a reserved name.
 - **Breaking:** `Crypto.sha256` is now `Digest.sha256`; rebuild old `.agcb` files.
 - `--jit on` keeps short loops that wait on channels, tasks, processes,
   sockets, stdin or files interpreted.

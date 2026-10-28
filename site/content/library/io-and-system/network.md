@@ -55,7 +55,6 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 - A last line without a line ending counts when the other side closes.
 - `read_line` errors at the end of input, when the connection breaks (even mid-line), and for a line over 1 MiB (which also closes the socket).
 - TCP is a byte stream: one `send` can arrive in several reads and one `read_line` can cover several sends. A character split between reads is joined before the UTF-8 check.
-- Reading and writing use separate locks, so one task can read while another writes.
 
 A program that talks to itself, with a task as the server:
 
@@ -232,7 +231,7 @@ HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOp
 ```
 
 - `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `download_options()` gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
-- The download sends a `GET` request and streams the body to `path` in pieces of at most 1 MiB, so bodies may be arbitrary bytes: NUL and invalid UTF-8 are fine. `Content-Length`, chunked and close-delimited responses are all bounded by `max_total_bytes`, and the file never grows past it.
+- The download sends a `GET` and streams the body to `path`, so bodies may be arbitrary bytes. The file never grows past `max_total_bytes`.
 - The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
 - The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
 
@@ -322,7 +321,7 @@ Bad requests never reach the handler: the server answers and closes the connecti
 | 501 | `CONNECT` or `Upgrade` |
 | 505 | not `HTTP/1.1` |
 
-Before closing, the server reads and drops up to 256 KiB of the peer's remaining input (until the peer closes or the request deadline), so the answer is not lost to a reset. A peer that keeps sending is cut off at that limit, so a client still sending a large body after a 413 may see a connection reset instead.
+Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
 
 ### HTTP.wait and HTTP.close_server
 
@@ -350,15 +349,3 @@ def main() -> Void
   HTTP.wait(server).unwrap!
 end
 ```
-
-### Moving from the builtin HTTP module
-
-The old builtin `HTTP` module is gone. Import `std/http` and use these names:
-
-- `HTTP.client()` is `HTTP.client(HTTP.client_options())`.
-- `HTTP.text(response.body, t)` is `response.body`; a body that is not UTF-8 is an error.
-- `HTTP.read`, `trailers`, `close_body` and `request_stream` are one `HTTP.request` call. Streaming is planned.
-- A handler `(request: Request, writer: HttpWriter) -> Void` is `(request: HttpRequest) -> Result[HttpResponse]`. `HTTP.respond`, `begin`, `write`, `write_bytes` and `finish` become `return ok(HttpResponse(...))`.
-- `header_timeout_ms` is `request_timeout_ms`; `timeout_ms` now covers the whole response.
-- `max_body_bytes` defaults to 1 MiB (was 64 MiB).
-- `Request`, `Response`, `HttpBody` and `HttpWriter` are gone: use `HttpRequest` and `HttpResponse`.

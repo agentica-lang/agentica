@@ -115,42 +115,13 @@ true
 
 ## Wait with a timeout
 
-`Task.await(task, timeout_ms)` waits at most that many milliseconds. It gives `Await.Done(value)` if the task ended in time, else `Await.TimedOut`. The task keeps running; you can await it again.
-
-```agentica
-def double(inbox: Channel[Int]) -> Int
-  n = inbox.recv(10000).unwrap!
-  return n * 2
-end
-
-def main() -> Void
-  inbox: Channel[Int] = Channel.new(1)
-  task = Task.spawn(&double, inbox)
-  case Task.await(task, 20)
-    Await.Done(n) -> puts("done #{n}")
-    Await.TimedOut -> puts("still working")
-  end
-  inbox.send(21, 1000)
-  case Task.await(task, 10000)
-    Await.Done(n) -> puts("done #{n}")
-    Await.TimedOut -> puts("gave up")
-  end
-end
-```
-
-```output
-still working
-done 42
-```
+`Task.await(task, timeout_ms)` waits at most that many milliseconds. It gives `Await.Done(value)` if the task ended in time, else `Await.TimedOut`. The task keeps running; you can await it again. See [Task.await with a timeout](/library/concurrency/task/#taskawait-with-a-timeout) for an example.
 
 ## Rules
 
-- `await` can run again and gives the same value.
-- A timeout must be above 0. A timed-out task keeps running.
-- A task other than `main` that fails stops alone. Its error is printed, its child tasks are cancelled, and its files and sockets close. Awaiting it gives `error` if it returns a `Result`, else it stops the waiter. An unawaited failure makes the program exit with code 1. An error in `main` stops the program.
-- A file, socket, listener or process belongs to the task that opened it, and closes when that task ends. `Task.spawn_owning` hands one to the new task. It also takes a `Channel`, which closes when that task ends.
+- A task other than `main` that fails stops alone: its error is printed, its child tasks are cancelled, and its files and sockets close. Awaiting it gives `error` if it returns a `Result`, else it stops the waiter. An unawaited failure makes the program exit with code 1.
+- A file, socket, listener or process belongs to the task that opened it and closes when that task ends. `Task.spawn_owning` hands one (or a `Channel`) to the new task.
 - When `main` returns, running tasks are cancelled. Await what you need.
-- Tasks run on several CPU cores (one scheduler per core; `--schedulers 1` runs one at a time). Output may come in any order.
-- To pass values between tasks, use a [Channel](/library/concurrency/channel/).
+- Tasks run on several CPU cores (`--schedulers 1` runs one at a time). Output may come in any order. To pass values between tasks, use a [Channel](/library/concurrency/channel/).
 
 See [Task](/library/concurrency/task/) and [Channel](/library/concurrency/channel/) for the reference.

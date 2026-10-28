@@ -93,27 +93,9 @@ end
 2
 ```
 
-## Printing values
-
-`puts` prints any value. Strings print as they are. Other values print in a short, readable form:
-
-```agentica
-def main() -> Void
-  puts([1, 2, 3])
-  puts({"a": 1})
-  puts(ok(5))
-end
-```
-
-```output
-[1, 2, 3]
-{"a": 1}
-ok(5)
-```
-
 ## to_s and inspect
 
-Every data value has `to_s`, the text that `puts` prints. A function, a task or a handle, such as a `Listener`, has none: `f.to_s` is `CHECK-UNKNOWN-METHOD`. `inspect` is the debug form: strings keep their quotes.
+`puts` prints any value as its `to_s` text: strings as they are, other values in a short, readable form (`[1, 2, 3]`, `{"a": 1}`, `ok(5)`). A function, a task or a handle, such as a `Listener`, has no `to_s`: `f.to_s` is `CHECK-UNKNOWN-METHOD`. `inspect` is the debug form: strings keep their quotes.
 
 ```agentica
 def main() -> Void

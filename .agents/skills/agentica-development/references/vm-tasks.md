@@ -209,114 +209,92 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - a crash keeps `crash_code`, `crash_message` and `crash_span` for `Test.run`,
     and `finish_task` sets `left_children` when a task ends with running
     children
-- `vm/task_map.c`
-  - `Task.map` (`agc_task_map_builtins`, `docs/vm/10-io-scheduler.md`
-    §10.2.1, "Task.map"; core layer): a GC
-    `map_group` whose first member is the `agc_stepper`, installed on the caller
-    by `agc_task_stepper` (as `File.each_line` does)
-  - the arguments are checked first and in order: `limit` (1 to 1024,
+- `vm/task_map.c`: `Task.map` (`agc_task_map_builtins`,
+  `docs/vm/10-io-scheduler.md` §10.2.1, "Task.map"; core layer): a GC
+  `map_group` whose first member is the `agc_stepper`, installed on the caller
+  by `agc_task_stepper` (as `File.each_line` does).
+  - The arguments are checked first and in order: `limit` (1 to 1024,
     `RUNTIME-INVALID-COUNT` at `span + 2`), `timeout_ms` (above 0,
     `RUNTIME-INVALID-DURATION` at `span + 3`), then the empty list returns the
-    list itself
+    list itself.
   - `map_step` runs on the caller at each wake: `collect` the ended items into
     their slots, `expire` the oldest running item whose deadline passed (slot
     `error("task: timed out")`, then `agc_task_cancel`), `start` items up to
-    `limit` (one `agc_count_step` each, `agc_task_spawn_seeded` with the caller
-    as parent), and, if every slot is set, charge `count` and end with the list;
-    else one timer of the caller for the oldest deadline
-    (`agc_task_park_until`)
-  - one timer is enough because every item has the same timeout and starts in
-    input order, so the deadlines grow along the running list
-  - an item tells the group through the task hook (`end`, `end_data`, called by
+    `limit` (`agc_task_spawn_seeded` with the caller as parent), and, if every
+    slot is set, charge `count` and end with the list; else one timer of the
+    caller for the oldest deadline. One timer is enough because every item has
+    the same timeout and starts in input order.
+  - An item tells the group through the task hook (`end`, `end_data`, called by
     `finish_task` for a return, a crash and a cancel): `item_ended` ignores an
     item that already timed out and an item that is `cancelled` (its caller was
     cancelled, so the group is gone), else moves it to the ended list and wakes
-    the caller. There is no dead flag: a cancelled caller never runs `map_step`
-    again
-  - a crashed item is observed (`agc_task_observe`) and its slot is
-    `error(t->crash)`; a non-`Result` item result is `RUNTIME-INTERNAL`
-  - an item that ends after its deadline but before the caller runs keeps its
-    result
-  - an item with a file close pending (`closing`) is not settled, as for
+    the caller. A crashed item is observed (`agc_task_observe`) and its slot is
+    `error(t->crash)`; a non-`Result` item result is `RUNTIME-INTERNAL`. An item
+    that ends after its deadline but before the caller runs keeps its result.
+    An item with a file close pending (`closing`) is not settled, as for
     `Task.await`: `item_ended` puts the hook back on the task and
     `agc_task_close_done` calls it when the last close ends; if its deadline
-    comes first it is settled as timed out without waiting for the close, and
-    `expire` marks its crash, if any, as observed
-- `vm/channel.c`
-  - the `Channel` builtins (`agc_channel_builtins`,
-    `docs/vm/10-io-scheduler.md` §10.2.2, "Channel waits"; core layer): a GC
-    `agc_channel` with a ring (at most 8 slots at first, doubling up to the
-    capacity, one turn-cost unit per slot copied; each slot holds the value and
-    its send sequence number, so a value handed back by a cancelled receiver is
-    inserted by it and FIFO holds), two FIFOs of waiting tasks through
-    `wait_next`, and counters for the reserved values and slots.
+    comes first it is settled as timed out without waiting for the close.
+- `vm/channel.c`: the `Channel` builtins (`agc_channel_builtins`,
+  `docs/vm/10-io-scheduler.md` §10.2.2, "Channel waits"; core layer): a GC
+  `agc_channel` with a ring (at most 8 slots at first, doubling up to the
+  capacity, one turn-cost unit per slot copied; each slot holds the value and
+  its send sequence number, so a value handed back by a cancelled receiver is
+  inserted by it and FIFO holds), two FIFOs of waiting tasks through
+  `wait_next`, and counters for the reserved values and slots.
   - A call that must wait parks with retry on the task's own timer
-    (`agc_task_park_within`; no job, so no I/O trace line)
-  - a retry is told by `channel.channel == c`; a waiter is woken only with a
-    reservation, by a close or by its timer, so a retry with neither timed out.
+    (`agc_task_park_within`; no job, so no I/O trace line). A retry is told by
+    `channel.channel == c`; a waiter is woken only with a reservation, by a
+    close or by its timer, so a retry with neither timed out.
   - A value for a waiting receiver is reserved in the task (`channel.value`), a
     freed slot for the head sender (`channel.reserved`; `offer_slot` makes the
-    offer after a `recv` and after a woken sender hands its value to a receiver)
-  - the pops skip tasks that are no longer parked (their timer won), and a woken
-    waiter with a reservation does not search the FIFO again.
-  - `agc_channel_leave` (called from `unlink_task`) takes a cancelled waiter out
-    and hands its reservation on.
-  - An owner: `agc_channel_claim` registers an entry with no native object
-    the first time `Task.spawn_owning` hands the channel over
-    (`agc_task_spawn_owning` in `vm/task.c` takes the resource of a channel from
-    it, of any other handle from `agc_owned_of`)
-  - `shut` is the one close, run by `Channel.close` and by `agc_close_owned` at
-    the owner's end, and it drops the entry first so a closed channel has none.
-  - Arguments are checked before any wait state changes
-  - `Channel.new` and the timeouts fail at their argument (`span + 1 + index`;
-    the receiver is argument 0).
-- `vm/ats.c`
-  - the `ATS` builtins (`agc_ats_builtins`, tag `AGC_T_ATS`; the rules are in
-    the grammar's "Shared tables"; service layer). A table holds an
-    `_Atomic` pointer to a `state` that never changes: two persistent AVL trees
-    over the same entries (by key for lookups, by insertion number for the
-    snapshots) and the size. A reader loads the pointer; a writer builds the
-    next state from the one it loaded and installs it with a strong CAS,
-    building again when another writer won. No row is `shared`: a call takes
-    neither `rt->sync` nor a lock, so `keys` and `to_map` build their result
-    from a snapshot without holding back writers.
-  - A failure (an `add` overflow, a wrong tag from forged bytecode) happens
-    before the CAS, so the table keeps its state. Keys compare Int before
-    String, so mixed keys from forged bytecode stay defined. Tree depth is
-    bounded by the AVL height (at most 96 levels), the stack of the in-order
-    walk too.
-  - `vm/tests/ats_test.c` races threads on one table (in `VM_TSAN_TESTS`);
-    `tests/test_vm_ats.py` checks one table against a Python dict and many
-    tasks at `--schedulers 4`.
-- `vm/testing.c`
-  - the `Test` builtins (`agc_test_builtins`; the rules are in the grammar's
-    `Unit tests (Test)` section): `Test.test`
-    makes an `agc_test_case` (tag `AGC_T_TEST`: name, block, call span)
-  - the assertions return `ok()` or `error(text)` and record their first failure
-    (`agc_test_note`) on `vm->task->test`, the test the task was spawned under
+    offer). The pops skip tasks that are no longer parked (their timer won), and
+    a woken waiter with a reservation does not search the FIFO again.
+    `agc_channel_leave` (from `unlink_task`) takes a cancelled waiter out and
+    hands its reservation on.
+  - An owner: `agc_channel_claim` registers an entry with no native object the
+    first time `Task.spawn_owning` hands the channel over. `shut` is the one
+    close, run by `Channel.close` and by `agc_close_owned` at the owner's end,
+    and it drops the entry first so a closed channel has none.
+  - Arguments are checked before any wait state changes; `Channel.new` and the
+    timeouts fail at their argument (`span + 1 + index`; the receiver is
+    argument 0).
+- `vm/ats.c`: the `ATS` builtins (`agc_ats_builtins`, tag `AGC_T_ATS`; service
+  layer; rules: the grammar's "Shared tables"). A table holds an `_Atomic`
+  pointer to a `state` that never changes (two persistent AVL trees over the
+  same entries, by key and by insertion number, and the size). A writer builds
+  the next state from the one it loaded and installs it with a strong CAS,
+  building again when another writer won. No row is `shared`: a call takes
+  neither `rt->sync` nor a lock. A failure (an `add` overflow, a wrong tag from
+  forged bytecode) happens before the CAS, so the table keeps its state. Keys
+  compare Int before String. Tree depth is bounded by the AVL height (at most 96
+  levels). `vm/tests/ats_test.c` races threads on one table (in
+  `VM_TSAN_TESTS`); `tests/test_vm_ats.py` checks one table against a Python
+  dict and many tasks at `--schedulers 4`.
+- `vm/testing.c`: the `Test` builtins (`agc_test_builtins`; rules: the grammar's
+  `Unit tests (Test)` section). `Test.test` makes an `agc_test_case` (tag
+  `AGC_T_TEST`). The assertions return `ok()` or `error(text)` and record their
+  first failure (`agc_test_note`) on `vm->task->test`, the test the task was
+  spawned under.
   - `Test.run` fails with `RUNTIME-TEST-RUN` when the calling task is not `main`
-    (`vm->task != vm->main`: a test or any task `main` spawned; there is no
-    "served once" state), checks the names, then the arguments (`--agentica-test
-    list|run`; run directly it prints `run this file with agentica test` and
-    exits 2) and the channel (`agc_parent_open`; none is `RUNTIME-TEST-RUN`).
-  - It serves `list` (all `test` records and `ready` built by `list_lines` in
-    one pass over an array of lines and sent as one batch, exit 0) or `run`, a
-    retry builtin whose state (`agc_test_run`) lives on the calling task: it
-    reads an index line with `agc_parent_line` (`vm/duplex.c`; the program's
-    stdin and stdout are untouched, there is no token), starts the test with
-    `agc_task_spawn_test` and a seed from the run's seed and the name, waits for
-    it with `agc_task_join`, and on wake builds the record (crash, first note,
-    the block's error, `left_children`, an unobserved crash of the test's
-    tasks), cancels the test's leftover tasks (now the caller's children),
-    observes every crash of the test's tasks, then `deliver` flushes stdout with
-    `agc_drain` and sends the record with `agc_parent_send` before the next
-    index is read
-  - at the end of the channel and after a list it ends the run like a return
-    from `main` (`agc_report_unobserved` in `vm/task.c`: the unobserved summary,
-    exit 1)
-  - an index line that is not a plain index, or that cannot be read as a line
-    (`AGC_INPUT_FAILED`: invalid UTF-8), is a `RUNTIME-BDD-INFRA` fail record
-    and exit 1 (a channel that is already shut just exits 1)
+    (`vm->task != vm->main`), checks the names, then the arguments
+    (`--agentica-test list|run`; run directly it prints `run this file with
+    agentica test` and exits 2) and the channel (`agc_parent_open`; none is
+    `RUNTIME-TEST-RUN`). It serves `list` (all `test` records and `ready` sent
+    as one batch, exit 0) or `run`, a retry builtin whose state
+    (`agc_test_run`) lives on the calling task: it reads an index line with
+    `agc_parent_line` (the program's stdin and stdout are untouched), starts the
+    test with `agc_task_spawn_test` and a seed from the run's seed and the name,
+    waits for it with `agc_task_join`, and on wake builds the record (crash,
+    first note, the block's error, `left_children`, an unobserved crash of the
+    test's tasks), cancels the test's leftover tasks, observes every crash of
+    the test's tasks, then `deliver` flushes stdout with `agc_drain` and sends
+    the record with `agc_parent_send` before the next index is read.
+  - At the end of the channel and after a list it ends the run like a return
+    from `main` (`agc_report_unobserved`: the unobserved summary, exit 1). An
+    index line that is not a plain index, or that cannot be read as a line
+    (`AGC_INPUT_FAILED`), is a `RUNTIME-BDD-INFRA` fail record and exit 1 (a
+    channel that is already shut just exits 1).
 
 ## Gotchas
 

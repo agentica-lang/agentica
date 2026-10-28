@@ -35,19 +35,14 @@ index 5 is outside a list of length 3
     main at nested.agc:11:8
 ```
 
-Each line is a function and the place it runs (the error for the first, the
-call it waits on for the others); a block is `block`, and a builtin that runs
-one (`xs.map`) has no line. `(after a tail call)` marks a frame whose callers a
-tail call removed; `walk at tree.agc:9:12 (9998 times)` is one line for a
-recursion. The 15 innermost and 5 outermost lines show, with `... 312 frames
-not shown ...` between. A task ends with `task spawned at file:line:column`.
-A function name or file path over 256 bytes is cut there and ends with `...`.
-Runtime traces name files as you can open them from the working directory (a
-standard module as `std/NAME.agc`); compile-time errors show the first file as
-typed and imports by absolute path. `--json` adds `stack` (objects with
-`column`, `file`, `function`, `line`, and `repeat` or `tail`), `stack_omitted`
-and, for a task, `spawned_at`; `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`
-and a task's crash line (`"task":true`) carry it too.
+Each line is a function and the place it runs; a block is `block`.
+`(after a tail call)` marks a frame whose callers a tail call removed;
+`walk at tree.agc:9:12 (9998 times)` is one line for a recursion. The 15
+innermost and 5 outermost lines show, with `... 312 frames not shown ...`
+between. A task ends with `task spawned at file:line:column`. `--json` adds
+`stack` (objects with `column`, `file`, `function`, `line`, and `repeat` or
+`tail`), `stack_omitted` and, for a task, `spawned_at`; `RUNTIME-STEP-LIMIT`,
+`RUNTIME-STACK-OVERFLOW` and a task's crash line (`"task":true`) carry it too.
 
 - `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
   `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`: bad character, string or
@@ -66,7 +61,6 @@ and a task's crash line (`"task":true`) carry it too.
   `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says
   blocks have no braces; `//` or `/*` says comments start with `#`;
   `value.with()` and `value.with(31)` say to name each field.
-- `PARSE-UNCLOSED-BLOCK`: missing `end`.
 - `PARSE-MISSING-BLANK-LINE`: no blank line between the `end` of a declaration
   and the next one (a `##` doc block belongs to the next declaration: the blank
   line goes before it).
@@ -75,7 +69,6 @@ and a task's crash line (`"task":true`) carry it too.
   of the file follows it, or it stands in a function body or inside brackets).
 - `PARSE-TOP-LEVEL-STATEMENT`: a statement outside a function, or an extra `end`
   (a stray `else` or `elsif` has no `if`).
-- `PARSE-CHAINED-COMPARISON`: `a < b < c`.
 - `PARSE-TOO-DEEP`: more than 1,000 levels of nesting (parentheses, brackets,
   blocks, statements, prefix operators, type arguments); chains of operators or
   `.` suffixes count as levels too.
@@ -97,20 +90,16 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`:
   duplicate declaration, shadowing, an annotation on an existing name; an `Fn`
   field named `with` (`value.with(...)` is the struct update).
-- `CHECK-ARITY`: wrong number of arguments (with defaults, `expects 1 to 2
-  arguments`).
 - `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`: a parameter without a default
   after one with a default (only a last `Fn` parameter may); a default that is
   not a constant (a literal, `true`, `false`, `nil`, `[]`, `{}` or a
   payload-less enum variant).
-- `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`: struct construction fields.
 - `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
   expected type.
 - `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
 - `CHECK-EXPECTED-TYPE`: `Channel.new(n)` or `ATS.new()` with no expected type.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
-- `CHECK-MISSING-RETURN`: a path without `return` in a non-`Void` function.
 - `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a
   `main` with parameters or a result other than `Void`.
 - `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`: an index on a non-list/map (a
@@ -146,18 +135,9 @@ and a task's crash line (`"task":true`) carry it too.
   column for a TOML syntax error; a missing or unreadable file has only its
   name. The manifests of all locked packages in `deps/` are checked before any
   file loads, imported or not.
-- `QUERY-USAGE`: a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
-  missing or extra argument, an unknown option, `--stdin` without a file, a bad
-  `FILE:LINE:COL`, an unreadable path, or a folder with no `*.agc` file. The
-  file is `<arguments>` at line 1, column 1; exit 2.
-- `QUERY-NOT-FOUND`: `symbol` or `refs` NAME is declared in no linked module and
-  no builtin. The help has the closest name and the skipped files. Exit 2.
-- `QUERY-AMBIGUOUS-NAME`: `refs` NAME is declared by more than one module; the
-  help lists each candidate as `FILE:LINE:COL` to ask again with. Exit 2.
-- `QUERY-NO-EXPRESSION`: `type-at` or `refs` was given a position on no
-  expression or name: a blank between tokens, a comment, a keyword, past the end
-  of a line or file, or (for `refs`) a module alias or path in an import line.
-  The span is the position; exit 2.
+- `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` and
+  `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
+  (`queries.md`).
 - `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
   `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
   the lock hashes (edited, added or missing), or one is a symbolic link or
@@ -192,11 +172,8 @@ and a task's crash line (`"task":true`) carry it too.
   `&f`, a block outside a builtin call, `while`, or a builtin with effects.
 - `CHECK-CONSTANT-TYPE`: a constant expression whose type is not data
   (`Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
-- `CHECK-CONSTANT-CYCLE`: constants that read each other in a loop.
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
-- `CHECK-MODULE-CONTEXT`: raw import/export declarations need module resolution
-  before checking.
 - `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
   struct or has unsupported field types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
@@ -204,21 +181,15 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
   not the direct type of a struct field (a list item, a map value, a nested
   `JsonField`, or the whole `JSON.encode` argument).
-- `CHECK-IMMUTABLE-ASSIGNMENT`: assignment to a `for` variable.
-- `CHECK-INT-RANGE`: an integer literal that does not fit in `Int`.
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
   call on a struct, or `.with(...)` on a non-struct. Common foreign names get
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
-- `CHECK-LAZY-NO-STEP`: `File.foreach(...).each do ... end` with no step between
-  them (use `File.each_line`).
 - `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
   (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone).
 - `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
   Int|`).
-- `CHECK-BLOCK-TARGET`: a block passed to a function whose last parameter is not
-  a `Fn`.
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
 - `CHECK-CAPTURED-ASSIGNMENT`: a block assigns to an outer variable (use a `for`
@@ -227,29 +198,21 @@ and a task's crash line (`"task":true`) carry it too.
   `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`,
   resource or owned buffer, nor a struct, enum, `List`, `Map` or `Result` that
   holds one.
-- `CHECK-TYPE-ALIAS-CYCLE`: a type alias that expands to itself.
 - `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
   more than 1,000 type references in an expanded alias.
 - `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure
   (also an `ATS.add` past the 64-bit range, which leaves the table unchanged).
-- `RUNTIME-ATS-CONTEXT`: a table used outside the run that made it (no program
-  reaches it today).
-- `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`: a list index or map key
-  not present.
 - `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative
   `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
   `Task.map` `limit` outside 1..1024; a negative
-  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count.
+  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count; a
+  `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
   `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
   0..4294967295, a `Digest` hash, `HMAC`, `Base64` or `Digest.hexencode`
   item outside 0..255.
-- `RUNTIME-INVALID-RANGE`: `Random.int` with `min > max`.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.
-- `RUNTIME-END-OF-INPUT`: `IO.gets!` with no input left.
-- `RUNTIME-UNWRAP-ERROR`: `r.unwrap!` on an error.
-- `RUNTIME-JSON-ENCODE`: `JSON.encode` of a non-finite Float.
 - `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows
   where the loop runs.
 - `RUNTIME-STACK-OVERFLOW`: recursion deeper than 10000; the stack shows the
@@ -272,53 +235,18 @@ and a task's crash line (`"task":true`) carry it too.
   whose task crashed unawaited.
 - `RUNTIME-TEST-ASSERTION`: a failed `Test.eq`, `Test.ok?`, `Test.error?` or
   `Test.assert` in a test, at the assertion.
-- `RUNTIME-TEST-ERROR`: a test block returned `error(message)`, at the
-  `Test.test` call.
-- `RUNTIME-TEST-NAME`: an empty or repeated test name, at that `Test.test` call.
 - `RUNTIME-TEST-RUN`: `Test.run` called in a task other than `main`'s own (a
   test, or a task you spawned). Also a call with the `agentica test` arguments
   but no parent channel, and, under `agentica test`, a test file whose `main`
   returns without calling `Test.run` (a `*_test.agc` helper: rename it).
-- `RUNTIME-TEST-PENDING-TASKS`: a test returned while tasks it spawned were
-  still running.
 - `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
   seconds; the rest of its file is not executed.
-- `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
-  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an `extern`
-  signature with a type that is not a C type or a resource or struct declared
-  above in the block (the span is the type), a C struct field that is not a C
-  value type or a struct with no field, a name with `?` or `!`, a parameter with
-  a default, more than 64 parameters (or a C struct over 1024 fields or 16
-  levels), a library that is not a name without `/` or an absolute path, or a
-  `def` of the block's `free:` function (`native.md`).
-- `PARSE-EXTERN-OUT`: an `out` parameter of a type that cannot be one
-  (`C.String`, `C.Bytes`, `C.Function`, a struct), named `result` beside a C
-  result or like an in parameter, of a function name with no letter for the
-  record's name, or outside an extern block (`native.md`).
-- `PARSE-EXTERN-VARIADIC`, `PARSE-EXTERN-VARIADIC-FIXED`,
-  `PARSE-EXTERN-VARIADIC-TYPE`, `PARSE-EXTERN-SYMBOL`: a second `...` or one
-  outside an extern block, a `...` with no parameter before it, a `C.Bool`,
-  `C.Float`, struct or `out` parameter after it, or a C name after `=` that is
-  not a plain string of letters, digits and `_` (`native.md`).
-- `PARSE-EXTERN-FUNCTION`: a `C.Function` parameter that is not the first
-  (the function to call) or the last (the free function), a call through a
-  `C.Function` with `= "symbol"`, a call that makes a `free: C.Function`
-  resource without that last parameter or makes two, or a `free:` type other
-  than `C.Function` (`native.md`).
-- `CHECK-NATIVE-LOAD`: the argument of `Native.load` is not a string literal,
-  or is not a library name without `/` or an absolute path (`native.md`).
-- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-NULL`,
-  `RUNTIME-NATIVE-BOUNDS`, `RUNTIME-NATIVE-NOT-OWNED`,
-  `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`: the library or
-  function of an extern call was not found (at the extern function); a call
-  or a memory builtin took a closed resource or a freed buffer; a memory
-  builtin read or wrote at NULL, at a negative offset or past an owned buffer;
-  a `C.Function` argument was NULL or an owned buffer;
-  `Native.free` took a pointer that C gave or a view; or, at load with exit 2,
-  `--deny-native` refused a program with an extern function or a `Native.*`
-  call, or the system has no native calls.
-- `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything
-  runs); an interpreter bug to report.
+- `PARSE-EXTERN-*`, `CHECK-NATIVE-LOAD` and `RUNTIME-NATIVE-*` (`C.Int` or a
+  library name with `/`, a closed resource, NULL, out of bounds, `--deny-native`
+  at load with exit 2): each is named in the rule it breaks in `native.md`.
+
+`LOWER-UNSUPPORTED`: the VM cannot run this form; an interpreter bug to
+report.
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and
 `RUNTIME-BDD-*` codes: `bdd.md`.

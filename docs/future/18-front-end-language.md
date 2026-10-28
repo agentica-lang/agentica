@@ -16,12 +16,9 @@ decision, of the method, and of what remains; live status is in
   golden-output tests replaced it when the evaluator was removed.
 - Self-hosting gives the one-file distribution and dogfooding: the compiler
   becomes the biggest Agentica program there is.
-- Baseline the goals were set against, measured on Linux x86_64 with Racket CS
-  9.3 on 2026-10-13: `raco exe --orig-exe` produced a 68 MB executable (14 MB
-  as `.tar.xz`) but startup stayed at about 570–630 ms in every mode, and the
-  release was about 89 MB in three files (`dist/runtime/` from
-  `raco distribute`). A proof embedded the VM bytes in the Racket executable
-  (+144 KB) and unpacked them on first run; loading the VM as a shared library
+- Baseline, measured on 2026-10-13 with Racket CS 9.3: `raco exe --orig-exe`
+  gave a 68 MB executable that still started in about 570–630 ms, and the
+  release was about 89 MB in three files. Loading the VM as a shared library
   through the FFI was rejected (two garbage collectors, clashes over `exit` and
   stdio).
 
@@ -38,25 +35,20 @@ development skill's `references/ci.md`, "The checks of ci.yml…".
 
 ### 18.3 Port
 
-Steps 1 (lexer), 2 (parser, with `PARSE-TOO-DEEP`), 3 (modules and linker),
-4 (builtin catalog and checker, with `CHECK-TOO-DEEP`), 5 (lowering, with
-module constants), 6 (bytecode writer), 7 (BDD driver) and 8 (command line,
-single binary, goldens, the test suite and CI) are done; the per-PR record is
-in git history (PRs #237 to #311, then #313; row 7.2.7 of the roadmap). Source
-paths are stored relative to the entry file's folder.
-Each stage carries its diagnostics and dumps (`--dump`, `--dump-ir`)
-so a compiler bug is visible as a runtime error in `compiler/`, reported as an
-internal code with a stack trace (roadmap 14b).
+Done (lexer, parser, modules and linker, builtin catalog and checker, lowering,
+bytecode writer, BDD driver, command line and single binary); the record is in
+git history (PRs #237 to #313). Source paths are stored relative to the entry
+file's folder. Each stage carries its diagnostics and dumps (`--dump`,
+`--dump-ir`), so a compiler bug is visible as a runtime error in `compiler/`,
+reported as an internal code with a stack trace.
 
 ### 18.4 Prerequisites
 
-The port needed these, all now part of the language or the VM (grammar and
-`docs/vm/` are the current homes): O(1) `push`/`+=`, an efficient `Map`, JSON
-key listing, file/dir/path builtins, `System.env`, binary output, process
-spawning, call depth and stack traces, and the BDD driver builtins. The
-isolation decisions (random names, lossy names, the 1 MiB capture, signals,
-`TMPDIR`) are in [`docs/bdd.md`](../bdd.md), "Isolation and process
-lifetime".
+The port needed O(1) `push`/`+=`, an efficient `Map`, JSON key listing, file,
+directory and path builtins, `System.env`, binary output, process spawning, call
+depth and stack traces, and the BDD driver builtins; all are now part of the
+language or the VM. The isolation decisions are in [`docs/bdd.md`](../bdd.md),
+"Isolation and process lifetime".
 
 ### 18.5 Goals and targets
 
@@ -74,16 +66,13 @@ lifetime".
 
 ### 18.6 Order
 
-What is left of the port is the post-bootstrap work in
-[`docs/roadmap/README.md`](../roadmap/README.md): the parser pass of the speed
-targets, `agentica doc`, and the package system, FFI and JIT path
-(issue [#534](https://github.com/agentica-lang/agentica/issues/534)).
+What is left is the post-bootstrap work in
+[`docs/roadmap/README.md`](../roadmap/README.md).
 
 ### 18.7 Tests
 
-The suite is Python, standard library only (the repository rules in
-`AGENTS.md`; design and make targets in the development skill's
-`references/ci.md`).
+The suite is Python, standard library only (`AGENTS.md`; make targets in the
+development skill's `references/ci.md`).
 
 ### 18.8 Distribution
 

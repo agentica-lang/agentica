@@ -10,11 +10,8 @@ On Linux, macOS and Windows:
 
 - A print reaches a pipe or file without `IO.flush()`. The VM writes it as soon as the reader takes it.
 - Reads from standard input, and writes to standard output or error, wait without stopping other tasks.
-- Each stream keeps up to 64 KiB. When a pipe is full, the printing tasks wait their turn, in order.
-- A print has no timeout, and one print is never split by another. Each stream keeps the order of the calls.
-- Standard output and error that go to the same terminal or file (for example with `2>&1`) share one buffer, so `puts` and `IO.warn` keep their order.
-- On Windows, two descriptors are the same when they are the same handle object, such as one pipe given to both. Otherwise there is no order between them.
-- A crash message waits for room the same way, and is never put in the middle of a print.
+- Each stream keeps up to 64 KiB. When a pipe is full, the printing tasks wait their turn, in order. A print has no timeout, and one print is never split by another (a crash message too).
+- Standard output and error that go to the same terminal or file (for example with `2>&1`) share one buffer, so `puts` and `IO.warn` keep their order. On Windows this holds when both descriptors are the same handle object.
 - On Windows, text typed on a console reaches the program as UTF-8, whatever the console's code page.
 - On Windows, after a stop signal and for the last error messages, a pipe or console gets one wait of up to 200 ms in all. So a reader that never reads cannot hold the exit.
 
