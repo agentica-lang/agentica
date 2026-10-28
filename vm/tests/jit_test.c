@@ -427,29 +427,39 @@ static agc_value refuses(agc_vm *v, agc_value *args, uint32_t span) {
   agc_fail(v, "RUNTIME-TEST", "refused", span + 1);
 }
 
+static agc_value subtracts(agc_vm *v, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(agc_as_int(v, args[0]) - agc_as_int(v, args[1]));
+}
+
 /* A CALL_BUILTIN of a direct row runs in compiled code (agc_jit_call_builtin): the result in the window, the top
    frame's pc after the call, the turn cost applied; a cost that ends the turn leaves with YIELD after the result is
    written; a failure is caught and leaves with RAISE, the failure recorded at the builtin's span and the window left
-   alone. A row that is not direct takes the INTERPRET exit. */
+   alone. A leaf row runs there too (agc_jit_call_leaf), and charges nothing, even with no turn left; its failure
+   leaves with RAISE in the same way. A row that is neither takes the INTERPRET exit. */
 static AGC_JIT_CALLER void direct_calls(void) {
   static const agc_builtin add_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
   static const agc_builtin fail_row = {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true};
   static const agc_builtin tail_row = {"Test.adds", 2, adds, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
-  static one_function fs[3];
-  const agc_builtin *rows[3] = {&add_row, &fail_row, &tail_row};
+  static const agc_builtin leaf_row = {"Test.subtracts", 2, subtracts, AGC_NATIVE_NONE, AGC_COST_NONE,
+                                       false, true, false};
+  static const agc_builtin leaf_fail_row = {"Test.refuses", 0, refuses, AGC_NATIVE_NONE, AGC_COST_NONE,
+                                            false, true, false};
+  static one_function fs[5];
+  const agc_builtin *rows[5] = {&add_row, &fail_row, &tail_row, &leaf_row, &leaf_fail_row};
   agc_task *t = vm.task, saved = *vm.task;
   agc_outcome outcome = *vm.outcome;
   agc_frame frames[1] = {{.function = 0}};
   t->frames = frames;
   t->frame_capacity = t->frame_count = t->depth = 1;
-  agc_jit_code code[3];
-  for (uint16_t k = 0; k < 3; k++) {
+  agc_jit_code code[5];
+  for (uint16_t k = 0; k < 5; k++) {
     memset(&fs[k], 0, sizeof fs[k]);
     emit(&fs[k], AGC_OP_CALL_BUILTIN, 1, k, 0);
     emit(&fs[k], AGC_OP_RETURN, 1, 0, 0);
     fs[k].spans[0] = 7;
     fs[k].program.builtins = rows;
-    fs[k].program.builtin_count = 3;
+    fs[k].program.builtin_count = 5;
     code[k] = compile(&fs[k]);
     assert(code[k]);
   }
@@ -471,6 +481,18 @@ static AGC_JIT_CALLER void direct_calls(void) {
   assert(vm.outcome->kind == AGC_FAILED && strcmp(vm.outcome->code, "RUNTIME-TEST") == 0 && vm.outcome->span == 8);
   assert(same_bits(R[1], agc_int(2)) && frames[0].pc == 1 && !vm.jit_catch);
   expect_exit(code[2](&vm, R, NULL, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  *vm.outcome = outcome;
+  R[1] = agc_int(50);
+  frames[0].pc = 0;
+  vm.turn_left = 1;
+  expect_exit(code[3](&vm, R, NULL, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[1], agc_int(10)) && frames[0].pc == 1 && t->turn_cost == 0 && vm.turn_left == 1 && !vm.yield);
+  frames[0].pc = 0;
+  vm.rt->program = &fs[4].program;
+  expect_exit(code[4](&vm, R, NULL, 0), AGC_JIT_EXIT_RAISE, 0);
+  vm.rt->program = NULL;
+  assert(vm.outcome->kind == AGC_FAILED && strcmp(vm.outcome->code, "RUNTIME-TEST") == 0 && vm.outcome->span == 8);
+  assert(same_bits(R[1], agc_int(10)) && frames[0].pc == 1 && !vm.jit_catch);
   *vm.outcome = outcome;
   *t = saved;
   vm.next_stop = 1000;
@@ -1108,9 +1130,10 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
 }
 
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is neither
-   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions; a leaf builtin does not count,
-   as run_compiled calls it, nor a block call, which run_compiled starts, nor a direct one, which compiled code calls.
-   A program where no function is compiled has no JIT at all. */
+   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions; a leaf or direct builtin does
+   not count, as compiled code calls it, nor a block call, which run_compiled starts. A function without a loop that
+   calls a leaf builtin may still get code for native calls; one that starts a block call may not. A program where no
+   function is compiled has no JIT at all. */
 static void ineligible(void) {
   static const agc_trace quiet = {0};
   one_function f;
@@ -1152,6 +1175,20 @@ static void ineligible(void) {
     agc_jit_settle(&program, callable, looped, calling);
     assert(looped[0] && !looped[1] && calling[0] && !calling[1]);
     assert(callable[0] == !leaving && callable[1] == !leaving);
+  }
+  /* A function without a loop that calls a leaf builtin may get code for native calls, as compiled code calls the
+     builtin itself; one that starts a block call may not, and the loop that calls it then leaves at the call. */
+  agc_builtin leaf_row = {.leaf = true}, block_row = {.native = AGC_NATIVE_FILTER};
+  const agc_builtin *callee_rows[2] = {&leaf_row, &block_row};
+  agc_instr calls_loop[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 1, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  for (uint16_t which = 0; which < 2; which++) {
+    agc_instr body[2] = {{AGC_OP_CALL_BUILTIN, 0, which, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+    agc_function fns[2] = {{.registers = 2, .code = calls_loop, .count = 3},
+                           {.registers = 2, .code = body, .count = 2}};
+    agc_program program = {.functions = fns, .function_count = 2, .builtins = callee_rows};
+    bool callable[2], looped[2], calling[2];
+    agc_jit_settle(&program, callable, looped, calling);
+    assert(callable[0] == (which == 0) && callable[1] == (which == 0));
   }
   /* A function whose only loop is a TAIL_CALL of itself has a loop, so `on` compiles it at its entries; a TAIL_CALL of
      another function is no loop. */

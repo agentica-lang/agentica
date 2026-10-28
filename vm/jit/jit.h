@@ -60,13 +60,13 @@ typedef struct {
 /* Compiled code of one function: runs from instruction `pc` with R the frame's registers and K the program's
    constants, and returns at the first exit. The machine code itself never fails, allocates directly or grows an
    array: an opcode helper it calls may allocate, but never fails (no agc_fail, no longjmp), parks or moves a frame,
-   and it calls a builtin only through agc_jit_call_builtin, which catches the builtin's failure. A CALL of a function
-   that has code, and a CALL_VALUE of a function value whose function has code (agc_jit_call_value), push its frame in
-   room the task already has and call that code natively (at AGC_JIT_NATIVE_ENTRY), up to AGC_JIT_NATIVE_DEPTH calls
-   deep; its RETURN pops it. A TAIL_CALL of a function that has code replaces the top frame in place, sets its tail
-   flag and jumps to that code (at AGC_JIT_TAIL_ENTRY), or to instruction 0 for a call of itself, so the code that runs
-   may belong to another function than the one entered: after an exit, run_compiled reads the top frame again when
-   the frame count changed or the tail flag is set. */
+   and it calls a builtin only through agc_jit_call_builtin or agc_jit_call_leaf, which catch its failure. A CALL of a
+   function that has code, and a CALL_VALUE of a function value whose function has code (agc_jit_call_value), push
+   its frame in room the task already has and call that code natively (at AGC_JIT_NATIVE_ENTRY), up to
+   AGC_JIT_NATIVE_DEPTH calls deep; its RETURN pops it. A TAIL_CALL of a function that has code replaces the top
+   frame in place, sets its tail flag and jumps to that code (at AGC_JIT_TAIL_ENTRY), or to instruction 0 for a call
+   of itself, so the code that runs may belong to another function than the one entered: after an exit, run_compiled
+   reads the top frame again when the frame count changed or the tail flag is set. */
 typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *K, uint32_t pc);
 
 /* On a function that calls compiled code: clang's -fsanitize=function reads a type word before each indirect call
@@ -167,7 +167,8 @@ static inline bool agc_jit_native_only(agc_jit *jit, uint32_t function) {
 uint32_t agc_jit_call_value_exit(agc_vm *vm, agc_jit *jit, const agc_function *f, agc_jit_exit out, uint32_t base);
 /* Counts an INTERPRET exit at instruction PC of FUNCTION, when the jit trace is on (the exit's slow path). */
 void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc);
-/* Counts a leaf builtin that run_compiled called between two runs of compiled code, when the jit trace is on. */
+/* Counts a leaf builtin that run_compiled called between two runs of compiled code, when the jit trace is on (none in
+   a loaded program: compiled code calls every leaf row itself, agc_jit_call_leaf). */
 void agc_jit_count_leaf(agc_jit *jit);
 /* Counts a block call (a builtin row with a native kind) that run_compiled started, when the jit trace is on. */
 void agc_jit_count_block(agc_jit *jit);
@@ -178,7 +179,8 @@ void agc_jit_count_transition(agc_jit *jit);
    only code compiled while the jit trace is on (agc_emit_tail_call). */
 void agc_jit_count_tail(agc_jit *jit, _Atomic(agc_jit_code) *slot);
 /* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
-   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code, `block count=N`, the
+   turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code (none in a loaded
+   program), `block count=N`, the
    block calls started there, `transition count=N`, the calls, tail calls and returns that left compiled code (a
    native call, tail call or return does not), `transition op=tail-call count=N compiled=M`, the tail calls among them
    and those of a callee that had code, and `turn count=N`, the turns that ran the jit copy of the turn loop. */
@@ -192,6 +194,11 @@ void agc_jit_report(agc_jit *jit);
    crosses compiled code, and run_compiled hands it on. The call either completes or raises, as in the interpreter;
    a direct row never parks, starts a stepper or a native frame, or moves the frames, so nothing is left half done. */
 uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
+/* The CALL_BUILTIN of a leaf row (agc_builtin.leaf) in compiled code, as the interpreter's call_leaf runs it, with
+   ARGS and WHERE as for agc_jit_call_builtin. A leaf charges no cost, counts no step and never ends the turn, so it
+   answers AGC_STATUS_OK, the result in ARGS[0], or AGC_JIT_EXIT_RAISE when it failed (caught as above). So a leaf
+   no longer exits, and the native calls below it stay on the C stack. */
+uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
 /* MAP_GET in compiled code, as the interpreter's case runs it: *DST = the value of *KEY in *MAP, and AGC_STATUS_OK.
    A missing key, or a wrong tag (hand-made bytecode), answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left
    alone, so the interpreter runs the instruction and fails as it does. A String key charges its bytes to the task's
@@ -338,8 +345,9 @@ void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t up
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
-/* CALL_BUILTIN of the direct row at BUILTIN, whose span is SPAN: a call of agc_jit_call_builtin. */
-void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span);
+/* CALL_BUILTIN of the direct row at BUILTIN, whose span is SPAN: a call of agc_jit_call_builtin, or of
+   agc_jit_call_leaf when the row is a LEAF. */
+void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span, bool leaf);
 /* CALL with SLOT the address of the callee's entry in the code table and REGISTERS the callee's register count. */
 void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers);
 /* TAIL_CALL with SLOT the address of the callee's entry in the code table, PARAMS and REGISTERS the callee's counts,

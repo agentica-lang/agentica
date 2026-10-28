@@ -577,14 +577,14 @@ void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uin
 
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1, status, pc); }
 
-/* agc_jit_call_builtin(vm, &R[a], builtin, span << 32 | pc + 1): it runs the builtin and answers 0 to go on, or the
-   exit (YIELD, RAISE) to return at PC, as an opcode helper's status. */
-void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
+/* agc_jit_call_builtin(vm, &R[a], builtin, span << 32 | pc + 1), or agc_jit_call_leaf for a LEAF row: it runs the
+   builtin and answers 0 to go on, or the exit (YIELD, RAISE) to return at PC, as an opcode helper's status. */
+void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span, bool leaf) {
   move_reg(e, true, ARG0, VM);
   lea(e, ARG1, REGS, TAG(in.a));
   move_imm64(e, ARG2, builtin);
   move_imm64(e, ARG3, ((uint64_t)span << 32) | (pc + 1));
-  call_status(e, (uint64_t)(uintptr_t)agc_jit_call_builtin, pc);
+  call_status(e, (uint64_t)(uintptr_t)(leaf ? agc_jit_call_leaf : agc_jit_call_builtin), pc);
 }
 
 /* CALL of function bx with the window at R[a], as a native call when it can be one: the callee has code (its slot in
