@@ -7,6 +7,7 @@
 #include "jit.h"
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* A part of a function that `on` measures: an innermost loop (one that holds no other loop's end) of SIZE
@@ -48,6 +49,31 @@ static const plain_leaf plain_leaves[] = {
     {"String.length", 1, {{AGC_T_STRING, AGC_T_VOID}, false}},
     {"String.code", 1, {{AGC_T_STRING, AGC_T_VOID}, true}},
 };
+
+/* The rows whose call may park: the turn ends while it waits, for a channel, a task, a timer or stdin (the woken task
+   runs the call again) or for an I/O job on the loop or the thread pool (files, paths, processes, sockets, a native
+   call or wait). Sorted by strcmp for bsearch; a name stands for each of its arities. Not listed: the `shared` rows
+   that never park (Channel.new, Channel.closed?, Task.cancel, the logger, ...), the output rows (puts, IO.print, ...),
+   which park only while the output is backed up, and the steppers (File.each_line, Task.map, the Lazy terminals),
+   whose call leaves the code once, however often they wait inside it. vm/tests/jit_test.c checks that the list is
+   sorted and that each name is a row of the builtin tables. */
+const char *const agc_jit_parking[] = {
+    "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.close",
+    "File.flush", "File.lstat", "File.open", "File.read_bytes", "File.read_line", "File.read_text", "File.sha256",
+    "File.stat", "File.try_lock", "File.write", "File.write_bytes", "File.write_text", "FrontEnd.stdin_bytes",
+    "HttpWire.accept", "HttpWire.connect_tls", "HttpWire.read_head", "HttpWire.read_response", "HttpWire.read_text",
+    "HttpWire.wait", "IO.eof?", "IO.gets", "IO.gets!", "IO.read", "IO.read_bytes", "Native.call",
+    "Native.wait_readable", "Native.wait_writable", "Path.real", "Path.remove", "Path.rename", "Process.channel_close",
+    "Process.channel_read_line", "Process.channel_send", "Process.close", "Process.close_stdin", "Process.output",
+    "Process.parent_read_line", "Process.parent_send", "Process.read_available", "Process.read_bytes",
+    "Process.read_line", "Process.send", "Process.send_bytes", "Process.spawn", "Process.spawn_captured",
+    "Process.spawn_channel", "Process.wait", "TCP.accept", "TCP.connect", "TCP.listen", "TCP.read_line",
+    "TCP.recv_bytes", "TCP.send", "TCP.send_bytes", "TLS.connect", "TLS.listen", "Task.await", "Task.await_result",
+    "Task.sleep", "Test.run",
+};
+const size_t agc_jit_parking_count = sizeof agc_jit_parking / sizeof agc_jit_parking[0];
+
+static int name_order(const void *key, const void *item) { return strcmp(key, *(const char *const *)item); }
 
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
    which the loader left in place. */
@@ -147,12 +173,12 @@ static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
 }
 
 /* The trips out of compiled code that the `on` heuristic counts for IN when it is not a call of a function of the
-   program: none, one, or AGC_JIT_PARK_WEIGHT for a builtin of shared state that leaves (a `shared` row, which may
-   park and end the turn). */
+   program: none, one, or AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park (agc_jit_parking). */
 static uint32_t trips(const agc_program *p, agc_instr in, bool loopless) {
   if (!leaves_code(p, in, loopless)) return 0;
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  return in.op == AGC_OP_CALL_BUILTIN && p->builtins[bx]->shared ? AGC_JIT_PARK_WEIGHT : 1;
+  if (in.op != AGC_OP_CALL_BUILTIN) return 1;
+  return agc_jit_parks(p->builtins[bx]) ? AGC_JIT_PARK_WEIGHT : 1;
 }
 
 /* Why `on` keeps a function out:
@@ -254,6 +280,11 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     work += first[g + 1] - first[g];
   }
   return work + site_count;
+}
+
+bool agc_jit_parks(const agc_builtin *b) {
+  return b->name &&
+         bsearch(b->name, agc_jit_parking, agc_jit_parking_count, sizeof agc_jit_parking[0], name_order) != NULL;
 }
 
 const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {
@@ -747,21 +778,26 @@ static bool sampled(agc_vm *vm, uint32_t bits) {
 /* The draw of a turn while no code is published. A sampled turn reads whether an entry was counted since the last
    one (on any scheduler): if so the interval goes back to AGC_JIT_SAMPLE; after AGC_JIT_SAMPLE_MISSES sampled turns
    in a row with none, it doubles, up to AGC_JIT_SAMPLE_MAX. Not at the first miss: in a ping-pong whose work runs in
-   one task's turns only, about half the samples land on the other task's turns. Only sampled turns write, so the
-   shared fields stay cold, and a race between schedulers only moves the interval a step. */
+   one task's turns only, about half the samples land on the other task's turns. Only sampled turns write, and only
+   a field whose value changes, so the shared line stays cold. Two schedulers that sample at once may undo each
+   other's store: a reset can be lost, and the interval go back to what the other read (up to AGC_JIT_SAMPLE_MAX).
+   That is harmless: the next counted entry resets it again at the next sampled turn. */
 static bool sample(agc_jit *jit, agc_vm *vm) {
   uint32_t bits = atomic_load_explicit(&jit->sample_bits, memory_order_relaxed);
   if (!sampled(vm, bits)) return false;
+  uint32_t was = atomic_load_explicit(&jit->sample_misses, memory_order_relaxed);
   uint32_t next = AGC_JIT_SAMPLE_BITS, misses = 0;
-  if (!atomic_exchange_explicit(&jit->counted, false, memory_order_relaxed)) {
+  bool counted = atomic_load_explicit(&jit->counted, memory_order_relaxed) &&
+                 atomic_exchange_explicit(&jit->counted, false, memory_order_relaxed);
+  if (!counted) {
     next = bits;
-    misses = atomic_load_explicit(&jit->sample_misses, memory_order_relaxed) + 1;
+    misses = was + 1;
     if (misses == AGC_JIT_SAMPLE_MISSES) {
       misses = 0;
       if (next < AGC_JIT_SAMPLE_MAX_BITS) next++;
     }
   }
-  atomic_store_explicit(&jit->sample_misses, misses, memory_order_relaxed);
+  if (misses != was) atomic_store_explicit(&jit->sample_misses, misses, memory_order_relaxed);
   if (next != bits) atomic_store_explicit(&jit->sample_bits, next, memory_order_relaxed);
   return true;
 }

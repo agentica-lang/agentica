@@ -230,14 +230,14 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   of its entries were passes (an entry at or before the previous one: a new
   call, or a loop that went round). It keeps a function out when one of its
   innermost loops has more than one instruction that leaves compiled code per 16
-  instructions; a builtin of shared state (a `shared` row: tasks, channels,
-  processes, sockets, stdin, file handles, the logger), which may park, counts
-  as three. A function without a loop gets code only for native calls, and
-  only when none of its instructions leaves compiled code: at its first `CALL`,
-  `TAIL_CALL` or `CALL_VALUE` exit from compiled code when it calls a function,
-  else at its 16th call that leaves compiled code. `always` compiles every
-  function at its first entry, for tests. A host without an emitter runs every
-  mode in the interpreter.
+  instructions; a builtin that may park (a channel or task wait, a sleep, a read
+  of stdin, a file, path, process or socket call: `agc_jit_parking` in
+  `vm/jit/jit.c`) counts as three. A function without a loop gets code only for
+  native calls, and only when none of its instructions leaves compiled code: at
+  its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit from compiled code when it
+  calls a function, else at its 16th call that leaves compiled code. `always`
+  compiles every function at its first entry, for tests. A host without an
+  emitter runs every mode in the interpreter.
 - **Native calls.** A `CALL` of a function that has code is a native call. So is
   a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
   Compiled code pushes the frame and calls the callee's code, up to 256 deep
@@ -338,9 +338,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     out and back costs more than the instructions it saves. The loops of
     `benchmarks/programs/print-lines.agc`, `small-values.agc` and `strings.agc`
     leave every few instructions, and ran slower compiled.
-  - A call that parks ends the turn, and the woken task enters the code again
-    only to leave at the same call, which it retries. The loops of
-    `benchmarks/programs/channel-pingpong.agc` (32 instructions, a send and a
+  - A channel or task wait that parks ends the turn, and the woken task enters
+    the code again only to leave at the same call, which it retries. The loops
+    of `benchmarks/programs/channel-pingpong.agc` (32 instructions, a send and a
     receive) ran 1.2 times slower compiled; with longer bodies, two such calls
     broke even at 64 to 96 instructions, about three plain exits each.
   - A block call in a function without a loop counts as leaving, so `on` keeps
@@ -402,7 +402,8 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - The jit copy of the turn loop interprets slower than the plain copy: it
     tests the resume pc at each instruction, and gcc keeps its code pointer on
     the stack. With every turn in it and nothing compiled, `logger-disabled`
-    took 1.38 times as long, `arithmetic` 1.24 and `channel-pingpong` 1.16.
+    took about 1.4 times as long, `arithmetic` 1.2 and `channel-pingpong` 1.2
+    (the Ryzen 5 3550H and gcc 14.2.0 of `docs/vm-benchmarks.md`).
     Once some code is published every turn runs it, so the interpreted part of
     such a run pays this.
 

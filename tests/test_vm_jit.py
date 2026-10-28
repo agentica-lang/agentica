@@ -878,9 +878,9 @@ end
 
 @pytest.mark.parametrize("work", [0, 12])
 def test_on_keeps_out_a_loop_that_parks_often(tmp_path, work):
-    # Channel.send and Channel.recv may park (shared rows), and each counts three trips out (AGC_JIT_PARK_WEIGHT): a
-    # loop of two of them stays out below 96 instructions, as it ran slower compiled; with 12 more lines of work each
-    # loop is long enough and both compile.
+    # Channel.send and Channel.recv may park (agc_jit_parking), and each counts three trips out
+    # (AGC_JIT_PARK_WEIGHT): a loop of two of them stays out below 96 instructions, as it ran slower compiled; with 12
+    # more lines of work each loop is long enough and both compile.
     body = "".join(f"    acc = (acc + n * {k + 1}) % 1000003\n" for k in range(work))
     bytecode = compile_text(f"""struct Pair
   ping: Channel[Int]
@@ -925,6 +925,35 @@ end
     acc = sum(sum(n * (k + 1) for k in range(work)) for n in range(1, 3001)) % 1000003 if work else 0
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == f"{sum(range(1, 3001))} {acc} {acc}\n", (stdout, stderr)
+
+
+def test_on_compiles_a_loop_with_a_shared_call_that_never_parks(tmp_path):
+    # Channel.closed? is a shared row (it takes rt->sync) but never parks, so it counts one trip out, as on master:
+    # this loop of about 40 instructions compiles, where three trips (a call that may park) would keep it out.
+    bytecode = compile_text("""def main() -> Void
+  ch: Channel[Int] = Channel.new(1)
+  acc = 0
+  i = 0
+  while i < 300000
+    if ch.closed?
+      acc = acc + 1
+    end
+    acc = (acc + i * 3) % 1000003
+    acc = (acc + i * 5) % 1000003
+    acc = (acc + i * 7) % 1000003
+    i += 1
+  end
+  puts(acc)
+end
+""", "closed_loop", tmp_path)
+    if X86_64:
+        assert compiled(bytecode, tmp_path, "on") == ["main"]
+    acc = 0
+    for i in range(300000):
+        for k in (3, 5, 7):
+            acc = (acc + i * k) % 1000003
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == f"{acc}\n", (stdout, stderr)
 
 
 MID_TURN_WORK = """def work(n: Int) -> Int

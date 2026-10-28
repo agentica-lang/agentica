@@ -232,8 +232,8 @@ only about 8% more.
 ## JIT (`--jit`)
 
 The x86-64 JIT (`docs/vm/05-values-execution-builtins.md` §6.4) against the
-interpreter (`--jit off`), on `9eb81699` (2026-10-28, the `on` changes for
-parking loops and sampled turns). Seconds, best of 5 runs at size 4 on one
+interpreter (`--jit off`), on the head of #770 (2026-10-28, the `on` changes
+for parking loops and sampled turns). Seconds, best of 5 runs at size 4 on one
 pinned core and one scheduler, on the Ryzen 5 3550H of "Results" (8 threads, 12
 GB RAM, Debian 13, gcc 14.2.0, Linux 6.12, a default `make` build). The load
 average was 0.7 to 1.2, from other sessions on the same host. The host ran

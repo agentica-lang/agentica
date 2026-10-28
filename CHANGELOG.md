@@ -10,8 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `--jit on` no longer compiles short loops that wait on channels or tasks,
-  which ran slower compiled.
+- `--jit on` keeps short loops that wait on channels, tasks, processes,
+  sockets, stdin or files interpreted.
 
 ## [0.14.0] - 2026-10-28
 

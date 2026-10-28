@@ -11,8 +11,7 @@
 /* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself with at most
    AGC_JIT_TAIL_PARAMS arguments, is compiled at its AGC_JIT_THRESHOLD-th entry once AGC_JIT_PASSES of its entries
    landed at or before the previous one, unless an innermost loop leaves compiled code for the interpreter more than
-   once in AGC_JIT_SPACING instructions, where a builtin of shared state, which may park, counts AGC_JIT_PARK_WEIGHT
-   times) and always
+   once in AGC_JIT_SPACING instructions, where a builtin that may park counts AGC_JIT_PARK_WEIGHT times) and always
    (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything in
    the interpreter. With `on`, a function without a loop gets code only for native calls, at its first CALL, TAIL_CALL
    or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
@@ -24,11 +23,12 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_PASSES 32
 #define AGC_JIT_CALLEE_THRESHOLD 16
 #define AGC_JIT_SPACING 16
-/* A `shared` row (tasks, channels, processes, sockets, stdin, file handles, the logger) may park: its turn ends, and
-   the woken task enters the code again only to leave it at the same call, which it retries. Measured with longer
-   loop bodies of benchmarks/programs/channel-pingpong.agc, a loop with two such calls broke even at 64 to 96
-   instructions, where a loop with one plain exit breaks even at about 19: such a call costs about three plain
-   exits. */
+/* The trips out that `on` counts for a builtin that may park (agc_jit_parking: channels, task waits, sleeps, stdin,
+   files, paths, processes, sockets), which ends the turn when it waits. A task woken from a channel, a task or a
+   timer enters the code again only to leave it at the same call, which it retries. Measured with longer loop bodies
+   of benchmarks/programs/channel-pingpong.agc, a loop with two such calls broke even at 64 to 96 instructions, where
+   a loop with one plain exit breaks even at about 19: such a call costs about three plain exits. An I/O job's call is
+   not retried, but its wait costs far more than any trip, so a loop that waits on I/O gains little from code. */
 #define AGC_JIT_PARK_WEIGHT 3
 
 /* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
@@ -410,5 +410,10 @@ void agc_jit_mem_unmap(void *pages, size_t size);
    set when f has a loop and CALLING[f] when it calls a function of the program. Returns the work it did
    (instructions read and call sites counted), which the C test bounds by the program's size. */
 size_t agc_jit_settle(const agc_program *program, bool *callable, bool *looped, bool *calling);
+/* The names of the builtin rows whose call may park, sorted (jit.c), and whether B is one of them: `on` counts such a
+   call AGC_JIT_PARK_WEIGHT trips out. */
+extern const char *const agc_jit_parking[];
+extern const size_t agc_jit_parking_count;
+bool agc_jit_parks(const agc_builtin *b);
 
 #endif

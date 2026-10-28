@@ -188,12 +188,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `vm/jit/` (core, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit`,
   `AGENTICA_JIT`):
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
-  and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
-  decides every function once in `agc_jit_new` (for `on`, a backward jump and
-  innermost loops that seldom leave the code, where a `shared` builtin, which
-  may park, counts `AGC_JIT_PARK_WEIGHT` times: a fixed point that
-  `agc_jit_settle` reaches in time linear in the program), sets `skip` for the
-  rest and returns NULL when no function is left, so that run takes the plain
+  and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. For `on`,
+  a call of a builtin that may park (`agc_jit_parking`, a sorted name list that
+  `jit_test.c` checks against the tables) counts as `AGC_JIT_PARK_WEIGHT` trips
+  out of the code. `jit.c` decides every function once in `agc_jit_new` (for
+  `on`, a backward jump and innermost loops that seldom leave the code, a fixed
+  point that `agc_jit_settle` reaches in time linear in the program), sets
+  `skip` for the rest and returns NULL when no function is left, so that run takes the plain
   turn loop, as a turn does while no code is published, no top frame may get
   some and it is not one of the turns sampled at random, one in 16 on average,
   down to one in 256 while the samples count no entry (`agc_jit_turn`, called
