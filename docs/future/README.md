@@ -64,7 +64,8 @@ design.
 - §: 20
   - Title: Crypto module
   - File: [`20-crypto.md`](20-crypto.md)
-  - Status: `Digest`, `HMAC` and `Base64` built; the rest planned (row 7.5)
+  - Status: `Digest`, `HMAC`, `SecureRandom` and `Base64` built; the rest
+    planned (row 7.5)
 
 - §: 25
   - Title: Ruby typed idioms

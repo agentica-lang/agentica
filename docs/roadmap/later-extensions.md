@@ -9,7 +9,7 @@
 - [ ] `Crypto` module ([`docs/future/20-crypto.md` section
   20](../future/20-crypto.md#20-crypto-module)), on demand: after TLS on the VM
   (7h) and `Bytes`. Started: the `Digest` hashes on `List[Int]` (#455, #757),
-  SHA-256 for the package hash.
+  SHA-256 for the package hash, and `SecureRandom` (#757).
 
 ### Enums and pattern matching: implemented
 

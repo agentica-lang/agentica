@@ -126,6 +126,25 @@ int __wrap_timespec_get(struct timespec *ts, int base) {
 }
 // NOLINTEND(bugprone-reserved-identifier,readability-identifier-naming)
 
+/* SecureRandom is the other input from the host: agc_secure_random draws from OpenSSL, so an interpreter run and a JIT
+   run of one program would print other bytes. The link wraps it (mk/vm-test.mk) to give every run the same stream
+   instead, restarted by run() as the fixed seed restarts Random, so programs that draw still compare. Only this
+   harness links the wrap: the VM, its tests and the fuzz runs without the JIT draw from OpenSSL. A fuzz run has one
+   scheduler and no pool thread draws, so the state needs no lock. */
+static agc_random secure_stream; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+// NOLINTBEGIN(bugprone-reserved-identifier,readability-identifier-naming)
+bool __wrap_agc_secure_random(unsigned char *out, size_t n);
+
+bool __wrap_agc_secure_random(unsigned char *out, size_t n) {
+  for (size_t k = 0; k < n; k += 8) {
+    uint64_t word = agc_random_next(&secure_stream);
+    memcpy(out + k, &word, n - k < 8 ? n - k : 8);
+  }
+  return true;
+}
+// NOLINTEND(bugprone-reserved-identifier,readability-identifier-naming)
+
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
 /* No coverage hooks: the hash loop is not fuzzed code, and with them it costs two hook calls per byte. */
@@ -151,6 +170,7 @@ static void run(const uint8_t *data, size_t size, agc_jit_mode mode, seen *s) {
   // The allocation limit's longjmp leaves agc_vm_run without passing the wrapper's end.
   atomic_store_explicit(&clock_read, false, memory_order_relaxed);
   atomic_store_explicit(&in_run, false, memory_order_relaxed);
+  agc_random_seed(&secure_stream, 0);
   s->status = agc_fuzz_one(data, size, (int)mode, out, err);
   s->clocked = atomic_load_explicit(&clock_read, memory_order_relaxed);
   fclose(out);

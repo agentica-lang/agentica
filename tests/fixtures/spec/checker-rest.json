@@ -10983,6 +10983,90 @@
       "start": [1, 1]
     }
   ],
+  "SecureRandom.random_bytes and hex take an optional Int count (16), uuid takes none; they draw at run time, so a constant cannot call them; SecureRandom is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  bytes: List[Int] = SecureRandom.random_bytes(32)",
+        "  key: List[Int] = SecureRandom.random_bytes",
+        "  token: String = SecureRandom.hex + SecureRandom.hex(8)",
+        "  id: String = SecureRandom.uuid + SecureRandom.uuid()",
+        "  puts(bytes.size + key.size + token.size + id.size)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b = SecureRandom.random_bytes(\"16\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 33],
+      "covers": "\"16\"",
+      "expected": "Int",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = SecureRandom.hex(4)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "SecureRandom.hex(4)",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = SecureRandom.uuid(4)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "SecureRandom.uuid(4)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = SecureRandom.hex(1, 2)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "SecureRandom.hex(1, 2)"
+    },
+    {
+      "program": [
+        "TOKEN = SecureRandom.hex",
+        "",
+        "def main() -> Void",
+        "  puts(TOKEN)",
+        "end"
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 9],
+      "covers": "SecureRandom.hex",
+      "help": true
+    },
+    {
+      "program": [
+        "struct SecureRandom",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Std.source takes a path and gives a Result[String]; Std is a reserved type name": [
     {
       "program": [

@@ -112,3 +112,17 @@ Digest.hexdecode(text: String) -> Result[List[Int]]   # either case
   `Base64.strict_encode64(String.to_bytes("hi"))`. An encoded item outside
   0..255 halts (`RUNTIME-INVALID-NUMBER`). `Base64` and `Digest` are reserved
   type names.
+
+## Secure random
+
+```text
+SecureRandom.random_bytes(n: Int = 16) -> List[Int]   # OpenSSL RAND_bytes
+SecureRandom.hex(n: Int = 16) -> String               # 2n lowercase hex digits
+SecureRandom.uuid() -> String                         # version 4, 36 chars
+```
+
+- Use `SecureRandom` for keys, salts, tokens and IDs: `Random` is seeded and
+  `--seed` repeats it, so it is not for secrets.
+- `n` outside 0..1048576 halts (`RUNTIME-INVALID-COUNT`); a failed draw halts
+  (`RUNTIME-INTERNAL`). The calls have the `random` effect label, so a module
+  constant cannot call them. `SecureRandom` is a reserved type name.

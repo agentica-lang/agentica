@@ -121,6 +121,12 @@ in a PR that rewrites the goldens.
   eight `Base64` and hex builtins in `vm/crypto.c`
   (`Digest.hexencode`/`hexdecode`) are plain C; the encoders check items the
   same way, and all eight charge `AGC_COST_SIZE`.
+- `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
+  `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
+  (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;
+  `uuid` draws 16 bytes and sets the version and variant bits. A failed draw is
+  `RUNTIME-INTERNAL` at the call. They run without the shared lock: OpenSSL 3
+  keeps one generator per thread.
 
 ### 2.4 Printing values
 

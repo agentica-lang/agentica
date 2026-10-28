@@ -1,10 +1,10 @@
 ---
-title: Digest and HMAC
+title: Digest, HMAC and SecureRandom
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, and the HMAC builtins, which sign bytes with a key.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, and the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`. More (a constant-time compare, random bytes) are planned.
+The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, and the secure random draws of `SecureRandom`, as Ruby names them. More (a constant-time compare) are planned.
 
 ## Digests
 
@@ -84,3 +84,45 @@ f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
 - An item outside 0 to 255, in the key or in the data, stops the program with `RUNTIME-INVALID-NUMBER` at that argument.
 - The time grows with the key and the data, as for the digests, and they need no effect label.
 - `HMAC` is a reserved type name too.
+
+## SecureRandom
+
+```text
+SecureRandom.random_bytes(n: Int = 16) -> List[Int]
+SecureRandom.hex(n: Int = 16) -> String
+SecureRandom.uuid() -> String
+```
+
+`SecureRandom.random_bytes(n)` gives `n` bytes from the secure random generator of OpenSSL (`RAND_bytes`), which the system seeds. `SecureRandom.hex(n)` gives `n` such bytes as `2n` lowercase hex digits. `SecureRandom.uuid` gives a random version 4 UUID (RFC 9562): 36 lowercase characters such as `"2ddb7c9f-b237-4edc-b8ae-d3a42c7135f5"`. Without an argument, `random_bytes` and `hex` draw 16 bytes, as in Ruby.
+
+```agentica
+def main() -> Void
+  key = SecureRandom.random_bytes(32)
+  puts(key.size)
+  puts(SecureRandom.hex.size)
+  id = SecureRandom.uuid
+  puts(id.size)
+  puts(String.slice(id, 14, 1))
+end
+```
+
+```output
+32
+32
+36
+4
+```
+
+Each run gives other values.
+
+- Use `SecureRandom` for keys, salts, session tokens, password reset links and IDs that must not be guessed. [`Random`](/library/io-and-system/system/#randomint) is seeded and `--seed` repeats it, so it is not for secrets.
+- `n` must be from 0 to 1048576 (1 MiB); any other `n` stops the program with `RUNTIME-INVALID-COUNT` at the argument. A key or a token needs 16 to 64 bytes.
+- If the system cannot give random bytes, the call stops the program with `RUNTIME-INTERNAL`. It never gives weak bytes instead.
+- The calls have the `random` effect label, so a module constant cannot call them. The time of `random_bytes` and `hex` grows with `n`.
+- `SecureRandom` is a reserved type name.
+
+```agentica {expect="RUNTIME-INVALID-COUNT"}
+def main() -> Void
+  puts(SecureRandom.hex(-1))
+end
+```

@@ -186,6 +186,9 @@ Result.message ResultMessage
 Result.ok? ResultOk
 Result.unwrap! ResultUnwrap
 Result.unwrap_or ResultDefault
+SecureRandom.hex Plain
+SecureRandom.random_bytes Plain
+SecureRandom.uuid Plain
 Set.add SetAdd
 Set.delete SetAdd
 Set.difference SetCombine
