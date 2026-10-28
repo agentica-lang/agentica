@@ -664,8 +664,8 @@ With the alias `Binary`:
   [`binary.md`](../../site/content/library/text-and-data/binary.md).
 - Writers return new lists and no buffer is ever changed. Offset writers into an
   existing list and the compact `Bytes` type are not part of the module. Half
-  floats (f16), varints (LEB128), hex and Base64 come later, each when a real
-  program needs it; hex and Base64 stay open in the crypto section.
+  floats (f16) and varints (LEB128) come later, each when a real program needs
+  it; hex and Base64 are the `Digest` and `Base64` builtins (§6b).
 
 #### TOML (`std/toml`)
 

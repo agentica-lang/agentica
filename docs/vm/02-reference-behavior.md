@@ -113,6 +113,8 @@ in a PR that rewrites the goldens.
   at the argument), hashes with OpenSSL (`vm/digest_openssl.c`, behind
   `digest.h`) and returns 32 bytes. It charges one turn-cost unit per item
   (§10.2.1) and runs without the shared lock, as it reads only its argument.
+  The `Base64` and `Digest.hexencode`/`hexdecode` builtins in `vm/crypto.c`
+  check items and charge the same way, in plain C.
 
 ### 2.4 Printing values
 
