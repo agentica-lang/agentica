@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** `Base64` and `Digest` are reserved names.
+- **Breaking:** `Crypto.sha256` is now `Digest.sha256`.
 - `--jit on` keeps short loops that wait on channels, tasks, processes,
   sockets, stdin or files interpreted.
 

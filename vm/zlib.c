@@ -174,7 +174,7 @@ static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int 
 }
 
 /* One-shot calls are pure functions of their arguments: they hold no shared
-   state, so they run without the shared lock, like Crypto.sha256, with the
+   state, so they run without the shared lock, like Digest.sha256, with the
    1 MiB input and output bounds keeping each call's work bounded. */
 static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool compress) {
   agc_value failed = agc_void();

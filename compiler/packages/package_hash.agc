@@ -14,7 +14,7 @@
 ## way and simply cannot be imported.
 ##
 ## The folder is listed and read through the Workspace. The stream is built in memory (the pieces of the files are
-## collected and joined once) and hashed once with Crypto.sha256, so the cost is the size of the .agc files.
+## collected and joined once) and hashed once with Digest.sha256, so the cost is the size of the .agc files.
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
@@ -225,7 +225,7 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
     pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
   end
 
-  return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
+  return Hashed.Hash("sha256:#{hex(Digest.sha256(concat_all(pieces)))}")
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".

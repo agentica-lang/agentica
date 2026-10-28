@@ -78,6 +78,7 @@ end
 export def foreign_names() -> Map[String, String]
   return {
     "Array.new": "use a list literal with a type: xs: List[Int] = []",
+    "Crypto.sha256": "use Digest.sha256(data), or Digest.sha256_hexdigest(data) for the hex text",
     "Enumerator.new": (
       "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), " +
       "Task.spawn(&produce, ch), then ch.recv(timeout_ms)"

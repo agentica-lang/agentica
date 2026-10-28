@@ -312,9 +312,6 @@ static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t 
 }
 
 const agc_builtin agc_crypto_builtins[] = {
-  /* The key of the old name, which the bytecode of the checked-in bootstrap/stage0.agcb still imports; it goes once
-     the stage0 in the tree imports Digest.sha256. */
-  {"Crypto.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.sha1", 1, builtin_sha1, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
