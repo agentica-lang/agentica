@@ -114,9 +114,10 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
   head SHA, started from the main checkout (run the query once in the
   foreground first).
-- `vm/tests/loop_test.c:237` on macOS is a known flake (#366): rerun once with
-  `gh run rerun ID --failed` and say so. Read other failures with
-  `gh run view ID --log-failed`; native Windows finds bugs Wine hides.
+- A timing assertion of `vm/tests/loop_test.c` on macOS flaked before (#366,
+  closed): rerun once with `gh run rerun ID --failed` and say so. Read other
+  failures with `gh run view ID --log-failed`; native Windows finds bugs Wine
+  hides.
 
 ## 5. Merge and clean up
 
@@ -130,8 +131,9 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   `git worktree remove --force`. Retarget any open PR based on the branch
   (`gh pr edit N --base master`) before deleting the branch locally and on
   origin.
-- Issues created for follow-ups go into the "Agentica Roadmap" project
-  (users/sonic182/projects/1) as Todo; set In Progress when work starts.
+- Issues created for follow-ups go into the "Agentica Roadmap" project of the
+  `agentica-lang` organization (project 1) as Todo; set In Progress when work
+  starts.
 
 ## Gotchas
 

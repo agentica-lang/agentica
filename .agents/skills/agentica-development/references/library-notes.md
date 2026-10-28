@@ -227,78 +227,56 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   for any of them; `agentica test` passes them to the user's code only (test
   files, step programs, programs under test). The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
-- `tests/test_process.py` uses independent Node standard-library children and a
-  Python one (`tests/fixtures/process-peer.py`). Node is required in CI; local
-  absence visibly skips. It runs on Linux, macOS and Windows (not in
-  `WINDOWS_TEST_MODULES`: Wine cannot start host peers).
+- `tests/test_process.py` uses Node and Python peer children (required in CI);
+  it is not in `WINDOWS_TEST_MODULES`: Wine cannot start host peers.
 
 ## Int and Float bits, std/binary
 
 - Int and Float bit builtins (`vm/numbers.c`): shifts and masks run on
-  `uint64_t` and `int_from_bits` turns the result back into an `int64_t` without
-  implementation-defined casts; a count of 64 or more is decided before the
-  shift (`shift_left` and `shift_right_unsigned` give 0, `shift_right` gives 0
-  or -1), a negative count is `RUNTIME-INVALID-COUNT` at argument 1 (`span +
-  2`). `Float.to_bits` and `from_bits` return the canonical NaN
+  `uint64_t`; a count of 64 or more is decided before the shift
+  (`shift_left` and `shift_right_unsigned` give 0, `shift_right` gives 0 or
+  -1), a negative count is `RUNTIME-INVALID-COUNT` at argument 1 (`span + 2`).
+  `Float.to_bits` and `from_bits` return the canonical NaN
   `0x7FF8000000000000` for any NaN; `to_bits32` decides the binary32 overflow
-  (`>= 2^128 - 2^103`) before the `(float)` cast, so the cast never sees an
-  out-of-range value, and gives `0x7FC00000` for NaN. The vectors of
-  `bits-vectors.agc` are the file `tests/fixtures/vm/bits-vectors.stdin`, which
-  `python3 tests/fixtures/bits-vectors.py` writes (standard library only; it
-  checks `struct` against its own exact `Fraction` rounding). CI does not run
-  the script: run it by hand and commit both files when the vectors change.
-  `tests/test_vm_bits.py` checks the spans of the errors.
-
+  before the `(float)` cast, so the cast never sees an out-of-range value, and
+  gives `0x7FC00000` for NaN. The vectors of `bits-vectors.agc` are the file
+  `tests/fixtures/vm/bits-vectors.stdin`, which `python3
+  tests/fixtures/bits-vectors.py` writes (standard library only). CI does not
+  run the script: run it by hand and commit both files when the vectors change.
+  `std-binary-vectors` works the same way with `std-binary-vectors.py`.
 - `std/binary` (`stdlib/binary.agc`) is Agentica on the bit builtins, with no
-  C. A reader is `window` (offset range, no overflow for any offset), a
-  `load8/16/32/64_{be,le}` that indexes the items, ORs them with `bit_or` and
-  tests the result once (`bytes_ok`), and walks the bytes (`first_bad_byte`)
-  only to name the first bad one; `extend` sign-extends with `shift_left` then
-  `shift_right`. A writer is `fits` plus a list literal from `bytesN_{be,le}`.
+  C. A reader checks `window` (offset range, no overflow for any offset), ORs
+  the items with `bit_or` and tests the result once (`bytes_ok`); the walk
+  that names the first bad byte (`first_bad_byte`) runs only on the error path.
   `concat` splits in halves (`join_parts`), so it recurses about log2 k deep.
-  The goldens are `std-binary` (round trips both ways, error order and messages,
-  `concat`, frames) and `std-binary-vectors`, which checks
-  `tests/fixtures/vm/std-binary-vectors.stdin` that `python3
-  tests/fixtures/std-binary-vectors.py` writes (standard library only; it loads
-  `bits-vectors.py` for the float helpers and checks `struct` against the
-  exact f32 rounding). CI does not run the script: run it by hand and commit
-  both files when the vectors change. `tests/test_std_binary.py` checks the
-  fixed output.
+  Goldens: `std-binary` and `std-binary-vectors`.
 
 ## std/toml
 
-- `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. The reader walks a list
-  of code points (`Src`, with a 128-entry class table of bits for digits, bare
-  keys, number characters, forbidden control characters and string stoppers)
-  with `while` loops; each function returns the next position in a small struct
-  (`Parsed`, `Scan`, `Key`). CRLF is turned into LF before reading, so a lone CR
-  is an error everywhere. Error text is built only on the error path (`place`
-  scans from the start for the line and column).
+- `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. The reader walks a
+  list of code points with `while` loops; each function returns the next
+  position in a small struct. CRLF is turned into LF before reading, so a lone
+  CR is an error everywhere. Error text is built only on the error path.
 - Floats go through `JSON.parse` and `JSON.float` (`String.to_float` has no
   exponent and rounds less well). A reader error on a valid float text means a
   magnitude over the largest float, which is inf, as in `tomllib`. A sign is
   applied afterwards so that `-0.0` survives.
-- Tables are built as a `Node` tree (`Leaf` sealed, `Tab` with its `Origin` and
-  `Rows` for arrays of tables) because `Value` cannot tell which tables a
-  header or a dotted key may still extend. `Origin.Dotted` carries the number of
-  the section that made it: only that section adds keys. This is the rule set of
-  `tomllib`'s flags. The tree is turned into `Value` at the end.
+- Tables are built as a `Node` tree (`Leaf` sealed, `Tab` with its `Origin`)
+  because `Value` cannot tell which tables a header or a dotted key may still
+  extend. `Origin.Dotted` carries the number of the section that made it: only
+  that section adds keys (the rule set of `tomllib`'s flags).
 - Limits, all 256: arrays and inline tables per value, parts of one header,
-  parts of one dotted key. The encoder refuses the same depths (a table path
-  over 256, inline nesting over 256), and `to_json` refuses 2,048 levels, so no
-  value built by a caller halts with `RUNTIME-STACK-OVERFLOW`, and what
-  `encode` writes `parse` reads back.
-- The encoder builds the class table once per document, because the date-time
-  check reuses the reader (`valid_date_time?`). Tests: `tests/test_std_toml.py`
-  compares the tagged value with the vendored toml-test JSON (its `valid/` and
-  `invalid/` for TOML 1.0.0, MIT, `tests/fixtures/toml-test/`) and with
-  `tomllib`; `.gitattributes` marks both fixture folders `-text` to keep CRLF.
+  parts of one dotted key. The encoder refuses the same depths, and `to_json`
+  refuses 2,048 levels, so no value built by a caller halts with
+  `RUNTIME-STACK-OVERFLOW`, and what `encode` writes `parse` reads back.
+- Tests: `tests/test_std_toml.py` compares the tagged value with the vendored
+  toml-test JSON (TOML 1.0.0, `tests/fixtures/toml-test/`) and with `tomllib`;
+  `.gitattributes` marks both fixture folders `-text` to keep CRLF.
 
 ## Comments and style in stdlib/
 
-Comments and style follow `.agents/skills/agentica-code-guidelines/` and
-`references/frontend.md` ("Comments and style"). Give the module a `##` doc
-block, and every exported `def`, `struct` and `enum` you add or touch one, as
-`stdlib/queue.agc` does; do not add docs to code you do not touch. A `#` comment
-names a VM behavior that the code copies. Lines are at most 119 characters
-(`stdlib/agentica.toml`, checked by `tests/test_style_line_width.py`).
+As in `references/frontend.md` ("Comments and style"): a module `##` doc block
+and a `##` doc on every exported `def`, `struct` and `enum` you add or touch
+(as `stdlib/queue.agc`), none on code you do not touch. A `#` comment names a
+VM behavior that the code copies. Lines are at most 119 characters
+(`stdlib/agentica.toml`, `tests/test_style_line_width.py`).

@@ -21,39 +21,29 @@ pin those texts (`references/frontend.md`).
 
 ## Source and tokens
 
-`compiler/syntax/source.agc` holds `Position` (offset, line, column) and `Span`
-(source, start, end). `compiler/syntax/token.agc` holds `Token` (kind string,
-lexeme, `Value`, span); `Value` is the decoded literal (`Text`, `Whole`, `Huge`,
-`Real`) or `NoValue`, or a `DocBlock` for a `DOC` token: `text` is the doc lines
-with the `##` markers and one optional space removed, joined by newlines; `next`
-says what the line after the block is: `blank`, `comment`, `eof` or `code`. The
-lexer works this out because the `NL` tokens of a blank line and of a `#`
-comment line look the same.
+`compiler/syntax/source.agc` holds `Position` and `Span`;
+`compiler/syntax/token.agc` holds `Token` (kind string, lexeme, `Value`,
+span). `Value` is the decoded literal or `NoValue`, or a `DocBlock` for a
+`DOC` token: `text` is the doc lines with the `##` markers and one optional
+space removed; `next` says what follows the block (`blank`, `comment`, `eof`
+or `code`), which the lexer works out because the `NL` tokens of a blank line
+and of a `#` comment line look the same.
 
-### Token kinds
-
-Kinds are Strings, listed in `OPERATOR_KINDS` and `WORD_ACTIONS` of
+Token kinds are Strings, listed in `OPERATOR_KINDS` and `WORD_ACTIONS` of
 `compiler/syntax/lexer.agc`; a reserved word is its own kind. Notes:
 
 - `name` starts with a lowercase letter or `_`; `type-name` with an uppercase
-  letter. `integer` and `float` are decimal literals; `string` holds the decoded
-  contents; `interp-start`, `interp-middle` and `interp-end` hold the decoded
-  text before, between and after `#{...}` pieces, and the expression tokens
-  come between them.
-- `dot-dot` and `dot-dot-dot` are ranges; `1..5` stays two integers, since a
-  Float needs a digit after the dot.
-- `pipe` is `|` (block parameters) and `pipe-forward` is `|>` (longest match,
-  so `do |x|` and `||` are unchanged). `&&`, `||` and `!` are the kinds `and`,
-  `or` and `not`; a `!` glued to a name stays in the name, and `!=` stays
-  `not-equal`.
-- The parser desugars `x op= e` (`plus-assign` and the like) into `binding x #f
-  (binary op ...)`.
-- `DOC` is one block of `##` doc lines: the lexeme is the raw block, the span
-  covers it from the first `##` to the end of the last line, and the `NL` of
-  the line break after it follows as usual.
-
-The parser reads the keyword literals from their kind, not from `value`: `true`,
-`false` and `nil` are literals.
+  letter. `interp-start`, `interp-middle` and `interp-end` hold the decoded
+  text around `#{...}` pieces; the expression tokens come between them.
+- `1..5` stays two integers, since a Float needs a digit after the dot.
+- `pipe` is `|` (block parameters), `pipe-forward` is `|>` (longest match, so
+  `do |x|` and `||` are unchanged). `&&`, `||` and `!` are the kinds `and`,
+  `or` and `not`; a `!` glued to a name stays in the name.
+- The parser desugars `x op= e` into `binding x #f (binary op ...)`, and reads
+  `true`, `false` and `nil` from their kind, not from `value`.
+- `DOC` is one block of `##` lines: the lexeme is the raw block, the span runs
+  from the first `##` to the end of the last line, and the `NL` after it
+  follows as usual.
 
 ## Diagnostics
 
@@ -75,34 +65,26 @@ Notes by stage:
 - `LOWER-` and `BYTECODE-` codes: `compiler/lower/lowering.agc`,
   `compiler/bytecode/bytecode_writer.agc` (`docs/vm/03-ir-and-bytecode.md`
   3.5).
-- **Packages** (`packages/`, `package_import.agc`): manifest, lock, stale
-  and conflict errors are at a key path (`Failure.fail_key`,
-  `Problem.key_path`); a TOML syntax error at its line and column; a missing
-  or unreadable file has no key (`Failure.fail_file`). The manifests of the
-  locked packages are checked before any file loads (`check_manifests`). The
-  hash and link errors are at the import. `agentica install`
-  (`app/cli_install.agc`, `io/package_fetch.agc`) reports at a key of
-  `agentica.lock` (`package[N].tag`, `package[N].subdir`, ...). `install`,
-  `add` and `update` write `deps/<name>/` (`io/package_deps.agc`) and report
-  at the lock too (`PKG-SYMLINK` for a `deps/` that is a link, `PKG-WRITE` at
-  the file). A build reads a package only from `deps/<name>/`
-  (`package_import.agc`; a missing one is `CHECK-IMPORT-PACKAGE`) and hashes
-  it, except a workspace member (`packages/members.agc`: the `[workspace]`
-  table of the project's root, found by walking up), read from its folder
-  with no hash and locked with `workspace = true`. `agentica add` and
-  `update` (`app/cli_add.agc`, `io/package_resolve.agc`) report the fetch
-  codes of a new pin at `dependencies.<name>.git`.
-
-- **Query** (`query/`; `outline`, `type-at`, `refs`, `symbol`): exit 2 at
-  `<arguments>` (line 1, column 1) for `QUERY-USAGE`, `QUERY-NOT-FOUND`
-  (`symbol` or `refs` NAME in no linked module and no builtin) and
-  `QUERY-AMBIGUOUS-NAME` (`refs_name.agc`); `QUERY-NO-EXPRESSION` is at the
-  position. The stage reads the words (`query_options.agc`), picks the file
-  (`query_files.agc`) and lists declarations (`outline*.agc`). `outline` lexes
-  and parses, and links only a file with re-exports (its `LEX-` or `PARSE-`
-  exits 1); `type-at` and `refs`
-  link and check, so any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code can come,
-  exit 1; `symbol` exits 1 only when no file links.
+- **Packages** (`packages/`, `package_import.agc`): manifest, lock, stale and
+  conflict errors are at a key path (`Failure.fail_key`, `Problem.key_path`); a
+  TOML syntax error at its line and column; a missing or unreadable file has no
+  key (`Failure.fail_file`). The manifests of the locked packages are checked
+  before any file loads (`check_manifests`); the hash and link errors are at the
+  import. `agentica install`, `add` and `update` (`app/cli_install.agc`,
+  `app/cli_add.agc`, `io/package_fetch.agc`, `io/package_resolve.agc`) report
+  at a key of `agentica.lock` (`package[N].tag`, ...) or, for a new pin, at
+  `dependencies.<name>.git`; `PKG-SYMLINK` is a `deps/` that is a link,
+  `PKG-WRITE` is at the file. A build reads a package only from
+  `deps/<name>/` (a missing one is `CHECK-IMPORT-PACKAGE`) and hashes it,
+  except a workspace member (`packages/members.agc`: the `[workspace]` table of
+  the project's root, found by walking up), read from its folder with no hash
+  and locked with `workspace = true`.
+- **Query** (`query/`): `QUERY-USAGE`, `QUERY-NOT-FOUND` and
+  `QUERY-AMBIGUOUS-NAME` exit 2 at `<arguments>` (line 1, column 1);
+  `QUERY-NO-EXPRESSION` is at the position. `outline` lexes and parses, and
+  links only a file with re-exports (its `LEX-` or `PARSE-` exits 1);
+  `type-at` and `refs` link and check, so any `LEX-`, `PARSE-`, `PKG-` or
+  `CHECK-` code can come, exit 1; `symbol` exits 1 only when no file links.
 
 Network and protocol failures otherwise return Results; handler and
 producer diagnostics retain their original code and span.
@@ -449,44 +431,33 @@ name. Every entry's implementation key must be in `VM_BUILTINS` of
 `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks the
 catalog) and run in a golden fixture; do not add test-only exports.
 
-A builtin can have several signatures (alternatives by arity): the checker and
-lowering use the same selection. Only catalog initialization fills the
-alternatives field; `builtin-ref` optionally selects by arity. Map.get/2
-returns Result[V]; Map.get/3 returns V with an eagerly evaluated default. Text
-help lists both signatures, and its JSON help carries an `overloads` array;
-single-signature JSON output is unchanged. There is no user-function
+A builtin can have several signatures (alternatives by arity; the checker and
+lowering use the same selection). Only catalog initialization fills the
+alternatives field. `Map.get/2` returns `Result[V]`; `Map.get/3` returns `V`
+with an eagerly evaluated default. Text help lists both signatures and its
+JSON help carries an `overloads` array. There is no user-function
 overloading. A Plain or Prelude builtin may instead give its trailing
-parameters a default (`Model.Named.default`, `references/frontend.md`, "Builtin
-defaults"): one form takes every count from the required to all, and lowering
-fills the rest at the call site.
+parameters a default (`Model.Named.default`, `references/frontend.md`,
+"Builtin defaults"): lowering fills the rest at the call site.
 
 ## Command line (`compiler/app/cli.agc` and `cli_*.agc`)
 
-`run(settings, words, hand_off) -> exit status`; the program is `dist/agentica`.
-`test` runs the BDD driver `compiler/bdd/bdd_driver.agc` (`references/bdd.md`).
-It reads the file (a missing file prints one plain line and exits 2), then
-links, checks and lowers it, and hands the bytecode to the VM. A diagnostic is
-printed in the plain form (header, message, source line, caret run) on stderr
-with exit 1. `--dump` pretty-prints the checked tree instead of running it;
-`--dump-ir` prints the lowered program. `compile FILE -o OUT` (first argument
-only, exactly that shape, else usage exit 2) checks, lowers and writes bytecode,
-and it cannot be combined with `--dump` or `--dump-ir` (usage, exit 2); lowering
-diagnostics exit 1, an unwritable output prints one line and exits 2. Arguments
-after the source file reach the VM as `System.args`, and the command exits with
-the VM's code. No source file exits 2. `check` never runs; --ai/--json use the
-same structured diagnostic. `help NAME --json` reads the catalog without a
-source file (unknown target exits 2; with no NAME it prints all entries as a
-JSON array sorted by name); `help` alone (exit 0) prints the command summary and
-the builtin namespaces. `--help` and `help` share one text. Help and test handle
-trailing style options; options on other commands precede the command/file so
-program args stay intact. --max-steps accepts a positive integer and reaches
-only the VM. The --deny-* flags and --sandbox go to the VM as typed
-(`Options.deny`); `test` passes them to the driver.
-`tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`install` is `cli_install.agc` (it takes no word); `add` and `update` are
-`cli_add.agc` (their words are read by hand there). `doc` and the query commands
-(`outline`, `type-at`, `refs`) are `cli_doc.agc` and `cli_query.agc`: the words
-after the command are read by hand (`query/query_options.agc`), and `--stdin
-FILE` (`type-at --stdin FILE:LINE:COL`, likewise `refs`) goes through
-`with_buffer` in `cli.agc`, as `check --stdin` does. `reject` takes the exit
-status: a `QUERY-` problem exits 2, any other 1.
+`run(settings, words, hand_off) -> exit status`. `agentica help` and
+`tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`) freeze the forms;
+read them, not this list. Non-obvious rules:
+
+- A diagnostic prints in the plain form on stderr with exit 1; a missing file
+  or bad usage exits 2. A `QUERY-` problem exits 2 (`reject` takes the
+  status), any other 1.
+- `compile FILE -o OUT` only as the first argument with exactly that shape;
+  it cannot combine with `--dump` or `--dump-ir`.
+- Options of other commands precede the command or file so program args stay
+  intact; `help` and `test` accept trailing style options. `--max-steps`
+  reaches only the VM. The `--deny-*` flags and `--sandbox` go to the VM as
+  typed (`Options.deny`); `test` passes them to the driver
+  (`references/bdd.md`).
+- `install` is `cli_install.agc` (no words); `add` and `update` are
+  `cli_add.agc`; `doc` and the query commands are `cli_doc.agc` and
+  `cli_query.agc`, which read their words by hand (`query/query_options.agc`).
+  `--stdin FILE` (`type-at --stdin FILE:LINE:COL`, likewise `refs` and
+  `check`) goes through `with_buffer` in `cli.agc`.
