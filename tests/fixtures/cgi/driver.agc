@@ -27,7 +27,10 @@ def run_case(c: Case) -> Reply
   case c.op
     "escape_html" -> return text_reply(CGI.escape_html(c.text))
     "unescape_html" -> return text_reply(CGI.unescape_html(c.text))
-    "parse_cookies_header" -> return Reply(success: true, message: "", text: "", cookies: CGI.parse_cookies_header(c.text))
+    "parse_cookies_header" ->
+      return Reply(success: true, message: "", text: "", cookies: CGI.parse_cookies_header(c.text))
+    "default_max_age" -> return text_reply("#{CGI.Cookie(name: "a", value: "b").max_age}")
+    "no_max_age" -> return text_reply("#{CGI.NO_MAX_AGE}")
     "set_cookie_header" ->
       case CGI.set_cookie_header(c.cookie)
         ok(header) -> return text_reply(header)
@@ -45,7 +48,8 @@ def main() -> Void
     end
     case JSON.decode(line.unwrap!, Case)
       ok(c) -> puts(JSON.encode(run_case(c)))
-      error(message) -> puts(JSON.encode(Reply(success: false, message: "bad case: #{message}", text: "", cookies: {})))
+      error(message) ->
+        puts(JSON.encode(Reply(success: false, message: "bad case: #{message}", text: "", cookies: {})))
     end
   end
 end

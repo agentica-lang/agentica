@@ -21,7 +21,7 @@ struct CGI.Cookie
   value: String
   path: String = ""
   domain: String = ""
-  max_age: Int = -1          # negative: no Max-Age; 0 deletes the cookie
+  max_age: Int = CGI.NO_MAX_AGE   # no Max-Age; 0 or less writes Max-Age=0, which deletes the cookie
   expires: String = ""       # written as it is: "Wed, 21 Oct 2015 07:28:00 GMT"
   secure: Bool = false
   http_only: Bool = false
@@ -47,24 +47,27 @@ end
 <b> 😀 A &nbsp; &lt;
 {"sid": "abc123", "theme": "dark"}
 ok("sid=abc123; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax")
-error("invalid cookie value (a b)")
+error("invalid cookie value (byte 1)")
 ```
 
 ## HTML
 
 `escape_html` replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby does.
 
-`unescape_html` decodes `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, decimal `&#65;` and hex `&#x41;` (`&#X41;` too), and nothing else. Other text that looks like an entity stays as written: a name Ruby does not know (`&nbsp;`), a missing `;`, and a number that is not a Unicode scalar value (above `10FFFF`, or a surrogate). Where Ruby raises for such a number or its version decides, this leaves the text. The text is read once, so `&amp;lt;` becomes `&lt;`, and `unescape_html(escape_html(text))` is `text`.
+`unescape_html` decodes `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, decimal `&#65;` and hex `&#x41;` (`&#X41;` too), and nothing else. Other text that looks like an entity stays as written: a name Ruby does not know (`&nbsp;`), a missing `;`, and a number that is not a Unicode scalar value (above `10FFFF`, or a surrogate). For such a number Ruby may raise or leave the text, depending on its version; this behaviour may differ from Ruby there. `unescape_html("&#0;")` gives a NUL character, as Ruby does. The text is read once, so `&amp;lt;` becomes `&lt;`, and `unescape_html(escape_html(text))` is `text`.
 
 ## Cookies
 
 `parse_cookies_header` splits the header on `;`, drops spaces around each piece, and splits a piece on its first `=`. A piece without `=` or with an empty name is skipped, and the first value of a repeated name wins, as in Rack's `parse_cookies_header`. The map keeps the order of the first appearance.
 
-`set_cookie_header` writes `name=value` and then the attributes in Rack's order: `Domain`, `Path`, `Max-Age`, `Expires`, `Secure`, `HttpOnly`, `SameSite`. There is no date type, so `expires` is text you format. It returns an `error` that names the field and shows the text when:
+`set_cookie_header` writes `name=value` and then the attributes in Rack's order: `Domain`, `Path`, `Max-Age`, `Expires`, `Secure`, `HttpOnly`, `SameSite` (Rack 3 writes the attribute names in lowercase; this writes them capitalized). There is no date type, so `expires` is text you format. `max_age` is `CGI.NO_MAX_AGE`, the smallest `Int`, when there is no `Max-Age`, so a computed negative number is never taken for it: it writes `Max-Age=0` and the browser deletes the cookie. It returns an `error` that names the field when:
 
 - `name` is empty or is not an RFC 7230 token (letters, digits and ``!#$%&'*+-.^_`|~``),
-- `value` has a byte that RFC 6265 does not allow: a space, `"`, `,`, `;`, `\`, a control or a non-ASCII byte,
-- `path`, `domain` or `expires` has a control, a non-ASCII byte or `;`,
-- `same_site` is not `Strict`, `Lax` or `None`.
+- `value` has a byte that RFC 6265 does not allow: a space, `"`, `,`, `;`, `\`, a control or a non-ASCII byte; the error gives the position of the byte (`invalid cookie value (byte 3)`) and never the value, which may be a secret,
+- `path`, `domain` or `expires` has a control, a non-ASCII byte or `;`, `domain` has a space, or `path` or `expires` starts or ends with a space,
+- `same_site` is not `Strict`, `Lax` or `None`, or is `None` without `secure: true`,
+- the name starts with `__Secure-` and `secure` is false, or starts with `__Host-` and `secure` is false, `path` is not `/` or `domain` is set (the prefix is matched without regard to case, as browsers do).
 
-Unlike Ruby's `CGI::Cookie` and Rack, the cookie functions neither percent-encode nor decode: both of those escape the value when writing it and decode it when reading. Here the value is written as it is (it is never quoted) and read as the client sent it, so a value with a space, a comma or non-ASCII text must be encoded before `set_cookie_header` and decoded after `parse_cookies_header`. A `%41` in a header stays `%41`.
+The text of an error about a name or an attribute has its control bytes removed, so it is safe in a log line.
+
+Unlike Ruby's `CGI::Cookie` and Rack, which as far as I know escape the value when writing it and decode it when reading, the cookie functions never percent-encode, decode or quote, and this is final. The value is written as it is and read as the client sent it, so a caller that needs a value with a space, a comma or non-ASCII text encodes it before `set_cookie_header` and decodes it after `parse_cookies_header`. A `%41` in a header stays `%41`.

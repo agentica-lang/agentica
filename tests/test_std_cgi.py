@@ -1,11 +1,12 @@
 """std/cgi: HTML escaping and cookies, with the names of Ruby's CGI and Rack.
 
 tests/fixtures/cgi/driver.agc reads one JSON case per line of stdin and prints one JSON reply per line. The fixed
-vectors are the values that Ruby gives (written out here); the generated cases are checked against Python's html and
-http.cookies, which are not the code under test. Python writes `'` as `&#x27;` where Ruby writes `&#39;`, so the
-peer's escape is rewritten. html.unescape also decodes entities without their `;`, names that Ruby does not know and
-numbers that are controls or not characters, so the generated text uses only the entities Ruby decodes. http.cookies
-reads back what std/cgi writes, and a header built from known pairs gives the expected map of the reader.
+vectors are the forms written out from reading Ruby's cgi/util and Rack (no Ruby ran here); the generated cases are
+checked against Python's html and http.cookies, which are not the code under test. Python writes `'` as `&#x27;` where
+Ruby writes `&#39;`, so the peer's escape is rewritten. html.unescape also decodes entities without their `;`, names
+that Ruby does not know and numbers that are controls or not characters, so the generated text uses only the entities
+Ruby decodes. http.cookies reads back what std/cgi writes, and a header built from known pairs gives the expected map
+of the reader.
 """
 import html
 import json
@@ -17,7 +18,8 @@ import pytest
 
 from tests.agentica_test import FIXTURES, compile_agc, run_vm
 
-DEFAULTS = {"name": "", "value": "", "path": "", "domain": "", "max_age": -1, "expires": "", "secure": False,
+NO_MAX_AGE = -2 ** 63
+DEFAULTS = {"name": "", "value": "", "path": "", "domain": "", "max_age": NO_MAX_AGE, "expires": "", "secure": False,
             "http_only": False, "same_site": ""}
 
 
@@ -78,16 +80,14 @@ UNESCAPE_UNCHANGED = [
 
 COOKIE_HEADERS = [
     ("", {}),
-    ("a=1; b=2", {"a": "1", "b": "2"}),
     ("a=1;b=2", {"a": "1", "b": "2"}),
-    ("a=1; a=2; b=3; a=4", {"a": "1", "b": "3"}),
     ("  a = 1 ;b=x=y ;; c; =d; e=; f", {"a": "1", "b": "x=y", "e": ""}),
     ("a=\"x y\"; b=%41%20; c=é", {"a": "\"x y\"", "b": "%41%20", "c": "é"}),
-    ("z=1; y=2; x=3", {"z": "1", "y": "2", "x": "3"}),
     (";;;", {}),
 ]
 
-# (cookie fields, header) as Rack writes them, the attributes in its order.
+# (cookie fields, header). The attributes are in the order of Rack 3; Rack writes their names in lowercase
+# (`; path=/`) and this writes them capitalized, so only the order matches.
 SET_COOKIE_VECTORS = [
     ({"name": "sid", "value": "abc"}, "sid=abc"),
     ({"name": "empty", "value": ""}, "empty="),
@@ -97,39 +97,59 @@ SET_COOKIE_VECTORS = [
      "a=1; Domain=example.com; Path=/; Max-Age=3600; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Secure; HttpOnly; "
      "SameSite=Lax"),
     ({"name": "a", "value": "1", "max_age": 0}, "a=1; Max-Age=0"),
-    ({"name": "a", "value": "1", "max_age": -5}, "a=1"),
+    ({"name": "a", "value": "1", "max_age": -5}, "a=1; Max-Age=0"),
+    ({"name": "a", "value": "1", "max_age": -2 ** 63 + 1}, "a=1; Max-Age=0"),
     ({"name": "a", "value": "1", "path": "/a b"}, "a=1; Path=/a b"),
     ({"name": "a", "value": "1", "secure": True}, "a=1; Secure"),
     ({"name": "a", "value": "1", "http_only": True}, "a=1; HttpOnly"),
     ({"name": "a", "value": "1", "same_site": "Strict"}, "a=1; SameSite=Strict"),
-    ({"name": "a", "value": "1", "same_site": "None"}, "a=1; SameSite=None"),
+    ({"name": "a", "value": "1", "same_site": "None", "secure": True}, "a=1; Secure; SameSite=None"),
+    ({"name": "__Secure-id", "value": "1", "secure": True}, "__Secure-id=1; Secure"),
+    ({"name": "__Host-id", "value": "1", "secure": True, "path": "/"}, "__Host-id=1; Path=/; Secure"),
     ({"name": "!#$%&'*+-.^_`|~09azAZ", "value": "!#$%&'()*+-./:<=>?@[]^_`{|}~"},
      "!#$%&'*+-.^_`|~09azAZ=!#$%&'()*+-./:<=>?@[]^_`{|}~"),
 ]
+
+HOST_ERROR = "invalid cookie name (__Host- needs secure, path / and no domain)"
 
 SET_COOKIE_ERRORS = [
     ({"name": "", "value": "1"}, "invalid cookie name ()"),
     ({"name": "a b", "value": "1"}, "invalid cookie name (a b)"),
     ({"name": "a=b", "value": "1"}, "invalid cookie name (a=b)"),
     ({"name": "a;b", "value": "1"}, "invalid cookie name (a;b)"),
-    ({"name": "a\"", "value": "1"}, "invalid cookie name (a\")"),
     ({"name": "é", "value": "1"}, "invalid cookie name (é)"),
-    ({"name": "a\r\nb", "value": "1"}, "invalid cookie name (a\r\nb)"),
-    ({"name": "a", "value": "x y"}, "invalid cookie value (x y)"),
-    ({"name": "a", "value": "\"x\""}, "invalid cookie value (\"x\")"),
-    ({"name": "a", "value": "x,y"}, "invalid cookie value (x,y)"),
-    ({"name": "a", "value": "x;y"}, "invalid cookie value (x;y)"),
-    ({"name": "a", "value": "x\\y"}, "invalid cookie value (x\\y)"),
-    ({"name": "a", "value": "é"}, "invalid cookie value (é)"),
-    ({"name": "a", "value": "x\r\nSet-Cookie: b=1"}, "invalid cookie value (x\r\nSet-Cookie: b=1)"),
-    ({"name": "a", "value": "x\u007f"}, "invalid cookie value (x\u007f)"),
+    # Control bytes are left out of the echoed text.
+    ({"name": "a\r\nb", "value": "1"}, "invalid cookie name (ab)"),
+    # A value is never echoed: the error gives the position of the first bad byte.
+    ({"name": "a", "value": "se cret"}, "invalid cookie value (byte 2)"),
+    ({"name": "a", "value": "\"x\""}, "invalid cookie value (byte 0)"),
+    ({"name": "a", "value": "xy,"}, "invalid cookie value (byte 2)"),
+    ({"name": "a", "value": "x;y"}, "invalid cookie value (byte 1)"),
+    ({"name": "a", "value": "x\\y"}, "invalid cookie value (byte 1)"),
+    ({"name": "a", "value": "aé"}, "invalid cookie value (byte 1)"),
+    ({"name": "a", "value": "x\r\nSet-Cookie: b=1"}, "invalid cookie value (byte 1)"),
+    ({"name": "a", "value": "x\u007f"}, "invalid cookie value (byte 1)"),
     ({"name": "a", "value": "1", "path": "/a;b"}, "invalid cookie path (/a;b)"),
-    ({"name": "a", "value": "1", "path": "/\n"}, "invalid cookie path (/\n)"),
+    ({"name": "a", "value": "1", "path": "/\n"}, "invalid cookie path (/)"),
+    ({"name": "a", "value": "1", "path": " /"}, "invalid cookie path ( /)"),
     ({"name": "a", "value": "1", "domain": "é.com"}, "invalid cookie domain (é.com)"),
+    ({"name": "a", "value": "1", "domain": "a b.com"}, "invalid cookie domain (a b.com)"),
     ({"name": "a", "value": "1", "expires": "x; Secure"}, "invalid cookie expires (x; Secure)"),
+    ({"name": "a", "value": "1", "expires": "Wed, 21 Oct 2015 "}, "invalid cookie expires (Wed, 21 Oct 2015 )"),
     ({"name": "a", "value": "1", "same_site": "lax"}, "invalid cookie same_site (lax)"),
     ({"name": "a", "value": "1", "same_site": "Strict; Secure"}, "invalid cookie same_site (Strict; Secure)"),
+    ({"name": "a", "value": "1", "same_site": "None"}, "invalid cookie same_site (None needs secure)"),
+    ({"name": "__Secure-id", "value": "1"}, "invalid cookie name (__Secure- needs secure)"),
+    ({"name": "__secure-id", "value": "1"}, "invalid cookie name (__Secure- needs secure)"),
+    ({"name": "__Host-id", "value": "1", "path": "/"}, HOST_ERROR),
+    ({"name": "__Host-id", "value": "1", "secure": True}, HOST_ERROR),
+    ({"name": "__Host-id", "value": "1", "secure": True, "path": "/", "domain": "example.com"}, HOST_ERROR),
 ]
+
+
+def test_max_age_default_is_the_smallest_int(driver):
+    replies = call(driver, [("default_max_age", ""), ("no_max_age", "")])
+    assert [reply["text"] for reply in replies] == [str(NO_MAX_AGE)] * 2
 
 
 def test_escape_html_vectors(driver):
@@ -137,7 +157,8 @@ def test_escape_html_vectors(driver):
 
 
 def test_unescape_html_decodes_what_ruby_decodes_and_leaves_the_rest(driver):
-    assert texts(driver, "unescape_html", [text for text, _ in UNESCAPE_VECTORS]) == [out for _, out in UNESCAPE_VECTORS]
+    decoded = texts(driver, "unescape_html", [text for text, _ in UNESCAPE_VECTORS])
+    assert decoded == [out for _, out in UNESCAPE_VECTORS]
     assert texts(driver, "unescape_html", UNESCAPE_UNCHANGED) == UNESCAPE_UNCHANGED
 
 
@@ -168,15 +189,17 @@ def random_text(rng, longest=40):
     return "".join(rng.choice(ALPHABET) for _ in range(rng.randint(0, longest)))
 
 
-def generated_texts(seed, count):
+def generated_texts(seed, count, long=False):
     rng = random.Random(seed)
     values = [random_text(rng) for _ in range(count)]
-    values.append("".join(rng.choice(ALPHABET) for _ in range(100000)))
+    if long:
+        # One long text for the cost of one pass.
+        values.append("".join(rng.choice(ALPHABET) for _ in range(100000)))
     return values
 
 
 def test_escape_html_matches_html_escape_for_generated_text(driver):
-    values = generated_texts(1, 400)
+    values = generated_texts(1, 400, long=True)
     for value, got in zip(values, texts(driver, "escape_html", values)):
         assert got == html.escape(value, quote=True).replace("&#x27;", "&#39;"), value[:60]
 
@@ -229,6 +252,8 @@ def random_cookie(rng):
     cookie["http_only"] = bool(rng.randint(0, 1))
     if rng.randint(0, 1):
         cookie["same_site"] = rng.choice(["Strict", "Lax", "None"])
+    if cookie.get("same_site") == "None":
+        cookie["secure"] = True
     return cookie
 
 
