@@ -292,23 +292,24 @@ Expected types flow into these operations for empty collections and Results.
   type name. It is the first part of the `Crypto` module of
   `docs/future/20-crypto.md` §20; until `Bytes` exists, bytes are a
   `List[Int]`.
-- `Base64` writes and reads bytes as RFC 4648 text, in Ruby's forms and with
-  Ruby's results. `Base64.strict_encode64(data)` gives padded base64 on one
-  line; `Base64.encode64(data)` the same in lines of 60 characters, each ending
-  in a newline (`""` for `[]`); `Base64.urlsafe_encode64(data, padding = true)`
-  the base64url alphabet (`-` and `_`), without the `=` padding when `padding`
-  is false. `Base64.strict_decode64(text)` gives `ok(bytes)` only for padded
-  base64 with nothing else in the text and zero spare bits, else
-  `error("invalid base64")`; `Base64.urlsafe_decode64(text)` first adds the
-  missing `=` to text that does not end in one, then decodes the same way and
-  takes both alphabets. `Base64.decode64(text)` returns a `List[Int]` and never
-  fails: it skips characters outside the alphabet, stops at a `=` in the third
-  or fourth place of a group, and drops a lone last character.
-  `Digest.hexencode(data)` gives two lowercase hex digits per byte, and
-  `Digest.hexdecode(text)` gives `ok(bytes)` for an even number of hex digits
-  in either case, else an error. An encoded item outside 0 to 255 is
-  `RUNTIME-INVALID-NUMBER` at the argument. The work grows with the input; none
-  has an effect label. `Base64` and `Digest` are reserved type names.
+- `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
+  `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
+  same in lines of 60 characters that each end in a newline (`""` for `[]`),
+  and `urlsafe_encode64(data, padding = true)` the `-_` alphabet, without `=`
+  when `padding` is false. `strict_decode64(text)` gives `ok(bytes)` only for
+  padded base64 with zero spare bits and nothing else, else
+  `error("invalid base64")`; `urlsafe_decode64(text)` first adds the missing
+  `=` when the text does not end in one, then decodes the same way in either
+  alphabet. `decode64(text)` gives a `List[Int]` and never fails: it skips
+  other characters, stops at a `=` in the third or fourth place of a group and
+  drops a lone last character.
+- `Digest.hexencode(data)` gives two lowercase hex digits per byte, as Ruby's
+  does. `Digest.hexdecode(text)`, Agentica's own name for its inverse, gives
+  `ok(bytes)` for an even number of hex digits in either case, else
+  `error("invalid hex")`. An encoded item outside 0 to 255 is
+  `RUNTIME-INVALID-NUMBER` at the argument; the time of every `Base64` and
+  `Digest` call grows with its input, and none has an effect label. `Base64`
+  and `Digest` are reserved type names.
 - `IO.eof?()` peeks without consuming and can block until data or EOF arrives.
   Reads have no timeout, and the step budget cannot interrupt blocking I/O.
 - `IO.flush()` flushes stdout only. On Linux, macOS and Windows, a print copies

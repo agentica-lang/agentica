@@ -10,9 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `Base64` (`encode64`, `strict_encode64`, `urlsafe_encode64` and their
-  `decode64` forms) and `Digest.hexencode`/`hexdecode` turn bytes into text and
-  back, as in Ruby. **Breaking:** `Base64` and `Digest` are reserved type names.
+- `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
+
+### Changed
+
+- **Breaking:** `Base64` and `Digest` are reserved names.
 
 ## [0.14.0] - 2026-10-28
 

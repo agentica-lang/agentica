@@ -4,7 +4,7 @@ weight: 8
 description: The Base64 and Digest builtins, which write bytes as base64 or hex text and read them back.
 ---
 
-`Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `Digest.hexencode` and `Digest.hexdecode` do the same with hex digits. The VM computes them in plain C; nothing is written in Agentica.
+`Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `Digest.hexencode` writes hex digits as Ruby's does, and `Digest.hexdecode`, Agentica's own name for its inverse, reads them back. The VM computes them in plain C; nothing is written in Agentica.
 
 Bytes are a `List[Int]` from 0 to 255, as `Crypto.sha256`, `IO.read_bytes` and `File.read_bytes` use. For text, encode its UTF-8 bytes from `String.to_bytes` and decode the bytes back with `String.from_bytes`.
 
@@ -52,7 +52,7 @@ Digest.hexencode(data: List[Int]) -> String
 Digest.hexdecode(text: String) -> Result[List[Int]]
 ```
 
-`Digest.hexencode` gives two lowercase hex digits per byte. `Digest.hexdecode` takes an even number of hex digits in either case; an odd length or any other character, a space or `0x` included, is an error.
+`Digest.hexencode` gives two lowercase hex digits per byte. `Digest.hexdecode` takes an even number of hex digits in either case; an odd length or any other character, a space or `0x` included, is `error("invalid hex")`.
 
 ```agentica
 def main() -> Void

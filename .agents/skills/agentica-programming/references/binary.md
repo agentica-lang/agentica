@@ -93,8 +93,9 @@ Digest.hexencode(data: List[Int]) -> String           # lowercase
 Digest.hexdecode(text: String) -> Result[List[Int]]   # either case
 ```
 
-- They behave as Ruby's: `strict_decode64` and `urlsafe_decode64` give
-  `error("invalid base64")` for anything but base64 (no newlines);
+- `Base64` and `hexencode` behave as Ruby's (`hexdecode` is Agentica's own
+  inverse, `error("invalid hex")`): `strict_decode64` and `urlsafe_decode64`
+  give `error("invalid base64")` for anything but base64 (no newlines);
   `decode64` skips other characters and stops at a `=` padding. Text goes
   through `String.to_bytes` and `String.from_bytes`:
   `Base64.strict_encode64(String.to_bytes("hi"))`. An encoded item outside

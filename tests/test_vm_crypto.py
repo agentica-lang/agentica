@@ -21,10 +21,10 @@ from tests.agentica_test import FIXTURES, compile_agc, run_vm
 SIZES = [0, 1, 3, 55, 56, 63, 64, 65, 119, 120, 128, 1000, 4096 + 7, 1024 * 1024]
 
 
-# Base64 and hex: every length up to 100 bytes (all line and padding phases), the line edges of encode64 (45 bytes
-# a line) and some large lists.
+# Base64 and hex: every length up to 100 bytes (all line and padding phases),
+# the line edges of encode64 (45 bytes a line) and some large lists.
 BASE64_SIZES = list(range(101)) + [134, 135, 136, 1000, 4096 + 7, 65536]
-BASE64_ALPHABET = string.ascii_letters + string.digits + "+/"
+BASE64_ALPHABET = string.ascii_uppercase + string.ascii_lowercase + string.digits + "+/"
 # Characters outside the base64 alphabet and not "=": decode64 skips them.
 NOISE = " \n\t\r!*.,~\u00e9"
 
@@ -107,8 +107,30 @@ def lenient(text):
     return list(base64.b64decode(digits + "=" * (-len(digits) % 4)))
 
 
+def ruby_decode64(text):
+    # A model of the group loop of Ruby's decode64 (unpack "m" in pack.c), for the text with "=" that Python's decoder
+    # reads otherwise: other characters are skipped, a "=" in the first two places of a group too, one in the last
+    # two places ends the text, and a last group of two or three digits gives one or two bytes.
+    digits = {ord(c): i for i, c in enumerate(BASE64_ALPHABET)}
+    out, group = [], []
+    for byte in text.encode():
+        if byte == ord("=") and len(group) >= 2:
+            break
+        if byte in digits:
+            group.append(digits[byte])
+        if len(group) == 4:
+            value = group[0] << 18 | group[1] << 12 | group[2] << 6 | group[3]
+            out += [value >> 16, value >> 8 & 255, value & 255]
+            group = []
+    if len(group) >= 2:
+        out.append((group[0] << 2 | group[1] >> 4) & 255)
+    if len(group) == 3:
+        out.append((group[1] << 4 | group[2] >> 2) & 255)
+    return out
+
+
 def generated_texts(rng):
-    """(text, decode64 answer or None when Python has no model of it) pairs."""
+    """(text, decode64 answer from Python's base64, or None where only the ruby_decode64 model has one) pairs."""
     texts = []
     for size in range(40):
         data = rng.randbytes(size)
@@ -120,6 +142,7 @@ def generated_texts(rng):
         # Python's non-validating decode drops the noise bytes and reads the padding as Ruby does here.
         texts += [(canonical, list(data)), (ruby_encode64(data), list(data)),
                   (base64.urlsafe_b64encode(data).decode().rstrip("="), None),
+                  ("%s=%s" % (canonical.rstrip("="), noisy), None),
                   (noisy, list(base64.b64decode(noisy.encode(), validate=False))),
                   (data.hex(), lenient(data.hex())), (data.hex().upper(), lenient(data.hex().upper()))]
         if size % 3:
@@ -127,8 +150,9 @@ def generated_texts(rng):
             cut = canonical.rstrip("=")
             spare = cut[:-1] + rng.choice(BASE64_ALPHABET) + canonical[len(cut):]
             texts.append((spare, list(base64.b64decode(spare))))
+    alphabets = [BASE64_ALPHABET, BASE64_ALPHABET + "=-_", BASE64_ALPHABET + "==" + NOISE, "0123456789abcdefABCDEFg "]
     for _ in range(600):
-        chars = rng.choice([BASE64_ALPHABET, BASE64_ALPHABET + "=-_", BASE64_ALPHABET + NOISE, "0123456789abcdefABCDEFg "])
+        chars = rng.choice(alphabets)
         text = "".join(rng.choice(chars) for _ in range(rng.randint(0, 13)))
         texts.append((text, lenient(text) if "=" not in text else None))
     return texts
@@ -147,8 +171,10 @@ def test_base64_and_hex_match_python(base64_peer):
         assert encoded == [ruby_encode64(data), base64.b64encode(data).decode(), urlsafe, urlsafe.rstrip("="),
                            binascii.hexlify(data).decode()], len(data)
     for (text, expected), decoded in zip(texts, answers["decoded"], strict=True):
-        if expected is not None:
-            assert decoded["lenient"] == expected, text
+        # Where Python has the answer, the model must agree with it, so the model is checked on those texts too.
+        model = ruby_decode64(text)
+        assert expected is None or model == expected, text
+        assert decoded["lenient"] == model, text
         assert decoded["strict"] == strict_or_none(text), text
         assert decoded["urlsafe"] == urlsafe_or_none(text), text
         assert decoded["hex"] == hex_or_none(text), text

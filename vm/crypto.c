@@ -48,9 +48,9 @@ static const uint8_t *text_form_bytes(agc_vm *vm, agc_value arg, const char *mes
   return bytes;
 }
 
-/* ASCII text: one character per byte. */
-static agc_value ascii_value(agc_vm *vm, const char *data, size_t n) {
-  return agc_string_value(agc_small_string(vm, data, n, n));
+/* A String of len ASCII bytes for the caller to fill before it stores it anywhere, or the run's shared empty String. */
+static agc_string *ascii_string(agc_vm *vm, size_t len) {
+  return len ? agc_new_string(len, len) : vm->rt->empty_string;
 }
 
 /* Base64 of n bytes in the given alphabet. pad writes the '=' of a short last group (RFC 4648 §3.2); lines puts a
@@ -59,7 +59,8 @@ static agc_value b64_encode(agc_vm *vm, const uint8_t *in, size_t n, const char 
   size_t rest = n % 3;
   size_t len = agc_size_add(agc_size_mul(n / 3, 4), rest == 0 ? 0 : pad ? 4 : rest + 1);
   if (lines) len = agc_size_add(len, len / B64_LINE + (len % B64_LINE != 0));
-  char *out = agc_alloc_atomic(len ? len : 1);
+  agc_string *text = ascii_string(vm, len);
+  char *out = text->data;
   size_t o = 0, column = 0;
   for (size_t i = 0; i < n; i += 3) {
     uint32_t group = (uint32_t)in[i] << 16;
@@ -77,7 +78,7 @@ static agc_value b64_encode(agc_vm *vm, const uint8_t *in, size_t n, const char 
       column = 0;
     }
   }
-  return ascii_value(vm, out, o);
+  return agc_string_value(text);
 }
 
 /* The value of a base64 character, or -1. url also takes the base64url '-' and '_', as Ruby's urlsafe_decode64 does
@@ -207,33 +208,40 @@ static agc_value builtin_strict_decode64(agc_vm *vm, agc_value *args, uint32_t s
 }
 
 /* Base64.urlsafe_decode64(text): as in Ruby, text that does not end in '=' and whose length is not a multiple of
-   four gets the missing '=' first; then it decodes strictly, in either alphabet. */
+   four gets the missing '=' first; then it decodes strictly, in either alphabet. The padded last group is decoded
+   from a local copy: strict text has no '=' before its last group, so the whole groups before it decode alone. */
 static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
-  size_t n = s->bytes;
+  const uint8_t *text = (const uint8_t *)s->data;
+  size_t n = s->bytes, rest = n % 4, got;
+  uint8_t *out = agc_alloc_atomic(agc_size_add(n, 3));
   /* Ruby counts characters, not bytes; they differ only for text with a non-ASCII byte, which fails either way. */
-  size_t padded = n % 4 != 0 && s->data[n - 1] != '=' ? agc_size_add(n, 4 - n % 4) : n;
-  uint8_t *text = agc_alloc_atomic(padded ? padded : 1);
-  if (n) memcpy(text, s->data, n);
-  memset(text + n, '=', padded - n);
-  uint8_t *out = agc_alloc_atomic(padded ? padded : 1);
-  size_t got = b64_strict(text, padded, true, out);
+  if (rest != 0 && text[n - 1] != '=') {
+    size_t whole = n - rest;
+    uint8_t last[4] = {'=', '=', '=', '='};
+    memcpy(last, text + whole, rest);
+    got = memchr(text, '=', whole) ? SIZE_MAX : b64_strict(text, whole, true, out);
+    size_t tail = got == SIZE_MAX ? SIZE_MAX : b64_strict(last, 4, true, out + got);
+    got = tail == SIZE_MAX ? SIZE_MAX : got + tail;
+  } else {
+    got = b64_strict(text, n, true, out);
+  }
   if (got == SIZE_MAX) return agc_error_value("invalid base64");
   return agc_result_value(true, byte_list_value(vm, out, got));
 }
 
-/* Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them. */
+/* Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them. Digest.hexdecode
+   is Agentica's own inverse: Ruby has no named hex decoder. */
 static agc_value builtin_hexencode(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t n;
   const uint8_t *bytes = text_form_bytes(vm, args[0], "Digest.hexencode needs bytes between 0 and 255", span, &n);
-  size_t len = agc_size_mul(n, 2);
-  char *out = agc_alloc_atomic(len ? len : 1);
+  agc_string *text = ascii_string(vm, agc_size_mul(n, 2));
   for (size_t k = 0; k < n; k++) {
-    out[2 * k] = hex_digits[bytes[k] >> 4];
-    out[2 * k + 1] = hex_digits[bytes[k] & 15];
+    text->data[2 * k] = hex_digits[bytes[k] >> 4];
+    text->data[2 * k + 1] = hex_digits[bytes[k] & 15];
   }
-  return ascii_value(vm, out, len);
+  return agc_string_value(text);
 }
 
 static int hex_value(uint8_t c) {
@@ -243,18 +251,18 @@ static int hex_value(uint8_t c) {
   return -1;
 }
 
-/* Digest.hexdecode(text): ok(bytes) of an even number of hex digits in either case, or an error for an odd length
-   or any other character (no spaces, no "0x"). */
+/* Digest.hexdecode(text): ok(bytes) of an even number of hex digits in either case, or error("invalid hex") for an
+   odd length or any other character (no spaces, no "0x"). */
 static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   const uint8_t *text = (const uint8_t *)s->data;
-  if (s->bytes % 2) return agc_error_value("invalid hex: odd number of digits");
+  if (s->bytes % 2) return agc_error_value("invalid hex");
   size_t n = s->bytes / 2;
   uint8_t *out = agc_alloc_atomic(n ? n : 1);
   for (size_t k = 0; k < n; k++) {
     int high = hex_value(text[2 * k]), low = hex_value(text[2 * k + 1]);
-    if (high < 0 || low < 0) return agc_error_value("invalid hex digit");
+    if (high < 0 || low < 0) return agc_error_value("invalid hex");
     out[k] = (uint8_t)(high << 4 | low);
   }
   return agc_result_value(true, byte_list_value(vm, out, n));
