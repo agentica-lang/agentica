@@ -127,12 +127,25 @@ end
 
 ## The root that the cache holds for the file that `loaded` starts from.
 export def held(cache: Cache, loaded: Modules.Loaded) -> Ast.Optional[Root]
-  key = loaded.order[0]
+  return root_of(cache, loaded.order[0])
+end
+
+## The root that the cache holds for the file with the canonical key `key`.
+export def root_of(cache: Cache, key: String) -> Ast.Optional[Root]
   if cache.roots.has_key?(key)
     return Ast.Optional.Present(cache.roots[key])
   end
 
   return Ast.Optional.Absent
+end
+
+## A cache that holds `root` and the files it was made from, and nothing else. Their ids do not overlap, since one
+## program gave them all, so it is a line of its own: a root of another cache can be put in a new cache this way and no
+## cache has to be merged with another.
+export def alone(root: Root) -> Cache
+  # The counters (checks, parsed, reused) restart at 0 on purpose: they count the work of one session's refreshes.
+  start = reaching(empty(), root.loaded)
+  return start.with(roots: {root.loaded.order[0]: root.with(used: 1)}, clock: 1)
 end
 
 ## What the checker may take from the last good program of the root of `loaded`, when some of its modules are

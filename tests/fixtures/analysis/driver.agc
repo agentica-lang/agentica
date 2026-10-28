@@ -9,6 +9,12 @@ import Analysis from "std/analysis"
 #   diagnostic TEXTFILE    the diagnostic that Analysis.diagnostic reads from the JSON in TEXTFILE, written back
 #   roundtrip PATH         `true` on stdout when the diagnostic of PATH, written as JSON and read back, is the same
 #   refresh PATH           Analysis.refresh; prints nothing
+#   keep PATH              Analysis.entry of PATH, kept by the driver; prints `kept`, or `none` and the error message
+#   adopt PATH             Analysis.adopt of the kept entry of PATH; prints nothing
+#   fresh                  a new session over the same buffers, with no cache
+#   share PATH...          the last command: each PATH is refreshed in its own task from the session and its entry
+#                          put in an ATS table; then each PATH is adopted from the table in a task, refreshed and
+#                          checked. One line for each PATH (the check) and `entries=N rechecks=C`
 #   stats                  `roots=R checks=C reused=U parsed=P kept=K top=T live=L`: the cache and what refreshes did
 #   write PATH TEXTFILE    puts the text of TEXTFILE in the file PATH of the disk (an edit that is not a buffer)
 #   remove PATH            deletes the file PATH of the disk
@@ -33,9 +39,28 @@ def main() -> Void
   end
   session = Analysis.open(files)
   buffers = files.buffers
+  kept: Map[String, Analysis.Entry] = {}
   while at < words.size
     word = words[at]
-    if word == "update"
+    if word == "keep"
+      found = Analysis.entry(session, words[at + 1])
+      if found.ok?
+        kept = kept.put(words[at + 1], found.unwrap!)
+        puts("kept")
+      else
+        puts("none #{found.message}")
+      end
+      at += 2
+    elsif word == "adopt"
+      session = Analysis.adopt(session, kept[words[at + 1]])
+      at += 2
+    elsif word == "fresh"
+      session = Analysis.open(Analysis.workspace().with(buffers: buffers))
+      at += 1
+    elsif word == "share"
+      share(session, words.drop(at + 1))
+      at = words.size
+    elsif word == "update"
       text = File.read_text(words[at + 2], 10000).unwrap!
       session = Analysis.update(session, words[at + 1], text)
       buffers = buffers.put(words[at + 1], text)
@@ -223,4 +248,38 @@ def show_all(session: Analysis.Session, paths: List[String]) -> Void
   for line in lines
     puts(line.unwrap!)
   end
+end
+
+# Refreshes each path in a task of its own, from the same session, and puts the entries in an ATS table (the value of
+# a table must be data, which a session is not). Then tasks adopt the entry of each path, refresh it and check it: the
+# refresh must find the program there, so the checks of the adopted sessions add up to none.
+def share(session: Analysis.Session, paths: List[String]) -> Void
+  table: ATS[String, Analysis.Entry] = ATS.new()
+  Task.map(paths, 4, 60000) do |path: String|
+    found = Analysis.entry(Analysis.refresh(session, path), path)
+    if found.ok?
+      table.put(path, found.unwrap!)
+    end
+    ok(path)
+  end
+  lines = Task.map(paths, 4, 60000) do |path: String|
+    adopted = session
+    found = table.get(path)
+    if found.ok?
+      adopted = Analysis.adopt(session, found.unwrap!)
+    end
+    refreshed = Analysis.refresh(adopted, path)
+    checked = Analysis.check(refreshed, path)
+    line = "{\"ok\":true}"
+    if !checked.passed
+      line = JSON.encode(Analysis.diagnostic_json(checked.diagnostics[0]))
+    end
+    ok([line, refreshed.internal.cache.checks.to_s])
+  end
+  rechecks = 0
+  for found in lines
+    puts(found.unwrap![0])
+    rechecks += found.unwrap![1].to_i!
+  end
+  puts("entries=#{table.size} rechecks=#{rechecks}")
 end

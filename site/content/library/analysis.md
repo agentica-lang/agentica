@@ -12,6 +12,8 @@ Analysis.open(files: Analysis.Workspace) -> Analysis.Session
 Analysis.update(session: Analysis.Session, path: String, text: String) -> Analysis.Session
 Analysis.close(session: Analysis.Session, path: String) -> Analysis.Session
 Analysis.refresh(session: Analysis.Session, path: String) -> Analysis.Session
+Analysis.entry(session: Analysis.Session, path: String) -> Result[Analysis.Entry]
+Analysis.adopt(session: Analysis.Session, entry: Analysis.Entry) -> Analysis.Session
 Analysis.check(session: Analysis.Session, path: String) -> Analysis.Checked
 Analysis.outline(session: Analysis.Session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
@@ -42,6 +44,29 @@ A session is a value. Tasks may share one and ask it at once; an `update` in one
 `check`, `type_at` and `refs` use the checked program in the cache; `symbol` links each file it searches and uses only its parsed modules. Each question reads the files again, starting at its own file, and uses the cache only where the modules and their texts are the ones the cache was made from. Buffer edits, `close`, changes on disk, new and removed files, and a change of `agentica.toml` that changes what an import means all count. So the answers are the same with or without `refresh`: a stale cache costs time, never a wrong answer. A refresh checks again only when a module changed, and parses only the modules whose text changed. A module whose text is the same, with every module it imports, is not checked again: the check takes what the last program of `path` that checked left for it, so an edit of `path` costs about the file itself, and an edit of an imported module checks that module and those that import it. The answers are those of a check from the start. A file that cannot be read or linked leaves the cache as it was, and the questions say why.
 
 The cache keeps at most 16 checked files, the least recently refreshed leaving first, with the parsed modules they reach. It lives in the value: there is no task, channel or lock, so the caller owns the loop. Run one `refresh` at a time per session and keep the session it returns. Two refreshes from one session make two caches, and keeping one drops the other's work, which costs time only. A program that refreshes in a task and calls `update` on its own copy meanwhile adopts the refreshed session only if no `update` or `close` came after the refresh started; otherwise it keeps its own session and refreshes again later.
+
+## Sharing the cache between tasks
+
+A `Session` holds functions, so an `ATS` table cannot hold one. An `Analysis.Entry` is what `refresh` kept for one file, as plain data. `Analysis.entry(session, path)` takes it from a refreshed session; it is an error when the cache holds none for `path` (not refreshed, a file that does not link, or an entry that left the cache). Give `entry` the same spelling of the path as `refresh`: a file that only has a buffer is not canonicalized, so another spelling finds nothing. `Analysis.adopt(session, entry)` returns the session with the cache of that entry alone, and the same buffers. A refresh or a question about that file then takes the program from the entry when the files and buffers are as they were, and else checks again only the modules that changed or import one that did. A stale entry costs time, never a wrong answer. The fields of an `Entry` are not API.
+
+So tasks that refresh different files lose nothing. Each task refreshes its own session, puts `Analysis.entry(refreshed, path)` in an `ATS[String, Analysis.Entry]` under the path, and a task that asks about a file adopts the entry of that file first. Entries of two files are separate caches: the table shares the checked program of each file, not the modules that two files both import. The program decides when an entry leaves the table, for instance when the file is closed.
+
+```ruby
+def refresh_into(entries: ATS[String, Analysis.Entry], session: Analysis.Session, path: String) -> Void
+  found = Analysis.entry(Analysis.refresh(session, path), path)
+  if found.ok?
+    entries.put(path, found.unwrap!)
+  end
+end
+
+def check_from(entries: ATS[String, Analysis.Entry], session: Analysis.Session, path: String) -> Analysis.Checked
+  found = entries.get(path)
+  if found.ok?
+    return Analysis.check(Analysis.adopt(session, found.unwrap!), path)
+  end
+  return Analysis.check(session, path)
+end
+```
 
 ## Answers
 

@@ -494,6 +494,79 @@ def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_
     assert out.splitlines()[-1] == "same 2"
 
 
+CHECKED_TOGETHER = ["main.agc", "type_error.agc", "orders.agc", "missing_import.agc", "main.agc"]
+
+
+def checks_of(project, files):
+    """What the command line prints for the `check` of each file, in order."""
+    printed = ""
+    for file in files:
+        out, err = command_line(project, "check", file)
+        printed += out or err
+    return printed
+
+
+def test_an_entry_adopted_by_a_new_session_is_taken_and_an_edit_checks_only_what_changed(driver, project):
+    """The entry of a refreshed file, adopted by a session with no cache, is a hit; an edit that follows is a refresh
+    that takes the unchanged modules from it, as it would in the session that made it; the answers are a cold check's."""
+    edited = "# An edit.\n" + REPORT
+    write_files(project, {
+        "shapes.agc": SHAPES, "sizes.agc": SIZES, "report.agc": REPORT, "report_edit.agc": edited,
+    })
+    asked_at = positions(edited, ("Sizes.area", 6), ("(3)", 1))
+    out, err = library(
+        driver, project,
+        "refresh", "report.agc", "keep", "report.agc",
+        "fresh", "stats",
+        "adopt", "report.agc", "stats",
+        "refresh", "report.agc", "stats",
+        "update", "report.agc", "report_edit.agc", "refresh", "report.agc", "stats",
+        "compare", "report.agc", *asked_at,
+    )
+    assert (err, out.splitlines()[0], out.splitlines()[-1]) == ("", "kept", "same 2")
+    assert counted(out, "roots", "checks", "reused", "parsed") == [
+        (0, 0, 0, 0), (1, 0, 0, 0), (1, 0, 0, 0), (1, 1, 2, 1),
+    ]
+
+
+@pytest.mark.parametrize("edit", ["write", "update"], ids=["a disk edit", "a buffer"])
+def test_a_stale_entry_is_adopted_and_the_answers_are_those_of_a_cold_check(driver, project, edit):
+    """The entry was made while util.agc had `twice`; the file loses it before the adopt, on the disk or in a buffer,
+    so main.agc no longer checks and the entry must not hide that."""
+    write_files(project, {"util_renamed.agc": UTIL_RENAMED})
+    out, err = library(
+        driver, project,
+        "refresh", "main.agc", "keep", "main.agc",
+        edit, "util.agc", "util_renamed.agc",
+        "fresh", "adopt", "main.agc",
+        "check", "main.agc",
+        "compare", "main.agc",
+    )
+    assert json.loads(err)["code"].startswith("CHECK-")
+    assert out.splitlines()[-1] == "same 0"
+
+
+def test_a_file_that_was_not_refreshed_or_did_not_link_has_no_entry(driver, project):
+    out, err = library(
+        driver, project,
+        "keep", "main.agc", "refresh", "main.agc", "keep", "missing_import.agc", "refresh", "missing_import.agc",
+        "keep", "missing_import.agc",
+    )
+    assert err == ""
+    lines = out.splitlines()
+    assert [line.split(" ")[0] for line in lines] == ["none", "none", "none"]
+
+
+def test_tasks_share_entries_in_an_ats_table_and_answer_as_the_command_line_does(driver, project):
+    """Four tasks each refresh a session of their own and publish the entry of their file; four more adopt the entries.
+    No adopted session checks a program again, and each check is the command line's."""
+    files = CHECKED_TOGETHER
+    expected = checks_of(project, files)
+    got = library(driver, project, "share", *files, flags=("--schedulers", "4"))
+    # missing_import.agc does not link, so it has no entry; main.agc is in the table once.
+    assert got == (expected + "entries=3 rechecks=0\n", "")
+
+
 # A fourth module that the edits below do not touch, so it is taken from the last good program.
 NAMES = 'export def label() -> String\n  return "r"\nend\n'
 REPORT_NAMED = (
@@ -536,11 +609,8 @@ def test_a_question_without_a_refresh_and_the_partial_answers_take_the_unchanged
 
 
 def test_a_refreshed_session_is_asked_by_tasks_on_four_schedulers_with_the_answers_of_the_command_line(driver, project):
-    files = ["main.agc", "type_error.agc", "orders.agc", "missing_import.agc", "main.agc"]
-    expected = ""
-    for file in files:
-        out, err = command_line(project, "check", file)
-        expected += out or err
+    files = CHECKED_TOGETHER
+    expected = checks_of(project, files)
     got = library(
         driver, project, "refresh", "main.agc", "refresh", "orders.agc", "refresh", "type_error.agc",
         "check-all", *files, flags=("--schedulers", "4"),

@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   inferred when you build the value.
 - Generic functions: `def first_or[T](xs: List[T], fallback: T) -> T`, with the
   type arguments inferred from the arguments, the expected type and the block.
+- `Analysis.entry` and `Analysis.adopt` of `std/analysis` move the cache of one
+  file between sessions as plain data, so tasks can share it in an `ATS` table.
 
 ### Changed
 
