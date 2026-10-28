@@ -1029,7 +1029,7 @@ static void block_program_of(block_program *b) {
    the transitions and turns in COUNTS[0] and [1]): the outcome, and the steps left in *LEFT. */
 static agc_outcome run_blocks(block_program *b, bool jit, int64_t max_steps, int64_t *left, uint64_t counts[2]) {
   static FILE *quiet;
-  if (!quiet) quiet = fopen("/dev/null", "w");
+  if (!quiet) quiet = tmpfile(); /* not /dev/null: Windows has none */
   assert(quiet);
   record_count = 0;
   agc_vm run;
