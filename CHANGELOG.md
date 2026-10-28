@@ -29,6 +29,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `JSON.encode` and `JSON.from` now refuse a generic struct whose field is a
   `JsonField[Nil]` reached through a recursive field such as `List[W[Nil]]`.
+- Checking `JSON.encode`, `puts` or `to_s` of structs that refer to one another
+  no longer takes exponential time.
 
 ## [0.13.0] - 2026-10-27
 
