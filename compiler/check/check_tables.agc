@@ -7,6 +7,7 @@ export def method_modules() -> Map[String, String]
   return {
     "ATS": "ATS",
     "Channel": "Channel",
+    "Codec": "JSON.Codec",
     "Float": "Float",
     "Int": "Int",
     "Json": "JSON",

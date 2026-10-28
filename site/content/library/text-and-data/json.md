@@ -113,6 +113,44 @@ end
 ["x","y"]
 ```
 
+## JSON.codec
+
+```text
+JSON.codec(type: T) -> JSON.Codec[T]
+codec.decode(s: String) -> Result[T]
+codec.decode(json: Json) -> Result[T]
+codec.encode(value: T) -> String
+codec.from(value: T) -> Json
+```
+
+A generic function cannot call `JSON.encode` or `JSON.decode` on its type parameter `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct.
+
+```agentica
+struct User
+  name: String
+  age: Int
+end
+
+def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]
+  return codec.decode(body)
+end
+
+def show[T](codec: JSON.Codec[T], value: T) -> String
+  return codec.encode(value)
+end
+
+def main() -> Void
+  user = body_as("{\"name\": \"Ana\", \"age\": 25}", JSON.codec(User)).unwrap!
+  puts(show(JSON.codec(User), user))
+end
+```
+
+```output
+{"name":"Ana","age":25}
+```
+
+A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value.
+
 ## Optional and nullable fields
 
 Some APIs (tool calls, PATCH bodies, config files) tell three states of a key apart: the key is absent, it is `null`, or it has a value. A struct field of type `JsonField[T]` keeps them apart. It is a builtin enum with the variants `JsonField.Absent`, `JsonField.Null` and `JsonField.Value(x)`.

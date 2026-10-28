@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
 - `HMAC.sha256` and `HMAC.sha512` (HMAC-SHA256 and HMAC-SHA512), each with a
   `_hexdigest` form.
+- `JSON.codec(User)` gives a `JSON.Codec[User]` with `decode`, `encode` and
+  `from`, so generic code can read and write JSON of its type parameter.
 
 ### Changed
 
