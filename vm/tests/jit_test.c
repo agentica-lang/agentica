@@ -1307,8 +1307,9 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
 }
 
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is neither
-   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions; a leaf or direct builtin does
-   not count, as compiled code calls it, nor a block call, which run_compiled starts. A function without a loop that
+   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions, a `shared` one counting
+   AGC_JIT_PARK_WEIGHT times; a leaf or direct builtin does not count, as compiled code calls it, nor a block call,
+   which run_compiled starts. A function without a loop that
    calls a leaf builtin may still get code for native calls; one that starts a block call may not. A program where no
    function is compiled has no JIT at all. */
 static void ineligible(void) {
@@ -1337,6 +1338,23 @@ static void ineligible(void) {
     f.code[f.fn.count - 1] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
     emit(&f, AGC_OP_JUMP, 0, 0, 0);
     assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  }
+  /* A builtin of shared state (a `shared` row, such as Channel.recv) may park, so it counts AGC_JIT_PARK_WEIGHT trips
+     out: a loop that calls it once stays out below AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING instructions. */
+  agc_builtin shared_row = {.shared = true};
+  const agc_builtin *shared_rows[1] = {&shared_row};
+  enum { PARKS = AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING };
+  agc_instr parking[PARKS];
+  for (uint32_t size = PARKS - 1; size <= PARKS; size++) {
+    parking[0] = (agc_instr){AGC_OP_STEP, 1, 0, 0};
+    parking[1] = (agc_instr){AGC_OP_CALL_BUILTIN, 0, 0, 0};
+    for (uint32_t pc = 2; pc + 1 < size; pc++) parking[pc] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
+    parking[size - 1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+    agc_function parks[1] = {{.registers = 3, .code = parking, .count = size}};
+    agc_program parks_program = {.functions = parks, .function_count = 1, .builtins = shared_rows};
+    bool parks_callable[1], parks_looped[1], parks_calling[1];
+    agc_jit_settle(&parks_program, parks_callable, parks_looped, parks_calling);
+    assert(parks_looped[0] && parks_callable[0] == (size == PARKS));
   }
   /* A TAIL_CALL counts as a call, by its callee: a loop that tail-calls a function that may get code does not leave,
      and one whose callee leaves (a builtin that is neither leaf, direct nor a block call) does. */

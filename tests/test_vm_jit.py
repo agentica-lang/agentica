@@ -842,6 +842,91 @@ end
         assert turns == []
 
 
+def test_on_samples_fewer_turns_while_no_entry_is_counted(tmp_path):
+    # As above, only the uncalled pad may get code, but main runs long: after 8 sampled turns in a row that counted no
+    # entry, the sample's interval doubles, up to one turn in 256 (AGC_JIT_SAMPLE_MAX), so far fewer turns than one
+    # in 16 run the jit copy, which interprets slower than the plain copy. One scheduler draws the same samples in
+    # each run.
+    bytecode = compile_text("""def pad(n: Int, width: Int) -> String
+  text = n.to_s
+  while text.length < width
+    text = "0#{text}"
+  end
+  return text
+end
+
+def main() -> Void
+  total = 0
+  i = 0
+  while i < 600000
+    total = total + {"k": i}.size * {"j": i}.size
+    i += 1
+  end
+  puts(total)
+  puts(Profile.steps())
+end
+""", "sample_backoff", tmp_path)
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.split("\n")[0] == "600000", (stdout, stderr)
+    all_turns = int(stdout.split("\n")[1]) // 2000 + 1
+    turns = [int(line.split("count=")[1]) for line in jit_trace(bytecode, tmp_path, "on") if " jit turn count=" in line]
+    if X86_64:
+        assert len(turns) == 1 and 0 < turns[0] <= all_turns // 64, (turns, all_turns)
+    else:
+        assert turns == []
+
+
+@pytest.mark.parametrize("work", [0, 12])
+def test_on_keeps_out_a_loop_that_parks_often(tmp_path, work):
+    # Channel.send and Channel.recv may park (shared rows), and each counts three trips out (AGC_JIT_PARK_WEIGHT): a
+    # loop of two of them stays out below 96 instructions, as it ran slower compiled; with 12 more lines of work each
+    # loop is long enough and both compile.
+    body = "".join(f"    acc = (acc + n * {k + 1}) % 1000003\n" for k in range(work))
+    bytecode = compile_text(f"""struct Pair
+  ping: Channel[Int]
+  pong: Channel[Int]
+end
+
+def echo(p: Pair) -> Int
+  n = 0
+  acc = 0
+  while n < 3000
+    case p.ping.recv(5000)
+      ok(v) -> _ = p.pong.send(v + 1, 5000)
+      error(_) -> return -1
+    end
+    n += 1
+{body}  end
+  return acc
+end
+
+def main() -> Void
+  p = Pair(ping: Channel.new(1), pong: Channel.new(1))
+  worker = Task.spawn(&echo, p)
+  total = 0
+  acc = 0
+  n = 0
+  while n < 3000
+    _ = p.ping.send(n, 5000)
+    case p.pong.recv(5000)
+      ok(v) -> total += v
+      error(_) -> return
+    end
+    n += 1
+{body}  end
+  puts("#{{total}} #{{acc}} #{{Task.await(worker)}}")
+end
+""", f"parks_{work}", tmp_path)
+    lines = jit_trace(bytecode, tmp_path, "on")
+    skips = sorted(line.split("skip ")[1] for line in lines if " jit skip " in line)
+    if X86_64:
+        assert skips == ([] if work else ["function=echo loop=exits", "function=main loop=exits"]), skips
+        assert compiled(bytecode, tmp_path, "on") == (["echo", "main"] if work else [])
+    acc = sum(sum(n * (k + 1) for k in range(work)) for n in range(1, 3001)) % 1000003 if work else 0
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == f"{sum(range(1, 3001))} {acc} {acc}\n", (stdout, stderr)
+
+
 MID_TURN_WORK = """def work(n: Int) -> Int
   s = 0
   i = 0

@@ -29,6 +29,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `filter`, `reduce`, `times`, ...) without leaving compiled code.
 - The experimental x86-64 JIT calls small builtins (`size`, `length`,
   `append`, `ok`, ...) from compiled code in more places.
+- `--jit on` no longer compiles short loops that wait on channels or tasks,
+  which ran slower compiled.
 
 ### Fixed
 

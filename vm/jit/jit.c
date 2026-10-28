@@ -146,6 +146,15 @@ static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
   return !(b->direct || b->leaf) && (!b->native || loopless);
 }
 
+/* The trips out of compiled code that the `on` heuristic counts for IN when it is not a call of a function of the
+   program: none, one, or AGC_JIT_PARK_WEIGHT for a builtin of shared state that leaves (a `shared` row, which may
+   park and end the turn). */
+static uint32_t trips(const agc_program *p, agc_instr in, bool loopless) {
+  if (!leaves_code(p, in, loopless)) return 0;
+  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  return in.op == AGC_OP_CALL_BUILTIN && p->builtins[bx]->shared ? AGC_JIT_PARK_WEIGHT : 1;
+}
+
 /* Why `on` keeps a function out:
    - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
      exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
@@ -153,7 +162,7 @@ static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
      its exit unwinds every native call).
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
-     ran slower compiled.
+     ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (trips).
    A CALL leaves when its callee may not get code, which depends on the callee's own calls, so the decision is a fixed
    point: every function starts callable, and a function that drops out counts one more leaving instruction in each
    region that calls it. Innermost loops never overlap, so each instruction is in at most one region, and each call
@@ -209,7 +218,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
       if (call)
         sites[site_count++] = (call_site){(uint32_t)in.b | ((uint32_t)in.c << 16), at[pc]};
       else
-        regions[at[pc]].out += leaves_code(p, in, !looped[k]);
+        regions[at[pc]].out += trips(p, in, !looped[k]);
     }
     work += 2 * (size_t)f->count;
   }
@@ -601,6 +610,9 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc) {
   agc_jit_code code = atomic_load_explicit(&jit->code[function], memory_order_acquire);
   if (code || atomic_load_explicit(&jit->skip[function], memory_order_relaxed)) return code;
   if (jit->mode == AGC_JIT_ON) {
+    /* The sample of agc_jit_turn reads it; a load first, so most entries write no shared line. */
+    if (!atomic_load_explicit(&jit->counted, memory_order_relaxed))
+      atomic_store_explicit(&jit->counted, true, memory_order_relaxed);
     /* An entry that lands at or before the previous one (a call lands at 0) is a pass: a new call, or a loop that went
        round. The returns and the turns inside one pass of a long loop body land further on each time, so a function
        whose loop runs only a few times stays interpreted however many entries it gets. */
@@ -635,6 +647,13 @@ agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block) {
   agc_lock_drop(jit->lock);
   return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
+
+/* The log2 of AGC_JIT_SAMPLE and of AGC_JIT_SAMPLE_MAX. */
+#define AGC_JIT_SAMPLE_BITS 4u
+#define AGC_JIT_SAMPLE_MAX_BITS 8u
+#define AGC_JIT_SAMPLE_MISSES 8u
+_Static_assert(AGC_JIT_SAMPLE == 1u << AGC_JIT_SAMPLE_BITS && AGC_JIT_SAMPLE_MAX == 1u << AGC_JIT_SAMPLE_MAX_BITS,
+               "the sample bits match the intervals");
 
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace) {
   if (mode == AGC_JIT_OFF || !AGC_JIT_HOST) return NULL;
@@ -705,21 +724,46 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   atomic_init(&jit->spent, false);
   atomic_init(&jit->work, 0);
   jit->budget = AGC_JIT_BUDGET;
+  atomic_init(&jit->sample_bits, AGC_JIT_SAMPLE_BITS);
+  atomic_init(&jit->sample_misses, 0);
+  atomic_init(&jit->counted, false);
   atomic_init(&jit->arena, NULL);
   atomic_init(&jit->used, 0);
   return jit;
 }
 
-/* True for a turn drawn at random, one in AGC_JIT_SAMPLE on average (a power of two): a xorshift16 with the shifts 7,
-   9, 8, whose period is all 65535 non-zero states, seeded with an odd number made of the scheduler's index. A counter
-   would sample every 16th turn, and two tasks that take turns could then put every sample on the one that idles. */
-static bool sampled(agc_vm *vm) {
+/* True for a turn drawn at random, one in 2^BITS on average: a xorshift16 with the shifts 7, 9, 8, whose period is all
+   65535 non-zero states, seeded with an odd number made of the scheduler's index. A counter would sample every 16th
+   turn, and two tasks that take turns could then put every sample on the one that idles. */
+static bool sampled(agc_vm *vm, uint32_t bits) {
   uint16_t x = vm->jit_sample ? vm->jit_sample : (uint16_t)(vm->index * 2 + 1);
   x ^= (uint16_t)(x << 7);
   x ^= (uint16_t)(x >> 9);
   x ^= (uint16_t)(x << 8);
   vm->jit_sample = x;
-  return (x & (AGC_JIT_SAMPLE - 1)) == 0;
+  return (x & ((1u << bits) - 1)) == 0;
+}
+
+/* The draw of a turn while no code is published. A sampled turn reads whether an entry was counted since the last
+   one (on any scheduler): if so the interval goes back to AGC_JIT_SAMPLE; after AGC_JIT_SAMPLE_MISSES sampled turns
+   in a row with none, it doubles, up to AGC_JIT_SAMPLE_MAX. Not at the first miss: in a ping-pong whose work runs in
+   one task's turns only, about half the samples land on the other task's turns. Only sampled turns write, so the
+   shared fields stay cold, and a race between schedulers only moves the interval a step. */
+static bool sample(agc_jit *jit, agc_vm *vm) {
+  uint32_t bits = atomic_load_explicit(&jit->sample_bits, memory_order_relaxed);
+  if (!sampled(vm, bits)) return false;
+  uint32_t next = AGC_JIT_SAMPLE_BITS, misses = 0;
+  if (!atomic_exchange_explicit(&jit->counted, false, memory_order_relaxed)) {
+    next = bits;
+    misses = atomic_load_explicit(&jit->sample_misses, memory_order_relaxed) + 1;
+    if (misses == AGC_JIT_SAMPLE_MISSES) {
+      misses = 0;
+      if (next < AGC_JIT_SAMPLE_MAX_BITS) next++;
+    }
+  }
+  atomic_store_explicit(&jit->sample_misses, misses, memory_order_relaxed);
+  if (next != bits) atomic_store_explicit(&jit->sample_bits, next, memory_order_relaxed);
+  return true;
 }
 
 bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
@@ -728,8 +772,8 @@ bool agc_jit_turn(agc_jit *jit, agc_vm *vm) {
      load on x86-64) only keeps "live" meaning "some code is visible" on every scheduler. */
   bool jit_copy = atomic_load_explicit(&jit->live, memory_order_acquire);
   uint32_t n = t->frame_count, low = n > AGC_JIT_TOP_FRAMES ? n - AGC_JIT_TOP_FRAMES : 0;
-  /* The sample: a per-scheduler draw, no shared write. */
-  if (!jit_copy) jit_copy = sampled(vm);
+  /* The sample: a per-scheduler draw; only a sampled turn writes the shared interval. */
+  if (!jit_copy) jit_copy = sample(jit, vm);
   /* A deeper stack runs the jit copy, as every run did before: its frames below the top ones may be in a loop that
      gets hot, and walking all of them each turn would cost more than the plain loop saves. */
   if (!jit_copy) jit_copy = low > 0;

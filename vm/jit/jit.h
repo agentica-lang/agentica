@@ -11,7 +11,8 @@
 /* --jit and AGENTICA_JIT: off, on (a function with a loop, a backward jump or a TAIL_CALL of itself with at most
    AGC_JIT_TAIL_PARAMS arguments, is compiled at its AGC_JIT_THRESHOLD-th entry once AGC_JIT_PASSES of its entries
    landed at or before the previous one, unless an innermost loop leaves compiled code for the interpreter more than
-   once in AGC_JIT_SPACING instructions) and always
+   once in AGC_JIT_SPACING instructions, where a builtin of shared state, which may park, counts AGC_JIT_PARK_WEIGHT
+   times) and always
    (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything in
    the interpreter. With `on`, a function without a loop gets code only for native calls, at its first CALL, TAIL_CALL
    or CALL_VALUE exit from compiled code when it calls a function (or a function value), else at its
@@ -23,6 +24,12 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_PASSES 32
 #define AGC_JIT_CALLEE_THRESHOLD 16
 #define AGC_JIT_SPACING 16
+/* A `shared` row (tasks, channels, processes, sockets, stdin, file handles, the logger) may park: its turn ends, and
+   the woken task enters the code again only to leave it at the same call, which it retries. Measured with longer
+   loop bodies of benchmarks/programs/channel-pingpong.agc, a loop with two such calls broke even at 64 to 96
+   instructions, where a loop with one plain exit breaks even at about 19: such a call costs about three plain
+   exits. */
+#define AGC_JIT_PARK_WEIGHT 3
 
 /* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
    WRONG_TAG), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP at `pc` is the
@@ -101,7 +108,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    so that a mutant's 10,000 steps reach them. The code lives until the process exits, like the program. `work` is
    the compile budget taken, at most `budget` (AGC_JIT_BUDGET; a C test or AGENTICA_VM_TEST_JIT_BUDGET sets less), and
    `spent` is set once a compile did not fit the budget or the code memory: from then on nothing is compiled
-   (jit.c). They come last, so the fields the interpreter reads keep their offsets. */
+   (jit.c). `sample_bits` is the log2 of the sampling interval of agc_jit_turn, `sample_misses` the sampled turns in a
+   row before which no entry was counted, and `counted` is set by an entry that `on` counted since the last sampled
+   turn. They come last, so the fields the interpreter reads keep their offsets. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -126,6 +135,8 @@ typedef struct agc_jit {
   uint64_t budget;
   _Atomic bool spent;
   _Atomic uint64_t tails, tails_compiled;
+  _Atomic uint32_t sample_bits, sample_misses;
+  _Atomic bool counted;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -144,11 +155,15 @@ static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
    enter (or the task has more frames than that), which catches a long loop the turn starts in, and a turn drawn at
    random, one in AGC_JIT_SAMPLE on average, on each scheduler does in any case, which counts a function that runs only
    inside turns (a callee that returns before the turn ends, the work of a task that parks or ends within its turn).
-   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. So a
-   run whose functions that may get code run seldom or never keeps the plain loop for nearly every turn, without a test
-   of the JIT inside it. */
+   The draw is random so that tasks taking turns in a fixed rhythm (a ping-pong) cannot all fall between samples. A
+   run of sampled turns with no entry counted doubles the interval, up to one in AGC_JIT_SAMPLE_MAX, and one after an
+   entry was counted sets it back to AGC_JIT_SAMPLE: the jit copy interprets slower than the plain copy (up to 1.4
+   times, benchmarks/programs/logger-disabled.agc), so a run whose functions that may get code never run pays that in
+   few turns. So a run whose functions that may get code run seldom or never keeps the plain loop for nearly every
+   turn, without a test of the JIT inside it. */
 #define AGC_JIT_TOP_FRAMES 64
 #define AGC_JIT_SAMPLE 16
+#define AGC_JIT_SAMPLE_MAX 256
 bool agc_jit_turn(agc_jit *jit, agc_vm *vm);
 /* The code of FUNCTION for the frame a CALL, TAIL_CALL or CALL_VALUE exit just made (BLOCK false), or for the block a
    block call started from compiled code just called (BLOCK set): its code, or, for a function without a loop that
