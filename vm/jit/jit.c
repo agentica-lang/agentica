@@ -351,16 +351,18 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         break;
       case AGC_OP_CALL_VALUE: agc_emit_call_value(e, in, pc); break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
-      case AGC_OP_CALL_BUILTIN:
+      case AGC_OP_CALL_BUILTIN: {
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
-        if (bx < p->builtin_count && agc_jit_plain_tags(p->builtins[bx]))
-          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc],
-                              agc_jit_plain_tags(p->builtins[bx]));
-        else if (bx < p->builtin_count && (p->builtins[bx]->direct || p->builtins[bx]->leaf))
-          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc], p->builtins[bx]->leaf);
+        const agc_builtin *b = bx < p->builtin_count ? p->builtins[bx] : NULL;
+        const uint8_t *tags = b ? agc_jit_plain_tags(b) : NULL;
+        if (tags)
+          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], tags);
+        else if (b && (b->direct || b->leaf))
+          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], b->leaf);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
+      }
       default: agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc); break;
     }
   }

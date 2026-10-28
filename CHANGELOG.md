@@ -25,7 +25,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The experimental x86-64 JIT runs the repeated calls of a block (`map`,
   `filter`, `reduce`, `times`, ...) without leaving compiled code.
 - The experimental x86-64 JIT calls small builtins (`size`, `length`,
-  `append`, `ok`, ...) from compiled code instead of leaving it.
+  `append`, `ok`, ...) from compiled code in more places.
 
 ### Fixed
 

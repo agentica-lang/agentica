@@ -1078,12 +1078,12 @@ def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
         counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
                   if " jit block count=" in line or " jit transition count=" in line or " jit leaf count=" in line}
         blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
-        # About one transition per block call (its last RETURN), not one per leaf below a native call (before,
-        # 56,096 under `always` for 8,000 block calls). Of the half a million leaf calls (505,808 leaf exits under
-        # `always` before), only those at native depth 0 of the builtins that can fail take an exit (a frame that
-        # goes on after its native calls were unwound, as when a turn ended in them).
-        assert counts.get("leaf", 0) < 20000, (mode, counts)
-        assert (blocks >= 7900 and transitions < blocks * 5 // 4) if X86_64 else blocks == transitions == 0, \
+        # About one transition per block call (its last RETURN, 8,000 calls, a few interpreted before the block has
+        # code), not one per leaf below a native call. Of the half a million leaf calls, only those at native depth 0
+        # of the builtins that can fail take an exit (a frame that goes on after its native calls were unwound, as
+        # when a turn ended in them).
+        assert counts.get("leaf", 0) < 50000, (mode, counts)
+        assert (blocks >= 7000 and transitions < blocks * 3 // 2) if X86_64 else blocks == transitions == 0, \
             (mode, counts)
     steps = int(stdout.split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
@@ -1096,7 +1096,7 @@ def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     exits = sorted(line.split("exit op=")[1] for line in lines if " jit exit op=" in line)
     leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
     assert exits == [], exits
-    assert len(leaves) == (1 if X86_64 else 0) and all(n > 1000 for n in leaves), leaves
+    assert len(leaves) == (1 if X86_64 else 0) and all(n > 2000 for n in leaves), leaves
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)
     steps = int(stdout.split("steps ")[1])
@@ -1166,11 +1166,11 @@ def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
     assert compiled(bytecode, tmp_path, "on") == (["parse", "walk"] if X86_64 else [])
     # Only the two errors leave the code: the interpreter runs the `try` that returns them. parse is compiled too (its
     # `ok` is a leaf builtin that compiled code calls), and each error leaves both functions' code.
-    for mode, want in (("on", ["try count=4"]), ("always", ["try count=4"])):
+    for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         exits = sorted(line.split("exit op=")[1] for line in lines
                        if any(f" jit exit op={op} " in line for op in ("global", "struct", "enum", "try")))
-        assert exits == (want if X86_64 else []), (mode, exits)
+        assert exits == (["try count=4"] if X86_64 else []), (mode, exits)
     for style in ((), ("--json",), ("--ai",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout.startswith("369396\nfalse\n"), (style, stdout)

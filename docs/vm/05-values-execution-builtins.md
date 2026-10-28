@@ -270,8 +270,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
-    interpreter runs. `run_compiled` calls a leaf builtin itself. It starts a
-    block call, whose block then runs in its code.
+    interpreter runs. `run_compiled` calls a leaf builtin itself, at native
+    depth 0 or after a failed tag check. It starts a block call, whose block
+    then runs in its code.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
@@ -352,11 +353,12 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
     budget, `bytes` for the code memory.
   - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
-    count=N` (the leaf exits at native depth 0), `block count=N`, `transition
-    count=N` (the `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native
-    call, tail call or return is not one), `transition op=tail-call count=N
-    compiled=M` (the `TAIL_CALL` exits, and those whose callee had code) and
-    `turn count=N` (the turns that ran the jit copy of the turn loop).
+    count=N` (the leaf exits at native depth 0, and the plain leaves whose tag
+    check failed), `block count=N`, `transition count=N` (the `CALL`,
+    `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native call, tail call or
+    return is not one), `transition op=tail-call count=N compiled=M` (the
+    `TAIL_CALL` exits, and those whose callee had code) and `turn count=N` (the
+    turns that ran the jit copy of the turn loop).
 - **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
   that end inside compiled code, native and block calls, tail calls and the exit
   counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,

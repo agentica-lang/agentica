@@ -142,11 +142,13 @@ static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_map_value(agc_map_put(vm, agc_as_map(vm, args[0]), args[1], args[2]));
 }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_list_size(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_int((int64_t)agc_list_len(agc_as_list(vm, args[0])));
 }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_list_append(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_list_value(agc_list_append(agc_as_list(vm, args[0]), args[1]));
@@ -362,6 +364,7 @@ static agc_value builtin_set_subset(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_bool(agc_set_subset(vm, agc_as_set(vm, args[0]), agc_as_set(vm, args[1])));
 }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_ok(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)span;
@@ -381,6 +384,7 @@ static agc_value builtin_error(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(false, args[0]);
 }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_result_ok(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_bool(agc_as_result(vm, args[0])->ok);
