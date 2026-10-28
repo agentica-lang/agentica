@@ -16,7 +16,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   type arguments inferred from the arguments, the expected type and the block.
 - `Analysis.entry` and `Analysis.adopt` of `std/analysis` move the cache of one
   file between sessions as plain data, so tasks can share it in an `ATS` table.
-
 - `JsonField` can be a type argument of a generic struct: in
   `Box[JsonField[Int]]` the field `value: T` is a `JsonField` field for
   `JSON.encode` and `JSON.from`.
