@@ -232,11 +232,14 @@ agc_jit_code agc_jit_call_value(agc_vm *vm, agc_value *window, uint32_t argc, ui
    another call of the same function. It does what the interpreter's RETURN and the native frame do (the block's value
    taken, the step or turn cost of a call charged, which may end the turn), but the frame stays and starts over at
    instruction 0 with the next arguments. It answers the frame's registers, for the code to go on at instruction 0
-   (or to take the YIELD exit at pc UINT32_MAX when the turn ended: run_compiled sets the top frame's pc to the exit's
-   pc + 1, which is 0). Any other RETURN (no native frame below, a stepper, the last item, a value that ends the call
-   or that it would fail on, a slow step, another function next) answers NULL with nothing changed, and the code takes
+   (or to take the YIELD exit at AGC_JIT_PC_RESTART when the turn ended). Any other RETURN (no native frame below, a
+   stepper, the last item, a value that ends the call or that it would fail on, a slow step, a function value of
+   another function, a frame that a native tail call reached) answers NULL with nothing changed, and the code takes
    the RETURN exit. It never fails or parks; it may allocate. */
 agc_value *agc_jit_block_return(agc_vm *vm, const agc_value *result);
+/* The pc of an exit taken by a frame that starts over at instruction 0 (agc_jit_block_return): run_compiled sets the
+   top frame's pc to the exit's pc + 1, which wraps to 0. */
+#define AGC_JIT_PC_RESTART UINT32_MAX
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 

@@ -1742,15 +1742,29 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
    or all?), an item is left, and a counting call (times, upto, downto, each of a Range) has its step on the fast
    path. A stepper is never one: its step may lock, park or name another function. */
 static bool block_goes_on(agc_vm *vm, const agc_native *st, agc_value result, uint32_t function) {
-  if (st->kind == AGC_NATIVE_STEPPER || st->kind == AGC_NATIVE_NONE) return false;
   /* The tag tests keep agc_as_fn and agc_as_bool from failing here, under compiled code. */
   if (!agc_is(st->fn, AGC_T_FN) || agc_as_fn(vm, st->fn)->function != function) return false;
-  if (counting(st->kind)) return st->more && vm->next_stop > 1;
-  bool kept = st->kind == AGC_NATIVE_FILTER || st->kind == AGC_NATIVE_ANY || st->kind == AGC_NATIVE_ALL;
-  if (kept && !agc_is(result, AGC_T_BOOL)) return false;
-  if ((st->kind == AGC_NATIVE_ANY && agc_as_bool(vm, result)) ||
-      (st->kind == AGC_NATIVE_ALL && !agc_as_bool(vm, result)))
-    return false;
+  /* Only the kinds handled by agc_jit_block_return: a kind added later takes the RETURN exit until it is. */
+  switch (st->kind) {
+    case AGC_NATIVE_RANGE_EACH:
+    case AGC_NATIVE_TIMES:
+    case AGC_NATIVE_UPTO:
+    case AGC_NATIVE_DOWNTO: return st->more && vm->next_stop > 1;
+    case AGC_NATIVE_FILTER:
+      if (!agc_is(result, AGC_T_BOOL)) return false;
+      break;
+    case AGC_NATIVE_ANY:
+      if (!agc_is(result, AGC_T_BOOL) || agc_as_bool(vm, result)) return false;
+      break;
+    case AGC_NATIVE_ALL:
+      if (!agc_is(result, AGC_T_BOOL) || !agc_as_bool(vm, result)) return false;
+      break;
+    case AGC_NATIVE_MAP:
+    case AGC_NATIVE_SORT_BY:
+    case AGC_NATIVE_REDUCE:
+    case AGC_NATIVE_EACH: break;
+    default: return false;
+  }
   return st->items.index < agc_list_len(st->items.list);
 }
 
@@ -1762,13 +1776,16 @@ static bool block_goes_on(agc_vm *vm, const agc_native *st, agc_value result, ui
    Nothing here can fail: call_value's checks passed for the same function value and argument count at the first
    call, and compiled code never runs with the profile on. A counting call takes its step on the fast path; a list
    call charges the turn cost of a call, which may end the turn. Returns the frame's registers, for the code to go on
-   at instruction 0, or NULL with nothing done, for the RETURN exit. Below plain_turn and out of line, so the turn
+   at instruction 0 (or at AGC_JIT_PC_RESTART's YIELD exit), or NULL with nothing done, for the RETURN exit. Below plain_turn and out of line, so the turn
    loops keep their code. */
 __attribute__((noinline)) agc_value *agc_jit_block_return(agc_vm *vm, const agc_value *result) {
   agc_task *t = vm->task;
   uint32_t n = t->frame_count;
   if (n < 2 || !t->frames[n - 2].native) return NULL;
   agc_frame *frame = &t->frames[n - 1];
+  /* A frame that a native tail call reached runs another function's code than the one run_compiled entered, and
+     run_compiled reloads that code after an exit only while the tail flag is set, which this would clear. */
+  if (frame->tail) return NULL;
   agc_native *st = t->frames[n - 2].native;
   /* Read first: RESULT may be one of the registers that the next arguments overwrite. */
   agc_value got = *result;
@@ -1795,6 +1812,7 @@ __attribute__((noinline)) agc_value *agc_jit_block_return(agc_vm *vm, const agc_
   const agc_fn *fn = agc_as_fn(vm, st->fn);
   if (fn->n) memcpy(R + argc, fn->captured, (size_t)fn->n * sizeof(agc_value));
   frame->pc = 0;
+  /* As push_frame leaves it (the flag is clear already: see above); stack traces read it. */
   frame->tail = false;
   if (!counting(st->kind)) {
     t->turn_cost++;

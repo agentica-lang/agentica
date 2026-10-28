@@ -1260,6 +1260,61 @@ def test_block_calls_of_every_kind_start_their_block_again_in_compiled_code(tmp_
     assert_max_steps_sweep(bytecode, steps)
 
 
+# map's block is &f, which tail-calls g (a loop long enough to end turns, compiled under `on`), which tail-calls f
+# again: the block's frame reaches f's RETURN by a native tail call, so f's code runs in a frame that run_compiled
+# entered for g's. That RETURN must take the RETURN exit, not start the block again in place.
+TAIL_BLOCK = """def g(x: Int) -> Int
+  i = 0
+  s = 0
+  while i < 700
+    s = (s + i * x) % 1000003
+    i += 1
+  end
+  return f(x - 1 + s * 0)
+end
+
+def f(x: Int) -> Int
+  if x > 0
+    return g(x)
+  end
+  a = x
+  i = 0
+  while i < 3
+    a = (a * 3 + i) % 1000003
+    a = (a * 5 + i) % 1000003
+    a = (a * 7 + i) % 1000003
+    a = (a * 11 + i) % 1000003
+    a = (a * 13 + i) % 1000003
+    a = (a * 17 + i) % 1000003
+    a = (a * 19 + i) % 1000003
+    a = (a * 23 + i) % 1000003
+    i += 1
+  end
+  return a + 1
+end
+
+def main() -> Void
+  total = 0
+  r = 0
+  while r < 300
+    xs = [1, 0, 0, 0].map(&f)
+    total = (total + xs[3] + xs[0]) % 1000003
+    r += 1
+  end
+  puts(total)
+  puts([2, 0, 1].map(&f))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", (1, 4))
+def test_a_block_that_returns_after_a_native_tail_call_matches_the_interpreter(tmp_path, schedulers):
+    bytecode = compile_text(TAIL_BLOCK, "tail_block", tmp_path)
+    code, stdout, _ = assert_same(bytecode, schedulers=schedulers)
+    assert code == 0 and stdout.count("\n") == 3, stdout
+
+
 # Two tasks whose compiled loop (drive) calls step, which tail-calls count_down (self tail calls that copy a struct of
 # five fields with `with`, each copy charging turn cost), noisy (a loop that prints, which `on` never compiles: a tail
 # call into a function without code) or calls is_even (mutual tail calls). With `on`, count_down's self tail call is

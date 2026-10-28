@@ -742,8 +742,8 @@ void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
 /* RETURN R[a]: under a native call, as return_value does it (the frame's ret is its base, R[0], where the native
    CALL put it), and AGC_JIT_EXIT_RETURNED to the caller's code. Else agc_jit_block_return(vm, &R[a]) first: when the
    frame returns to a block call that calls the same function again, the frame starts over with the next arguments,
-   and the code goes on at instruction 0 with its registers (or takes the YIELD exit at pc UINT32_MAX when the turn
-   ended, which leaves the frame's pc at 0); otherwise the RETURN exit for run_compiled. */
+   and the code goes on at instruction 0 with its registers (or takes the YIELD exit at AGC_JIT_PC_RESTART when the
+   turn ended, which leaves the frame's pc at 0); otherwise the RETURN exit for run_compiled. */
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
   BYTES(e, 0x4D, 0x85, 0xF6); /* test r14, r14 */
   size_t native = jump_to_patch(e, CC_NE);
@@ -755,7 +755,7 @@ void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
   move_reg(e, true, REGS, RAX);
   op_mem(e, false, 0x80, 7, VM, (int64_t)offsetof(agc_vm, yield)); /* cmp byte [rbx + yield], 0 */
   byte(e, 0);
-  exit_if(e, CC_NE, AGC_JIT_EXIT_YIELD, UINT32_MAX);
+  exit_if(e, CC_NE, AGC_JIT_EXIT_YIELD, AGC_JIT_PC_RESTART);
   agc_emit_jump(e, 0);
   land(e, native);
   load(e, RAX, REGS, TAG(a));

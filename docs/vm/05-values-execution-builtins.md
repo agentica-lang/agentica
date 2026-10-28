@@ -273,9 +273,11 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     the value and charges the step or turn cost of the next call. Then the
     block's frame starts over in place, at instruction 0 with the next
     arguments. A turn that this cost ends takes the `YIELD` exit at pc
-    `UINT32_MAX`, so the frame's pc stays 0. The other cases take the `RETURN`
-    exit: the last item, a value that ends the call (`any?`, `all?`) or that
-    it would fail on, a slow step, and a stepper (`Lazy`, `File.each_line`).
+    `UINT32_MAX` (`AGC_JIT_PC_RESTART`), so the frame's pc stays 0. The other
+    cases take the `RETURN` exit: the last item, a value that ends the call
+    (`any?`, `all?`) or that it would fail on, a slow step, a stepper (`Lazy`,
+    `File.each_line`), a block call whose function value is not the
+    returning frame's function, and a frame that a native tail call reached.
   - `YIELD` and `RAISE`: a direct builtin that compiled code called ended the
     turn or failed.
 - **Helper contract.** The machine code never fails itself. Its `agc_op_*`

@@ -20,9 +20,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
   a closure or `&name`) from compiled code.
 - The experimental x86-64 JIT runs tail calls inside compiled code.
-- The experimental x86-64 JIT keeps the calls of a block by `map`, `filter`,
-  `reduce`, `times` and the other block calls in compiled code, so loops of
-  short blocks run faster.
+- The experimental x86-64 JIT runs the repeated calls of a block (`map`,
+  `filter`, `reduce`, `times`, ...) without leaving compiled code.
 
 ## [0.13.0] - 2026-10-27
 
