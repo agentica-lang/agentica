@@ -157,17 +157,17 @@ test-shared: dist/agentica$(EXE)
 # The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
 # the JIT can compile compiled at its first entry (AGENTICA_JIT=always,
 # docs/vm/05-values-execution-builtins.md §6.4): no output may depend on the tier. Then half of the golden shards with
-# AGENTICA_JIT=on, the mode that compiles hot functions only: the odd or the even shards by the last hex digit of
-# GITHUB_SHA (else HEAD), so successive commits cover all of them; VM_JIT_ON_TESTS names others.
-VM_JIT_ON_TESTS ?=
+# AGENTICA_JIT=off, the interpreter alone (make test runs them with `on`, the default): the odd or the even shards by
+# the last hex digit of GITHUB_SHA (else HEAD), so successive commits cover all of them; VM_JIT_OFF_TESTS names others.
+VM_JIT_OFF_TESTS ?=
 vm-jit-test: dist/agentica$(EXE)
 	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_vm_multicore.py"
-	@tests="$(VM_JIT_ON_TESTS)"; if [ -z "$$tests" ]; then \
+	@tests="$(VM_JIT_OFF_TESTS)"; if [ -z "$$tests" ]; then \
 	  sha=$${GITHUB_SHA:-$$(git rev-parse HEAD 2>/dev/null || echo 0)}; parity=$$(( 0x$$(printf '%s' "$$sha" | tail -c 1) % 2 )); \
 	  tests=$$(printf '%s\n' $(VM_DIFF_TESTS) | awk -v p=$$parity 'NR % 2 == p'); fi; \
-	  echo "vm-jit-test: AGENTICA_JIT=on over" $$tests; \
-	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=on $(MAKE) --no-print-directory test-py TESTS="$$tests"
+	  echo "vm-jit-test: AGENTICA_JIT=off over" $$tests; \
+	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=off $(MAKE) --no-print-directory test-py TESTS="$$tests"
 
 # The goldens and the stack traces with AGENTICA_JIT=always on the sanitizer binary that an earlier step built
 # (SANITIZE=1, as vm-sanitize-test), with the sampled sweep: it checks the C helpers that compiled code calls and the

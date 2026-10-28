@@ -224,20 +224,20 @@ is its only boundary with the interpreter: the interpreter asks for a function's
 code, enters it at the frame's `pc`, and handles the exit it returns.
 
 - **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
-  or `always`. `off`, the default, has no JIT. An entry of a function is a call,
-  a return into it, or a turn that starts in it. `on` compiles a function with a
-  loop (a backward jump, or a `TAIL_CALL` of itself) at its 100th entry, once 32
-  of its entries were passes (an entry at or before the previous one: a new
-  call, or a loop that went round). It keeps a function out when one of its
-  innermost loops has more than one instruction that leaves compiled code per 16
-  instructions; a builtin that may park (a channel or task wait, a sleep, a read
-  of stdin, a file, path, process or socket call: `agc_jit_parking` in
-  `vm/jit/jit.c`) counts as three. A function without a loop gets code only for
-  native calls, and only when none of its instructions leaves compiled code: at
-  its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit from compiled code when it
-  calls a function, else at its 16th call that leaves compiled code. `always`
-  compiles every function at its first entry, for tests. A host without an
-  emitter runs every mode in the interpreter.
+  or `always`. `off` has no JIT; `on` is the default. An entry of a function is
+  a call, a return into it, or a turn that starts in it. `on` compiles a
+  function with a loop (a backward jump, or a `TAIL_CALL` of itself) at its
+  100th entry, once 32 of its entries were passes (an entry at or before the
+  previous one: a new call, or a loop that went round). It keeps a function out
+  when one of its innermost loops has more than one instruction that leaves
+  compiled code per 16 instructions; a builtin that may park (a channel or task
+  wait, a sleep, a read of stdin, a file, path, process or socket call:
+  `agc_jit_parking` in `vm/jit/jit.c`) counts as three. A function without a
+  loop gets code only for native calls, and only when none of its instructions
+  leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
+  from compiled code when it calls a function, else at its 16th call that leaves
+  compiled code. `always` compiles every function at its first entry, for tests.
+  A host without an emitter runs every mode in the interpreter.
 - **Native calls.** A `CALL` of a function that has code is a native call. So is
   a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
   Compiled code pushes the frame and calls the callee's code, up to 256 deep
@@ -372,9 +372,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,
   helpers and exits; `make vm-tsan` runs it under ThreadSanitizer. `make
   vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
-  with `on`, in CI. `make vm-jit-self-compile` compiles the front end under each
-  mode and compares the bytes. `make test-jit-on` runs the conformance areas
-  with `on`, and `jit-soak.yml` runs it daily on four systems.
+  with `off`, in CI. `make vm-jit-self-compile` compiles the front end under
+  each mode and compares the bytes. `make test-jit-off` runs the conformance
+  areas with `off`, and `jit-soak.yml` runs it daily on four systems.
 - **Fuzzing and layout.** `make vm-libfuzz` needs clang and runs on Linux. It
   runs each accepted input with `always` and `on` and compares the result with
   the interpreter's. Only runs that read no clock are compared. A JIT run that

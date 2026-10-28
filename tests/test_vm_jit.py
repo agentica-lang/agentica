@@ -2033,14 +2033,15 @@ def test_a_bad_jit_mode_is_refused(tmp_path):
 
 
 def test_the_jit_mode_of_the_environment_reaches_the_vm(tmp_path):
-    """The canary of make test-jit-on: no --jit flag, so only AGENTICA_JIT decides whether this hot loop is compiled.
+    """The canary of make test-jit-off: no --jit flag, so only AGENTICA_JIT, or the default `on`, decides whether this
+    hot loop is compiled.
 
-    If the variable stopped reaching the VMs, the soak would run the interpreter and pass without proving anything.
+    If the variable stopped reaching the VMs, the soak would run the JIT and pass without proving anything.
     """
     bytecode = compile_text(THRESHOLD, "threshold-env", tmp_path)
     trace = tmp_path / "env.trace"
     run_vm(bytecode, env=vm_environment({"AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}))
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
     functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
-    jit_on = os.environ.get("AGENTICA_JIT", "off") in ("on", "always")
+    jit_on = (os.environ.get("AGENTICA_JIT") or "on") in ("on", "always")
     assert ("spin" in functions) == (X86_64 and jit_on), (os.environ.get("AGENTICA_JIT"), functions)
