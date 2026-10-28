@@ -263,11 +263,19 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
     interpreter runs. `run_compiled` calls a leaf builtin itself. It starts a
-    block call, and each `RETURN` of the block takes the `RETURN` exit.
+    block call, whose block then runs in its code.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
     `run_compiled`.
+  - A block's `RETURN` to a block call that calls the same function again
+    takes no exit. `agc_jit_block_return` does what the native frame does with
+    the value and charges the step or turn cost of the next call. Then the
+    block's frame starts over in place, at instruction 0 with the next
+    arguments. A turn that this cost ends takes the `YIELD` exit at pc
+    `UINT32_MAX`, so the frame's pc stays 0. The other cases take the `RETURN`
+    exit: the last item, a value that ends the call (`any?`, `all?`) or that
+    it would fail on, a slow step, and a stepper (`Lazy`, `File.each_line`).
   - `YIELD` and `RAISE`: a direct builtin that compiled code called ended the
     turn or failed.
 - **Helper contract.** The machine code never fails itself. Its `agc_op_*`
@@ -359,8 +367,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - A leaf builtin exits compiled code and unwinds the native calls below it. A
     builtin that is neither leaf, direct nor a block call (for example output,
     tasks, channels and files) also returns to the turn loop.
-  - Each call of a block from a block call takes a `RETURN` exit to
-    `run_compiled`, which starts the next call from C.
+  - A block call whose block has code takes the `RETURN` exit at its end, and
+    at a slow step of `times`, `upto`, `downto` or `each` of a Range. A block
+    that a stepper calls takes it at each call.
   - A function with a loop that is called often but whose loop rarely runs still
     pays the entry and the exit at each call.
   - Until some code is published, only turns that start near a function that may
