@@ -867,22 +867,24 @@ end
 
 # True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
 # each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
-# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each name on the
-# path: a struct already in seen is true (the type is recursive), and since seen holds names, a recursion that changes
-# its type arguments each time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each key on the
+# path (walk_key: the name and which arguments are Nil, the one thing the stand-ins keep): a key already in seen is
+# true (the type is recursive), and since a key has only two shapes for each parameter, a recursion that changes its
+# type arguments each time (W[T] with a field W[List[T]]) still ends. W[Int] and W[Nil] are walked once each, so a
+# JsonField[Nil] behind W[Nil] is found. A decodable struct has no arguments.
 def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
-  name = Types.name(type)
   for argument in Types.args(type)
     if test == 0 and !encodable?(cx, argument, seen)
       return false
     end
   end
 
-  if seen.any? do |item: String| item == name end
+  key = walk_key(type)
+  if seen.any? do |item: String| item == key end
     return true
   end
 
-  inner = seen.push(name)
+  inner = seen.push(key)
   for field in stand_in_fields(cx, type)
     if test == 0 and !encodable?(cx, field.type, inner)
       return false
@@ -892,6 +894,26 @@ def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int)
   end
 
   return true
+end
+
+# The name of a struct type and an N for each Nil argument and an I for each other one ("W[IN]"): what the stand-ins
+# (stand_ins) tell apart, so the walks of W[Int] and W[Nil] do not stop one another.
+def walk_key(type: ResolvedType) -> String
+  name = Types.name(type)
+  if Types.args(type).size == 0
+    return name
+  end
+
+  marks = ""
+  for argument in Types.args(type)
+    if Types.is?(argument, "Nil")
+      marks += "N"
+    else
+      marks += "I"
+    end
+  end
+
+  return "#{name}[#{marks}]"
 end
 
 def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool

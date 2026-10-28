@@ -25,6 +25,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The experimental x86-64 JIT runs the repeated calls of a block (`map`,
   `filter`, `reduce`, `times`, ...) without leaving compiled code.
 
+### Fixed
+
+- `JSON.encode` and `JSON.from` now refuse a generic struct whose field is a
+  `JsonField[Nil]` reached through a recursive field such as `List[W[Nil]]`.
+
 ## [0.13.0] - 2026-10-27
 
 ### Added

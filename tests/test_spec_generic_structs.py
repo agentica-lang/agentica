@@ -14,6 +14,10 @@ PAIR = "struct Pair[T]\n  a: T\n  b: T\nend\n\n"
 INC = "def inc(x: Int) -> Int\n  return x + 1\nend\n\n"
 
 
+NIL_WALK = "struct W[T]\n  f: JsonField[T]\n  rest: List[W[Nil]]\nend\n\n"
+NIL_VALUES = ("inner = W(f: JsonField.Value(nil), rest: [])", "outer = W(f: JsonField.Value(1), rest: [inner])")
+
+
 def main(*lines: str) -> str:
     """A `main` function whose body is the lines."""
     return "def main() -> Void\n" + "".join("  %s\n" % line for line in lines) + "end\n\n"
@@ -100,6 +104,14 @@ RULES = {
     "JSON.encode ends on a recursion that changes its type argument": (
         "struct Deep[T]\n  v: T\n  rest: List[Deep[List[T]]]\nend\n\n"
         + main("puts(JSON.encode(Deep(v: 1, rest: [])))"), None, None),
+    "JSON.encode finds a JsonField of Nil behind a struct already on the walk": (
+        NIL_WALK + main(*NIL_VALUES, "puts(JSON.encode(outer))"), "CHECK-NOT-ENCODABLE", "outer"),
+    "JSON.from finds a JsonField of Nil behind a struct already on the walk": (
+        NIL_WALK + main(*NIL_VALUES, "puts(JSON.from(outer).inspect)"), "CHECK-NOT-ENCODABLE", "outer"),
+    "JSON.encode takes the same recursion without a Nil argument": (
+        NIL_WALK.replace("W[Nil]", "W[Int]")
+        + main("inner = W(f: JsonField.Value(2), rest: [])", "puts(JSON.encode(W(f: JsonField.Value(1), rest: [inner])))"),
+        None, None),
     "JsonField is no type argument, however deep": (
         declared("puts(JSON.encode(Box(value: Box(value: JsonField.Value(1)))))"), "CHECK-JSON-FIELD-PLACE",
         "Box(value: Box(value: JsonField.Value(1)))"),
