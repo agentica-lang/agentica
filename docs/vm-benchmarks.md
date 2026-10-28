@@ -242,7 +242,7 @@ To rerun one program (size 4 is a copy of the source with `scale` returning 4):
 
 ```sh
 dist/agentica compile prog.agc -o prog.agcb
-for round in 1 2 3 4 5; do for mode in off on always; do
+for round in 0 1 2 3 4 5; do for mode in off on always; do
   /usr/bin/time -f "$mode %e" taskset -c 3 \
     dist/agentica run --schedulers 1 --jit $mode -- prog.agcb >/dev/null
 done; done
@@ -250,7 +250,7 @@ done; done
 
 Interleaved means the loop above: one run of each mode per round, so a change
 in the load hits the three modes alike; the table keeps the smallest of the 5
-times per mode, after one unrecorded run of each. The front-end row is
+times per mode; round 0 is a warm-up and is not recorded. The front-end row is
 `AGENTICA_VM_TEST_FRONT_END_JIT=$mode taskset -c 3 dist/agentica compile
 compiler/front_end.agc -o out.agcb` in the same loop (a test-only variable: the
 front end runs in the interpreter otherwise).
