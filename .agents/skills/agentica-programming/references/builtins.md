@@ -41,7 +41,7 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
   interrupt blocking input.
 - `Random` has one generator per run, seeded from the OS unless `--seed N` is
   given (N in `0 .. 2147483647`); each task's generator is split at spawn. Not
-  for secrets.
+  for secrets: use `SecureRandom` (`binary.md`).
 
 ## Int, Float
 

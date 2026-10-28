@@ -1,13 +1,15 @@
 /*
- * The digest adapter over OpenSSL's EVP interface, the same library that
- * tls_openssl.c links (system OpenSSL 3 or the vendored one). Adapter layer,
- * behind digest.h. Design: docs/vm/15-layers.md §15.1.
+ * The digest adapter over OpenSSL's EVP interface and RAND_bytes, the same
+ * library that tls_openssl.c links (system OpenSSL 3 or the vendored one).
+ * Adapter layer, behind digest.h. Design: docs/vm/15-layers.md §15.1.
  */
 #include "digest.h"
 
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <limits.h>
 #include <stdlib.h>
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -96,4 +98,12 @@ void agc_sha256_free(agc_sha256_stream *stream) {
   if (!stream) return;
   EVP_MD_CTX_free(stream->ctx);
   free(stream);
+}
+
+bool agc_secure_random(unsigned char *out, size_t n) {
+  if (n == 0) return true;
+  /* RAND_bytes takes an int count; it returns 1 only when every byte came from a seeded generator (0 or -1 else). */
+  bool done = n <= INT_MAX && digest_ready() && RAND_bytes(out, (int)n) == 1;
+  if (!done) ERR_clear_error();
+  return done;
 }

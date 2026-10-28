@@ -240,4 +240,4 @@ true
 Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the same numbers every time.
 
 - Each task has its own generator. It is split from its parent when the task is spawned, so each task repeats its own numbers.
-- Do not use `Random` for secrets.
+- Do not use `Random` for secrets: it is seeded, and `--seed` repeats it. Use [SecureRandom](/library/text-and-data/crypto/#securerandom) for keys, tokens and IDs.

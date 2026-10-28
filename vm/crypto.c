@@ -2,9 +2,10 @@
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
  * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex), the first part of
  * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
- * forms of bytes, in plain C. The hash itself is the digest adapter
- * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
- * Base64 and hex follow RFC 4648 and Ruby's Base64 module.
+ * forms of bytes, in plain C, and the SecureRandom draws. The hash and the
+ * random bytes come from the OpenSSL adapter (digest.h). Service layer.
+ * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC
+ * 4648 and Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
 #include "services.h"
 #include "digest.h"
@@ -270,6 +271,7 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
    or as lowercase hex (hexdigest). The work grows with the list, so the rows charge AGC_COST_SIZE: one turn-cost unit
    per item (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task
    yields after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
+/* vm/tools/tsan.supp names digest_value, the caller of agc_digest. */
 static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
   size_t n;
   const uint8_t *bytes = text_form_bytes(vm, args[0], digest_names[kind].bad_byte, span, &n);
@@ -311,6 +313,59 @@ static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t 
   return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
 }
 
+/* SecureRandom.random_bytes(n) and hex(n) draw at most AGC_MAX_LIST_COUNT bytes (1 MiB), the bound of the other
+   builtins that make a list from a count (List#*, Range#to_a, IO.read_bytes). Keys, salts and tokens are 16 to 64
+   bytes; the bound makes a wrong count such as 10 ** 12 fail at the argument instead of asking for terabytes of
+   memory. Ruby has no bound. */
+/* Fills the n bytes at out from the secure random source. A failed draw stops the run: it never gives weak, partial
+   or zero bytes in place of random ones. vm/tools/tsan.supp names this function, the caller of agc_secure_random. */
+static void secure_draw(agc_vm *vm, uint8_t *out, size_t n, uint32_t span) {
+  if (!agc_secure_random(out, n)) agc_fail(vm, "RUNTIME-INTERNAL", "the secure random source failed", span);
+}
+
+static const uint8_t *secure_random_bytes(agc_vm *vm, agc_value arg, const char *bad_count, uint32_t span, size_t *n) {
+  int64_t count = agc_as_int(vm, arg);
+  if (count < 0 || count > AGC_MAX_LIST_COUNT) agc_fail(vm, "RUNTIME-INVALID-COUNT", bad_count, span + 1);
+  *n = (size_t)count;
+  uint8_t *out = agc_alloc_atomic(*n ? *n : 1);
+  secure_draw(vm, out, *n, span);
+  return out;
+}
+
+/* SecureRandom.random_bytes(n): n bytes from OpenSSL's CSPRNG (RAND_bytes), unlike the seeded Random. The rows charge
+   AGC_COST_SIZE, since the work grows with n (the result's items), and run without the shared lock: OpenSSL 3 keeps
+   one generator per thread. */
+static agc_value builtin_random_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n;
+  const uint8_t *bytes =
+    secure_random_bytes(vm, args[0], "SecureRandom.random_bytes needs n between 0 and 1048576", span, &n);
+  return byte_list_value(vm, bytes, n);
+}
+
+/* SecureRandom.hex(n): n random bytes as 2n lowercase hex digits, as Ruby's. */
+static agc_value builtin_random_hex(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n;
+  const uint8_t *bytes = secure_random_bytes(vm, args[0], "SecureRandom.hex needs n between 0 and 1048576", span, &n);
+  return hex_text(vm, bytes, n);
+}
+
+/* SecureRandom.uuid: a version 4 UUID (RFC 9562 §5.4), 122 random bits in the lowercase 8-4-4-4-12 form. */
+static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  uint8_t b[16];
+  secure_draw(vm, b, sizeof b, span);
+  b[6] = (uint8_t)((b[6] & 0x0f) | 0x40); /* version 4 in the high nibble of byte 6 */
+  b[8] = (uint8_t)((b[8] & 0x3f) | 0x80); /* variant 10xx in the high bits of byte 8 */
+  agc_string *text = ascii_string(vm, 36);
+  size_t o = 0;
+  for (size_t k = 0; k < sizeof b; k++) {
+    if (k == 4 || k == 6 || k == 8 || k == 10) text->data[o++] = '-';
+    text->data[o++] = hex_digits[b[k] >> 4];
+    text->data[o++] = hex_digits[b[k] & 15];
+  }
+  return agc_string_value(text);
+}
+
 const agc_builtin agc_crypto_builtins[] = {
   {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
@@ -328,6 +383,9 @@ const agc_builtin agc_crypto_builtins[] = {
   {"Base64.urlsafe_decode64", 1, builtin_urlsafe_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexencode", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexdecode", 1, builtin_hexdecode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"SecureRandom.random_bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"SecureRandom.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"SecureRandom.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

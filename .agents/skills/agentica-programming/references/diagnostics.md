@@ -239,7 +239,8 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative
   `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
   `Task.map` `limit` outside 1..1024; a negative
-  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count.
+  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count; a
+  `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
   `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
   0..4294967295, a `Digest` hash, `Base64` or `Digest.hexencode` item
