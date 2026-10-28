@@ -134,9 +134,7 @@ Change style only in code you touch. Restyle untouched code separately.
 
 ## Speed (only on a hot path)
 
-- Profile first: `AGENTICA_VM_TRACE=profile agentica FILE.agc`. Steps repeat;
-  wall time varies. Keep speed changes only when measurement improves.
-- Hoist argument-independent tables to module constants. Use `Set` for
-  membership; build text with `push` and one `join` (`s = s + piece` in a loop
-  is quadratic).
-- Details and measurements: `references/performance.md`.
+Profile first (`AGENTICA_VM_TRACE=profile agentica FILE.agc`; steps repeat,
+wall time varies) and keep a change only when measurement improves. Hoist
+argument-independent tables to module constants; build text with `push` and
+one `join`. Details: `references/performance.md`.

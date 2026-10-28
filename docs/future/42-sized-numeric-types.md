@@ -572,23 +572,13 @@ should have made.
 - **Step 4: typed storage, if measured.** §42.12.
 
 Tests, for each step: goldens for the VM, an independent Python peer with the
-standard library only, and checker goldens that assert the code and the span.
-
-- **Integer vectors.** Python's unbounded integers, masked to the width, give
-  every result: edge values of each type, each operation and bit method on
-  them, each conversion, and `UInt64` above 2^63 (unsigned order).
-- **Float32 vectors.** The exact result of each operation with
-  `fractions.Fraction`, rounded to binary32 with integer arithmetic, so the
-  peer is independent of the double-rounding argument of §42.9; the shortest
-  printing is checked by trying each candidate of 1 to 9 digits with exact
-  arithmetic, never through a `double`, `struct` or `repr`. It covers ties,
-  subnormals, overflow and the Int-to-Float32 cases of §42.9.
-- **Round trips** of the conversions, of `read` and `write` (step 3) and of
-  `strtof` on the printed text.
-- **Errors:** `CHECK-INT-RANGE`, `CHECK-TYPE-MISMATCH` (mixed types, unary
-  minus on an unsigned type), `CHECK-MAP-KEY-TYPE`, `CHECK-FLOAT-RANGE`,
-  `RUNTIME-INTEGER-OVERFLOW` (each direction and `MIN / -1`) and
-  `RUNTIME-INVALID-COUNT`.
+standard library only (unbounded integers masked to the width; for Float32 the
+exact result with `fractions.Fraction` rounded to binary32 by integer
+arithmetic, and the shortest printing checked with exact arithmetic, never
+through a `double` or `repr`), round trips of the conversions, and checker
+goldens that assert the code and the span (`CHECK-INT-RANGE`,
+`CHECK-TYPE-MISMATCH`, `CHECK-MAP-KEY-TYPE`, `CHECK-FLOAT-RANGE`,
+`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INVALID-COUNT`).
 
 ### 42.14 Freeze and bootstrap impact
 

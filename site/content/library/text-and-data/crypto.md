@@ -83,7 +83,7 @@ f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
 - To check a MAC you received, compare it with the one you compute in constant time. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right; a constant-time compare is planned.
 - An item outside 0 to 255, in the key or in the data, stops the program with `RUNTIME-INVALID-NUMBER` at that argument.
 - The time grows with the key and the data, as for the digests, and they need no effect label.
-- `HMAC` is a reserved type name.
+- `HMAC` is a reserved type name too.
 
 ## SecureRandom
 

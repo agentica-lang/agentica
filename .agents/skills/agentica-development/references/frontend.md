@@ -31,20 +31,14 @@ with a packed `Problem` (`references/stages.md`).
   export is on its `ExportDecl`. The command is `app/cli_doc.agc`; the tests
   are `tests/test_spec_doc.py`.
 - Query (`query/`, §39): the commands `outline`, `type-at`, `symbol` and `refs`
-  (`app/cli_query.agc`, the words read by `query/query_options.agc`). `outline`
-  parses one file and lists the items of `compiler/docs/doc_model.agc`.
+  (`app/cli_query.agc`, the words read by `query/query_options.agc`).
   `type-at` and `refs` link and check (`analysis/front.agc` `query_file`;
-  `Checker.check_query`: a missing `main` is not `CHECK-MAIN`). `at.agc` finds
-  the innermost typed expression; a builtin answers with
-  `catalog/catalog_json.agc`, which `help` shares. A local comes from
-  `locals.agc` and `Checked.bound`, kept apart from `Checked.types` so lowering
-  never sees it. `symbol` parses and links only (`symbol_link.agc`,
-  `Linker.link_programs`: a root that fails is `Skipped`); `symbol.agc` matches
-  the name against `Model.declared`. `refs` finds uses with `sites.agc` (one
-  pass) or `Locals.uses`, and `refs.agc` picks the target. The tree has no span
-  for a name inside a call or a pattern, so `written` reads the dotted name from
-  the text. Tests: `tests/test_spec_outline.py`, `test_spec_type_at.py`,
-  `test_spec_symbol.py`, `test_spec_refs.py`.
+  `Checker.check_query`: a missing `main` is not `CHECK-MAIN`). A local comes
+  from `locals.agc` and `Checked.bound`, kept apart from `Checked.types` so
+  lowering never sees it. `symbol` parses and links only
+  (`Linker.link_programs`: a root that fails is `Skipped`). The tree has no
+  span for a name inside a call or a pattern, so `written` reads the dotted
+  name from the text. Tests: `tests/test_spec_{outline,type_at,symbol,refs}.py`.
 - Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
   implementation of `check`, `outline`, `type-at`, `symbol` and `refs`, called
   by `app/` and `stdlib/analysis.agc`; `front.agc` holds the read, link and
@@ -74,20 +68,16 @@ with a packed `Problem` (`references/stages.md`).
   The check cache (`modules/check_cache.agc`, `analysis/front.agc`
   `query_checked`, `io/check_cache.agc`; `check` and `type-at` only): one file
   per imported source in `_build/check/` holds the text digest, the tree digest
-  at which the module passed a check, whether the text follows
-  `blank_line_after_end` (skips the lexing of the style rule), a same-length
-  stub (bodies and private functions blanked) and the constant types
-  (`modules/type_code.agc`). A module whose tree digest (text, shape, imports'
-  digests) the entry vouches for is `clean`: its bodies and constants are not
+  at which the module passed a check, a same-length stub (bodies and private
+  functions blanked) and the constant types. A module whose tree digest (text,
+  shape, imports' digests) the entry vouches for is `clean`: its bodies are not
   checked, and it is parsed from the stub. A walk with a stubbed module that is
   not clean is redone without stubs, and a problem in a stubbed file falls back
   to `query_cached`, so the answer is the cold one. The core reaches the folder
-  through `Workspace.check_cache`; the safe-file rules are shared with the
-  bytecode cache (`io/cache_files.agc`). Anything the core or the CLI adds to
+  through `Workspace.check_cache`. Anything the core or the CLI adds to
   `Modules` or `Checker` that new entries depend on must be in the tree digest
   (`Modules.shape_of`); `test_check_cache.py` compares cold, warm and
-  `--no-cache` runs. A module of `compiler/` that `std/analysis` needs goes in
-  `stdlib/CORE`.
+  `--no-cache` runs.
 
 ### Pure core, one port
 
@@ -272,20 +262,18 @@ Add an entry in `OPCODES` in `bytecode_tables.agc` and `agc_opcode` in
 ### Add a pipeline stage
 
 Create `compiler/<context>/<stage>.agc` with one entry point returning next
-data or one diagnostic. Require only the previous stage's modules; wire it in
-`compiler/app/pipeline.agc`; add an entry program printing its text form (like
-`check.agc`), `tests/test_frontend_<stage>.py` and a spec module. `make test`
-discovers them; CI needs no change.
+data or one diagnostic; wire it in `compiler/app/pipeline.agc`; add an entry
+program printing its text form (like `check.agc`) and the tests
+(`tests/test_frontend_<stage>.py`, a spec module). `make test` discovers them.
 
 ### Add tests
 
-Use `tests/test_<area>.py` with `tests.agentica_test.TestCase`. A language rule
-runs `cli() + ["--json", "check", path]`; assert the code and, when relevant,
-`start` and covered text, never message text. Put many small cases in
+A language rule runs `cli() + ["--json", "check", path]` in
+`tests/test_spec_<area>.py`; assert the code and, when relevant, `start` and
+covered text, never message text. Many small cases go in
 `tests/fixtures/spec/checker-rest.json` (program lines, `code`, optional
 `start`, `covers`, `help`, `expected`, `actual`, `function`, `callee`,
-`labels`).
-Cover happy path, error path and the introduced behavior.
+`labels`). Cover the happy path, the error path and the new behavior.
 
 ### Speed change to a stage (differential run against master)
 
@@ -400,18 +388,6 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
 `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end top-level `end` with
 `end\n\n`.
 
-## Error handling
-
-- A failing test: read the subtest name (a spec case prints its program) and
-  the code the CLI gave.
-- A CLI exit 1 with `file:line:column error[CODE]` and a caret excerpt on
-  stderr is a stage diagnostic, not a crash.
-- `*-INTERNAL` or a `RUNTIME-` error with a trace in `compiler/` means a stage
-  assumed something false or indexed out of range. Find the token or index and
-  turn it into a diagnostic.
-- A stage returns a diagnostic it should not: check the first-error rule and
-  that the caller passes the failure on.
-
 ## Comments and style
 
 Style and comments follow `.agents/skills/agentica-code-guidelines/`. Each
@@ -425,18 +401,13 @@ check it.
 ## The command line in Agentica
 
 `Cli.run(settings, words, hand_off) -> Int` reads the options
-(`cli_options.agc`, first error wins; `--version` and `-h` answer at once) and
-runs `check`, `compile`, `help`, `test` or a source file through `pipeline.agc`,
-which the BDD driver shares. A command never prints: it returns a `Reply` (code,
-stdout, stderr) and `cli.agc` writes it. Diagnostics print as plain text
-(`diagnostic_plain.agc`), `--ai` (`diagnostic_ai.agc`) or JSON
-(`diagnostic_json.agc`). `hand_off` calls `FrontEnd.hand_off`
-(`front_end_cli.agc`), so an ordinary run stays in the binary's process with no
+(`cli_options.agc`, first error wins) and runs a command through
+`pipeline.agc`, which the BDD driver shares. A command never prints: it returns
+a `Reply` (code, stdout, stderr) and `cli.agc` writes it. `hand_off` calls
+`FrontEnd.hand_off`, so an ordinary run stays in the binary's process with no
 child or temporary file. `agentica run` is answered in C (`vm/agentica.c`) when
 it is the first word; `cli.agc` answers a later `run` with a usage error.
-`test` runs the BDD driver in the same process and starts the runner as
-`settings.self_path run ...`; without `--self` it exits 2. `cli_text.agc` keeps
-the help texts as data.
+`cli_text.agc` keeps the help texts as data. Forms: `references/stages.md`.
 
 To run a `compiler/` change without the build chain:
 `dist/agentica run -- build/stage/stage2.agcb --version V --stdlib

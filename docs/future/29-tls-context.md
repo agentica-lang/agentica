@@ -1,30 +1,27 @@
 ## 29. TLS contexts
 
 **Status:** planned (roadmap phase 19), decided by the user on 2026-10-12. It is
-a new feature, so it comes after 7i deletes the evaluator (order 7.2) and runs
-on the C VM only. It is part of order step 7.4: after phase 17 (`Task.map` and
-channels, §27) and right after the HTTP streaming items 20e to 20g ([section
-30.11](30-hybrid-http.md#3011-streaming-on-channels)), and before default
-parameter values (15a, order row 7.5a, deferred until after the bootstrap).
-`with` (15c) was built early, on 2026-10-15, so `TLS.client_options().with(...)`
-is available. The API needs neither: every call has a fixed argument list, and
-options live in records (29.1). It changes `TLS` and `HTTP` together in one
-breaking step, with one CHANGELOG entry and one migration (29.5).
+part of order step 7.4: after phase 17 (`Task.map` and channels, §27) and right
+after the HTTP streaming items 20e to 20g ([section
+30.11](30-hybrid-http.md#3011-streaming-on-channels)). `with` (15c) is built, so
+`TLS.client_options().with(...)` is available; the API needs neither it nor
+default parameter values: every call has a fixed argument list, and options live
+in records (29.1). It changes `TLS` and `HTTP` together in one breaking step,
+with one CHANGELOG entry and one migration (29.5).
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS
 options have one home instead of new arguments on every call.
 
-**What exists when this phase starts** (the TLS catch-up PR, roadmap 7h, keeps
-today's API; phase 20 keeps it for HTTP): every `TLS` and HTTPS call names its
-trust or its key pair by file path (the "Before" forms of 29.5;
+**What exists today:** every `TLS` and HTTPS call names its trust or its key
+pair by file path (the "Before" forms of 29.5;
 [the grammar](../grammar/06d-io-and-network.md)). So the runtime either loads
 and parses the files on every call (a system CA bundle is about 150
 certificates) or keeps a hidden cache keyed by path, which goes stale when a
-file changes. Phase 20's `HttpClient` builds one OpenSSL `SSL_CTX` per client
+file changes. An `HttpClient` builds one OpenSSL `SSL_CTX` per client
 (`docs/vm/10-io-http.md` §10.7), which helps HTTP clients only. And every new
 option (a minimum version, ALPN, a client certificate) would be one more
-argument on each of these calls.
+argument on each call.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing, values stay immutable, types stay static. Security
@@ -212,10 +209,6 @@ Phase 19a changes, in one PR:
 - The PR migrates every program in the repository that uses TLS or HTTPS (the
   golden fixtures, the TLS and HTTP tests, the examples, the runnable blocks of
   the site network page and the programming skill's `references/network.md`).
-- **One CHANGELOG entry** under "Changed": TLS settings live in a `TlsContext`,
-  built once and shared by every connection; the calls above take a context
-  instead of file paths; `HttpClientOptions` has no `ca_file` field any more;
-  `TLS.upgrade` starts TLS on an open TCP socket (STARTTLS).
 
 ### 29.6 VM design
 
@@ -232,34 +225,19 @@ Phase 19a changes, in one PR:
   (`SSL_CTX_up_ref`, 29.4), dropped in `close_client` and at the end of the run.
 - **How a context is freed: a GC finalizer, as a stated exception.** Today's
   rule is "no GC finalizers for OS resources; closing is explicit" (§5.3). A
-  context is not an OS resource: it holds no descriptor (its files are read
-  whole when it is built) and has no `close` (29.1), so the rule's reason does
-  not apply, but freeing it only at the end of the run would leak in a
-  long-running server: a server that rotates its certificate every day builds a
-  new context each time, and a program that wrongly builds a context per request
-  would grow without bound. The other choice, keeping contexts in the resource
-  registry until the end of the run with a cap on live contexts, was not taken:
-  the cap would turn a slow program into a failing one in exactly the
-  long-running servers that need contexts most. So:
-  - The context's GC object gets a Boehm finalizer
-    (`GC_register_finalizer_no_order`) that calls `SSL_CTX_free` and frees the
-    native record.
-  - The VM sets `GC_set_finalize_on_demand(1)`, so Boehm never runs a finalizer
-    inside an allocation; the scheduler calls `GC_invoke_finalizers()` between
-    turns, at the same safe point where it polls the loop (§10.2.1), so OpenSSL
-    is never entered from inside the GC or in the middle of a builtin. With N
-    schedulers (§10.2.3) any scheduler may run them; `SSL_CTX_free` is
-    thread-safe.
-  - Native records are also linked in a `malloc`'d list (no GC pointers), so the
-    in-process harnesses free what is left (`agc_io_close`), and ASan's leak
-    check stays clean; the VM's own end of the run ends with `_exit` (§14.4) and
-    frees nothing one by one. The finalizer unlinks its record from that list
-    before it frees it; with N schedulers (§10.2.3) the list has a small lock,
-    taken by creation, the finalizer and `agc_io_close`. Under `AGC_NO_GC`
-    nothing is collected and `agc_io_close` frees everything.
-  - `docs/vm/05-values-execution-builtins.md` §5.3 records the exception: a
-    `TlsContext` holds only memory and is freed by a finalizer run on demand
-    between turns.
+  context holds no descriptor (its files are read whole when it is built) and
+  has no `close` (29.1), so the rule's reason does not apply, and freeing it
+  only at the end of the run would leak in a long-running server that rotates
+  its certificate. Keeping contexts in the resource registry with a cap on live
+  contexts was not taken: the cap would turn a slow program into a failing one
+  in exactly the servers that need contexts most. So the context's GC object
+  gets a Boehm finalizer that calls `SSL_CTX_free` and frees the native record;
+  the VM sets `GC_set_finalize_on_demand(1)` and the scheduler calls
+  `GC_invoke_finalizers()` between turns, so OpenSSL is never entered from
+  inside the GC or in the middle of a builtin. Native records are also linked in
+  a `malloc`'d list (a small lock with N schedulers) so the in-process harnesses
+  free what is left. `docs/vm/05-values-execution-builtins.md` §5.3 records the
+  exception.
 - **Fuzzing.** Under `no_files` (the fuzzer), `TLS.client_context` and
   `TLS.server_context` end the run with `RUNTIME-INTERNAL`, as `TCP.connect`
   does, so a mutant never reads a file.
@@ -318,25 +296,19 @@ flag, an "optional" verify mode, a hostname-check switch, cipher strings, curve
 lists, `openssl.cnf` settings, versions below TLS 1.2, and setters on an
 existing context.
 
-### 29.8 Tests and docs
+### 29.8 Tests
 
 VM only: golden fixtures with the test CA of `tests/fixtures/tls/`, independent
 Python `ssl` peers on port 0 (the hostname and CA cases of §10.3 and STARTTLS
-both ways), and checker tests for the hints of 29.5. Two behaviors need their
-own test: a `ca_file` replaced on disk after the context is built does not
-change that context, and a context dropped while a socket made from it is open
-stays valid until the socket closes (its finalizer runs only from
-`GC_invoke_finalizers`, under the GC stress build). The programming skill
-teaches: build one context at start-up and share it.
+both ways). Two behaviors need their own test: a `ca_file` replaced on disk
+after the context is built does not change that context, and a context dropped
+while a socket made from it is open stays valid until the socket closes.
 
 ### 29.9 Implementation (row 7.4)
 
-- One PR per item, each with its own tests and docs. 19a `TlsContext`
-  (breaking, one step: contexts for `TLS` and `HTTP`, reserved names,
-  migration); 19b `TLS.upgrade`; 19c ALPN.
-- Not in this phase: the other later options of §29.7.
-- Done when: a program builds one client context and one server context
-  at start-up and shares them; `TLS`, `HTTP.client` and
-  `HTTP.listen_tls` take only contexts; STARTTLS works against Python on
-  both sides; no repository program uses a TLS file path outside the
-  options records.
+One PR per item: 19a `TlsContext` (breaking, one step: contexts for `TLS` and
+`HTTP`, reserved names, migration); 19b `TLS.upgrade`; 19c ALPN. The other later
+options of §29.7 are not in this phase. Done when: a program builds one client
+context and one server context at start-up and shares them; `TLS`,
+`HTTP.client` and `HTTP.listen_tls` take only contexts; STARTTLS works against
+Python on both sides.

@@ -24,15 +24,11 @@ memory or speed ever asks for it.
 - Memory is managed by the Boehm GC, which is conservative: it treats any word
   that looks like a pointer into the heap as one. Pointers are never tagged
   (`docs/vm/05-values-execution-builtins.md` §5.3).
-- The GC setup: the collector is compiled with
-  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`GC_COMPILE` in
-  mk/vm.mk), and `vm/value.c` only calls `GC_INIT` and sets the OOM, abort and
-  warning hooks. So a pointer anywhere inside an object keeps it alive, from the
-  heap as well as from the stack. bdwgc sets `ALIGNMENT` to 8 on x86-64
-  (`include/private/gcconfig.h`): the collector reads heap objects, the stack
-  and the roots only at 8-byte aligned offsets. The VM keeps both: it calls
-  `GC_set_all_interior_pointers(1)` so the system and vendored libgc match, and
-  it calls no `GC_register_displacement`.
+- The collector is compiled with `-DALL_INTERIOR_POINTERS` (`GC_COMPILE` in
+  mk/vm.mk), so a pointer anywhere inside an object keeps it alive. bdwgc reads
+  heap objects, the stack and the roots only at 8-byte aligned offsets
+  (`ALIGNMENT` is 8 on x86-64); the VM calls `GC_set_all_interior_pointers(1)`
+  and no `GC_register_displacement`.
 
 ### 38.2 Packed struct (12 or 9 bytes): rejected
 

@@ -103,58 +103,13 @@ its help lists each candidate as `FILE:LINE:COL`, and it exits 2. A `LEX-`,
 that is on no expression. Exit 1 means fix the program, exit 2 fix the question.
 A usage error is a diagnostic too, so with `--json` it is JSON as well.
 
-Names and forms from other languages get a `help` that names the Agentica form.
-A method hint is given only when the suggested method exists for the receiver's
-type:
-
-- **Written:** `len(x)`, `x.len`
-  - **Help:** `.length` or `.size`, which both work on a String, List, Map,
-    Set and Range
-
-- **Written:** `str(x)`, `x.to_string()`
-  - **Help:** `x.to_s` or `"#{x}"`
-
-- **Written:** `inspect(x)`
-  - **Help:** `x.inspect`, or `IO.inspect(x)` to print it
-
-- **Written:** `println(x)`
-  - **Help:** `puts(x)`
-
-- **Written:** `input()`, `read_line()`
-  - **Help:** `gets` (a Result) or `gets!`
-
-- **Written:** `range(n)`
-  - **Help:** a range: `for i in 0...n`, or `n.times do \|i\| ... end`
-
-- **Written:** `int(x)`, `float(n)`, `Int.to_float(n)`
-  - **Help:** `x.to_i`, `n.to_f`
-
-- **Written:** `x.lower`, `x.upper`, `x.startswith(...)`
-  - **Help:** `downcase`, `upcase`, `start_with?`
-
-- **Written:** `x.nil?`
-  - **Help:** `x == nil`
-
-- **Written:** `xs.reject`
-  - **Help:** `xs.select do \|x\| !cond end`
-
-- **Written:** `(1..5).map`, `.select`, `.find`, `.sum`
-  - **Help:** a range has no list methods: `(1..5).to_a.map do \|x\| ... end`
-
-- **Written:** `None`, `null`
-  - **Help:** `nil`
-
-- **Written:** `elif`, `elseif`, `else if`
-  - **Help:** `elsif`
-
-- **Written:** `let x = 5`, `var x = 5`, `const x = 5`
-  - **Help:** `x = 5` or `x: Int = 5`
-
-- **Written:** `match x`, `when 1` in a `case`
-  - **Help:** `case x`, arms as `1 -> ...`
-
-- **Written:** `if x then`
-  - **Help:** a newline after the condition
+Names and forms from other languages get a `help` that names the Agentica form
+(`len(x)`, `elif`, `let x = 5`, `Mutex.new`, `Agent.start_link`, `Thread.new`, a
+Ruby String method Agentica lacks): those without a code of their own are in the
+tables of `compiler/check/check_tables.agc` and the parser, and tests assert the
+code, never the help text. A method hint is given only when the suggested method
+exists for the receiver's type. The diagnostics below carry a code whose trigger
+is a rule:
 
 - **Written:** `x = 1;` (`LEX-UNEXPECTED-CHAR`)
   - **Help:** no semicolons: end the statement with a newline
@@ -318,25 +273,6 @@ type:
   - **Help:** a call takes from the number of parameters without a default to
     the number of all parameters (`1 to 2 arguments`)
 
-- **Written:** `s.chars`, `s.each_char`
-  - **Help:** `s.split("")`, and `s.at(i)` for one character
-
-- **Written:** `s.matches?(...)`, `s.match?(...)`, `s.scan(...)`
-  - **Help:** no regular expressions: `include?`, `start_with?`, `end_with?`,
-    `index_of`
-
-- **Written:** `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`,
-  `s.ord`, `n.chr`, `s.empty?`, `s.isdigit`
-  - **Help:** `s.replace`, `s.slice(start, length)` (length is end - start),
-    `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?`
-
-- **Written:** `s.chomp`, `s.chars` or another String method on a `Result` (for
-  example from `IO.gets`)
-  - **Help:** unwrap first with `r.unwrap!`, or read with `IO.gets!`
-
-- **Written:** `s.error?` on a String
-  - **Help:** only a Result has `ok?` and `message`
-
 - **Written:** `s[0]` on a String (`CHECK-NOT-INDEXABLE`)
   - **Help:** `s.at(i)`, `s.slice(start, length)`, or `s.split("")`
 
@@ -365,18 +301,6 @@ type:
   `{` (`LEX-UNCLOSED-DELIMITER`)
   - **Help:** blocks end with `end`, not `}`
 
-- **Written:** `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call
-  - **Help:** a block after a call (`xs.map do \|x\| ... end`) or `&name`
-
-- **Written:** `Hash.new`, `Map.new`, `Array.new`, `List.new`
-  - **Help:** a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []`
-
-- **Written:** `Set.empty`, `s.contains?(x)`, `s.member?(x)`
-  - **Help:** `Set.new([])` with an expected type, `s.include?(x)`
-
-- **Written:** `continue`
-  - **Help:** `next`
-
 - **Written:** `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g`
   (`PARSE-PIPE-TARGET`)
   - **Help:** a call with parentheses on the right; wrap the expression in
@@ -384,34 +308,6 @@ type:
 
 - **Written:** `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
   - **Help:** the method form: `x.strip`
-
-- **Written:** `break if x`, `next if x`
-  - **Help:** `if x`, then `break` on its own line, then `end`
-
-- **Written:** `loop do ... end`
-  - **Help:** `while true ... end`, or a `while` condition
-
-- **Written:** `puts(x) if ok`, `if x do`
-  - **Help:** `if ok ... end`; an `if` condition ends with a newline
-
-- **Written:** `Result.Some(x)` and other unknown Result variants
-  - **Help:** `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)`
-
-- **Written:** `Color.Red` with no `Color` enum or import
-  - **Help:** `enum Color`, or `import Color from "path"`
-
-- **Written:** a `Result[T]` where `T` is expected (`n: Int = s.to_i`)
-  - **Help:** a `!` form (`s.to_i!`), `Result.unwrap!`, or `try`
-
-- **Written:** `HttpWire.service(...)` or another `HttpWire` call outside
-  `std/http`
-  - **Help:** `import HTTP from "std/http"`, then `HTTP.get`, `HTTP.post` or
-    `HTTP.request`
-
-- **Written:** `LogRegistry.level()` or another `LogRegistry` call outside
-  `std/logger`
-  - **Help:** `import Logger from "std/logger"`, then `Logger.info`,
-    `Logger.attach` and the other `Logger` functions
 
 - **Written:** `import` followed by a string, the path-first form of earlier
   versions (`PARSE-UNEXPECTED-TOKEN`)
@@ -445,9 +341,6 @@ type:
   - **Help:** `Logger.err(...)`; `error` is a reserved name, so the function for
     the error level is `err`
 
-- **Written:** `HTTP.get(...)` or another `HTTP.` call without the import
-  - **Help:** `import HTTP from "std/http"`
-
 - **Written:** `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`,
   `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`)
   - **Help:** a handler that returns its whole response: `return
@@ -479,44 +372,10 @@ type:
   - **Help:** construct the struct named by the alias, or use a value of the
     aliased builtin type
 
-- **Written:** `Task.async_stream(...)`, `Parallel.map(...)`
-  - **Help:** `Task.map(items, limit, timeout_ms) do |x| ... end`, where the
-    block gives a `Result`
-
-- **Written:** `Task.async(...)`
-  - **Help:** `Task.spawn(&f, arg)`, then `Task.await(task)` for its result
-
-- **Written:** `Thread.new(...)`
-  - **Help:** `Task.spawn do ... end` (or `Task.spawn(&f, arg)`), then
-    `Task.await(task)` for its result
-
-- **Written:** `Enumerator.new(...)`, `Fiber.new(...)`
-  - **Help:** a producer task that sends into a channel: `Task.spawn(&produce,
-    ch)`, then `ch.recv(timeout_ms)`
-
-- **Written:** a step only `Lazy` has on a list or a range, such as
-  `xs.each_cons(2)`
-  - **Help:** list and range methods are eager; call `.lazy` first:
-    `xs.lazy.each_cons(...)`
-
-- **Written:** a `List` method on a `Lazy`, such as `lz.size`
-  - **Help:** a `Lazy` runs only in a terminal; collect it first with `try
-    lz.to_a` (or `lz.first(n)`)
-
 - **Written:** `File.foreach(path, n, ms).each do |line| ... end`, with no step
   between the source and `.each`, written as one chain (`CHECK-LAZY-NO-STEP`)
   - **Help:** `File.each_line(path, buffer_bytes, timeout_ms) do |line| ...
     end`; keep `File.foreach` for a chain with a step
-
-- **Written:** `Agent.start_link(...)` and other `Agent.` calls
-  - **Help:** return values from tasks and combine them with `reduce`, or keep
-    the state in one task that receives on a `Channel`
-
-- **Written:** `Mutex.new`
-  - **Help:** one owner task that receives requests on a `Channel`
-
-- **Written:** `SizedQueue.new(n)`
-  - **Help:** `Channel.new(n)` with an annotated variable
 
 - **Written:** `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`)
   - **Help:** annotate it: `ch: Channel[Int] = Channel.new(8)`

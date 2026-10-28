@@ -1,9 +1,9 @@
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks,
-tokens, password storage). It needs `Bytes` (§12.5) and uses the same OpenSSL as
-TLS: the vendored 3.5 LTS, linked statically, in the release, and the system
-OpenSSL 3 (3.0 or newer) in a default source build
+**Status:** started (issue #757, one PR per item; see Landed and Plan). It needs
+`Bytes` (§12.5) to leave `List[Int]` and uses the same OpenSSL as TLS: the
+vendored 3.5 LTS, linked statically, in the release, and the system OpenSSL 3
+(3.0 or newer) in a default source build
 (`docs/vm/10-dependencies-and-platforms.md` 10.0). So 3.5-only features
 (Argon2id, `OSSL_set_max_threads`) are not always there: when this work lands,
 either raise the minimum in `OSSL_MIN` of mk/vm.mk and the `#error` in

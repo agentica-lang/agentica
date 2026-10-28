@@ -21,7 +21,7 @@ ok([1, 9, 25])
 ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 ```
 
-Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running; a terminal over a file or a channel parks while it waits, and a cancel reaches it there.
+Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. Other tasks keep running between items.
 
 A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
 
@@ -54,7 +54,7 @@ ok(["a", "aa", "aaa"])
 
 ### File.foreach
 
-The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and is closed before the terminal returns, whatever ended it: the end of the file, a `take` or `find` that had enough, an error from the block, a failed `try`. A crash or cancel of the task closes it when the task ends. After a read timeout the handle is released at once, and the OS descriptor closes when the read that timed out ends.
+The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and is closed before the terminal returns, whatever ended it (the end of the file, a `take` or `find` that had enough, an error, a failed `try`).
 
 A read error (invalid UTF-8, a line over the buffer), a missing file or a bad timeout ends the terminal with that error. `File.foreach(...).each do ... end` with no step in between, written as one chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line` for that. A buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
 
@@ -264,7 +264,7 @@ error("not found")
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled, so a failed open reads nothing, and it is flushed and closed before the terminal returns, whatever ended it: the end of the items, a failed `try` or a failed write. A crash or cancel of the task closes it when the task ends. What was written before an error stays in the file. Lines are buffered and written 64 KiB at a time; `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
+Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled and is flushed and closed before the terminal returns, whatever ended it. What was written before an error stays in the file. `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
 
 ```agentica {mode="check"}
 def amount(line: String) -> Result[Int]

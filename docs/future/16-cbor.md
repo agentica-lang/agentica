@@ -321,19 +321,13 @@ the data.
   on the VM. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of
   argument.
 - **Tests:** the RFC 8949 Appendix A vectors that fit the mapping, as fixed
-  bytes in `tests/fixtures/` (they come from the RFC, not from our encoder, so
-  they are the independent counterpart); round trips (`decode(encode(v))` gives
-  `v`; `encode(decode(b))` gives `b` for canonical `b`, the canonical bytes for
-  reordered or extra struct keys); the depth boundary (an enum nested 10,000
-  levels round trips, one more level is `$: depth limit exceeded`); the item
-  cap boundary (`Wrap(items: xs)` with 3,999,998 elements round trips, with
-  3,999,999 it is `$: too many items`, on encode and on decode with the input
-  built by hand); encode errors with their paths; and hostile input (truncation
-  at every byte, lengths larger than the input, depth one above the limit,
-  4,000,001 one-byte items also inside an ignored struct value, duplicate map
-  and struct keys also when the struct does not have the key, tags, indefinite
-  lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing
-  bytes). The VM loader fuzzer (`make vm-libfuzz`) gets a decode target too.
+  bytes (independent of our encoder); round trips in both directions; the depth
+  and item-cap boundaries (one more level is `$: depth limit exceeded`, one more
+  item is `$: too many items`, on encode and on decode); encode errors with
+  their paths; and hostile input (truncation at every byte, lengths larger than
+  the input, duplicate keys, tags, indefinite lengths, non-shortest heads,
+  invalid UTF-8, Ints outside int64, trailing bytes). The VM loader fuzzer gets
+  a decode target too.
 - **Framing:** decode rejects trailing bytes, so a stream of messages needs
   framing. A message can be up to 64 MiB, but `Process.send_bytes` and
   `TCP.send_bytes` take at most 1 MiB per call, and `Process.read_bytes` and

@@ -35,22 +35,13 @@ hand. `agentica check` enforces the width, and `fmt` does not.
   has a pattern and a body. Map entries (`MapEntry`), block parameters
   (`BlockParam`), fields and variants have nodes. The module doc is not a node
   (§32.4). Every node has a span.
-- **Repo style, measured** over `compiler/`, `stdlib/` and `examples/` (the
-  counts come from a script; re-run it before relying on them):
-  - no tabs, trailing spaces, CRLF lines or `;`. Block bodies are indented two
-    spaces. The only odd indents are six aligned continuation lines in
-    `stdlib/test/`, which a hanging-indent printer does not produce;
-  - multi-line `def` headers are closed by `) -> Type` on its own line, with
-    one parameter per line (a few pack several) and a trailing comma after the
-    last parameter;
-  - lines end in `and` or `or` when a condition is broken, and in ` +` for the
-    pieces of a split string (PR #284);
-  - method chains are broken with a leading dot inside parentheses, multi-line
-    `if (` conditions exist, and map and struct literals have one entry per
-    line and a trailing comma;
-  - no trailing comments after code, and no heredocs outside
-    `examples/heredoc.agc`. Two blank lines in a row occur in one place,
-    `stdlib/test/runner.agc`.
+- **Repo style** (`compiler/`, `stdlib/`, `examples/`): no tabs, trailing
+  spaces, CRLF lines or `;`; two-space block indents; multi-line `def` headers
+  closed by `) -> Type` on its own line with one parameter per line and a
+  trailing comma; broken conditions end in `and` or `or`; split strings end in
+  ` +`; method chains break with a leading dot inside parentheses; map and
+  struct literals have one entry per line and a trailing comma; no trailing
+  comments after code.
 - **Generated files** are ordinary source: `compiler/catalog/builtins_data.agc`,
   `compiler/check/check_tables.agc` and `compiler/syntax/unicode_table.agc` are
   edited by hand (AGENTS.md).
@@ -369,22 +360,18 @@ The checks that decide the design (the case list is decided in the PRs):
 
 - **The normal form.** `agentica fmt --tree FILE` prints the tree with ids,
   spans and grouping parentheses removed, a `+` chain of string pieces
-  flattened into one list of parts, and one line per comment with its words.
-  The **round trip** compares the normal form of the input with that of the
-  output on every golden, so folding string pieces and dropping grouping
-  parentheses do not count as changes, and a printer that drops a parenthesis,
-  changes an operator or splits a word is caught.
+  flattened, and one line per comment with its words. The **round trip**
+  compares the normal form of the input with that of the output on every golden,
+  so a printer that drops a parenthesis, changes an operator or splits a word is
+  caught.
 - **Goldens:** one case for each rule of 47.5 and each comment position of
-  47.4, plus CRLF input, a comment-only file, an interpolation with a `#` in
-  the text, unbreakable long strings and names, and heredocs.
+  47.4, plus CRLF input, a comment-only file, unbreakable long strings and
+  names, and heredocs.
 - **Idempotence:** `fmt(fmt(x)) == fmt(x)` on every golden (fast tier) and on
   every `.agc` file of the repo that parses (slow tier).
 - **Independent peer** (standard library only): no tabs, no trailing spaces, LF
   newlines, a final newline, and no line over the width except one word too long
   to break.
-- **Width in CI:** `agentica check` reports `CHECK-LINE-TOO-LONG` (47c). The
-  one-time reformat of `stdlib/` moves line numbers in the `std/` stack-trace
-  goldens.
 
 ### 47.8 Phases
 
