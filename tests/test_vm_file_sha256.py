@@ -68,7 +68,7 @@ def test_sha256_matches_hashlib(peer, tmp_path, size):
     check_matches_hashlib(peer, tmp_path, "input-%d.bin" % size, random.Random(size).randbytes(size))
 
 
-def test_sha256_matches_crypto_sha256_on_the_same_bytes(tmp_path):
+def test_sha256_matches_digest_sha256_on_the_same_bytes(tmp_path):
     data = random.Random(1234).randbytes(999)
     target = write_data(tmp_path, "same.bin", data)
     source = tmp_path / "same.agc"
@@ -79,7 +79,7 @@ def test_sha256_matches_crypto_sha256_on_the_same_bytes(tmp_path):
         '  handle = File.open(System.args()[0], "read", 30000).unwrap!\n'
         "  bytes = File.read_bytes(handle, 1048576, 30000).unwrap!\n"
         "  File.close(handle, 30000)\n"
-        "  puts(from_fs == hex(Crypto.sha256(bytes)))\n"
+        "  puts(from_fs == hex(Digest.sha256(bytes)))\n"
         "end\n",
         encoding="utf-8",
     )

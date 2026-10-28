@@ -513,7 +513,7 @@ import Sqlite from "pkg/sqlite/db"
   does not change it).
   Their paths are relative to it, written with `/`, in bytewise order; for each
   file, its path, a zero byte, its size in decimal, a zero byte and its bytes.
-  The hash is `sha256:` and the SHA-256 of that stream in hex (`Crypto.sha256`).
+  The hash is `sha256:` and the SHA-256 of that stream in hex (`Digest.sha256`).
   Hidden folders (any depth), `agc_libs/` at the root and files that are not
   `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
   compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left

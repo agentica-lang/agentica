@@ -147,13 +147,13 @@ def test_tasks_on_four_schedulers_give_the_exact_sum(tmp_path, repeats):
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % expected_fan_out(), "")
 
 
-# Crypto.sha256 runs without the shared lock (vm/crypto.c), so eight tasks hash 64 KiB each at once.
+# Digest.sha256 runs without the shared lock (vm/crypto.c), so eight tasks hash 64 KiB each at once.
 SHA256_TASKS = """\
 def digest(seed: Int) -> Result[List[Int]]
   data = (0..65535).to_a.map do |i|
     (i * 31 + seed * 7 + i / 256) % 256
   end
-  return ok(Crypto.sha256(data))
+  return ok(Digest.sha256(data))
 end
 
 def main() -> Void

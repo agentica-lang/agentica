@@ -284,14 +284,18 @@ Expected types flow into these operations for empty collections and Results.
   replacement characters. `String.to_bytes(s)` is its inverse: the UTF-8 bytes
   of `s` as a `List[Int]` of 0 to 255 (`[]` for `""`); it cannot fail, so
   `String.from_bytes(String.to_bytes(s))` is `ok(s)`.
-- `Crypto.sha256(data)` gives the SHA-256 digest of the bytes in `data` as a
-  `List[Int]` of 32 integers 0 to 255 (`Crypto.sha256([])` starts `[227, 176,
-  196, ...]`, hex `e3b0c442...`). An item outside 0 to 255 is
-  `RUNTIME-INVALID-NUMBER` at the argument. It is built on OpenSSL, takes time
-  in proportion to the list and has no effect label. `Crypto` is a reserved
-  type name. It is the first part of the `Crypto` module of
-  `docs/future/20-crypto.md` §20; until `Bytes` exists, bytes are a
-  `List[Int]`.
+- `Digest.md5(data)`, `Digest.sha1(data)`, `Digest.sha256(data)` and
+  `Digest.sha512(data)` give the digest of the bytes in `data` as a
+  `List[Int]` of 16, 20, 32 or 64 integers 0 to 255 (`Digest.sha256([])`
+  starts `[227, 176, 196, ...]`), as Ruby's `Digest::SHA256.digest` does. Each
+  has a `_hexdigest` form (`Digest.sha256_hexdigest(data)`) that gives the
+  same digest as lowercase hex, as Ruby's `hexdigest` does. MD5 and SHA-1 are
+  for formats that need them (ETags, git, old APIs), not for security. An item
+  outside 0 to 255 is `RUNTIME-INVALID-NUMBER` at the argument. They are built
+  on OpenSSL, take time in proportion to the list and have no effect label. A
+  system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then stops
+  with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name; until `Bytes`
+  exists, bytes are a `List[Int]`.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
   same in lines of 60 characters that each end in a newline (`""` for `[]`),

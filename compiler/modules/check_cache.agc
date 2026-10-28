@@ -87,14 +87,14 @@ end
 
 ## The SHA-256 of `text` as 64 lowercase hex digits.
 export def text_digest(text: String) -> String
-  return hex(Crypto.sha256(String.to_bytes(text)))
+  return hex(Digest.sha256(String.to_bytes(text)))
 end
 
 ## The tree digest of a file: `shape` (what describes it apart from its text), the digest of its text and the tree
 ## digests of the files it imports, in the order of its import lines.
 export def tree_digest(shape: String, digest: String, imported: List[String]) -> String
   pieces = [FORMAT, shape, digest].concat(imported)
-  return hex(Crypto.sha256(String.to_bytes(pieces.map do |text: String| piece(text) end.join(""))))
+  return hex(Digest.sha256(String.to_bytes(pieces.map do |text: String| piece(text) end.join(""))))
 end
 
 ## Every piece is written with its length, so two different lists never give one text.

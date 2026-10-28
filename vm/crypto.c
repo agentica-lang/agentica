@@ -1,10 +1,10 @@
 /*
- * The Crypto builtins (agc_crypto_builtins): hashes of byte lists, the first
- * part of the Crypto module of docs/future/20-crypto.md, and the Base64 and
- * Digest.hexencode/hexdecode text forms of bytes, in plain C. The hash itself
- * is the digest adapter (digest.h). Service layer. Design:
- * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
- * Ruby's Base64 module.
+ * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
+ * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex), the first part of
+ * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
+ * forms of bytes, in plain C. The hash itself is the digest adapter
+ * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
+ * Base64 and hex follow RFC 4648 and Ruby's Base64 module.
  */
 #include "services.h"
 #include "digest.h"
@@ -20,26 +20,20 @@ static const char b64_standard[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 static const char b64_urlsafe[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 static const char hex_digits[] = "0123456789abcdef";
 
-/* Crypto.sha256(data): the 32 bytes of the digest. Each item must be 0..255, else RUNTIME-INVALID-NUMBER at the
-   argument. The work grows with the list, so the row charges AGC_COST_SIZE: one turn-cost unit per item
-   (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task yields
-   after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
-static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
-  const agc_list *data = agc_as_list(vm, args[0]);
-  size_t n = agc_list_len(data);
-  /* A GC atomic block (bytes only); the list is read through the cursor, never by its layout. */
-  const uint8_t *bytes = agc_byte_list(vm, data, n);
-  if (!bytes) agc_fail(vm, "RUNTIME-INVALID-NUMBER", "Crypto.sha256 needs bytes between 0 and 255", span + 1);
-  unsigned char digest[AGC_SHA256_BYTES];
-  if (!agc_digest_sha256(bytes, n, digest)) agc_fail(vm, "RUNTIME-INTERNAL", "SHA-256 is not available", span);
-  agc_list_builder out;
-  agc_list_builder_sized(&out, AGC_SHA256_BYTES);
-  for (size_t k = 0; k < AGC_SHA256_BYTES; k++) agc_list_builder_push(&out, agc_int(digest[k]));
-  return agc_list_value(agc_list_builder_finish(&out));
-}
+/* The messages of the Digest hashes, by agc_digest_kind: a bad item (RUNTIME-INVALID-NUMBER) and a failed hash. */
+static const struct {
+  const char *bad_byte;
+  const char *missing;
+} digest_names[] = {
+  [AGC_DIGEST_MD5] = {"Digest.md5 needs bytes between 0 and 255", "MD5 is not available"},
+  [AGC_DIGEST_SHA1] = {"Digest.sha1 needs bytes between 0 and 255", "SHA-1 is not available"},
+  [AGC_DIGEST_SHA256] = {"Digest.sha256 needs bytes between 0 and 255", "SHA-256 is not available"},
+  [AGC_DIGEST_SHA512] = {"Digest.sha512 needs bytes between 0 and 255", "SHA-512 is not available"},
+};
 
-/* The bytes of the List[Int] argument, read as Crypto.sha256 reads them: an item outside 0..255 is
-   RUNTIME-INVALID-NUMBER at the argument (span + 1), a non-Int item fails through agc_as_int. */
+/* The bytes of the List[Int] argument: an item outside 0..255 is RUNTIME-INVALID-NUMBER at the argument (span + 1), a
+   non-Int item fails through agc_as_int. The block is GC atomic (bytes only); the list is read through the cursor,
+   never by its layout. */
 static const uint8_t *text_form_bytes(agc_vm *vm, agc_value arg, const char *message, uint32_t span, size_t *n) {
   const agc_list *data = agc_as_list(vm, arg);
   *n = agc_list_len(data);
@@ -233,15 +227,19 @@ static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t 
 
 /* Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them. Digest.hexdecode
    is Agentica's own inverse: Ruby has no named hex decoder. */
-static agc_value builtin_hexencode(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], "Digest.hexencode needs bytes between 0 and 255", span, &n);
+static agc_value hex_text(agc_vm *vm, const uint8_t *bytes, size_t n) {
   agc_string *text = ascii_string(vm, agc_size_mul(n, 2));
   for (size_t k = 0; k < n; k++) {
     text->data[2 * k] = hex_digits[bytes[k] >> 4];
     text->data[2 * k + 1] = hex_digits[bytes[k] & 15];
   }
   return agc_string_value(text);
+}
+
+static agc_value builtin_hexencode(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n;
+  const uint8_t *bytes = text_form_bytes(vm, args[0], "Digest.hexencode needs bytes between 0 and 255", span, &n);
+  return hex_text(vm, bytes, n);
 }
 
 static int hex_value(uint8_t c) {
@@ -268,8 +266,60 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, byte_list_value(vm, out, n));
 }
 
+/* Digest.<kind>(data) and its _hexdigest form: the digest of the bytes, as a byte list (Ruby's Digest::SHA256.digest)
+   or as lowercase hex (hexdigest). The work grows with the list, so the rows charge AGC_COST_SIZE: one turn-cost unit
+   per item (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task
+   yields after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
+static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+  size_t n;
+  const uint8_t *bytes = text_form_bytes(vm, args[0], digest_names[kind].bad_byte, span, &n);
+  unsigned char digest[AGC_DIGEST_MAX_BYTES];
+  size_t len = agc_digest(kind, bytes, n, digest);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", digest_names[kind].missing, span);
+  return hex ? hex_text(vm, digest, len) : byte_list_value(vm, digest, len);
+}
+
+static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, false);
+}
+
+static agc_value builtin_md5_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, true);
+}
+
+static agc_value builtin_sha1(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false);
+}
+
+static agc_value builtin_sha1_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true);
+}
+
+static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false);
+}
+
+static agc_value builtin_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true);
+}
+
+static agc_value builtin_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false);
+}
+
+static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
+}
+
 const agc_builtin agc_crypto_builtins[] = {
-  {"Crypto.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha1", 1, builtin_sha1, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha1_hexdigest", 1, builtin_sha1_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha256_hexdigest", 1, builtin_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha512", 1, builtin_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha512_hexdigest", 1, builtin_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.encode64", 1, builtin_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.strict_encode64", 1, builtin_strict_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.urlsafe_encode64", 2, builtin_urlsafe_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},

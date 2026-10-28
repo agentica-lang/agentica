@@ -5,9 +5,9 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name; the Zlib rows, the ATS rows and then the
-## Base64 and Digest rows are appended last, in contract order, so the
-## positions of the existing rows never shift.
+## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and
+## hex rows and then the digest rows are appended last, in contract order, so
+## the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -19,7 +19,7 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58))
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59)))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -380,16 +380,6 @@ ROWS_2: List[Model.Builtin] = [
         "Add a value in order; wait for room up to timeout_ms; error(\"channel: closed\") or error(\"channel: timed " +
         "out\"); VM only."
       ),
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Crypto.sha256",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
-      rule: Model.Rule.Plain,
-      implementation: "Crypto.sha256",
-      effects: [],
-      description: "Hash bytes (each 0..255) with SHA-256 and return the 32 bytes of the digest; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -5450,6 +5440,102 @@ ROWS_58: List[Model.Builtin] = [
       implementation: "Digest.hexencode",
       effects: [],
       description: "Encode bytes (each 0..255) as two lowercase hex digits each; VM only.",
+      alternatives: [],
+    ),
+  ]
+
+## The digest rows; appended last so the positions of the existing rows never shift.
+ROWS_59: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Digest.md5",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Digest.md5",
+      effects: [],
+      description: (
+        "Hash bytes (each 0..255) with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old " +
+        "APIs), not for security; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.md5_hexdigest",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Digest.md5_hexdigest",
+      effects: [],
+      description: (
+        "Hash bytes (each 0..255) with MD5 and return the digest as 32 lowercase hex digits; for compatibility " +
+        "(ETags, old APIs), not for security; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha1",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha1",
+      effects: [],
+      description: (
+        "Hash bytes (each 0..255) with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old " +
+        "APIs), not for security; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha1_hexdigest",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha1_hexdigest",
+      effects: [],
+      description: (
+        "Hash bytes (each 0..255) with SHA-1 and return the digest as 40 lowercase hex digits; for " +
+        "compatibility (git, old APIs), not for security; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha256",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha256",
+      effects: [],
+      description: "Hash bytes (each 0..255) with SHA-256 and return the 32 bytes of the digest; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha256_hexdigest",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha256_hexdigest",
+      effects: [],
+      description: "Hash bytes (each 0..255) with SHA-256 and return the digest as 64 lowercase hex digits; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha512",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha512",
+      effects: [],
+      description: "Hash bytes (each 0..255) with SHA-512 and return the 64 bytes of the digest; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.sha512_hexdigest",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Digest.sha512_hexdigest",
+      effects: [],
+      description: "Hash bytes (each 0..255) with SHA-512 and return the digest as 128 lowercase hex digits; VM only.",
       alternatives: [],
     ),
   ]

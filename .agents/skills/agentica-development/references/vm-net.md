@@ -122,9 +122,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     ERROR, `agc_tls_error`, `agc_tls_failure` with code, `errno` and a short
     detail); `vm/tls_openssl.c`, `vm/tls_trust.c` and `vm/tls_trust_posix.c` are
     the TLS files that include OpenSSL (the other is the digest adapter
-    `vm/digest_openssl.c`, for `Crypto.sha256`); two memory BIOs per session,
-    error-queue draining into our codes; built and used for sockets on every
-    system. Init, minimums, trust and verification rules:
+    `vm/digest_openssl.c`, for the `Digest` hashes); two memory BIOs per
+    session, error-queue draining into our codes; built and used for sockets
+    on every system. Init, minimums, trust and verification rules:
     `docs/vm/10-io-tls.md` §10.3
 
 - `vm/duplex.c`
