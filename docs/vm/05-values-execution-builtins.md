@@ -257,15 +257,21 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     `reduce` and the others). Its native frame calls a block, and the block's
     frames run in compiled code when the block has code.
 
-  Compiled code calls a direct or a leaf builtin itself, so neither takes an
-  exit unless it fails or ends the turn. It returns `{status, pc}` at its first
-  exit. `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
+  Compiled code calls a direct builtin itself, and a leaf builtin when a native
+  call is below it, so the native calls stay on the C stack. A leaf at native
+  depth 0 takes the `INTERPRET` exit, which unwinds nothing and costs less than
+  the catch of the call. The hottest leaves that cannot fail once their
+  arguments have the right tags (`size` of a List, `append`, `ok`, `ok?`,
+  `length` of a String; `plain_leaves` in `vm/jit/jit.c`) are called at any
+  depth, with no catch, after a check of the tags; a wrong tag takes the
+  `INTERPRET` exit. Compiled code returns `{status, pc}` at its first exit.
+  `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
   instruction at `pc`:
   - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
-    interpreter runs. `run_compiled` starts a block call, whose block then runs
-    in its code.
+    interpreter runs. `run_compiled` calls a leaf builtin itself. It starts a
+    block call, whose block then runs in its code.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
@@ -345,12 +351,12 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `memory pages=N` when the code memory fails.
   - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
     budget, `bytes` for the code memory.
-  - At the end: `exit op=OP count=N` (interpreter exits by opcode), `block
-    count=N`, `transition count=N` (the `CALL`, `CALL_VALUE`, `TAIL_CALL` and
-    `RETURN` exits; a native call, tail call or return is not one), `transition
-    op=tail-call count=N compiled=M` (the `TAIL_CALL` exits, and those whose
-    callee had code) and `turn count=N` (the turns that ran the jit copy of the
-    turn loop).
+  - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
+    count=N` (the leaf exits at native depth 0), `block count=N`, `transition
+    count=N` (the `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native
+    call, tail call or return is not one), `transition op=tail-call count=N
+    compiled=M` (the `TAIL_CALL` exits, and those whose callee had code) and
+    `turn count=N` (the turns that ran the jit copy of the turn loop).
 - **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
   that end inside compiled code, native and block calls, tail calls and the exit
   counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,

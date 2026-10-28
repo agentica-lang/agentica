@@ -30,6 +30,21 @@ struct agc_jit_batch {
   size_t count, slots;
 };
 
+/* The hottest leaf rows of the self-compile, which cannot fail once each argument has its tag here (AGC_T_VOID: any
+   tag): their only agc_fail is agc_as_*'s wrong tag, and running out of memory exits the process. Compiled code
+   checks the tags and calls them with no catch (agc_jit_call_plain). vm/tests/jit_test.c checks that each one is a
+   leaf row. */
+typedef struct {
+  const char *name;
+  uint32_t arity;
+  uint8_t tags[2];
+} plain_leaf;
+
+static const plain_leaf plain_leaves[] = {
+    {"List.size", 1, {AGC_T_LIST}},  {"List.append", 2, {AGC_T_LIST, AGC_T_VOID}}, {"ok", 1, {AGC_T_VOID}},
+    {"Result.ok?", 1, {AGC_T_RESULT}}, {"String.length", 1, {AGC_T_STRING}},
+};
+
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
    which the loader left in place. */
 static uint32_t plain_op(uint32_t op) {
@@ -113,10 +128,11 @@ static bool calls_function(const agc_program *p, agc_instr in) {
 /* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a call of a function of the
    program (calls_function). A block call (a row with a native kind, such as `filter`: its native frame and the
    block's frames) is started by run_compiled itself, which LOOPLESS says to count or not, as its exit unwinds the
-   native calls; a direct or leaf builtin is called by the code itself, which leaves only when the call ends the turn
-   or fails; a RETURN runs once per call. A CALL_VALUE does not leave: its callee is known only when it runs, and it is
-   called natively once it has code (a block or a small function, which `on` compiles at its CALL_VALUE exits), so it
-   is counted as a call of a function that may get code. */
+   native calls; a direct builtin is called by the code itself, which leaves only when the call ends the turn or
+   fails, and so is a leaf below a native call (at native depth 0 it leaves, but unwinds nothing); a RETURN runs once
+   per call. A CALL_VALUE does not leave: its callee is known only when it runs, and it is called natively once it has
+   code (a block or a small function, which `on` compiles at its CALL_VALUE exits), so it is counted as a call of a
+   function that may get code. */
 static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN || in.op == AGC_OP_CALL_VALUE) return false;
@@ -227,6 +243,13 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
   return work + site_count;
 }
 
+const uint8_t *agc_jit_plain_tags(const agc_builtin *b) {
+  if (!b->leaf) return NULL;
+  for (size_t k = 0; k < sizeof plain_leaves / sizeof plain_leaves[0]; k++)
+    if (b->arity == plain_leaves[k].arity && strcmp(b->name, plain_leaves[k].name) == 0) return plain_leaves[k].tags;
+  return NULL;
+}
+
 #if AGC_JIT_HOST
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL,
    CALL_VALUE and RETURN; other instructions leave for the interpreter. */
@@ -330,7 +353,10 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
       case AGC_OP_CALL_BUILTIN:
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
-        if (bx < p->builtin_count && (p->builtins[bx]->direct || p->builtins[bx]->leaf))
+        if (bx < p->builtin_count && agc_jit_plain_tags(p->builtins[bx]))
+          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc],
+                              agc_jit_plain_tags(p->builtins[bx]));
+        else if (bx < p->builtin_count && (p->builtins[bx]->direct || p->builtins[bx]->leaf))
           agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc], p->builtins[bx]->leaf);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
@@ -813,6 +839,16 @@ uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, ui
 #endif
   args[0] = result;
   return AGC_STATUS_OK;
+}
+
+void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+#if AGC_LEAF_CHECK
+  /* The checked builds catch it anyway, and stop when a row of plain_leaves failed or broke the leaf rule. */
+  if (agc_jit_call_leaf(vm, args, b, where) != AGC_STATUS_OK) direct_broken(b, "failed with the tags it needs");
+#else
+  (void)where;
+  args[0] = b->fn(vm, args, 0);
+#endif
 }
 
 uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {
