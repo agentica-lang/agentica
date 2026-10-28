@@ -1315,6 +1315,10 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
     FUSED_NEXT();                    \
   } while (0)
 
+/* What jit_one returns after its one instruction, when the turn goes on: not a value of agc_turn_result. */
+#define TURN_AGAIN ((agc_turn_result)(AGC_TURN_DONE + 1))
+agc_turn_result agc_interpret_one(agc_vm *vm);
+
 /* The turn loop keeps the state of the top frame in locals (its code, spans, register window and next pc) and
  * reloads them (`reload`) only after an instruction that can change which frame runs or move the frames or the
  * registers: CALL, CALL_VALUE, TAIL_CALL, RETURN, a failing TRY, and a builtin that starts a native frame. A
@@ -1322,8 +1326,11 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
  * file, on the task that runs, and a builtin never pushes a frame of the running task (Task.spawn pushes the
  * child's). frame->pc is still written before each instruction runs, as the stack trace of a failure, a park and a
  * yield read it. The plain copy, the profiling copy and the jit copy (--jit on or always; it enters compiled code at
- * each reload) are three copies of this loop, so the plain copy has no test of the JIT at all. */
-static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling, bool jitting) {
+ * each reload) are three copies of this loop, so the plain copy has no test of the JIT at all. A fourth copy, jit_one,
+ * runs the one instruction that compiled code left to the interpreter (COMPILED_ONE) and returns TURN_AGAIN after it,
+ * for the jit copy to enter the code again at the next pc: the jit copy itself tests nothing per instruction. */
+static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling, bool jitting,
+                                                                       bool one) {
   const agc_program *p = vm->rt->program;
   agc_task *t = vm->task;
   if (t->frame_count == 0) return AGC_TURN_DONE;
@@ -1340,25 +1347,27 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
   /* Only the profiling copy uses these; the plain copy drops them. */
   agc_profile *profile = profiling ? vm->profile : NULL;
   uint32_t before = AGC_OP_COUNT;
-  /* Only the jit copy uses it: the pc after an instruction that compiled code left to the interpreter, where the loop
-     enters the code again. An instruction that changes the frame reloads first, which clears it; one that jumps
-     elsewhere leaves it unmet until the loop comes by. */
-  uint32_t resume = UINT32_MAX;
+  /* Only jit_one uses it: true once its instruction has started. */
+  bool ran = false;
 reload:
+  /* jit_one's instruction changed the frame (a call, a return, a block call): the jit copy reloads. */
+  if (one && ran) return TURN_AGAIN;
   if (profiling) {
     profile->reloads++;
     before = AGC_OP_COUNT;
   }
   frame = &t->frames[t->frame_count - 1];
-  if (jitting) {
-    resume = UINT32_MAX;
-    if (agc_jit_may_run(vm->rt->jit, frame->function)) {
-      compiled_result ran = run_compiled(vm, vm->rt->jit, frame);
-      if (ran == COMPILED_YIELD) return AGC_TURN_YIELD;
-      if (ran == COMPILED_PARKED) return park_task(t);
-      if (ran == COMPILED_DONE) return AGC_TURN_DONE;
-      if (ran == COMPILED_RELOAD) goto reload;
-      if (ran == COMPILED_ONE) resume = frame->pc + 1;
+  if (jitting && agc_jit_may_run(vm->rt->jit, frame->function)) {
+    compiled_result out = run_compiled(vm, vm->rt->jit, frame);
+    if (out == COMPILED_YIELD) return AGC_TURN_YIELD;
+    if (out == COMPILED_PARKED) return park_task(t);
+    if (out == COMPILED_DONE) return AGC_TURN_DONE;
+    if (out == COMPILED_RELOAD) goto reload;
+    if (out == COMPILED_ONE) {
+      /* The instruction at frame->pc runs alone, and the code is entered again at the pc it leaves. */
+      agc_turn_result after = agc_interpret_one(vm);
+      if (after != TURN_AGAIN) return after;
+      goto reload;
     }
   }
   code = p->functions[frame->function].code;
@@ -1367,14 +1376,18 @@ reload:
   R = t->regs + base;
   pc = frame->pc;
   for (;;) {
-    /* A stale resume is harmless: reload rebuilds code, spans, base, R and
-       pc from the frame, so landing on this pc by another path just enters
-       the code at the frame's instruction. */
-    if (jitting && pc == resume) {
-      frame->pc = pc;
-      goto reload;
+    if (one) {
+      /* A jump wrote pc after frame->pc: the reload reads the frame. */
+      if (ran) {
+        frame->pc = pc;
+        return TURN_AGAIN;
+      }
+      ran = true;
     }
     agc_instr in = code[pc];
+    /* jit_one runs a fused pair as its first instruction alone, the instruction compiled code left. */
+    if (one && in.op >= AGC_OP_COUNT && in.op < AGC_FUSED_END)
+      in.op = in.op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
     if (profiling) {
       /* The profiling copy runs a fused STEP as a plain STEP, and its next instruction as one of its own, so the
          opcode and pair counts describe the program's bytecode, the same with or without fusing. */
@@ -1724,17 +1737,21 @@ reload:
    for each function apart, so a change to the JIT's copy, or to the choice in agc_run_turn, does not reshape the plain
    one. With the three copies in agc_run_turn, a change to the jit copy alone made case 7% slower with --jit off, and
    with the plain copy inline there, one more test before it changed a third of its instructions. */
-static __attribute__((noinline)) agc_turn_result jit_turn(agc_vm *vm) { return turn_loop(vm, false, true); }
-static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { return turn_loop(vm, true, false); }
-static __attribute__((noinline)) agc_turn_result plain_turn(agc_vm *vm) { return turn_loop(vm, false, false); }
+static __attribute__((noinline)) agc_turn_result jit_turn(agc_vm *vm) { return turn_loop(vm, false, true, false); }
+static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { return turn_loop(vm, true, false, false); }
+static __attribute__((noinline)) agc_turn_result plain_turn(agc_vm *vm) { return turn_loop(vm, false, false, false); }
 
 /* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. A run with a JIT runs
    the plain copy, the one of --jit off, for the turns agc_jit_turn turns down while no code is published. */
 agc_turn_result agc_run_turn(agc_vm *vm) {
   if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
-  if (vm->rt->jit && agc_jit_turn(vm->rt->jit, vm)) return jit_turn(vm);
-  return plain_turn(vm);
+  if (!vm->rt->jit || !agc_jit_turn(vm->rt->jit, vm)) return plain_turn(vm);
+  return jit_turn(vm);
 }
+
+/* The copy that runs one instruction for the jit copy. External, not static: gcc emits a static callee before its
+   caller, and so before plain_turn; this way plain_turn comes before both jit copies, whose edits do not move it. */
+__attribute__((noinline)) agc_turn_result agc_interpret_one(agc_vm *vm) { return turn_loop(vm, false, false, true); }
 
 /* True when the RETURN of RESULT by the block frame of FUNCTION into the native frame ST below it only makes ST call
    the block again, with the same function value: resume_native would neither end the call nor fail, take a slow step
