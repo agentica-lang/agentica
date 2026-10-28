@@ -14,9 +14,10 @@ current status; linked sections keep requirements, rationale and alternatives.
 Sections 1, 2, 5, 8–14, 17, 21, 22, 23, 24, 33, 35–37 and 49 have no file of
 their own: they are built or decided, and their content lives in the grammar,
 `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
-[`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
-small-value sharing. §40 (native code and FFI) was replaced by issue
-[#534](https://github.com/sonic182/agentica/issues/534), which holds its design.
+[`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built small-value
+sharing. §40 (native code and FFI) was replaced by issue
+[#534](https://github.com/agentica-lang/agentica/issues/534), which holds its
+design.
 
 - §: 3
   - Title: Extensions without a normative grammar
@@ -147,7 +148,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
   - Status: Built (45-0, 45a to 45d); only FFI-b is left, for 0.10 (issue
-    [#534](https://github.com/sonic182/agentica/issues/534))
+    [#534](https://github.com/agentica-lang/agentica/issues/534))
 
 - §: 46
   - Title: Signals

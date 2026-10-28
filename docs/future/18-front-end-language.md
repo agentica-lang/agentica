@@ -77,7 +77,7 @@ lifetime".
 What is left of the port is the post-bootstrap work in
 [`docs/roadmap/README.md`](../roadmap/README.md): the parser pass of the speed
 targets, `agentica doc`, and the package system, FFI and JIT path
-(issue [#534](https://github.com/sonic182/agentica/issues/534)).
+(issue [#534](https://github.com/agentica-lang/agentica/issues/534)).
 
 ### 18.7 Tests
 

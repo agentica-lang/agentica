@@ -72,7 +72,7 @@ Start a fresh agent per review with only this prompt; pick its model in the
 agent call (a small model for docs-only, a stronger one for code):
 
 ```text
-Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review GitHub pull request #N in the repository at /home/sonic182/apps/agentica (sonic182/agentica). Do not modify local files, switch branches, commit, push, run tests or programs, or post comments on GitHub. Return the full review report as your final answer.
+Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review GitHub pull request #N in the repository at /home/sonic182/apps/agentica (agentica-lang/agentica). Do not modify local files, switch branches, commit, push, run tests or programs, or post comments on GitHub. Return the full review report as your final answer.
 ```
 
 - **Trivial** (metadata only): no review. **Docs-only or small:** one review.

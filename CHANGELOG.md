@@ -593,26 +593,26 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.14.0...HEAD
-[0.14.0]: https://github.com/sonic182/agentica/compare/0.13.0...0.14.0
-[0.13.0]: https://github.com/sonic182/agentica/compare/0.12.0...0.13.0
-[0.12.0]: https://github.com/sonic182/agentica/compare/0.11.0...0.12.0
-[0.11.0]: https://github.com/sonic182/agentica/compare/0.10.0...0.11.0
-[0.10.0]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...0.10.0
-[0.10.0-beta.1]: https://github.com/sonic182/agentica/compare/0.9.0...0.10.0-beta.1
-[0.9.0]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...0.9.0
-[0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
-[0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
-[0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
-[0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
-[0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
-[0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0
-[0.5.0]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...0.5.0
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/agentica-lang/agentica/compare/0.13.0...0.14.0
+[0.13.0]: https://github.com/agentica-lang/agentica/compare/0.12.0...0.13.0
+[0.12.0]: https://github.com/agentica-lang/agentica/compare/0.11.0...0.12.0
+[0.11.0]: https://github.com/agentica-lang/agentica/compare/0.10.0...0.11.0
+[0.10.0]: https://github.com/agentica-lang/agentica/compare/0.10.0-beta.1...0.10.0
+[0.10.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.9.0...0.10.0-beta.1
+[0.9.0]: https://github.com/agentica-lang/agentica/compare/0.9.0-beta.2...0.9.0
+[0.9.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
+[0.9.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.8.1...0.9.0-beta.1
+[0.8.1]: https://github.com/agentica-lang/agentica/compare/0.8.0...0.8.1
+[0.8.0]: https://github.com/agentica-lang/agentica/compare/0.7.0...0.8.0
+[0.7.0]: https://github.com/agentica-lang/agentica/compare/0.6.0...0.7.0
+[0.6.0]: https://github.com/agentica-lang/agentica/compare/0.5.0...0.6.0
+[0.5.0]: https://github.com/agentica-lang/agentica/compare/0.5.0-beta.1...0.5.0
 [0.5.0-beta.1]:
-https://github.com/sonic182/agentica/compare/0.4.1-beta.1...0.5.0-beta.1
+https://github.com/agentica-lang/agentica/compare/0.4.1-beta.1...0.5.0-beta.1
 [0.4.1-beta.1]:
-https://github.com/sonic182/agentica/compare/0.4.0...0.4.1-beta.1
-[0.4.0]: https://github.com/sonic182/agentica/compare/0.3.0...0.4.0
-[0.3.0]: https://github.com/sonic182/agentica/compare/0.2.0...0.3.0
-[0.2.0]: https://github.com/sonic182/agentica/compare/0.1.0...0.2.0
-[0.1.0]: https://github.com/sonic182/agentica/releases/tag/0.1.0
+https://github.com/agentica-lang/agentica/compare/0.4.0...0.4.1-beta.1
+[0.4.0]: https://github.com/agentica-lang/agentica/compare/0.3.0...0.4.0
+[0.3.0]: https://github.com/agentica-lang/agentica/compare/0.2.0...0.3.0
+[0.2.0]: https://github.com/agentica-lang/agentica/compare/0.1.0...0.2.0
+[0.1.0]: https://github.com/agentica-lang/agentica/releases/tag/0.1.0

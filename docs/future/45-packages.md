@@ -11,10 +11,10 @@ Decided by the owner:
 - 2026-10-15: `std/toml` comes first. The manifest and the lock are TOML.
   `Toml.parse` returns the enum `Toml.Value`.
 - 2026-10-20 (issue
-  [#468](https://github.com/sonic182/agentica/issues/468)): a dependency has a
-  local name, a git source and a pin, a `tag` or a `ref` (a commit). The import
-  is `pkg/<name>/<module path>`. The lock pins each dependency to a commit and a
-  hash. There is no semver and no minimal version selection.
+  [#468](https://github.com/agentica-lang/agentica/issues/468)): a dependency
+  has a local name, a git source and a pin, a `tag` or a `ref` (a commit). The
+  import is `pkg/<name>/<module path>`. The lock pins each dependency to a
+  commit and a hash. There is no semver and no minimal version selection.
 - 2026-10-20: the answers to the questions of 45.14.
 
 ### 45.2 Goals
@@ -138,19 +138,20 @@ the command lines, the files they write and the `PKG-` codes are in
 ### 45.10 Native code
 
 **Built (FFI-b, issue
-[#534](https://github.com/sonic182/agentica/issues/534)).** The rules are in
-[05b](../grammar/05b-modules.md), Packages. Packages stay pure Agentica unless
-the manifest names a native library. Decided (2026-10-23, the smallest rule
-that works on Linux, macOS and Windows):
+[#534](https://github.com/agentica-lang/agentica/issues/534)).** The rules are
+in [05b](../grammar/05b-modules.md), Packages. Packages stay pure Agentica
+unless the manifest names a native library. Decided (2026-10-23, the smallest
+rule that works on Linux, macOS and Windows):
 
 - **Declaration.** `[native.NAME]` in the manifest of the package, one inline
   table per system (`linux`, `macos`, `windows`) with `file` (a path in the
   package's `native/` folder) or `system` (a name for the loader). The key is
-  the operating system only, because `System.os()` is all the front end can
-  ask: a macOS library is a universal binary (`lipo`), and the VM supports one
-  Linux architecture. The tables are inline so that a later `url` and `sha256`
-  (a downloaded prebuilt library, issue
-  [#594](https://github.com/sonic182/agentica/issues/594) H) is one more key.
+  the operating system only, because `System.os()` is all the front end can ask:
+  a macOS library is a universal binary (`lipo`), and the VM supports one Linux
+  architecture. The tables are inline so that a later `url` and `sha256` (a
+  downloaded prebuilt library, issue
+  [#594](https://github.com/agentica-lang/agentica/issues/594) H) is one more
+  key.
 - **Lookup.** `extern "NAME"` in a file of the package means that entry. The
   front end rewrites the library to an absolute path in `deps/<package>/`
   while it links, so no search is involved and `LD_LIBRARY_PATH` plays no

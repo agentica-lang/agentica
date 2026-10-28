@@ -31,7 +31,7 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 Needs a C11 compiler and `make`; on Linux also `libssl-dev`, `libgc-dev` and `pkg-config` (OpenSSL 3, libgc 8.2 or newer). The build starts from the checked-in `bootstrap/stage0.agcb` and needs no other tool. It also runs on macOS and Windows (MSYS2 UCRT64).
 
 ```sh
-git clone https://github.com/sonic182/agentica.git
+git clone https://github.com/agentica-lang/agentica.git
 cd agentica
 git submodule update --init
 make    # writes dist/agentica
