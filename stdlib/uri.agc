@@ -14,16 +14,17 @@
 ## Ruby, `decode_www_form` skips an empty piece (`a=1&&b=2` has two pairs, as in Python, Rack and browsers) and
 ## returns an `error` for a bad `%` instead of leaving it in the text.
 
-# The bytes of "0123456789ABCDEF".
+# The bytes of "0123456789ABCDEF", indexed by a nibble.
 HEX_DIGITS = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 66, 67, 68, 69, 70]
 
 # The bytes that Ruby's encoders keep: A-Z a-z 0-9 * - . _
 PLAIN = Set.new(List.concat(List.concat((48..57).to_a, (65..90).to_a), List.concat((97..122).to_a, [42, 45, 46, 95])))
 
-# The byte values the encoders and decoders look at.
+# The byte values the encoders and decoders look at, and the three bytes of "%20".
 PERCENT = 37
 PLUS = 43
 SPACE = 32
+ENCODED_SPACE = [PERCENT, 50, 48]
 
 ## One `name=value` piece of a query string.
 export struct Pair
@@ -40,7 +41,7 @@ end
 ## Encodes `text` for a path segment or any URI component: space becomes `%20` and every byte but `A-Z a-z 0-9 * - . _`
 ## becomes `%XX`, as Ruby's `URI.encode_uri_component`.
 export def encode_uri_component(text: String) -> String
-  return encode(text, [PERCENT, 50, 48])
+  return encode(text, ENCODED_SPACE)
 end
 
 ## Decodes a query string or form component: `+` becomes a space and `%XX` becomes its byte, as Ruby's
@@ -91,12 +92,13 @@ def encode(text: String, space: List[Int]) -> String
       out = out.push(PERCENT).push(HEX_DIGITS[byte.shift_right(4)]).push(HEX_DIGITS[byte.bit_and(15)])
     end
   end
+  # Every output byte is ASCII (a plain byte, `%`, a hex digit, `+`), so this cannot halt.
   return String.from_bytes(out).unwrap!
 end
 
 # Decodes the bytes of `text`. Text without a `%` (or a `+` to turn into a space) is returned as it is.
 def decode(text: String, plus_is_space: Bool) -> Result[String]
-  if !text.include?("%") and !(plus_is_space and text.include?("+"))
+  if !needs_decoding?(text, plus_is_space)
     return ok(text)
   end
   bytes = text.to_bytes
@@ -127,6 +129,14 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
     ok(decoded) -> return ok(decoded)
     error(_) -> return error("invalid UTF-8 after decoding (#{text})")
   end
+end
+
+# Whether `text` has a `%` escape or, for the form style, a `+`.
+def needs_decoding?(text: String, plus_is_space: Bool) -> Bool
+  if text.include?("%")
+    return true
+  end
+  return plus_is_space and text.include?("+")
 end
 
 # The value of a hex digit byte of either case, or -1.

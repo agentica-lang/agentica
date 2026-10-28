@@ -51,6 +51,6 @@ A decoder returns an `error` when a `%` is not followed by two hex digits (`inva
 
 A query string is a list of `URI.Pair`, Ruby's `[name, value]` arrays. A name may repeat and the order is kept, so `a=1&a=2` is two pairs. `decode_www_form` splits on `&` and then on the first `=`: a piece without `=` has the value `""`, and `a=b=c` has the value `b=c`. It returns the error of the first piece that does not decode.
 
-`decode_www_form` differs from Ruby in two ways. An empty piece (`a=1&&b=2`, a trailing `&`) is skipped, as in Python, Rack and browsers, where Ruby returns `["", ""]` for it. A bad `%` is an error, where Ruby leaves it in the text. Only `&` separates pieces.
+`decode_www_form` differs from Ruby in two ways. An empty piece (`a=1&&b=2`, or a lone `&`) is skipped, as in Python, Rack and browsers, where Ruby returns `["", ""]` for it. A trailing `&` adds nothing in either. A bad `%` is an error, where Ruby leaves it in the text. Only `&` separates pieces.
 
 `encode_www_form` joins the pairs as `name=value` with `encode_www_form_component` and cannot fail, so the output of `decode_www_form` goes back in unchanged. Ruby's one-item pair (a name without `=`) has no form here: write `Pair(name: "k", value: "")`, which gives `k=`.
