@@ -70,4 +70,4 @@ error("invalid cookie value (byte 1)")
 
 The text of an error about a name or an attribute has its control bytes removed, so it is safe in a log line.
 
-Unlike Ruby's `CGI::Cookie` and Rack, which as far as I know escape the value when writing it and decode it when reading, the cookie functions never percent-encode, decode or quote, and this is final. The value is written as it is and read as the client sent it, so a caller that needs a value with a space, a comma or non-ASCII text encodes it before `set_cookie_header` and decodes it after `parse_cookies_header`. A `%41` in a header stays `%41`.
+Unlike Ruby's `CGI::Cookie` and Rack, which escape the value when writing it and decode it when reading, the cookie functions never percent-encode, decode or quote, and this is final. The value is written as it is and read as the client sent it, so a caller that needs a value with a space, a comma or non-ASCII text encodes it before `set_cookie_header` and decodes it after `parse_cookies_header`. A `%41` in a header stays `%41`.
