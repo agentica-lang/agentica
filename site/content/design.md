@@ -38,9 +38,9 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 ## Results and try, not exceptions
 
-**Decision.** Errors are `Result[T]` values and `try` returns the error from the current function. There is no `raise` or `rescue`. Only user structs, enums and type aliases take type parameters, besides the builtin `List`, `Map` and `Result`.
+**Decision.** Errors are `Result[T]` values and `try` returns the error from the current function. There is no `raise` or `rescue`. Only user structs, enums, type aliases and functions take type parameters, besides the builtin `List`, `Map` and `Result`.
 
-**Why.** Every `try` shows where a function can leave, and agents do best with one obvious form per job. Generic functions are still an open design.
+**Why.** Every `try` shows where a function can leave, and agents do best with one obvious form per job.
 
 ## Step limits and an untrusted bytecode loader
 

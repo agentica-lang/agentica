@@ -1,0 +1,12 @@
+## A generic function.
+def first_or[T](xs: List[T], fallback: T) -> T
+  return fallback
+end
+
+export def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
+  return body.call(pool.items[0])
+end
+
+def plain(n: Int) -> Int
+  return n
+end

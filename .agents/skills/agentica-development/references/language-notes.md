@@ -298,6 +298,15 @@ section for the area you are changing.
   arguments. `debug_text` keeps `Struct(Name)` for no arguments (the goldens).
   `vm_type?` takes a `Var` as a VM value, because the default of a field
   (`items: List[T] = []`) is typed with the parameter. No VM or bytecode change.
+- Generic functions: `FunctionDecl.type_parameters` (and their spans),
+  `State.Signature.type_parameters`. A signature keeps `Type.Var`; a call
+  (`check_generic_call` in `check_call.agc`) never substitutes a type that holds
+  a variable of the caller again: `Types.open_variables?` asks of the template
+  (the callee's own variables), not of the substituted type. `Types.learn` is
+  the matching that cannot fail, for the expected type and `&f`. The body is
+  checked once with `Cx.type_params` set; there `data?` refuses a `Var` (only
+  `Cx.prelude` accepts it). The linker keeps the names in
+  `Resolve.Context.type_parameters`. `vm_type?` already takes a `Var`.
 - Enum cases require every variant or `_`. All non-enum scrutinees—including
   Bool and Nil—require `_`. Reject repeated/covered arms, require an unguarded
   `_` last (a guarded arm, or one with a literal or nested slot, covers nothing

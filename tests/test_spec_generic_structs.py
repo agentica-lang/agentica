@@ -7,7 +7,7 @@ A program that must check clean has no code.
 import pytest
 
 from tests.agentica_test import cli, output_lines, run, vm_environment
-from tests.spec_support import covered
+from tests.spec_support import assert_rule
 
 BOX = "struct Box[T]\n  value: T\nend\n\n"
 PAIR = "struct Pair[T]\n  a: T\n  b: T\nend\n\n"
@@ -143,19 +143,13 @@ MODULE_RULES = {
 @pytest.mark.parametrize("name", list(RULES))
 def test_generic_struct_rules(agentica_check, name):
     program, code, text = RULES[name]
-    found = agentica_check(program)
-    assert (found and found["code"]) == code, program
-    if text is not None:
-        assert covered(program, found["range"]) == text
+    assert_rule(agentica_check(program), program, code, text)
 
 
 @pytest.mark.parametrize("name", list(MODULE_RULES))
 def test_generic_structs_across_modules(agentica_check, name):
     program, code, text = MODULE_RULES[name]
-    found = agentica_check({"m.agc": MODULE, "main.agc": program})
-    assert (found and found["code"]) == code, program
-    if text is not None:
-        assert covered(program, found["range"]) == text
+    assert_rule(agentica_check({"m.agc": MODULE, "main.agc": program}), program, code, text)
 
 
 def test_a_generic_struct_of_another_module_stays_private_to_update(agentica_check):

@@ -11,6 +11,7 @@ import Help from "check_help"
 import Names from "check_names"
 import Rules from "check_rules"
 import State from "check_state"
+import Stmt from "check_stmt"
 import Types from "check_types"
 import Defaults from "defaults"
 
@@ -33,7 +34,7 @@ end
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = ENTRIES.get(node.name)
   if !entry.ok? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
-    return check_plain_call(cx, st, node)
+    return check_plain_call(cx, st, node, expected)
   end
 
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)
@@ -299,8 +300,9 @@ def simple_receiver?(node: Ast.Expr) -> Bool
   end
 end
 
-# A function of the program: the arguments against the parameter types.
-def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State.Out]
+# A function of the program: the arguments against the parameter types. A generic function infers its type arguments
+# first (check_generic_call).
+def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = cx.functions.get(node.name)
   if !entry.ok?
     return error(
@@ -322,6 +324,10 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
     return error(arity_failure(cx, st, node, signature))
   end
 
+  if signature.type_parameters.size > 0
+    return check_generic_call(cx, st, node, signature, expected)
+  end
+
   current = st
   index = 0
   while index < count
@@ -331,6 +337,211 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
   end
 
   return ok(State.Out(st: current, type: signature.result))
+end
+
+# A call of a generic function. Each call has its own type variables: the signature is a template, and the arguments
+# bind its variables to types (which may hold the variables of the caller, and are never read again as template). The
+# order is:
+#   1. the arguments that have a type of their own, from left to right, each against its parameter type as far as the
+#      variables are known;
+#   2. the expected type of the call, matched with the result type, for the variables still open;
+#   3. the arguments that need an expected type ([], {}, error(...), Option.None, &f of a generic function ...),
+#      against their parameter type, and they bind nothing;
+#   4. the block, which may bind the variables its annotated parameters and its result show.
+# A step 3 argument whose parameter type is still open waits for the block, and is checked after it.
+def check_generic_call(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Call,
+  signature: State.Signature,
+  expected: T.Type,
+) -> Result[State.Out]
+  count = node.args.size
+  shape = signature.shape
+  current = st
+  found: Map[String, T.Type] = {}
+  waiting: List[Int] = []
+  block = -1
+  index = 0
+  while index < count
+    template = signature.params[Defaults.param_of(shape, count, index)]
+    arg = node.args[index]
+    if index == count - 1 and block_literal?(arg) and T.is?(template, "Fn")
+      block = index
+    elsif needs_expected?(cx, arg)
+      waiting = waiting.push(index)
+    else
+      out = try State.expr(cx, current, arg, known_part(template, found))
+      current = out.st
+      found = try Types.unify(cx, current, template, out.type, found, Ast.expr_span(arg))
+    end
+
+    index += 1
+  end
+
+  found = Types.learn(signature.result, expected, found)
+  later: List[Int] = []
+  for at in waiting
+    template = signature.params[Defaults.param_of(shape, count, at)]
+    if Types.open_variables?(template, found)
+      later = later.push(at)
+    else
+      current = try check_closed_argument(cx, current, node.args[at], template, found)
+    end
+  end
+
+  if block >= 0
+    template = signature.params[Defaults.param_of(shape, count, block)]
+    after = try check_generic_block(cx, current, node.args[block], template, found)
+    current = after.st
+    found = after.substitutions
+  end
+
+  for at in later
+    template = signature.params[Defaults.param_of(shape, count, at)]
+    if Types.open_variables?(template, found)
+      return error(uninferred_failure(cx, current, node, signature, found))
+    end
+
+    current = try check_closed_argument(cx, current, node.args[at], template, found)
+  end
+
+  unresolved = signature.type_parameters.filter do |name: String| !found.has_key?(name) end
+  if unresolved.size > 0
+    return error(uninferred_failure(cx, current, node, signature, found))
+  end
+
+  try check_void_arguments(cx, current, node, signature, found)
+  return ok(State.Out(st: current, type: Types.substitute(signature.result, found)))
+end
+
+# The parameter type with the variables found so far put in, or Unknown while one is open: an argument is then checked
+# for a type of its own.
+def known_part(template: T.Type, found: Map[String, T.Type]) -> T.Type
+  if Types.open_variables?(template, found)
+    return T.Type.Unknown
+  end
+
+  return Types.substitute(template, found)
+end
+
+def block_literal?(node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.BlockLit(found) -> return true
+    _ -> return false
+  end
+end
+
+# An argument that has no type of its own, so it waits for the others: an empty list or map, error(...), Set.new of an
+# empty list, a variant of a generic enum with no payload, a list or map literal that holds one of those, and the
+# reference of a generic function.
+def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.ListLit(list) ->
+      return list.elements.size == 0 or list.elements.any? do |item: Ast.Expr| needs_expected?(cx, item) end
+    Ast.Expr.MapLit(map) ->
+      return map.entries.size == 0 or map.entries.any? do |entry: Ast.MapEntry| needs_expected?(cx, entry.value) end
+    Ast.Expr.Call(call) ->
+      set_of_empty = call.name == "Set.new" and call.args.size == 1 and needs_expected?(cx, call.args[0])
+      return call.name == "error" or set_of_empty
+    Ast.Expr.EnumConstructor(variant) ->
+      definition = cx.enums.get(variant.enum_name)
+      return variant.args.size == 0 and definition.ok? and definition.unwrap!.parameters.size > 0
+    Ast.Expr.FunctionRef(ref) ->
+      signature = cx.functions.get(ref.name)
+      return signature.ok? and signature.unwrap!.type_parameters.size > 0
+    _ -> return false
+  end
+end
+
+# An argument checked against its parameter type, which has no open variable. It binds nothing.
+def check_closed_argument(
+  cx: State.Cx,
+  st: State.St,
+  arg: Ast.Expr,
+  template: T.Type,
+  found: Map[String, T.Type],
+) -> Result[State.St]
+  out = try State.expr(cx, st, arg, Types.substitute(template, found))
+  try Types.unify(cx, out.st, template, out.type, found, Ast.expr_span(arg))
+  return ok(out.st)
+end
+
+# The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open must be
+# annotated in the block (CHECK-BLOCK-TYPE otherwise), and an annotation binds it. The block's result binds what the Fn
+# result leaves open: a Result type is asked for as such, so that ok(...) and error(...) are read as the block's value.
+def check_generic_block(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Expr,
+  template: T.Type,
+  found: Map[String, T.Type],
+) -> Result[Inferred]
+  params = T.params(template).map do |param: T.Type| known_part(param, found) end
+  result = known_part(T.result(template), found)
+  if T.unknown?(result) and T.is?(T.result(template), "Result")
+    result = T.Type.Result(T.Type.Unknown)
+  end
+
+  case node
+    Ast.Expr.BlockLit(block) ->
+      out = try Stmt.check_block_in(cx, st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, false)
+      learned = try Types.unify(cx, out.st, template, out.type, found, block.span)
+      return ok(Inferred(st: out.st, substitutions: learned))
+    _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
+  end
+end
+
+# CHECK-ENUM-TYPE-INFERENCE at the call, for the type parameters that the arguments and the expected type leave open.
+def uninferred_failure(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Call,
+  signature: State.Signature,
+  found: Map[String, T.Type],
+) -> String
+  unset = signature.type_parameters.filter do |name: String| !found.has_key?(name) end
+  if unset.size == 0
+    unset = signature.type_parameters
+  end
+
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-ENUM-TYPE-INFERENCE",
+    "cannot infer type parameter(s) #{unset.join(", ")} of #{T.display_name(node.name)}",
+    node.span,
+    "give the call a type where it is used, such as a variable with a type annotation, or an argument that shows it",
+  )
+end
+
+# CHECK-VOID-TYPE at the call when a type argument is Void where a value is needed: in a parameter, a field or a list
+# item. A result, the last type of an Fn and the item of a Result or a Task may be Void.
+def check_void_arguments(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Call,
+  signature: State.Signature,
+  found: Map[String, T.Type],
+) -> Result[Bool]
+  misplaced = Types.misplaced_void?(Types.substitute(signature.result, found), true)
+  for param in signature.params
+    misplaced = misplaced or Types.misplaced_void?(Types.substitute(param, found), false)
+  end
+
+  if misplaced
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-VOID-TYPE",
+        "a type argument of #{T.display_name(node.name)} is Void where a value is needed",
+        node.span,
+      ),
+    )
+  end
+
+  return ok(true)
 end
 
 # A function with defaults says the range of arguments it takes.
@@ -416,7 +627,8 @@ def infer_arguments(
   while index < payload.size
     template = payload[index]
     context = Types.substitute(template, found)
-    if Types.has_variables?(context) and empty_collection?(args[index])
+    unset = Types.open_variables?(template, found)
+    if unset and empty_collection?(args[index])
       return error(
         State.fail(
           cx,
@@ -429,7 +641,7 @@ def infer_arguments(
     end
 
     wanted = context
-    if Types.has_variables?(context)
+    if unset
       wanted = T.Type.Unknown
     end
 
@@ -610,11 +822,12 @@ def check_named_fields(
     wanted = template
     if parameters.size > 0
       wanted = Types.substitute(template, found)
-      if Types.has_variables?(wanted) and empty_collection?(arg.value)
+      unset = Types.open_variables?(template, found)
+      if unset and empty_collection?(arg.value)
         return error(empty_field_failure(cx, current, name, Ast.expr_span(arg.value)))
       end
 
-      if Types.has_variables?(wanted)
+      if unset
         wanted = T.Type.Unknown
       end
     end

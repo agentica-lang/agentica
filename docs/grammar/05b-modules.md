@@ -613,9 +613,9 @@ import Sqlite from "pkg/sqlite/db"
 Push adds at the back and pop removes the oldest value. Pop and peek on an empty
 queue return an error Result. Inputs are never changed: continue with the
 returned queue or `Popped.remaining`. Empty strings and duplicates are valid.
-There are no user generics and no blocking cross-task operations. `push`, `pop`,
-`peek`, `size` and `empty?` are O(n) with the current list operations; no
-constant-time FIFO is promised.
+The queue holds only `String` values, and there are no blocking cross-task
+operations. `push`, `pop`, `peek`, `size` and `empty?` are O(n) with the
+current list operations; no constant-time FIFO is promised.
 
 #### Binary data (`std/binary`)
 

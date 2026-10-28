@@ -44,7 +44,10 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
   end
 end
 
-def rewrite_function(cx: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.Decl]
+# The type parameters of a generic function stay as written in its signature and its body (annotations, block
+# parameters, the target of JSON.decode), as those of a struct or an enum do in rewrite_payload.
+def rewrite_function(outer: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.Decl]
+  cx = outer.with(type_parameters: node.type_parameters)
   params: List[Ast.Param] = []
   for param in node.params
     type = try rewrite_type(cx, param.type)
@@ -139,7 +142,11 @@ def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.Typ
 end
 
 def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
-  name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
+  name = type.name
+  if type.args.size > 0 or !cx.type_parameters.any? do |parameter| parameter == type.name end
+    name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
+  end
+
   args: List[Ast.TypeRef] = []
   for arg in type.args
     args = args.push(try rewrite_type(cx, arg))
@@ -496,6 +503,10 @@ end
 # any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
+  if parts.size == 1 and cx.type_parameters.any? do |parameter| parameter == node.name end
+    return ok(Ast.Expr.TypeName(node))
+  end
+
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], [], node.span))
   elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])

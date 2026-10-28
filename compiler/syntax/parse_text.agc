@@ -93,7 +93,13 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       return print_decl(lines, child, "declaration", node.declaration)
     Ast.Decl.Function(node) ->
-      attrs = name_attr(node.name) + doc_attr(node.doc) + native_attr(node.name, node.native)
+      attrs = name_attr(node.name)
+      if node.type_parameters.size > 0
+        parameters = node.type_parameters.map do |name| Text.quote(name) end
+        attrs += " type-parameters=#{list_text(parameters)}"
+      end
+
+      attrs += doc_attr(node.doc) + native_attr(node.name, node.native)
       lines = out.push(head(at, role, "function-decl", node.id, node.span, attrs))
       for param in node.params
         lines = print_param(lines, child, param)

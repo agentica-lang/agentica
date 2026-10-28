@@ -135,7 +135,8 @@ Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
   is not needed before encoding; use builders for dynamic objects or mixed
   arrays.
 - A shared stdio helper takes the encoded `String`, prints it and flushes. There
-  are no user generics or structural unions to accept any struct.
+  are no structural unions to accept any struct, and a generic function cannot
+  encode a `T`.
 
 ```ruby
 def greet_json(text: String) -> Result[String]

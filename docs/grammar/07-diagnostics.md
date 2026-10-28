@@ -287,6 +287,21 @@ type:
   - **Help:** give the struct a type where it is used, such as a variable with
     a type annotation
 
+- **Written:** `first_or([], [])`, `empty_of()` with no expected type, or `f =
+  &first_or`, for generic functions (`CHECK-ENUM-TYPE-INFERENCE`)
+  - **Help:** give the call a type where it is used, such as a variable with a
+    type annotation, or an argument that shows it; a reference needs the `Fn`
+    type, as in `f: Fn[List[Int], Int, Int] = &first_or`
+
+- **Written:** a type parameter of a function named like a struct, enum or alias
+  of the file, as in `def f[Item](x: Item)` beside `struct Item`
+  (`CHECK-REDEFINED-NAME`)
+  - **Help:** rename the type parameter
+
+- **Written:** a default on a parameter whose type has a type parameter, such as
+  `xs: List[T] = []` (`CHECK-DEFAULT-VALUE`)
+  - **Help:** make the parameter required
+
 - **Written:** a parameter without a default after one with a default, such as
   `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)
   - **Help:** give `b` a default, or move the parameters with a default to the

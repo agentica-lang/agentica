@@ -576,3 +576,37 @@ def test_a_generic_struct_constant_is_read_back_from_its_entry(ws):
     failed = settled(ws, source=wrong, needle="origin.x")
     assert failed[0][0] == 1
     assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"
+
+
+# A module with a generic function: the stub keeps the signature with its type parameters, and the body goes.
+GENERIC_FUNCTION = '''export def first_or[T](xs: List[T], fallback: T) -> T
+  if xs.length == 0
+    return fallback
+  end
+
+  return xs[0]
+end
+'''
+
+THROUGH_GENERIC_FUNCTION = '''import Gen from "gen"
+
+def main() -> Void
+  n: Int = Gen.first_or([], 3)
+  puts(n.to_s)
+end
+'''
+
+
+def test_a_generic_function_is_called_through_its_stub(ws):
+    (ws.project / "gen.agc").write_text(GENERIC_FUNCTION, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_GENERIC_FUNCTION, encoding="utf-8")
+    asked = {"source": THROUGH_GENERIC_FUNCTION, "needle": "Gen.first_or"}
+    assert settled(ws, **asked)[0] == (0, '{"ok":true}\n', "")
+    stubs = [path.read_bytes() for path in entries(ws) if b"export def first_or" in path.read_bytes()]
+    assert len(stubs) == 1 and b"export def first_or[T](xs: List[T], fallback: T) -> T" in stubs[0]
+    # The second run reads the entry: the same wrong use gets the same diagnostic, cold, warm and off.
+    wrong = THROUGH_GENERIC_FUNCTION.replace("n: Int", "n: String")
+    (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
+    failed = settled(ws, source=wrong, needle="Gen.first_or")
+    assert failed[0][0] == 1
+    assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"

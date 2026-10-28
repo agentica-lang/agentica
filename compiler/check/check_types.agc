@@ -197,12 +197,15 @@ export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, spa
   )
 end
 
-## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, type variables, and lists,
-## maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at
-## ("Struct:name"), so a recursive type ends.
+## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, and lists, maps, sets,
+## Results, structs and enums of those. A type variable is one only in the files of the prelude: in the body of a
+## generic function it stands for any type, which could be an Fn. seen holds the structs and enums already being looked
+## at ("Struct:name"), so a recursive type ends.
 export def data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range") or Types.is?(type, "Var")
+  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range")
     return true
+  elsif Types.is?(type, "Var")
+    return cx.prelude
   elsif Types.is?(type, "List")
     return data?(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
@@ -236,6 +239,73 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     _ -> return false
   end
+end
+
+## True when the template has a type variable that substitutions does not set yet. A template is the signature of a
+## function or the type of a field: every variable in it is a parameter of the declaration, whatever the types in
+## substitutions hold (they may hold the variables of the code that calls).
+export def open_variables?(template: ResolvedType, substitutions: Map[String, ResolvedType]) -> Bool
+  return variable_names(template).any? do |name: String| !substitutions.has_key?(name) end
+end
+
+## The names of the type variables written in the type, in order, with repeats.
+export def variable_names(type: ResolvedType) -> List[String]
+  if Types.is?(type, "Var")
+    return [Types.name(type)]
+  end
+
+  names: List[String] = []
+  for part in parts(type)
+    names = names.concat(variable_names(part))
+  end
+
+  return names
+end
+
+## True when the type has Void where a value is needed. Void is valid as the result of a function type, the last type
+## of an Fn, and the item of a Result or a Task: completion says the type is in such a place.
+export def misplaced_void?(type: ResolvedType, completion: Bool) -> Bool
+  case type
+    Types.Type.Void -> return !completion
+    Types.Type.Result(item) -> return misplaced_void?(item, true)
+    Types.Type.Task(item) -> return misplaced_void?(item, true)
+    Types.Type.Fn(params, result) ->
+      return params.any? do |param: ResolvedType| misplaced_void?(param, false) end or misplaced_void?(result, true)
+    _ -> return parts(type).any? do |part: ResolvedType| misplaced_void?(part, false) end
+  end
+end
+
+## Matches the actual type against a template and returns the substitutions with the variables of the template that it
+## binds and substitutions does not set yet. It is unify without the failures: a part that does not match is left to
+## the check that follows, and a variable is not bound to a type that is not known (Unknown, or with Unknown inside).
+export def learn(
+  template: ResolvedType,
+  actual: ResolvedType,
+  substitutions: Map[String, ResolvedType],
+) -> Map[String, ResolvedType]
+  if Types.is?(template, "Var")
+    if substitutions.has_key?(Types.name(template)) or has_unknown?(actual)
+      return substitutions
+    end
+
+    return substitutions.put(Types.name(template), actual)
+  end
+
+  pairs = parts(template)
+  others = parts(actual)
+  same_head = Types.tag(template) == Types.tag(actual) and pairs.size == others.size
+  if same_head and (Types.is?(template, "Enum") or Types.is?(template, "Struct"))
+    same_head = Types.name(template) == Types.name(actual)
+  end
+
+  found = substitutions
+  index = 0
+  while same_head and index < pairs.size
+    found = learn(pairs[index], others[index], found)
+    index += 1
+  end
+
+  return found
 end
 
 ## The type with each type variable that has a substitution replaced.
@@ -797,9 +867,9 @@ end
 
 # True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
 # each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
-# argument). Then every field with the arguments put in is tested, once for each name on the path: a struct already in
-# seen is true (the type is recursive), and since seen holds names, a recursion that changes its type arguments each
-# time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each name on the
+# path: a struct already in seen is true (the type is recursive), and since seen holds names, a recursion that changes
+# its type arguments each time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
 def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
   name = Types.name(type)
   for argument in Types.args(type)
@@ -813,7 +883,7 @@ def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int)
   end
 
   inner = seen.push(name)
-  for field in fields_of(cx, type)
+  for field in stand_in_fields(cx, type)
     if test == 0 and !encodable?(cx, field.type, inner)
       return false
     elsif test == 1 and !decodable?(cx, field.type, inner)
@@ -840,7 +910,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
 
   inner = seen.push(key)
   if Types.is?(type, "Struct")
-    for field in cx.structs[name]
+    for field in stand_in_fields(cx, type)
       if !data?(cx, field.type, inner)
         return false
       end
@@ -849,15 +919,50 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
     return true
   end
 
-  for variant in cx.enums[name].variants
+  definition = cx.enums[name]
+  stand = stand_ins(definition.parameters, Types.args(type))
+  for variant in definition.variants
     for payload in variant.payload
-      if !data?(cx, payload, inner)
+      if !data?(cx, substitute(payload, stand), inner)
         return false
       end
     end
   end
 
   return true
+end
+
+# The fields of a struct type to walk after its type arguments were tested: each type parameter is replaced by a
+# stand-in (stand_ins), not by its argument, so a nest of generic instances is walked once for each level and not once
+# for each way down (the arguments are tested as types of their own, and repeating that for each field makes it
+# exponential).
+def stand_in_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
+  name = Types.name(type)
+  parameters = cx.struct_params.get(name, [])
+  if parameters.size == 0 or parameters.size != Types.args(type).size
+    return cx.structs[name]
+  end
+
+  stand = stand_ins(parameters, Types.args(type))
+  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
+end
+
+# A type for each parameter to stand for its argument once the argument was tested: Int, or Nil for a Nil argument,
+# the one thing that a field of the parameter (JsonField[T]) tells apart.
+def stand_ins(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
+  found: Map[String, ResolvedType] = {}
+  index = 0
+  while index < parameters.size and index < args.size
+    stand = Types.Type.Int
+    if Types.is?(args[index], "Nil")
+      stand = Types.Type.Nil
+    end
+
+    found = found.put(parameters[index], stand)
+    index += 1
+  end
+
+  return found
 end
 
 def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType
@@ -867,6 +972,11 @@ def substitution(type: ResolvedType, name: String, substitutions: Map[String, Re
   end
 
   return type
+end
+
+# True for Unknown, or a type that has Unknown inside.
+def has_unknown?(type: ResolvedType) -> Bool
+  return Types.unknown?(type) or parts(type).any? do |part: ResolvedType| has_unknown?(part) end
 end
 
 # True for a type with other types inside: the ones unify matches part by part.

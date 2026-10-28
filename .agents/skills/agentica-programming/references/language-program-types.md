@@ -142,9 +142,9 @@ end
 - A blank line follows the `end` of each `def`, `struct` and `enum`
   (`PARSE-MISSING-BLANK-LINE`). Every parameter and the return type need an
   annotation.
-- Structs, enums and functions are top level only. Only structs, enums and
-  aliases take type parameters. There are no generic functions, user methods,
-  nested functions, keyword arguments or overloads. Closures are blocks.
+- Structs, enums and functions are top level only. Structs, enums, aliases and
+  functions take type parameters. There are no user methods, nested functions,
+  keyword arguments or overloads. Closures are blocks.
 - A struct field may have a default: `retries: Int = 3`. A constructor may
   leave it out (`Options(name: "a")`); a field without one must be given
   (`CHECK-MISSING-FIELD`). The default follows the rules of a parameter default
@@ -163,6 +163,23 @@ end
   is no `Map` key (`CHECK-MAP-KEY-TYPE`) and no type of a field named `with`.
   `JSON.encode` takes a generic instance; `JSON.decode` and `JSON.schema` refuse
   one anywhere in the target (`CHECK-NOT-DECODABLE`).
+- A generic function, `def first_or[T](xs: List[T], fallback: T) -> T`, is
+  called without type arguments (`first_or[Int](...)` is
+  `PARSE-UNEXPECTED-TOKEN`). The checker finds them in four steps: the
+  arguments with a type, left to right (a clash is `CHECK-TYPE-MISMATCH`); the
+  expected type of the call, for the parameters still open; the arguments that
+  need an expected type (`[]`, `{}`, `error(...)`, a payload-less variant of a
+  generic enum, `&f` of a generic function), which bind nothing; the block,
+  whose open parameter types must be annotated (`do |x: Int|`, else
+  `CHECK-BLOCK-TYPE`) and whose result binds the rest (`R` in `Result[R]`).
+  A parameter still open is `CHECK-ENUM-TYPE-INFERENCE` at the call. In the
+  body `T` is opaque: store, return and pass it on, but no `==`, arithmetic,
+  printing, fields or methods (`CHECK-TYPE-MISMATCH`, `CHECK-UNKNOWN-METHOD`),
+  and it is no `Map` key or `Set` element; take an `Fn` parameter for
+  behaviour. A parameter name may not be the name of a struct, enum or alias of
+  the file, and a parameter whose type has a type parameter has no default.
+  `&first_or` needs the expected `Fn` type (`f: Fn[List[Int], Int, Int] =
+  &first_or`); `xs.filter(&name)` has it, `xs.map(&name)` does not.
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the
   fields in declaration order; `StructMember` has `name: String` and
   `type: String`, the field type as source with aliases expanded

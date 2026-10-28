@@ -8,6 +8,7 @@
 import Diag from "../diagnostics/diagnostic"
 import Ast from "ast"
 import Base from "parse_base"
+import Source from "source"
 import Tokens from "token"
 
 LEVELS: Map[String, Int] = {
@@ -242,6 +243,7 @@ end
 
 struct TypeParametersAt
   names: List[String]
+  spans: List[Source.Span]
   pos: Int
 end
 
@@ -2049,7 +2051,8 @@ end
 
 def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
-  after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
+  type_parameters = try parse_type_parameters(e, after_name)
+  after_open = try Base.expect(e, type_parameters.pos, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids, false)
   after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
   if e.tokens[after_params].kind == "left-brace"
@@ -2074,6 +2077,8 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
       id: body.ids,
       name: e.tokens[pos + 1].lexeme,
       name_span: e.tokens[pos + 1].span,
+      type_parameters: type_parameters.names,
+      type_parameter_spans: type_parameters.spans,
       params: params.nodes,
       result: result.node,
       body: body.nodes,
@@ -2725,6 +2730,8 @@ def parse_extern_function(
       id: next_id,
       name: name,
       name_span: e.tokens[pos + 1].span,
+      type_parameters: [],
+      type_parameter_spans: [],
       params: typed,
       result: result_type,
       body: [],
@@ -3127,7 +3134,7 @@ end
 # be followed by type parameters (struct Box[T]); a C struct of an extern block takes none.
 def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], generic: Bool) -> Result[StructAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a struct name", false)
-  parameters = TypeParametersAt(names: [], pos: after_name)
+  parameters = TypeParametersAt(names: [], spans: [], pos: after_name)
   if generic
     parameters = try parse_type_parameters(e, after_name)
   end
@@ -3168,22 +3175,27 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], gen
   return ok(StructAt(node: node, pos: stop, ids: next_id))
 end
 
+# The [T, U] after the name of a struct, enum, alias or function, with the span of each name; none when the next token
+# is not a left bracket.
 def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   names: List[String] = []
+  spans: List[Source.Span] = []
   if e.tokens[pos].kind != "left-bracket"
-    return ok(TypeParametersAt(names: names, pos: pos))
+    return ok(TypeParametersAt(names: names, spans: spans, pos: pos))
   end
 
   cursor = try Base.expect(e, pos + 1, "type-name", "a type parameter", false)
   names = names.push(e.tokens[pos + 1].lexeme)
+  spans = spans.push(e.tokens[pos + 1].span)
   while e.tokens[cursor].kind == "comma"
     after = try Base.expect(e, cursor + 1, "type-name", "a type parameter", false)
     names = names.push(e.tokens[cursor + 1].lexeme)
+    spans = spans.push(e.tokens[cursor + 1].span)
     cursor = after
   end
 
   cursor = try Base.expect(e, cursor, "right-bracket", "]", false)
-  return ok(TypeParametersAt(names: names, pos: cursor))
+  return ok(TypeParametersAt(names: names, spans: spans, pos: cursor))
 end
 
 def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]

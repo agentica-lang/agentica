@@ -20,13 +20,15 @@ import Resolve from "resolve_import"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
-## receiver of a rewritten NAME.method(...) takes the id ids + the id of the call).
+## receiver of a rewritten NAME.method(...) takes the id ids + the id of the call). type_parameters are the type
+## parameters of the generic function being rewritten, whose names stay as written.
 export struct Context
   settings: Env.Settings
   modules: Map[String, Modules.Module]
   me: Modules.Module
   visible: List[String]
   ids: Int
+  type_parameters: List[String]
 end
 
 ## What a name must be where it is written: a type (a struct, enum or alias), an enum, or a function.

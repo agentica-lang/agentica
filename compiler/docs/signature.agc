@@ -34,10 +34,12 @@ export def type_text(type: Ast.TypeRef) -> String
   return parts.join("")
 end
 
-## `name(a: Int, b: Int = 2) -> Int`. `text` is the source of the module: a default value is printed as written there.
+## `name(a: Int, b: Int = 2) -> Int`, or `name[T](a: T) -> T` for a generic function. `text` is the source of the
+## module: a default value is printed as written there.
 export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
   parameters = declaration.params.map do |parameter: Ast.Param| parameter_text(parameter, text) end
-  return "#{declaration.name}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
+  names = parameters_text(declaration.type_parameters)
+  return "#{declaration.name}#{names}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
 end
 
 ## `struct Name` or `struct Name[T, U]`.

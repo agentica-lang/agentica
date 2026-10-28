@@ -232,9 +232,10 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Range -> return true
     Types.Type.Json -> return true
     # A type variable stands for a value of the VM: the functions of the prelude are written for any type, and so is
-    # the default of a field of a generic struct (`items: List[T] = []`), which the checker types with the variable.
-    # No other variable reaches the lowering: a function of the program has no type parameters, a use of a generic
-    # struct or enum has its arguments put in, and a builtin signature is instantiated at each call.
+    # a generic function of the program (its body is checked once, whatever the type argument), and the default of a
+    # field of a generic struct (`items: List[T] = []`), which the checker types with the variable. No other variable
+    # reaches the lowering: a use of a generic struct, enum or function has its arguments put in, and a builtin
+    # signature is instantiated at each call.
     Types.Type.Var(name) -> return true
     _ -> return false
   end

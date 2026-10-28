@@ -1,0 +1,35 @@
+program #34 0:1:1-246:13:1
+  declaration: function-decl #8 23:2:1-92:5:1 name="first_or" type-parameters=["T"] doc="A generic function."
+    param: param #2 39:2:17-50:2:28 name="xs"
+      type: type-ref #1 43:2:21-50:2:28 name="List"
+        arg: type-ref #0 48:2:26-49:2:27 name="T"
+    param: param #4 52:2:30-63:2:41 name="fallback"
+      type: type-ref #3 62:2:40-63:2:41 name="T"
+    result: type-ref #5 68:2:46-69:2:47 name="T"
+    body: return-stmt #7 72:3:3-88:4:1
+      value: name-ref #6 79:3:10-87:3:18 name="fallback"
+  declaration: export-decl #27 93:6:1-205:9:1
+    declaration: function-decl #26 100:6:8-205:9:1 name="with" type-parameters=["T","R"]
+      param: param #11 115:6:23-128:6:36 name="pool"
+        type: type-ref #10 121:6:29-128:6:36 name="Pool"
+          arg: type-ref #9 126:6:34-127:6:35 name="T"
+      param: param #16 130:6:38-152:6:60 name="body"
+        type: type-ref #15 136:6:44-152:6:60 name="Fn"
+          arg: type-ref #12 139:6:47-140:6:48 name="T"
+          arg: type-ref #14 142:6:50-151:6:59 name="Result"
+            arg: type-ref #13 149:6:57-150:6:58 name="R"
+      result: type-ref #18 157:6:65-166:6:74 name="Result"
+        arg: type-ref #17 164:6:72-165:6:73 name="R"
+      body: return-stmt #25 169:7:3-201:8:1
+        value: invoke #24 176:7:10-200:7:34
+          target: name-ref #19 176:7:10-180:7:14 name="body"
+          arg: index-access #23 186:7:20-199:7:33
+            target: field-access #21 186:7:20-196:7:30 name="items"
+              target: name-ref #20 186:7:20-190:7:24 name="pool"
+            index: literal #22 197:7:31-198:7:32 value=int:0
+  declaration: function-decl #33 206:10:1-246:13:1 name="plain"
+    param: param #29 216:10:11-222:10:17 name="n"
+      type: type-ref #28 219:10:14-222:10:17 name="Int"
+    result: type-ref #30 227:10:22-230:10:25 name="Int"
+    body: return-stmt #32 233:11:3-242:12:1
+      value: name-ref #31 240:11:10-241:11:11 name="n"

@@ -18,7 +18,7 @@ name_list        = "{", import_name, { ",", import_name }, [ "," ], "}" ;
 import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
 reexport_decl    = "export", TYPE_NAME, ".", ( NAME | TYPE_NAME ), NL ;
 
-function_decl    = "def", NAME, "(", [ parameters ], ")",
+function_decl    = "def", NAME, [ type_parameters ], "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
 parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
@@ -244,10 +244,12 @@ Struct, enum, type alias and function declarations appear only at the top level.
 A type alias is transparent (section 6, "Enums and pattern matching"). The
 parser accepts type applications such as
 `List[Int]`. The checker allows them only for supported builtins, declared
-structs and enums that take type parameters, and generic aliases; structs, enums
-and aliases are the only declarations that take type parameters, so generic
-functions are not supported. A struct with type parameters is in section 6,
-"Generic structs".
+structs and enums that take type parameters, and generic aliases. Structs,
+enums, aliases and functions are the declarations that take type parameters. A
+struct with type parameters is in section 6, "Generic structs", and a function
+in "Generic functions". A call writes no type arguments: `first_or[Int](xs, 0)`
+is `PARSE-UNEXPECTED-TOKEN` at the `(`, because `first_or[Int]` reads as an
+index. A `def` in an `extern` block takes no type parameters.
 
 A generic alias, `type Matrix[T] = List[List[T]]`, is pure substitution:
 `Matrix[Int]` means exactly `List[List[Int]]`. The parameters follow the enum

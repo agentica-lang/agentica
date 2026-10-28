@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Generic structs: `struct Box[T]`, used as `Box[Int]`, with the type argument
   inferred when you build the value.
+- Generic functions: `def first_or[T](xs: List[T], fallback: T) -> T`, with the
+  type arguments inferred from the arguments, the expected type and the block.
 
 ### Changed
 
