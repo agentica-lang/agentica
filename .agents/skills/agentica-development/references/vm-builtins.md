@@ -68,7 +68,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md` §10.2.1,
    "Builtins"): a builtin whose work grows with its input takes `AGC_COST_SIZE`
    or charges `agc_charge` from inside; never touch `steps_left` for that. CPU
-   work with no wait (`Crypto.sha256`, a sort) stays on the scheduler with that
+   work with no wait (`Digest.sha256`, a sort) stays on the scheduler with that
    cost; the libuv pool is for blocking calls. The last field, `leaf`, marks a
    plain C call that never parks, starts a stepper or a block, charges turn cost
    (a map lookup charges for a String key) or counts a step: `CALL_BUILTIN`

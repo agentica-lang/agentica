@@ -11,6 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
+- `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
 
 ### Changed
 

@@ -10648,13 +10648,16 @@
       "start": [1, 1]
     }
   ],
-  "Crypto.sha256 takes a List[Int] and gives a List[Int]; Crypto is a reserved name": [
+  "The Digest hashes take a List[Int]; the plain form gives a List[Int], the _hexdigest form a String; Crypto stays a reserved name": [
     {
       "program": [
         "def main() -> Void",
-        "  digest: List[Int] = Crypto.sha256([97, 98, 99])",
-        "  empty = Crypto.sha256([])",
-        "  puts(digest.size + empty.size)",
+        "  digest: List[Int] = Digest.sha256([97, 98, 99])",
+        "  empty = Digest.sha256([])",
+        "  others: List[Int] = Digest.md5([1]).concat(Digest.sha1([1])).concat(Digest.sha512([1]))",
+        "  hex: String = Digest.md5_hexdigest([]) + Digest.sha1_hexdigest([]) + Digest.sha256_hexdigest([])",
+        "  long: String = Digest.sha512_hexdigest([97])",
+        "  puts(digest.size + empty.size + others.size + hex.length + long.length)",
         "end"
       ],
       "code": null
@@ -10662,7 +10665,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Crypto.sha256(\"abc\")",
+        "  d = Digest.sha256(\"abc\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
@@ -10674,7 +10677,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Crypto.sha256([\"a\"])",
+        "  d = Digest.sha256([\"a\"])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
@@ -10686,34 +10689,68 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Crypto.sha256()",
+        "  d = Digest.sha256()",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Crypto.sha256()"
+      "covers": "Digest.sha256()"
     },
     {
       "program": [
         "def main() -> Void",
-        "  d = Crypto.sha256([1], [2])",
+        "  d = Digest.sha256([1], [2])",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Crypto.sha256([1], [2])"
+      "covers": "Digest.sha256([1], [2])"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: String = Crypto.sha256([1])",
+        "  s: String = Digest.sha256([1])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 15],
-      "covers": "Crypto.sha256([1])",
+      "covers": "Digest.sha256([1])",
       "expected": "String",
       "actual": "List[Int]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = Digest.sha512_hexdigest([1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "Digest.sha512_hexdigest([1])",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  h = Digest.md5_hexdigest(\"abc\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 28],
+      "covers": "\"abc\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  h = Digest.sha1([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "Digest.sha1([1], [2])"
     },
     {
       "program": [

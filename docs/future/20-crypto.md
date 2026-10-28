@@ -12,15 +12,15 @@ error `Result` that names the missing feature. Likewise, when `EVP_KDF_fetch`
 still returns `NULL` (an algorithm left out of the build), the call returns an
 error `Result` that names the missing feature.
 
-**Landed:** `Crypto.sha256(data: List[Int]) -> List[Int]` (#455,
+**Landed:** the `Digest` hashes `md5`, `sha1`, `sha256` and `sha512`, each
+with a `_hexdigest` form (`Digest.sha256(data: List[Int]) -> List[Int]`,
 `docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
-`vm/digest_openssl.c`. It takes and gives `List[Int]` until `Bytes` exists, and
-moves to `Bytes` with the other byte APIs.
+`vm/digest_openssl.c`. They take and give `List[Int]` until `Bytes` exists, and
+move to `Bytes` with the other byte APIs.
 
 **Sketch** (names are not final):
 
 ```text
-Crypto.sha256(data: Bytes) -> Bytes          # also sha512; blake2b if needed
 Crypto.hmac_sha256(key: Bytes, data: Bytes) -> Bytes
 Crypto.equal?(a: Bytes, b: Bytes) -> Bool     # constant time
 Crypto.random_bytes(n: Int) -> Result[Bytes]  # OS-backed CSPRNG

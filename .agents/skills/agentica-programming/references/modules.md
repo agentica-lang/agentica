@@ -255,7 +255,7 @@ import Sqlite from "pkg/sqlite/db"
   into `deps/`). `test` and
   `symbol` walks skip the `deps/` of a project. `agc_libs/` stays for local
   libraries.
-- The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
+- The hash is `sha256:` and the SHA-256 in hex (`Digest.sha256`) of one byte
   stream: for each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the path, a zero byte, the
   size in decimal, a zero byte and the file bytes. The files are the `.agc`

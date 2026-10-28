@@ -1,4 +1,4 @@
-# File.sha256 of small known inputs, its error taxonomy and its agreement with Crypto.sha256; tests/test_vm_file_sha256.py
+# File.sha256 of small known inputs, its error taxonomy and its agreement with Digest.sha256; tests/test_vm_file_sha256.py
 # checks long inputs against hashlib.
 def hex(digest: List[Int]) -> String
   digits = "0123456789abcdef"
@@ -23,7 +23,7 @@ def main() -> Void
   abc = put_bytes(dir, "abc.bin", [97, 98, 99])
   puts("empty #{hex(File.sha256(empty, 60000).unwrap!)}")
   puts("abc #{hex(File.sha256(abc, 60000).unwrap!)}")
-  puts("crypto agrees #{hex(File.sha256(abc, 60000).unwrap!) == hex(Crypto.sha256([97, 98, 99]))}")
+  puts("digest agrees #{hex(File.sha256(abc, 60000).unwrap!) == hex(Digest.sha256([97, 98, 99]))}")
   puts("missing -> #{File.sha256(at(dir, "missing.bin"), 60000)}")
   puts("directory -> #{File.sha256(dir, 60000)}")
   puts("empty path -> #{File.sha256("", 60000)}")

@@ -22,6 +22,14 @@ Channel.send ChannelSend
 Crypto.sha256 Plain
 Digest.hexdecode Plain
 Digest.hexencode Plain
+Digest.md5 Plain
+Digest.md5_hexdigest Plain
+Digest.sha1 Plain
+Digest.sha1_hexdigest Plain
+Digest.sha256 Plain
+Digest.sha256_hexdigest Plain
+Digest.sha512 Plain
+Digest.sha512_hexdigest Plain
 Dir.list Plain
 Dir.mkdir Plain
 Dir.mkdir_private Plain

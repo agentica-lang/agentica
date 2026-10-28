@@ -28,14 +28,20 @@ static bool digest_ready(void) {
   return true;
 }
 
-bool agc_digest_sha256(const unsigned char *data, size_t n, unsigned char out[AGC_SHA256_BYTES]) {
+size_t agc_digest(agc_digest_kind kind, const unsigned char *data, size_t n, unsigned char out[AGC_DIGEST_MAX_BYTES]) {
   static const unsigned char none = 0;
+  /* The default provider has all four, MD5 and SHA-1 included (the legacy provider, which no-legacy leaves out of the
+     vendored build, holds only older hashes such as MD4). */
+  const EVP_MD *md = kind == AGC_DIGEST_MD5    ? EVP_md5()
+                     : kind == AGC_DIGEST_SHA1 ? EVP_sha1()
+                     : kind == AGC_DIGEST_SHA256 ? EVP_sha256()
+                                                 : EVP_sha512();
   unsigned int len = 0;
-  bool done = digest_ready() && EVP_Digest(n ? data : &none, n, out, &len, EVP_sha256(), NULL) == 1 &&
-              len == AGC_SHA256_BYTES;
+  bool done = digest_ready() && md && EVP_MD_get_size(md) <= AGC_DIGEST_MAX_BYTES &&
+              EVP_Digest(n ? data : &none, n, out, &len, md, NULL) == 1 && len > 0;
   /* A failure leaves errors in this thread's OpenSSL queue; drop them so a later TLS call on it reads only its own. */
   if (!done) ERR_clear_error();
-  return done;
+  return done ? len : 0;
 }
 
 agc_sha256_stream *agc_sha256_begin(void) {

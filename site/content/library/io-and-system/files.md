@@ -61,7 +61,7 @@ end
 File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
 ```
 
-Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Crypto.sha256` gives for the same content. It streams the file in fixed 64 KiB chunks with O(chunk) memory, so an archive far over the 1 MiB text cap still hashes without holding it in memory.
+Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Digest.sha256` gives for the same content. It streams the file in fixed 64 KiB chunks with O(chunk) memory, so an archive far over the 1 MiB text cap still hashes without holding it in memory.
 
 ```agentica {mode="check"}
 def main() -> Void

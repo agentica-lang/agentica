@@ -109,11 +109,13 @@ in a PR that rewrites the goldens.
   surrogates, no overlong forms, no code points above U+10FFFF.
   `String.to_bytes` returns the UTF-8 bytes as a `List[Int]` and costs by size,
   like `from_bytes`.
-- `Crypto.sha256` checks every item is 0 to 255 (else `RUNTIME-INVALID-NUMBER`
-  at the argument), hashes with OpenSSL (`vm/digest_openssl.c`, behind
-  `digest.h`) and returns 32 bytes. It charges one turn-cost unit per item
-  (§10.2.1) and runs without the shared lock, as it reads only its argument.
-  The `Base64` and `Digest` builtins in `vm/crypto.c` are plain C; the
+- The `Digest` hashes (`md5`, `sha1`, `sha256`, `sha512` and their
+  `_hexdigest` forms) check every item is 0 to 255 (else
+  `RUNTIME-INVALID-NUMBER` at the argument), hash with OpenSSL's EVP digests
+  (`vm/digest_openssl.c`, behind `digest.h`) and return the digest bytes or
+  their hex. Each charges one turn-cost unit per item (§10.2.1) and runs
+  without the shared lock, as it reads only its argument. The `Base64` and
+  `Digest.hexencode`/`hexdecode` builtins in `vm/crypto.c` are plain C; the
   encoders check items the same way, and all eight charge `AGC_COST_SIZE`.
 
 ### 2.4 Printing values
@@ -245,7 +247,7 @@ Every failure is an error value. The checks run in this order:
   `File.read_bytes` reads to `max_bytes` or EOF.
 - `File.sha256` streams a whole regular file through one private descriptor,
   read from the start in fixed 64 KiB chunks with O(chunk) memory: no 1 MiB
-  cap, and the 32 digest bytes in `Crypto.sha256` order. The `fstat` of the
+  cap, and the 32 digest bytes in `Digest.sha256` order. The `fstat` of the
   descriptor decides regular; anything else is `filesystem: path does not
   refer to a regular file`, without waiting on the loop. The job never takes
   the `more` step, so a cancel or a timeout detaches it like the other
