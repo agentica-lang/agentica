@@ -18,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `Base64` and `Digest` are reserved names.
 - `--jit on` keeps short loops that wait on channels, tasks, processes,
   sockets, stdin or files interpreted.
+- `--jit on` is the default on x86-64; `--jit off` or `AGENTICA_JIT=off` turns
+  the JIT off.
 
 ## [0.14.0] - 2026-10-28
 

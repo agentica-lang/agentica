@@ -33,7 +33,7 @@ static const char usage[] =
   "  the run uses one scheduler per logical core (at most 1024), or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag "
   "wins); --schedulers 1 runs one task at a time, in a fixed order\n"
   "  --jit MODE (off, on or always; or AGENTICA_JIT, the flag wins) compiles hot functions to machine code: "
-  "experimental, off by default, x86-64 only\n";
+  "on by default, x86-64 only\n";
 
 /* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
  * is static, so the array holds no GC pointer and is atomic. */

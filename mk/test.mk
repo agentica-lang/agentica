@@ -3,7 +3,7 @@
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
   test-bdd smoke goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
-  docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-on
+  docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
 # TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md,
@@ -115,16 +115,16 @@ conformance: $(PRODUCT)
 	done; \
 	$(MAKE) --no-print-directory conformance-report || status=1; exit $$status
 
-# The soak of the JIT default (docs/vm/05-values-execution-builtins.md §6.4, jit-soak.yml): the conformance areas of
-# this system, plus the destructive group on a GitHub-hosted runner (it needs the prebuilt C test binaries, so
-# vm-test-binaries comes first there), with AGENTICA_JIT=on in the environment of every VM the tests start (run_vm,
-# Child, `agentica test` and its VMs inherit it; vm_environment() keeps it). A test that passes --jit or sets
-# AGENTICA_JIT itself keeps its own mode, since the flag wins; tests/test_vm_jit.py has a canary that fails if the
-# variable stops reaching the VMs. `on` must change no result, so a failure here is a JIT bug or a test that depends on
-# the mode; the report in the job summary names the failed cases. Locally: `AGENTICA_JIT=on make test` runs the whole
-# suite (the conformance areas leave out the source checks).
-test-jit-on: $(PRODUCT) $(if $(filter true,$(GITHUB_ACTIONS)),vm-test-binaries)
-	@status=0; export AGENTICA_JIT=on; \
+# The soak of the interpreter (docs/vm/05-values-execution-builtins.md §6.4, jit-soak.yml), since `--jit on` is the
+# default: the conformance areas of this system, plus the destructive group on a GitHub-hosted runner (it needs the
+# prebuilt C test binaries, so vm-test-binaries comes first there), with AGENTICA_JIT=off in the environment of every
+# VM the tests start (run_vm, Child, `agentica test` and its VMs inherit it; vm_environment() keeps it). A test that
+# passes --jit or sets AGENTICA_JIT itself keeps its own mode, since the flag wins; tests/test_vm_jit.py has a canary
+# that fails if the variable stops reaching the VMs. The mode must change no result, so a failure here is a bug of one
+# tier or a test that depends on the mode; the report in the job summary names the failed cases. Locally:
+# `AGENTICA_JIT=off make test` runs the whole suite (the conformance areas leave out the source checks).
+test-jit-off: $(PRODUCT) $(if $(filter true,$(GITHUB_ACTIONS)),vm-test-binaries)
+	@status=0; export AGENTICA_JIT=off; \
 	  if [ "$${GITHUB_ACTIONS:-}" = true ]; then $(MAKE) --no-print-directory test-remove-actions || status=1; fi; \
 	  $(MAKE) --no-print-directory conformance || status=1; exit $$status
 
