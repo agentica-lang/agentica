@@ -23,6 +23,8 @@ runners:
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of
 every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to
 skip the `hello.agc` start-up check and the front-end rows (see "Front end").
+`run.py` has no `--jit`; `AGENTICA_JIT=on python3 benchmarks/run.py ...` sets
+the JIT mode of every program it runs (see "JIT").
 
 Every runner must print the same output, or the row is a mismatch and the script
 exits 1. A program the VM cannot compile yet shows as `unsupported`, with its
@@ -225,6 +227,58 @@ about 110):
 The instruction stayed: the case it is for, a lexer or parser state of 4 to 16
 fields in a tail-recursive `step`, is 15% to 34% faster, and two fields cost
 only about 8% more.
+
+## JIT (`--jit`)
+
+The x86-64 JIT (`docs/vm/05-values-execution-builtins.md` §6.4) against the
+interpreter, on master `b04d44f9` (2026-10-28). Seconds, best of 5 runs at size
+4, the three modes interleaved, one pinned core (`taskset -c 3`) and one
+scheduler (`--schedulers 1`), on the Ryzen 5 3550H of "Results" (8 threads, 13
+GB RAM, Debian 13, gcc 14.2.0, Linux 6.12, a default `make` build). The load
+average was 0.8 to 1.3, from other sessions on the same host.
+
+| Program | `off` s | `on` s | `always` s | `on` / `off` |
+|---|---:|---:|---:|---:|
+| arithmetic | 0.109 | 0.053 | 0.053 | 0.48 |
+| calls | 0.087 | 0.032 | 0.030 | 0.37 |
+| case | 0.077 | 0.025 | 0.025 | 0.33 |
+| knight-tour | 0.098 | 0.058 | 0.059 | 0.60 |
+| traveling-salesman | 0.101 | 0.066 | 0.067 | 0.65 |
+| lists | 0.112 | 0.078 | 0.076 | 0.69 |
+| small-values | 0.482 | 0.372 | 0.379 | 0.77 |
+| strings | 0.119 | 0.094 | 0.093 | 0.80 |
+| sets | 0.157 | 0.143 | 0.136 | 0.91 |
+| string-library | 0.087 | 0.081 | 0.081 | 0.93 |
+| maze-bfs | 0.155 | 0.148 | 0.144 | 0.95 |
+| print-lines | 0.721 | 0.684 | 0.688 | 0.95 |
+| deadline-pingpong | 0.277 | 0.276 | 0.356 | 1.00 |
+| sleepers | 0.415 | 0.420 | 0.424 | 1.01 |
+| logger-disabled | 2.511 | 2.562 | 3.070 | 1.02 |
+| maps | 0.234 | 0.246 | 0.249 | 1.05 |
+| list-bulk | 0.293 | 0.324 | 0.315 | 1.11 |
+| channel-pingpong | 0.558 | 0.678 | 0.667 | 1.22 |
+| list-build | 0.151 | 0.200 | 0.149 | 1.32 |
+| front-end self-compile | 18.00 | 15.01 | 13.93 | 0.83 |
+
+Every mode printed the same output, and the three self-compiles wrote the same
+bytes. The self-compile is `AGENTICA_VM_TEST_FRONT_END_JIT=MODE agentica compile
+compiler/front_end.agc -o FILE`, best of 5 (the front end runs in the
+interpreter otherwise, and the variable is for tests); `always` is 0.77 of
+`off`.
+
+- **What the JIT covers.** Functions with a loop, native calls and tail calls
+  run in machine code, and call the direct builtins and the plain leaf builtins
+  from it. The rows at 0.8 or below are programs of loops and calls.
+- **What still leaves compiled code.** Non-leaf builtins (output, tasks,
+  channels, files), some block-call returns, calls to functions without code
+  and returns into interpreted callers go back to the interpreter (§6.4,
+  "Exits"). Programs of such builtins and timers gain nothing in this table, and
+  `always` also compiles functions that never get hot.
+- **Reading the table.** `on` is slower than `off` on `channel-pingpong` (1.17
+  to 1.22 in two runs) and `list-bulk` (1.11 to 1.12), and `always` is 1.22
+  times `off` on `logger-disabled`. `list-build` moves by 30% between runs of
+  one mode (`off` 0.151 and 0.205, `on` 0.200 and 0.143 in two passes) and is
+  not a JIT result. `maps` is inside the noise (1.02 to 1.05).
 
 ## HTTP sanity check
 
