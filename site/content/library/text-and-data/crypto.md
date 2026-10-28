@@ -45,7 +45,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 - A system OpenSSL in FIPS-only mode has no MD5 or SHA-1; `Digest.md5` and `Digest.sha1` (and their `_hexdigest` forms) then stop the program with `RUNTIME-INTERNAL`. The release binaries use their own OpenSSL, which has all four.
 - The time grows with the list. A call is never split, but it counts toward the task's turn, so other tasks run soon after a large hash.
 - They need no effect label: they read nothing outside their argument.
-- `Crypto` and `Digest` are reserved type names.
+- `Digest` is a reserved type name.
 
 ```agentica {expect="RUNTIME-INVALID-NUMBER"}
 def main() -> Void
@@ -83,4 +83,4 @@ f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
 - To check a MAC you received, compare it with the one you compute in constant time. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right; a constant-time compare is planned.
 - An item outside 0 to 255, in the key or in the data, stops the program with `RUNTIME-INVALID-NUMBER` at that argument.
 - The time grows with the key and the data, as for the digests, and they need no effect label.
-- `HMAC` is a reserved type name.
+- `HMAC` is a reserved type name too.
