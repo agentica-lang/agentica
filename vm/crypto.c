@@ -1,9 +1,10 @@
 /*
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
- * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex), the first part of
+ * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex) and their HMACs
+ * (HMAC-SHA256 and HMAC-SHA512, RFC 2104), the first parts of
  * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
- * forms of bytes, in plain C, and the SecureRandom draws. The hash and the
- * random bytes come from the OpenSSL adapter (digest.h). Service layer.
+ * forms of bytes, in plain C, and the SecureRandom draws. The hash, the HMAC and
+ * the random bytes come from the OpenSSL adapter (digest.h). Service layer.
  * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC
  * 4648 and Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
@@ -30,6 +31,19 @@ static const struct {
   [AGC_DIGEST_SHA1] = {"Digest.sha1 needs bytes between 0 and 255", "SHA-1 is not available"},
   [AGC_DIGEST_SHA256] = {"Digest.sha256 needs bytes between 0 and 255", "SHA-256 is not available"},
   [AGC_DIGEST_SHA512] = {"Digest.sha512 needs bytes between 0 and 255", "SHA-512 is not available"},
+};
+
+/* The messages of the HMAC builtins, by agc_digest_kind: a bad item in the key or in the data (RUNTIME-INVALID-NUMBER)
+   and a failed HMAC. Only the kinds with an HMAC builtin have an entry. */
+static const struct {
+  const char *bad_key;
+  const char *bad_data;
+  const char *missing;
+} hmac_names[] = {
+  [AGC_DIGEST_SHA256] = {"HMAC.sha256 needs a key of bytes between 0 and 255",
+                         "HMAC.sha256 needs data of bytes between 0 and 255", "HMAC-SHA256 is not available"},
+  [AGC_DIGEST_SHA512] = {"HMAC.sha512 needs a key of bytes between 0 and 255",
+                         "HMAC.sha512 needs data of bytes between 0 and 255", "HMAC-SHA512 is not available"},
 };
 
 /* The bytes of the List[Int] argument: an item outside 0..255 is RUNTIME-INVALID-NUMBER at the argument (span + 1), a
@@ -267,17 +281,36 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, byte_list_value(vm, out, n));
 }
 
+/* The calls into libcrypto (digest_compute, hmac_compute and secure_draw below) each have their own out-of-line
+   function whose only callees are the adapter and agc_fail. vm/tools/tsan.supp names these three and nothing else, so
+   a TSan report about OpenSSL's fetch caches is suppressed while a race in the VM code around them (such as reading a
+   list another task holds) is still reported. TSan unwinds by frame pointers, which libcrypto does not keep, so a
+   report skips the adapter function and shows its caller first: these must stay real frames (noinline, and not a tail
+   call). */
+static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
+                                                       unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
+  size_t len = agc_digest(kind, bytes, n, out);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", digest_names[kind].missing, span);
+  return len;
+}
+
+static __attribute__((noinline)) size_t hmac_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *key,
+                                                     size_t key_n, const uint8_t *data, size_t n,
+                                                     unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
+  size_t len = agc_hmac(kind, key, key_n, data, n, out);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", hmac_names[kind].missing, span);
+  return len;
+}
+
 /* Digest.<kind>(data) and its _hexdigest form: the digest of the bytes, as a byte list (Ruby's Digest::SHA256.digest)
    or as lowercase hex (hexdigest). The work grows with the list, so the rows charge AGC_COST_SIZE: one turn-cost unit
    per item (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task
    yields after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
-/* vm/tools/tsan.supp names digest_value, the caller of agc_digest. */
 static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
   size_t n;
   const uint8_t *bytes = text_form_bytes(vm, args[0], digest_names[kind].bad_byte, span, &n);
   unsigned char digest[AGC_DIGEST_MAX_BYTES];
-  size_t len = agc_digest(kind, bytes, n, digest);
-  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", digest_names[kind].missing, span);
+  size_t len = digest_compute(vm, kind, bytes, n, digest, span);
   return hex ? hex_text(vm, digest, len) : byte_list_value(vm, digest, len);
 }
 
@@ -313,16 +346,46 @@ static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t 
   return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
 }
 
+/* HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as a byte list (Ruby's
+   OpenSSL::HMAC.digest) or as lowercase hex (hexdigest). A bad item is reported at its own argument: the key at
+   span + 1, the data at span + 2. The key block stays reachable while the data is read: it is a local the GC scans.
+   Cost and lock as digest_value. */
+static agc_value hmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+  size_t key_n, n;
+  const uint8_t *key = text_form_bytes(vm, args[0], hmac_names[kind].bad_key, span, &key_n);
+  const uint8_t *data = text_form_bytes(vm, args[1], hmac_names[kind].bad_data, span + 1, &n);
+  unsigned char mac[AGC_DIGEST_MAX_BYTES];
+  size_t len = hmac_compute(vm, kind, key, key_n, data, n, mac, span);
+  return hex ? hex_text(vm, mac, len) : byte_list_value(vm, mac, len);
+}
+
+static agc_value builtin_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, false);
+}
+
+static agc_value builtin_hmac_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, true);
+}
+
+static agc_value builtin_hmac_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, false);
+}
+
+static agc_value builtin_hmac_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, true);
+}
+
+/* Fills the n bytes at out from the secure random source. A failed draw stops the run: it never gives weak, partial
+   or zero bytes in place of random ones. One of the libcrypto wrappers that vm/tools/tsan.supp names (see
+   digest_compute). */
+static __attribute__((noinline)) void secure_draw(agc_vm *vm, uint8_t *out, size_t n, uint32_t span) {
+  if (!agc_secure_random(out, n)) agc_fail(vm, "RUNTIME-INTERNAL", "the secure random source failed", span);
+}
+
 /* SecureRandom.random_bytes(n) and hex(n) draw at most AGC_MAX_LIST_COUNT bytes (1 MiB), the bound of the other
    builtins that make a list from a count (List#*, Range#to_a, IO.read_bytes). Keys, salts and tokens are 16 to 64
    bytes; the bound makes a wrong count such as 10 ** 12 fail at the argument instead of asking for terabytes of
    memory. Ruby has no bound. */
-/* Fills the n bytes at out from the secure random source. A failed draw stops the run: it never gives weak, partial
-   or zero bytes in place of random ones. vm/tools/tsan.supp names this function, the caller of agc_secure_random. */
-static void secure_draw(agc_vm *vm, uint8_t *out, size_t n, uint32_t span) {
-  if (!agc_secure_random(out, n)) agc_fail(vm, "RUNTIME-INTERNAL", "the secure random source failed", span);
-}
-
 static const uint8_t *secure_random_bytes(agc_vm *vm, agc_value arg, const char *bad_count, uint32_t span, size_t *n) {
   int64_t count = agc_as_int(vm, arg);
   if (count < 0 || count > AGC_MAX_LIST_COUNT) agc_fail(vm, "RUNTIME-INVALID-COUNT", bad_count, span + 1);
@@ -383,6 +446,10 @@ const agc_builtin agc_crypto_builtins[] = {
   {"Base64.urlsafe_decode64", 1, builtin_urlsafe_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexencode", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexdecode", 1, builtin_hexdecode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256", 2, builtin_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256_hexdigest", 2, builtin_hmac_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512", 2, builtin_hmac_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512_hexdigest", 2, builtin_hmac_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.random_bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

@@ -6,8 +6,9 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and
-## hex rows, the digest rows and then the SecureRandom rows are appended last,
-## in contract order, so the positions of the existing rows never shift.
+## hex rows, the digest rows, the HMAC rows and then the SecureRandom rows are
+## appended last, in contract order, so the positions of the existing rows never
+## shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -19,7 +20,7 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60.concat(ROWS_61)))))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -249,6 +250,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "FileInfo",
     "Float",
     "Fn",
+    "HMAC",
     "Header",
     "HttpClient",
     "HttpClientOptions",
@@ -5541,8 +5543,76 @@ ROWS_59: List[Model.Builtin] = [
     ),
   ]
 
-## The SecureRandom rows; appended last so the positions of the existing rows never shift.
+## The HMAC rows; appended last so the positions of the existing rows never shift.
 ROWS_60: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "HMAC.sha256",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "HMAC.sha256",
+      effects: [],
+      description: (
+        "HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "32 bytes of the MAC; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HMAC.sha256_hexdigest",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "HMAC.sha256_hexdigest",
+      effects: [],
+      description: (
+        "HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "MAC as 64 lowercase hex digits; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HMAC.sha512",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "HMAC.sha512",
+      effects: [],
+      description: (
+        "HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "64 bytes of the MAC; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HMAC.sha512_hexdigest",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "HMAC.sha512_hexdigest",
+      effects: [],
+      description: (
+        "HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "MAC as 128 lowercase hex digits; VM only."
+      ),
+      alternatives: [],
+    ),
+  ]
+
+## The SecureRandom rows; appended last so the positions of the existing rows never shift.
+ROWS_61: List[Model.Builtin] = [
     Model.Builtin(
       name: "SecureRandom.random_bytes",
       parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],

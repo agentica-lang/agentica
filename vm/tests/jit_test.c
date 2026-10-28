@@ -1433,6 +1433,26 @@ static void ineligible(void) {
     agc_jit_settle(&program, callable, looped, calling);
     assert(callable[0] == (which == 0) && callable[1] == (which == 0));
   }
+  /* A builtin row's answer is kept per row, apart for a loop and a function without one: a block call leaves from the
+     function, not from the loop, whichever of the two settle reads first. The loop's one trip out is its call of the
+     function, which drops; a second one would keep the loop out too. */
+  enum { BLOCK_LOOP = AGC_JIT_SPACING };
+  agc_instr block_body[2] = {{AGC_OP_CALL_BUILTIN, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}}, block_loop[BLOCK_LOOP];
+  for (uint16_t loop_first = 0; loop_first < 2; loop_first++) {
+    uint16_t body = loop_first, loop_at = !loop_first;
+    block_loop[0] = (agc_instr){AGC_OP_STEP, 1, 0, 0};
+    block_loop[1] = (agc_instr){AGC_OP_CALL_BUILTIN, 0, 1, 0};
+    block_loop[2] = (agc_instr){AGC_OP_CALL, 0, body, 0};
+    for (uint32_t pc = 3; pc + 1 < BLOCK_LOOP; pc++) block_loop[pc] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
+    block_loop[BLOCK_LOOP - 1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+    agc_function fns[2];
+    fns[body] = (agc_function){.registers = 3, .code = block_body, .count = 2};
+    fns[loop_at] = (agc_function){.registers = 3, .code = block_loop, .count = BLOCK_LOOP};
+    agc_program program = {.functions = fns, .function_count = 2, .builtins = callee_rows};
+    bool callable[2], looped[2], calling[2];
+    agc_jit_settle(&program, callable, looped, calling);
+    assert(!callable[body] && callable[loop_at] && looped[loop_at] && !looped[body]);
+  }
   /* A function whose only loop is a TAIL_CALL of itself has a loop, so `on` compiles it at its entries; a TAIL_CALL of
      another function is no loop. */
   agc_instr self_tail[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};

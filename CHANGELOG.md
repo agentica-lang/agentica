@@ -12,12 +12,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
 - `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
+- `HMAC.sha256` and `HMAC.sha512` (HMAC-SHA256 and HMAC-SHA512), each with a
+  `_hexdigest` form.
 - `SecureRandom.random_bytes`, `hex` and `uuid` draw secure random bytes for
   keys and tokens.
 
 ### Changed
 
 - **Breaking:** `Base64` and `Digest` are reserved names.
+- **Breaking:** `HMAC` is a reserved name.
 - **Breaking:** `SecureRandom` is a reserved name.
 - **Breaking:** `Crypto.sha256` is now `Digest.sha256`; rebuild old `.agcb` files.
 - `--jit on` keeps short loops that wait on channels, tasks, processes,

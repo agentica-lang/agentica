@@ -243,8 +243,8 @@ and a task's crash line (`"task":true`) carry it too.
   `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
   `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
-  0..4294967295, a `Digest` hash, `Base64` or `Digest.hexencode` item
-  outside 0..255.
+  0..4294967295, a `Digest` hash, `HMAC`, `Base64` or `Digest.hexencode`
+  item outside 0..255.
 - `RUNTIME-INVALID-RANGE`: `Random.int` with `min > max`.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.

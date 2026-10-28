@@ -10777,6 +10777,112 @@
       "start": [1, 1]
     }
   ],
+  "The HMAC builtins take a key and data, both List[Int]; the plain form gives a List[Int], the _hexdigest form a String; HMAC is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  mac: List[Int] = HMAC.sha256([107], [100])",
+        "  empty = HMAC.sha512([], [])",
+        "  hex: String = HMAC.sha256_hexdigest([], [1]) + HMAC.sha512_hexdigest([1], [])",
+        "  puts(mac.size + empty.size + hex.length)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = HMAC.sha256(\"key\", [1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 19],
+      "covers": "\"key\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = HMAC.sha512_hexdigest([1], \"data\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 34],
+      "covers": "\"data\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = HMAC.sha256([1], [\"a\"])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 25],
+      "covers": "\"a\"",
+      "expected": "Int",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = HMAC.sha256([1])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "HMAC.sha256([1])"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = HMAC.sha512([1], [2], [3])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "HMAC.sha512([1], [2], [3])"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: String = HMAC.sha512([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 15],
+      "covers": "HMAC.sha512([1], [2])",
+      "expected": "String",
+      "actual": "List[Int]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = HMAC.sha256_hexdigest([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "HMAC.sha256_hexdigest([1], [2])",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "struct HMAC",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Base64 and Digest.hexencode take a List[Int] and give a String; the strict decodes give a Result; Base64 and Digest are reserved names": [
     {
       "program": [

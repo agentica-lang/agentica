@@ -57,6 +57,10 @@ Float.to_int!
 FrontEnd.hand_off
 FrontEnd.std_source
 FrontEnd.stdin_bytes
+HMAC.sha256
+HMAC.sha256_hexdigest
+HMAC.sha512
+HMAC.sha512_hexdigest
 HttpWire.accept
 HttpWire.awaited?
 HttpWire.chunk

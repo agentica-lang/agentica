@@ -22,6 +22,26 @@ typedef struct {
   uint32_t callee, region;
 } call_site;
 
+/* What settle reads of an instruction, by its opcode: agc_jit_settle looks each one up in a table made by op_kind
+   once, instead of testing the opcode at each instruction of the program. The first two neither leave compiled code
+   nor call, so settle reads no more of them after its first walk. */
+enum {
+  KIND_CODE,   /* code of its own (has_code), not a jump */
+  KIND_RETURN, /* runs once per call */
+  /* A CALL_VALUE does not leave: its callee is known only when it runs, and it is called natively once it has code (a
+     block or a small function, which `on` compiles at its CALL_VALUE exits), so it is counted as a call of a function
+     that may get code. */
+  KIND_VALUE,
+  KIND_LEAVES, /* no code of its own: a trip out of compiled code */
+  KIND_JUMP,   /* JUMP, JUMP_IF_FALSE, JUMP_IF_TRUE: code of its own, the end of a loop when it goes back */
+  /* A CALL or TAIL_CALL: of a function of the program when its index is below the function count (compiled code makes
+     the call natively when the callee has code, else run_compiled makes the frame transition and goes on in the
+     callee's code once it has some, so settle counts the call by its callee), else a trip out. */
+  KIND_CALL,
+  KIND_TAIL,
+  KIND_BUILTIN /* CALL_BUILTIN: see builtin_trips */
+};
+
 /* The code that waits for a seal (seal_batch), under the JIT's lock: BYTES[0 .. LEN) holds the code of FUNCTIONS[k]
    at OFFSETS[k], SIZES[k] bytes long, for k below COUNT. */
 struct agc_jit_batch {
@@ -82,22 +102,8 @@ static uint32_t plain_op(uint32_t op) {
   return op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
 }
 
-/* True when IN at PC of function SELF of P jumps back to *START or before it: the end of a loop. A TAIL_CALL of SELF
-   is one too, back to instruction 0, when its code is a jump there (agc_emit_tail_call: at most AGC_JIT_TAIL_PARAMS
-   arguments). */
-static bool backward(const agc_program *p, agc_instr in, uint32_t pc, uint32_t self, uint32_t *start) {
-  uint32_t op = plain_op(in.op);
-  *start = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  if (op == AGC_OP_TAIL_CALL) {
-    bool again = *start == self && p->functions[self].params <= AGC_JIT_TAIL_PARAMS;
-    *start = 0;
-    return again;
-  }
-  return (op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && *start <= pc;
-}
-
-/* True when IN always has code of its own. CALL, CALL_VALUE, TAIL_CALL and RETURN have code that may exit
-   (leaves_code). */
+/* True when OP (a fused one: its STEP or CONST) always has code of its own. CALL, CALL_VALUE, TAIL_CALL and RETURN
+   have code that may exit (op_kind). */
 static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
@@ -147,38 +153,68 @@ static bool has_code(uint32_t op) {
   }
 }
 
-/* True for a CALL or a TAIL_CALL of a function of the program: compiled code makes either natively when the callee has
-   code, else run_compiled makes the frame transition and goes on in the callee's code once it has some, so settle
-   counts such a call by its callee. */
-static bool calls_function(const agc_program *p, agc_instr in) {
-  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  return (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) && bx < p->function_count;
+/* The kind of OP for settle, from has_code and plain_op. */
+static uint8_t op_kind(uint32_t op) {
+  uint32_t plain = plain_op(op);
+  if (plain == AGC_OP_JUMP || plain == AGC_OP_JUMP_IF_FALSE || plain == AGC_OP_JUMP_IF_TRUE) return KIND_JUMP;
+  if (has_code(op)) return KIND_CODE;
+  switch (op) {
+    case AGC_OP_RETURN: return KIND_RETURN;
+    case AGC_OP_CALL_VALUE: return KIND_VALUE;
+    case AGC_OP_CALL: return KIND_CALL;
+    case AGC_OP_TAIL_CALL: return KIND_TAIL;
+    case AGC_OP_CALL_BUILTIN: return KIND_BUILTIN;
+    default: return KIND_LEAVES;
+  }
 }
 
-/* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a call of a function of the
-   program (calls_function). A block call (a row with a native kind, such as `filter`: its native frame and the
-   block's frames) is started by run_compiled itself, which LOOPLESS says to count or not, as its exit unwinds the
-   native calls; a direct builtin is called by the code itself, which leaves only when the call ends the turn or
-   fails, and so is a leaf below a native call (at native depth 0 it leaves, but unwinds nothing); a RETURN runs once
-   per call. A CALL_VALUE does not leave: its callee is known only when it runs, and it is called natively once it has
-   code (a block or a small function, which `on` compiles at its CALL_VALUE exits), so it is counted as a call of a
-   function that may get code. */
-static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
-  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  if (has_code(in.op) || in.op == AGC_OP_RETURN || in.op == AGC_OP_CALL_VALUE) return false;
-  if (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) return !calls_function(p, in);
-  if (in.op != AGC_OP_CALL_BUILTIN) return true;
-  const agc_builtin *b = p->builtins[bx];
-  return !(b->direct || b->leaf) && (!b->native || loopless);
+/* The kind of IN, from KINDS (op_kind of each opcode below AGC_FUSED_END); any other opcode has no code. */
+static uint32_t kind_of(const uint8_t *kinds, agc_instr in) {
+  return in.op < AGC_FUSED_END ? kinds[in.op] : KIND_LEAVES;
 }
 
-/* The trips out of compiled code that the `on` heuristic counts for IN when it is not a call of a function of the
-   program: none, one, or AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park (agc_jit_parking). */
-static uint32_t trips(const agc_program *p, agc_instr in, bool loopless) {
-  if (!leaves_code(p, in, loopless)) return 0;
-  uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-  if (in.op != AGC_OP_CALL_BUILTIN) return 1;
-  return agc_jit_parks(p->builtins[bx]) ? AGC_JIT_PARK_WEIGHT : 1;
+/* True when IN at PC of function SELF of P, of kind KIND_JUMP or KIND_TAIL, jumps back to *START or before it: the
+   end of a loop. A TAIL_CALL of SELF is one too, back to instruction 0, when its code is a jump there
+   (agc_emit_tail_call: at most AGC_JIT_TAIL_PARAMS arguments). */
+static bool backward(const agc_program *p, agc_instr in, uint32_t kind, uint32_t pc, uint32_t self, uint32_t *start) {
+  *start = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  if (kind == KIND_TAIL) {
+    bool again = *start == self && p->functions[self].params <= AGC_JIT_TAIL_PARAMS;
+    *start = 0;
+    return again;
+  }
+  return *start <= pc;
+}
+
+/* The trips out of compiled code that the `on` heuristic counts for a CALL_BUILTIN of row BX of P, in a function
+   without a loop when LOOPLESS: none, one, or AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park
+   (agc_jit_parking). A block call (a row with a native kind, such as `filter`: its native frame and the block's
+   frames) is started by run_compiled itself, which LOOPLESS says to count or not, as its exit unwinds the native
+   calls; a direct builtin is called by the code itself, which leaves only when the call ends the turn or fails, and so
+   is a leaf below a native call (at native depth 0 it leaves, but unwinds nothing). ROWS[BX] keeps the answer of each
+   row, which is the same at each of its call sites: bit 0 once known, bit 1 when it leaves from a loop, bit 2 when it
+   leaves from a function without one, bit 3 when it may park. */
+static uint32_t builtin_trips(const agc_program *p, uint8_t *rows, uint32_t bx, bool loopless) {
+  uint8_t row = rows[bx];
+  if (!row) {
+    const agc_builtin *b = p->builtins[bx];
+    bool leaves = !(b->direct || b->leaf);
+    row = (uint8_t)(1u | (unsigned)(leaves && !b->native) << 1 | (unsigned)leaves << 2 |
+                    (unsigned)(leaves && agc_jit_parks(b)) << 3);
+    rows[bx] = row;
+  }
+  if (!(row & (loopless ? 4u : 2u))) return 0;
+  return row & 8u ? AGC_JIT_PARK_WEIGHT : 1;
+}
+
+/* ITEMS, an atomic GC block of *CAP items of SIZE bytes whose first COUNT are set, with room for NEED items: when it
+   has too little, a new block of twice the size or more with the same first COUNT items. */
+static void *grow(void *items, size_t *cap, size_t count, size_t need, size_t size) {
+  if (need <= *cap) return items;
+  *cap = 2 * *cap > need ? 2 * *cap : need;
+  void *bigger = agc_alloc_atomic(agc_size_mul(*cap, size));
+  if (count) memcpy(bigger, items, count * size);
+  return bigger;
 }
 
 /* Why `on` keeps a function out:
@@ -188,65 +224,84 @@ static uint32_t trips(const agc_program *p, agc_instr in, bool loopless) {
      its exit unwinds every native call).
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
-     ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (trips).
+     ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (builtin_trips).
    A CALL leaves when its callee may not get code, which depends on the callee's own calls, so the decision is a fixed
    point: every function starts callable, and a function that drops out counts one more leaving instruction in each
    region that calls it. Innermost loops never overlap, so each instruction is in at most one region, and each call
    site is counted once, when its callee drops: the work follows the program's size, whatever the order of the
    functions or the size of a caller. */
 size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *calling) {
-  size_t n = p->function_count, longest = 0, jumps = 0, calls = 0, work = 0;
-  for (uint32_t k = 0; k < n; k++) {
-    const agc_function *f = &p->functions[k];
-    if (f->count > longest) longest = f->count;
-    for (uint32_t pc = 0; pc < f->count; pc++) {
-      uint32_t start;
-      agc_instr in = f->code[pc];
-      jumps += backward(p, in, pc, k, &start);
-      calls += calls_function(p, in);
-    }
-    work += f->count;
-  }
-  /* Atomic GC memory is not zeroed. ENDS[pc] counts the loop ends before pc; AT[pc] is the region of pc. */
-  uint32_t *ends = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *ends));
-  uint32_t *at = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *at));
-  region *regions = agc_alloc_atomic(agc_size_mul(n + jumps + 1, sizeof *regions));
-  call_site *sites = agc_alloc_atomic(agc_size_mul(calls + 1, sizeof *sites));
-  size_t region_count = 0, site_count = 0;
+  uint8_t kinds[AGC_FUSED_END];
+  for (uint32_t op = 0; op < AGC_FUSED_END; op++) kinds[op] = op_kind(op);
+  size_t n = p->function_count, longest = 0, work = 0;
+  for (uint32_t k = 0; k < n; k++)
+    if (p->functions[k].count > longest) longest = p->functions[k].count;
+  /* Atomic GC memory is not zeroed. MARKS holds the pcs of a function that settle reads after its first walk; LAST[j]
+     is the pc of the loop end of the function's region j. REGIONS, SITES and ROWS grow as needed. */
+  uint32_t *marks = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *marks));
+  uint32_t *last = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *last));
+  size_t region_cap = n + 1, site_cap = n + 1, row_cap = 0, region_count = 0, site_count = 0;
+  region *regions = agc_alloc_atomic(agc_size_mul(region_cap, sizeof *regions));
+  call_site *sites = agc_alloc_atomic(agc_size_mul(site_cap, sizeof *sites));
+  uint8_t *rows = NULL;
   for (uint32_t k = 0; k < n; k++) {
     const agc_function *f = &p->functions[k];
     callable[k] = true;
     calling[k] = false;
-    ends[0] = 0;
-    for (uint32_t pc = 0; pc < f->count; pc++) {
-      uint32_t start;
-      ends[pc + 1] = ends[pc] + backward(p, f->code[pc], pc, k, &start);
-      at[pc] = UINT32_MAX;
-    }
-    looped[k] = ends[f->count] > 0;
-    if (!looped[k]) {
-      regions[region_count] = (region){k, 0, 0};
-      for (uint32_t pc = 0; pc < f->count; pc++) at[pc] = (uint32_t)region_count;
-      region_count++;
-    }
-    for (uint32_t pc = 0; looped[k] && pc < f->count; pc++) {
-      uint32_t start;
-      if (!backward(p, f->code[pc], pc, k, &start) || ends[pc] - ends[start] > 0) continue;
-      regions[region_count] = (region){k, pc - start + 1, 0};
-      for (uint32_t q = start; q <= pc; q++) at[q] = (uint32_t)region_count;
-      region_count++;
-    }
+    /* The one walk over every instruction marks the ones the rest reads: a jump back, a call of any kind, and an
+       instruction without code. Most instructions have code, so the rest reads few. */
+    size_t m = 0;
     for (uint32_t pc = 0; pc < f->count; pc++) {
       agc_instr in = f->code[pc];
-      bool call = calls_function(p, in);
-      calling[k] |= call || in.op == AGC_OP_CALL_VALUE;
-      if (at[pc] == UINT32_MAX) continue;
-      if (call)
-        sites[site_count++] = (call_site){(uint32_t)in.b | ((uint32_t)in.c << 16), at[pc]};
-      else
-        regions[at[pc]].out += trips(p, in, !looped[k]);
+      uint32_t kind = kind_of(kinds, in), bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+      marks[m] = pc;
+      m += (kind > KIND_RETURN) & ((kind != KIND_JUMP) | (bx <= pc));
     }
-    work += 2 * (size_t)f->count;
+    work += f->count + m;
+    regions = grow(regions, &region_cap, region_count, region_count + m + 1, sizeof *regions);
+    sites = grow(sites, &site_cap, site_count, site_count + m + 1, sizeof *sites);
+    /* The innermost loops, in order: a loop end is one when the loop end before it (LATEST) is not inside its loop.
+       They never overlap, and a function without a loop is one region. */
+    size_t first_region = region_count;
+    uint32_t latest = UINT32_MAX;
+    for (size_t j = 0; j < m; j++) {
+      uint32_t pc = marks[j], start, kind = kind_of(kinds, f->code[pc]);
+      if ((kind != KIND_JUMP && kind != KIND_TAIL) || !backward(p, f->code[pc], kind, pc, k, &start)) continue;
+      if (latest == UINT32_MAX || latest < start) {
+        last[region_count - first_region] = pc;
+        regions[region_count++] = (region){k, pc - start + 1, 0};
+      }
+      latest = pc;
+    }
+    looped[k] = latest != UINT32_MAX;
+    if (!looped[k]) regions[region_count++] = (region){k, 0, 0};
+    /* The call sites and the trips out of each region; R is the first region that does not end before PC. */
+    size_t r = first_region;
+    for (size_t j = 0; j < m; j++) {
+      uint32_t pc = marks[j];
+      agc_instr in = f->code[pc];
+      uint32_t kind = kind_of(kinds, in), bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+      if (kind == KIND_JUMP) continue;
+      bool call = (kind == KIND_CALL || kind == KIND_TAIL) && bx < n;
+      calling[k] |= call || kind == KIND_VALUE;
+      if (kind == KIND_VALUE) continue;
+      if (looped[k]) {
+        while (r < region_count && last[r - first_region] < pc) r++;
+        if (r == region_count || last[r - first_region] - regions[r].size + 1 > pc) continue;
+      }
+      if (call)
+        sites[site_count++] = (call_site){bx, (uint32_t)r};
+      else if (kind != KIND_BUILTIN)
+        regions[r].out++;
+      else {
+        if (bx >= row_cap) {
+          size_t known = row_cap;
+          rows = grow(rows, &row_cap, known, (size_t)bx + 1, 1);
+          memset(rows + known, 0, row_cap - known);
+        }
+        regions[r].out += builtin_trips(p, rows, bx, !looped[k]);
+      }
+    }
   }
   /* by_callee[first[g] .. first[g + 1]) are the regions of the call sites of g. */
   uint32_t *first = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *first));

@@ -114,10 +114,13 @@ in a PR that rewrites the goldens.
   `RUNTIME-INVALID-NUMBER` at the argument), hash with OpenSSL's EVP digests
   (`vm/digest_openssl.c`, behind `digest.h`) and return the digest bytes or
   their hex. Each charges one turn-cost unit per item (§10.2.1) and runs
-  without the shared lock, as it reads only its argument. The eight `Base64`
-  and hex builtins in `vm/crypto.c` (`Digest.hexencode`/`hexdecode`) are plain
-  C; the encoders check items the same way, and all eight charge
-  `AGC_COST_SIZE`.
+  without the shared lock, as it reads only its argument. The `HMAC` builtins
+  (`sha256`, `sha512` and their `_hexdigest` forms) check the key and the data
+  the same way, each at its own argument, and compute the MAC with OpenSSL's
+  `EVP_Q_mac` (`agc_hmac` in `digest.h`), with the same cost and lock. The
+  eight `Base64` and hex builtins in `vm/crypto.c`
+  (`Digest.hexencode`/`hexdecode`) are plain C; the encoders check items the
+  same way, and all eight charge `AGC_COST_SIZE`.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;

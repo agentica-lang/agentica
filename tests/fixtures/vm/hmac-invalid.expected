@@ -1,0 +1,10 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INVALID-NUMBER",
+  "steps": 16,
+  "stdout": [
+    "32",
+    ""
+  ],
+  "stderr": []
+}
