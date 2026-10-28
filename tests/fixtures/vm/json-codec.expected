@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 136,
+  "stdout": [
+    "User(name: \"a\", age: 1)",
+    "{\"name\":\"a\",\"age\":1}",
+    "{\"age\":1,\"name\":\"a\"}",
+    "ok(User(name: \"a\", age: 1))",
+    "ok([User(name: \"b\", age: 2), User(name: \"c\", age: 3)])",
+    "age: expected required field",
+    "name: expected String",
+    "JSON.parse: invalid JSON",
+    "receiver",
+    "argument",
+    "ok(User(name: \"c\", age: 3))",
+    ""
+  ],
+  "stderr": []
+}

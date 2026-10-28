@@ -3,7 +3,7 @@
 ## of the builtins.
 
 import Builtins from "../catalog/builtins"
-import {PUBLIC_NAMES} from "../catalog/builtins"
+import {CALLABLE_NAMES, PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
 import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
@@ -144,7 +144,7 @@ def suggestion(name: String) -> String
     return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ")
   end
 
-  case Suggest.closest_among(name, PUBLIC_NAMES, [])
+  case Suggest.closest_among(name, CALLABLE_NAMES, [])
     Ast.Optional.Present(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
     Ast.Optional.Absent -> return ""
   end

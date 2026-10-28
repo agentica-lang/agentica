@@ -574,7 +574,8 @@ they are for an `Fn`:
   `x.call(...)`: `CHECK-TYPE-MISMATCH`.
 - a literal or variant arm in `case x`: `CHECK-PATTERN-TYPE`.
 - `JSON.encode(x)`: `CHECK-NOT-ENCODABLE`; `JSON.decode(text, T)`:
-  `CHECK-NOT-DECODABLE`.
+  `CHECK-NOT-DECODABLE`. Take a `JSON.Codec[T]` parameter instead
+  (`docs/grammar/06b-builtins.md`, JSON).
 - `T` as a `Map` key or a `Set` element: `CHECK-MAP-KEY-TYPE` and
   `CHECK-SET-ELEMENT-TYPE`, wherever it is written; a call with `Int` does not
   help.

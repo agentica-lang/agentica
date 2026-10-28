@@ -158,6 +158,7 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.Task(item) -> return has_variables?(item)
     Types.Type.Channel(item) -> return has_variables?(item)
     Types.Type.Lazy(item) -> return has_variables?(item)
+    Types.Type.Codec(item) -> return has_variables?(item)
     Types.Type.List(item) -> return has_variables?(item)
     Types.Type.Set(item) -> return has_variables?(item)
     Types.Type.Map(key, value) -> return has_variables?(key) or has_variables?(value)
@@ -245,6 +246,7 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
     Types.Type.Task(item) -> return Types.Type.Task(substitute(item, substitutions))
     Types.Type.Channel(item) -> return Types.Type.Channel(substitute(item, substitutions))
     Types.Type.Lazy(item) -> return Types.Type.Lazy(substitute(item, substitutions))
+    Types.Type.Codec(item) -> return Types.Type.Codec(substitute(item, substitutions))
     Types.Type.List(item) -> return Types.Type.List(substitute(item, substitutions))
     Types.Type.Set(item) -> return Types.Type.Set(substitute(item, substitutions))
     Types.Type.Map(key, value) -> return Types.Type.Map(
@@ -595,6 +597,8 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
     return ok(Types.Type.Channel(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Lazy" and args.size == 1
     return ok(Types.Type.Lazy(try resolve_expanded(cx, st, args[0], false)))
+  elsif name == "JSON.Codec" and args.size == 1
+    return ok(Types.Type.Codec(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Fn"
     return resolve_function(cx, st, args)
   elsif name == "List" and args.size == 1
@@ -1187,6 +1191,7 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Task(item) -> return [item]
     Types.Type.Channel(item) -> return [item]
     Types.Type.Lazy(item) -> return [item]
+    Types.Type.Codec(item) -> return [item]
     Types.Type.List(item) -> return [item]
     Types.Type.Set(item) -> return [item]
     Types.Type.Map(key, value) -> return [key, value]

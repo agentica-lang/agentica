@@ -18,7 +18,9 @@ import Types from "../syntax/types"
 import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
-import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_STRUCTS, STRING_OPS, VM_BUILTINS} from "lower_tables"
+import {
+  CODEC_BUILTINS, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_STRUCTS, STRING_OPS, VM_BUILTINS,
+} from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
@@ -101,6 +103,8 @@ export def lower_call(
 
   if key == "Task.await"
     key = try await_key(cx, node, checked, count)
+  elsif form.ok? and CODEC_BUILTINS.include?(node.name)
+    return lower_codec(cx, fx, node, key, want, void, checked, tail)
   end
 
   builtin = key != "" and VM_BUILTINS.include?(key)
@@ -185,6 +189,58 @@ export def lower_call(
   end
 
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+end
+
+# JSON.codec and the methods of a codec. A codec is the name of its struct at run time, the type argument of
+# JSON.decode: JSON.codec(Person) is that name, decode is JSON.decode of the source and the codec, and encode and from
+# are their JSON builtin of the value alone (the struct of a value names itself). The receiver is computed first, as
+# the first argument of any call is, into the register after the one the builtin takes first.
+def lower_codec(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, want: Int, void: Bool, checked: Bool, tail: Bool
+) -> Result[Lowering.Out]
+  if !checked
+    expr = Ast.Expr.Call(node)
+    try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
+  end
+
+  span = node.span
+  saved = fx.next
+  out = try codec_value(cx, fx, node, key, want)
+  fx = out.fx
+  base = out.slot
+  if tail
+    fx = Lowering.emit_at(fx, "return", [base], span)
+  end
+
+  if want >= 0
+    if base != want
+      fx = Lowering.emit_at(fx, "move", [want, base], span)
+    end
+
+    return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
+  end
+
+  return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+end
+
+# The value of a lower_codec call, in want when the type name of JSON.codec is the value, else in a new register.
+def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, want: Int) -> Result[Lowering.Out]
+  if node.name == "JSON.codec"
+    return lower_expression(cx, fx, node.args[0], want, false, false)
+  end
+
+  fx = Lowering.alloc(Lowering.alloc(Lowering.step(fx, node.span)))
+  base = fx.next - 2
+  codec = try lower_expression(cx, fx, node.args[0], base + 1, false, false)
+  value = try lower_expression(cx, codec.fx, node.args[1], base, false, false)
+  spans = [node.span, Ast.expr_span(node.args[1])]
+  count = 1
+  if key == "JSON.decode"
+    spans = spans.push(Ast.expr_span(node.args[0]))
+    count = 2
+  end
+
+  return ok(Lowering.Out(fx: Lowering.emit_builtin(value.fx, base, key, count, spans), slot: base))
 end
 
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults

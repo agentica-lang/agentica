@@ -3,7 +3,7 @@
 
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
-import {ENTRIES, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS} from "../catalog/builtins"
+import {CALLABLE_NAMES, ENTRIES, PRELUDE_ONLY, RECORDS} from "../catalog/builtins"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
@@ -574,7 +574,7 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
     return "import HTTP from \"std/http\""
   end
 
-  return Help.near(name, cx.functions.keys, PUBLIC_NAMES)
+  return Help.near(name, cx.functions.keys, CALLABLE_NAMES)
 end
 
 def unknown_enum_help(name: String) -> String

@@ -187,7 +187,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
-  elsif function_wanted?(want) or std_record?(alias, member, want) or c_pointer?(alias, member, want)
+  elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
 
@@ -210,10 +210,11 @@ def std_record?(alias: String, member: String, want: Want) -> Bool
   end
 end
 
-# C.Pointer, the builtin type of a C pointer (the extern blocks of native code), which any file may name.
-def c_pointer?(alias: String, member: String, want: Want) -> Bool
+# A builtin type with a module name, which any file may name: C.Pointer, the type of a C pointer (the extern blocks of
+# native code), and JSON.Codec, the JSON codec of a struct.
+def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type -> return alias == "C" and member == "Pointer"
+    Want.Type -> return (alias == "C" and member == "Pointer") or (alias == "JSON" and member == "Codec")
     _ -> return false
   end
 end

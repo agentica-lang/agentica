@@ -2,10 +2,12 @@
 
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `List`,
-`Map`, `Set`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`);
-there is no dynamic dispatch. `s.strip` is `String.trim(s)`, but `"a".from_int`
-is not a method. Without parentheses, `receiver.name` on a non-struct value is a
-method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
+`Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`, and
+`JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch. `s.strip`
+is `String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec
+have no function form: `JSON.Codec.decode(c, s)` is `CHECK-UNKNOWN-NAME`.
+Without parentheses, `receiver.name` on a non-struct value is a method without
+arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
 Structs and enums have no methods. The one form on a struct type is
 `Type.members`, the list of its fields (`docs/grammar/06-semantics.md`, "Structs
 and lists").
@@ -428,15 +430,26 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   `additionalProperties`; nested and recursive structs use `$defs` and `$ref`.
   Extra keys stay allowed.
 - `JSON.decode(source, T)` takes JSON text (a `String`) or a `Json` value, and a
-  named struct type, not a value; bare type names are valid only for `decode`
-  and `schema`. A `Json` source is decoded as it is, without going through text,
-  with the same rules and the same errors as its text. Fields may be Int, Float,
-  Bool, String, lists, String-keyed maps, nested or recursive structs, and
-  `JsonField` of those; other nested types, a generic struct or enum instance
-  included, are `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong
-  types, Int overflow and non-finite numbers give errors with a field or index
-  path. Extra keys are ignored. A JSON integer may decode as a Float; a decimal
-  or exponent never decodes as an Int. Decoded maps are in sorted key order.
+  named struct type, not a value; bare type names are valid only for `decode`,
+  `schema` and `codec`. A `Json` source is decoded as it is, without going
+  through text, with the same rules and the same errors as its text. Fields may
+  be Int, Float, Bool, String, lists, String-keyed maps, nested or recursive
+  structs, and `JsonField` of those; other nested types, a generic struct or
+  enum instance included, are `CHECK-NOT-DECODABLE`. Malformed JSON, missing
+  fields, wrong types, Int overflow and non-finite numbers give errors with a
+  field or index path. Extra keys are ignored. A JSON integer may decode as a
+  Float; a decimal or exponent never decodes as an Int. Decoded maps are in
+  sorted key order.
+- `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
+  returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
+  cannot call `decode` or `encode` on its type parameter. `codec.decode(source)`
+  is `JSON.decode(source, T)`, and `codec.encode(x)` and `codec.from(x)` are
+  `JSON.encode(x)` and `JSON.from(x)` for an `x` of type `T`. A codec follows
+  the rules of an `Fn` value: it may be a parameter, a struct field or a list
+  item, and it has no `to_s`, `inspect` or equality and is no constant or `ATS`
+  value. `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`; in
+  a generic body, `IO.inspect(x)` of a `T` that is a codec prints the struct's
+  name as a String.
 - `JSON.parse` reads exactly one value, with optional surrounding whitespace
   (space, tab, CR, LF). Empty input, trailing content, invalid escapes, raw
   control characters and non-finite numbers are errors. A repeated object key

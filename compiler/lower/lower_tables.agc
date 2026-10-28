@@ -1,6 +1,11 @@
 ## The tables of the lowering that are plain data: the builtins the VM implements, the operator instructions, and the
 ## builtin structs the VM can build. tests/test_frontend_lower.py compares VM_BUILTINS with a frozen copy.
 
+## The builtins that lowering writes with no builtin of their own (lower_codec): JSON.codec, whose implementation is no
+## builtin of the VM, and the methods of a codec, which call JSON.decode, JSON.encode and JSON.from with other
+## arguments than theirs.
+export CODEC_BUILTINS = Set.new(["JSON.codec", "JSON.Codec.decode", "JSON.Codec.encode", "JSON.Codec.from"])
+
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
 export VM_BUILTINS = Set.new([
   "puts", "IO.print", "IO.warn", "IO.inspect", "IO.gets", "IO.gets!", "IO.read", "IO.read_bytes", "IO.flush",

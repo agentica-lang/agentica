@@ -279,6 +279,60 @@ MODULE_RULES = {
 }
 
 
+CODEC = (
+    "struct User\n  name: String\nend\n\n"
+    "struct Bad\n  f: Fn[Int, Int]\nend\n\n"
+    "def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]\n  return codec.decode(body)\nend\n\n"
+    "def show[T](codec: JSON.Codec[T], value: T) -> String\n  return codec.encode(value)\nend\n\n"
+)
+
+
+def with_codec(*lines: str, header: str = "") -> str:
+    """The structs User and Bad, the generic functions body_as and show, and a main with `c = JSON.codec(User)`
+    then the lines."""
+    return header + CODEC + main("c = JSON.codec(User)", *lines)
+
+
+CODEC_RULES = {
+    "generic code decodes and encodes through a codec": (
+        with_codec('u = body_as("{}", c).unwrap!', "puts(show(c, u))", "j: Json = c.from(u)",
+                   "puts(c.decode(j).ok?)"), None, None),
+    "a codec is a struct field": (
+        with_codec("h = Holder(codec: c)", 'puts(h.codec.decode("{}").ok?)',
+                   header="struct Holder\n  codec: JSON.Codec[User]\nend\n\n"), None, None),
+    "JSON.codec of a struct that cannot be decoded": (with_codec("b = JSON.codec(Bad)"), "CHECK-NOT-DECODABLE", "Bad"),
+    "JSON.codec of a value": (with_codec('b = JSON.codec("User")'), "CHECK-TYPE-MISMATCH", '"User"'),
+    "JSON.codec of a type variable": (body("c = JSON.codec(T)"), "CHECK-NOT-DECODABLE", "T"),
+    "decode of a source that is no text or Json": (with_codec("r = c.decode(1)"), "CHECK-TYPE-MISMATCH", "1"),
+    "encode of a value of another type": (with_codec("s = c.encode(1)"), "CHECK-TYPE-MISMATCH", "1"),
+    "the value and the codec of a generic call disagree": (
+        with_codec("puts(show(c, 1))"), "CHECK-TYPE-MISMATCH", "1"),
+    "a codec of another struct": (
+        with_codec("o: JSON.Codec[Other] = c", header="struct Other\n  n: Int\nend\n\n"), "CHECK-TYPE-MISMATCH",
+        "c"),
+    "a codec has no to_s": (with_codec("puts(c)"), "CHECK-TYPE-MISMATCH", "c"),
+    "a codec has no equality": (with_codec("puts(c == c)"), "CHECK-TYPE-MISMATCH", "=="),
+    "a codec has no other method": (with_codec("puts(c.parse)"), "CHECK-UNKNOWN-METHOD", "c.parse"),
+    "a codec is no ATS value": (
+        with_codec("t: ATS[String, JSON.Codec[User]] = ATS.new()"), "CHECK-ATS-VALUE", "JSON.Codec[User]"),
+    "a codec is no constant": ("USERS = JSON.codec(User)\n\n" + with_codec("puts(1)"), "CHECK-CONSTANT-TYPE",
+                               "JSON.codec(User)"),
+    "a struct with a codec cannot be encoded": (
+        with_codec("puts(JSON.encode(Holder(codec: c)))", header="struct Holder\n  codec: JSON.Codec[User]\nend\n\n"),
+        "CHECK-NOT-ENCODABLE", "Holder(codec: c)"),
+    "JSON.Codec needs its type argument": (with_codec("d: JSON.Codec = c"), "CHECK-UNKNOWN-TYPE", "JSON.Codec"),
+    "a codec cannot be inspected": (with_codec("IO.inspect(c)"), "CHECK-TYPE-MISMATCH", "c"),
+    "a struct that holds a codec cannot be inspected": (
+        with_codec("IO.inspect(Holder(codec: c))", header="struct Holder\n  codec: JSON.Codec[User]\nend\n\n"),
+        "CHECK-TYPE-MISMATCH", "Holder(codec: c)"),
+    "IO.inspect of a function field that takes a codec stays valid": (
+        with_codec("IO.inspect(Hold(f: &body_as))",
+                   header="struct Hold\n  f: Fn[String, JSON.Codec[User], Result[User]]\nend\n\n"), None, None),
+    "the methods of a codec have no function form": (
+        with_codec('r = JSON.Codec.decode(c, "{}")'), "CHECK-UNKNOWN-NAME", 'JSON.Codec.decode(c, "{}")'),
+}
+
+
 @pytest.mark.parametrize("name", list(RULES))
 def test_generic_function_rules(agentica_check, name):
     program, code, text = RULES[name]
@@ -348,3 +402,19 @@ def test_a_struct_with_every_nil_shape_of_its_arguments_checks_fast(agentica_che
     started = time.monotonic()
     assert agentica_check(shapes(4)) is None
     assert time.monotonic() - started < scaled(2)
+
+
+@pytest.mark.parametrize("name", list(CODEC_RULES))
+def test_json_codec_rules(agentica_check, name):
+    program, code, text = CODEC_RULES[name]
+    assert_rule(agentica_check(program), program, code, text)
+
+
+def test_a_codec_crosses_modules(agentica_check):
+    lib = (
+        "export struct User\n  name: String\nend\n\n"
+        "export def users() -> JSON.Codec[User]\n  return JSON.codec(User)\nend\n\n"
+        "export def show[T](codec: JSON.Codec[T], value: T) -> String\n  return codec.encode(value)\nend\n"
+    )
+    program = 'import M from "m"\n\n' + main('u = M.users().decode("{}").unwrap!', "puts(M.show(M.users(), u))")
+    assert_rule(agentica_check({"m.agc": lib, "main.agc": program}), program, None, None)

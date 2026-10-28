@@ -14,8 +14,11 @@ export enum Rule
   ChannelRecv
   ChannelSend
   ChannelTarget
+  CodecDecode
+  CodecEncode
   Error
   Identity
+  JsonCodec
   JsonDecode
   JsonEncode
   JsonFrom

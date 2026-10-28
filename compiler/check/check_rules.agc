@@ -183,7 +183,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
   case rule
     Model.Rule.Plain -> return check_plain(cx, st, site)
     Model.Rule.Show -> return check_show(cx, st, site)
-    Model.Rule.Identity -> return State.expr(cx, st, site.args[0], site.expected)
+    Model.Rule.Identity -> return check_identity(cx, st, site)
     Model.Rule.Ok -> return check_ok(cx, st, site)
     Model.Rule.OkVoid -> return ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.Error -> return check_error(cx, st, site)
@@ -191,6 +191,9 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.JsonSchema -> return check_json_type(cx, st, site, false)
     Model.Rule.JsonEncode -> return check_json_encode(cx, st, site, false)
     Model.Rule.JsonFrom -> return check_json_encode(cx, st, site, true)
+    Model.Rule.JsonCodec -> return check_json_codec(cx, st, site)
+    Model.Rule.CodecDecode -> return check_codec_decode(cx, st, site)
+    Model.Rule.CodecEncode -> return check_codec_encode(cx, st, site)
     Model.Rule.TestEq -> return check_test_eq(cx, st, site)
     Model.Rule.Prelude -> return PreludeCalls.check_prelude_call(cx, st, site)
     _ -> return check_result_rule(cx, st, site, rule)
@@ -223,6 +226,26 @@ def check_show(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try ensure_printable(cx, out.st, out.type, Ast.expr_span(site.args[0]))
   return ok(State.Out(st: out.st, type: T.Type.Void))
+end
+
+# IO.inspect: any value, except one whose type holds a JSON.Codec, which has no inspect (a codec is its struct's name
+# at run time, and would print as that String). A T of a generic body is not looked into: it may still be a codec.
+def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  out = try State.expr(cx, st, site.args[0], site.expected)
+  if Collections.holds_codec?(cx, out.type)
+    return error(
+      State.fail_help(
+        cx,
+        out.st,
+        "CHECK-TYPE-MISMATCH",
+        "#{T.to_text(out.type)} cannot be inspected: a JSON.Codec has no inspect",
+        Ast.expr_span(site.args[0]),
+        "inspect the values the codec reads or writes instead",
+      ),
+    )
+  end
+
+  return ok(out)
 end
 
 def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
@@ -265,21 +288,59 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   current = st
   target = site.args[0]
   if decode
-    source = try State.expr(cx, current, site.args[0], T.Type.Unknown)
-    if !T.is?(source.type, "String") and !T.is?(source.type, "Json")
-      return error(decode_source_mismatch(cx, source.st, source.type, Ast.expr_span(site.args[0])))
-    end
-
-    current = source.st
+    current = try check_decode_source(cx, current, site.args[0])
     target = site.args[1]
   end
 
+  type = try json_struct(cx, current, target)
+  if decode
+    return ok(State.Out(st: current, type: T.Type.Result(type)))
+  end
+
+  return ok(State.Out(st: current, type: T.Type.Json))
+end
+
+# JSON.codec(Type): the codec of the struct, with the type argument JSON.decode takes.
+def check_json_codec(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  type = try json_struct(cx, st, site.args[0])
+  return ok(State.Out(st: st, type: T.Type.Codec(type)))
+end
+
+# codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value. The receiver of a
+# codec method is a JSON.Codec: the rows are reached only as methods of one, since the parser has no function form of
+# a name with two dots (check_method gives the help for JSON.Codec.decode(...)).
+def check_codec_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  current = try check_decode_source(cx, codec.st, site.args[1])
+  return ok(State.Out(st: current, type: T.Type.Result(T.item(codec.type))))
+end
+
+# codec.encode(value) and codec.from(value): a value of the struct of the codec, which can be written as JSON because
+# the struct can be decoded. The form gives the result type (String or Json).
+def check_codec_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  value = try State.expr(cx, codec.st, site.args[1], T.item(codec.type))
+  return ok(State.Out(st: value.st, type: site.selected.result))
+end
+
+# The source of a decode, which is JSON text (String) or a Json value.
+def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[State.St]
+  out = try State.expr(cx, st, source, T.Type.Unknown)
+  if !T.is?(out.type, "String") and !T.is?(out.type, "Json")
+    return error(decode_source_mismatch(cx, out.st, out.type, Ast.expr_span(source)))
+  end
+
+  return ok(out.st)
+end
+
+# The struct a JSON type argument names, which must be a struct name whose fields can all be decoded.
+def json_struct(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
   case target
-    Ast.Expr.TypeName(node) -> return json_target(cx, current, node, decode)
+    Ast.Expr.TypeName(node) -> return json_target(cx, st, node)
     _ -> return error(
       State.fail(
         cx,
-        current,
+        st,
         "CHECK-TYPE-MISMATCH",
         "JSON type argument requires a struct name",
         Ast.expr_span(target),
@@ -296,7 +357,7 @@ def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Sou
   return Failure.pack(base.with(expected: "String or Json", actual: found))
 end
 
-def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) -> Result[State.Out]
+def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
   ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
   try json_field_place(cx, st, type, "decode target", node.span)
@@ -304,11 +365,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) ->
     return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
   end
 
-  if decode
-    return ok(State.Out(st: st, type: T.Type.Result(type)))
-  end
-
-  return ok(State.Out(st: st, type: T.Type.Json))
+  return ok(type)
 end
 
 # JSON.encode and JSON.from: any value that can be written as JSON.

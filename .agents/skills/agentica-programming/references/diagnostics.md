@@ -174,8 +174,8 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   (`Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
-- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema` target that is not a struct or
-  has unsupported field types.
+- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
+  struct or has unsupported field types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
   or Int-keyed maps.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is

@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `_hexdigest` form.
 - `SecureRandom.random_bytes`, `hex` and `uuid` draw secure random bytes for
   keys and tokens.
+- `JSON.codec(User)` gives a `JSON.Codec[User]` with `decode`, `encode` and
+  `from`, so generic code can read and write JSON of its type parameter.
 
 ### Changed
 
