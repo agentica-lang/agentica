@@ -114,9 +114,10 @@ in a PR that rewrites the goldens.
   `RUNTIME-INVALID-NUMBER` at the argument), hash with OpenSSL's EVP digests
   (`vm/digest_openssl.c`, behind `digest.h`) and return the digest bytes or
   their hex. Each charges one turn-cost unit per item (§10.2.1) and runs
-  without the shared lock, as it reads only its argument. The `Base64` and
-  `Digest.hexencode`/`hexdecode` builtins in `vm/crypto.c` are plain C; the
-  encoders check items the same way, and all eight charge `AGC_COST_SIZE`.
+  without the shared lock, as it reads only its argument. The eight `Base64`
+  and hex builtins in `vm/crypto.c` (`Digest.hexencode`/`hexdecode`) are plain
+  C; the encoders check items the same way, and all eight charge
+  `AGC_COST_SIZE`.
 
 ### 2.4 Printing values
 

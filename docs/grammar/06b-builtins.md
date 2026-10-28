@@ -292,10 +292,10 @@ Expected types flow into these operations for empty collections and Results.
   same digest as lowercase hex, as Ruby's `hexdigest` does. MD5 and SHA-1 are
   for formats that need them (ETags, git, old APIs), not for security. An item
   outside 0 to 255 is `RUNTIME-INVALID-NUMBER` at the argument. They are built
-  on OpenSSL, take time in proportion to the list and have no effect label.
-  `Crypto` is a reserved type name, for the rest of the module of
-  `docs/future/20-crypto.md` §20; until `Bytes` exists, bytes are a
-  `List[Int]`.
+  on OpenSSL, take time in proportion to the list and have no effect label. A
+  system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then stops
+  with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name; until `Bytes`
+  exists, bytes are a `List[Int]`.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
   same in lines of 60 characters that each end in a newline (`""` for `[]`),

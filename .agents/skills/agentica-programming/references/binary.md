@@ -81,8 +81,9 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   hash bytes with OpenSSL and return the 16, 20, 32 or 64 digest bytes; each
   `_hexdigest` form (`Digest.sha256_hexdigest(data) -> String`) returns them
   as lowercase hex, as Ruby's `Digest::SHA256.hexdigest`. MD5 and SHA-1 are
-  for formats that need them (ETags, git), not for security. An item outside
-  0..255 halts (`RUNTIME-INVALID-NUMBER`). The time grows with the list.
+  for formats that need them (ETags, git), not for security; a FIPS-only
+  system OpenSSL lacks them, and the call halts (`RUNTIME-INTERNAL`). An item
+  outside 0..255 halts (`RUNTIME-INVALID-NUMBER`). The time grows with the list.
   `Crypto` is a reserved type name.
 
 ```text
