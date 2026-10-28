@@ -325,6 +325,17 @@ Expected types flow into these operations for empty collections and Results.
   `RUNTIME-INVALID-NUMBER` at the argument; the time of every `Base64` and
   `Digest` call grows with its input, and none has an effect label. `Base64`
   and `Digest` are reserved type names.
+- `SecureRandom.random_bytes(n = 16)` gives `n` bytes (a `List[Int]` of 0 to
+  255) from OpenSSL's secure random generator (`RAND_bytes`), as Ruby's
+  `SecureRandom` does; `SecureRandom.hex(n = 16)` gives `n` such bytes as `2n`
+  lowercase hex digits, and `SecureRandom.uuid` a version 4 UUID (RFC 9562):
+  36 lowercase characters in the `8-4-4-4-12` form. Unlike `Random`, it is
+  never seeded and `--seed` does not change it, so it is the one for keys,
+  salts, tokens and IDs. `n` outside 0 to 1048576 is `RUNTIME-INVALID-COUNT`
+  at the argument; a failed draw stops with `RUNTIME-INTERNAL` and never gives
+  weak bytes. The calls have the `random` effect label, and the time of
+  `random_bytes` and `hex` grows with `n`. `SecureRandom` is a reserved type
+  name.
 - `IO.eof?()` peeks without consuming and can block until data or EOF arrives.
   Reads have no timeout, and the step budget cannot interrupt blocking I/O.
 - `IO.flush()` flushes stdout only. On Linux, macOS and Windows, a print copies
@@ -344,7 +355,7 @@ Expected types flow into these operations for empty collections and Results.
   clock in nanoseconds, for short durations. `Random.int(min, max)` is uniform
   over `min .. max`, both included; `min > max` halts with
   `RUNTIME-INVALID-RANGE`. `Random.float()` is in `0.0` up to, not including,
-  `1.0`.
+  `1.0`. `Random` is seeded and not for secrets: use `SecureRandom`.
 - `Profile.measure(label) do ... end` runs the block (no parameters) once and
   gives what it gives, a `Result` included; a function value of no parameters
   works too. With `AGENTICA_VM_TRACE=profile` it adds a `section` row for

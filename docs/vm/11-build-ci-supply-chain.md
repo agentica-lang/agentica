@@ -116,7 +116,9 @@
   interpreter's run (in length, or in a hash of the first 16 MB) while a second
   interpreter run agrees with the first. A run whose program read a clock
   (`Time.now`, a timed wait) is not compared: the link wraps `clock_gettime`,
-  `timespec_get` and `agc_vm_run` to see it.
+  `timespec_get` and `agc_vm_run` to see it. It also wraps
+  `agc_secure_random`, so `SecureRandom` draws the same fixed stream in every
+  run, as the fixed seed does for `Random`.
   `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
   `-fsanitize=fuzzer-no-link,address,undefined`, `AGC_NO_GC`) into
   `build/vm/libfuzz/` and links `agentica-vm-libfuzz` with libFuzzer's
