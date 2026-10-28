@@ -577,14 +577,38 @@ void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uin
 
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1, status, pc); }
 
-/* agc_jit_call_builtin(vm, &R[a], builtin, span << 32 | pc + 1): it runs the builtin and answers 0 to go on, or the
-   exit (YIELD, RAISE) to return at PC, as an opcode helper's status. */
-void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
+/* The arguments of a builtin call helper: vm, &R[a], BUILTIN and span << 32 | pc + 1. */
+static void builtin_args(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
   move_reg(e, true, ARG0, VM);
   lea(e, ARG1, REGS, TAG(in.a));
   move_imm64(e, ARG2, builtin);
   move_imm64(e, ARG3, ((uint64_t)span << 32) | (pc + 1));
-  call_status(e, (uint64_t)(uintptr_t)agc_jit_call_builtin, pc);
+}
+
+/* agc_jit_call_builtin(vm, &R[a], builtin, span << 32 | pc + 1), or agc_jit_call_leaf for a LEAF row: it runs the
+   builtin and answers 0 to go on, or the exit (YIELD, RAISE) to return at PC, as an opcode helper's status. A leaf
+   at native depth 0 takes the INTERPRET exit instead: with no native call to unwind, run_compiled's plain call of the
+   leaf and the entry back cost less than the catch of agc_jit_call_leaf. */
+void agc_emit_builtin(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span, bool leaf) {
+  if (leaf) {
+    BYTES(e, 0x4D, 0x85, 0xF6); /* test r14, r14 */
+    exit_if(e, CC_E, AGC_JIT_EXIT_INTERPRET, pc);
+  }
+  builtin_args(e, in, pc, builtin, span);
+  call_status(e, (uint64_t)(uintptr_t)(leaf ? agc_jit_call_leaf : agc_jit_call_builtin), pc);
+}
+
+/* agc_jit_call_plain(vm, &R[a], builtin, span << 32 | pc + 1) once each argument has its tag in TAGS; the arity is
+   at most 2 (agc_jit_plain_tags), so the code has a fixed size. */
+void agc_emit_plain_leaf(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span,
+                         const uint8_t *tags) {
+  for (uint32_t k = 0; k < 2; k++)
+    if (tags[k] != AGC_T_VOID) {
+      compare_imm8(e, false, REGS, TAG((uint32_t)in.a + k), (int8_t)tags[k]);
+      exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
+    }
+  builtin_args(e, in, pc, builtin, span);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_plain);
 }
 
 /* CALL of function bx with the window at R[a], as a native call when it can be one: the callee has code (its slot in

@@ -30,6 +30,21 @@ struct agc_jit_batch {
   size_t count, slots;
 };
 
+/* The hottest leaf rows of the self-compile, which cannot fail once each argument has its tag here (AGC_T_VOID: any
+   tag): their only agc_fail is agc_as_*'s wrong tag, and running out of memory exits the process. Compiled code
+   checks the tags and calls them with no catch (agc_jit_call_plain). vm/tests/jit_test.c checks that each one is a
+   leaf row. */
+typedef struct {
+  const char *name;
+  uint32_t arity;
+  uint8_t tags[2];
+} plain_leaf;
+
+static const plain_leaf plain_leaves[] = {
+    {"List.size", 1, {AGC_T_LIST}},  {"List.append", 2, {AGC_T_LIST, AGC_T_VOID}}, {"ok", 1, {AGC_T_VOID}},
+    {"Result.ok?", 1, {AGC_T_RESULT}}, {"String.length", 1, {AGC_T_STRING}},
+};
+
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
    which the loader left in place. */
 static uint32_t plain_op(uint32_t op) {
@@ -111,25 +126,26 @@ static bool calls_function(const agc_program *p, agc_instr in) {
 }
 
 /* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a call of a function of the
-   program (calls_function). A leaf builtin, and a block call (a row with a native kind, such as
-   `filter`: its native frame and the block's frames), are started by run_compiled itself, which LEAF says to count or
-   not, as their exit unwinds the native calls; a direct builtin is called by the code itself, which leaves only when
-   the call ends the turn or fails; a RETURN runs once per call. A CALL_VALUE does not leave: its callee is known only
-   when it runs, and it is called natively once it has code (a block or a small function, which `on` compiles at its
-   CALL_VALUE exits), so it is counted as a call of a function that may get code. */
-static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
+   program (calls_function). A block call (a row with a native kind, such as `filter`: its native frame and the
+   block's frames) is started by run_compiled itself, which LOOPLESS says to count or not, as its exit unwinds the
+   native calls; a direct builtin is called by the code itself, which leaves only when the call ends the turn or
+   fails, and so is a leaf below a native call (at native depth 0 it leaves, but unwinds nothing); a RETURN runs once
+   per call. A CALL_VALUE does not leave: its callee is known only when it runs, and it is called natively once it has
+   code (a block or a small function, which `on` compiles at its CALL_VALUE exits), so it is counted as a call of a
+   function that may get code. */
+static bool leaves_code(const agc_program *p, agc_instr in, bool loopless) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN || in.op == AGC_OP_CALL_VALUE) return false;
   if (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) return !calls_function(p, in);
   if (in.op != AGC_OP_CALL_BUILTIN) return true;
   const agc_builtin *b = p->builtins[bx];
-  return !b->direct && (!(b->leaf || b->native) || leaf);
+  return !(b->direct || b->leaf) && (!b->native || loopless);
 }
 
 /* Why `on` keeps a function out:
    - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
      exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
-     from compiled code, and only when none of its instructions leaves ("none" otherwise, where a leaf builtin counts:
+     from compiled code, and only when none of its instructions leaves ("none" otherwise, where a block call counts:
      its exit unwinds every native call).
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
@@ -225,6 +241,13 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     work += first[g + 1] - first[g];
   }
   return work + site_count;
+}
+
+const uint8_t *agc_jit_plain_tags(const agc_builtin *b) {
+  if (!b->leaf) return NULL;
+  for (size_t k = 0; k < sizeof plain_leaves / sizeof plain_leaves[0]; k++)
+    if (b->arity == plain_leaves[k].arity && strcmp(b->name, plain_leaves[k].name) == 0) return plain_leaves[k].tags;
+  return NULL;
 }
 
 #if AGC_JIT_HOST
@@ -328,13 +351,18 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         break;
       case AGC_OP_CALL_VALUE: agc_emit_call_value(e, in, pc); break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
-      case AGC_OP_CALL_BUILTIN:
+      case AGC_OP_CALL_BUILTIN: {
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
-        if (bx < p->builtin_count && p->builtins[bx]->direct)
-          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)p->builtins[bx], f->spans[pc]);
+        const agc_builtin *b = bx < p->builtin_count ? p->builtins[bx] : NULL;
+        const uint8_t *tags = b ? agc_jit_plain_tags(b) : NULL;
+        if (tags)
+          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], tags);
+        else if (b && (b->direct || b->leaf))
+          agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], b->leaf);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
+      }
       default: agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc); break;
     }
   }
@@ -747,10 +775,12 @@ void agc_jit_report(agc_jit *jit) {
 }
 
 #if AGC_LEAF_CHECK
-/* Names the direct builtin and what it did that a direct call must not (a row marked direct by mistake). */
+/* Names the direct or leaf builtin and what it did that its call from compiled code must not (a row marked by
+   mistake). */
 static _Noreturn __attribute__((noinline, cold)) void direct_broken(const agc_builtin *b, const char *what) {
   char detail[160];
-  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked direct but %s", b->name, b->arity, what);
+  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked %s but %s", b->name, b->arity,
+                 b->leaf ? "leaf" : "direct", what);
   agc_internal_abort(detail);
 }
 #endif
@@ -790,6 +820,37 @@ uint32_t agc_jit_call_builtin(agc_vm *vm, agc_value *args, const agc_builtin *b,
   if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
   if (t->turn_cost) agc_turn_charge(vm);
   return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
+}
+
+uint32_t agc_jit_call_leaf(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+  agc_task *t = vm->task;
+  t->frames[t->frame_count - 1].pc = (uint32_t)where;
+#if AGC_LEAF_CHECK
+  /* The interpreter's call_leaf checks the same rule; here a broken row would also have left a cost or a stop that
+     compiled code never applies. */
+  int64_t cost = t->turn_cost, stop = vm->next_stop, left = vm->turn_left;
+  uint32_t frames = t->frame_count, depth = vm->sync_depth;
+  bool yielded = vm->yield, retry = t->retry;
+#endif
+  agc_value result;
+  if (!caught(vm, b, args, (uint32_t)(where >> 32), &result)) return AGC_JIT_EXIT_RAISE;
+#if AGC_LEAF_CHECK
+  if (t->parking || t->retry != retry || t->stepper || t->frame_count != frames || vm->sync_depth != depth ||
+      t->turn_cost != cost || vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
+    direct_broken(b, "broke the leaf rule");
+#endif
+  args[0] = result;
+  return AGC_STATUS_OK;
+}
+
+void agc_jit_call_plain(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+#if AGC_LEAF_CHECK
+  /* The checked builds catch it anyway, and stop when a row of plain_leaves failed or broke the leaf rule. */
+  if (agc_jit_call_leaf(vm, args, b, where) != AGC_STATUS_OK) direct_broken(b, "failed with the tags it needs");
+#else
+  (void)where;
+  args[0] = b->fn(vm, args, 0);
+#endif
 }
 
 uint32_t agc_jit_map_get(agc_vm *vm, agc_value *dst, const agc_value *map, const agc_value *key) {

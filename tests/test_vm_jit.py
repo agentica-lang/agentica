@@ -209,8 +209,8 @@ end
 
 
 # scan reads fields, list items, enum variants and payloads, Results and Floats (a NaN among them) in compiled code;
-# the only instructions of its loop without code are leaf builtins (List.size, Int.bit_xor), which run_compiled calls
-# itself, so with `on` the code leaves for the interpreter only at the RETURN.
+# its loop also calls leaf builtins: List.size, which compiled code calls itself, and Int.bit_xor, which run_compiled
+# calls at native depth 0, so with `on` the code leaves for the interpreter only at the RETURN.
 READS = """struct Point
   x: Int
   y: Float
@@ -348,11 +348,14 @@ end
 
 # Failures inside natively called functions, after main's loop is hot: the diagnostic, its span and the stack (each
 # caller's pc is the one after its CALL) must not depend on the tier. down passes the call depth limit; a builtin that
-# compiled code calls in cut fails.
+# compiled code calls in cut fails, and so does the leaf unwrap! in pick, also when relay's native tail call reached
+# pick.
 NATIVE_FAILURES = {
     "overflow": ("RUNTIME-INTEGER-OVERFLOW", "if i < 150\n      x = grow(x % 1000)\n    else\n      x = grow(x)\n    end"),
     "depth": ("RUNTIME-STACK-OVERFLOW", "x = x % 1000 + down(i * 80)"),
     "builtin": ("RUNTIME-INVALID-COUNT", "x = x % 1000 + cut(400 - i).length"),
+    "leaf": ("RUNTIME-UNWRAP-ERROR", "x = x % 1000 + pick(i)"),
+    "tail-leaf": ("RUNTIME-UNWRAP-ERROR", "x = x % 1000 + relay(i)"),
 }
 
 # Two tasks whose compiled loops call String, List, Map and Set builtins that compiled code calls itself: they
@@ -979,6 +982,18 @@ def down(n: Int) -> Int
   return down(n - 1) + 1
 end
 
+def pick(n: Int) -> Int
+  r = ok(n)
+  if n > 400
+    r = error("stop")
+  end
+  return r.unwrap! + 1
+end
+
+def relay(n: Int) -> Int
+  return pick(n + 1)
+end
+
 def main() -> Void
   puts("before")
   x = 1
@@ -990,11 +1005,88 @@ def main() -> Void
   puts(x)
 end
 """, "native_failure", tmp_path)
-    callee = {"depth": "down", "builtin": "cut"}.get(case, "grow")
-    assert compiled(bytecode, tmp_path, "on") == (sorted([callee, "main"]) if X86_64 else [])
+    callees = {"depth": ["down"], "builtin": ["cut"], "leaf": ["pick"], "tail-leaf": ["pick", "relay"]}
+    callees = callees.get(case, ["grow"])
+    assert compiled(bytecode, tmp_path, "on") == (sorted([*callees, "main"]) if X86_64 else [])
     for style in ((), ("--json",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
+
+
+# measure has no loop and calls only leaf builtins (ok, ok?, unwrap!, List.size, List.append, String.length), ping
+# and pong tail-call each other with leaf builtins (Int.bit_and, Int.bit_xor, Int.shift_right), and map's block calls
+# measure. Compiled code calls a leaf builtin itself below a native call, so `on` gives all of them code, the native
+# calls below a leaf stay on the C stack, and their RETURNs take no exit. The turns of the two tasks end inside these
+# calls.
+LEAVES = """def measure(xs: List[Int], word: String) -> Int
+  r = ok(xs.size + word.length)
+  if r.ok?
+    return r.unwrap! + xs.append(word.length).size
+  end
+  return 0
+end
+
+def ping(n: Int, acc: Int) -> Int
+  if n == 0
+    return acc
+  end
+  return pong(n - 1, acc + n.bit_and(3))
+end
+
+def pong(n: Int, acc: Int) -> Int
+  if n == 0
+    return acc
+  end
+  return ping(n - 1, acc + n.bit_xor(5).shift_right(1))
+end
+
+def work(id: Int) -> Int
+  xs = [1, 2, 3]
+  words = ["a", "bb", "ccc", "dddd"]
+  total = 0
+  i = 0
+  while i < 4000
+    total += measure(xs, words[i % 4])
+    total += ping(i % 24 + id, 0)
+    total += words.map do |w| measure(xs, w) + w.length end.sum
+    if i % 1000 == 0
+      puts("#{id} #{i} #{total}")
+    end
+    i += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&work, 2)
+  puts(work(1))
+  puts(Task.await(t))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
+    bytecode = compile_text(LEAVES, "leaves", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("1 0 57\n2 0 60\n") and "\n368072\n385056\n" in stdout, stdout
+    on = compiled(bytecode, tmp_path, "on")
+    want = ["measure", "ping", "pong", "work"]
+    assert all(name in on for name in want) if X86_64 else on == [], on
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
+                  if " jit block count=" in line or " jit transition count=" in line or " jit leaf count=" in line}
+        blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
+        # About one transition per block call (its last RETURN, 8,000 calls, a few interpreted before the block has
+        # code), not one per leaf below a native call. Of the half a million leaf calls, only those at native depth 0
+        # of the builtins that can fail take an exit (a frame that goes on after its native calls were unwound, as
+        # when a turn ended in them).
+        assert counts.get("leaf", 0) < 50000, (mode, counts)
+        assert (blocks >= 7000 and transitions < blocks * 3 // 2) if X86_64 else blocks == transitions == 0, \
+            (mode, counts)
+    steps = int(stdout.split("steps ")[1])
+    assert_max_steps_sweep(bytecode, steps)
 
 
 def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
@@ -1004,7 +1096,7 @@ def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     exits = sorted(line.split("exit op=")[1] for line in lines if " jit exit op=" in line)
     leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
     assert exits == [], exits
-    assert len(leaves) == (1 if X86_64 else 0) and all(n > 10000 for n in leaves), leaves
+    assert len(leaves) == (1 if X86_64 else 0) and all(n > 2000 for n in leaves), leaves
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)
     steps = int(stdout.split("steps ")[1])
@@ -1071,14 +1163,14 @@ end
 
 def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
     bytecode = compile_text(VALUES, "values", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["walk"] if X86_64 else [])
-    # Only the two errors leave walk's code: the interpreter runs the `try` that returns them. Under `always` parse is
-    # compiled too, and each error leaves both functions' code.
-    for mode, want in (("on", ["try count=2"]), ("always", ["try count=4"])):
+    assert compiled(bytecode, tmp_path, "on") == (["parse", "walk"] if X86_64 else [])
+    # Only the two errors leave the code: the interpreter runs the `try` that returns them. parse is compiled too (its
+    # `ok` is a leaf builtin that compiled code calls), and each error leaves both functions' code.
+    for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         exits = sorted(line.split("exit op=")[1] for line in lines
                        if any(f" jit exit op={op} " in line for op in ("global", "struct", "enum", "try")))
-        assert exits == (want if X86_64 else []), (mode, exits)
+        assert exits == (["try count=4"] if X86_64 else []), (mode, exits)
     for style in ((), ("--json",), ("--ai",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout.startswith("369396\nfalse\n"), (style, stdout)

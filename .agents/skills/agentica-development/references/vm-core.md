@@ -211,26 +211,26 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the whole budget only stays interpreted itself.
   `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
   table, for the SysV and Win64 argument registers (`AGC_JIT_HOST` is 0
-  elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X
-  pages, reserved, opened writable, then sealed read-execute. `run_compiled`
-  in `vm/interp.c` enters at each reload of the jit copy of `turn_loop`
-  (after the one-byte `agc_jit_may_run` test; the plain copy has no JIT test,
-  as one cost arithmetic 20% by code layout alone)
-  and handles the exits as the interpreter handles that instruction: STEP runs
-  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
-  leaf builtin itself, starts a block call (a row with a native kind:
-  `start_native`, whose block then runs in its code) or lets the loop run
-  that one instruction, which enters the code again at the next pc
-  (`resume`), CALL and RETURN the shared frame handlers. A block's RETURN at
-  native depth 0 first calls `agc_jit_block_return` (below `plain_turn`):
-  while the block call goes on with the same function and nothing can fail
-  or take a slow step (`block_goes_on`, which lists the kinds it handles),
-  it does the native frame's work for that kind and restarts the block's
-  frame in place at instruction 0 (no exit; a turn it ends takes the YIELD
-  exit at `AGC_JIT_PC_RESTART`, which `run_compiled` turns into pc 0). A
-  frame with the tail flag set takes the RETURN exit: `run_compiled` reloads
-  the running code only while that flag is set. A change to `resume_native`
-  or `call_value` needs the same change there.
+  elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X pages,
+  reserved, opened writable, then sealed read-execute. `run_compiled` in
+  `vm/interp.c` enters at each reload of the jit copy of `turn_loop` (after the
+  one-byte `agc_jit_may_run` test; the plain copy has no JIT test, as one cost
+  arithmetic 20% by code layout alone) and handles the exits as the interpreter
+  handles that instruction: STEP runs `step_slow`, COST `apply_cost`, a failure
+  `op_failed`, INTERPRET calls a leaf builtin itself at native depth 0 or after
+  a failed tag check, starts a block call (a row with a native kind:
+  `start_native`, whose block then runs in its code) or lets the loop run that
+  one instruction, which enters the code again at the next pc (`resume`), CALL
+  and RETURN the shared frame handlers. A block's RETURN at native depth 0 first
+  calls `agc_jit_block_return` (below `plain_turn`): while the block call goes
+  on with the same function and nothing can fail or take a slow step
+  (`block_goes_on`, which lists the kinds it handles), it does the native
+  frame's work for that kind and restarts the block's frame in place at
+  instruction 0 (no exit; a turn it ends takes the YIELD exit at
+  `AGC_JIT_PC_RESTART`, which `run_compiled` turns into pc 0). A frame with the
+  tail flag set takes the RETURN exit: `run_compiled` reloads the running code
+  only while that flag is set. A change to `resume_native` or `call_value` needs
+  the same change there.
   A CALL of a function with code is native (`agc_emit_call`): an exit inside
   the callee comes back with the callee's frame on top. So is a CALL_VALUE
   whose function value has code (`agc_jit_call_value` pushes the frame in room
@@ -253,15 +253,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   slow path leaves for the interpreter; compiled code never fails,
   allocates or parks, and pushes or pops a frame only in room the task
   already has. It calls a builtin only when the row is marked `direct`
-  (`agc_builtin.direct`, checked by `sync_test.c`), through
-  `agc_jit_call_builtin`, whose catch (`vm->jit_catch`) keeps `agc_fail` from
-  jumping across compiled code; mark a row only if it never parks, starts a
-  block or moves frames. An edit of `turn_loop`, even in its jit copy,
-  changes the plain copy's machine code: keep JIT logic in `run_compiled`, and
-  put new JIT exit handling there in out-of-line `noinline` helpers: growth of
-  `run_compiled` moves `plain_turn`, and a move of 128 bytes with the same
-  instructions cost `--jit off` up to 12% (`make layout-check` fails on it,
-  `references/ci.md`).
+  (`agc_builtin.direct`, checked by `sync_test.c`) or `leaf` (only below a
+  native call, so its exit never unwinds one; at depth 0 the INTERPRET exit is
+  cheaper than the catch; the rows of `plain_leaves`, which cannot fail once
+  their tags are checked, at any depth through `agc_jit_call_plain`, with no
+  catch), through `agc_jit_call_builtin` or `agc_jit_call_leaf`, whose catch
+  (`vm->jit_catch`) keeps `agc_fail` from jumping across compiled code; mark a
+  row only if it never parks, starts a block or moves frames. An edit of
+  `turn_loop`, even in its jit copy, changes the plain copy's machine code:
+  keep JIT logic in `run_compiled`, and put new JIT exit handling there in
+  out-of-line `noinline` helpers: growth of `run_compiled` moves `plain_turn`,
+  and a move of 128 bytes with the same instructions cost `--jit off` up to 12%
+  (`make layout-check` fails on it, `references/ci.md`).
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere

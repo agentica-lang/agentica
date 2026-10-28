@@ -295,6 +295,7 @@ agc_string *agc_around(const char *before, const agc_string *part, const char *a
 
 static agc_value failure(agc_string *message) { return agc_result_value(false, agc_string_value(message)); }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tags are right. */
 static agc_value builtin_length(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_int((int64_t)agc_as_string(vm, args[0])->chars);

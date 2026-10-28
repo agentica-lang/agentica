@@ -257,13 +257,22 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     `reduce` and the others). Its native frame calls a block, and the block's
     frames run in compiled code when the block has code.
 
-  Compiled code returns `{status, pc}` at its first exit. `run_compiled`
-  (`vm/interp.c`) handles it as the interpreter handles the instruction at `pc`:
+  Compiled code calls a direct builtin itself, and a leaf builtin when a native
+  call is below it, so the native calls stay on the C stack. A leaf at native
+  depth 0 takes the `INTERPRET` exit, which unwinds nothing and costs less than
+  the catch of the call. The hottest leaves that cannot fail once their
+  arguments have the right tags (`size` of a List, `append`, `ok`, `ok?`,
+  `length` of a String; `plain_leaves` in `vm/jit/jit.c`) are called at any
+  depth, with no catch, after a check of the tags; a wrong tag takes the
+  `INTERPRET` exit. Compiled code returns `{status, pc}` at its first exit.
+  `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
+  instruction at `pc`:
   - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
-    interpreter runs. `run_compiled` calls a leaf builtin itself. It starts a
-    block call, whose block then runs in its code.
+    interpreter runs. `run_compiled` calls a leaf builtin itself, at native
+    depth 0 or after a failed tag check. It starts a block call, whose block
+    then runs in its code.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
@@ -291,9 +300,10 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
 
   Compiled code never calls `agc_fail`. On Windows x64, `longjmp` unwinds the
   stack, and JIT frames have no unwind info. A direct builtin is called through
-  `agc_jit_call_builtin`, which sets `vm->jit_catch`, so a failure inside the
-  builtin jumps back to it and not across compiled code. The builtin's registers
-  stay in the frame's register file during the call, so the collector sees them.
+  `agc_jit_call_builtin`, a leaf one through `agc_jit_call_leaf`. Both set
+  `vm->jit_catch`, so a failure inside the builtin jumps back to them and not
+  across compiled code. The builtin's registers stay in the frame's register
+  file during the call, so the collector sees them.
 - **Code.** Each instruction has fixed code, emitted in one pass over the
   bytecode. The register convention is in the header of `vm/jit/emit_x64.c`.
 - **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
@@ -343,11 +353,12 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
     budget, `bytes` for the code memory.
   - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
-    count=N`, `block count=N`, `transition count=N` (the `CALL`, `CALL_VALUE`,
-    `TAIL_CALL` and `RETURN` exits; a native call, tail call or return is not
-    one), `transition op=tail-call count=N compiled=M` (the `TAIL_CALL` exits,
-    and those whose callee had code) and `turn count=N` (the turns that ran the
-    jit copy of the turn loop).
+    count=N` (the leaf exits at native depth 0, and the plain leaves whose tag
+    check failed), `block count=N`, `transition count=N` (the `CALL`,
+    `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native call, tail call or
+    return is not one), `transition op=tail-call count=N compiled=M` (the
+    `TAIL_CALL` exits, and those whose callee had code) and `turn count=N` (the
+    turns that ran the jit copy of the turn loop).
 - **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
   that end inside compiled code, native and block calls, tail calls and the exit
   counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,
@@ -366,9 +377,9 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
 - **Known limits.**
   - Only x86-64 has an emitter; the other hosts run the interpreter, arm64 macOS
     included.
-  - A leaf builtin exits compiled code and unwinds the native calls below it. A
-    builtin that is neither leaf, direct nor a block call (for example output,
-    tasks, channels and files) also returns to the turn loop.
+  - A builtin that is neither leaf, direct nor a block call (for example
+    output, tasks, channels and files) returns to the turn loop and unwinds the
+    native calls below it.
   - A block call whose block has code takes the `RETURN` exit at its end, and
     at a slow step of `times`, `upto`, `downto` or `each` of a Range. A block
     that a stepper calls takes it at each call.
