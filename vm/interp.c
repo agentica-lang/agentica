@@ -1179,9 +1179,10 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
     agc_jit_exit out = code(vm, R, p->constants, pc);
-    if (t->frame_count != depth) {
-      /* Native calls are on the frames, not on the C stack any more: the exit is the top frame's, whose function was
-         called natively, so it has code. */
+    if (__builtin_expect(t->frame_count != depth, 0) || frame->tail) {
+      /* Native calls are on the frames, not on the C stack any more, and a native tail call (which sets the frame's
+         tail flag) may have made the frame another function's: the exit is the top frame's, whose function was called
+         or tail-called natively, so it has code. */
       depth = t->frame_count;
       frame = &t->frames[depth - 1];
       f = &p->functions[frame->function];

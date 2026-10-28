@@ -44,7 +44,7 @@ enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7
 #define TAG(r) ((int64_t)(r) * 16)
 #define WORD(r) ((int64_t)(r) * 16 + 8)
 
-/* The frame fields that a native CALL writes and RETURN reads (port.h). */
+/* The frame fields that a native CALL and TAIL_CALL write and RETURN reads (port.h). */
 #define FRAME_FIELD(name) ((int64_t)offsetof(agc_frame, name))
 #define TASK_FIELD(name) ((int64_t)offsetof(agc_task, name))
 #define FIELD_SIZE(type, name) sizeof(((type *)0)->name)
@@ -241,11 +241,14 @@ void agc_emit_begin(agc_emitter *e, uint32_t count) {
   memset(e, 0, sizeof *e);
   e->count = count;
   e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
-  /* The native entry at AGC_JIT_NATIVE_ENTRY, which a native CALL of compiled code calls with the callee's R in
-     ARG1, rbx and r13 being the same for every function: one more native call deep, then instruction 0. The entry
-     from C at offset 0 jumps over it. */
+  /* The entry from C at offset 0 jumps over the two entries of compiled code. The tail entry at AGC_JIT_TAIL_ENTRY,
+     which a native TAIL_CALL of another function jumps to with everything as it is (the frame's R, the native depth,
+     the stack of the caller's code, which every function lays out the same way): instruction 0. The native entry at
+     AGC_JIT_NATIVE_ENTRY, which a native CALL of compiled code calls with the callee's R in ARG1, rbx and r13 being
+     the same for every function: one more native call deep, then instruction 0. */
   BYTES(e, 0xEB, 0x00); /* jmp short entry */
   size_t over = e->len - 1;
+  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
   save_registers(e);
   BYTES(e, 0x49, 0xFF, 0xC6);        /* inc r14 */
   BYTES(e, 0x48, 0x83, 0xEC, FRAME); /* sub rsp, 40 */
@@ -638,6 +641,77 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   BYTES(e, 0x41, 0xFF, 0xD3);                       /* call r11 */
   BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+}
+
+/* The TAIL_CALL exit at PC when CC holds (always for CC < 0). With COUNTER, the jit trace's agc_jit_count_tail(COUNTER,
+   SLOT) runs first, which counts it (and whether the callee in SLOT had code): run_compiled's call_exit cannot tell a
+   tail call from a call without growing. */
+static void tail_exit(agc_emitter *e, int cc, uint32_t pc, uint64_t counter, uint64_t slot) {
+  if (!counter) {
+    exit_if(e, cc, AGC_JIT_EXIT_TAIL_CALL, pc);
+    return;
+  }
+  size_t over = cc < 0 ? 0 : jump_to_patch(e, cc ^ 1); /* the inverse condition: the low bit of the code */
+  move_imm64(e, ARG0, counter);
+  move_imm64(e, ARG1, slot);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_count_tail);
+  exit_if(e, -1, AGC_JIT_EXIT_TAIL_CALL, pc);
+  if (cc >= 0) land(e, over);
+}
+
+/* TAIL_CALL of function bx with the window at R[a], in place, as replace_frame does it: the top frame keeps its base,
+   ret and depth, takes the callee's PARAMS arguments from the window into R[0..), and becomes the callee's (pc 0, tail
+   set). For itself (SELF) that is a jump to instruction 0. Another function needs code (its slot in the code table at
+   SLOT, read when the call runs) and room for its REGISTERS in the register file, as replace_frame would grow it;
+   then the code jumps to that code's tail entry, at the same native depth and on the same stack, so a chain of tail
+   calls never grows the C stack. run_compiled reads the top frame again after an exit when the frame count changed
+   or the frame's tail flag is set, which this sets. Anything else takes the TAIL_CALL exit with nothing changed, for
+   run_compiled. The tail call itself charges nothing, as in the interpreter: the callee's
+   STEPs do (the loader makes every function that calls start with one). The window is copied upwards one register at
+   a time, which is right as R[k] is never above R[a + k]; a callee of more than AGC_JIT_TAIL_PARAMS arguments always
+   takes the exit, so that copy stays short. COUNTER, when the jit trace is on, counts each exit (tail_exit). */
+void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
+                        uint32_t registers, uint64_t counter) {
+  uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  if (params > AGC_JIT_TAIL_PARAMS) {
+    tail_exit(e, -1, pc, counter, slot);
+    return;
+  }
+  if (!self) {
+    move_imm64(e, RAX, slot);
+    load(e, R11, RAX, 0);
+    BYTES(e, 0x4D, 0x85, 0xDB); /* test r11, r11 */
+    tail_exit(e, CC_E, pc, counter, slot);
+  }
+  load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
+  if (!self) {
+    /* R + 16 * registers must not pass regs + 16 * reg_capacity, the end of the register file. */
+    load(e, RDX, RCX, TASK_FIELD(reg_capacity));
+    BYTES(e, 0x48, 0xC1, 0xE2, 0x04);                  /* shl rdx, 4 */
+    op_mem(e, true, 0x03, RDX, RCX, TASK_FIELD(regs)); /* add rdx, [rcx + regs] */
+    lea(e, R10, REGS, TAG(registers));
+    BYTES(e, 0x49, 0x39, 0xD2); /* cmp r10, rdx */
+    tail_exit(e, CC_A, pc, counter, slot);
+  }
+  for (uint32_t k = 0; in.a && k < params; k++) agc_emit_move(e, k, (uint32_t)in.a + k);
+  /* rax = &frames[frame_count]: the top frame is the one before it. */
+  op_mem(e, false, 0x8B, RAX, RCX, TASK_FIELD(frame_count)); /* mov eax, [rcx + frame_count] */
+  BYTES(e, 0x48, 0xC1, 0xE0, 0x05);                          /* shl rax, 5 */
+  op_mem(e, true, 0x03, RAX, RCX, TASK_FIELD(frames));       /* add rax, [rcx + frames] */
+  if (!self) {
+    op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(function) - 32); /* mov dword [rax - 32 + function], bx */
+    word32(e, function);
+  }
+  op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(pc) - 32); /* mov dword [rax - 32 + pc], 0 */
+  word32(e, 0);
+  op_mem(e, false, 0xC6, 0, RAX, FRAME_FIELD(tail) - 32); /* mov byte [rax - 32 + tail], 1 */
+  byte(e, 1);
+  if (self) {
+    agc_emit_jump(e, 0);
+    return;
+  }
+  BYTES(e, 0x49, 0x83, 0xC3, AGC_JIT_TAIL_ENTRY); /* add r11, tail entry */
+  BYTES(e, 0x41, 0xFF, 0xE3);                     /* jmp r11 */
 }
 
 /* CALL_VALUE of the function value in R[a] with in.b arguments after it, as a native call when it can be one:

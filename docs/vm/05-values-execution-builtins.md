@@ -226,20 +226,27 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
 - **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
   or `always`. `off`, the default, has no JIT. An entry of a function is a call,
   a return into it, or a turn that starts in it. `on` compiles a function with a
-  loop at its 100th entry, once 32 of its entries were passes (an entry at or
-  before the previous one: a new call, or a loop that went round). It keeps a
-  function out when one of its innermost loops has more than one instruction
-  that leaves compiled code per 16 instructions. A function without a loop
-  gets code only for native calls, and only when none of its instructions
-  leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
-  from compiled code when it calls a function, else at its 16th call that
-  leaves compiled code. `always` compiles every function at its first entry,
-  for tests. A host without an emitter runs every mode in the interpreter.
+  loop (a backward jump, or a `TAIL_CALL` of itself) at its 100th entry, once 32
+  of its entries were passes (an entry at or before the previous one: a new
+  call, or a loop that went round). It keeps a function out when one of its
+  innermost loops has more than one instruction that leaves compiled code per 16
+  instructions. A function without a loop gets code only for native calls, and
+  only when none of its instructions leaves compiled code: at its first `CALL`,
+  `TAIL_CALL` or `CALL_VALUE` exit from compiled code when it calls a function,
+  else at its 16th call that leaves compiled code. `always` compiles every
+  function at its first entry, for tests. A host without an emitter runs every
+  mode in the interpreter.
 - **Native calls.** A `CALL` of a function that has code is a native call. So is
   a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
   Compiled code pushes the frame and calls the callee's code, up to 256 deep
-  (`AGC_JIT_NATIVE_DEPTH`); the callee's `RETURN` pops it. A call that cannot be
-  native takes an exit. `on` counts a `CALL_VALUE` as a call, not as leaving.
+  (`AGC_JIT_NATIVE_DEPTH`); the callee's `RETURN` pops it. A `TAIL_CALL` of a
+  function that has code replaces the top frame in place, as the interpreter
+  does (same base, `ret` and depth, `tail` set), and jumps to the callee's code;
+  a `TAIL_CALL` of the function itself jumps to its first instruction. It nests
+  nothing on the C stack and charges nothing; the callee's `STEP`s do. A call
+  that cannot be native (no code, the frames or registers would grow, or a tail
+  call of more than 32 arguments, `AGC_JIT_TAIL_PARAMS`) takes an exit. `on`
+  counts a `CALL_VALUE` as a call, not as leaving.
 - **Exits.** Three kinds of builtin matter here:
   - A *direct* builtin only returns a value. It may allocate, do work that grows
     with its arguments, charge turn cost and fail. It never parks, starts a
@@ -327,8 +334,10 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
     budget, `bytes` for the code memory.
   - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
     count=N`, `block count=N`, `transition count=N` (the `CALL`, `CALL_VALUE`,
-    `TAIL_CALL` and `RETURN` exits; a native call or return is not one) and
-    `turn count=N` (the turns that ran the jit copy of the turn loop).
+    `TAIL_CALL` and `RETURN` exits; a native call, tail call or return is not
+    one), `transition op=tail-call count=N compiled=M` (the `TAIL_CALL` exits,
+    and those whose callee had code) and `turn count=N` (the turns that ran the
+    jit copy of the turn loop).
 - **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
   that end inside compiled code, native and block calls, tail calls and the exit
   counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,
@@ -347,8 +356,6 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
 - **Known limits.**
   - Only x86-64 has an emitter; the other hosts run the interpreter, arm64 macOS
     included.
-  - No native tail call: every `TAIL_CALL` takes its exit, which unwinds the
-    native calls below it.
   - A leaf builtin exits compiled code and unwinds the native calls below it. A
     builtin that is neither leaf, direct nor a block call (for example output,
     tasks, channels and files) also returns to the turn loop.

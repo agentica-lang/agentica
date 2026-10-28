@@ -77,6 +77,8 @@ static void expect_exit(agc_jit_exit got, uint32_t status, uint32_t pc) {
 static void bytes(void) {
   agc_emitter e;
   agc_emit_begin(&e, 1);
+  /* The entry from C jumps over the tail entry (jmp rel32) and the native entry (push rbx first). */
+  assert(e.code[0] == 0xEB && e.code[AGC_JIT_TAIL_ENTRY] == 0xE9 && e.code[AGC_JIT_NATIVE_ENTRY] == 0x53);
   size_t start = e.len;
   agc_emit_move(&e, 1, 2);
   static const uint8_t move[] = {
@@ -126,22 +128,20 @@ static void sum_loop(one_function *f) {
   emit(f, AGC_OP_RETURN, 2, 0, 0);
 }
 
-/* A CALL that cannot be native and a RETURN not called natively take their exits; every TAIL_CALL takes its own, and
-   one of a function past the program's table (hand-made code) leaves for the interpreter. */
+/* A CALL that cannot be native and a RETURN not called natively take their exits, and a TAIL_CALL of a function past
+   the program's table (hand-made code) leaves for the interpreter. */
 static AGC_JIT_CALLER void call_return_exits(void) {
   one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_CALL, 0, 0, 0);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
-  emit(&f, AGC_OP_TAIL_CALL, 1, 0, 0);
   emit(&f, AGC_OP_TAIL_CALL, 1, 1, 0);
   agc_jit_code code = compile(&f);
   assert(code);
   agc_value R[8] = {agc_int(42)};
   expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_CALL, 0);
   expect_exit(code(&vm, R, f.constants, 1), AGC_JIT_EXIT_RETURN, 1);
-  expect_exit(code(&vm, R, f.constants, 2), AGC_JIT_EXIT_TAIL_CALL, 2);
-  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_INTERPRET, 3);
+  expect_exit(code(&vm, R, f.constants, 2), AGC_JIT_EXIT_INTERPRET, 2);
   assert(same_bits(R[0], agc_int(42)));
 }
 
@@ -154,11 +154,20 @@ static void run_on(agc_task *t, agc_frame *frames, agc_value *regs) {
   t->reg_capacity = 8;
 }
 
+/* The code of function 0 of PROGRAM, compiled with `always` once function 1 has code; *JIT is the run's JIT. */
+static agc_jit_code first_two(agc_program *program, agc_jit **jit) {
+  static const agc_trace quiet = {0};
+  *jit = agc_jit_new(program, AGC_JIT_ALWAYS, &quiet);
+  assert(*jit && agc_jit_code_of(*jit, 1, 0));
+  agc_jit_code code = agc_jit_code_of(*jit, 0, 0);
+  assert(code);
+  return code;
+}
+
 /* Function 0 calls function 1, which adds 1 to its argument, natively: the frame is pushed and popped in compiled code
    and the result lands in the caller's window. A STEP exit inside the callee comes out of the caller with the callee's
    frame on top, and a task without room for the frame takes the CALL exit with nothing pushed. */
 static AGC_JIT_CALLER void native_calls(void) {
-  static const agc_trace quiet = {0};
   static agc_instr caller[] = {{AGC_OP_CALL, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
   static agc_instr callee[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 1, 1, 0}, {AGC_OP_ADD_I, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
@@ -169,10 +178,8 @@ static AGC_JIT_CALLER void native_calls(void) {
     {.name = agc_make_string("callee", 6, 6), .registers = 2, .code = callee, .spans = spans, .count = 4},
   };
   agc_program program = {.functions = fns, .function_count = 2, .constants = constants, .constant_count = 2};
-  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
-  assert(jit && agc_jit_code_of(jit, 1, 0));
-  agc_jit_code code = agc_jit_code_of(jit, 0, 0);
-  assert(code);
+  agc_jit *jit;
+  agc_jit_code code = first_two(&program, &jit);
   agc_task *t = vm.task, saved = *vm.task;
   agc_frame frames[2] = {{.function = 0}};
   agc_value regs[8] = {0};
@@ -202,6 +209,113 @@ static AGC_JIT_CALLER void native_calls(void) {
   assert(same_bits(regs[2], agc_int(43)) && t->frame_count == 1);
   *t = saved;
   vm.next_stop = 1000;
+}
+
+/* Function 0 calls function 1 natively with n in R2; function 1 tail-calls function 2 (sum) with (n, 0), which adds n,
+   n - 1, ..., 1 by tail-calling itself, and returns the sum to function 0's R2. A native tail call keeps the frame's
+   base, ret and depth and marks it tail, as replace_frame does; a callee without code, or a register file without room
+   for its registers, takes the TAIL_CALL exit with the caller's frame and its window as they were. A STEP exit inside
+   the chain comes out with the tail-called frame on top, and a million tail calls never grow the C stack. */
+static AGC_JIT_CALLER void native_tail_calls(void) {
+  static agc_instr outer[] = {{AGC_OP_CALL, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
+  static agc_instr start[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_MOVE, 2, 0, 0}, {AGC_OP_CONST, 3, 0, 0}, {AGC_OP_TAIL_CALL, 2, 2, 0}};
+  static agc_instr sum[] = {
+    {AGC_OP_STEP, 1, 0, 0},  {AGC_OP_CONST, 2, 0, 0}, {AGC_OP_EQ, 3, 0, 2},    {AGC_OP_JUMP_IF_FALSE, 3, 5, 0},
+    {AGC_OP_RETURN, 1, 0, 0}, {AGC_OP_CONST, 4, 1, 0}, {AGC_OP_SUB_I, 4, 0, 4}, {AGC_OP_ADD_I, 5, 1, 0},
+    {AGC_OP_TAIL_CALL, 4, 2, 0}};
+  static uint32_t spans[9] = {0};
+  agc_value constants[2] = {agc_int(0), agc_int(1)};
+  agc_function fns[3] = {
+    {.name = agc_make_string("outer", 5, 5), .registers = 4, .code = outer, .spans = spans, .count = 2},
+    {.name = agc_make_string("start", 5, 5), .registers = 4, .params = 1, .code = start, .spans = spans, .count = 4},
+    {.name = agc_make_string("sum", 3, 3), .registers = 6, .params = 2, .code = sum, .spans = spans, .count = 9},
+  };
+  agc_program program = {.functions = fns, .function_count = 3, .constants = constants, .constant_count = 2};
+  agc_task *t = vm.task, saved = *vm.task;
+  agc_value regs[8] = {0};
+  agc_frame frames[2] = {{.function = 0}};
+  run_on(t, frames, regs);
+  agc_jit *jit;
+  agc_jit_code code = first_two(&program, &jit);
+  /* sum has no code yet. */
+  regs[2] = agc_int(10);
+  vm.next_stop = 1000;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_TAIL_CALL, 3);
+  assert(t->frame_count == 2 && t->depth == 2 && frames[1].function == 1 && !frames[1].tail);
+  assert(same_bits(regs[2], agc_int(10)) && same_bits(regs[4], agc_int(10)) && same_bits(regs[5], agc_int(0)));
+  assert(agc_jit_code_of(jit, 2, 0));
+  /* sum's 6 registers from base 2 would pass a register file of 7. */
+  t->frame_count = t->depth = 1;
+  t->reg_capacity = 7;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_TAIL_CALL, 3);
+  assert(t->frame_count == 2 && frames[1].function == 1 && !frames[1].tail && same_bits(regs[2], agc_int(10)));
+  /* They end exactly at the end of a file of 8: 1 STEP of start and 11 of sum, no exit until outer's RETURN. */
+  t->frame_count = t->depth = 1;
+  t->reg_capacity = 8;
+  vm.next_stop = 1000;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(regs[2], agc_int(55)) && t->frame_count == 1 && t->depth == 1 && vm.next_stop == 1000 - 12);
+  /* The fourth STEP of sum is the slow one: three self tail calls ran. */
+  regs[2] = agc_int(10);
+  vm.next_stop = 5;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_STEP, 0);
+  assert(t->frame_count == 2 && t->depth == 2 && frames[0].pc == 1);
+  assert(frames[1].function == 2 && frames[1].pc == 0 && frames[1].base == 2 && frames[1].ret == 2 && frames[1].tail &&
+         !frames[1].native);
+  assert(same_bits(regs[2], agc_int(7)) && same_bits(regs[3], agc_int(27)));
+  /* A million tail calls in one run of the code. */
+  t->frame_count = t->depth = 1;
+  regs[2] = agc_int(1000000);
+  vm.next_stop = INT64_MAX;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(regs[2], agc_int(500000500000)) && t->frame_count == 1 && t->depth == 1);
+  *t = saved;
+  vm.next_stop = 1000;
+}
+
+/* A TAIL_CALL of a callee with more than AGC_JIT_TAIL_PARAMS arguments takes the TAIL_CALL exit, even a self one with
+   room for its registers, and its code is a few bytes, however many arguments (65,534 at most); a self TAIL_CALL like
+   that is no loop for `on`. */
+static AGC_JIT_CALLER void wide_tail_calls(void) {
+  agc_emitter e;
+  agc_jit_code none = NULL;
+  agc_instr call = {AGC_OP_TAIL_CALL, 1, 0, 0};
+  size_t size[3];
+  for (int k = 0; k < 3; k++) {
+    agc_emit_begin(&e, 1);
+    size_t start = e.len;
+    uint32_t params = k == 2 ? AGC_JIT_TAIL_PARAMS : 65534;
+    agc_emit_tail_call(&e, call, 0, k == 1, (uint64_t)(uintptr_t)&none, params, params + 1, 0);
+    size[k] = e.len - start;
+  }
+  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)32 * AGC_JIT_TAIL_PARAMS);
+  /* A self TAIL_CALL (no native call needed) of 33 arguments exits with the frame as it was. */
+  static agc_instr wide[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static uint32_t spans[3] = {0};
+  agc_value constants[1] = {agc_int(0)};
+  uint32_t many = AGC_JIT_TAIL_PARAMS + 1;
+  agc_function fns[1] = {{.name = agc_make_string("wide", 4, 4), .registers = many + 1, .params = many, .code = wide,
+                          .spans = spans, .count = 3}};
+  agc_program program = {.functions = fns, .function_count = 1, .constants = constants, .constant_count = 1};
+  static const agc_trace quiet = {0};
+  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
+  agc_jit_code code = jit ? agc_jit_code_of(jit, 0, 0) : NULL;
+  assert(code);
+  agc_task *t = vm.task, saved = *vm.task;
+  agc_value regs[64] = {0};
+  agc_frame frames[2] = {{.function = 0}};
+  run_on(t, frames, regs);
+  t->reg_capacity = 64;
+  regs[0] = agc_int(99);
+  regs[1] = agc_int(7);
+  vm.next_stop = 1000;
+  expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_TAIL_CALL, 1);
+  assert(t->frame_count == 1 && frames[0].function == 0 && !frames[0].tail && same_bits(regs[0], agc_int(99)));
+  *t = saved;
+  bool callable[1], looped[1], calling[1];
+  agc_jit_settle(&program, callable, looped, calling);
+  assert(!looped[0]);
 }
 
 /* Function 0 calls the function value in R2 with R3 as its argument: function 1, which adds its capture to it. The
@@ -918,6 +1032,18 @@ static void ineligible(void) {
     assert(looped[0] && !looped[1] && calling[0] && !calling[1]);
     assert(callable[0] == !leaving && callable[1] == !leaving);
   }
+  /* A function whose only loop is a TAIL_CALL of itself has a loop, so `on` compiles it at its entries; a TAIL_CALL of
+     another function is no loop. */
+  agc_instr self_tail[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  agc_instr other_tail[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  agc_function tails[2] = {{.registers = 2, .code = self_tail, .count = 3},
+                           {.registers = 2, .code = other_tail, .count = 3}};
+  agc_program tail_program = {.functions = tails, .function_count = 2};
+  bool tail_callable[2], tail_looped[2], tail_calling[2];
+  agc_jit_settle(&tail_program, tail_callable, tail_looped, tail_calling);
+  assert(tail_looped[0] && !tail_looped[1] && tail_callable[0] && tail_callable[1]);
+  tail_program.function_count = 1;
+  assert(agc_jit_new(&tail_program, AGC_JIT_ON, &quiet));
   /* A CALL_VALUE does not leave and counts as calling: its callee, known only when it runs, is called natively once it
      has code. */
   agc_instr values[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}};
@@ -1166,6 +1292,8 @@ int main(void) {
   bytes();
   call_return_exits();
   native_calls();
+  native_tail_calls();
+  wide_tail_calls();
   call_values();
   direct_calls();
   loops_and_steps();

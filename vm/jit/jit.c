@@ -37,15 +37,22 @@ static uint32_t plain_op(uint32_t op) {
   return op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
 }
 
-/* True when IN at PC jumps back to *START or before it: the end of a loop. */
-static bool backward(agc_instr in, uint32_t pc, uint32_t *start) {
+/* True when IN at PC of function SELF of P jumps back to *START or before it: the end of a loop. A TAIL_CALL of SELF
+   is one too, back to instruction 0, when its code is a jump there (agc_emit_tail_call: at most AGC_JIT_TAIL_PARAMS
+   arguments). */
+static bool backward(const agc_program *p, agc_instr in, uint32_t pc, uint32_t self, uint32_t *start) {
   uint32_t op = plain_op(in.op);
   *start = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  if (op == AGC_OP_TAIL_CALL) {
+    bool again = *start == self && p->functions[self].params <= AGC_JIT_TAIL_PARAMS;
+    *start = 0;
+    return again;
+  }
   return (op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && *start <= pc;
 }
 
-/* True when IN always has code of its own. CALL, CALL_VALUE and RETURN have code that may exit, and TAIL_CALL is an
-   exit that run_compiled handles (leaves_code). */
+/* True when IN always has code of its own. CALL, CALL_VALUE, TAIL_CALL and RETURN have code that may exit
+   (leaves_code). */
 static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
@@ -95,8 +102,9 @@ static bool has_code(uint32_t op) {
   }
 }
 
-/* True for a CALL or a TAIL_CALL of a function of the program: run_compiled makes the frame transition of either and
-   goes on in the callee's code when it has some, so settle counts such a call by its callee. */
+/* True for a CALL or a TAIL_CALL of a function of the program: compiled code makes either natively when the callee has
+   code, else run_compiled makes the frame transition and goes on in the callee's code once it has some, so settle
+   counts such a call by its callee. */
 static bool calls_function(const agc_program *p, agc_instr in) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   return (in.op == AGC_OP_CALL || in.op == AGC_OP_TAIL_CALL) && bx < p->function_count;
@@ -139,7 +147,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     for (uint32_t pc = 0; pc < f->count; pc++) {
       uint32_t start;
       agc_instr in = f->code[pc];
-      jumps += backward(in, pc, &start);
+      jumps += backward(p, in, pc, k, &start);
       calls += calls_function(p, in);
     }
     work += f->count;
@@ -157,7 +165,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     ends[0] = 0;
     for (uint32_t pc = 0; pc < f->count; pc++) {
       uint32_t start;
-      ends[pc + 1] = ends[pc] + backward(f->code[pc], pc, &start);
+      ends[pc + 1] = ends[pc] + backward(p, f->code[pc], pc, k, &start);
       at[pc] = UINT32_MAX;
     }
     looped[k] = ends[f->count] > 0;
@@ -168,7 +176,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     }
     for (uint32_t pc = 0; looped[k] && pc < f->count; pc++) {
       uint32_t start;
-      if (!backward(f->code[pc], pc, &start) || ends[pc] - ends[start] > 0) continue;
+      if (!backward(p, f->code[pc], pc, k, &start) || ends[pc] - ends[start] > 0) continue;
       regions[region_count] = (region){k, pc - start + 1, 0};
       for (uint32_t q = start; q <= pc; q++) at[q] = (uint32_t)region_count;
       region_count++;
@@ -224,6 +232,8 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
    CALL_VALUE and RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
   const agc_program *p = jit->program;
+  uint32_t self = (uint32_t)(f - p->functions);
+  uint64_t counter = AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT) ? (uint64_t)(uintptr_t)jit : 0;
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
@@ -310,7 +320,11 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
         break;
       case AGC_OP_TAIL_CALL:
         /* As for CALL, the loader checks bx. */
-        agc_emit_exit(e, bx < p->function_count ? AGC_JIT_EXIT_TAIL_CALL : AGC_JIT_EXIT_INTERPRET, pc);
+        if (bx < p->function_count)
+          agc_emit_tail_call(e, in, pc, bx == self, (uint64_t)(uintptr_t)&jit->code[bx], p->functions[bx].params,
+                             p->functions[bx].registers, counter);
+        else
+          agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
       case AGC_OP_CALL_VALUE: agc_emit_call_value(e, in, pc); break;
       case AGC_OP_RETURN: agc_emit_return(e, in.a, pc); break;
@@ -651,6 +665,8 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   atomic_init(&jit->leaves, 0);
   atomic_init(&jit->blocks, 0);
   atomic_init(&jit->transitions, 0);
+  atomic_init(&jit->tails, 0);
+  atomic_init(&jit->tails_compiled, 0);
   atomic_init(&jit->turns, 0);
   atomic_init(&jit->live, false);
   atomic_init(&jit->spent, false);
@@ -704,6 +720,13 @@ void agc_jit_count_block(agc_jit *jit) { atomic_fetch_add_explicit(&jit->blocks,
 
 void agc_jit_count_transition(agc_jit *jit) { atomic_fetch_add_explicit(&jit->transitions, 1, memory_order_relaxed); }
 
+void agc_jit_count_tail(agc_jit *jit, _Atomic(agc_jit_code) *slot) {
+  atomic_fetch_add_explicit(&jit->tails, 1, memory_order_relaxed);
+  /* A trace hint: another scheduler may publish the callee's code between the code's own check and this load. */
+  if (atomic_load_explicit(slot, memory_order_relaxed))
+    atomic_fetch_add_explicit(&jit->tails_compiled, 1, memory_order_relaxed);
+}
+
 void agc_jit_report(agc_jit *jit) {
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) {
     uint64_t count = atomic_load_explicit(&jit->exits[op], memory_order_relaxed);
@@ -715,6 +738,10 @@ void agc_jit_report(agc_jit *jit) {
   if (blocks) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "block count=%" PRIu64, blocks);
   uint64_t transitions = atomic_load_explicit(&jit->transitions, memory_order_relaxed);
   if (transitions) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "transition count=%" PRIu64, transitions);
+  uint64_t tails = atomic_load_explicit(&jit->tails, memory_order_relaxed);
+  if (tails)
+    AGC_TRACE(jit->trace, AGC_TRACE_JIT, "transition op=tail-call count=%" PRIu64 " compiled=%" PRIu64, tails,
+              atomic_load_explicit(&jit->tails_compiled, memory_order_relaxed));
   uint64_t turns = atomic_load_explicit(&jit->turns, memory_order_relaxed);
   if (turns) AGC_TRACE(jit->trace, AGC_TRACE_JIT, "turn count=%" PRIu64, turns);
 }
