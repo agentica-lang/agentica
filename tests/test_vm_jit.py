@@ -1196,6 +1196,125 @@ end
     assert status == 1 and stdout == "12000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 
+# Two tasks whose compiled loop (work) makes block calls of every kind over 300 items: map, filter, reduce, any? and
+# all? (both stop early), each, sort_by, a named function as the block, times, upto, downto and each of a Range, with
+# captured values. A compiled block that returns while its call has items left starts over in place, so only the last
+# item of each call (or the one that stops it) leaves compiled code. The turns of the two tasks end inside these
+# calls, and the order of the lines shows where.
+BLOCK_KINDS = """def triple(x: Int) -> Int
+  return x * 3
+end
+
+def work(id: Int) -> Int
+  rounds = 30
+  items = (0...300).to_a
+  total = 0
+  r = 0
+  while r < rounds
+    bias = r + id
+    total += items.map do |x| x + bias end.sum % 1000
+    total += items.filter do |x| (x + bias) % 3 == 0 end.size
+    total += items.reduce(0) do |acc, x| (acc + x * bias) % 100003 end
+    if items.any? do |x| x == bias % 300 end
+      total += 1
+    end
+    if items.all? do |x| x < 250 end
+      total += 1
+    end
+    total += items.map(&triple).sum % 1000
+    total += items.sort_by do |x| (x * 7 + bias) % 300 end.first
+    items.each do |x| x + bias end
+    300.times do |i| i + bias end
+    3.upto(200) do |i| i - bias end
+    200.downto(3) do |i| i * bias end
+    (0...300).each do |i| i + bias end
+    if r % 10 == 0
+      puts("#{id} #{r} #{total}")
+    end
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&work, 2)
+  puts(work(1))
+  puts(Task.await(t))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_block_calls_of_every_kind_start_their_block_again_in_compiled_code(tmp_path):
+    bytecode = compile_text(BLOCK_KINDS, "block_kinds", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.count("\n") == 9, stdout
+    for mode in ("on", "always"):
+        lines = jit_trace(bytecode, tmp_path, mode)
+        counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
+                  if " jit block count=" in line or " jit transition count=" in line}
+        blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
+        # One RETURN exit for each block call (and a few calls of work and main), not one for each item.
+        assert (blocks > 300 and transitions < 2 * blocks) if X86_64 else blocks == transitions == 0, (mode, counts)
+    steps = int(stdout.split("steps ")[1])
+    assert_max_steps_sweep(bytecode, steps)
+
+
+# map's block is &f, which tail-calls g (a loop long enough to end turns, compiled under `on`), which tail-calls f
+# again: the block's frame reaches f's RETURN by a native tail call, so f's code runs in a frame that run_compiled
+# entered for g's. That RETURN must take the RETURN exit, not start the block again in place.
+TAIL_BLOCK = """def g(x: Int) -> Int
+  i = 0
+  s = 0
+  while i < 700
+    s = (s + i * x) % 1000003
+    i += 1
+  end
+  return f(x - 1 + s * 0)
+end
+
+def f(x: Int) -> Int
+  if x > 0
+    return g(x)
+  end
+  a = x
+  i = 0
+  while i < 3
+    a = (a * 3 + i) % 1000003
+    a = (a * 5 + i) % 1000003
+    a = (a * 7 + i) % 1000003
+    a = (a * 11 + i) % 1000003
+    a = (a * 13 + i) % 1000003
+    a = (a * 17 + i) % 1000003
+    a = (a * 19 + i) % 1000003
+    a = (a * 23 + i) % 1000003
+    i += 1
+  end
+  return a + 1
+end
+
+def main() -> Void
+  total = 0
+  r = 0
+  while r < 300
+    xs = [1, 0, 0, 0].map(&f)
+    total = (total + xs[3] + xs[0]) % 1000003
+    r += 1
+  end
+  puts(total)
+  puts([2, 0, 1].map(&f))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", (1, 4))
+def test_a_block_that_returns_after_a_native_tail_call_matches_the_interpreter(tmp_path, schedulers):
+    bytecode = compile_text(TAIL_BLOCK, "tail_block", tmp_path)
+    code, stdout, _ = assert_same(bytecode, schedulers=schedulers)
+    assert code == 0 and stdout.count("\n") == 3, stdout
+
+
 # Two tasks whose compiled loop (drive) calls step, which tail-calls count_down (self tail calls that copy a struct of
 # five fields with `with`, each copy charging turn cost), noisy (a loop that prints, which `on` never compiles: a tail
 # call into a function without code) or calls is_even (mutual tail calls). With `on`, count_down's self tail call is

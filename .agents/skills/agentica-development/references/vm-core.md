@@ -219,9 +219,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   and handles the exits as the interpreter handles that instruction: STEP runs
   `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
   leaf builtin itself, starts a block call (a row with a native kind:
-  `start_native`, whose block then runs in its code, one RETURN exit per
-  call) or lets the loop run that one instruction, which enters the code
-  again at the next pc (`resume`), CALL and RETURN the shared frame handlers.
+  `start_native`, whose block then runs in its code) or lets the loop run
+  that one instruction, which enters the code again at the next pc
+  (`resume`), CALL and RETURN the shared frame handlers. A block's RETURN at
+  native depth 0 first calls `agc_jit_block_return` (below `plain_turn`):
+  while the block call goes on with the same function and nothing can fail
+  or take a slow step (`block_goes_on`, which lists the kinds it handles),
+  it does the native frame's work for that kind and restarts the block's
+  frame in place at instruction 0 (no exit; a turn it ends takes the YIELD
+  exit at `AGC_JIT_PC_RESTART`, which `run_compiled` turns into pc 0). A
+  frame with the tail flag set takes the RETURN exit: `run_compiled` reloads
+  the running code only while that flag is set. A change to `resume_native`
+  or `call_value` needs the same change there.
   A CALL of a function with code is native (`agc_emit_call`): an exit inside
   the callee comes back with the callee's frame on top. So is a CALL_VALUE
   whose function value has code (`agc_jit_call_value` pushes the frame in room

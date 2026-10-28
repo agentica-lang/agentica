@@ -1,10 +1,11 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone, native calls, calls of function values, tail calls, direct builtins,
- * map reads, lists, closures, globals, structs and their updates, enums, `try`), sealed code memory, functions packed
- * in it up to its cap, the compile budget's stop, one copy made by racing threads, and the `on` decision.
+ * failures, native calls, calls of function values, tail calls, direct builtins, map reads, lists, closures, globals,
+ * structs, enums, `try`), block calls that start their block again in place, sealed code memory packed up to its cap,
+ * the compile budget's stop, one copy made by racing threads, and the `on` decision.
  */
 #include "../jit/jit.h"
+#include "test_program.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -33,6 +34,21 @@ typedef struct {
   uint32_t spans[2];
   agc_value constants[FOUR];
 } four_functions;
+
+enum { BLOCK_ITEMS = 1000 };
+
+/* The program of block_calls_in_place. main: sum = [1..1000].reduce(0) do |acc, x| acc + x end, Test.record(sum), then [1..1000].map with a block that
+   adds its capture 100, Test.record of that list. */
+typedef struct {
+  agc_function fns[3];
+  agc_instr code[3][MAX_CODE];
+  uint32_t spans[3][MAX_CODE];
+  agc_span span_table[16];
+  agc_test_source source;
+  agc_value constants[8];
+  const agc_builtin *builtins[3];
+  agc_program program;
+} block_program;
 
 static agc_vm vm;
 
@@ -959,6 +975,111 @@ static void cap_inside_an_offset(void) {
   assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
+/* The values that Test.record saw, in order. */
+static agc_value recorded[4];
+static size_t record_count;
+
+static agc_value record(agc_vm *v, agc_value *args, uint32_t span) {
+  (void)v;
+  (void)span;
+  if (record_count < sizeof recorded / sizeof recorded[0]) recorded[record_count++] = args[0];
+  return args[0];
+}
+
+static void block_program_of(block_program *b) {
+  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
+  memset(b, 0, sizeof *b);
+  b->builtins[0] = agc_find_builtin((const uint8_t *)"List.reduce", 11, 3);
+  b->builtins[1] = agc_find_builtin((const uint8_t *)"List.map", 8, 2);
+  b->builtins[2] = &record_row;
+  assert(b->builtins[0] && b->builtins[1]);
+  agc_test_program(&b->program, &b->source, b->span_table, 16, b->constants, b->builtins, 3, b->fns, 3,
+                   &b->code[0][0], &b->spans[0][0], MAX_CODE, 0);
+  agc_value items[BLOCK_ITEMS];
+  for (int64_t k = 0; k < BLOCK_ITEMS; k++) items[k] = agc_int(k + 1);
+  agc_fn *add = agc_new_fn(1, 0), *shift = agc_new_fn(2, 1);
+  shift->captured[0] = agc_int(100);
+  b->constants[0] = agc_list_value(agc_list_from_array(items, BLOCK_ITEMS));
+  b->constants[1] = agc_int(0);
+  b->constants[2] = agc_fn_value(add);
+  b->constants[3] = agc_fn_value(shift);
+  b->program.constant_count = 4;
+  b->fns[1].params = 2;
+  b->fns[2].captures = 1;
+  agc_function *main_fn = &b->fns[0];
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_STEP, 1, 0, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 1, 0, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 2, 1, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 3, 2, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 0, 2);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 2, 3);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 4, 0, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 5, 3, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 4, 1, 4);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 4, 2, 5);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_RETURN, 4, 0, 1);
+  for (uint32_t f = 1; f < 3; f++) {
+    agc_test_emit(&b->fns[f], MAX_CODE, AGC_OP_STEP, 1, 0, 6);
+    agc_test_emit(&b->fns[f], MAX_CODE, AGC_OP_ADD_I, 0, 0 | (1u << 16), 6); /* R0 = R0 + R1 */
+    agc_test_emit(&b->fns[f], MAX_CODE, AGC_OP_RETURN, 0, 0, 6);
+  }
+}
+
+/* One run of the block program with at most MAX_STEPS steps, with no JIT or with `always` (its trace on, so it counts
+   the transitions and turns in COUNTS[0] and [1]): the outcome, and the steps left in *LEFT. */
+static agc_outcome run_blocks(block_program *b, bool jit, int64_t max_steps, int64_t *left, uint64_t counts[2]) {
+  static FILE *quiet;
+  if (!quiet) quiet = tmpfile(); /* not /dev/null: Windows has none */
+  assert(quiet);
+  record_count = 0;
+  agc_vm run;
+  agc_vm_init(&run, &b->program, stdout, quiet, max_steps);
+  agc_jit *j = NULL;
+  if (jit) {
+    static agc_trace counting = {.mask = AGC_TRACE_JIT, .fd = -1};
+    j = agc_jit_new(&b->program, AGC_JIT_ALWAYS, &counting);
+    assert(j);
+    run.rt->jit = j;
+  }
+  agc_outcome outcome = agc_vm_run(&run);
+  *left = atomic_load(&run.rt->steps_left);
+  counts[0] = j ? atomic_load(&j->transitions) : 0;
+  counts[1] = j ? atomic_load(&j->turns) : 0;
+  return outcome;
+}
+
+/* A compiled block that returns to its block call while items are left starts over in place
+   (agc_jit_block_return): the frame keeps its slot and gets the next arguments and its captures, the step and turn
+   cost of each call are charged as the interpreter charges them, and the turns that end inside the call end where
+   the interpreter's do. Only the last item of each call, and main's RETURN, take the RETURN exit. Step limits that
+   stop inside the calls stop both tiers at the same step. */
+static AGC_JIT_CALLER void block_calls_in_place(void) {
+  static block_program b;
+  block_program_of(&b);
+  int64_t left_off, left_jit;
+  uint64_t counts[2];
+  agc_outcome off = run_blocks(&b, false, 1000000, &left_off, counts);
+  assert(off.kind == AGC_DONE && record_count == 2);
+  agc_value sum = recorded[0], list = recorded[1];
+  assert(same_bits(sum, agc_int(BLOCK_ITEMS * (BLOCK_ITEMS + 1) / 2)));
+  agc_outcome on = run_blocks(&b, true, 1000000, &left_jit, counts);
+  assert(on.kind == AGC_DONE && record_count == 2 && left_jit == left_off);
+  assert(same_bits(recorded[0], sum) && agc_equal(&vm, recorded[1], list, 0));
+  const agc_list *shifted = agc_as_list(&vm, recorded[1]);
+  assert(agc_list_len(shifted) == BLOCK_ITEMS && same_bits(agc_list_get(shifted, 0), agc_int(101)) &&
+         same_bits(agc_list_get(shifted, BLOCK_ITEMS - 1), agc_int(BLOCK_ITEMS + 100)));
+  /* Each call of a block takes a step and a turn cost: 2000 calls end turns of 2000 steps inside them. */
+  assert(counts[0] == 3 && counts[1] >= 3);
+  /* The calls take about 1000000 - left_off steps; the limits stop inside the reduce and the map. */
+  int64_t used = 1000000 - left_off;
+  for (int64_t limit = used / 7; limit < used; limit += used / 7) {
+    agc_outcome a = run_blocks(&b, false, limit, &left_off, counts);
+    agc_outcome c = run_blocks(&b, true, limit, &left_jit, counts);
+    assert(a.kind == AGC_FAILED && c.kind == a.kind && strcmp(a.code, "RUNTIME-STEP-LIMIT") == 0);
+    assert(strcmp(c.code, a.code) == 0 && c.span == a.span && left_jit == left_off);
+  }
+}
+
 /* Every opcode compiles with `always`: one without code of its own, such as CALL_BUILTIN or RETURN, leaves for the
    interpreter at its pc. */
 static AGC_JIT_CALLER void every_opcode_compiles(void) {
@@ -1307,6 +1428,7 @@ int main(void) {
   globals_structs_enums();
   struct_updates();
   ineligible();
+  block_calls_in_place();
   every_opcode_compiles();
 #else
   /* No emitter on this host: the JIT is never made. */
