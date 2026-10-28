@@ -296,6 +296,17 @@ Expected types flow into these operations for empty collections and Results.
   system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then stops
   with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name; until `Bytes`
   exists, bytes are a `List[Int]`.
+- `HMAC.sha256(key, data)` and `HMAC.sha512(key, data)` give the HMAC
+  (RFC 2104) of the bytes in `data` under the bytes in `key`, with SHA-256 or
+  SHA-512, as a `List[Int]` of 32 or 64 integers 0 to 255, as Ruby's
+  `OpenSSL::HMAC.digest("SHA256", key, data)` does. Each has a `_hexdigest`
+  form (`HMAC.sha256_hexdigest(key, data)`) that gives the same MAC as
+  lowercase hex. A key of any length is taken, empty included; one longer than
+  the hash's block (64 or 128 bytes) is hashed first. An item outside 0 to 255
+  is `RUNTIME-INVALID-NUMBER` at the argument that holds it. They are built on
+  OpenSSL, take time in proportion to both lists and have no effect label. A
+  received MAC is to be compared in constant time, which `==` is not; a
+  constant-time compare is planned. `HMAC` is a reserved type name.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
   same in lines of 60 characters that each end in a newline (`""` for `[]`),

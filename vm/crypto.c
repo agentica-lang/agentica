@@ -1,10 +1,12 @@
 /*
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
- * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex), the first part of
+ * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex) and their HMACs
+ * (HMAC-SHA256 and HMAC-SHA512, RFC 2104), the first parts of
  * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
- * forms of bytes, in plain C. The hash itself is the digest adapter
- * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
- * Base64 and hex follow RFC 4648 and Ruby's Base64 module.
+ * forms of bytes, in plain C. The hash and the HMAC themselves are the digest
+ * adapter (digest.h). Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
+ * Ruby's Base64 module.
  */
 #include "services.h"
 #include "digest.h"
@@ -29,6 +31,19 @@ static const struct {
   [AGC_DIGEST_SHA1] = {"Digest.sha1 needs bytes between 0 and 255", "SHA-1 is not available"},
   [AGC_DIGEST_SHA256] = {"Digest.sha256 needs bytes between 0 and 255", "SHA-256 is not available"},
   [AGC_DIGEST_SHA512] = {"Digest.sha512 needs bytes between 0 and 255", "SHA-512 is not available"},
+};
+
+/* The messages of the HMAC builtins, by agc_digest_kind: a bad item in the key or in the data (RUNTIME-INVALID-NUMBER)
+   and a failed HMAC. Only the kinds with an HMAC builtin have an entry. */
+static const struct {
+  const char *bad_key;
+  const char *bad_data;
+  const char *missing;
+} hmac_names[] = {
+  [AGC_DIGEST_SHA256] = {"HMAC.sha256 needs a key of bytes between 0 and 255",
+                         "HMAC.sha256 needs data of bytes between 0 and 255", "HMAC-SHA256 is not available"},
+  [AGC_DIGEST_SHA512] = {"HMAC.sha512 needs a key of bytes between 0 and 255",
+                         "HMAC.sha512 needs data of bytes between 0 and 255", "HMAC-SHA512 is not available"},
 };
 
 /* The bytes of the List[Int] argument: an item outside 0..255 is RUNTIME-INVALID-NUMBER at the argument (span + 1), a
@@ -311,6 +326,36 @@ static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t 
   return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
 }
 
+/* HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as a byte list (Ruby's
+   OpenSSL::HMAC.digest) or as lowercase hex (hexdigest). A bad item is reported at its own argument: the key at
+   span + 1, the data at span + 2. The key block stays reachable while the data is read: it is a local the GC scans.
+   Cost and lock as digest_value. */
+static agc_value hmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+  size_t key_n, n;
+  const uint8_t *key = text_form_bytes(vm, args[0], hmac_names[kind].bad_key, span, &key_n);
+  const uint8_t *data = text_form_bytes(vm, args[1], hmac_names[kind].bad_data, span + 1, &n);
+  unsigned char mac[AGC_DIGEST_MAX_BYTES];
+  size_t len = agc_hmac(kind, key, key_n, data, n, mac);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", hmac_names[kind].missing, span);
+  return hex ? hex_text(vm, mac, len) : byte_list_value(vm, mac, len);
+}
+
+static agc_value builtin_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, false);
+}
+
+static agc_value builtin_hmac_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, true);
+}
+
+static agc_value builtin_hmac_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, false);
+}
+
+static agc_value builtin_hmac_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, true);
+}
+
 const agc_builtin agc_crypto_builtins[] = {
   {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
@@ -328,6 +373,10 @@ const agc_builtin agc_crypto_builtins[] = {
   {"Base64.urlsafe_decode64", 1, builtin_urlsafe_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexencode", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.hexdecode", 1, builtin_hexdecode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256", 2, builtin_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256_hexdigest", 2, builtin_hmac_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512", 2, builtin_hmac_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512_hexdigest", 2, builtin_hmac_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

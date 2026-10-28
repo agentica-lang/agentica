@@ -1,8 +1,8 @@
 /*
- * The digest adapter interface: one-shot hashes of a byte buffer, for the
- * Digest builtins (crypto.c), and an incremental SHA-256 for the File hash
- * (files.c), which streams a whole file in fixed chunks. The OpenSSL code is
- * in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
+ * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
+ * the Digest and HMAC builtins (crypto.c), and an incremental SHA-256 for the
+ * File hash (files.c), which streams a whole file in fixed chunks. The OpenSSL
+ * code is in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
@@ -20,6 +20,12 @@ typedef enum { AGC_DIGEST_MD5, AGC_DIGEST_SHA1, AGC_DIGEST_SHA256, AGC_DIGEST_SH
 /* Writes the digest of the n bytes at data into out and returns its length (16, 20, 32 or 64 bytes), or returns 0
    when the library fails (the hash missing from the build, or no memory). data may be NULL when n is 0. */
 size_t agc_digest(agc_digest_kind kind, const unsigned char *data, size_t n, unsigned char out[AGC_DIGEST_MAX_BYTES]);
+
+/* Writes the HMAC (RFC 2104) with the hash of kind of the n bytes at data under the key_n bytes at key into out and
+   returns its length (the digest size), or returns 0 when the library fails. A key of any length is taken: one
+   longer than the hash's block is hashed first, as RFC 2104 says. key and data may be NULL when their length is 0. */
+size_t agc_hmac(agc_digest_kind kind, const unsigned char *key, size_t key_n, const unsigned char *data, size_t n,
+                unsigned char out[AGC_DIGEST_MAX_BYTES]);
 
 /* An incremental SHA-256 hash: one malloc'd context per call, fed in chunks. Only the pool threads use it (files.c),
    which free the context on every return path; no GC memory is involved. */
