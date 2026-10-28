@@ -32,69 +32,20 @@ pilot. The start programs of t9, t10 and t12 are 170 to 210 lines in both
 languages (`wc -l` of `start.agc` and `start.py`); the others are 28 to 132
 lines.
 
-- **Task:** `t9-inventory-orders`
-  - **Kind:** modify a program
-  - **The agent does:** add bulk discounts, a `remove` command and a `low` mark
-    to a shop program with six commands
-
-- **Task:** `t10-calc-extend`
-  - **Kind:** modify a program
-  - **The agent does:** add `%`, `^` (right-associative) and a unary minus to a
-    calculator with variables, with the right precedence
-
-- **Task:** `t11-gradebook`
-  - **Kind:** modify a program
-  - **The agent does:** add subject weights, ranking with ties and letter grades
-    to a gradebook; the data model has to change
-
-- **Task:** `t12-member-ids`
-  - **Kind:** type change
-  - **The agent does:** change member and book ids from `Int` to `String`
-    (`M-007`, `B-12`) through structs, maps, sorting, parsing and messages
-
-- **Task:** `t13-transfer-variant`
-  - **Kind:** type change
-  - **The agent does:** add an enum variant (`Transfer`) that every `case`
-    handles (in Python, every `match` ends in `assert_never`) and a new field in
-    the stats
-
-- **Task:** `t14-price-lookup`
-  - **Kind:** type change
-  - **The agent does:** `find_price` stops returning `-1` and returns
-    `Result[Int]` (`int \| None` in Python); follow it through four callers and
-    count the unknown lookups
-
-- **Task:** `t15-robust-ledger`
-  - **Kind:** error handling
-  - **The agent does:** a ledger program that halts on a bad line reports `line
-    N: problem`, skips the line and goes on
-
-- **Task:** `t16-robust-csv`
-  - **Kind:** error handling
-  - **The agent does:** the same for a CSV salary summary, with five checks in a
-    fixed order
-
-- **Task:** `t17-quote-client`
-  - **Kind:** repair an integration
-  - **The agent does:** an HTTP client with the wrong path, JSON shape, header
-    and no error handling, against a Python server
-
-- **Task:** `t18-stats-server`
-  - **Kind:** repair an integration
-  - **The agent does:** an HTTP server (`std/http`, `http.server`) with wrong
-    JSON, content type, status codes and port line, driven by a Python client
-
-- **Task:** `t19-orders-report`
-  - **Kind:** repair an integration
-  - **The agent does:** a CSV to JSON file pipeline with the wrong delimiter,
-    header, output path and format
-
-- **Task:** `t20-big-log`
-  - **Kind:** big data (a streaming probe)
-  - **The agent does:** print the slow server errors of a log of up to 29 MB and
-    600,000 lines, reading it line by line; in Agentica a whole-file read stops
-    at 1 MiB, so the program has to stream (`File.each_line` or
-    `File.read_line`)
+| Task | Kind | The agent does |
+|---|---|---|
+| `t9-inventory-orders` | modify a program | add bulk discounts, `remove` and a `low` mark to a shop program |
+| `t10-calc-extend` | modify a program | add `%`, right-associative `^` and unary minus to a calculator |
+| `t11-gradebook` | modify a program | add weights, ranking with ties and letter grades; the data model changes |
+| `t12-member-ids` | type change | member and book ids from `Int` to `String` through the whole program |
+| `t13-transfer-variant` | type change | add an enum variant that every `case` (Python: `assert_never`) handles |
+| `t14-price-lookup` | type change | `find_price` returns `Result[Int]` (`int \| None`) instead of `-1`; four callers |
+| `t15-robust-ledger` | error handling | report `line N: problem`, skip the bad line, go on |
+| `t16-robust-csv` | error handling | the same for a CSV summary, with five checks in a fixed order |
+| `t17-quote-client` | repair an integration | an HTTP client with the wrong path, JSON shape and header |
+| `t18-stats-server` | repair an integration | an `std/http` server with wrong JSON, status codes and port line |
+| `t19-orders-report` | repair an integration | a CSV to JSON pipeline with the wrong delimiter, header and path |
+| `t20-big-log` | streaming probe | slow errors of a log up to 29 MB; a whole-file read stops at 1 MiB, so stream (`File.each_line`, `File.read_line`) |
 
 The arms are the context an agent gets:
 
@@ -453,16 +404,6 @@ Per run, `skill` against `typed-python` on the tasks both ran:
 input plus the cache reads (Pi reported no cache writes). The cache reads are
 most of it, so "tokens in" understates the gap between the arms.
 
-Cost over the same runs (39 per arm for DeepSeek, 60 for GLM), split as Pi
-reports it:
-
-| Model | Arm | Input | Cache read | Output | Total |
-|---|---|---|---|---|---|
-| DeepSeek | `skill` | $0.259 | $0.030 | $0.271 | $0.561 |
-| DeepSeek | `typed-python` | $0.096 | $0.006 | $0.207 | $0.308 |
-| GLM | `skill` | $0.084 | $0.149 | $0.086 | $0.318 |
-| GLM | `typed-python` | $0.025 | $0.030 | $0.044 | $0.099 |
-
 - **The commands were not used.** `query_runs` is 0 in all 225 Pi runs. In the
   raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
   `type-at`, `symbol` or `refs`, no call names `queries.md` or `analysis.md`,
@@ -490,10 +431,9 @@ reports it:
 - **Most of the extra cost is on the input side.** Input and cache reads are
   75% (DeepSeek) and 81% (GLM) of what `skill` costs more than `typed-python`.
   The context, not the output, is what to cut.
-- **DeepSeek stopped for budget.** Its cost per run was above the estimate
-  ($0.0144 against $0.0082 for `skill`) because the runs go in task-name order
-  (t1, t10 to t19, t2, t20, then t3 to t9), so the larger tasks ran first. The
-  small tasks t3 to t9 have no DeepSeek run.
+- **DeepSeek stopped for budget:** runs go in task-name order (t1, t10 to t19,
+  t2, t20, then t3 to t9), so the larger tasks ran first and t3 to t9 have no
+  DeepSeek run.
 - With 3 reps, and 13 tasks for DeepSeek, these are directions, not claims.
 
 ## Diagnostics

@@ -18,55 +18,21 @@ dependencies; each row names its phases and the sections that specify them.
 Phase and row numbers stay stable; done rows keep one line each, and git history
 keeps their records.
 
-### Releases
+### Order after 0.8.0 (owner, 2026-10-21)
 
-- **0.9.0:** the FFI core (FFI-a, issue
-  [#534](https://github.com/agentica-lang/agentica/issues/534)) with its Windows
-  and macOS parity
-  ([#568](https://github.com/agentica-lang/agentica/issues/568)), released
-  2026-10-23.
-- **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
-  1. The JIT groundwork, without tier 2
-     ([#622](https://github.com/agentica-lang/agentica/issues/622)): interpreter
-     opcode and opcode-pair profile counters (done), `leaf` builtins (done),
-     then the opcode helpers by pointer (direct compiled calls to non-leaf
-     builtins stay deferred beyond 0.10.0), errors without `longjmp` through
-     compiled code and a W^X code memory. Smaller values
-     ([#396](https://github.com/agentica-lang/agentica/issues/396)) are deferred
-     beyond 0.10.0.
-  2. The rest of the FFI core: FFI-b (native libraries in packages; done),
-     variadic C functions
-     ([#619](https://github.com/agentica-lang/agentica/issues/619); done), and
-     from [#594](https://github.com/agentica-lang/agentica/issues/594) owned
-     buffers and typed memory and `C.Float` (done), structs by value (done),
-     function pointers (done) and downloaded prebuilt libraries. No callbacks.
-  3. JIT tier 2 ([§6.4](../vm/05-values-execution-builtins.md#64-jit)) with our
-     own emitter for x86-64 (no sljit); the arm64 emitter is deferred beyond
-     0.10.0.
+Released: 0.9.0 (the FFI core, FFI-a, with its Windows and macOS parity) and
+0.10.0 (the JIT groundwork, the rest of the FFI core, and the x86-64 JIT with
+our own emitter, no sljit). The CHANGELOG has the records. The arm64 emitter
+and smaller values (#396) are deferred.
 
-### Next, after 0.8.0 (owner, 2026-10-21)
-
-The owner's order for the work after release 0.8.0. Two batches come first;
-everything else is weighed after them.
-
-- **Linux first:** new VM and C features land on Linux first. Until Windows
-  and macOS support comes later, in separate work, the feature is refused
-  there with a clear error, and its tests are skipped with a `known-issue: #N`
-  reason that points to the port issue. The builds on all four systems keep
-  passing.
+- **Linux first:** new VM and C features land on Linux first. Until the Windows
+  and macOS port, the feature is refused there with a clear error, and its
+  tests are skipped with a `known-issue: #N` reason that points to the port
+  issue. The builds on all four systems keep passing.
 - **Freeze:** after the FFI; see "Stable core" below.
 
-First batch:
-
-1. FFI-a, the core of
-   [#534](https://github.com/agentica-lang/agentica/issues/534): done (PRs #553
-   to #591, and step 1 of #592; release 0.9.0).
-2. [#375](https://github.com/agentica-lang/agentica/issues/375), cached bytecode
-   (`_build/bytecode/`): done.
-3. Packages [§45](../future/45-packages.md): done.
-4. FFI-b: native libraries in packages: done; release 0.10 (above).
-
-Second batch, after the first:
+Items 1 to 4 (FFI-a, cached bytecode, packages
+[§45](../future/45-packages.md), FFI-b) are done. Second batch:
 
 5. The formatter
    [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt) (row 7.9).
@@ -76,8 +42,7 @@ Second batch, after the first:
 6. [#396](https://github.com/agentica-lang/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
-   not only Linux. It is deferred beyond 0.10.0 and is not a prerequisite for
-   the 0.10.0 x86-64 JIT.
+   not only Linux.
 
 Weighed later (no fixed order):
 
@@ -86,13 +51,6 @@ Weighed later (no fixed order):
 8. The JIT (row 9.1, [§6.4](../vm/05-values-execution-builtins.md#64-jit)); it
    needs 8.1, 7.7 and 9, and comes after the FFI. What is left:
    [#756](https://github.com/agentica-lang/agentica/issues/756).
-9. [#531](https://github.com/agentica-lang/agentica/issues/531), `type-at` on
-   type names: done in 0.8.1 (#550).
-10. [#536](https://github.com/agentica-lang/agentica/issues/536): libFuzzer:
-    done (#670).
-11. Flaky tests [#528](https://github.com/agentica-lang/agentica/issues/528) and
-    [#382](https://github.com/agentica-lang/agentica/issues/382): closed (#603
-    fixed #528; #382 did not recur).
 12. UDP [#450](https://github.com/agentica-lang/agentica/issues/450) (row 7.5):
     it leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
@@ -178,11 +136,11 @@ Weighed later (no fixed order):
     `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
 
 - **Order:** 7.5
-  - **Next work:** UDP (leaves the core plan, item 12 above), then the `Crypto`
-    module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time
-    compare, random bytes, password hashing and AEAD on OpenSSL 3; needs
-    `Bytes`)
-  - **Outcome:** Programs send UDP, and sign, hash and encrypt
+  - **Next work:** UDP (leaves the core plan, item 12 above), then the rest of
+    the crypto module (`docs/future/20-crypto.md` §20: random bytes, constant-time
+    compare, password hashing and AEAD on OpenSSL 3). `Base64`, `Digest` and
+    `HMAC` have landed
+  - **Outcome:** Programs send UDP and encrypt
 
 - **Order:** 7.6
   - **Next work:** Each item changes the checker in `compiler/`. Strict
