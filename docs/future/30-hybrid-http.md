@@ -6,10 +6,10 @@ whole response, and a handler returns a whole response (decided by the user on
 2026-10-12): a `String` body is simple for programs and keeps all byte work in
 C. What is built is not in this file: the API, options, limits and answers are
 in the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md),
-"HTTP client and server (`std/http`)"), and the parsing rules, design, errors and tests
-in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7. This file
-keeps what is not built: streaming on channels (20e to 20g, 30.11) and what
-comes later (30.12 to 30.13).
+"HTTP client and server (`std/http`)"), and the parsing rules, design, errors
+and tests in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7.
+This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
+what comes later (30.12 to 30.13).
 
 **Streaming** is a new feature, VM-only, at order step 7.4 ([the order
 table](../roadmap/README.md#current-implementation-order)): after phase 17

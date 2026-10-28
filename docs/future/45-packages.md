@@ -120,8 +120,8 @@ The command lines, the files they write and the `PKG-` codes are in
 
 The rules are in [05b](../grammar/05b-modules.md), Packages (issue
 [#534](https://github.com/agentica-lang/agentica/issues/534)). Packages stay
-pure Agentica unless the manifest names a native library. Decided (2026-10-23, the smallest
-rule that works on Linux, macOS and Windows):
+pure Agentica unless the manifest names a native library. Decided (2026-10-23,
+the smallest rule that works on Linux, macOS and Windows):
 
 - **Declaration.** `[native.NAME]` in the manifest of the package, one inline
   table per system (`linux`, `macos`, `windows`) with `file` (a path in the
