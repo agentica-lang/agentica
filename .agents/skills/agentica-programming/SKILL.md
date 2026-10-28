@@ -60,7 +60,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `Profile`, step costs |
-| `binary.md` | bytes, bit operations, `Digest` hashes, `Base64`, hex, `std/binary` (`read_u16_be`, `frame`) |
+| `binary.md` | bytes, bit operations, `Digest` hashes, `HMAC`, `Base64`, hex, `std/binary` (`read_u16_be`, `frame`) |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |

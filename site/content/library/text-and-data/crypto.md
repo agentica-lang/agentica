@@ -1,10 +1,10 @@
 ---
-title: Digest
+title: Digest and HMAC
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, and the HMAC builtins, which sign bytes with a key.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`. More (HMAC, a constant-time compare, random bytes) are planned.
+The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, and the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`. More (a constant-time compare, random bytes) are planned.
 
 ## Digests
 
@@ -52,3 +52,35 @@ def main() -> Void
   puts(Digest.sha256([1, 256]))
 end
 ```
+
+## HMAC
+
+```text
+HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]
+HMAC.sha256_hexdigest(key: List[Int], data: List[Int]) -> String
+HMAC.sha512(key: List[Int], data: List[Int]) -> List[Int]
+HMAC.sha512_hexdigest(key: List[Int], data: List[Int]) -> String
+```
+
+`HMAC.sha256` gives the HMAC-SHA256 (RFC 2104) of `data` under `key`: 32 integers from 0 to 255. `HMAC.sha512` gives the 64 of HMAC-SHA512. Each `_hexdigest` form gives the same MAC as lowercase hex, as Ruby's `OpenSSL::HMAC.hexdigest("SHA256", key, data)` does. The key can have any length, empty included; a key longer than the hash's block (64 bytes for SHA-256, 128 for SHA-512) is hashed first, as RFC 2104 says. They sign webhook payloads, JSON Web Tokens with HS256 (the MAC in unpadded base64url) and signed URLs.
+
+```agentica
+def main() -> Void
+  key = String.to_bytes("key")
+  data = String.to_bytes("The quick brown fox jumps over the lazy dog")
+  puts(HMAC.sha256_hexdigest(key, data))
+  puts(HMAC.sha512(key, data).size)
+  puts(Base64.urlsafe_encode64(HMAC.sha256(key, data), false))
+end
+```
+
+```output
+f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
+64
+97yD9DBThCSxMpjmqm-xQ-9NWaFJRhdZl0edvC0aPNg
+```
+
+- To check a MAC you received, compare it with the one you compute in constant time. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right; a constant-time compare is planned.
+- An item outside 0 to 255, in the key or in the data, stops the program with `RUNTIME-INVALID-NUMBER` at that argument.
+- The time grows with the key and the data, as for the digests, and they need no effect label.
+- `HMAC` is a reserved type name.

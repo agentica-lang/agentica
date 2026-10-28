@@ -85,6 +85,13 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   system OpenSSL lacks them, and the call halts (`RUNTIME-INTERNAL`). An item
   outside 0..255 halts (`RUNTIME-INVALID-NUMBER`). The time grows with the list.
   `Crypto` is a reserved type name.
+- `HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]` and
+  `HMAC.sha512(key, data)` return the 32 or 64 bytes of the HMAC (RFC 2104,
+  Ruby's `OpenSSL::HMAC.digest`); `HMAC.sha256_hexdigest(key, data) -> String`
+  and `sha512_hexdigest` return them as lowercase hex. Any key length works,
+  empty included. A bad item in the key or the data halts at that argument
+  (`RUNTIME-INVALID-NUMBER`). Compare a received MAC in constant time, not
+  with `==` (no such compare builtin yet). `HMAC` is a reserved type name.
 
 ```text
 Base64.strict_encode64(data: List[Int]) -> String     # padded, one line
