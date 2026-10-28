@@ -483,10 +483,15 @@ generic instance anywhere in the target (a field `b: Box[Int]`, or an alias of
 one) with `CHECK-NOT-DECODABLE`, because the schema is keyed by the bare struct
 name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
 the target is `CHECK-UNKNOWN-TYPE`. `JsonField[T]` is allowed only as the type
-of a struct field, so it is also refused as a type argument
-(`CHECK-JSON-FIELD-PLACE`). A C struct of an `extern` block takes no type
-parameters (`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in
-the checker: the VM sees a struct of its field names and order, as before.
+of a struct field, and it counts after substitution: in `Box[JsonField[Int]]`
+the field `value: T` is a direct `JsonField` field, so `JSON.encode` and
+`JSON.from` treat it as `value: JsonField[Int]`. A `JsonField` argument that
+lands anywhere else (`items: List[T]`, `f: JsonField[T]`, or inside a list as
+in `Box[List[JsonField[Int]]]`) is `CHECK-JSON-FIELD-PLACE`. In
+`Box[Box[JsonField[Int]]]` it is direct in the inner `Box`, so it is allowed. A
+C struct of an `extern` block takes no type parameters
+(`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in the
+checker: the VM sees a struct of its field names and order, as before.
 
 ### Generic functions
 

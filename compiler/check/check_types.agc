@@ -794,8 +794,10 @@ def shared_type_names(cx: State.Cx) -> List[String]
   ].concat(OPAQUE_TYPES.to_a)
 end
 
-# json_field_place for one type. seen holds every struct walked in the whole call ("Struct:name"), not only the ones on
+# json_field_place for one type. seen holds every struct walked in the whole call (place_key), not only the ones on
 # the path: the walk stops at the first place found, so a struct walked before had none, and a recursive type ends.
+# A JsonField that is the argument of a struct is placed by the fields of the struct with the argument put in
+# (place_fields): Box[JsonField[Int]] has a direct JsonField field `value`, and a list item for `items: List[T]`.
 def place_walk(
   cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String, seen: Map[String, Bool]
 ) -> Placed
@@ -814,11 +816,12 @@ def place_walk(
   elsif Types.is?(type, "Map")
     return place_walk(cx, Types.value(type), false, "map value", owner, seen)
   elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
-    key = "Struct:#{Types.name(type)}"
+    key = place_key(type)
     # The type arguments come first and whether or not the struct was seen: Box[Box[JsonField[Int]]] reaches the inner
-    # Box by an argument, and the fields below are walked once for each name.
+    # Box by an argument, and the fields below are walked once for each key. A JsonField argument is walked as a
+    # direct type here and placed by the fields below, which see it in the place of the parameter.
     for argument in Types.args(type)
-      found = place_walk(cx, argument, false, "type argument", owner, seen)
+      found = place_walk(cx, argument, json_field?(argument), "type argument", owner, seen)
       if found.place != ""
         return found
       end
@@ -832,7 +835,7 @@ def place_walk(
 
     seen = seen.put(key, true)
     place = Types.display_name(Types.name(type))
-    for field in cx.structs[Types.name(type)]
+    for field in place_fields(cx, type)
       found = place_walk(cx, field.type, true, "struct field", "#{place}.#{field.name}", seen)
       if found.place != ""
         return found
@@ -843,6 +846,52 @@ def place_walk(
   end
 
   return Placed(place: "", seen: seen)
+end
+
+# The name of a struct type and a J for each JsonField argument and an I for each other one ("Box[J]"): what the
+# stand-ins of place_fields tell apart, so Box[Int] and Box[JsonField[Int]] are walked once each.
+def place_key(type: ResolvedType) -> String
+  name = Types.name(type)
+  if Types.args(type).size == 0
+    return "Struct:#{name}"
+  end
+
+  marks = ""
+  for argument in Types.args(type)
+    if json_field?(argument)
+      marks += "J"
+    else
+      marks += "I"
+    end
+  end
+
+  return "Struct:#{name}[#{marks}]"
+end
+
+# The fields of a struct type to place after its type arguments were walked: each type parameter is replaced by a
+# stand-in, JsonField[Int] for a JsonField argument and Int for any other (a nest of generic instances is then walked
+# once for each level, as in stand_in_fields). The arguments were walked as types of their own, so what is inside a
+# JsonField or a container is already placed.
+def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
+  name = Types.name(type)
+  parameters = cx.struct_params.get(name, [])
+  if parameters.size == 0 or parameters.size != Types.args(type).size
+    return cx.structs[name]
+  end
+
+  stand: Map[String, ResolvedType] = {}
+  index = 0
+  while index < parameters.size
+    if json_field?(Types.args(type)[index])
+      stand = stand.put(parameters[index], Types.Type.Enum("JsonField", [Types.Type.Int]))
+    else
+      stand = stand.put(parameters[index], Types.Type.Int)
+    end
+
+    index += 1
+  end
+
+  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
 end
 
 def passed(seen: Map[String, Bool]) -> Walk

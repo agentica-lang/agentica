@@ -485,7 +485,11 @@ end
   of a struct field. A list item, a map value, a nested
   `JsonField[JsonField[T]]` or the whole argument of `JSON.encode` or
   `JSON.from` is
-  `CHECK-JSON-FIELD-PLACE`, at the target or argument. This check comes first,
+  `CHECK-JSON-FIELD-PLACE`, at the target or argument. A type argument counts
+after substitution: in `Box[JsonField[Int]]` (`struct Box[T]` with `value: T`)
+the field is a direct `JsonField` field, but `items: List[T]` or
+`f: JsonField[T]` with that argument is `CHECK-JSON-FIELD-PLACE`. `JSON.decode`
+and `JSON.schema` still take no generic instance. This check comes first,
   so `List[JsonField[Nil]]` is `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` as a
   field is `CHECK-NOT-DECODABLE` or `CHECK-NOT-ENCODABLE`, since `Value(nil)`
   would be written as `null`. A bare `JsonField` target is

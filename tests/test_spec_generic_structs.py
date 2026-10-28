@@ -10,6 +10,7 @@ from tests.agentica_test import cli, output_lines, run, vm_environment
 from tests.spec_support import assert_rule
 
 BOX = "struct Box[T]\n  value: T\nend\n\n"
+BOTH = "struct Both[T]\n  value: T\n  items: List[T]\nend\n\n"
 PAIR = "struct Pair[T]\n  a: T\n  b: T\nend\n\n"
 INC = "def inc(x: Int) -> Int\n  return x + 1\nend\n\n"
 
@@ -112,9 +113,40 @@ RULES = {
         NIL_WALK.replace("W[Nil]", "W[Int]")
         + main("inner = W(f: JsonField.Value(2), rest: [])", "puts(JSON.encode(W(f: JsonField.Value(1), rest: [inner])))"),
         None, None),
-    "JsonField is no type argument, however deep": (
-        declared("puts(JSON.encode(Box(value: Box(value: JsonField.Value(1)))))"), "CHECK-JSON-FIELD-PLACE",
-        "Box(value: Box(value: JsonField.Value(1)))"),
+    "a JsonField argument is a direct field after substitution": (
+        declared("b: Box[JsonField[Int]] = Box(value: JsonField.Absent)", "puts(JSON.encode(b))", "puts(JSON.from(b))"),
+        None, None),
+    "a JsonField argument is direct in the inner Box of a nest": (
+        declared("b: Box[Box[JsonField[Int]]] = Box(value: Box(value: JsonField.Null))", "puts(JSON.encode(b))"),
+        None, None),
+    "a JsonField argument is direct in the Box of another generic field": (
+        declared("w: Wrap[JsonField[Int]] = Wrap(inner: Box(value: JsonField.Value(1)))", "puts(JSON.encode(w))",
+                   header=BOX + "struct Wrap[T]\n  inner: Box[T]\nend\n\n"),
+        None, None),
+    "a JsonField argument that is a list item after substitution": (
+        declared("b: Both[JsonField[Int]] = Both(value: JsonField.Absent, items: [])", "puts(JSON.encode(b))",
+                 header=BOTH),
+        "CHECK-JSON-FIELD-PLACE", "b"),
+    "a JsonField argument that is a list item in the Box of another generic field": (
+        declared("b: Outer[JsonField[Int]] = Outer(inner: Both(value: JsonField.Absent, items: []))", "puts(JSON.from(b).inspect)",
+                 header=BOTH + "struct Outer[T]\n  inner: Both[T]\nend\n\n"),
+        "CHECK-JSON-FIELD-PLACE", "b"),
+    "a JsonField argument inside a JsonField field": (
+        declared("b: Nested[JsonField[Int]] = Nested(f: JsonField.Absent)", "puts(JSON.encode(b))",
+                 header="struct Nested[T]\n  f: JsonField[T]\nend\n\n"),
+        "CHECK-JSON-FIELD-PLACE", "b"),
+    "a JsonField argument inside a JsonField argument": (
+        declared("b: Box[JsonField[JsonField[Int]]] = Box(value: JsonField.Absent)", "puts(JSON.encode(b))"),
+        "CHECK-JSON-FIELD-PLACE", "b"),
+    "a JsonField argument under a list argument": (
+        declared("b: Box[List[JsonField[Int]]] = Box(value: [])", "puts(JSON.encode(b))"),
+        "CHECK-JSON-FIELD-PLACE", "b"),
+    "a JsonField argument is no whole JSON.from argument": (
+        declared("puts(JSON.from(JsonField.Value(1)).inspect)"), "CHECK-JSON-FIELD-PLACE", "JsonField.Value(1)"),
+    "a generic instance with a JsonField argument is not decodable": (
+        declared('r = JSON.decode("{}", Wrapper)',
+                 header=BOX + "struct Wrapper\n  b: Box[JsonField[Int]]\nend\n\n"),
+        "CHECK-NOT-DECODABLE", "Wrapper"),
     "JSON.decode rejects a bare generic struct": (
         declared('r = JSON.decode("{}", Box)'), "CHECK-UNKNOWN-TYPE", "Box"),
     "JSON.schema rejects a bare generic struct": (declared("r = JSON.schema(Box)"), "CHECK-UNKNOWN-TYPE", "Box"),
