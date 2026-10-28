@@ -2,9 +2,8 @@
 
 **Status:** 22a and `agentica doc` (§32.5, part 1 of 22b) are built; `agentica
 help` for `std/` (§32.6) is not (roadmap [row 22b](../roadmap/README.md)).
-Decided on 2026-10-12: Agentica has documentation comments written as `##`
-lines, in the style of Rust's `///`, so that a later tool generates
-documentation from the code. The `##` syntax, the `DOC` token and the `std/`
+Decided on 2026-10-12: documentation comments are `##` lines, in the style of
+Rust's `///`. The `##` syntax, the `DOC` token and the `std/`
 docs of 22a are in the grammar
 ([`04-lexical.md`](../grammar/04-lexical.md#doc-comments) for the token and
 section 5 for where a block may stand); the parser keeps each block in the `doc`
@@ -14,12 +13,11 @@ program with doc comments runs as before. The doc of an exported `def`,
 `struct`, `enum` or alias is on its `ExportDecl`, not on the declaration inside
 it.
 
-The idea in one paragraph: a run of lines that start with `##` documents the
-declaration on the next line. `#` stays an ordinary comment that tools ignore.
-The text is Markdown. A `##` run at the top of a file documents the module. Two
-tools read it: `agentica doc`, which prints a module's exported API with its
-docs, and `agentica help`, which learns to show `std/` functions. No tags such
-as `@param` are needed, because the types are in the signature.
+Docs are `##` lines before a declaration (`#` stays an ordinary comment). A
+`##` run at the top of a file documents the module. `agentica doc` prints a
+module's exported API with its docs; `agentica help` is to learn `std/`
+functions. No tags such as `@param` are needed, because the types are in the
+signature.
 
 ### 32.3 Content
 
@@ -145,8 +143,3 @@ end
     strings, and it would put docs into the compiled program, which no current
     tool needs.
   - YARD-style `@param` tags. The types are already in the signature.
-
-### 32.9 Implementation (row 22b)
-
-Pending: `agentica help std/MODULE[.NAME] [--json]` (§32.6), one PR in
-`compiler/`, lex and parse only, from the embedded `stdlib/`.

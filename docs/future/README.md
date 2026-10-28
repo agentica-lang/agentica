@@ -5,9 +5,9 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Section 19 is a VM implementation proposal, not a language change;
-section 20 adds crypto without changing the grammar. The Files index carries
-current status; linked sections keep requirements, rationale and alternatives.
+Section 19 is a VM implementation proposal, not a language change; section 20
+adds crypto without changing the grammar. The Files index carries current
+status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
@@ -64,7 +64,7 @@ design.
 - §: 20
   - Title: Crypto module
   - File: [`20-crypto.md`](20-crypto.md)
-  - Status: Planned (row 7.5)
+  - Status: `Digest`, `HMAC` and `Base64` built; the rest planned (row 7.5)
 
 - §: 25
   - Title: Ruby typed idioms
@@ -113,7 +113,7 @@ design.
 - §: 34
   - Title: Shared small values in the VM
   - File: [`34-shared-small-values.md`](34-shared-small-values.md)
-  - Status: Built (row 7g, 2026-10-16); kept as the VM design record
+  - Status: Built (row 7g); kept as the VM design record
 
 - §: 38
   - Title: Value representation

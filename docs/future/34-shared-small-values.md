@@ -41,18 +41,11 @@ byte, else a new one; the paths below call it, or read the table. There are no
 needs no function.
 
 The builtins that return them are the ones that call `agc_small_string` or read
-the table (`rg agc_small_string vm/`): Strings with no bytes or one ASCII byte
-(`String.at`, `slice`, `trim`, `from_code`, `from_bytes`, `upcase`, `downcase`,
-`reverse`, `join`, `replace`, the pieces of `split`, one-digit `to_s`,
-`Result.message` of `ok`, JSON strings and keys, the lines of `IO.gets`,
-`IO.read`, `File.each_line` and a stream); `[]` (empty results of list, map, set
-and range functions, `reverse` of fewer than two items returns its argument);
-`Set.new([])` (`Set.new` with no items, the last `Set.delete`, empty
-`intersection` and `difference`); and `{}` (the last `Map.delete`, the start of
-a typed JSON map).
-
-`Set.new`, the set filters and the typed JSON map start from the shared empty
-value: `agc_map_put` and `agc_map_add_hash` never write their input.
+the table (`rg agc_small_string vm/`): Strings with no bytes or one ASCII byte,
+the empty results of list, map, set and range functions, `Set.new([])`, and the
+last `Map.delete`. `Set.new`, the set filters and the typed JSON map start from
+the shared empty value: `agc_map_put` and `agc_map_add_hash` never write their
+input.
 
 Left out, after a measurement or because the gain is small:
 
@@ -70,11 +63,5 @@ Left out, after a measurement or because the gain is small:
 - The `[]` of a Json array: `agc_json_container` has no vm.
 
 Every shared path keeps the turn cost it had, since the cost rule reads sizes
-and not objects, and `make goldens` rewrites nothing.
-
-Tests: `shared_strings` in `vm/tests/string_test.c`, `shared_empties` in
-`vm/tests/map_test.c` and the keys of a parse in `vm/tests/json_test.c` check
-that the builtins return the shared objects (and not for a non-ASCII or longer
-result), and that a shared String still holds its text after a collection. The
-golden `shared-small-values` builds on every shared value across tasks and
-prints them again at the end.
+and not objects. The tests are `shared_strings`, `shared_empties` and the keys
+test in `vm/tests`, and the golden `shared-small-values`.

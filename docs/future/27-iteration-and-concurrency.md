@@ -122,30 +122,15 @@ the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1 ("Task.map").
   the other items go on.
 - **Cancellation.** The caller cannot leave a `Task.map` call early: it waits
   until every item has ended, and an `error` result does not stop it. So
-  in-flight items stop early only at their own timeout, or when the run ends,
-  which already stops every task. The cancel rules are in the grammar and in
-  `docs/vm/10-io-scheduler.md` §10.2.1 and `docs/vm/14-core-invariants.md`; the
-  choices behind them:
-  - A timed-out item's work is everything it started (its running descendants
-    are cancelled), so it leaves nothing behind that still prints or spends
-    steps. "Descendants" holds even when a task in between has ended, because a
-    task that ends hands its running children to its parent. The other choice,
-    a walk up the ancestors of every running task at each cancel, was not
-    taken: moving children at the end of a task is O(its children) once, and a
-    cancel then only walks down.
-  - A `Task.map` whose caller is cancelled is a dead group: no pending item
-    starts, and its in-flight items are cancelled with it. A dead group closes
-    the timers of those items and never writes their slots, so it never wakes
-    the caller.
-  - An I/O operation in flight is detached, never abandoned with a close: it
-    never closes the handle, so a timed-out item cannot close a handle that
-    other items share. The pooled connection of an `HTTP.get` or
-    `HTTP.request` is not owned by the item: it is closed, not put back in the
-    pool, when the detached job ends, since its state is unknown.
-  - Handles the cancelled task opened are closed with it (phase 24b), so a
-    timed-out item does not leak them. The skill teaches: open the handles
-    inside the item; do not share a handle across `Task.map` items; give a
-    handle that many tasks need to one owner task (27.5).
+  in-flight items stop early only at their own timeout, or when the run ends.
+  The cancel rules are in the grammar, `docs/vm/10-io-scheduler.md` §10.2.1 and
+  `docs/vm/14-core-invariants.md`. The choices behind them: a timed-out item's
+  work is everything it started, running descendants included (a task that ends
+  hands its running children to its parent, so a cancel only walks down); an
+  I/O operation in flight is detached, never closed, so a timed-out item cannot
+  close a handle that other items share; handles the cancelled task opened are
+  closed with it. The skill teaches: open the handles inside the item, and give
+  a handle that many tasks need to one owner task (27.5).
 - **Public cancel (built, owner decision of 2026-10-20).**
   `Task.cancel(task: Task[R]) -> Void` runs the same cancel as a timed-out item
   on the task it names. The use: a program keeps state in a task, uses it for a
@@ -165,37 +150,27 @@ the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1 ("Task.map").
   the work faster.
 - **Nesting.** An item may call `Task.map`; each call has its own limit, so the
   limits multiply.
-- **BDD.** `Task.map` ends all its items before it returns, so it can be used in
-  a step handler. Only the items are sure to be done: an item that ended
-  normally after spawning a task it did not await leaves that task running, like
-  any unawaited task, and the handler then fails with
-  `RUNTIME-BDD-PENDING-TASKS` as today.
-
 **Why a builtin, not prelude code.** With `Task.spawn` and `Task.await` there
-is no way to wait for whichever item ends first, and when 17a landed there was
-no way to cancel a task;
-channels give bounded concurrency but not per-item timeouts (a receive with a
-timeout stops only the waiter, not the work). So it schedules tasks and starts
-timers in the VM, under exception 1 of the std-first rule (time).
+is no way to wait for whichever item ends first, and channels give bounded
+concurrency but not per-item timeouts (a receive with a timeout stops only the
+waiter, not the work). So it schedules tasks and starts timers in the VM, under
+exception 1 of the std-first rule (time).
 
 ### 27.2 Channels
 
-This finalizes the earlier channel proposal: a bounded buffer that tasks
+A bounded buffer that tasks
 send values into and receive values from, so producer and consumer pipelines
 work. The contract is in the grammar
 ([`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md), "Channels");
-the VM design (waits, reservations, close, owner) is in
-`docs/vm/10-io-scheduler.md` §10.2.2 ("Channel waits", `vm/channel.c`). Against
-the earlier proposal: `new` takes a capacity, `send` and `recv` take a timeout
-and return a `Result`, and `close` and `closed?` are added.
+the VM design (waits, reservations, close, owner, fairness) is in
+`docs/vm/10-io-scheduler.md` §10.2.2 ("Channel waits", `vm/channel.c`).
 
 **Decisions:**
 
 - **Type.** `Channel[T]` is a builtin opaque generic, like `Task[T]`. A channel
   value is a handle. `Channel` becomes a reserved type and module name, a
   breaking change: a user `struct Channel`, `enum Channel` or `import ... as
-  Channel` becomes `CHECK-REDEFINED-NAME`, as for `Range` and `Set` (and 8c's
-  `Queue`).
+  Channel` is `CHECK-REDEFINED-NAME`, as for `Range` and `Set`.
 - **Element type.** `T` is any type a variable can have, so not `Void`
   (`CHECK-VOID-TYPE`, as for a `List[Void]`; use `Nil` or `Bool` for a plain
   signal). `Fn`, `Task` and handles (files, sockets, processes, other channels)
@@ -238,20 +213,6 @@ and return a `Result`, and `close` and `closed?` are added.
   be added after a close, so after a `recv` error it tells the end of the
   stream from a timeout without matching error text. A closed channel that
   still holds values answers `false`, and the next `recv` returns a value.
-- **Fairness, no lost values.** Waiting receivers and senders are served in the
-  order they started waiting, with no barging: a woken waiter has a reservation
-  (a direct hand-off), and one that leaves without completing hands it on. A
-  value is in exactly one place: the sender's call (until it returns `ok()`),
-  the buffer, or a receiver's reservation. So a cancelled receiver never loses
-  a value, and a cancelled sender never adds one.
-- **Lifetime.** A channel belongs to the run, like a task handle: the GC frees
-  it when nothing refers to it, and using it from another execution halts with
-  `RUNTIME-TASK-CONTEXT`, the code planned for task handles, since both are
-  concurrency handles and are fixed the same way. On the VM one run is one
-  execution, and after phase 21 each BDD scenario is its own VM run whose steps
-  share one execution (`docs/bdd.md`, "How a run works"), so BDD gives no way to
-  reach this case; a channel created in a step program's `main` is fresh in each
-  scenario.
 - **Left out**, each until a real program needs it: `select` over several
   channels (fan-in uses one channel of an enum type, `Channel[Event]` with one
   variant per source, and each source sends into it; a coordinator awaits all
@@ -272,12 +233,10 @@ end.
 Wait for a task's result, but not longer than `timeout_ms`. The contract is in
 the grammar ([`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md),
 "Lightweight tasks"). The owner decided on 2026-10-14 to build it as a C builtin
-that returns a builtin enum, `Await[T]`. This replaced the earlier plan
-(decided on 2026-10-12): prelude code over a helper task, a capacity-1 channel
-and two prelude-only builtins (`__task_settled?` and `__task_wait`), returning
-`Result[T]`. That plan needed lambdas (15e) and the prelude (15f), and it made a
-timeout an `error` next to the `error("task crashed: ...")` of a crashed task
-and a `Result[Result[U]]` for a task that returns a `Result`.
+that returns a builtin enum, `Await[T]`. Rejected: prelude code over a helper
+task and a capacity-1 channel, returning `Result[T]`, which would make a timeout
+an `error` next to the `error("task crashed: ...")` of a crashed task and a
+`Result[Result[U]]` for a task that returns a `Result`.
 
 **Decisions:**
 
@@ -321,9 +280,6 @@ and a `Result[Result[U]]` for a task that returns a `Result`.
   ends, and then A gets B's result. The plain form keeps its check
   (`RUNTIME-TASK-AWAIT-CYCLE`). The caller holds a timer while it waits, so the
   stall check (§10.2.1) is unchanged and still only guards VM bugs.
-- **BDD.** There is no helper task, so `RUNTIME-BDD-PENDING-TASKS` and
-  `Task.pending_count` are not affected: a timed-out await leaves only the
-  target, which is the program's own task.
 
 ### 27.4 Streams: `File.each_line` and `Lazy[T]`
 
@@ -334,15 +290,11 @@ recipe over sources, named `Lazy[T]` by the owner on 2026-10-20 (after Ruby's
 `Enumerator::Lazy`; it was planned as `Stream[T]`), roadmap 17e, built in three
 PRs.
 
-The owner judged that streaming without loading everything is needed: Python
-iterators and Ruby `yield` cover it, and Agentica's loop and channel forms are
-too much ceremony to compose. This replaces the earlier criteria for planning
-streams (a real program first, then a narrower fix).
+The owner judged that streaming without loading everything is needed: Agentica's
+loop and channel forms are too much ceremony to compose.
 
 **Step 1: `File.each_line`.** The contract is in the programming skill
-(`references/files.md`) and the site files page; the resumable-builtin and
-file-read notes are in `docs/vm/03-ir-and-bytecode.md` §4.3 and
-`docs/vm/10-io-scheduler.md` §10.2.1 and §10.2.2. It is the one form for that
+(`references/files.md`) and the site files page. It is the one form for that
 job: it replaces a composition of `File.open`, a loop, `eof?`, `read_line` and
 `close`. Left out: the same form for process and TCP lines
 (`Process.each_line`, `TCP.each_line`); each waits for its own item when a real

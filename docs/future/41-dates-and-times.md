@@ -438,16 +438,13 @@ The grammar, the programming skill (a `references/dates.md`), a site page and a
 
 The independent peer is a Python generator (standard library only, `datetime`
 and `timedelta`, fixed seed) that writes the input of a golden fixture. The
-vectors cover the epoch and the microseconds before it (the floor division of
-41.9), the bounds of years 1 and 9999 at the extreme offsets (41.8), leap and
-non-leap century days, every month end of a few edge years, offsets from -1439
-to 1439 minutes, fractions of six, seven and nine digits (truncated to
-microseconds), and the `Z`, `+02:00` and lowercase forms. Round trips: `parse`
-of `format`, `from_unix_us` of `to_unix_us`, the naive and time forms, and
-`add_days` of `days_between`; records have no `==` (41.2), so checks use
-`compare`. Every error message of 41.3 and 41.6 has a golden, and the checker
-codes (`CHECK-REDEFINED-NAME`, `CHECK-NOT-CONSTRUCTIBLE`, `CHECK-TYPE-MISMATCH`
-for a naive and an aware argument) are asserted with their spans.
+vectors cover the epoch and the microseconds before it (41.9), the bounds of
+years 1 and 9999 at the extreme offsets (41.8), leap days, month ends, offsets
+from -1439 to 1439 minutes, and fractions of six, seven and nine digits. Round
+trips: `parse` of `format`, `from_unix_us` of `to_unix_us`, the naive and time
+forms, and `add_days` of `days_between`; records have no `==` (41.2), so checks
+use `compare`. Every error message of 41.3 and 41.6 has a golden, and the
+checker codes are asserted with their spans.
 
 ### 41.16 Later
 
@@ -512,7 +509,7 @@ chosen.
 
 ### 41.19 TOML (std/toml)
 
-std/toml (phase 45-0, 45.4) keeps the text of a TOML date-time: its
+std/toml (§45.14 question 11) keeps the text of a TOML date-time: its
 `DateTime(String)` variant holds the text as written, until these types land.
 When §41 lands, std/toml maps TOML's four kinds of date and time to four
 variants, named after the types:

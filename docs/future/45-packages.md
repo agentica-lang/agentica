@@ -1,10 +1,7 @@
 ## 45. Packages
 
-**Status:** Built. The parts (45-0 `std/toml`, the manifest, the lock and the
-cache imports of 45a, the fetch and `install` of 45b, `add`, `update` and the
-writers of 45c, the `deps/` folder of #578, and the native libraries of 45.10)
-are specified in [`05b-modules.md`](../grammar/05b-modules.md), the contract.
-This file keeps the decisions.
+**Status:** Built (45-0 to 45d and the native libraries of 45.10). The contract
+is [`05b-modules.md`](../grammar/05b-modules.md); this file keeps the decisions.
 
 Decided by the owner:
 
@@ -31,20 +28,9 @@ Decided by the owner:
 
 Not in v1: a central registry, a version solver and publishing commands (45.13).
 
-### 45.3 Import form
-
-**Built.** The rules are in [05b](../grammar/05b-modules.md), Packages. The
-decisions on the form are in 45.14, questions 1 and 2.
-
-### 45.4 The TOML parser: `std/toml` (45-0)
-
-**Built.** The API, the errors and the limits are in
-[05b](../grammar/05b-modules.md), TOML. The shape of `parse` and the datetime
-form are decided in 45.14, questions 10 and 11.
-
 ### 45.5 Manifest and style
 
-**Built.** The manifest is in [05b](../grammar/05b-modules.md), Packages.
+The manifest is in [05b](../grammar/05b-modules.md), Packages.
 
 - The manifest is the nearest `agentica.toml` going up to the root of the file
   system, so an unrelated file in a shared parent folder (such as `/tmp`)
@@ -53,11 +39,8 @@ form are decided in 45.14, questions 10 and 11.
   takes the local name as an argument and never reads it. Nothing checks it
   against the names that others give it.
 
-**Built: `blank_line_after_end`.** The optional key
-`[style] blank_line_after_end = true` (default false) turns on
-`CHECK-BLANK-LINE-AFTER-END` in `agentica check`, as 05b says. The last `end`
-of a file needs no empty line after it. `agentica fmt` (47) must add the empty
-line when the key is on.
+**`blank_line_after_end`** (built, see 05b): `agentica fmt` (47) must add the
+empty line when the key is on.
 
 **Pending: the `max_line_width` rule.** `max_line_width` is the longest line
 allowed, in characters (Unicode code points, not bytes). It counts every line,
@@ -71,9 +54,8 @@ break stays long.
 
 ### 45.6 Lock and hash
 
-**Built.** The lock layout, the hash rule and the stale checks are in
-[05b](../grammar/05b-modules.md), Packages. The lock writer is built (45c,
-45.9).
+The lock layout, the hash rule and the stale checks are in
+[05b](../grammar/05b-modules.md), Packages.
 
 The lock keeps `git` and the pin as the manifests write them, not the URL after
 a git `url.<base>.insteadOf` rewrite, so the lock does not depend on one
@@ -94,7 +76,7 @@ machine's git config.
 
 ### 45.8 Fetching and the cache
 
-**Built (45b).** The cache layout, the fetch, the limits and the codes are in
+The cache layout, the fetch, the limits and the codes are in
 [05b](../grammar/05b-modules.md), Packages. The reasons behind the choices:
 
 - Git runs as the system `git`, so the user's git config, SSH keys and
@@ -112,8 +94,7 @@ machine's git config.
 
 ### 45.9 Commands and errors
 
-**Built.** `install` (45b), `add` and `update` (45c) and `deps/` (#578, 45d):
-the command lines, the files they write and the `PKG-` codes are in
+The command lines, the files they write and the `PKG-` codes are in
 [05b](../grammar/05b-modules.md) and the programming skill. Decided:
 
 - `add` adds one line to the manifest and changes no other byte (comments, key
@@ -137,9 +118,9 @@ the command lines, the files they write and the `PKG-` codes are in
 
 ### 45.10 Native code
 
-**Built (FFI-b, issue
-[#534](https://github.com/agentica-lang/agentica/issues/534)).** The rules are
-in [05b](../grammar/05b-modules.md), Packages. Packages stay pure Agentica
+The rules are in [05b](../grammar/05b-modules.md), Packages (issue
+[#534](https://github.com/agentica-lang/agentica/issues/534)). Packages stay
+pure Agentica
 unless the manifest names a native library. Decided (2026-10-23, the smallest
 rule that works on Linux, macOS and Windows):
 
@@ -148,10 +129,10 @@ rule that works on Linux, macOS and Windows):
   package's `native/` folder) or `system` (a name for the loader). The key is
   the operating system only, because `System.os()` is all the front end can ask:
   a macOS library is a universal binary (`lipo`), and the VM supports one Linux
-  architecture. The tables are inline so that a later `url` and `sha256` (a
-  downloaded prebuilt library, issue
-  [#594](https://github.com/agentica-lang/agentica/issues/594) H) is one more
-  key.
+  architecture. The tables are inline so that a downloaded prebuilt library
+  (`url`, `sha256`, `member`; issue
+  [#594](https://github.com/agentica-lang/agentica/issues/594) H) was one more
+  key; the rules are in 05b.
 - **Lookup.** `extern "NAME"` in a file of the package means that entry. The
   front end rewrites the library to an absolute path in `deps/<package>/`
   while it links, so no search is involved and `LD_LIBRARY_PATH` plays no
@@ -179,17 +160,15 @@ rule that works on Linux, macOS and Windows):
 - **Grants.** Nothing changes: the result is an ordinary extern function, so
   `--deny-native` and `--sandbox` refuse it. No code runs at install.
 - **Size.** A file of a package is at most 1 MiB, the library included, so
-  a larger library is a `system` name until downloaded libraries exist.
+  a larger library is a `system` name or a download.
 
-Compiling at install, which breaks "no code runs at install", and downloading
-prebuilt libraries (a URL and a hash for each system) come later, each with its
+Compiling at install breaks "no code runs at install" and would come with its
 own grant or lock key.
 
 ### 45.11 Testing plan
 
-**Built.** The tests are `tests/test_spec_packages.py`,
-`test_spec_package_fetch.py`, `test_spec_package_add.py` and
-`test_spec_package_deps.py`, through the CLI. The decisions that stay:
+The tests are `tests/test_spec_package*.py`, through the CLI. The decisions
+that stay:
 
 - The remote is a bare git repository in a temporary folder: a throwaway `HOME`
   has a `.gitconfig` whose `url.<base>.insteadOf` sends `https://example.test/`
@@ -202,24 +181,17 @@ own grant or lock key.
 - A build with the cache filled and no `git` on `PATH` passes, which proves
   that a build never fetches.
 
-### 45.12 Phases
-
-45-0, 45a, 45b (fetch and `install`), 45c (`add`, `update`), 45d (`deps/`) and
-native libraries (FFI-b, 45.10) are done.
-
 ### 45.13 Not now
 
 - A central registry: git hosts already hold the packages.
 - Private registries: git's own login covers private repositories.
 - Publishing commands: a release is a tag.
 - Signatures: the commit and the hash come first. Signed tags can follow.
-- Workspaces and monorepos: one manifest per project in v1.
 - Branches and version ranges: a pin is a tag or a commit.
 - Sources other than git, such as a local path.
 - Typed decoding into structs: `JSON.decode(JSON.encode(j), T)` on the output of
   `Toml.to_json` does it (45.14, question 10).
-- Compiling a native library at install, and downloaded prebuilt libraries
-  (45.10).
+- Compiling a native library at install (45.10).
 
 ### 45.14 Open questions
 

@@ -70,7 +70,7 @@ order, with each program counter at most once. A thread that reaches `Match`
 cuts the lower-priority threads.
 
 **Where:** `stdlib/regex.agc`, embedded as `std/regex` and imported as
-`import Regex from "std/regex"`, as `std/toml` is (§45.4). It is pure
+`import Regex from "std/regex"`, as `std/toml` is. It is pure
 computation over existing types, so the "std first" rule applies: no builtin, no
 VM change, no front-end change.
 
@@ -362,28 +362,19 @@ programming skill state these differences next to the literal.
 
 - **Goldens:** the syntax of 48.4, leftmost-first alternation, the zero-length
   rules, templates, `split`, the limits and the round trip of `escape`, with
-  hand-checked expected output (`docs/vm/README.md` §1).
-- **Python peer** (standard library only). The peer
-  runs each pattern through `re` with `re.ASCII`, after two mechanical
-  translations: `\z` to `\Z` and `(?<name>` to `(?P<name>`. Patterns that Python
-  still rejects, such as mid-pattern flags and `\x{...}`, are not compared; the
-  goldens cover them. Whole-match spans are always compared, and group spans
-  only outside repetitions (48.4). Zero-length `find_all` and `replace` results
-  are compared where Python agrees, and by goldens where it does not.
-- **Slow fuzzer** (`@slow`). It draws patterns and short ASCII texts from the
-  compared subset only: literals, `.`, classes, `\d` and `\w`, named and
-  unnamed groups, alternation, quantifiers and their lazy forms, `^`, `$`, `\b`,
-  and `(?i)` at the start.
-- **Go rules.** No Go toolchain is in CI, so leftmost-first, the zero-length
-  rule and the end-only `$` are pinned by hand-checked goldens. A Go peer needs
-  the owner's approval for CI.
+  hand-checked expected output. No Go toolchain is in CI, so the Go rules
+  (leftmost-first, zero-length, end-only `$`) are pinned by goldens.
+- **Python peer** (standard library only): each pattern runs through `re` with
+  `re.ASCII`, after two mechanical translations (`\z` to `\Z`, `(?<name>` to
+  `(?P<name>`). Patterns Python still rejects are covered by goldens.
+  Whole-match spans are always compared, group spans only outside repetitions
+  (48.4).
+- **Slow fuzzer** (`@slow`) over the compared subset only.
 - **ReDoS.** `(a+)+$` on `"a" * n + "!"` runs under a `--max-steps` budget that
-  is a fixed multiple of n times the program size, at two sizes. No clock is
-  used. Python's `re` shows the risk: 0.08 s at 20 characters, 0.34 s at 22, and
-  about four times more for each two characters (Python 3.13, measured here).
+  is a fixed multiple of n times the program size, at two sizes, with no clock.
   The budget holds for the C matcher too (48.3).
 - **Benchmark** (48a): the Agentica program and its Python twin, run by
-  `make bench`. The numbers go in the PR.
+  `make bench`.
 
 ### 48.9 Phases
 

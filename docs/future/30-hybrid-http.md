@@ -1,25 +1,16 @@
 ## 30. HTTP on the VM: simple, synchronous, hybrid
 
-**Status:** the simple, synchronous HTTP of roadmap phase 20 is built: the
-client (20a), the task cancellation core (20b) and the server (20c; 20d, the
-switch to `std/http`, was done by 7i and what was left of it merged into 20c).
-It was decided by the user on 2026-10-12: a call sends a whole request and gets
-a whole response, a handler returns a whole response, and there is no streaming.
-The earlier design, C-only `HttpBody` and `HttpWriter` streams, was replaced by
-whole messages because a `String` body is simple for programs and keeps all byte
-work in C.
-
-What is built is not in this file. The API, options, limits and answers are in
-the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md), "HTTP
-client and server (`std/http`)"), with the migration table in the site's
-[network page][agentica-link-1] and the hints for removed names in
-[`07-diagnostics.md`](../grammar/07-diagnostics.md); the parsing rules, the
-design decisions, the client, the server, the errors, the status codes and the
-tests are in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7;
-task cancellation for `close_server` is in
-[`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2.
-This file keeps what is not built: streaming on channels (20e to 20g, 30.11)
-and what comes later (30.12 to 30.13).
+**Status:** the simple, synchronous HTTP of roadmap phase 20 is built (client
+20a, cancellation core 20b, server 20c). A call sends a whole request and gets a
+whole response, and a handler returns a whole response (decided by the user on
+2026-10-12): a `String` body is simple for programs and keeps all byte work in
+C. What is built is not in this file: the API, options, limits and answers are
+in the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md),
+"HTTP client and server (`std/http`)"), the migration table in the site's
+[network page][agentica-link-1], and the parsing rules, design, errors and tests
+in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7. This file
+keeps what is not built: streaming on channels (20e to 20g, 30.11) and what
+comes later (30.12 to 30.13).
 
 **Streaming** is a new feature, VM-only, at order step 7.4 ([the order
 table](../roadmap/README.md#current-implementation-order)): after phase 17
@@ -160,17 +151,10 @@ Agentica code, not a C feature.
 
 ### 30.14 Implementation (row 7.4)
 
-- One PR per item (20e–20g), each with its own tests and docs; 20c-bench records
-  the HTTP benchmark numbers from an idle-machine run
-  (`benchmarks/http_bench.py`).
-- 20e streamed downloads (`HttpStream`, `HTTP.open`); 20f streamed uploads
-  (`HTTP.upload`, fixed length or chunked); 20g streamed responses and SSE
-  (`HttpStreamResponse`, `listen_stream`, `whole`). Tests: goldens plus Node
-  peers (no Python server for chunked uploads).
-- Done when: `examples/http_get.agc` and `examples/http_server.agc` run on the
-  VM; every hostile case of §10.6 is rejected with its code; client and server
-  work with Python and Node peers over HTTP and HTTPS; the benchmark check is
-  recorded; and a download bigger than 64 MiB, a chunked upload and an SSE
-  stream run through channels with one form for each job.
+One PR per item (20e–20g), each with its own tests and docs; tests are goldens
+plus Node peers (no Python server for chunked uploads). Done when: a download
+bigger than 64 MiB, a chunked upload and an SSE stream run through channels with
+one form for each job, every hostile case of §10.6 is rejected with its code,
+and client and server work with Python and Node peers over HTTP and HTTPS.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
