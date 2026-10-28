@@ -1,8 +1,9 @@
 # VM benchmarks
 
-Speed of the VM against CPython, the HTTP sanity check of roadmap 20c, and the
-speed passes of the front end. Each section keeps its result, its method and
-what was tried and dropped; the full tables of each round are in git history.
+Speed of the VM against CPython and of the JIT against the interpreter, the
+HTTP sanity check of roadmap 20c, and the speed passes of the front end. Each
+section keeps its result, its method and what was tried and dropped; the full
+tables of each round are in git history.
 
 ## How to run
 
@@ -23,6 +24,8 @@ runners:
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of
 every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to
 skip the `hello.agc` start-up check and the front-end rows (see "Front end").
+`run.py` has no `--jit`; `AGENTICA_JIT=on python3 benchmarks/run.py ...` sets
+the JIT mode of every program it runs (see "JIT").
 
 Every runner must print the same output, or the row is a mismatch and the script
 exits 1. A program the VM cannot compile yet shows as `unsupported`, with its
@@ -225,6 +228,70 @@ about 110):
 The instruction stayed: the case it is for, a lexer or parser state of 4 to 16
 fields in a tail-recursive `step`, is 15% to 34% faster, and two fields cost
 only about 8% more.
+
+## JIT (`--jit`)
+
+The x86-64 JIT (`docs/vm/05-values-execution-builtins.md` §6.4) against the
+interpreter (`--jit off`), on master `b04d44f9` (2026-10-28). Seconds, best of 5
+runs at size 4 on one pinned core and one scheduler, on the Ryzen 5 3550H of
+"Results" (8 threads, 12 GB RAM, Debian 13, gcc 14.2.0, Linux 6.12, a default
+`make` build). The load average was 0.8 to 1.3, from other sessions on the same
+host. The ratio is `on` / `off`, computed from the printed times.
+
+To rerun one program (size 4 is a copy of the source with `scale` returning 4):
+
+```sh
+dist/agentica compile prog.agc -o prog.agcb
+for round in 0 1 2 3 4 5; do for mode in off on always; do
+  /usr/bin/time -f "$mode %e" taskset -c 3 \
+    dist/agentica run --schedulers 1 --jit $mode -- prog.agcb >/dev/null
+done; done
+```
+
+Interleaved means the loop above: one run of each mode per round, so a change
+in the load hits the three modes alike; the table keeps the smallest of the 5
+times per mode; round 0 is a warm-up and is not recorded. The front-end row is
+`AGENTICA_VM_TEST_FRONT_END_JIT=$mode taskset -c 3 dist/agentica compile
+compiler/front_end.agc -o out.agcb` in the same loop (a test-only variable: the
+front end runs in the interpreter otherwise).
+
+| Program | `off` s | `on` s | `always` s | `on` / `off` |
+|---|---:|---:|---:|---:|
+| arithmetic | 0.109 | 0.053 | 0.053 | 0.49 |
+| calls | 0.087 | 0.032 | 0.030 | 0.37 |
+| case | 0.077 | 0.025 | 0.025 | 0.32 |
+| knight-tour | 0.098 | 0.058 | 0.059 | 0.59 |
+| traveling-salesman | 0.101 | 0.066 | 0.067 | 0.65 |
+| lists | 0.112 | 0.078 | 0.076 | 0.70 |
+| small-values | 0.482 | 0.372 | 0.379 | 0.77 |
+| strings | 0.119 | 0.094 | 0.093 | 0.79 |
+| sets | 0.157 | 0.143 | 0.136 | 0.91 |
+| string-library | 0.087 | 0.081 | 0.081 | 0.93 |
+| maze-bfs | 0.155 | 0.148 | 0.144 | 0.95 |
+| print-lines | 0.721 | 0.684 | 0.688 | 0.95 |
+| deadline-pingpong | 0.277 | 0.276 | 0.356 | 1.00 |
+| sleepers | 0.415 | 0.420 | 0.424 | 1.01 |
+| logger-disabled | 2.511 | 2.562 | 3.070 | 1.02 |
+| maps | 0.234 | 0.246 | 0.249 | 1.05 |
+| list-bulk | 0.293 | 0.324 | 0.315 | 1.11 |
+| channel-pingpong | 0.558 | 0.678 | 0.667 | 1.22 |
+| list-build (noise, see below) | 0.151 | 0.200 | 0.149 | 1.32 |
+| front-end self-compile | 18.00 | 15.01 | 13.93 | 0.83 |
+
+Every mode printed the same output, and the three self-compiles wrote the same
+bytes. The `always` ratio of the self-compile is 0.77.
+
+- **Coverage.** §6.4 says what compiles, which builtins run inside compiled
+  code and which exits go back to the interpreter.
+- **Slower rows.** `on` is slower than `off` on `channel-pingpong` (1.17 to 1.22
+  in two runs) and `list-bulk` (1.11 to 1.12). `always` is slower on
+  `deadline-pingpong` (1.29, the worst row) and `logger-disabled` (1.22).
+- **Small or no gain.** `sets`, `string-library`, `maze-bfs` and `print-lines`
+  gain 5% to 9%, and `sleepers` and `maps` do not move beyond the noise (1.01
+  and 1.02 to 1.05).
+- **Noise.** `list-build` moves by 35% to 40% between runs of one mode (`off`
+  0.151 and 0.205, `on` 0.200 and 0.143 in two passes), so its 1.32 is not a JIT
+  result.
 
 ## HTTP sanity check
 

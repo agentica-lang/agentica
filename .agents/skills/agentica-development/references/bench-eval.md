@@ -16,7 +16,8 @@ test`; the heading prints the load average and says "measured under load" above
 2; `--no-startup` skips both). For where the time goes,
 `AGENTICA_VM_TRACE=profile` (`references/vm-build.md`). It is outside `make
 test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make
-bench`; record new numbers in `docs/vm-benchmarks.md`. `list-build` (n pushes, n
+bench`; `AGENTICA_JIT=on` in the environment sets the JIT mode of every run;
+record new numbers in `docs/vm-benchmarks.md`. `list-build` (n pushes, n
 scattered `set`s and a `for` sum) is the gate of the list representation:
 160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5 times
 the time, and no other benchmark slows by more than 2%; `small-values` (the
