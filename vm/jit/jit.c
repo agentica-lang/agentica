@@ -30,19 +30,23 @@ struct agc_jit_batch {
   size_t count, slots;
 };
 
-/* The hottest leaf rows of the self-compile, which cannot fail once each argument has its tag here (AGC_T_VOID: any
-   tag): their only agc_fail is agc_as_*'s wrong tag, and running out of memory exits the process. Compiled code
-   checks the tags and calls them with no catch (agc_jit_call_plain). vm/tests/jit_test.c checks that each one is a
-   leaf row. */
+/* The hottest leaf rows of the self-compile, which cannot fail once their checks pass: each argument has its tag here
+   (AGC_T_VOID: any tag) and, for String.code, its String has one character. Their only agc_fail is agc_as_*'s wrong
+   tag or String.code's other count, and running out of memory exits the process. Compiled code checks and calls them
+   with no catch (agc_jit_call_plain). vm/tests/jit_test.c checks that each one is a leaf row. */
 typedef struct {
   const char *name;
   uint32_t arity;
-  uint8_t tags[2];
+  agc_jit_plain checks;
 } plain_leaf;
 
 static const plain_leaf plain_leaves[] = {
-    {"List.size", 1, {AGC_T_LIST}},  {"List.append", 2, {AGC_T_LIST, AGC_T_VOID}}, {"ok", 1, {AGC_T_VOID}},
-    {"Result.ok?", 1, {AGC_T_RESULT}}, {"String.length", 1, {AGC_T_STRING}},
+    {"List.size", 1, {{AGC_T_LIST, AGC_T_VOID}, false}},
+    {"List.append", 2, {{AGC_T_LIST, AGC_T_VOID}, false}},
+    {"ok", 1, {{AGC_T_VOID, AGC_T_VOID}, false}},
+    {"Result.ok?", 1, {{AGC_T_RESULT, AGC_T_VOID}, false}},
+    {"String.length", 1, {{AGC_T_STRING, AGC_T_VOID}, false}},
+    {"String.code", 1, {{AGC_T_STRING, AGC_T_VOID}, true}},
 };
 
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
@@ -243,10 +247,11 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
   return work + site_count;
 }
 
-const uint8_t *agc_jit_plain_tags(const agc_builtin *b) {
+const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {
   if (!b->leaf) return NULL;
   for (size_t k = 0; k < sizeof plain_leaves / sizeof plain_leaves[0]; k++)
-    if (b->arity == plain_leaves[k].arity && strcmp(b->name, plain_leaves[k].name) == 0) return plain_leaves[k].tags;
+    if (b->arity == plain_leaves[k].arity && strcmp(b->name, plain_leaves[k].name) == 0)
+      return &plain_leaves[k].checks;
   return NULL;
 }
 
@@ -354,9 +359,9 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_CALL_BUILTIN: {
         /* As for CALL, the C tests' hand-made code may have no builtin table. */
         const agc_builtin *b = bx < p->builtin_count ? p->builtins[bx] : NULL;
-        const uint8_t *tags = b ? agc_jit_plain_tags(b) : NULL;
-        if (tags)
-          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], tags);
+        const agc_jit_plain *plain = b ? agc_jit_plain_of(b) : NULL;
+        if (plain)
+          agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], plain);
         else if (b && (b->direct || b->leaf))
           agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], b->leaf);
         else

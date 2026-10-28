@@ -50,6 +50,19 @@ typedef struct {
   agc_program program;
 } block_program;
 
+/* The program of string_code_calls. main: R1 = the String constant, R1 = R1.code (span 3), Test.record(R1)
+   (span 4), return. */
+typedef struct {
+  agc_function fns[1];
+  agc_instr code[1][MAX_CODE];
+  uint32_t spans[1][MAX_CODE];
+  agc_span span_table[8];
+  agc_test_source source;
+  agc_value constants[1];
+  const agc_builtin *builtins[2];
+  agc_program program;
+} code_program;
+
 static agc_vm vm;
 
 #if AGC_JIT_HOST
@@ -540,23 +553,11 @@ static agc_value counts(agc_vm *v, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_string(v, args[0])->chars * 10);
 }
 
-/* The rows of plain_leaves are leaf rows of the builtin tables, and only those get tags. Such a row runs in compiled
-   code at native depth 0 too (agc_jit_call_plain): the result in the window and nothing charged, while an argument
-   with another tag takes the INTERPRET exit at the call, its window left alone. */
-static AGC_JIT_CALLER void plain_leaf_calls(void) {
-  size_t plain = 0;
-  for (size_t t = 0; t < agc_builtin_table_count; t++)
-    for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
-      const agc_builtin *b = &agc_builtin_tables[t].entries[i];
-      if (agc_jit_plain_tags(b)) plain++;
-      assert(!agc_jit_plain_tags(b) || b->leaf);
-    }
-  assert(plain == 5);
-  static const agc_builtin row = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
-  static const agc_builtin not_leaf = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
-  assert(agc_jit_plain_tags(&row) && !agc_jit_plain_tags(&not_leaf));
+/* R1 = ROW(ARG), then RETURN R1, compiled and run at native depth 0 with one unit of the turn left: the exit, with R1
+   in *OUT. A plain leaf charges nothing, so the turn is as it was. */
+static AGC_JIT_CALLER agc_jit_exit plain_call(const agc_builtin *row, agc_value arg, agc_value *out) {
   static one_function f;
-  const agc_builtin *rows[1] = {&row};
+  const agc_builtin *rows[1] = {row};
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_CALL_BUILTIN, 1, 0, 0);
   emit(&f, AGC_OP_RETURN, 1, 0, 0);
@@ -570,13 +571,38 @@ static AGC_JIT_CALLER void plain_leaf_calls(void) {
   t->frame_capacity = t->frame_count = t->depth = 1;
   int64_t left = vm.turn_left;
   vm.turn_left = 1;
-  agc_value R[4] = {agc_nil(), agc_string_value(agc_make_string("abc", 3, 3)), agc_nil(), agc_nil()};
-  expect_exit(code(&vm, R, NULL, 0), AGC_JIT_EXIT_RETURN, 1);
-  assert(same_bits(R[1], agc_int(30)) && t->turn_cost == 0 && vm.turn_left == 1);
-  expect_exit(code(&vm, R, NULL, 0), AGC_JIT_EXIT_INTERPRET, 0);
-  assert(same_bits(R[1], agc_int(30)));
+  agc_value R[4] = {agc_nil(), arg, agc_nil(), agc_nil()};
+  agc_jit_exit got = code(&vm, R, NULL, 0);
+  assert(t->turn_cost == 0 && vm.turn_left == 1);
+  *out = R[1];
   vm.turn_left = left;
   *t = saved;
+  return got;
+}
+
+/* The rows of plain_leaves are leaf rows of the builtin tables, and only those get checks; a one-character check
+   follows a String tag check of the same argument. Such a row runs in compiled
+   code at native depth 0 too (agc_jit_call_plain): the result in the window and nothing charged, while an argument
+   with another tag takes the INTERPRET exit at the call, its window left alone. */
+static AGC_JIT_CALLER void plain_leaf_calls(void) {
+  size_t plain = 0;
+  for (size_t t = 0; t < agc_builtin_table_count; t++)
+    for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
+      const agc_builtin *b = &agc_builtin_tables[t].entries[i];
+      const agc_jit_plain *checks = agc_jit_plain_of(b);
+      if (checks) plain++;
+      assert(!checks || b->leaf);
+      assert(!checks || !checks->one_char || checks->tags[0] == AGC_T_STRING);
+    }
+  assert(plain == 6);
+  static const agc_builtin row = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false};
+  static const agc_builtin not_leaf = {"String.length", 1, counts, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
+  assert(agc_jit_plain_of(&row) && !agc_jit_plain_of(&not_leaf));
+  agc_value got;
+  expect_exit(plain_call(&row, agc_string_value(agc_make_string("abc", 3, 3)), &got), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(got, agc_int(30)));
+  expect_exit(plain_call(&row, agc_int(30), &got), AGC_JIT_EXIT_INTERPRET, 0);
+  assert(same_bits(got, agc_int(30)));
 }
 
 static AGC_JIT_CALLER void loops_and_steps(void) {
@@ -1183,6 +1209,76 @@ static AGC_JIT_CALLER void block_calls_in_place(void) {
   }
 }
 
+/* One run of the code_program of TEXT with no JIT or with `always` (its trace on, so it counts the leaves that
+   run_compiled called in *LEAVES): the outcome. Test.record is no leaf here, so only String.code can be counted. */
+static agc_outcome run_code(code_program *c, const char *text, bool jit, uint64_t *leaves) {
+  static const agc_builtin record_row = {"Test.record", 1, record, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false};
+  static FILE *quiet;
+  if (!quiet) quiet = tmpfile(); /* not /dev/null: Windows has none */
+  assert(quiet);
+  memset(c, 0, sizeof *c);
+  c->builtins[0] = agc_find_builtin((const uint8_t *)"String.code", 11, 1);
+  c->builtins[1] = &record_row;
+  assert(c->builtins[0]);
+  agc_test_program(&c->program, &c->source, c->span_table, 8, c->constants, c->builtins, 2, c->fns, 1, &c->code[0][0],
+                   &c->spans[0][0], MAX_CODE, 0);
+  size_t bytes = strlen(text), chars = 0;
+  for (size_t k = 0; k < bytes; k++) chars += ((uint8_t)text[k] & 0xC0) != 0x80;
+  c->constants[0] = agc_string_value(agc_make_string(text, bytes, chars));
+  c->program.constant_count = 1;
+  agc_test_emit(&c->fns[0], MAX_CODE, AGC_OP_STEP, 1, 0, 1);
+  agc_test_emit(&c->fns[0], MAX_CODE, AGC_OP_CONST, 1, 0, 2);
+  agc_test_emit(&c->fns[0], MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 0, 3);
+  agc_test_emit(&c->fns[0], MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 1, 4);
+  agc_test_emit(&c->fns[0], MAX_CODE, AGC_OP_RETURN, 1, 0, 5);
+  record_count = 0;
+  agc_vm run;
+  agc_vm_init(&run, &c->program, stdout, quiet, 1000);
+  agc_jit *j = NULL;
+  if (jit) {
+    static agc_trace counting = {.mask = AGC_TRACE_JIT, .fd = -1};
+    j = agc_jit_new(&c->program, AGC_JIT_ALWAYS, &counting);
+    assert(j);
+    run.rt->jit = j;
+  }
+  agc_outcome outcome = agc_vm_run(&run);
+  *leaves = j ? atomic_load(&j->leaves) : 0;
+  return outcome;
+}
+
+/* String.code is a plain leaf with a one-character check: on a one-character String (two bytes here) compiled code
+   calls it at native depth 0 with no exit, and on an empty or longer String, or another tag, it takes the INTERPRET
+   exit at the call, its window left alone. A whole run then fails in run_compiled's call of the leaf with the code and
+   span that the interpreter fails with. */
+static AGC_JIT_CALLER void string_code_calls(void) {
+  const agc_builtin *row = agc_find_builtin((const uint8_t *)"String.code", 11, 1);
+  assert(row && agc_jit_plain_of(row) && agc_jit_plain_of(row)->one_char);
+  agc_value got;
+  expect_exit(plain_call(row, agc_string_value(agc_make_string("\xC3\xA9", 2, 1)), &got), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(got, agc_int(0xE9)));
+  const agc_value others[] = {agc_string_value(agc_make_string("ab", 2, 2)),
+                              agc_string_value(agc_make_string("", 0, 0)), agc_int(7)};
+  for (size_t k = 0; k < sizeof others / sizeof others[0]; k++) {
+    expect_exit(plain_call(row, others[k], &got), AGC_JIT_EXIT_INTERPRET, 0);
+    assert(same_bits(got, others[k]));
+  }
+  static code_program c;
+  static const char *const texts[] = {"\xC3\xA9", "ab", ""};
+  for (size_t k = 0; k < sizeof texts / sizeof texts[0]; k++) {
+    uint64_t leaves_off, leaves_on;
+    agc_outcome off = run_code(&c, texts[k], false, &leaves_off);
+    size_t recorded_off = record_count;
+    agc_outcome on = run_code(&c, texts[k], true, &leaves_on);
+    assert(on.kind == off.kind && record_count == recorded_off);
+    if (k == 0) {
+      assert(off.kind == AGC_DONE && record_count == 1 && same_bits(recorded[0], agc_int(0xE9)) && leaves_on == 0);
+    } else {
+      assert(off.kind == AGC_FAILED && strcmp(off.code, "RUNTIME-INVALID-CHARACTER") == 0 && off.span == 4);
+      assert(strcmp(on.code, off.code) == 0 && on.span == off.span && leaves_on == 1);
+    }
+  }
+}
+
 /* Every opcode compiles with `always`: one without code of its own, such as CALL_BUILTIN or RETURN, leaves for the
    interpreter at its pc. */
 static AGC_JIT_CALLER void every_opcode_compiles(void) {
@@ -1533,6 +1629,7 @@ int main(void) {
   native_calls();
   native_leaf_calls();
   plain_leaf_calls();
+  string_code_calls();
   native_tail_calls();
   wide_tail_calls();
   call_values();

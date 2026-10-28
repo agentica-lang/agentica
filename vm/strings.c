@@ -520,6 +520,7 @@ static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(result);
 }
 
+/* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tag and its one character are checked. */
 static agc_value builtin_code(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]);
   if (s->chars != 1)

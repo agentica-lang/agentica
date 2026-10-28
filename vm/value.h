@@ -333,7 +333,7 @@ typedef struct {
      rt->sync and drop it before it returns to read shared state (Native.closed?). A leaf row is never shared, has
      AGC_NATIVE_NONE and AGC_COST_NONE (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds
      abort when a leaf call breaks the rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. A row
-     in plain_leaves (vm/jit/jit.c) must never agc_fail once its argument tags are right. */
+     in plain_leaves (vm/jit/jit.c) must never agc_fail once its checks there pass. */
   bool leaf;
   /* A call that compiled code makes itself (agc_jit_call_builtin, vm/jit/jit.c), without leaving for the interpreter:
      the builtin returns a value or fails with agc_fail, and never parks (nor asks to retry), never starts a stepper,

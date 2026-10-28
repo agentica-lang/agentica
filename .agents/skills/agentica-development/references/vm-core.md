@@ -256,8 +256,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`agc_builtin.direct`, checked by `sync_test.c`) or `leaf` (only below a
   native call, so its exit never unwinds one; at depth 0 the INTERPRET exit is
   cheaper than the catch; the rows of `plain_leaves`, which cannot fail once
-  their tags are checked, at any depth through `agc_jit_call_plain`, with no
-  catch), through `agc_jit_call_builtin` or `agc_jit_call_leaf`, whose catch
+  their `agc_jit_plain` checks pass (the tags, and one character for
+  `String.code`), at any depth through `agc_jit_call_plain`, with no catch),
+  through `agc_jit_call_builtin` or `agc_jit_call_leaf`, whose catch
   (`vm->jit_catch`) keeps `agc_fail` from jumping across compiled code; mark a
   row only if it never parks, starts a block or moves frames. An edit of
   `turn_loop`, even in its jit copy, changes the plain copy's machine code:
