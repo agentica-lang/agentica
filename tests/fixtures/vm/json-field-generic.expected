@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 101,
+  "stdout": [
+    "{\"tag\":\"a\"}",
+    "{\"tag\":\"a\"}",
+    "true",
+    "{\"value\":null,\"tag\":\"n\"}",
+    "{\"tag\":\"n\",\"value\":null}",
+    "true",
+    "{\"value\":7,\"tag\":\"v\"}",
+    "{\"tag\":\"v\",\"value\":7}",
+    "true",
+    "{\"value\":{\"tag\":\"in\"},\"tag\":\"out\"}",
+    "{\"inner\":{\"value\":null,\"tag\":\"o\"}}",
+    "{\"inner\":{\"tag\":\"o\",\"value\":null}}",
+    ""
+  ],
+  "stderr": []
+}

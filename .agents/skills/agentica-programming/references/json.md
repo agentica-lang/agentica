@@ -64,6 +64,9 @@ match all three or use `_`.
 - Only as the direct type of a struct field: `List[JsonField[Int]]`, a map of
   them, `JsonField[JsonField[T]]` or `JSON.encode(field_value)` is
   `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` is not encodable or decodable.
+  A type argument counts after substitution: `Box[JsonField[Int]]` with
+  `value: T` encodes `value` as a `JsonField` field, but `items: List[T]` with
+  that argument is `CHECK-JSON-FIELD-PLACE`.
   `JsonField` is a reserved name.
 
 ```ruby
