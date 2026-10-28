@@ -381,8 +381,8 @@ Python solution that ignores the instruction still passes.
 
 - Network access for the agents. Agent containers can reach the provider, so
   they can reach the whole internet, and the programming skill links
-  `https://sonic182.github.io/agentica/llms.txt`, so an agent with a shell can
-  read the public site. Decide before a round whether that is allowed, and
+  `https://agentica-lang.github.io/agentica/llms.txt`, so an agent with a shell
+  can read the public site. Decide before a round whether that is allowed, and
   record it with the results: `run.json` has `agent_network` (`true` for a model
   run, `false` for `--check-references`), and `net_commands` counts the commands
   that mention `wget`, `git clone`, `github.com`, `pip install`, `npm`, `apt`,

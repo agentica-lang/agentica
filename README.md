@@ -4,7 +4,7 @@ Agentica is a small, statically typed language with Ruby-like syntax, checked
 before it runs. A front end written in Agentica compiles each program to
 bytecode, and a C VM runs it. Both are one binary, `agentica`.
 
-**[Read the documentation →](https://sonic182.github.io/agentica/)**
+**[Read the documentation →](https://agentica-lang.github.io/agentica/)**
 
 Contributor resources: [language specification](docs/grammar.md) · [agent
 reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/)
@@ -19,7 +19,7 @@ the licenses: `linux-x86_64` (glibc 2.28 or newer), `macos-x86_64` and
 with a `SHA256SUMS` file. Unpack one and put its `bin` folder on your `PATH`.
 The archives are not signed or notarized: the install guide says what macOS and
 Windows show for that. See the [install
-guide](https://sonic182.github.io/agentica/getting-started/).
+guide](https://agentica-lang.github.io/agentica/getting-started/).
 
 ## Requirements to build
 

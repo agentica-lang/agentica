@@ -5,7 +5,7 @@ description: Agentica is Ruby with static types. Ruby-like syntax, checked befor
 
 Agentica is Ruby with static types. It has Ruby-like syntax. Every program is checked before it runs, and values never change in place. The language is small on purpose, so people and AI agents can write, read and fix programs with few surprises. Every error has a stable code, a source position and often a hint with the fix.
 
-The project is hosted on [GitHub](https://github.com/sonic182/agentica).
+The project is hosted on [GitHub](https://github.com/agentica-lang/agentica).
 
 ```agentica
 # Prices are in cents, so the math stays exact.
