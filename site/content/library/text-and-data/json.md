@@ -172,7 +172,7 @@ name: set to Ana
 {"name":"Bo","age":null}
 ```
 
-`JsonField` may only be the type of a struct field in a JSON type: a list of `JsonField`, a map of them, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` is the error `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` cannot be encoded or decoded, since `Value(nil)` would look like `Null`. A type argument counts after substitution: in `Box[JsonField[Int]]` (`struct Box[T]` with `value: T`) the field `value` is a `JsonField` field for `JSON.encode` and `JSON.from`, while `items: List[T]` with that argument is `CHECK-JSON-FIELD-PLACE`. Outside JSON it is an ordinary enum value, and `JsonField` is a reserved name.
+`JsonField` may only be the type of a struct field in a JSON type. A list or map of them, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` is `CHECK-JSON-FIELD-PLACE`; so is `items: List[T]` when `T` is a `JsonField` (a type argument counts after substitution). `JsonField[Nil]` cannot be encoded or decoded, since `Value(nil)` would look like `Null`. Outside JSON it is an ordinary enum value, and `JsonField` is a reserved name.
 
 ## JSON.parse
 
