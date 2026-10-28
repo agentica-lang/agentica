@@ -389,7 +389,7 @@ ROWS_2: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "Digest.sha256",
       effects: [],
-      description: "The old name of Digest.sha256, about to be removed: use Digest.sha256; VM only.",
+      description: "Same as Digest.sha256; VM only.",
       alternatives: [],
     ),
     Model.Builtin(

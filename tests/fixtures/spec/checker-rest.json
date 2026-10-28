@@ -10754,6 +10754,15 @@
     },
     {
       "program": [
+        "def main() -> Void",
+        "  old: List[Int] = Crypto.sha256([1])",
+        "  puts(old.size)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
         "struct Crypto",
         "  name: String",
         "end",

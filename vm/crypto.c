@@ -20,15 +20,13 @@ static const char b64_standard[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 static const char b64_urlsafe[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 static const char hex_digits[] = "0123456789abcdef";
 
-/* The messages of the Digest hashes, by agc_digest_kind: a bad item (RUNTIME-INVALID-NUMBER) and a failed hash. */
-static const struct {
-  const char *bad_byte;
-  const char *missing;
-} digest_names[] = {
-  [AGC_DIGEST_MD5] = {"Digest.md5 needs bytes between 0 and 255", "MD5 is not available"},
-  [AGC_DIGEST_SHA1] = {"Digest.sha1 needs bytes between 0 and 255", "SHA-1 is not available"},
-  [AGC_DIGEST_SHA256] = {"Digest.sha256 needs bytes between 0 and 255", "SHA-256 is not available"},
-  [AGC_DIGEST_SHA512] = {"Digest.sha512 needs bytes between 0 and 255", "SHA-512 is not available"},
+/* The RUNTIME-INTERNAL message of a failed hash, by agc_digest_kind: the hash is missing from the OpenSSL in use (MD5
+   and SHA-1 on a FIPS-only system build) or there is no memory. */
+static const char *const digest_missing[] = {
+  [AGC_DIGEST_MD5] = "MD5 is not available",
+  [AGC_DIGEST_SHA1] = "SHA-1 is not available",
+  [AGC_DIGEST_SHA256] = "SHA-256 is not available",
+  [AGC_DIGEST_SHA512] = "SHA-512 is not available",
 };
 
 /* The bytes of the List[Int] argument: an item outside 0..255 is RUNTIME-INVALID-NUMBER at the argument (span + 1), a
@@ -270,50 +268,51 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
    or as lowercase hex (hexdigest). The work grows with the list, so the rows charge AGC_COST_SIZE: one turn-cost unit
    per item (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task
    yields after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
-static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex,
+                              const char *bad_byte) {
   size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], digest_names[kind].bad_byte, span, &n);
+  const uint8_t *bytes = text_form_bytes(vm, args[0], bad_byte, span, &n);
   unsigned char digest[AGC_DIGEST_MAX_BYTES];
   size_t len = agc_digest(kind, bytes, n, digest);
-  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", digest_names[kind].missing, span);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", digest_missing[kind], span);
   return hex ? hex_text(vm, digest, len) : byte_list_value(vm, digest, len);
 }
 
 static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_MD5, false);
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, false, "Digest.md5 needs bytes between 0 and 255");
 }
 
 static agc_value builtin_md5_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_MD5, true);
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, true, "Digest.md5_hexdigest needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha1(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false, "Digest.sha1 needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha1_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true, "Digest.sha1_hexdigest needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false, "Digest.sha256 needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true, "Digest.sha256_hexdigest needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false, "Digest.sha512 needs bytes between 0 and 255");
 }
 
 static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true, "Digest.sha512_hexdigest needs bytes between 0 and 255");
 }
 
 const agc_builtin agc_crypto_builtins[] = {
-  /* The key of the old name, which the bytecode of the checked-in bootstrap/stage0.agcb still imports; it goes once
-     the stage0 in the tree imports Digest.sha256. */
+  /* The key of the old name: only the stage0 of the base branch imports it (make stage0-check runs that stage0 on this
+     VM); the checked-in stage0 imports Digest.sha256. It goes in the next change, with the Crypto.sha256 row. */
   {"Crypto.sha256", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},

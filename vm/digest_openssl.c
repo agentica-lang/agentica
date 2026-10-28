@@ -28,17 +28,28 @@ static bool digest_ready(void) {
   return true;
 }
 
+/* EVP_Digest writes at most EVP_MAX_MD_SIZE bytes, so out never overflows. */
+_Static_assert(EVP_MAX_MD_SIZE <= AGC_DIGEST_MAX_BYTES, "AGC_DIGEST_MAX_BYTES must hold any EVP digest");
+
+/* The method of a kind. The switch has no default, so -Wswitch flags a new kind that is not added here. */
+static const EVP_MD *digest_method(agc_digest_kind kind) {
+  switch (kind) {
+    case AGC_DIGEST_MD5: return EVP_md5();
+    case AGC_DIGEST_SHA1: return EVP_sha1();
+    case AGC_DIGEST_SHA256: return EVP_sha256();
+    case AGC_DIGEST_SHA512: return EVP_sha512();
+  }
+  return NULL;
+}
+
 size_t agc_digest(agc_digest_kind kind, const unsigned char *data, size_t n, unsigned char out[AGC_DIGEST_MAX_BYTES]) {
   static const unsigned char none = 0;
   /* The default provider has all four, MD5 and SHA-1 included (the legacy provider, which no-legacy leaves out of the
-     vendored build, holds only older hashes such as MD4). */
-  const EVP_MD *md = kind == AGC_DIGEST_MD5    ? EVP_md5()
-                     : kind == AGC_DIGEST_SHA1 ? EVP_sha1()
-                     : kind == AGC_DIGEST_SHA256 ? EVP_sha256()
-                                                 : EVP_sha512();
+     vendored build, holds only older hashes such as MD4). A FIPS-only system OpenSSL has no MD5 or SHA-1: the fetch
+     inside EVP_Digest fails and the call returns 0. */
+  const EVP_MD *md = digest_method(kind);
   unsigned int len = 0;
-  bool done = digest_ready() && md && EVP_MD_get_size(md) <= AGC_DIGEST_MAX_BYTES &&
-              EVP_Digest(n ? data : &none, n, out, &len, md, NULL) == 1 && len > 0;
+  bool done = md && digest_ready() && EVP_Digest(n ? data : &none, n, out, &len, md, NULL) == 1 && len > 0;
   /* A failure leaves errors in this thread's OpenSSL queue; drop them so a later TLS call on it reads only its own. */
   if (!done) ERR_clear_error();
   return done ? len : 0;

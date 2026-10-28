@@ -128,9 +128,11 @@ before a release.
 - (b) It cannot (a syntax or builtin that `compiler/` itself uses, a new
   bytecode format): split the change in two PRs (§18.2): the first adds the
   feature without using it in `compiler/` and refreshes stage0; the second
-  uses it. When that is not possible, compile `stage1` with another binary
-  built from the parent commit and say so in the PR:
-  `make stage0 STAGE1_COMPILER="path/to/agentica"`. A new bytecode format
+  uses it. To rename a builtin that `compiler/` calls, the first PR keeps the
+  old name as a catalog row whose key is the new one, plus the old C key for
+  the base stage0; the second removes both (#775, #776). When that is not
+  possible, compile `stage1` with another binary built from the parent commit
+  and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`. A new bytecode format
   needs the old VM to run the new compiler once by hand; the PR that changes
   the format writes the commands.
 

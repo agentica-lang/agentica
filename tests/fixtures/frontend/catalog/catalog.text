@@ -11,7 +11,7 @@ builtin Channel.recv forms=1
 builtin Channel.send forms=1
   Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void] shape=(Channel(Var(T)), Var(T), Int) -> Result(Void) rule=ChannelSend impl="Channel.send" effects=["concurrency"] desc="Add a value in order; wait for room up to timeout_ms; error(\"channel: closed\") or error(\"channel: timed out\"); VM only."
 builtin Crypto.sha256 forms=1
-  Crypto.sha256(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.sha256" effects=[] desc="The old name of Digest.sha256, about to be removed: use Digest.sha256; VM only."
+  Crypto.sha256(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.sha256" effects=[] desc="Same as Digest.sha256; VM only."
 builtin Dir.list forms=1
   Dir.list(path: String, timeout_ms: Int) -> Result[List[String]] shape=(String, Int) -> Result(List(String)) rule=Plain impl="Dir.list" effects=["filesystem"] desc="List immediate entry names in sorted order."
 builtin Dir.mkdir forms=1
