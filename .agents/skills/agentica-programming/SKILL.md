@@ -63,6 +63,7 @@ Read only what the task needs.
 | `binary.md` | bytes, bit operations, `Digest` hashes, `HMAC`, `Base64`, hex, `SecureRandom`, `std/binary` (`read_u16_be`, `frame`) |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
+| `cgi.md` | `std/cgi` (HTML escaping, cookies) |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
 | `analysis.md` | compiler answers in a program (`std/analysis`) |

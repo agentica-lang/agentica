@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
+  names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
 - `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
 - `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
 - `HMAC.sha256` and `HMAC.sha512` (HMAC-SHA256 and HMAC-SHA512), each with a

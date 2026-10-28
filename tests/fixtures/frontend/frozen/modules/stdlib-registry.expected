@@ -5,6 +5,7 @@ std/bdd/gherkin.agc
 std/bdd/match.agc
 std/bdd/tags.agc
 std/binary.agc
+std/cgi.agc
 std/http.agc
 std/internal/archive_zip.agc
 std/logger.agc

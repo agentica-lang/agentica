@@ -5,6 +5,7 @@ bdd/gherkin.agc
 bdd/match.agc
 bdd/tags.agc
 binary.agc
+cgi.agc
 http.agc
 logger.agc
 prelude/lazy.agc
