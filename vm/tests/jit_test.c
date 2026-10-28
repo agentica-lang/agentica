@@ -1306,9 +1306,54 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
   expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 0);
 }
 
+/* The first row of the builtin tables named NAME, or NULL. */
+static const agc_builtin *table_row(const char *name) {
+  for (size_t t = 0; t < agc_builtin_table_count; t++)
+    for (size_t i = 0; i < *agc_builtin_tables[t].count; i++)
+      if (strcmp(agc_builtin_tables[t].entries[i].name, name) == 0) return &agc_builtin_tables[t].entries[i];
+  return NULL;
+}
+
+/* The names of agc_jit_parking are sorted for bsearch, and each one is a row of the builtin tables, so a renamed row
+   fails here instead of dropping out of the list. */
+static void parking_rows(void) {
+  for (size_t k = 0; k < agc_jit_parking_count; k++) {
+    const agc_builtin *b = table_row(agc_jit_parking[k]);
+    if (!b) fprintf(stderr, "jit-test: agc_jit_parking names %s, which is no builtin row\n", agc_jit_parking[k]);
+    assert(b && agc_jit_parks(b));
+    assert(k == 0 || strcmp(agc_jit_parking[k - 1], agc_jit_parking[k]) < 0);
+  }
+}
+
+/* While no code is published, sampled turns that count no entry widen the sample to one turn in AGC_JIT_SAMPLE_MAX.
+   An entry counted after that sets it back to one in AGC_JIT_SAMPLE at the next sampled turn, the function still
+   compiles, and then every turn runs the jit copy. One scheduler's draws are the same in each run. */
+static void sample_resets(void) {
+  static const agc_trace quiet = {0};
+  one_function f;
+  sum_loop(&f);
+  program_of(&f);
+  agc_jit *jit = agc_jit_new(&f.program, AGC_JIT_ON, &quiet);
+  assert(jit);
+  uint32_t frames = vm.task->frame_count;
+  vm.task->frame_count = 0;
+  for (uint32_t turn = 0; turn < 100000; turn++) (void)agc_jit_turn(jit, &vm);
+  assert(1u << atomic_load(&jit->sample_bits) == AGC_JIT_SAMPLE_MAX);
+  assert(!agc_jit_code_of(jit, 0, 0));
+  uint32_t turns = 0;
+  while (!agc_jit_turn(jit, &vm)) turns++;
+  assert(1u << atomic_load(&jit->sample_bits) == AGC_JIT_SAMPLE && turns < 100000);
+  agc_jit_code code = NULL;
+  for (uint32_t entry = 1; entry < AGC_JIT_THRESHOLD && !code; entry++) code = agc_jit_code_of(jit, 0, 0);
+  assert(code);
+  for (uint32_t turn = 0; turn < 1000; turn++) assert(agc_jit_turn(jit, &vm));
+  vm.task->frame_count = frames;
+}
+
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is neither
-   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions; a leaf or direct builtin does
-   not count, as compiled code calls it, nor a block call, which run_compiled starts. A function without a loop that
+   a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions, one that may park counting
+   AGC_JIT_PARK_WEIGHT times; a leaf or direct builtin does not count, as compiled code calls it, nor a block call,
+   which run_compiled starts. A function without a loop that
    calls a leaf builtin may still get code for native calls; one that starts a block call may not. A program where no
    function is compiled has no JIT at all. */
 static void ineligible(void) {
@@ -1337,6 +1382,27 @@ static void ineligible(void) {
     f.code[f.fn.count - 1] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
     emit(&f, AGC_OP_JUMP, 0, 0, 0);
     assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  }
+  /* A builtin that may park (Channel.recv) counts AGC_JIT_PARK_WEIGHT trips out: a loop that calls it once stays out
+     below AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING instructions. A `shared` row that never parks (Channel.closed?)
+     counts one, as any other call that leaves. */
+  const agc_builtin *shared_rows[2] = {table_row("Channel.recv"), table_row("Channel.closed?")};
+  assert(shared_rows[0] && shared_rows[1] && shared_rows[1]->shared && !agc_jit_parks(shared_rows[1]));
+  enum { PARKS = AGC_JIT_PARK_WEIGHT * AGC_JIT_SPACING };
+  agc_instr parking[PARKS];
+  for (uint32_t which = 0; which < 2; which++) {
+    uint32_t qualifies = which == 0 ? PARKS : AGC_JIT_SPACING;
+    for (uint32_t size = qualifies - 1; size <= qualifies; size++) {
+      parking[0] = (agc_instr){AGC_OP_STEP, 1, 0, 0};
+      parking[1] = (agc_instr){AGC_OP_CALL_BUILTIN, 0, (uint16_t)which, 0};
+      for (uint32_t pc = 2; pc + 1 < size; pc++) parking[pc] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
+      parking[size - 1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+      agc_function parks[1] = {{.registers = 3, .code = parking, .count = size}};
+      agc_program parks_program = {.functions = parks, .function_count = 1, .builtins = shared_rows};
+      bool parks_callable[1], parks_looped[1], parks_calling[1];
+      agc_jit_settle(&parks_program, parks_callable, parks_looped, parks_calling);
+      assert(parks_looped[0] && parks_callable[0] == (size == qualifies));
+    }
   }
   /* A TAIL_CALL counts as a call, by its callee: a loop that tail-calls a function that may get code does not leave,
      and one whose callee leaves (a builtin that is neither leaf, direct nor a block call) does. */
@@ -1644,7 +1710,9 @@ int main(void) {
   closures();
   globals_structs_enums();
   struct_updates();
+  parking_rows();
   ineligible();
+  sample_resets();
   block_calls_in_place();
   every_opcode_compiles();
 #else

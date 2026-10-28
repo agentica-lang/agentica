@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `--jit on` keeps short loops that wait on channels, tasks, processes,
+  sockets, stdin or files interpreted.
+
 ## [0.14.0] - 2026-10-28
 
 ### Added

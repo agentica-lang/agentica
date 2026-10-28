@@ -232,19 +232,23 @@ only about 8% more.
 ## JIT (`--jit`)
 
 The x86-64 JIT (`docs/vm/05-values-execution-builtins.md` §6.4) against the
-interpreter (`--jit off`), on master `b04d44f9` (2026-10-28). Seconds, best of 5
-runs at size 4 on one pinned core and one scheduler, on the Ryzen 5 3550H of
-"Results" (8 threads, 12 GB RAM, Debian 13, gcc 14.2.0, Linux 6.12, a default
-`make` build). The load average was 0.8 to 1.3, from other sessions on the same
-host. The ratio is `on` / `off`, computed from the printed times.
+interpreter (`--jit off`), on the head of #770 (2026-10-28, the `on` changes
+for parking loops and sampled turns). Seconds, best of 5 runs at size 4 on one
+pinned core and one scheduler, on the Ryzen 5 3550H of "Results" (8 threads, 12
+GB RAM, Debian 13, gcc 14.2.0, Linux 6.12, a default `make` build). The load
+average was 0.7 to 1.2, from other sessions on the same host. The host ran
+these programs about 1.4 times faster than for the table on `b04d44f9` (the same
+binary timed both ways in one session), so compare ratios, not seconds. The
+ratio is `on` / `off`, computed from the printed times.
 
-To rerun one program (size 4 is a copy of the source with `scale` returning 4):
+To rerun one program (size 4 is a copy of the source with `scale` returning 4;
+bash's `time` prints milliseconds, GNU `time` only hundredths):
 
 ```sh
 dist/agentica compile prog.agc -o prog.agcb
 for round in 0 1 2 3 4 5; do for mode in off on always; do
-  /usr/bin/time -f "$mode %e" taskset -c 3 \
-    dist/agentica run --schedulers 1 --jit $mode -- prog.agcb >/dev/null
+  TIMEFORMAT="$mode %3R"
+  time taskset -c 3 dist/agentica run --schedulers 1 --jit $mode -- prog.agcb >/dev/null
 done; done
 ```
 
@@ -257,41 +261,50 @@ front end runs in the interpreter otherwise).
 
 | Program | `off` s | `on` s | `always` s | `on` / `off` |
 |---|---:|---:|---:|---:|
-| arithmetic | 0.109 | 0.053 | 0.053 | 0.49 |
-| calls | 0.087 | 0.032 | 0.030 | 0.37 |
-| case | 0.077 | 0.025 | 0.025 | 0.32 |
-| knight-tour | 0.098 | 0.058 | 0.059 | 0.59 |
-| traveling-salesman | 0.101 | 0.066 | 0.067 | 0.65 |
-| lists | 0.112 | 0.078 | 0.076 | 0.70 |
-| small-values | 0.482 | 0.372 | 0.379 | 0.77 |
-| strings | 0.119 | 0.094 | 0.093 | 0.79 |
-| sets | 0.157 | 0.143 | 0.136 | 0.91 |
-| string-library | 0.087 | 0.081 | 0.081 | 0.93 |
-| maze-bfs | 0.155 | 0.148 | 0.144 | 0.95 |
-| print-lines | 0.721 | 0.684 | 0.688 | 0.95 |
-| deadline-pingpong | 0.277 | 0.276 | 0.356 | 1.00 |
-| sleepers | 0.415 | 0.420 | 0.424 | 1.01 |
-| logger-disabled | 2.511 | 2.562 | 3.070 | 1.02 |
-| maps | 0.234 | 0.246 | 0.249 | 1.05 |
-| list-bulk | 0.293 | 0.324 | 0.315 | 1.11 |
-| channel-pingpong | 0.558 | 0.678 | 0.667 | 1.22 |
-| list-build (noise, see below) | 0.151 | 0.200 | 0.149 | 1.32 |
-| front-end self-compile | 18.00 | 15.01 | 13.93 | 0.83 |
+| case | 0.052 | 0.018 | 0.018 | 0.35 |
+| calls | 0.060 | 0.022 | 0.021 | 0.37 |
+| arithmetic | 0.074 | 0.037 | 0.036 | 0.50 |
+| knight-tour | 0.066 | 0.042 | 0.041 | 0.64 |
+| traveling-salesman | 0.069 | 0.046 | 0.048 | 0.67 |
+| lists | 0.077 | 0.054 | 0.053 | 0.70 |
+| small-values | 0.324 | 0.252 | 0.247 | 0.78 |
+| strings | 0.082 | 0.066 | 0.065 | 0.80 |
+| list-build (noise, see below) | 0.110 | 0.101 | 0.098 | 0.92 |
+| string-library | 0.061 | 0.056 | 0.055 | 0.92 |
+| maze-bfs | 0.108 | 0.101 | 0.100 | 0.94 |
+| sets | 0.107 | 0.101 | 0.092 | 0.94 |
+| print-lines | 0.525 | 0.498 | 0.489 | 0.95 |
+| deadline-pingpong | 0.189 | 0.185 | 0.239 | 0.98 |
+| sleepers | 0.354 | 0.348 | 0.355 | 0.98 |
+| logger-disabled | 1.676 | 1.673 | 2.259 | 1.00 |
+| channel-pingpong | 0.378 | 0.386 | 0.444 | 1.02 |
+| maps | 0.164 | 0.169 | 0.172 | 1.03 |
+| list-bulk (noise, see below) | 0.204 | 0.233 | 0.227 | 1.14 |
+| front-end self-compile | 12.78 | 10.78 | 10.04 | 0.84 |
 
 Every mode printed the same output, and the three self-compiles wrote the same
-bytes. The `always` ratio of the self-compile is 0.77.
+bytes. The `always` ratio of the self-compile is 0.79.
 
 - **Coverage.** §6.4 says what compiles, which builtins run inside compiled
   code and which exits go back to the interpreter.
-- **Slower rows.** `on` is slower than `off` on `channel-pingpong` (1.17 to 1.22
-  in two runs) and `list-bulk` (1.11 to 1.12). `always` is slower on
-  `deadline-pingpong` (1.29, the worst row) and `logger-disabled` (1.22).
-- **Small or no gain.** `sets`, `string-library`, `maze-bfs` and `print-lines`
-  gain 5% to 9%, and `sleepers` and `maps` do not move beyond the noise (1.01
-  and 1.02 to 1.05).
-- **Noise.** `list-build` moves by 35% to 40% between runs of one mode (`off`
-  0.151 and 0.205, `on` 0.200 and 0.143 in two passes), so its 1.32 is not a JIT
-  result.
+- **What changed.** On `b04d44f9`, `on` was 1.18 to 1.22 on
+  `channel-pingpong`: its loops park at each send and receive, and each park
+  costs about three plain exits. `on` now keeps them out, so nothing compiles.
+  `logger-disabled` went from 1.02 to 1.00: nothing compiles there, and fewer
+  turns run the slower jit copy of the turn loop. The self-compile did not move
+  (0.84 before and after).
+- **Slower rows.** Under `on`, `channel-pingpong` and `maps` are within the
+  noise. Under `always`, `logger-disabled` (1.35) leaves compiled code four
+  times per `Logger.debug` call; this row also moves by 9% with the address of
+  `agc_jit_code_of` alone (the same code with 144 bytes of padding before it
+  ran as fast as `b04d44f9`). `deadline-pingpong` (1.26) and
+  `channel-pingpong` (1.17) compile their parking loops under `always`.
+- **Small or no gain.** `string-library`, `maze-bfs`, `sets` and `print-lines`
+  gain 5% to 8%, and `sleepers` and `maps` do not move beyond the noise.
+- **Noise.** `list-build` moves by 35% to 40% between runs of one mode. Nothing
+  compiles in `list-bulk`, and its best of 5 follows its rare fast runs: 20
+  runs per mode gave the same spread (218 to 318 ms `off`, 220 to 312 ms `on`,
+  both with a median of about 254 ms). Neither ratio is a JIT result.
 
 ## HTTP sanity check
 
