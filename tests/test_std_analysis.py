@@ -529,6 +529,23 @@ def test_an_entry_adopted_by_a_new_session_is_taken_and_an_edit_checks_only_what
     ]
 
 
+@pytest.mark.parametrize("edit", ["write", "update"], ids=["a disk edit", "a buffer"])
+def test_a_stale_entry_is_adopted_and_the_answers_are_those_of_a_cold_check(driver, project, edit):
+    """The entry was made while util.agc had `twice`; the file loses it before the adopt, on the disk or in a buffer,
+    so main.agc no longer checks and the entry must not hide that."""
+    write_files(project, {"util_renamed.agc": UTIL_RENAMED})
+    out, err = library(
+        driver, project,
+        "refresh", "main.agc", "keep", "main.agc",
+        edit, "util.agc", "util_renamed.agc",
+        "fresh", "adopt", "main.agc",
+        "check", "main.agc",
+        "compare", "main.agc",
+    )
+    assert json.loads(err)["code"].startswith("CHECK-")
+    assert out.splitlines()[-1] == "same 0"
+
+
 def test_a_file_that_was_not_refreshed_or_did_not_link_has_no_entry(driver, project):
     out, err = library(
         driver, project,

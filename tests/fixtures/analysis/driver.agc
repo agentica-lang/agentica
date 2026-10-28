@@ -264,8 +264,9 @@ def share(session: Analysis.Session, paths: List[String]) -> Void
   end
   lines = Task.map(paths, 4, 60000) do |path: String|
     adopted = session
-    if table.has_key?(path)
-      adopted = Analysis.adopt(session, table.get(path).unwrap!)
+    found = table.get(path)
+    if found.ok?
+      adopted = Analysis.adopt(session, found.unwrap!)
     end
     refreshed = Analysis.refresh(adopted, path)
     checked = Analysis.check(refreshed, path)

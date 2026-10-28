@@ -49,7 +49,8 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   cache by that entry alone. An entry is a hit while the files and buffers are
   as they were, else the usual incremental check runs, so a stale entry costs
   time only. `entry` is an error when `path` has none (not refreshed, did not
-  link). Entries of two files are separate caches (the modules they both import
+  link), and needs the same spelling of `path` as `refresh` (a buffer-only file
+  is not canonicalized). Entries of two files are separate caches (the modules they both import
   are not shared). The program deletes the entries it no longer wants.
 - Answers are structs with no enum. An absent text is `""` (where the JSON has
   `null`), an absent definition an empty list (`TypeAt.definition` holds 0 or

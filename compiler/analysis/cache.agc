@@ -143,6 +143,7 @@ end
 ## program gave them all, so it is a line of its own: a root of another cache can be put in a new cache this way and no
 ## cache has to be merged with another.
 export def alone(root: Root) -> Cache
+  # The counters (checks, parsed, reused) restart at 0 on purpose: they count the work of one session's refreshes.
   start = reaching(empty(), root.loaded)
   return start.with(roots: {root.loaded.order[0]: root.with(used: 1)}, clock: 1)
 end

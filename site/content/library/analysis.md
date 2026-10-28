@@ -47,7 +47,7 @@ The cache keeps at most 16 checked files, the least recently refreshed leaving f
 
 ## Sharing the cache between tasks
 
-A `Session` holds functions, so an `ATS` table cannot hold one. An `Analysis.Entry` is what `refresh` kept for one file, as plain data. `Analysis.entry(session, path)` takes it from a refreshed session; it is an error when the cache holds none for `path` (not refreshed, a file that does not link, or an entry that left the cache). `Analysis.adopt(session, entry)` returns the session with the cache of that entry alone, and the same buffers. A refresh or a question about that file then takes the program from the entry when the files and buffers are as they were, and else checks again only the modules that changed or import one that did. A stale entry costs time, never a wrong answer. The fields of an `Entry` are not API.
+A `Session` holds functions, so an `ATS` table cannot hold one. An `Analysis.Entry` is what `refresh` kept for one file, as plain data. `Analysis.entry(session, path)` takes it from a refreshed session; it is an error when the cache holds none for `path` (not refreshed, a file that does not link, or an entry that left the cache). Give `entry` the same spelling of the path as `refresh`: a file that only has a buffer is not canonicalized, so another spelling finds nothing. `Analysis.adopt(session, entry)` returns the session with the cache of that entry alone, and the same buffers. A refresh or a question about that file then takes the program from the entry when the files and buffers are as they were, and else checks again only the modules that changed or import one that did. A stale entry costs time, never a wrong answer. The fields of an `Entry` are not API.
 
 So tasks that refresh different files lose nothing. Each task refreshes its own session, puts `Analysis.entry(refreshed, path)` in an `ATS[String, Analysis.Entry]` under the path, and a task that asks about a file adopts the entry of that file first. Entries of two files are separate caches: the table shares the checked program of each file, not the modules that two files both import. The program decides when an entry leaves the table, for instance when the file is closed.
 
@@ -60,8 +60,9 @@ def refresh_into(entries: ATS[String, Analysis.Entry], session: Analysis.Session
 end
 
 def check_from(entries: ATS[String, Analysis.Entry], session: Analysis.Session, path: String) -> Analysis.Checked
-  if entries.has_key?(path)
-    return Analysis.check(Analysis.adopt(session, entries.get(path).unwrap!), path)
+  found = entries.get(path)
+  if found.ok?
+    return Analysis.check(Analysis.adopt(session, found.unwrap!), path)
   end
   return Analysis.check(session, path)
 end

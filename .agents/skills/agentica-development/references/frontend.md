@@ -60,11 +60,11 @@ with a packed `Problem` (`references/stages.md`).
   The session cache (`cache.agc`, `Analysis.refresh`): `Modules.load_with` takes
   a parsed file from `Parses` when its key and text match, so node ids have gaps
   and are not in walk order. Nothing may read a node id except through a node it
-  holds (`Linker.parser_ids` is the highest `next_free_id`). `Analysis.entry`
-  and `adopt` move one root between sessions: `Cache.alone` rebuilds the parsed
-  files from that root alone, never merged with another cache, since the ids of
-  two lines can overlap. A cached root is
-  used only when `Cache.find` sees the same fingerprint and texts;
+  holds (`Linker.parser_ids` is the highest `next_free_id`).
+  `Analysis.entry` and `adopt` move one root between sessions: `Cache.alone`
+  rebuilds the parsed files from that root alone, never merged with another
+  cache, since the ids of two caches can overlap. A cached root is used only
+  when `Cache.find` sees the same fingerprint and texts;
   `test_std_analysis.py` compares cached and uncached answers. A root also
   keeps its last program that checked (`Cache.Good`); a module whose text and
   shape, and those of everything it imports, are unchanged is not checked
