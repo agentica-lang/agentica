@@ -111,9 +111,9 @@ phase 13).
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
   non-Ruby internal name has the Ruby name as alias, and every user-facing
   text shows only the Ruby form (rule and exception: the development skill).
-- Core grammar only (sections 4–6): user enums and type aliases (the only user
-  generics), `case`, file modules with explicit imports/exports, builtin
-  `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in
+- Core grammar only (sections 4–6): user enums, structs, functions and type
+  aliases (all may be generic), `case`, file modules with explicit
+  imports/exports, builtin `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in
   `docs/future/` until its phase lands. No placeholder files or nodes for later
   phases.
 - New features are VM-only, tested with golden outputs and independent
