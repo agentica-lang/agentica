@@ -867,9 +867,9 @@ end
 
 # True when the struct type passes the test: 0 for encodable, 1 for decodable. The type arguments are tested first,
 # each as a type of its own, whether or not the struct was seen (Box[Box[Fn[Int, Int]]] reaches the inner Box by an
-# argument). Then every field with the arguments put in is tested, once for each name on the path: a struct already in
-# seen is true (the type is recursive), and since seen holds names, a recursion that changes its type arguments each
-# time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
+# argument). Then every field is tested with a stand-in for each argument (stand_in_fields), once for each name on the
+# path: a struct already in seen is true (the type is recursive), and since seen holds names, a recursion that changes
+# its type arguments each time (W[T] with a field W[List[T]]) still ends. A decodable struct has no arguments.
 def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int) -> Bool
   name = Types.name(type)
   for argument in Types.args(type)
@@ -883,7 +883,7 @@ def struct_all?(cx: State.Cx, type: ResolvedType, seen: List[String], test: Int)
   end
 
   inner = seen.push(name)
-  for field in fields_of(cx, type)
+  for field in stand_in_fields(cx, type)
     if test == 0 and !encodable?(cx, field.type, inner)
       return false
     elsif test == 1 and !decodable?(cx, field.type, inner)
@@ -910,7 +910,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
 
   inner = seen.push(key)
   if Types.is?(type, "Struct")
-    for field in fields_of(cx, type)
+    for field in stand_in_fields(cx, type)
       if !data?(cx, field.type, inner)
         return false
       end
@@ -919,20 +919,50 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
     return true
   end
 
-  # The arguments were tested above, so a payload that is a parameter needs no test, and any other is tested with the
-  # arguments put in: a variable left in it would be the enum's own parameter, which is not the variable of the
-  # function that is being checked.
   definition = cx.enums[name]
-  substitutions = bindings(definition.parameters, Types.args(type))
+  stand = stand_ins(definition.parameters, Types.args(type))
   for variant in definition.variants
     for payload in variant.payload
-      if !Types.is?(payload, "Var") and !data?(cx, substitute(payload, substitutions), inner)
+      if !data?(cx, substitute(payload, stand), inner)
         return false
       end
     end
   end
 
   return true
+end
+
+# The fields of a struct type to walk after its type arguments were tested: each type parameter is replaced by a
+# stand-in (stand_ins), not by its argument, so a nest of generic instances is walked once for each level and not once
+# for each way down (the arguments are tested as types of their own, and repeating that for each field makes it
+# exponential).
+def stand_in_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
+  name = Types.name(type)
+  parameters = cx.struct_params.get(name, [])
+  if parameters.size == 0 or parameters.size != Types.args(type).size
+    return cx.structs[name]
+  end
+
+  stand = stand_ins(parameters, Types.args(type))
+  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
+end
+
+# A type for each parameter to stand for its argument once the argument was tested: Int, or Nil for a Nil argument,
+# the one thing that a field of the parameter (JsonField[T]) tells apart.
+def stand_ins(parameters: List[String], args: List[ResolvedType]) -> Map[String, ResolvedType]
+  found: Map[String, ResolvedType] = {}
+  index = 0
+  while index < parameters.size and index < args.size
+    stand = Types.Type.Int
+    if Types.is?(args[index], "Nil")
+      stand = Types.Type.Nil
+    end
+
+    found = found.put(parameters[index], stand)
+    index += 1
+  end
+
+  return found
 end
 
 def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType

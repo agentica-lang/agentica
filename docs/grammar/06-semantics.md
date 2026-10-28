@@ -531,13 +531,19 @@ of the caller do not mix:
 3. The arguments that need an expected type are checked against their parameter
    type as far as it is known, and bind nothing: `[]`, `{}`, `Set.new([])`,
    `error(...)`, a variant of a generic enum without a payload, a list or map
-   literal that holds one of them, and `&f` of a generic function.
+   literal that holds one of them, and `&f` of a generic function. As the
+   argument of a builtin method, `&f` gets its type only where the method fixes
+   the whole `Fn` type: the callback of `filter`, `any?`, `all?` and `each`,
+   and the predicate of `find`, `partition` and `take_while`. Elsewhere, as in
+   `map`, bind it first: `f: Fn[Int, Bool] = &name`.
 4. The block, the last argument. Its parameter types come from the `Fn`
    parameter; one that is still open must be annotated in the block (`do |x:
    Int|`), which binds it, else `CHECK-BLOCK-TYPE`. The block's result binds the
    open parameters of the `Fn` result (`R` in `Result[R]`); a result that does
    not fit is `CHECK-TYPE-MISMATCH`. A step 3 argument whose parameter type is
-   still open waits for the block.
+   still open waits for the block. A step 3 argument binds nothing: with
+   `def apply[A, B](x: A, f: Fn[A, B])`, the call `apply(3, &id)` leaves `B`
+   open.
 
 A type parameter still open after step 4 is `CHECK-ENUM-TYPE-INFERENCE` at the
 call. The call has the result type with the arguments put in. Recursion, mutual

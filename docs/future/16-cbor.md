@@ -94,12 +94,11 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
 - **Concrete types only:** the argument of `encode` must have a concrete static
   type, with every type parameter known, as `JSON.encode` requires today (its
   `encodable-type?` rejects a type variable). The checker already gives this at
-  every call site: there are no user generic functions, a constructor whose type
-  parameters cannot be inferred is `CHECK-ENUM-TYPE-INFERENCE`, and an empty
-  `[]` or `{}` with no expected type is `CHECK-EMPTY-LIST-TYPE` or
-  `CHECK-EMPTY-MAP-TYPE`. If a type variable ever reaches `Term.encode` or a
-  `decode` target (for example once generic functions exist), it is
-  `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`. Only type variables left after
+  every call site: a constructor whose type parameters cannot be inferred is
+  `CHECK-ENUM-TYPE-INFERENCE`, and an empty `[]` or `{}` with no expected type
+  is `CHECK-EMPTY-LIST-TYPE` or `CHECK-EMPTY-MAP-TYPE`. If a type variable ever
+  reaches `Term.encode` or a `decode` target (for example in a generic
+  function), it is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`. Only type variables left after
   substitution are rejected: the `T` in the declaration of `Box[T]` is fine when
   the instance is `Box[Int]`. Encode never falls back to the run-time shape
   of the value.

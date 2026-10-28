@@ -4,9 +4,11 @@ A rule case is `(program, code, covered text)`: the code of the diagnostic and t
 A program that must check clean has no code.
 """
 
+import time
+
 import pytest
 
-from tests.agentica_test import cli, output_lines, run, vm_environment
+from tests.agentica_test import scaled
 from tests.spec_support import assert_rule
 
 FIRST_OR = (
@@ -46,6 +48,7 @@ WITH = (
 EMPTY_OF = "def empty_of[T]() -> List[T]\n  return []\nend\n\n"
 ID = "def id(x: Int) -> Int\n  return x\nend\n\n"
 BOX = "struct Box[T]\n  value: T\nend\n\n"
+YES = "def yes[T](x: T) -> Bool\n  return true\nend\n\n"
 
 
 def main(*lines: str) -> str:
@@ -55,6 +58,12 @@ def main(*lines: str) -> str:
 
 def declared(*lines: str, header: str = FIRST_OR) -> str:
     return header + main(*lines)
+
+
+def elements(*lines: str, header: str = "") -> str:
+    """A generic function `f[T](xs: List[T], m: Map[String, T])` whose body is the lines, and a main that calls it."""
+    function = "def f[T](xs: List[T], m: Map[String, T]) -> Void\n" + "".join("  %s\n" % line for line in lines)
+    return header + function + "end\n\n" + main("f([1], {\"a\": 1})")
 
 
 def body(*lines: str, header: str = "") -> str:
@@ -198,6 +207,21 @@ RULES = {
         "def f[T](s: Set[T]) -> Int\n  return 0\nend\n\n" + main("puts(1)"), "CHECK-SET-ELEMENT-TYPE", "T"),
     "T as a Map key does not become valid with Int": (
         "def f[T](m: Map[T, Int]) -> Int\n  return 0\nend\n\n" + main("puts(f({1: 2}))"), "CHECK-MAP-KEY-TYPE", "T"),
+    "find and group_by on a List of T": (
+        elements("a = xs.find do |a: T| true end", "g = xs.group_by do |x| \"k\" end", "puts(g.size)"), None, None),
+    "the other block methods on a List of T": (
+        elements("xs.each_with_index do |x, i|", "  puts(i)", "end", "puts(xs.take_while do |x| true end.size)",
+                 "puts(xs.partition do |x| true end.size)", "puts(xs.min_by do |x| 1 end.ok?)",
+                 "puts(xs.flat_map do |x| [x] end.size)"), None, None),
+    "each and filter on a Map of T": (
+        elements("m.each do |k, v|", "  puts(k)", "end", "puts(m.filter do |k, v| true end.size)"), None, None),
+    "lazy filter on a List of T": (elements("l = xs.lazy.filter do |x| true end", "puts(1)"), None, None),
+    "a generic function reference as the callback of filter": (
+        elements("puts(xs.filter(&yes).size)", header=YES), None, None),
+    "Void in a parameter type is CHECK-VOID-TYPE at the call": (
+        "def hold[R](xs: List[R], f: Fn[Int, R]) -> Int\n  return xs.size\nend\n\n"
+        + main("n = hold([]) do |x|", "  puts(x)", "end", "puts(n)"), "CHECK-VOID-TYPE",
+        "hold([]) do |x|\n    puts(x)\n  end"),
     "a T annotation in the body": (
         body("z: T = x", "w: List[T] = []", "puts(w.size)"), None, None),
     "a block parameter annotated with T": (
@@ -265,3 +289,23 @@ def test_generic_function_rules(agentica_check, name):
 def test_generic_functions_across_modules(agentica_check, name):
     program, code, text = MODULE_RULES[name]
     assert_rule(agentica_check({"m.agc": LIB, "main.agc": program}), program, code, text)
+
+
+def nest(depth: int, use: str) -> str:
+    """`depth` generic structs, each holding its parameter twice, one inside the other, and a function that prints or
+    encodes a value of the whole nest."""
+    structs = "".join("struct P%d[T]\n  a: T\n  b: T\nend\n\n" % level for level in range(1, depth + 1))
+    kind = "Int"
+    for level in range(depth, 0, -1):
+        kind = "P%d[%s]" % (level, kind)
+    action = {"puts": "puts(x)", "json": "puts(JSON.encode(x))"}[use]
+    return structs + "def f(x: %s) -> Void\n  %s\nend\n\n" % (kind, action) + main("puts(1)")
+
+
+@pytest.mark.parametrize("use", ["puts", "json"])
+def test_a_deep_nest_of_generic_instances_checks_fast(agentica_check, use):
+    # The type arguments are tested once and the fields once for each level; a test that walked the fields with the
+    # arguments put in took seconds at this depth.
+    started = time.monotonic()
+    assert agentica_check(nest(12, use)) is None
+    assert time.monotonic() - started < scaled(2)

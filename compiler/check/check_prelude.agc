@@ -54,14 +54,14 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
   case arg
     Ast.Expr.BlockLit(block) ->
       if T.is?(template, "Fn")
-        checked = try check_block(cx, bound, block, wanted, step)
+        checked = try check_block(cx, bound, block, template, step)
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
       end
 
     _ ->
       context = wanted
-      if CheckTypes.has_variables?(wanted)
+      if CheckTypes.open_variables?(template, bound.types)
         context = T.Type.Unknown
       end
 
@@ -79,17 +79,19 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
 end
 
 # A block given for a parameter of type Fn[...]: its parameters are the types the Fn has, all known by now (the
-# receiver comes first), and the result is the one the Fn has when that is known.
-def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, wanted: T.Type, step: Bool) -> Result[State.Out]
-  params = T.params(wanted)
-  if params.any? do |param: T.Type| CheckTypes.has_variables?(param) end
+# receiver comes first), and the result is the one the Fn has when that is known. "Known" is judged on the variables of
+# the row (template), not on the types they stand for: in a generic function the type found may be the function's own
+# type parameter.
+def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, template: T.Type, step: Bool) -> Result[State.Out]
+  params = CheckTypes.substitute_all(T.params(template), bound.types)
+  if T.params(template).any? do |param: T.Type| CheckTypes.open_variables?(param, bound.types) end
     return error(
       State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "the types of the block parameters are not known", block.span),
     )
   end
 
-  result = T.result(wanted)
-  if CheckTypes.has_variables?(result)
+  result = CheckTypes.substitute(T.result(template), bound.types)
+  if CheckTypes.open_variables?(T.result(template), bound.types)
     result = T.Type.Unknown
   end
 

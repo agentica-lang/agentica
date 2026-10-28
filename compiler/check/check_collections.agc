@@ -481,10 +481,6 @@ def check_block_value(
 ) -> Result[State.Out]
   leading = try State.expr(cx, st, site.args[0], first)
   wanted = site.expected
-  if CheckTypes.has_variables?(wanted)
-    wanted = T.Type.Unknown
-  end
-
   callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->

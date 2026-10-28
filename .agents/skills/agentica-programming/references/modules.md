@@ -300,6 +300,6 @@ Written in Agentica. Exported records: `QueueState(items: List[String])` and
 adds at the back; pop removes the oldest value; pop and peek on an empty queue
 return an error Result. Inputs never change: assign the returned queue (or
 `Popped.remaining`). Empty strings and duplicates are valid. `QueueState` is a
-normal exported struct, not an opaque handle. There are no user generics or
-blocking cross-task queue operations. `push`, `pop`, `peek`, `size` and
-`empty?` are O(n); no constant-time FIFO is promised.
+normal exported struct, not an opaque handle. The queue holds only strings, and
+there are no blocking cross-task queue operations. `push`, `pop`, `peek`,
+`size` and `empty?` are O(n); no constant-time FIFO is promised.

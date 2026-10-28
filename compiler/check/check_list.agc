@@ -175,7 +175,7 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
   checked = State.Out(st: st, type: T.Type.Unknown)
   case callback
     Ast.Expr.BlockLit(block) -> checked = try block_callback(cx, st, site, rule, block)
-    _ -> checked = try State.expr(cx, st, callback, T.Type.Unknown)
+    _ -> checked = try callback_value(cx, st, site, rule, callback)
   end
 
   arity = 1
@@ -190,6 +190,34 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
   end
 
   return callback_result(cx, checked.st, site, rule, callback, checked.type)
+end
+
+# A callback that is not a block. The reference of a generic function (filter(&yes)) is a value only where the Fn type
+# is known, so it gets it when the rule fixes the result (filter, any?, all?, each): the element type from the list and
+# the result from the rule. Any other callback is checked as it is, and the rule judges its type.
+def callback_value(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  rule: Model.Rule,
+  callback: Ast.Expr,
+) -> Result[State.Out]
+  result = block_result(rule)
+  if reduces?(rule) or T.unknown?(result) or !generic_reference?(cx, callback)
+    return State.expr(cx, st, callback, T.Type.Unknown)
+  end
+
+  list = try Args.list_argument(cx, st, site, T.Type.Unknown)
+  return State.expr(cx, list.st, callback, T.Type.Fn([T.item(list.type)], result))
+end
+
+def generic_reference?(cx: State.Cx, node: Ast.Expr) -> Bool
+  case node
+    Ast.Expr.FunctionRef(ref) ->
+      signature = cx.functions.get(ref.name)
+      return signature.ok? and signature.unwrap!.type_parameters.size > 0
+    _ -> return false
+  end
 end
 
 # The callback of a block: the list gives the element type, and the rule gives the parameters and result the block must

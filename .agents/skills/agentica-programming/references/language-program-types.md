@@ -179,7 +179,7 @@ end
   behaviour. A parameter name may not be the name of a struct, enum or alias of
   the file, and a parameter whose type has a type parameter has no default.
   `&first_or` needs the expected `Fn` type (`f: Fn[List[Int], Int, Int] =
-  &first_or`).
+  &first_or`); `xs.filter(&name)` has it, `xs.map(&name)` does not.
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the
   fields in declaration order; `StructMember` has `name: String` and
   `type: String`, the field type as source with aliases expanded

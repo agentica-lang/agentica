@@ -98,6 +98,15 @@ def keep[T](x: T) -> T
   return x
 end
 
+# The builtin block methods read the element type of a List[T] inside the body.
+def count_if[T](xs: List[T], keep: Fn[T, Bool]) -> Int
+  return xs.filter do |x| keep.call(x) end.size
+end
+
+def groups[T](xs: List[T], key: Fn[T, String]) -> Int
+  return xs.group_by do |x| key.call(x) end.size
+end
+
 def double(n: Int) -> Int
   return n * 2
 end
@@ -141,4 +150,7 @@ def main() -> Void
   puts(pick.call([], 7))
   puts(apply(&keep, 5))
   puts(apply(&double, 21))
+
+  puts(count_if([1, 2, 3, 4]) do |n| n > 2 end)
+  puts(groups(["a", "bb", "cc"]) do |w| w.length.to_s end)
 end
