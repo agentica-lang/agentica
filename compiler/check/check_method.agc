@@ -131,9 +131,9 @@ def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> Str
     end
   end
 
-  if name == "to_s" and CheckTypes.data?(cx, target, [])
+  if name == "to_s" and CheckTypes.data?(cx, target)
     return "text"
-  elsif name == "inspect" and CheckTypes.data?(cx, target, [])
+  elsif name == "inspect" and CheckTypes.data?(cx, target)
     return "inspect"
   end
 
@@ -223,7 +223,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
     return "with copies a struct with some fields changed; the value before .with must be a struct"
   elsif kind != ""
     return kind_help(cx, target, kind, name)
-  elsif CheckTypes.data?(cx, target, [])
+  elsif CheckTypes.data?(cx, target)
     return Help.near(name, ["to_s", "inspect"], [])
   end
 
@@ -265,7 +265,7 @@ end
 # The methods of the kind, with to_s and inspect for a data value.
 def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
   names = Names.method_names(cx, kind)
-  if CheckTypes.data?(cx, target, [])
+  if CheckTypes.data?(cx, target)
     names = names.concat(
       ["to_s", "inspect"].filter do |own: String| !names.any? do |known: String| known == own end end,
     )
