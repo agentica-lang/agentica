@@ -8,34 +8,28 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-28
+
 ### Added
 
-- Generic structs: `struct Box[T]`, used as `Box[Int]`, with the type argument
-  inferred when you build the value.
-- Generic functions: `def first_or[T](xs: List[T], fallback: T) -> T`, with the
-  type arguments inferred from the arguments, the expected type and the block.
-- `Analysis.entry` and `Analysis.adopt` of `std/analysis` move the cache of one
-  file between sessions as plain data, so tasks can share it in an `ATS` table.
-- `JsonField` can be a type argument of a generic struct: in
-  `Box[JsonField[Int]]` the field `value: T` is a `JsonField` field for
-  `JSON.encode` and `JSON.from`.
+- Generic structs: `struct Box[T]`, with the type argument inferred.
+- Generic functions: `def first_or[T](xs: List[T], fallback: T) -> T`.
+- `Analysis.entry` and `Analysis.adopt` share a file's analysis cache between
+  tasks.
+- `JsonField` can be a type argument of a generic struct for `JSON.encode` and
+  `JSON.from`.
 
 ### Changed
 
-- The experimental x86-64 JIT calls function values (`f.call(...)` of a block,
-  a closure or `&name`) from compiled code.
-- The experimental x86-64 JIT runs tail calls inside compiled code.
-- The experimental x86-64 JIT runs the repeated calls of a block (`map`,
-  `filter`, `reduce`, `times`, ...) without leaving compiled code.
-- The experimental x86-64 JIT calls small builtins (`size`, `length`,
-  `append`, `ok`, ...) from compiled code in more places.
+- The experimental x86-64 JIT runs function values, tail calls, repeated block
+  calls and small builtins inside compiled code.
 
 ### Fixed
 
-- `JSON.encode` and `JSON.from` now refuse a generic struct whose field is a
-  `JsonField[Nil]` reached through a recursive field such as `List[W[Nil]]`.
+- `JSON.encode` and `JSON.from` refuse a `JsonField[Nil]` behind a recursive
+  generic field.
 - Checking `JSON.encode`, `puts` or `to_s` of structs that refer to one another
-  no longer takes exponential time.
+  is no longer exponential.
 
 ## [0.13.0] - 2026-10-27
 
@@ -599,7 +593,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.13.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/sonic182/agentica/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/sonic182/agentica/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/sonic182/agentica/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/sonic182/agentica/compare/0.10.0...0.11.0
