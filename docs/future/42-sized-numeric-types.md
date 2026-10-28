@@ -91,9 +91,9 @@ The reasons, in the order of their weight:
   `write_u16_be` checks the range at run time (`value 70000 does not fit in
   u16`). With `UInt16` the range is in the type, and the writer takes the type.
 - **A future FFI** (issue
-  [#534](https://github.com/sonic182/agentica/issues/534)). C has `int32_t`,
-  `uint8_t` and `float`. A native function needs those widths in its signature,
-  and the issue lists the first C types.
+  [#534](https://github.com/agentica-lang/agentica/issues/534)). C has
+  `int32_t`, `uint8_t` and `float`. A native function needs those widths in its
+  signature, and the issue lists the first C types.
 - **Interop.** CBOR's integer major types cover -2^64 to 2^64 - 1
   (`docs/future/16-cbor.md` maps `Int` only). Other systems use `uint64` IDs
   and 32-bit floats in their data.

@@ -21,25 +21,25 @@ keeps their records.
 ### Releases
 
 - **0.9.0:** the FFI core (FFI-a, issue
-  [#534](https://github.com/sonic182/agentica/issues/534)) with its Windows and
-  macOS parity ([#568](https://github.com/sonic182/agentica/issues/568)),
-  released 2026-10-23.
+  [#534](https://github.com/agentica-lang/agentica/issues/534)) with its Windows
+  and macOS parity
+  ([#568](https://github.com/agentica-lang/agentica/issues/568)), released
+  2026-10-23.
 - **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
   1. The JIT groundwork, without tier 2
-     ([#622](https://github.com/sonic182/agentica/issues/622)): interpreter
+     ([#622](https://github.com/agentica-lang/agentica/issues/622)): interpreter
      opcode and opcode-pair profile counters (done), `leaf` builtins (done),
      then the opcode helpers by pointer (direct compiled calls to non-leaf
-     builtins stay deferred beyond 0.10.0),
-     errors without `longjmp` through compiled code and a W^X code memory.
-     Smaller values ([#396](https://github.com/sonic182/agentica/issues/396))
-     are deferred beyond 0.10.0.
+     builtins stay deferred beyond 0.10.0), errors without `longjmp` through
+     compiled code and a W^X code memory. Smaller values
+     ([#396](https://github.com/agentica-lang/agentica/issues/396)) are deferred
+     beyond 0.10.0.
   2. The rest of the FFI core: FFI-b (native libraries in packages; done),
      variadic C functions
-     ([#619](https://github.com/sonic182/agentica/issues/619); done), and from
-     [#594](https://github.com/sonic182/agentica/issues/594) owned
+     ([#619](https://github.com/agentica-lang/agentica/issues/619); done), and
+     from [#594](https://github.com/agentica-lang/agentica/issues/594) owned
      buffers and typed memory and `C.Float` (done), structs by value (done),
-     function pointers (done) and downloaded prebuilt libraries. No
-     callbacks.
+     function pointers (done) and downloaded prebuilt libraries. No callbacks.
   3. JIT tier 2 ([§6.4](../vm/05-values-execution-builtins.md#64-jit)) with our
      own emitter for x86-64 (no sljit); the arm64 emitter is deferred beyond
      0.10.0.
@@ -58,9 +58,10 @@ everything else is weighed after them.
 
 First batch:
 
-1. FFI-a, the core of [#534](https://github.com/sonic182/agentica/issues/534):
-   done (PRs #553 to #591, and step 1 of #592; release 0.9.0).
-2. [#375](https://github.com/sonic182/agentica/issues/375), cached bytecode
+1. FFI-a, the core of
+   [#534](https://github.com/agentica-lang/agentica/issues/534): done (PRs #553
+   to #591, and step 1 of #592; release 0.9.0).
+2. [#375](https://github.com/agentica-lang/agentica/issues/375), cached bytecode
    (`_build/bytecode/`): done.
 3. Packages [§45](../future/45-packages.md): done.
 4. FFI-b: native libraries in packages: done; release 0.10 (above).
@@ -72,7 +73,7 @@ Second batch, after the first:
    Its needs are the heredoc and the open questions of
    [§47.9](../future/47-formatter.md#479-open-questions), which the owner
    answers when the work starts.
-6. [#396](https://github.com/sonic182/agentica/issues/396): smaller values,
+6. [#396](https://github.com/agentica-lang/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
    not only Linux. It is deferred beyond 0.10.0 and is not a prerequisite for
@@ -84,16 +85,16 @@ Weighed later (no fixed order):
    (row 7.10).
 8. The JIT (row 9.1, [§6.4](../vm/05-values-execution-builtins.md#64-jit)); it
    needs 8.1, 7.7 and 9, and comes after the FFI. What is left:
-   [#756](https://github.com/sonic182/agentica/issues/756).
-9. [#531](https://github.com/sonic182/agentica/issues/531), `type-at` on type
-   names: done in 0.8.1 (#550).
-10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer: done
-    (#670).
-11. Flaky tests [#528](https://github.com/sonic182/agentica/issues/528) and
-    [#382](https://github.com/sonic182/agentica/issues/382): closed (#603
+   [#756](https://github.com/agentica-lang/agentica/issues/756).
+9. [#531](https://github.com/agentica-lang/agentica/issues/531), `type-at` on
+   type names: done in 0.8.1 (#550).
+10. [#536](https://github.com/agentica-lang/agentica/issues/536): libFuzzer:
+    done (#670).
+11. Flaky tests [#528](https://github.com/agentica-lang/agentica/issues/528) and
+    [#382](https://github.com/agentica-lang/agentica/issues/382): closed (#603
     fixed #528; #382 did not recur).
-12. UDP [#450](https://github.com/sonic182/agentica/issues/450) (row 7.5): it
-    leaves the core plan and may be a package built on the FFI later.
+12. UDP [#450](https://github.com/agentica-lang/agentica/issues/450) (row 7.5):
+    it leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
 14. Test functions [§50](../future/50-test-functions.md#50-test-functions)
     (row 7.11).
@@ -102,11 +103,12 @@ Weighed later (no fixed order):
     ([§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), with
     `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts)) and ALPN
     (19c).
-17. [#469](https://github.com/sonic182/agentica/issues/469): the doc site.
+17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
 18. `agentica help std/MODULE` (row 22b, part 2).
-19. The Windows issues [#474](https://github.com/sonic182/agentica/issues/474),
-    [#462](https://github.com/sonic182/agentica/issues/462) and
-    [#457](https://github.com/sonic182/agentica/issues/457).
+19. The Windows issues
+    [#474](https://github.com/agentica-lang/agentica/issues/474),
+    [#462](https://github.com/agentica-lang/agentica/issues/462) and
+    [#457](https://github.com/agentica-lang/agentica/issues/457).
 20. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
 
 ### Done rows
@@ -315,12 +317,12 @@ Stable core (owner decisions, 2026-10-20 and 2026-10-21). The C core stays
 small, safe and stable: the language, the VM, the GC, the scheduler, tasks and
 channels, JSON, and the OS primitives that need the event loop (files,
 processes, timers, TCP and TLS). UDP is not in the core plan: it may be a
-package built on the FFI later. Everything else is an extension: first a
-package written in Agentica ([§45](../future/45-packages.md)), and a native
-library through the FFI (issue
-[#534](https://github.com/sonic182/agentica/issues/534)) only when it needs a
-library in C, C++ or Rust. After the FFI lands, the core changes only for bugs,
-platforms and speed (the JIT).
+package built on the FFI later. Everything else is an extension: first a package
+written in Agentica ([§45](../future/45-packages.md)), and a native library
+through the FFI (issue
+[#534](https://github.com/agentica-lang/agentica/issues/534)) only when it needs
+a library in C, C++ or Rust. After the FFI lands, the core changes only for
+bugs, platforms and speed (the JIT).
 
 Designed, not scheduled, with no row in this table:
 

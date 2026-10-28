@@ -45,7 +45,7 @@ branch such as `release/<version>`. Change only:
      `<version>...HEAD`, and add a line for the new version:
 
      ```text
-     [<version>]: https://github.com/sonic182/agentica/compare/<previous>...<version>
+     [<version>]: https://github.com/agentica-lang/agentica/compare/<previous>...<version>
      ```
 
    - Read the entries once: they must say what users see. Mark a breaking
