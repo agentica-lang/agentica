@@ -228,9 +228,9 @@ returns.
 - **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
   or `always`. `off` has no JIT; `on` is the default. At the start of a run `on`
   decides every function once (`agc_jit_settle`), in time linear in the program:
-  about 5 ms for the 174,000 instructions of the front end's bytecode on the
+  about 1.2 ms for the 174,000 instructions of the front end's bytecode on the
   Ryzen 5 3550H of `docs/vm-benchmarks.md` (`agentica run -- stage2.agcb
-  --version 0 -- --help`: median 37 ms with `off`, 41 ms with `on`). An entry of
+  --version 0 -- --help`: median 34 ms with `off`, 35 ms with `on`). An entry of
   a function is a call, a return into it, or a turn that starts in it. `on`
   compiles a function with a loop (a backward jump, or a `TAIL_CALL` of itself)
   at its 100th entry, once 32 of its entries were passes (an entry at or before

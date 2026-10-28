@@ -19,6 +19,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   sockets, stdin or files interpreted.
 - `--jit on` is the default on x86-64; `--jit off` or `AGENTICA_JIT=off` turns
   the JIT off.
+- Large programs start faster under the default `--jit on`.
 
 ## [0.14.0] - 2026-10-28
 
