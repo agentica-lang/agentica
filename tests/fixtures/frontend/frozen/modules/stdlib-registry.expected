@@ -18,3 +18,4 @@ std/test/report.agc
 std/test/runner.agc
 std/test/units.agc
 std/toml.agc
+std/uri.agc

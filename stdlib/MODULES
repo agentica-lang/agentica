@@ -17,4 +17,5 @@ test/report.agc
 test/runner.agc
 test/units.agc
 toml.agc
+uri.agc
 internal/archive_zip.agc
