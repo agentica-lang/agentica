@@ -149,7 +149,7 @@ end
 {"name":"Ana","age":25}
 ```
 
-A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value.
+A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec, and `decode`, `encode` and `from` are written only as methods: `JSON.Codec.decode(c, text)` is `CHECK-UNKNOWN-NAME`.
 
 ## Optional and nullable fields
 

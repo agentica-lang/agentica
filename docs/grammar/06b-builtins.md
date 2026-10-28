@@ -2,10 +2,12 @@
 
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `List`,
-`Map`, `Set`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`);
-there is no dynamic dispatch. `s.strip` is `String.trim(s)`, but `"a".from_int`
-is not a method. Without parentheses, `receiver.name` on a non-struct value is a
-method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
+`Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`, and
+`JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch. `s.strip`
+is `String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec
+have no function form: `JSON.Codec.decode(c, s)` is `CHECK-UNKNOWN-NAME`.
+Without parentheses, `receiver.name` on a non-struct value is a method without
+arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
 Structs and enums have no methods. The one form on a struct type is
 `Type.members`, the list of its fields (`docs/grammar/06-semantics.md`, "Structs
 and lists").
@@ -434,7 +436,9 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   `JSON.encode(x)` and `JSON.from(x)` for an `x` of type `T`. A codec follows
   the rules of an `Fn` value: it may be a parameter, a struct field or a list
   item, and it has no `to_s`, `inspect` or equality and is no constant or `ATS`
-  value.
+  value. `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`; in
+  a generic body, `IO.inspect(x)` of a `T` that is a codec prints the struct's
+  name as a String.
 - `JSON.parse` reads exactly one value, with optional surrounding whitespace
   (space, tab, CR, LF). Empty input, trailing content, invalid escapes, raw
   control characters and non-finite numbers are errors. A repeated object key

@@ -48,6 +48,10 @@ export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
   !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name)
 end
 
+## The public builtins a call can name, for the did-you-mean of an unknown name. A name with two dots
+## (JSON.Codec.decode) is a method of a builtin type, written only on a value of it, so it is left out.
+export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name| name.split(".").size < 3 end
+
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
 
 ## The builtin of that name, or an error when there is none (builtin-ref without an arity).

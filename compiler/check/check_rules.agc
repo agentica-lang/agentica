@@ -183,7 +183,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
   case rule
     Model.Rule.Plain -> return check_plain(cx, st, site)
     Model.Rule.Show -> return check_show(cx, st, site)
-    Model.Rule.Identity -> return State.expr(cx, st, site.args[0], site.expected)
+    Model.Rule.Identity -> return check_identity(cx, st, site)
     Model.Rule.Ok -> return check_ok(cx, st, site)
     Model.Rule.OkVoid -> return ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.Error -> return check_error(cx, st, site)
@@ -226,6 +226,26 @@ def check_show(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try ensure_printable(cx, out.st, out.type, Ast.expr_span(site.args[0]))
   return ok(State.Out(st: out.st, type: T.Type.Void))
+end
+
+# IO.inspect: any value, except one whose type holds a JSON.Codec, which has no inspect (a codec is its struct's name
+# at run time, and would print as that String). A T of a generic body is not looked into: it may still be a codec.
+def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  out = try State.expr(cx, st, site.args[0], site.expected)
+  if Collections.holds_codec?(cx, out.type)
+    return error(
+      State.fail_help(
+        cx,
+        out.st,
+        "CHECK-TYPE-MISMATCH",
+        "#{T.to_text(out.type)} cannot be inspected: a JSON.Codec has no inspect",
+        Ast.expr_span(site.args[0]),
+        "inspect the values the codec reads or writes instead",
+      ),
+    )
+  end
+
+  return ok(out)
 end
 
 def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
@@ -286,9 +306,11 @@ def check_json_codec(cx: State.Cx, st: State.St, site: State.Site) -> Result[Sta
   return ok(State.Out(st: st, type: T.Type.Codec(type)))
 end
 
-# codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value.
+# codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value. The receiver of a
+# codec method is a JSON.Codec: the rows are reached only as methods of one, since the parser has no function form of
+# a name with two dots (check_method gives the help for JSON.Codec.decode(...)).
 def check_codec_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  codec = try check_codec(cx, st, site.args[0])
+  codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   current = try check_decode_source(cx, codec.st, site.args[1])
   return ok(State.Out(st: current, type: T.Type.Result(T.item(codec.type))))
 end
@@ -296,20 +318,9 @@ end
 # codec.encode(value) and codec.from(value): a value of the struct of the codec, which can be written as JSON because
 # the struct can be decoded. The form gives the result type (String or Json).
 def check_codec_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  codec = try check_codec(cx, st, site.args[0])
+  codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   value = try State.expr(cx, codec.st, site.args[1], T.item(codec.type))
   return ok(State.Out(st: value.st, type: site.selected.result))
-end
-
-# The receiver of a codec method, which is a JSON.Codec.
-def check_codec(cx: State.Cx, st: State.St, receiver: Ast.Expr) -> Result[State.Out]
-  codec = try State.expr(cx, st, receiver, T.Type.Unknown)
-  if !T.is?(codec.type, "Codec")
-    wanted = T.Type.Codec(T.Type.Var("T"))
-    return error(State.mismatch(cx, codec.st, wanted, codec.type, Ast.expr_span(receiver)))
-  end
-
-  return ok(codec)
 end
 
 # The source of a decode, which is JSON text (String) or a Json value.

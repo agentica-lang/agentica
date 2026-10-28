@@ -86,7 +86,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process` (`<Process>`), `Lazy[T]`
   (`lazy.md`), `Task[R]`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
-  `Listener`, `HttpClient`, `HttpServer`.
+  `Listener`, `HttpClient`, `HttpServer`, `JSON.Codec[T]` (`JSON.codec(User)`,
+  no printing or inspect; `json.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
   `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`).

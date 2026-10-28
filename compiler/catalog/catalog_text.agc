@@ -8,15 +8,15 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
 import {
-  BARE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE, PRELUDE_ONLY,
-  PUBLIC_NAMES, RECORDS, RESERVED, STD_ONLY,
+  BARE_NAMES, CALLABLE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE,
+  PRELUDE_ONLY, PUBLIC_NAMES, RECORDS, RESERVED, STD_ONLY,
 } from "builtins"
 
 ## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help
-## among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME
-## inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the primitive
-## and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a linked
-## name).
+## among the builtin names a call can name), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME`
+## (is NAME inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the
+## primitive and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a
+## linked name).
 export def catalog_text(probes: List[String]) -> String
   lines: List[String] = []
   for name in ENTRIES.keys
@@ -130,7 +130,7 @@ def probe_line(probe: String) -> String
   rest = probe.slice(colon + 1, probe.length - colon - 1)
   case kind
     "near" ->
-      near = Suggest.did_you_mean_among(rest, PUBLIC_NAMES, [])
+      near = Suggest.did_you_mean_among(rest, CALLABLE_NAMES, [])
       return "#{probe} -> #{help_text(near)}"
     "ref" -> return "#{probe} -> #{ref_text(rest)}"
     "type" -> return "#{probe} -> #{help_text(type_help(rest))}"

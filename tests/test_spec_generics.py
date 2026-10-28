@@ -288,7 +288,8 @@ CODEC = (
 
 
 def with_codec(*lines: str, header: str = "") -> str:
-    """The struct User, the generic functions body_as and show, and a main with `c = JSON.codec(User)` then the lines."""
+    """The structs User and Bad, the generic functions body_as and show, and a main with `c = JSON.codec(User)`
+    then the lines."""
     return header + CODEC + main("c = JSON.codec(User)", *lines)
 
 
@@ -320,6 +321,15 @@ CODEC_RULES = {
         with_codec("puts(JSON.encode(Holder(codec: c)))", header="struct Holder\n  codec: JSON.Codec[User]\nend\n\n"),
         "CHECK-NOT-ENCODABLE", "Holder(codec: c)"),
     "JSON.Codec needs its type argument": (with_codec("d: JSON.Codec = c"), "CHECK-UNKNOWN-TYPE", "JSON.Codec"),
+    "a codec cannot be inspected": (with_codec("IO.inspect(c)"), "CHECK-TYPE-MISMATCH", "c"),
+    "a struct that holds a codec cannot be inspected": (
+        with_codec("IO.inspect(Holder(codec: c))", header="struct Holder\n  codec: JSON.Codec[User]\nend\n\n"),
+        "CHECK-TYPE-MISMATCH", "Holder(codec: c)"),
+    "IO.inspect of a function field that takes a codec stays valid": (
+        with_codec("IO.inspect(Hold(f: &body_as))",
+                   header="struct Hold\n  f: Fn[String, JSON.Codec[User], Result[User]]\nend\n\n"), None, None),
+    "the methods of a codec have no function form": (
+        with_codec('r = JSON.Codec.decode(c, "{}")'), "CHECK-UNKNOWN-NAME", 'JSON.Codec.decode(c, "{}")'),
 }
 
 

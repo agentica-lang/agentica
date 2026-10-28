@@ -197,8 +197,8 @@ and a task's crash line (`"task":true`) carry it too.
   `struct`/`enum`/aliases, `export def`, `def`).
 - `CHECK-MODULE-CONTEXT`: raw import/export declarations need module resolution
   before checking.
-- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema` target that is not a struct or
-  has unsupported field types.
+- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
+  struct or has unsupported field types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
   or Int-keyed maps.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is

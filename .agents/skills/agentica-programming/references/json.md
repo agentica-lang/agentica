@@ -60,7 +60,9 @@ A generic function cannot `JSON.encode(x)` or `JSON.decode(text, T)` its `T`
 parameter; the caller passes `JSON.codec(User)`. `codec.decode`, `encode` and
 `from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for that struct.
 A codec is like an `Fn` value: a parameter, field or list item, but no
-printing, `==`, constant or `ATS` value.
+printing, `inspect` (`IO.inspect` too), `==`, constant or `ATS` value. Its
+methods have no function form (`JSON.Codec.decode(c, s)` is
+`CHECK-UNKNOWN-NAME`).
 
 ```ruby
 struct User

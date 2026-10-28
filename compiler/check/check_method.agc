@@ -13,6 +13,7 @@ import CheckTypes from "check_types"
 
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
+  try codec_function(cx, st, node.target, node.name, node.span)
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if node.name == "each" and foreach_call?(node.target)
     return error(
@@ -42,12 +43,37 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
     _ -> st = st
   end
 
+  try codec_function(cx, st, node.target, node.name, node.span)
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if field_target?(cx, target.type, node.name)
     return check_struct_field(cx, target.st, node, target.type)
   end
 
   return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
+end
+
+# JSON.Codec.decode(codec, text) and the other methods of a codec written as functions: CHECK-UNKNOWN-NAME, since they
+# are methods only (a name with two dots has no function form). Any other target passes.
+def codec_function(cx: State.Cx, st: State.St, target: Ast.Expr, name: String, span: Source.Span) -> Result[Bool]
+  case target
+    Ast.Expr.TypeName(type_name) ->
+      if type_name.name == "JSON.Codec"
+        return error(
+          State.fail_help(
+            cx,
+            st,
+            "CHECK-UNKNOWN-NAME",
+            "JSON.Codec.#{name} is no function: decode, encode and from are methods of a codec",
+            span,
+            "call it on a codec value: codec.#{name}(...)",
+          ),
+        )
+      end
+
+    _ -> return ok(true)
+  end
+
+  return ok(true)
 end
 
 # Type.members: the fields of a struct type, in declaration order, as a List[StructMember]. Lowering builds the list
