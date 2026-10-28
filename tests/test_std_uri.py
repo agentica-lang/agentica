@@ -25,15 +25,20 @@ def driver(tmp_path_factory):
 
 
 def call(driver, cases):
-    """Run [(op, text_or_pairs)] through the driver and return one reply dict per case."""
+    """Run [(op, text_or_pairs)] through the driver and return one reply dict per case.
+
+    Pairs are [name, value] lists here, as Python's urllib has them; the driver takes and gives {"name", "value"}.
+    """
     lines = []
     for op, arg in cases:
-        pairs = arg if isinstance(arg, list) else []
+        pairs = [{"name": n, "value": v} for n, v in arg] if isinstance(arg, list) else []
         text = "" if isinstance(arg, list) else arg
         lines.append(json.dumps({"op": op, "text": text, "pairs": pairs}))
     result = run_vm(driver, stdin=("\n".join(lines) + "\n").encode("utf-8"))
     assert result.code == 0, result.stderr
     replies = [json.loads(line) for line in result.stdout.splitlines()]
+    for reply in replies:
+        reply["pairs"] = [[pair["name"], pair["value"]] for pair in reply["pairs"]]
     assert len(replies) == len(cases)
     return replies
 
@@ -114,9 +119,6 @@ ERROR_CASES = [
     ("decode_www_form", "a=1&b=%zz", "invalid %-encoding (%zz)"),
     ("decode_www_form", "%4=1", "invalid %-encoding (%4)"),
     ("decode_www_form", "a=%ff", "invalid UTF-8 after decoding (%ff)"),
-    ("encode_www_form", [["a", "1"], ["b"]], "pair 1 has 1 items, expected a name and a value"),
-    ("encode_www_form", [["a", "1", "2"]], "pair 0 has 3 items, expected a name and a value"),
-    ("encode_www_form", [[]], "pair 0 has 0 items, expected a name and a value"),
 ]
 
 

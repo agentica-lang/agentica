@@ -8,7 +8,7 @@ import URI from "std/uri"
 struct Case
   op: String
   text: String
-  pairs: List[List[String]]
+  pairs: List[URI.Pair]
 end
 
 # `message` is empty on success. `text` is the string result and `pairs` the pairs of `decode_www_form`.
@@ -16,7 +16,7 @@ struct Reply
   success: Bool
   message: String
   text: String
-  pairs: List[List[String]]
+  pairs: List[URI.Pair]
 end
 
 def text_reply(result: Result[String]) -> Reply
@@ -32,7 +32,7 @@ def run_case(c: Case) -> Reply
     "encode_uri_component" -> return text_reply(ok(URI.encode_uri_component(c.text)))
     "decode_www_form_component" -> return text_reply(URI.decode_www_form_component(c.text))
     "decode_uri_component" -> return text_reply(URI.decode_uri_component(c.text))
-    "encode_www_form" -> return text_reply(URI.encode_www_form(c.pairs))
+    "encode_www_form" -> return text_reply(ok(URI.encode_www_form(c.pairs)))
     "decode_www_form" ->
       case URI.decode_www_form(c.text)
         ok(pairs) -> return Reply(success: true, message: "", text: "", pairs: pairs)

@@ -11,9 +11,11 @@ URI.encode_www_form_component(text: String) -> String
 URI.encode_uri_component(text: String) -> String
 URI.decode_www_form_component(text: String) -> Result[String]
 URI.decode_uri_component(text: String) -> Result[String]
-URI.encode_www_form(pairs: List[List[String]]) -> Result[String]
-URI.decode_www_form(query: String) -> Result[List[List[String]]]
+URI.encode_www_form(pairs: List[URI.Pair]) -> String
+URI.decode_www_form(query: String) -> Result[List[URI.Pair]]
 ```
+
+`URI.Pair(name: String, value: String)` is one piece of a query string.
 
 ```agentica
 import URI from "std/uri"
@@ -23,7 +25,7 @@ def main() -> Void
   puts(URI.encode_uri_component("café au lait"))
   puts(URI.decode_uri_component("a+b%20c"))
   puts(URI.decode_www_form("a=1&a=2&b=&k"))
-  puts(URI.encode_www_form([["q", "a b"], ["q", "~"]]))
+  puts(URI.encode_www_form([URI.Pair(name: "q", value: "a b"), URI.Pair(name: "q", value: "~")]))
   puts(URI.decode_www_form_component("100%"))
 end
 ```
@@ -32,8 +34,8 @@ end
 caf%C3%A9+au+lait
 caf%C3%A9%20au%20lait
 ok("a+b c")
-ok([["a", "1"], ["a", "2"], ["b", ""], ["k", ""]])
-ok("q=a+b&q=%7E")
+ok([Pair(name: "a", value: "1"), Pair(name: "a", value: "2"), Pair(name: "b", value: ""), Pair(name: "k", value: "")])
+q=a+b&q=%7E
 error("invalid %-encoding (100%)")
 ```
 
@@ -47,8 +49,8 @@ A decoder returns an `error` when a `%` is not followed by two hex digits (`inva
 
 ## Query strings
 
-A query string is a list of `[name, value]` pairs, as in Ruby. A name may repeat and the order is kept, so `a=1&a=2` is two pairs. `decode_www_form` splits on `&` and then on the first `=`: a piece without `=` has the value `""`, and `a=b=c` has the value `b=c`. It returns the error of the first piece that does not decode.
+A query string is a list of `URI.Pair`, Ruby's `[name, value]` arrays. A name may repeat and the order is kept, so `a=1&a=2` is two pairs. `decode_www_form` splits on `&` and then on the first `=`: a piece without `=` has the value `""`, and `a=b=c` has the value `b=c`. It returns the error of the first piece that does not decode.
 
 `decode_www_form` differs from Ruby in two ways. An empty piece (`a=1&&b=2`, a trailing `&`) is skipped, as in Python, Rack and browsers, where Ruby returns `["", ""]` for it. A bad `%` is an error, where Ruby leaves it in the text. Only `&` separates pieces.
 
-`encode_www_form` joins the pairs as `name=value` with `encode_www_form_component`, so the output of `decode_www_form` goes back in unchanged. It returns an `error` for a pair that does not have exactly two items; Ruby's one-item pair (a name without `=`) is not accepted, write `[name, ""]`.
+`encode_www_form` joins the pairs as `name=value` with `encode_www_form_component` and cannot fail, so the output of `decode_www_form` goes back in unchanged. Ruby's one-item pair (a name without `=`) has no form here: write `Pair(name: "k", value: "")`, which gives `k=`.
