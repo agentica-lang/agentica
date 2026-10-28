@@ -21,7 +21,7 @@
 typedef struct {
   int64_t max_steps, flush_timeout, driver, schedulers;
   uint32_t seed;
-  /* The agc_jit_mode of --jit or AGENTICA_JIT (vm/jit/jit.h), off by default. */
+  /* The agc_jit_mode of --jit or AGENTICA_JIT (vm/jit/jit.h), on by default (a host without an emitter interprets). */
   int jit;
   agc_style style;
   const char *source_root;

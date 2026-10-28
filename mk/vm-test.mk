@@ -138,9 +138,10 @@ vm-diff-build: dist/agentica$(EXE)
 vm-diff-test:
 	@$(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
-# The golden tests with the full --max-steps sweep (weekly in CI)
+# The golden tests with the full --max-steps sweep (weekly in CI), with AGENTICA_JIT=off: the interpreter alone, since
+# `on`, the default, runs in every other suite
 sweep-full: vm-diff-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=off AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
@@ -157,24 +158,26 @@ test-shared: dist/agentica$(EXE)
 # The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
 # the JIT can compile compiled at its first entry (AGENTICA_JIT=always,
 # docs/vm/05-values-execution-builtins.md §6.4): no output may depend on the tier. Then half of the golden shards with
-# AGENTICA_JIT=on, the mode that compiles hot functions only: the odd or the even shards by the last hex digit of
-# GITHUB_SHA (else HEAD), so successive commits cover all of them; VM_JIT_ON_TESTS names others.
-VM_JIT_ON_TESTS ?=
+# AGENTICA_JIT=off, the interpreter alone (make test runs them with `on`, the default): the odd or the even shards by
+# the last hex digit of GITHUB_SHA (else HEAD), so successive commits cover all of them; VM_JIT_OFF_TESTS names others.
+VM_JIT_OFF_TESTS ?=
 vm-jit-test: dist/agentica$(EXE)
 	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_vm_multicore.py"
-	@tests="$(VM_JIT_ON_TESTS)"; if [ -z "$$tests" ]; then \
+	@tests="$(VM_JIT_OFF_TESTS)"; if [ -z "$$tests" ]; then \
 	  sha=$${GITHUB_SHA:-$$(git rev-parse HEAD 2>/dev/null || echo 0)}; parity=$$(( 0x$$(printf '%s' "$$sha" | tail -c 1) % 2 )); \
 	  tests=$$(printf '%s\n' $(VM_DIFF_TESTS) | awk -v p=$$parity 'NR % 2 == p'); fi; \
-	  echo "vm-jit-test: AGENTICA_JIT=on over" $$tests; \
-	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=on $(MAKE) --no-print-directory test-py TESTS="$$tests"
+	  echo "vm-jit-test: AGENTICA_JIT=off over" $$tests; \
+	  AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=off $(MAKE) --no-print-directory test-py TESTS="$$tests"
 
 # The goldens and the stack traces with AGENTICA_JIT=always on the sanitizer binary that an earlier step built
 # (SANITIZE=1, as vm-sanitize-test), with the sampled sweep: it checks the C helpers that compiled code calls and the
 # exits it takes under ASan and UBSan; the emitted machine code itself is not instrumented, so a fault there shows only
-# as a crash. Weekly in sweep.yml.
+# as a crash. SANITIZE_JIT=off runs the same tests on the interpreter alone (vm-sanitize-test runs the default, `on`).
+# Both weekly in sweep.yml.
+SANITIZE_JIT ?= always
 vm-sanitize-jit-test: vm-sanitize-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py \
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=$(SANITIZE_JIT) AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py" JOBS=$(SANITIZE_JOBS)
 
 

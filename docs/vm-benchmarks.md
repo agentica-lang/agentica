@@ -24,8 +24,9 @@ runners:
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of
 every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to
 skip the `hello.agc` start-up check and the front-end rows (see "Front end").
-`run.py` has no `--jit`; `AGENTICA_JIT=on python3 benchmarks/run.py ...` sets
-the JIT mode of every program it runs (see "JIT").
+`run.py` has no `--jit`; programs run with the default `--jit on`, and
+`AGENTICA_JIT=off python3 benchmarks/run.py ...` sets the JIT mode of every
+program it runs (see "JIT").
 
 Every runner must print the same output, or the row is a mismatch and the script
 exits 1. A program the VM cannot compile yet shows as `unsupported`, with its
@@ -46,9 +47,9 @@ noise, and build several layouts (padding) before blaming a change.
 
 ## Results
 
-Run of 2026-10-11, median of 5 runs at size 1, on an AMD Ryzen 5 3550H (4
-cores, 12 GB RAM), Debian 13, gcc 14.2, Python 3.13.5; a shared host, so the
-numbers are rough. The third speed pass (below) later made the loop-bound rows
+Run of 2026-10-11 with `--jit off` (the default then), median of 5 runs at size
+1, on an AMD Ryzen 5 3550H (4 cores, 12 GB RAM), Debian 13, gcc 14.2, Python
+3.13.5; a shared host, so the numbers are rough. The third speed pass (below) later made the loop-bound rows
 1.2 to 2 times faster.
 
 | Program | Work | VM s | Python s | VM / Python |

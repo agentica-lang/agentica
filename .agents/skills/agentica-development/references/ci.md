@@ -108,10 +108,11 @@ comment), then a step that calls it. Targets that are not obvious:
   each stage. They need Docker with buildx and about 6 GB; no CI job calls
   them. Wine is no substitute for native Windows (process creation, UTF-16
   command lines and symlinks can differ).
-- `sweep-full` runs the golden shards with `AGENTICA_SWEEP=full`.
+- `sweep-full` runs the golden shards with `AGENTICA_SWEEP=full` and
+  `AGENTICA_JIT=off`.
   `vm-jit-test` runs the goldens with `AGENTICA_JIT=always`, then half the
-  shards with `on` (odd or even by the last digit of `GITHUB_SHA`;
-  `VM_JIT_ON_TESTS` names others).
+  shards with `off` (odd or even by the last digit of `GITHUB_SHA`;
+  `VM_JIT_OFF_TESTS` names others).
   `test-distribution` copies `dist/agentica` away from the checkout and runs
   it (`tests/test_stdlib_distribution.py`).
 
@@ -301,14 +302,15 @@ Skip rules, checked by the report:
   `always`, via the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`, to stage2) on
   the release VM; job `jit-stress` runs `vm-gc-stress-jit` and
   `vm-sanitize-jit-test` (the goldens with `AGENTICA_JIT=always` on the GC
-  stress and the ASan binaries, sampled sweep).
-- `jit-soak.yml`: daily 04:30 UTC and by hand, on the four systems,
-  `make test-jit-on`: the conformance areas plus the destructive group (on a
-  GitHub-hosted runner, after `vm-test-binaries`) with `AGENTICA_JIT=on`; the
-  report names the failed cases, and a canary in `tests/test_vm_jit.py` fails
-  if the variable stops reaching the VMs. A test that needs one mode passes
-  `--jit` itself (the flag wins). It is the only daily schedule; `sweep.yml`
-  is weekly.
+  stress and the ASan binaries, sampled sweep), then `vm-sanitize-jit-test
+  SANITIZE_JIT=off` on the ASan binary.
+- `jit-soak.yml`: daily 04:30 UTC and by hand, on the three x86-64 systems,
+  `make test-jit-off`: the conformance areas plus the destructive group (on a
+  GitHub-hosted runner, after `vm-test-binaries`) with `AGENTICA_JIT=off`: the
+  interpreter alone, since `on` is the default. The report names the failed
+  cases, and a canary in `tests/test_vm_jit.py` fails if the variable stops
+  reaching the VMs. A test that needs one mode passes `--jit` itself (the flag
+  wins). It is the only daily schedule; `sweep.yml` is weekly.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.
 
 ## Release (`release.yml`)
