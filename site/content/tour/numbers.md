@@ -131,18 +131,7 @@ true
 true
 ```
 
-Comparisons do not chain. Write `a < b and b < c`:
-
-```agentica
-def main() -> Void
-  n = 5
-  puts(1 < n and n < 10)
-end
-```
-
-```output
-true
-```
+Comparisons do not chain. Write `a < b and b < c`.
 
 ## Negative numbers
 

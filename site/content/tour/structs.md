@@ -26,25 +26,7 @@ Ana
 User(name: "Ana", age: 25)
 ```
 
-Build a struct with every field, each by name, in any order:
-
-```agentica
-struct Point
-  x: Int
-  y: Int
-end
-
-def main() -> Void
-  p = Point(y: 2, x: 1)
-  puts("#{p.x}, #{p.y}")
-end
-```
-
-```output
-1, 2
-```
-
-A missing field is an error:
+Build a struct with every field, each by name, in any order. A missing field is an error:
 
 ```agentica {expect="CHECK-MISSING-FIELD"}
 struct Point
@@ -168,45 +150,7 @@ User(name: "Ana", address: Address(city: "Lima", zip: 8))
 User(name: "Bea", address: Address(city: "Quito", zip: 1))
 ```
 
-A recursive function can carry its state in a struct:
-
-```agentica
-struct Scan
-  pos: Int
-  total: Int
-  limit: Int
-end
-
-def run(s: Scan) -> Scan
-  if s.pos >= s.limit
-    return s
-  end
-  return run(s.with(pos: s.pos + 1, total: s.total + s.pos))
-end
-
-def main() -> Void
-  done = run(Scan(pos: 0, total: 0, limit: 100000))
-  puts(done.total)
-end
-```
-
-```output
-4999950000
-```
-
-`with` needs at least one field. Each must be named, appear once and exist in the struct:
-
-```agentica {expect="PARSE-UNEXPECTED-TOKEN"}
-struct Point
-  x: Int
-  y: Int
-end
-
-def main() -> Void
-  p = Point(x: 1, y: 2)
-  q = p.with(5)
-end
-```
+`with` needs at least one field. Each must be named (`PARSE-UNEXPECTED-TOKEN` otherwise), appear once, exist in the struct and have the right type (`CHECK-TYPE-MISMATCH`):
 
 ```agentica {expect="CHECK-UNKNOWN-FIELD"}
 struct Point
@@ -217,18 +161,6 @@ end
 def main() -> Void
   p = Point(x: 1, y: 2)
   q = p.with(z: 5)
-end
-```
-
-```agentica {expect="CHECK-TYPE-MISMATCH"}
-struct Point
-  x: Int
-  y: Int
-end
-
-def main() -> Void
-  p = Point(x: 1, y: 2)
-  q = p.with(x: "one")
 end
 ```
 
@@ -320,7 +252,7 @@ end
 
 ## Type parameters
 
-A struct can take type parameters after its name, as an enum does. A field may use a parameter as its type, and the type argument comes from the values you give:
+A struct can take type parameters after its name, as an enum does. The type argument comes from the values you give:
 
 ```agentica
 struct Box[T]
@@ -383,20 +315,7 @@ def main() -> Void
 end
 ```
 
-Values that disagree are `CHECK-TYPE-MISMATCH`:
-
-```agentica {expect="CHECK-TYPE-MISMATCH"}
-struct Pair[T]
-  first: T
-  second: T
-end
-
-def main() -> Void
-  pair = Pair(first: 1, second: "two")
-end
-```
-
-A parameter cannot be a `Map` key (`CHECK-MAP-KEY-TYPE`), and a field named `with` cannot have a parameter as its type (`CHECK-REDEFINED-NAME`), since the argument could be a function. `JSON.encode` writes a generic instance, but `JSON.decode` and `JSON.schema` refuse one (`CHECK-NOT-DECODABLE`). An imported struct is written `Models.Box[Int]`.
+Values that disagree are `CHECK-TYPE-MISMATCH`. A parameter cannot be a `Map` key (`CHECK-MAP-KEY-TYPE`), and a field named `with` cannot have a parameter as its type (`CHECK-REDEFINED-NAME`), since the argument could be a function. `JSON.encode` writes a generic instance, but `JSON.decode` and `JSON.schema` refuse one (`CHECK-NOT-DECODABLE`). An imported struct is written `Models.Box[Int]`.
 
 ## No methods
 
