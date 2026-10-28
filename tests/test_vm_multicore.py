@@ -2697,13 +2697,16 @@ def test_http_waits_queued_on_the_io_thread_leave_on_cancel_and_end_at_close(tmp
 # waits for it, so the test that owns the server finds no task of it still running (RUNTIME-TEST-PENDING-TASKS).
 HTTP_WAIT_BUSY = r"""import HTTP from "std/http"
 
-# Connects to the port in the path to say that it started, then spins until the close of the server cancels it.
+# Connects to the port in the path to say that it started, then spins until the close of the server cancels it. Each
+# round reverses 10,000 characters: real time in few steps, without parking, so the step budget of `agentica test`
+# lasts seconds with or without the JIT, far past the close (a loop of additions spent it in 3.5 ms under --jit on).
 def spin(request: HttpRequest) -> Result[HttpResponse]
   port = String.to_int!(String.slice(request.path, 1, String.length(request.path) - 1))
   signal = try TCP.connect("127.0.0.1", port, 5000)
+  text = List.repeat("ab", 5000).join("")
   n = 0
   while true
-    n = n + 1
+    n = n + text.reverse.length
   end
   TCP.close(signal)
   return ok(HttpResponse(status: 200, headers: [], body: "#{n}"))

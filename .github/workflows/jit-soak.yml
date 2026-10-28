@@ -2,11 +2,11 @@ name: JIT off soak
 
 # The interpreter alone, since `--jit on` is the default (docs/vm/05-values-execution-builtins.md §6.4) and every other
 # workflow runs the tests with it: every day, the Python tests of each system (the conformance areas of platforms.yml,
-# plus the destructive group) run with AGENTICA_JIT=off in the environment of every VM they start, on the four systems.
-# The mode must change no exit code, output or diagnostic, so any failure is a bug of the interpreter that the JIT
-# hides or a test that depends on the mode. macOS arm64 has no emitter and interprets in every mode, so that job runs
-# what platforms.yml runs. A failure fails the job, and the report in the job summary names the failed cases. Not on
-# pull requests, so their CI time does not change; run it by hand on a branch with
+# plus the destructive group) run with AGENTICA_JIT=off in the environment of every VM they start, on the three x86-64
+# systems. The mode must change no exit code, output or diagnostic, so any failure is a bug of the interpreter that the
+# JIT hides or a test that depends on the mode. macOS arm64 is left out: it has no emitter, so it interprets in every
+# mode and platforms.yml already runs these tests there. A failure fails the job, and the report in the job summary
+# names the failed cases. Not on pull requests, so their CI time does not change; run it by hand on a branch with
 # `gh workflow run jit-soak.yml --ref BRANCH`. A manual run never cancels the scheduled one (cancel-in-progress: false).
 on:
   schedule:
@@ -42,11 +42,6 @@ jobs:
             shell: msys2 {0}
           - platform: macos-x86_64
             runner: macos-15-intel
-            make: gmake
-            python: python3
-            shell: bash
-          - platform: macos-arm64
-            runner: macos-latest
             make: gmake
             python: python3
             shell: bash

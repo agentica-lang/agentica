@@ -702,8 +702,8 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->std_count = launch->std_count;
   rt->schedulers = front_end ? 1 : options->schedulers;
   /* The front end runs in the interpreter: --jit, `on` by default, is for the user's program. Under `on` the front end
-     compiles a small program slower (a hello world 39 to 43 ms, examples/blocks.agc 43 to 53 ms: its own compiles
-     cost more than they save), though it compiles itself faster. Test-only:
+     compiles a small program slower (on such a short run its own compiles cost more than they save), though it
+     compiles itself faster. Test-only:
      AGENTICA_VM_TEST_FRONT_END_JIT=on|always gives the front end that mode, so the self-compile can show that the JIT
      makes the same bytes (make vm-jit-self-compile); any other value is off. */
   agc_jit_mode mode = (agc_jit_mode)options->jit;

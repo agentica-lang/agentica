@@ -47,9 +47,9 @@ noise, and build several layouts (padding) before blaming a change.
 
 ## Results
 
-Run of 2026-10-11, median of 5 runs at size 1, on an AMD Ryzen 5 3550H (4
-cores, 12 GB RAM), Debian 13, gcc 14.2, Python 3.13.5; a shared host, so the
-numbers are rough. The third speed pass (below) later made the loop-bound rows
+Run of 2026-10-11 with `--jit off` (the default then), median of 5 runs at size
+1, on an AMD Ryzen 5 3550H (4 cores, 12 GB RAM), Debian 13, gcc 14.2, Python
+3.13.5; a shared host, so the numbers are rough. The third speed pass (below) later made the loop-bound rows
 1.2 to 2 times faster.
 
 | Program | Work | VM s | Python s | VM / Python |

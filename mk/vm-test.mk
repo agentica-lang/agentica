@@ -138,9 +138,10 @@ vm-diff-build: dist/agentica$(EXE)
 vm-diff-test:
 	@$(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
-# The golden tests with the full --max-steps sweep (weekly in CI)
+# The golden tests with the full --max-steps sweep (weekly in CI), with AGENTICA_JIT=off: the interpreter alone, since
+# `on`, the default, runs in every other suite
 sweep-full: vm-diff-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=off AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
@@ -172,9 +173,11 @@ vm-jit-test: dist/agentica$(EXE)
 # The goldens and the stack traces with AGENTICA_JIT=always on the sanitizer binary that an earlier step built
 # (SANITIZE=1, as vm-sanitize-test), with the sampled sweep: it checks the C helpers that compiled code calls and the
 # exits it takes under ASan and UBSan; the emitted machine code itself is not instrumented, so a fault there shows only
-# as a crash. Weekly in sweep.yml.
+# as a crash. SANITIZE_JIT=off runs the same tests on the interpreter alone (vm-sanitize-test runs the default, `on`).
+# Both weekly in sweep.yml.
+SANITIZE_JIT ?= always
 vm-sanitize-jit-test: vm-sanitize-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py \
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=$(SANITIZE_JIT) AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} $(MAKE) --no-print-directory test-py \
 	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py" JOBS=$(SANITIZE_JOBS)
 
 

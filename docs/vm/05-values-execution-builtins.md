@@ -217,19 +217,24 @@ ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 ### 6.4 JIT
 
 The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64
-machine code. The front end runs in the interpreter, except under the
-test-only `AGENTICA_VM_TEST_FRONT_END_JIT`. The JIT changes no exit code,
-output, diagnostic, span or step count (`tests/test_vm_jit.py`). `vm/jit/jit.h`
-is its only boundary with the interpreter: the interpreter asks for a function's
-code, enters it at the frame's `pc`, and handles the exit it returns.
+machine code. The front end runs in the interpreter, except under the test-only
+`AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run that compiles a small
+program, its own compiles cost more than they save. The JIT changes no exit
+code, output, diagnostic, span or step count (`tests/test_vm_jit.py`).
+`vm/jit/jit.h` is its only boundary with the interpreter: the interpreter asks
+for a function's code, enters it at the frame's `pc`, and handles the exit it
+returns.
 
 - **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
-  or `always`. `off` has no JIT; `on` is the default. An entry of a function is
-  a call, a return into it, or a turn that starts in it. `on` compiles a
-  function with a loop (a backward jump, or a `TAIL_CALL` of itself) at its
-  100th entry, once 32 of its entries were passes (an entry at or before the
-  previous one: a new call, or a loop that went round). It keeps a function out
-  when one of its innermost loops has more than one instruction that leaves
+  or `always`. `off` has no JIT; `on` is the default. At the start of a run `on`
+  decides every function once (`agc_jit_settle`), in time linear in the program:
+  5.5 ms for the 174,000 instructions of the front end's bytecode on the Ryzen 5
+  3550H of `docs/vm-benchmarks.md`, against a 36 ms run of `--help`. An entry of
+  a function is a call, a return into it, or a turn that starts in it. `on`
+  compiles a function with a loop (a backward jump, or a `TAIL_CALL` of itself)
+  at its 100th entry, once 32 of its entries were passes (an entry at or before
+  the previous one: a new call, or a loop that went round). It keeps a function
+  out when one of its innermost loops has more than one instruction that leaves
   compiled code per 16 instructions; a builtin that may park (a channel or task
   wait, a sleep, a read of stdin, a file, path, process or socket call:
   `agc_jit_parking` in `vm/jit/jit.c`) counts as three. A function without a
@@ -374,7 +379,8 @@ code, enters it at the frame's `pc`, and handles the exit it returns.
   vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
   with `off`, in CI. `make vm-jit-self-compile` compiles the front end under
   each mode and compares the bytes. `make test-jit-off` runs the conformance
-  areas with `off`, and `jit-soak.yml` runs it daily on four systems.
+  areas with `off`, and `jit-soak.yml` runs it daily on the three x86-64
+  systems.
 - **Fuzzing and layout.** `make vm-libfuzz` needs clang and runs on Linux. It
   runs each accepted input with `always` and `on` and compares the result with
   the interpreter's. Only runs that read no clock are compared. A JIT run that
