@@ -10729,6 +10729,106 @@
       "start": [1, 1]
     }
   ],
+  "Base64 and Digest.hexencode take a List[Int] and give a String; the strict decodes give a Result; Base64 and Digest are reserved names": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  text: String = Base64.strict_encode64([102, 111])",
+        "  lines: String = Base64.encode64([])",
+        "  url: String = Base64.urlsafe_encode64([251], false) + Base64.urlsafe_encode64([251])",
+        "  hex: String = Digest.hexencode([255])",
+        "  loose: List[Int] = Base64.decode64(text)",
+        "  bytes: Result[List[Int]] = Base64.strict_decode64(text)",
+        "  more: Result[List[Int]] = Base64.urlsafe_decode64(url)",
+        "  back: Result[List[Int]] = Digest.hexdecode(hex)",
+        "  puts(lines + hex + loose.size.to_s + bytes.ok?.to_s + more.ok?.to_s + back.ok?.to_s)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = Base64.strict_encode64(\"abc\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 30],
+      "covers": "\"abc\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b = Base64.decode64([1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 23],
+      "covers": "[1]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = Base64.urlsafe_encode64([1], 0)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 36],
+      "covers": "0",
+      "expected": "Bool",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = Digest.hexdecode(\"00\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "Digest.hexdecode(\"00\")",
+      "expected": "List[Int]",
+      "actual": "Result[List[Int]]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = Base64.strict_encode64([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "Base64.strict_encode64([1], [2])"
+    },
+    {
+      "program": [
+        "struct Base64",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "enum Digest",
+        "  Hex",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Std.source takes a path and gives a Result[String]; Std is a reserved type name": [
     {
       "program": [

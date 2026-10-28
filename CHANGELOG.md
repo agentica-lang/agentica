@@ -8,8 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
+
 ### Changed
 
+- **Breaking:** `Base64` and `Digest` are reserved names.
 - `--jit on` keeps short loops that wait on channels, tasks, processes,
   sockets, stdin or files interpreted.
 

@@ -5,9 +5,9 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name; the Zlib rows and then the ATS rows are
-## appended last, in contract order, so the positions of the existing rows
-## never shift.
+## Every builtin, sorted by name; the Zlib rows, the ATS rows and then the
+## Base64 and Digest rows are appended last, in contract order, so the
+## positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -19,7 +19,7 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57)
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -238,9 +238,11 @@ export OPAQUE_TYPES: List[String] = [
 export RESERVED_TYPE_NAMES: List[String] = [
     "ATS",
     "Await",
+    "Base64",
     "Bool",
     "Channel",
     "Crypto",
+    "Digest",
     "Dir",
     "File",
     "FileHandle",
@@ -5346,6 +5348,108 @@ ROWS_57: List[Model.Builtin] = [
       implementation: "ATS.to_map",
       effects: [],
       description: "A snapshot of the table as a Map in first-insertion order; VM only.",
+      alternatives: [],
+    ),
+  ]
+
+## The Base64 and hex rows; appended last so the positions of the existing rows never shift.
+ROWS_58: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Base64.encode64",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Base64.encode64",
+      effects: [],
+      description: (
+        "Encode bytes (each 0..255) as padded base64 (RFC 4648) in lines of 60 characters, each ending in a " +
+        "newline, as Ruby does; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Base64.strict_encode64",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Base64.strict_encode64",
+      effects: [],
+      description: "Encode bytes (each 0..255) as padded base64 (RFC 4648) on one line with no newline; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Base64.urlsafe_encode64",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "padding", type: Types.Type.Bool, default: Model.Default.Flag(true)),
+      ],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Base64.urlsafe_encode64",
+      effects: [],
+      description: (
+        "Encode bytes (each 0..255) as base64url (RFC 4648 section 5), with the = padding unless padding is false; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Base64.decode64",
+      parameters: [Model.Named(name: "text", type: Types.Type.String)],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Base64.decode64",
+      effects: [],
+      description: (
+        "Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two " +
+        "places ends the text; never an error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Base64.strict_decode64",
+      parameters: [Model.Named(name: "text", type: Types.Type.String)],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Base64.strict_decode64",
+      effects: [],
+      description: (
+        "Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Base64.urlsafe_decode64",
+      parameters: [Model.Named(name: "text", type: Types.Type.String)],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Base64.urlsafe_decode64",
+      effects: [],
+      description: (
+        "Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.hexdecode",
+      parameters: [Model.Named(name: "text", type: Types.Type.String)],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Digest.hexdecode",
+      effects: [],
+      description: (
+        "Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Digest.hexencode",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Digest.hexencode",
+      effects: [],
+      description: "Encode bytes (each 0..255) as two lowercase hex digits each; VM only.",
       alternatives: [],
     ),
   ]

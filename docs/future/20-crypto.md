@@ -30,7 +30,8 @@ Crypto.seal(key: Bytes, plain: Bytes) -> Result[Bytes]   # AEAD
 Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
 ```
 
-- Hex and Base64 encoding go here only if no other module has them by then.
+- Hex and Base64 are the `Digest.hexencode`/`hexdecode` and `Base64` builtins
+  (`docs/grammar/06b-builtins.md`).
 - `password_hash` uses Argon2id (OpenSSL 3.2 or later, so always with the
   vendored 3.5); the hash string carries its algorithm and parameters, so verify
   needs no settings. Argon2 uses `OSSL_set_max_threads` for its lanes.

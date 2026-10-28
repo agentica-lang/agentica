@@ -81,3 +81,23 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   returns the 32 digest bytes. An item outside 0..255 halts
   (`RUNTIME-INVALID-NUMBER`). Its time grows with the list. `Crypto` is a
   reserved type name.
+
+```text
+Base64.strict_encode64(data: List[Int]) -> String     # padded, one line
+Base64.encode64(data: List[Int]) -> String            # lines of 60 chars, each ends in "\n"
+Base64.urlsafe_encode64(data: List[Int], padding: Bool = true) -> String  # - and _
+Base64.strict_decode64(text: String) -> Result[List[Int]]
+Base64.urlsafe_decode64(text: String) -> Result[List[Int]]  # padded or not
+Base64.decode64(text: String) -> List[Int]            # lenient, never fails
+Digest.hexencode(data: List[Int]) -> String           # lowercase
+Digest.hexdecode(text: String) -> Result[List[Int]]   # either case
+```
+
+- `Base64` and `hexencode` behave as Ruby's (`hexdecode` is Agentica's own
+  inverse, `error("invalid hex")`): `strict_decode64` and `urlsafe_decode64`
+  give `error("invalid base64")` for anything but base64 (no newlines);
+  `decode64` skips other characters and stops at a `=` padding. Text goes
+  through `String.to_bytes` and `String.from_bytes`:
+  `Base64.strict_encode64(String.to_bytes("hi"))`. An encoded item outside
+  0..255 halts (`RUNTIME-INVALID-NUMBER`). `Base64` and `Digest` are reserved
+  type names.
