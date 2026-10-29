@@ -5413,39 +5413,39 @@ ROWS_57: List[Model.Builtin] = [
 ROWS_58: List[Model.Builtin] = [
     Model.Builtin(
       name: "Base64.encode64",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Base64.encode64",
+      implementation: "Base64.encode64.bytes",
       effects: [],
       description: (
-        "Encode bytes (each 0..255) as padded base64 (RFC 4648) in lines of 60 characters, each ending in a " +
+        "Encode bytes as padded base64 (RFC 4648) in lines of 60 characters, each ending in a " +
         "newline, as Ruby does; VM only."
       ),
       alternatives: [],
     ),
     Model.Builtin(
       name: "Base64.strict_encode64",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Base64.strict_encode64",
+      implementation: "Base64.strict_encode64.bytes",
       effects: [],
-      description: "Encode bytes (each 0..255) as padded base64 (RFC 4648) on one line with no newline; VM only.",
+      description: "Encode bytes as padded base64 (RFC 4648) on one line with no newline; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
       name: "Base64.urlsafe_encode64",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "padding", type: Types.Type.Bool, default: Model.Default.Flag(true)),
       ],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Base64.urlsafe_encode64",
+      implementation: "Base64.urlsafe_encode64.bytes",
       effects: [],
       description: (
-        "Encode bytes (each 0..255) as base64url (RFC 4648 section 5), with the = padding unless padding is false; " +
+        "Encode bytes as base64url (RFC 4648 section 5), with the = padding unless padding is false; " +
         "VM only."
       ),
       alternatives: [],
@@ -5453,9 +5453,9 @@ ROWS_58: List[Model.Builtin] = [
     Model.Builtin(
       name: "Base64.decode64",
       parameters: [Model.Named(name: "text", type: Types.Type.String)],
-      result: Types.Type.List(Types.Type.Int),
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Base64.decode64",
+      implementation: "Base64.decode64.bytes",
       effects: [],
       description: (
         "Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two " +
@@ -5466,9 +5466,9 @@ ROWS_58: List[Model.Builtin] = [
     Model.Builtin(
       name: "Base64.strict_decode64",
       parameters: [Model.Named(name: "text", type: Types.Type.String)],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Base64.strict_decode64",
+      implementation: "Base64.strict_decode64.bytes",
       effects: [],
       description: (
         "Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
@@ -5478,9 +5478,9 @@ ROWS_58: List[Model.Builtin] = [
     Model.Builtin(
       name: "Base64.urlsafe_decode64",
       parameters: [Model.Named(name: "text", type: Types.Type.String)],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Base64.urlsafe_decode64",
+      implementation: "Base64.urlsafe_decode64.bytes",
       effects: [],
       description: (
         "Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
@@ -5490,9 +5490,9 @@ ROWS_58: List[Model.Builtin] = [
     Model.Builtin(
       name: "Digest.hexdecode",
       parameters: [Model.Named(name: "text", type: Types.Type.String)],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Digest.hexdecode",
+      implementation: "Digest.hexdecode.bytes",
       effects: [],
       description: (
         "Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
@@ -5501,12 +5501,12 @@ ROWS_58: List[Model.Builtin] = [
     ),
     Model.Builtin(
       name: "Digest.hexencode",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Digest.hexencode",
+      implementation: "Digest.hexencode.bytes",
       effects: [],
-      description: "Encode bytes (each 0..255) as two lowercase hex digits each; VM only.",
+      description: "Encode bytes as two lowercase hex digits each; VM only.",
       alternatives: [],
     ),
   ]
@@ -5515,94 +5515,94 @@ ROWS_58: List[Model.Builtin] = [
 ROWS_59: List[Model.Builtin] = [
     Model.Builtin(
       name: "Digest.md5",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Digest.md5",
+      implementation: "Digest.md5.bytes",
       effects: [],
       description: (
-        "Hash bytes (each 0..255) with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old " +
+        "Hash bytes with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old " +
         "APIs), not for security; VM only."
       ),
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.md5_hexdigest",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Digest.md5_hexdigest",
+      implementation: "Digest.md5_hexdigest.bytes",
       effects: [],
       description: (
-        "Hash bytes (each 0..255) with MD5 and return the digest as 32 lowercase hex digits; for compatibility " +
+        "Hash bytes with MD5 and return the digest as 32 lowercase hex digits; for compatibility " +
         "(ETags, old APIs), not for security; VM only."
       ),
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha1",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha1",
+      implementation: "Digest.sha1.bytes",
       effects: [],
       description: (
-        "Hash bytes (each 0..255) with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old " +
+        "Hash bytes with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old " +
         "APIs), not for security; VM only."
       ),
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha1_hexdigest",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha1_hexdigest",
+      implementation: "Digest.sha1_hexdigest.bytes",
       effects: [],
       description: (
-        "Hash bytes (each 0..255) with SHA-1 and return the digest as 40 lowercase hex digits; for " +
+        "Hash bytes with SHA-1 and return the digest as 40 lowercase hex digits; for " +
         "compatibility (git, old APIs), not for security; VM only."
       ),
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha256",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha256",
+      implementation: "Digest.sha256.bytes",
       effects: [],
-      description: "Hash bytes (each 0..255) with SHA-256 and return the 32 bytes of the digest; VM only.",
+      description: "Hash bytes with SHA-256 and return the 32 bytes of the digest; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha256_hexdigest",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha256_hexdigest",
+      implementation: "Digest.sha256_hexdigest.bytes",
       effects: [],
-      description: "Hash bytes (each 0..255) with SHA-256 and return the digest as 64 lowercase hex digits; VM only.",
+      description: "Hash bytes with SHA-256 and return the digest as 64 lowercase hex digits; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha512",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
-      result: Types.Type.List(Types.Type.Int),
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha512",
+      implementation: "Digest.sha512.bytes",
       effects: [],
-      description: "Hash bytes (each 0..255) with SHA-512 and return the 64 bytes of the digest; VM only.",
+      description: "Hash bytes with SHA-512 and return the 64 bytes of the digest; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
       name: "Digest.sha512_hexdigest",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "Digest.sha512_hexdigest",
+      implementation: "Digest.sha512_hexdigest.bytes",
       effects: [],
-      description: "Hash bytes (each 0..255) with SHA-512 and return the digest as 128 lowercase hex digits; VM only.",
+      description: "Hash bytes with SHA-512 and return the digest as 128 lowercase hex digits; VM only.",
       alternatives: [],
     ),
   ]
@@ -5612,15 +5612,15 @@ ROWS_60: List[Model.Builtin] = [
     Model.Builtin(
       name: "HMAC.sha256",
       parameters: [
-        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
       ],
-      result: Types.Type.List(Types.Type.Int),
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "HMAC.sha256",
+      implementation: "HMAC.sha256.bytes",
       effects: [],
       description: (
-        "HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the " +
         "32 bytes of the MAC; VM only."
       ),
       alternatives: [],
@@ -5628,15 +5628,15 @@ ROWS_60: List[Model.Builtin] = [
     Model.Builtin(
       name: "HMAC.sha256_hexdigest",
       parameters: [
-        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
       ],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "HMAC.sha256_hexdigest",
+      implementation: "HMAC.sha256_hexdigest.bytes",
       effects: [],
       description: (
-        "HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the " +
         "MAC as 64 lowercase hex digits; VM only."
       ),
       alternatives: [],
@@ -5644,15 +5644,15 @@ ROWS_60: List[Model.Builtin] = [
     Model.Builtin(
       name: "HMAC.sha512",
       parameters: [
-        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
       ],
-      result: Types.Type.List(Types.Type.Int),
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "HMAC.sha512",
+      implementation: "HMAC.sha512.bytes",
       effects: [],
       description: (
-        "HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the " +
         "64 bytes of the MAC; VM only."
       ),
       alternatives: [],
@@ -5660,15 +5660,15 @@ ROWS_60: List[Model.Builtin] = [
     Model.Builtin(
       name: "HMAC.sha512_hexdigest",
       parameters: [
-        Model.Named(name: "key", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
       ],
       result: Types.Type.String,
       rule: Model.Rule.Plain,
-      implementation: "HMAC.sha512_hexdigest",
+      implementation: "HMAC.sha512_hexdigest.bytes",
       effects: [],
       description: (
-        "HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
+        "HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the " +
         "MAC as 128 lowercase hex digits; VM only."
       ),
       alternatives: [],
@@ -5680,9 +5680,9 @@ ROWS_61: List[Model.Builtin] = [
     Model.Builtin(
       name: "SecureRandom.random_bytes",
       parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
-      result: Types.Type.List(Types.Type.Int),
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "SecureRandom.random_bytes",
+      implementation: "SecureRandom.random_bytes.bytes",
       effects: ["random"],
       description: (
         "Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), " +
@@ -5719,15 +5719,15 @@ ROWS_62: List[Model.Builtin] = [
     Model.Builtin(
       name: "HMAC.secure_compare",
       parameters: [
-        Model.Named(name: "a", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "b", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "a", type: Types.Type.Bytes),
+        Model.Named(name: "b", type: Types.Type.Bytes),
       ],
       result: Types.Type.Bool,
       rule: Model.Rule.Plain,
-      implementation: "HMAC.secure_compare",
+      implementation: "HMAC.secure_compare.bytes",
       effects: [],
       description: (
-        "Whether the bytes a and b (each 0..255) are the same, in constant time: it compares their SHA-256 " +
+        "Whether the bytes a and b are the same, in constant time: it compares their SHA-256 " +
         "digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and " +
         "tokens; VM only."
       ),

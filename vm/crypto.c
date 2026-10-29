@@ -1,7 +1,7 @@
 /*
- * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
- * (MD5, SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104)
- * and the constant-time HMAC.secure_compare, the SecureRandom draws, and the
+ * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
+ * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
+ * the constant-time HMAC.secure_compare, the SecureRandom draws, and the
  * Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. The
  * hashes, HMACs, random bytes and compare come from the OpenSSL adapter
  * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
@@ -46,10 +46,17 @@ static const struct {
                          "HMAC.sha512 needs data of bytes between 0 and 255", "HMAC-SHA512 is not available"},
 };
 
-/* The bytes of the List[Int] argument: an item outside 0..255 is RUNTIME-INVALID-NUMBER at the argument (span + 1), a
-   non-Int item fails through agc_as_int. The block is GC atomic (bytes only); the list is read through the cursor,
-   never by its layout. */
-static const uint8_t *text_form_bytes(agc_vm *vm, agc_value arg, const char *message, uint32_t span, size_t *n) {
+/* Which form of bytes a call takes and returns: a Bytes value (the catalog's ".bytes" keys) or a byte list (the old
+   keys). */
+typedef enum { FORM_BYTES, FORM_LIST } byte_form;
+
+/* The bytes of a byte argument. A Bytes gives its own data, which the argument keeps alive, and cannot hold a bad
+   byte. A List[Int] (the old keys) is copied into a GC-atomic block: an item outside 0..255 is RUNTIME-INVALID-NUMBER
+   at the argument (span + 1), a non-Int item fails through agc_as_int, and the list is read through the cursor, never
+   by its layout. */
+static const uint8_t *text_form_bytes(agc_vm *vm, agc_value arg, byte_form form, const char *message, uint32_t span,
+                                      size_t *n) {
+  if (form == FORM_BYTES) return agc_bytes_data(vm, arg, n);
   const agc_list *data = agc_as_list(vm, arg);
   *n = agc_list_len(data);
   const uint8_t *bytes = agc_byte_list(vm, data, *n);
@@ -170,56 +177,59 @@ static size_t b64_lenient(const uint8_t *s, size_t n, uint8_t *out) {
   return o;
 }
 
-static agc_value byte_list_value(agc_vm *vm, const uint8_t *data, size_t n) {
+/* The n bytes at data as a result of the given form: a copy in a new Bytes or a byte list, or the shared empty one. */
+static agc_value byte_value(agc_vm *vm, const uint8_t *data, size_t n, byte_form form) {
+  if (form == FORM_BYTES) return agc_bytes_value(agc_make_bytes(data, n));
   return n ? agc_list_value(agc_list_of_bytes(data, n)) : vm->rt->empty_list;
 }
 
 /* Base64.encode64(data): RFC 4648 base64 with padding, in lines of 60 characters that each end in a newline. Every
    text-form row charges AGC_COST_SIZE, since the work grows with the argument, and runs without the shared lock, since
    it reads only its argument. */
-static agc_value builtin_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value encode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], "Base64.encode64 needs bytes between 0 and 255", span, &n);
+  const uint8_t *bytes = text_form_bytes(vm, args[0], form, "Base64.encode64 needs bytes between 0 and 255", span, &n);
   return b64_encode(vm, bytes, n, b64_standard, true, true);
 }
 
 /* Base64.strict_encode64(data): RFC 4648 base64 with padding, on one line with no newline. */
-static agc_value builtin_strict_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value strict_encode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], "Base64.strict_encode64 needs bytes between 0 and 255", span, &n);
+  const uint8_t *bytes =
+    text_form_bytes(vm, args[0], form, "Base64.strict_encode64 needs bytes between 0 and 255", span, &n);
   return b64_encode(vm, bytes, n, b64_standard, true, false);
 }
 
 /* Base64.urlsafe_encode64(data, padding): the base64url alphabet of RFC 4648 §5, with or without the '=' padding. */
-static agc_value builtin_urlsafe_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value urlsafe_encode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t n;
   const uint8_t *bytes =
-    text_form_bytes(vm, args[0], "Base64.urlsafe_encode64 needs bytes between 0 and 255", span, &n);
+    text_form_bytes(vm, args[0], form, "Base64.urlsafe_encode64 needs bytes between 0 and 255", span, &n);
   return b64_encode(vm, bytes, n, b64_urlsafe, agc_as_bool(vm, args[1]), false);
 }
 
 /* Base64.decode64(text): the bytes of base64 text, read as Ruby's decode64 reads it (b64_lenient); never an error. */
-static agc_value builtin_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value decode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   uint8_t *out = agc_alloc_atomic(s->bytes ? s->bytes : 1);
-  return byte_list_value(vm, out, b64_lenient((const uint8_t *)s->data, s->bytes, out));
+  return byte_value(vm, out, b64_lenient((const uint8_t *)s->data, s->bytes, out), form);
 }
 
 /* Base64.strict_decode64(text): ok(bytes) of padded base64, or error("invalid base64") (b64_strict). */
-static agc_value builtin_strict_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value strict_decode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   uint8_t *out = agc_alloc_atomic(s->bytes ? s->bytes : 1);
   size_t n = b64_strict((const uint8_t *)s->data, s->bytes, false, out);
   if (n == SIZE_MAX) return agc_error_value("invalid base64");
-  return agc_result_value(true, byte_list_value(vm, out, n));
+  return agc_result_value(true, byte_value(vm, out, n, form));
 }
 
 /* Base64.urlsafe_decode64(text): as in Ruby, text that does not end in '=' and whose length is not a multiple of
    four gets the missing '=' first; then it decodes strictly, in either alphabet. The padded last group is decoded
    from a local copy: strict text has no '=' before its last group, so the whole groups before it decode alone. */
-static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   const uint8_t *text = (const uint8_t *)s->data;
@@ -237,7 +247,7 @@ static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t 
     got = b64_strict(text, n, true, out);
   }
   if (got == SIZE_MAX) return agc_error_value("invalid base64");
-  return agc_result_value(true, byte_list_value(vm, out, got));
+  return agc_result_value(true, byte_value(vm, out, got, form));
 }
 
 /* Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them. Digest.hexdecode
@@ -251,9 +261,9 @@ static agc_value hex_text(agc_vm *vm, const uint8_t *bytes, size_t n) {
   return agc_string_value(text);
 }
 
-static agc_value builtin_hexencode(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value hexencode(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], "Digest.hexencode needs bytes between 0 and 255", span, &n);
+  const uint8_t *bytes = text_form_bytes(vm, args[0], form, "Digest.hexencode needs bytes between 0 and 255", span, &n);
   return hex_text(vm, bytes, n);
 }
 
@@ -266,7 +276,7 @@ static int hex_value(uint8_t c) {
 
 /* Digest.hexdecode(text): ok(bytes) of an even number of hex digits in either case, or error("invalid hex") for an
    odd length or any other character (no spaces, no "0x"). */
-static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value hexdecode(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   const uint8_t *text = (const uint8_t *)s->data;
@@ -278,7 +288,7 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
     if (high < 0 || low < 0) return agc_error_value("invalid hex");
     out[k] = (uint8_t)(high << 4 | low);
   }
-  return agc_result_value(true, byte_list_value(vm, out, n));
+  return agc_result_value(true, byte_value(vm, out, n, form));
 }
 
 /* The calls into libcrypto (digest_compute, hmac_compute and secure_draw below) each have their own out-of-line
@@ -302,77 +312,31 @@ static __attribute__((noinline)) size_t hmac_compute(agc_vm *vm, agc_digest_kind
   return len;
 }
 
-/* Digest.<kind>(data) and its _hexdigest form: the digest of the bytes, as a byte list (Ruby's Digest::SHA256.digest)
-   or as lowercase hex (hexdigest). The work grows with the list, so the rows charge AGC_COST_SIZE: one turn-cost unit
-   per item (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task
-   yields after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
-static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+/* Digest.<kind>(data) and its _hexdigest form: the digest of the bytes, as bytes (Ruby's Digest::SHA256.digest) or
+   as lowercase hex (hexdigest). The work grows with the data, so the rows charge AGC_COST_SIZE
+   (docs/vm/10-io-scheduler.md §10.2.1). Like List.sort or String.from_bytes the call is not split: the task yields
+   after it once the cost spends its turn. It runs without the shared lock, since it reads only its argument. */
+static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex,
+                              byte_form form) {
   size_t n;
-  const uint8_t *bytes = text_form_bytes(vm, args[0], digest_names[kind].bad_byte, span, &n);
+  const uint8_t *bytes = text_form_bytes(vm, args[0], form, digest_names[kind].bad_byte, span, &n);
   unsigned char digest[AGC_DIGEST_MAX_BYTES];
   size_t len = digest_compute(vm, kind, bytes, n, digest, span);
-  return hex ? hex_text(vm, digest, len) : byte_list_value(vm, digest, len);
+  return hex ? hex_text(vm, digest, len) : byte_value(vm, digest, len, form);
 }
 
-static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_MD5, false);
-}
-
-static agc_value builtin_md5_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_MD5, true);
-}
-
-static agc_value builtin_sha1(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false);
-}
-
-static agc_value builtin_sha1_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true);
-}
-
-static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false);
-}
-
-static agc_value builtin_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true);
-}
-
-static agc_value builtin_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false);
-}
-
-static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true);
-}
-
-/* HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as a byte list (Ruby's
-   OpenSSL::HMAC.digest) or as lowercase hex (hexdigest). A bad item is reported at its own argument: the key at
-   span + 1, the data at span + 2. The key block stays reachable while the data is read: it is a local the GC scans.
-   Cost and lock as digest_value. */
-static agc_value hmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
+/* HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as bytes (Ruby's
+   OpenSSL::HMAC.digest) or as lowercase hex (hexdigest). A bad item of a byte list is reported at its own argument:
+   the key at span + 1, the data at span + 2. The key's bytes stay reachable while the data is read: they are a local
+   the GC scans. Cost and lock as digest_value. */
+static agc_value hmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex,
+                            byte_form form) {
   size_t key_n, n;
-  const uint8_t *key = text_form_bytes(vm, args[0], hmac_names[kind].bad_key, span, &key_n);
-  const uint8_t *data = text_form_bytes(vm, args[1], hmac_names[kind].bad_data, span + 1, &n);
+  const uint8_t *key = text_form_bytes(vm, args[0], form, hmac_names[kind].bad_key, span, &key_n);
+  const uint8_t *data = text_form_bytes(vm, args[1], form, hmac_names[kind].bad_data, span + 1, &n);
   unsigned char mac[AGC_DIGEST_MAX_BYTES];
   size_t len = hmac_compute(vm, kind, key, key_n, data, n, mac, span);
-  return hex ? hex_text(vm, mac, len) : byte_list_value(vm, mac, len);
-}
-
-static agc_value builtin_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, false);
-}
-
-static agc_value builtin_hmac_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, true);
-}
-
-static agc_value builtin_hmac_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, false);
-}
-
-static agc_value builtin_hmac_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, true);
+  return hex ? hex_text(vm, mac, len) : byte_value(vm, mac, len, form);
 }
 
 /* Fills the n bytes at out from the secure random source. A failed draw stops the run: it never gives weak, partial
@@ -398,11 +362,11 @@ static const uint8_t *secure_random_bytes(agc_vm *vm, agc_value arg, const char 
 /* SecureRandom.random_bytes(n): n bytes from OpenSSL's CSPRNG (RAND_bytes), unlike the seeded Random. The rows charge
    AGC_COST_SIZE, since the work grows with n (the result's items), and run without the shared lock: OpenSSL 3 keeps
    one generator per thread. */
-static agc_value builtin_random_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value random_bytes(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t n;
   const uint8_t *bytes =
     secure_random_bytes(vm, args[0], "SecureRandom.random_bytes needs n between 0 and 1048576", span, &n);
-  return byte_list_value(vm, bytes, n);
+  return byte_value(vm, bytes, n, form);
 }
 
 /* SecureRandom.hex(n): n random bytes as 2n lowercase hex digits, as Ruby's. */
@@ -430,21 +394,201 @@ static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* HMAC.secure_compare(a, b): Ruby's OpenSSL.secure_compare, for checking a received MAC or token against the expected
-   one. Like Ruby it compares the SHA-256 digests of the two lists in constant time (CRYPTO_memcmp), so lists of other
-   lengths give false in a time that depends on the lengths only, never on valid bytes or on where they differ (a bad
-   byte stops the run at its position). Equal digests then also need equal lists, as Ruby's `&& a == b` does, so a
-   SHA-256 collision cannot pass; that second compare runs only when the digests match, so its branch tells nothing the
-   answer does not. The time grows with the lengths, which the row charges (AGC_COST_SIZE), and the call runs without
-   the shared lock, as HMAC does. */
-static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+   one. Like Ruby it compares the SHA-256 digests of the two values in constant time (CRYPTO_memcmp), so values of
+   other lengths give false in a time that depends on the lengths only, never on the bytes or on where they differ (in
+   a byte list, a bad byte stops the run at its position). Equal digests then also need equal bytes, as Ruby's
+   `&& a == b` does, so a SHA-256 collision cannot pass; that second compare runs only when the digests match, so its
+   branch tells nothing the answer does not. The time grows with the lengths, which the row charges (AGC_COST_SIZE),
+   and the call runs without the shared lock, as HMAC does. */
+static agc_value secure_compare(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
   size_t a_n, b_n;
-  const uint8_t *a = text_form_bytes(vm, args[0], "HMAC.secure_compare needs bytes between 0 and 255", span, &a_n);
-  const uint8_t *b = text_form_bytes(vm, args[1], "HMAC.secure_compare needs bytes between 0 and 255", span + 1, &b_n);
+  const char *bad = "HMAC.secure_compare needs bytes between 0 and 255";
+  const uint8_t *a = text_form_bytes(vm, args[0], form, bad, span, &a_n);
+  const uint8_t *b = text_form_bytes(vm, args[1], form, bad, span + 1, &b_n);
   unsigned char a_digest[AGC_DIGEST_MAX_BYTES], b_digest[AGC_DIGEST_MAX_BYTES];
   size_t len = digest_compute(vm, AGC_DIGEST_SHA256, a, a_n, a_digest, span);
   digest_compute(vm, AGC_DIGEST_SHA256, b, b_n, b_digest, span);
   bool same = agc_secure_equal(a_digest, b_digest, len);
   return agc_bool(same && a_n == b_n && agc_secure_equal(a, b, a_n));
+}
+
+/* The entries of the builtins on bytes, two over each body above: builtin_<name>_bytes on Bytes, under the catalog's
+   key "<name>.bytes", and builtin_<name> on byte lists (List[Int]) under the old key "<name>", which a front end compiled
+   before Bytes (the checked-in stage0) still imports. The old keys go when no stage0 imports them (#805 PR 9). */
+static agc_value builtin_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return encode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_encode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return encode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_strict_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strict_encode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_strict_encode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strict_encode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_urlsafe_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return urlsafe_encode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_urlsafe_encode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return urlsafe_encode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return decode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_decode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return decode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_strict_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strict_decode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_strict_decode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return strict_decode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return urlsafe_decode64(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_urlsafe_decode64_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return urlsafe_decode64(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_hexencode(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hexencode(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_hexencode_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hexencode(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hexdecode(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_hexdecode_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hexdecode(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_random_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return random_bytes(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_random_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return random_bytes(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+  return secure_compare(vm, args, span, FORM_LIST);
+}
+
+static agc_value builtin_secure_compare_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return secure_compare(vm, args, span, FORM_BYTES);
+}
+
+static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, false, FORM_LIST);
+}
+
+static agc_value builtin_md5_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, false, FORM_BYTES);
+}
+
+static agc_value builtin_md5_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, true, FORM_LIST);
+}
+
+static agc_value builtin_md5_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_MD5, true, FORM_BYTES);
+}
+
+static agc_value builtin_sha1(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false, FORM_LIST);
+}
+
+static agc_value builtin_sha1_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, false, FORM_BYTES);
+}
+
+static agc_value builtin_sha1_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true, FORM_LIST);
+}
+
+static agc_value builtin_sha1_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA1, true, FORM_BYTES);
+}
+
+static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false, FORM_LIST);
+}
+
+static agc_value builtin_sha256_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, false, FORM_BYTES);
+}
+
+static agc_value builtin_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true, FORM_LIST);
+}
+
+static agc_value builtin_sha256_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA256, true, FORM_BYTES);
+}
+
+static agc_value builtin_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false, FORM_LIST);
+}
+
+static agc_value builtin_sha512_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, false, FORM_BYTES);
+}
+
+static agc_value builtin_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true, FORM_LIST);
+}
+
+static agc_value builtin_sha512_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return digest_value(vm, args, span, AGC_DIGEST_SHA512, true, FORM_BYTES);
+}
+
+static agc_value builtin_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, false, FORM_LIST);
+}
+
+static agc_value builtin_hmac_sha256_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, false, FORM_BYTES);
+}
+
+static agc_value builtin_hmac_sha256_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, true, FORM_LIST);
+}
+
+static agc_value builtin_hmac_sha256_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA256, true, FORM_BYTES);
+}
+
+static agc_value builtin_hmac_sha512(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, false, FORM_LIST);
+}
+
+static agc_value builtin_hmac_sha512_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, false, FORM_BYTES);
+}
+
+static agc_value builtin_hmac_sha512_hexdigest(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, true, FORM_LIST);
+}
+
+static agc_value builtin_hmac_sha512_hexdigest_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return hmac_value(vm, args, span, AGC_DIGEST_SHA512, true, FORM_BYTES);
 }
 
 const agc_builtin agc_crypto_builtins[] = {
@@ -472,6 +616,28 @@ const agc_builtin agc_crypto_builtins[] = {
   {"SecureRandom.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HMAC.secure_compare", 2, builtin_secure_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.md5.bytes", 1, builtin_md5_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.md5_hexdigest.bytes", 1, builtin_md5_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha1.bytes", 1, builtin_sha1_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha1_hexdigest.bytes", 1, builtin_sha1_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha256.bytes", 1, builtin_sha256_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha256_hexdigest.bytes", 1, builtin_sha256_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha512.bytes", 1, builtin_sha512_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.sha512_hexdigest.bytes", 1, builtin_sha512_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.encode64.bytes", 1, builtin_encode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.strict_encode64.bytes", 1, builtin_strict_encode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.urlsafe_encode64.bytes", 2, builtin_urlsafe_encode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.decode64.bytes", 1, builtin_decode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.strict_decode64.bytes", 1, builtin_strict_decode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Base64.urlsafe_decode64.bytes", 1, builtin_urlsafe_decode64_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.hexencode.bytes", 1, builtin_hexencode_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Digest.hexdecode.bytes", 1, builtin_hexdecode_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256.bytes", 2, builtin_hmac_sha256_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha256_hexdigest.bytes", 2, builtin_hmac_sha256_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512.bytes", 2, builtin_hmac_sha512_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.sha512_hexdigest.bytes", 2, builtin_hmac_sha512_hexdigest_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"SecureRandom.random_bytes.bytes", 1, builtin_random_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"HMAC.secure_compare.bytes", 2, builtin_secure_compare_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];
