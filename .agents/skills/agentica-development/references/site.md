@@ -1,5 +1,7 @@
 # Documentation site
 
+The site's design rules are in `site/DESIGN.md`.
+
 Read this before changing `site/`, a site page, or a builtin or language
 rule that a site page shows.
 
