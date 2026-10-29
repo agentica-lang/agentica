@@ -137,9 +137,9 @@ end
 ## written, and a positive `max_total_bytes` for the body, at most 256 MiB.
 export struct DownloadOptions
   ## The milliseconds the whole download may take.
-  timeout_ms: Int
+  timeout_ms: Int = 30000
   ## The most body bytes written to the file.
-  max_total_bytes: Int
+  max_total_bytes: Int = 268435456
 end
 
 ## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.
@@ -244,9 +244,9 @@ export def request(
   end
 end
 
-## Returns the default download options: a 30 s timeout and bodies up to 256 MiB.
+## Returns the default download options: a 30 s timeout and bodies up to 256 MiB. `DownloadOptions()` gives the same.
 export def download_options() -> DownloadOptions
-  return DownloadOptions(timeout_ms: 30000, max_total_bytes: DOWNLOAD_MAX_BYTES)
+  return DownloadOptions()
 end
 
 ## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`.

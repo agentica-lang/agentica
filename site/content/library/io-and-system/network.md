@@ -230,7 +230,7 @@ HTTP.download_options() -> DownloadOptions
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
 ```
 
-- `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `download_options()` gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()` gives 30 s and 256 MiB, and so does `download_options()`. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
 - The download sends a `GET` and streams the body to `path`, so bodies may be arbitrary bytes. The file never grows past `max_total_bytes`.
 - The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
 - The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.

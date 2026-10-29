@@ -12,9 +12,10 @@ Archive.extract_tar(src, members, dest_dir, options) -> Result[List[Int]]
 Archive.extract_zip(src, members, dest_dir, options) -> Result[List[Int]]
 ```
 
-- `options` is `Archive.Options(timeout_ms, max_output_bytes)`; the defaults
-  are 30000 and 268435456. `timeout_ms` is 1 to 86400000, `max_output_bytes`
-  1 to 1073741824. The result holds each file's bytes in member order.
+- `options` is `Archive.Options(timeout_ms: Int = 30000, max_output_bytes: Int =
+  268435456)`; `Archive.Options()` equals `Archive.options()`. `timeout_ms` is
+  1 to 86400000, `max_output_bytes` 1 to 1073741824. The result holds each
+  file's bytes in member order.
 - `members` holds 1 to 256 safe relative paths; one leading `./` is optional.
   Absolute paths, drive letters, UNC shares, backslashes, colons, NUL bytes,
   `.`/`..` segments, exact and case-only repeats are rejected before anything
