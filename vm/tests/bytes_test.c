@@ -352,7 +352,7 @@ static void both_keys(const char *name, uint32_t arity, const agc_value *args) {
 }
 
 /* Each crypto builtin on bytes has the catalog's "<name>.bytes" key on Bytes and the old "<name>" key on byte lists,
-   which the checked-in stage0 still imports: both give the same answer. The old key still halts on an item that is
+   which front ends and .agcb files compiled before #805 PR 3 import: both give the same answer. The old key still halts on an item that is
    not a byte (RUNTIME-INVALID-NUMBER); the new key cannot see one, and a list there is a wrong tag. */
 static void test_crypto_keys(void) {
   static const char *const one_data[] = {

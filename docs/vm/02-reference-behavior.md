@@ -124,8 +124,10 @@ in a PR that rewrites the goldens.
   charge `AGC_COST_SIZE`. Each of these builtins and
   `SecureRandom.random_bytes` has its catalog key `<name>.bytes` on `Bytes` and
   its old key `<name>` on a `List[Int]`, which checks every item is 0 to 255
-  (else `RUNTIME-INVALID-NUMBER` at the argument): the checked-in stage0
-  imports the old keys until it is refreshed past #805.
+  (else `RUNTIME-INVALID-NUMBER` at the argument). The old keys stay for the
+  base stage0 of open branches and of branches cut before #805 PR 3, and for
+  `.agcb` files compiled by 0.16.x; #805 PR 9 removes them when no supported
+  stage0 or 0.16.x bytecode needs them.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;

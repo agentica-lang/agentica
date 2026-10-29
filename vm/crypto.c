@@ -350,12 +350,16 @@ static __attribute__((noinline)) void secure_draw(agc_vm *vm, uint8_t *out, size
    builtins that make a list from a count (List#*, Range#to_a, IO.read_bytes). Keys, salts and tokens are 16 to 64
    bytes; the bound makes a wrong count such as 10 ** 12 fail at the argument instead of asking for terabytes of
    memory. Ruby has no bound. */
-static const uint8_t *secure_random_bytes(agc_vm *vm, agc_value arg, const char *bad_count, uint32_t span, size_t *n) {
+static size_t secure_count(agc_vm *vm, agc_value arg, const char *bad_count, uint32_t span) {
   int64_t count = agc_as_int(vm, arg);
   if (count < 0 || count > AGC_MAX_LIST_COUNT) agc_fail(vm, "RUNTIME-INVALID-COUNT", bad_count, span + 1);
-  *n = (size_t)count;
-  uint8_t *out = agc_alloc_atomic(*n ? *n : 1);
-  secure_draw(vm, out, *n, span);
+  return (size_t)count;
+}
+
+/* n bytes drawn into a GC-atomic scratch block, for the forms that copy them into their result (a list, hex). */
+static const uint8_t *secure_scratch(agc_vm *vm, size_t n, uint32_t span) {
+  uint8_t *out = agc_alloc_atomic(n ? n : 1);
+  secure_draw(vm, out, n, span);
   return out;
 }
 
@@ -363,17 +367,19 @@ static const uint8_t *secure_random_bytes(agc_vm *vm, agc_value arg, const char 
    AGC_COST_SIZE, since the work grows with n (the result's items), and run without the shared lock: OpenSSL 3 keeps
    one generator per thread. */
 static agc_value random_bytes(agc_vm *vm, agc_value *args, uint32_t span, byte_form form) {
-  size_t n;
-  const uint8_t *bytes =
-    secure_random_bytes(vm, args[0], "SecureRandom.random_bytes needs n between 0 and 1048576", span, &n);
-  return byte_value(vm, bytes, n, form);
+  size_t n = secure_count(vm, args[0], "SecureRandom.random_bytes needs n between 0 and 1048576", span);
+  if (form == FORM_LIST) return byte_value(vm, secure_scratch(vm, n, span), n, form);
+  if (n == 0) return agc_bytes_value(agc_empty_bytes());
+  /* Drawn straight into the result, so no second copy of the secret stays behind in a dead block. */
+  agc_bytes *b = agc_new_bytes(n);
+  secure_draw(vm, b->data, n, span);
+  return agc_bytes_value(b);
 }
 
 /* SecureRandom.hex(n): n random bytes as 2n lowercase hex digits, as Ruby's. */
 static agc_value builtin_random_hex(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n;
-  const uint8_t *bytes = secure_random_bytes(vm, args[0], "SecureRandom.hex needs n between 0 and 1048576", span, &n);
-  return hex_text(vm, bytes, n);
+  size_t n = secure_count(vm, args[0], "SecureRandom.hex needs n between 0 and 1048576", span);
+  return hex_text(vm, secure_scratch(vm, n, span), n);
 }
 
 /* SecureRandom.uuid: a version 4 UUID (RFC 9562 §5.4), 122 random bits in the lowercase 8-4-4-4-12 form. */
@@ -413,8 +419,9 @@ static agc_value secure_compare(agc_vm *vm, agc_value *args, uint32_t span, byte
 }
 
 /* The entries of the builtins on bytes, two over each body above: builtin_<name>_bytes on Bytes, under the catalog's
-   key "<name>.bytes", and builtin_<name> on byte lists (List[Int]) under the old key "<name>", which a front end compiled
-   before Bytes (the checked-in stage0) still imports. The old keys go when no stage0 imports them (#805 PR 9). */
+   key "<name>.bytes", and builtin_<name> on byte lists (List[Int]) under the old key "<name>". The old keys stay for
+   front ends and programs compiled before #805 PR 3: the base stage0 of open branches and of branches cut before it,
+   and .agcb files from 0.16.x. #805 PR 9 removes them when no supported stage0 or 0.16.x bytecode needs them. */
 static agc_value builtin_encode64(agc_vm *vm, agc_value *args, uint32_t span) {
   return encode64(vm, args, span, FORM_LIST);
 }

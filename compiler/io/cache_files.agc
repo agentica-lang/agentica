@@ -232,10 +232,12 @@ end
 
 export def digest(data: List[Int]) -> String
   # The callers pass bytes read from a file or a String as a List[Int] until #805 PR 4, so Bytes.from_list cannot
-  # fail; if it did, "" matches no cache entry.
+  # fail. If it did, the items' decimal text is hashed instead, behind an "x" that no hex digest starts with: such an
+  # input never shares a key with real bytes, and two of them share one only when they hold the same items.
   bytes = Bytes.from_list(data)
   if !bytes.ok?
-    return ""
+    text = data.map do |item: Int| item.to_s end.join(" ")
+    return "x#{Digest.sha256_hexdigest(text.bytes)}"
   end
 
   return Digest.sha256_hexdigest(bytes.unwrap!)
