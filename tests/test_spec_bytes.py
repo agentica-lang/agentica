@@ -68,11 +68,18 @@ REFUSED = [
     # The help walk for a type with no Bytes ends: the code is the same as for a type that has one.
     (MAIN + "  puts(JSON.encode(1..2))\nend\n", "CHECK-NOT-ENCODABLE", "1..2"),
     (MAIN + '  puts(JSON.decode("{}", Int).ok?)\nend\n', "CHECK-NOT-DECODABLE", "Int"),
+    (MAIN + '  puts(JSON.decode("\\"x\\"", Bytes).ok?)\nend\n', "CHECK-NOT-DECODABLE", "Bytes"),
     # Operators take two Bytes, and only == and != compare.
     (MAIN + '  c = "a".bytes + "b"\nend\n', "CHECK-TYPE-MISMATCH", "+"),
     (MAIN + '  c = "a".bytes == "a"\nend\n', "CHECK-TYPE-MISMATCH", "=="),
     (MAIN + '  c = "a".bytes < "b".bytes\nend\n', "CHECK-TYPE-MISMATCH", "<"),
     (MAIN + '  c = "a".bytes[0] + "b".bytes\nend\n', "CHECK-TYPE-MISMATCH", "+"),
+    # A list of Bytes has no equality either.
+    (
+        MAIN + '  a = ["x".bytes]\n  puts(a == ["x".bytes])\nend\n',
+        "CHECK-TYPE-MISMATCH",
+        "==",
+    ),
     # A type variable has no equality, so a Bytes cannot reach EQ through generic code.
     ("def same[T](a: T, b: T) -> Bool\n  return a == b\nend\n\n" + MAIN + "end\n", "CHECK-TYPE-MISMATCH", "=="),
     # Indexing stays off String, and for takes a collection.

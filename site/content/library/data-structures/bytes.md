@@ -23,7 +23,7 @@ end
 [104, 195, 169, 108, 108, 111]
 ```
 
-Two `Bytes` are equal when they have the same length and the same bytes. `==` is not constant time, so compare a MAC or a token with [`HMAC.secure_compare`](/library/text-and-data/crypto/). A `Bytes` never equals a `String`. There is no `<`. A `Bytes` can be a `Map` key or a `Set` item, so a cache can be keyed by a digest. It is not JSON: `JSON.encode` and `JSON.decode` refuse it with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; write it as text first with `Base64.strict_encode64`. It cannot be an `ATS` key.
+Two `Bytes` are equal when they have the same length and the same bytes. `==` is not constant time, so compare a MAC or a token with [`HMAC.secure_compare`](/library/text-and-data/crypto/). A `Bytes` never equals a `String`. There is no `<`. A `Bytes` can be a `Map` key or a `Set` item, so a cache can be keyed by a digest. It is not JSON: `JSON.encode` and `JSON.decode` refuse it with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; write it as text first with `Base64.strict_encode64`. It cannot be an `ATS` key. `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only, so for a `Bytes` use a `Set[Bytes]` or a `Map[Bytes, _]`.
 
 ```agentica
 def main() -> Void

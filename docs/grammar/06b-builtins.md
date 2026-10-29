@@ -4,11 +4,11 @@
 type. The checker picks the module from the static type (`String`, `Bytes`,
 `List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
 and `JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch.
-`s.strip` is `String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec
-have no function form: `JSON.Codec.decode(c, s)` is `CHECK-UNKNOWN-NAME`.
-Without parentheses, `receiver.name` on a non-struct value is a method without
-arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
-Structs and enums have no methods. The one form on a struct type is
+`s.strip` is `String.trim(s)`, but `"a".from_int` is not a method. The methods
+of a codec have no function form: `JSON.Codec.decode(c, s)` is
+`CHECK-UNKNOWN-NAME`. Without parentheses, `receiver.name` on a non-struct value
+is a method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a
+field. Structs and enums have no methods. The one form on a struct type is
 `Type.members`, the list of its fields (`docs/grammar/06-semantics.md`, "Structs
 and lists").
 
@@ -19,9 +19,9 @@ method work too, and the texts show only the first: `length` and `size` on
 `String`, `Bytes`, `List`, `Map`, `Set` and `Range`; `collect` for `map`,
 `inject` for `reduce` and `detect` for `find` (on `List` and `Lazy`); `member?`
 for `include?` on `Set` and `Range`; `include?` and `member?` for `key?` on
-`Map`. Two differ from Ruby: `to_i` and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
-`to_i!` and `to_f!` halt on bad text. An unknown method is
-`CHECK-UNKNOWN-METHOD`.
+`Map`. Two differ from Ruby: `to_i` and `to_f` on text return a `Result`
+(`"abc".to_i` is an error, not `0`), and `to_i!` and `to_f!` halt on bad text.
+An unknown method is `CHECK-UNKNOWN-METHOD`.
 
 `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON
 text, and any other data value in its `inspect` form (`[1, 2]`, `ok(3)`,

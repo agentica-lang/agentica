@@ -77,7 +77,8 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `LogEvent`, `LogLevel`, `LogRegistry`, `Map`, `Nil`, `Path`, `Process`,
 `ProcessOutput`, `Profile`, `Random`, `Range`, `Result`, `SecureRandom`, `Set`,
 `Socket`, `Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
-`Test`, `TestCase`, `Time`, `Void` and `Zlib`. `HTTP` is not reserved: it is the usual alias of `std/http`.
+`Test`, `TestCase`, `Time`, `Void` and `Zlib`. `HTTP` is not reserved: it is
+the usual alias of `std/http`.
 `ok` and `error` are names, but cannot be declared as functions, variables,
 parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds
 for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables

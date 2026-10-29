@@ -388,6 +388,10 @@ def bytes_help(cx: State.Cx, type: T.Type, verb: String) -> String
     return "JSON has no byte type; encode it first: Base64.strict_encode64(b)"
   end
 
+  if T.is?(type, "Bytes")
+    return "JSON has no byte type; decode a String and convert it with Base64.strict_decode64(text)"
+  end
+
   return "JSON has no byte type; use a String field and decode it with Base64.strict_decode64(text)"
 end
 

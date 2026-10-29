@@ -155,8 +155,9 @@ initializer, not only the result, has a data type: numbers, `String`, `Bool`,
 `Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result` and `JSON` of data
 types, and structs and enums whose fields and payloads are data; a function,
 `Channel`, task, handle or `ATS` table type (and `Void`) is
-`CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no effects, but it makes a value with
-identity and state, which is why the type rule exists.
+`CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no
+effects, but it makes a value with identity and state, which is why the type
+rule exists.
 
 A scalar literal constant is part of the bytecode. Every other constant is built
 once, in dependency order, before `main` starts, and only if a function that
@@ -701,8 +702,8 @@ more = Map.put(stock, "kiwi", 7)
 
 ### Sets
 
-`Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key: any other
-element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once and keeps
+`Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key:
+any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once and keeps
 the order of first insertion.
 
 ```ruby
