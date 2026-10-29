@@ -6,17 +6,17 @@ description: The Base64 and Digest builtins, which write bytes as base64 or hex 
 
 `Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `Digest.hexencode` writes hex digits as Ruby's does, and `Digest.hexdecode`, Agentica's own name for its inverse, reads them back. The VM computes them in plain C; nothing is written in Agentica.
 
-Bytes are a `List[Int]` from 0 to 255, as `Digest.sha256`, `IO.read_bytes` and `File.read_bytes` use. For text, encode its UTF-8 bytes from `String.to_bytes` and decode the bytes back with `String.from_bytes`.
+They take and give [`Bytes`](/library/data-structures/bytes/), as `Digest.sha256` does. For text, encode its UTF-8 bytes from `s.bytes` and decode the bytes back with `String.from_bytes(b.to_a)`.
 
 ## Base64
 
 ```text
-Base64.strict_encode64(data: List[Int]) -> String
-Base64.encode64(data: List[Int]) -> String
-Base64.urlsafe_encode64(data: List[Int], padding: Bool = true) -> String
-Base64.strict_decode64(text: String) -> Result[List[Int]]
-Base64.urlsafe_decode64(text: String) -> Result[List[Int]]
-Base64.decode64(text: String) -> List[Int]
+Base64.strict_encode64(data: Bytes) -> String
+Base64.encode64(data: Bytes) -> String
+Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String
+Base64.strict_decode64(text: String) -> Result[Bytes]
+Base64.urlsafe_decode64(text: String) -> Result[Bytes]
+Base64.decode64(text: String) -> Bytes
 ```
 
 - `Base64.strict_encode64` gives padded base64 on one line. `Base64.encode64` gives the same text in lines of 60 characters, each ending in a newline, as Ruby writes them; no bytes give `""`.
@@ -27,13 +27,13 @@ Base64.decode64(text: String) -> List[Int]
 
 ```agentica
 def main() -> Void
-  data = String.to_bytes("hello, world")
+  data = "hello, world".bytes
   puts(Base64.strict_encode64(data))
-  puts(Base64.urlsafe_encode64([251, 255], false))
+  puts(Base64.urlsafe_encode64(Bytes.from_list([251, 255]).unwrap!, false))
   back = Base64.strict_decode64("aGVsbG8sIHdvcmxk").unwrap!
-  puts(String.from_bytes(back).unwrap!)
+  puts(String.from_bytes(back.to_a).unwrap!)
   puts(Base64.strict_decode64("aGVsbG8\n"))
-  puts(Base64.decode64("aGVs\nbG8=\n"))
+  puts(Base64.decode64("aGVs\nbG8=\n").to_a)
 end
 ```
 
@@ -48,32 +48,25 @@ error("invalid base64")
 ## Hex
 
 ```text
-Digest.hexencode(data: List[Int]) -> String
-Digest.hexdecode(text: String) -> Result[List[Int]]
+Digest.hexencode(data: Bytes) -> String
+Digest.hexdecode(text: String) -> Result[Bytes]
 ```
 
 `Digest.hexencode` gives two lowercase hex digits per byte. `Digest.hexdecode` takes an even number of hex digits in either case; an odd length or any other character, a space or `0x` included, is `error("invalid hex")`.
 
 ```agentica
 def main() -> Void
-  puts(Digest.hexencode(Digest.sha256([])).slice(0, 16))
-  puts(Digest.hexdecode("00FFa0"))
+  puts(Digest.hexencode(Digest.sha256("".bytes)).slice(0, 16))
+  puts(Digest.hexdecode("00FFa0").unwrap!.to_a)
   puts(Digest.hexdecode("abc").ok?)
 end
 ```
 
 ```output
 e3b0c44298fc1c14
-ok([0, 255, 160])
+[0, 255, 160]
 false
 ```
 
-- An item outside 0 to 255 in an encoded list stops the program with `RUNTIME-INVALID-NUMBER` at the argument.
 - The time grows with the input. None needs an effect label: they read nothing outside their argument.
 - `Base64` and `Digest` are reserved type names.
-
-```agentica {expect="RUNTIME-INVALID-NUMBER"}
-def main() -> Void
-  puts(Base64.strict_encode64([1, 256]))
-end
-```

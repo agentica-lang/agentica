@@ -35,8 +35,9 @@ for byte in b ... end
 - `slice`, `take` and `drop` copy. `+` in a loop is quadratic: collect the parts
   in a list and call `Bytes.concat` once. To build bytes one at a time, build a
   `List[Int]` and call `Bytes.from_list` once.
-- The byte builtins (`Digest`, `File.read_bytes`, `Zlib`, `std/binary` ...)
-  still take and return `List[Int]` for now; `Bytes.from_list(list)` and
+- `Digest`, `HMAC`, `Base64` and `SecureRandom.random_bytes` take and return
+  `Bytes`. The other byte builtins (`File.read_bytes`, `Zlib`, `std/binary`
+  ...) still take and return `List[Int]` for now; `Bytes.from_list(list)` and
   `b.to_a` convert.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
   `Set[Bytes]` or a `Map[Bytes, _]`. `List[Bytes]` has no `==`.

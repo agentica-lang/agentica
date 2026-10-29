@@ -110,20 +110,22 @@ in a PR that rewrites the goldens.
   `String.to_bytes` returns the UTF-8 bytes as a `List[Int]` and costs by size,
   like `from_bytes`.
 - The `Digest` hashes (`md5`, `sha1`, `sha256`, `sha512` and their
-  `_hexdigest` forms) check every item is 0 to 255 (else
-  `RUNTIME-INVALID-NUMBER` at the argument), hash with OpenSSL's EVP digests
-  (`vm/digest_openssl.c`, behind `digest.h`) and return the digest bytes or
-  their hex. Each charges one turn-cost unit per item (§10.2.1) and runs
-  without the shared lock, as it reads only its argument. The `HMAC` builtins
-  (`sha256`, `sha512` and their `_hexdigest` forms) check the key and the data
-  the same way, each at its own argument, and compute the MAC with OpenSSL's
-  `EVP_Q_mac` (`agc_hmac` in `digest.h`), with the same cost and lock.
-  `HMAC.secure_compare(a, b)` checks both lists the same way, hashes each with
-  SHA-256 and compares the digests, and then the lists when the digests match
+  `_hexdigest` forms) take a `Bytes`, hash it with OpenSSL's EVP digests
+  (`vm/digest_openssl.c`, behind `digest.h`) and return the digest as a
+  `Bytes` or as hex. Each charges `AGC_COST_SIZE` (§10.2.1) and runs without
+  the shared lock, as it reads only its argument. The `HMAC` builtins
+  (`sha256`, `sha512` and their `_hexdigest` forms) compute the MAC of the
+  data under the key with OpenSSL's `EVP_Q_mac` (`agc_hmac` in `digest.h`),
+  with the same cost and lock. `HMAC.secure_compare(a, b)` hashes each with
+  SHA-256 and compares the digests, and then the bytes when the digests match
   and the lengths are equal, with `CRYPTO_memcmp` (`agc_secure_equal`), again
   with the same cost and lock. The eight `Base64` and hex builtins in
-  `vm/crypto.c` (`Digest.hexencode`/`hexdecode`) are plain C; the encoders
-  check items the same way, and all eight charge `AGC_COST_SIZE`.
+  `vm/crypto.c` (`Digest.hexencode`/`hexdecode`) are plain C, and all eight
+  charge `AGC_COST_SIZE`. Each of these builtins and
+  `SecureRandom.random_bytes` has its catalog key `<name>.bytes` on `Bytes` and
+  its old key `<name>` on a `List[Int]`, which checks every item is 0 to 255
+  (else `RUNTIME-INVALID-NUMBER` at the argument): the checked-in stage0
+  imports the old keys until it is refreshed past #805.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;
