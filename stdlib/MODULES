@@ -5,7 +5,8 @@ bdd/gherkin.agc
 bdd/match.agc
 bdd/tags.agc
 binary.agc
-cgi.agc
+cookie.agc
+html.agc
 http.agc
 logger.agc
 mime.agc

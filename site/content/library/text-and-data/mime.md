@@ -1,6 +1,6 @@
 ---
 title: MIME (std)
-weight: 11
+weight: 12
 description: The std/mime module, which gives the media type of a file from its name and tells which types are text.
 ---
 

@@ -1,42 +1,31 @@
-## Escapes and unescapes HTML text, and reads and writes HTTP cookies, with the names of Ruby's `CGI` and Rack.
+## Reads a `Cookie` request header and writes a `Set-Cookie` response header (RFC 6265), with the behaviour of Rack's
+## `Rack::Utils.parse` and `Rack::Utils.set_header`.
 ##
-## Import it with `import CGI from "std/cgi"`. `escape_html` and `unescape_html` are Ruby's `CGI.escape_html` and
-## `CGI.unescape_html`. `Cookie`, `parse_cookies_header` and `set_cookie_header` are the cookie half: `Cookie` has the
-## fields of Rack's cookie options (`max_age`, `http_only`, `same_site`) and the two functions are Rack's
-## `Rack::Utils.parse_cookies_header` and `Rack::Utils.set_cookie_header`. Written in Agentica; nothing here halts.
+## Import it with `import Cookie from "std/cookie"`. `parse` reads a header into a map, `set_header` writes one, and
+## `Cookie.Cookie` is the cookie to send: it has the fields of Rack's cookie options (`max_age`, `http_only`,
+## `same_site`). Written in Agentica; nothing here halts.
 ##
-## Unlike Ruby and Rack, the cookie functions never percent-encode, decode or quote, and this is final.
-## `set_cookie_header` writes the value as it is and returns an `error` for a byte that RFC 6265 does not allow in it,
-## and `parse_cookies_header` returns the value as the client sent it. A caller that needs encoding (for a space, a
-## comma or a non-ASCII character) does it before `set_cookie_header` and decodes after `parse_cookies_header`.
-##
-## `unescape_html("&#0;")` gives a NUL character, as Ruby does.
+## Unlike Ruby and Rack, the functions never percent-encode, decode or quote, and this is final. `set_header` writes
+## the value as it is and returns an `error` for a byte that RFC 6265 does not allow in it, and `parse` returns the
+## value as the client sent it. A caller that needs encoding (for a space, a comma or a non-ASCII character) does it
+## before `set_header` and decodes after `parse`.
 
-# The code points and bytes that the functions look at.
+# The bytes that the functions look at.
 SPACE = 32
 QUOTE = 34
-HASH = 35
-UPPER_X = 88
 SEMICOLON = 59
 COMMA = 44
 BACKSLASH = 92
-LOWER_X = 120
 DEL = 127
-FIRST_SURROGATE = 55296
-LAST_SURROGATE = 57343
-LAST_CODE_POINT = 1114111
 
 ## The `max_age` of a cookie that has no `Max-Age`, the default. It is the smallest `Int`, so no computed value is
 ## taken for it: every other negative `max_age` writes `Max-Age=0`, which deletes the cookie.
 export NO_MAX_AGE = -9223372036854775808
 
-# The entities that Ruby's `unescape_html` decodes by name, as written between `&` and `;`.
-NAMED_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'"}
-
 # The bytes that RFC 6265 allows in a cookie name (an RFC 7230 token): letters, digits and !#$%&'*+-.^_`|~
 TOKEN_SYMBOLS = Set.new("!#$%&'*+-.^_`|~".to_bytes)
 
-# The same-site values that `set_cookie_header` writes.
+# The same-site values that `set_header` writes.
 SAME_SITE_VALUES = Set.new(["Strict", "Lax", "None"])
 
 ## A cookie to send. An empty `path`, `domain`, `expires` or `same_site`, a `max_age` of `NO_MAX_AGE` and a false
@@ -57,38 +46,10 @@ export struct Cookie
   same_site: String = ""
 end
 
-## Replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby's
-## `CGI.escape_html`.
-export def escape_html(text: String) -> String
-  return (
-    text.replace("&", "&amp;")
-      .replace("<", "&lt;")
-      .replace(">", "&gt;")
-      .replace("\"", "&quot;")
-      .replace("'", "&#39;")
-  )
-end
-
-## Replaces `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#NN;` and `&#xHH;` with their characters, as Ruby's
-## `CGI.unescape_html`. Any other text that looks like an entity stays as it is: a name that is not in that list
-## (`&nbsp;`), a number that is not a Unicode scalar value (above `10FFFF` or a surrogate), and an entity without its
-## `;`. The text is read once, so `&amp;lt;` becomes `&lt;`.
-export def unescape_html(text: String) -> String
-  if !text.include?("&")
-    return text
-  end
-  pieces = text.split("&")
-  out = [pieces[0]]
-  for piece in List.drop(pieces, 1)
-    out = out.push(unescape_piece(piece))
-  end
-  return out.join("")
-end
-
 ## Reads the value of a `Cookie` request header into a map from name to value, as Rack's `parse_cookies_header`.
 ## Pieces are separated by `;`, and spaces around a piece, a name and a value are dropped. A piece without `=` or with
 ## an empty name is skipped, and the first value of a repeated name wins. Values are not decoded or unquoted.
-export def parse_cookies_header(header: String) -> Map[String, String]
+export def parse(header: String) -> Map[String, String]
   cookies: Map[String, String] = {}
   for piece in header.split(";")
     pair = piece.strip
@@ -119,7 +80,7 @@ end
 ##   or `domain` is set (browsers compare the prefix without regard to case, so this does too).
 ##
 ## The text of an error about a name or an attribute has its control bytes removed.
-export def set_cookie_header(cookie: Cookie) -> Result[String]
+export def set_header(cookie: Cookie) -> Result[String]
   try check_cookie(cookie)
   parts = ["#{cookie.name}=#{cookie.value}"]
   parts = try add_attribute(parts, "Domain", "domain", cookie.domain)
@@ -140,76 +101,7 @@ export def set_cookie_header(cookie: Cookie) -> Result[String]
   return ok(parts.join("; "))
 end
 
-# The text after one `&` up to the next one: the decoded entity followed by the rest, or the `&` and the piece again.
-def unescape_piece(piece: String) -> String
-  end_at = piece.index_of(";")
-  if !end_at.ok?
-    return "&#{piece}"
-  end
-  at = end_at.unwrap!
-  name = piece.slice(0, at)
-  rest = piece.slice(at + 1, piece.length - at - 1)
-  if NAMED_ENTITIES.key?(name)
-    return "#{NAMED_ENTITIES.get(name, "")}#{rest}"
-  end
-  code = numeric_code(name)
-  if code < 0
-    return "&#{piece}"
-  end
-  return "#{String.from_code(code)}#{rest}"
-end
-
-# The code point that an entity name like `#65` or `#x41` stands for, or -1 when it is not a number or not a Unicode
-# scalar value.
-def numeric_code(name: String) -> Int
-  bytes = name.to_bytes
-  if bytes.size < 2 or bytes[0] != HASH
-    return -1
-  end
-  if bytes[1] == LOWER_X or bytes[1] == UPPER_X
-    return digits_value(List.drop(bytes, 2), 16)
-  end
-  return digits_value(List.drop(bytes, 1), 10)
-end
-
-# The value of digit bytes in `base`, or -1 for no digits, a bad digit, or a value that is not a Unicode scalar value.
-# Stops adding at the first value above the last code point, so a long run of digits cannot overflow.
-def digits_value(digits: List[Int], base: Int) -> Int
-  if digits.empty?
-    return -1
-  end
-  value = 0
-  for byte in digits
-    digit = digit_value(byte)
-    if digit < 0 or digit >= base
-      return -1
-    end
-    value = value * base + digit
-    if value > LAST_CODE_POINT
-      return -1
-    end
-  end
-  if value >= FIRST_SURROGATE and value <= LAST_SURROGATE
-    return -1
-  end
-  return value
-end
-
-# The value of a hex digit byte of either case, or -1.
-def digit_value(byte: Int) -> Int
-  if byte >= 48 and byte <= 57
-    return byte - 48
-  end
-  if byte >= 65 and byte <= 70
-    return byte - 55
-  end
-  if byte >= 97 and byte <= 102
-    return byte - 87
-  end
-  return -1
-end
-
-# The checks of `set_cookie_header` that are not about one attribute alone. Returns the first error.
+# The checks of `set_header` that are not about one attribute alone. Returns the first error.
 def check_cookie(cookie: Cookie) -> Result[Bool]
   if !valid_name?(cookie.name)
     return error("invalid cookie name (#{printable(cookie.name)})")
