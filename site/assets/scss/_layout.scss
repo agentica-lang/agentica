@@ -138,7 +138,7 @@ main {
   }
 
   .sidebar {
-    --nav-row: 2.75rem;
+    --nav-row: var(--target);
   }
 
   .sidebar a {
