@@ -10,12 +10,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/uri` percent-encodes and decodes URL components and query strings, with
+  the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
-- `Base64` and `Digest.hexencode`/`hexdecode` turn bytes into text and back.
+
+## [0.15.0] - 2026-10-29
+
+### Added
+
+- `Base64` encodes and decodes bytes: `encode64`, `strict_encode64`,
+  `urlsafe_encode64` and their decoders.
+- `Digest.hexencode` and `hexdecode` turn bytes into hex text and back.
 - `Digest.md5`, `sha1`, `sha256` and `sha512`, each with a `_hexdigest` form.
-- `HMAC.sha256` and `HMAC.sha512` (HMAC-SHA256 and HMAC-SHA512), each with a
-  `_hexdigest` form.
+- `HMAC.sha256` and `HMAC.sha512`, each with a `_hexdigest` form.
 - `SecureRandom.random_bytes`, `hex` and `uuid` draw secure random bytes for
   keys and tokens.
 - `JSON.codec(User)` gives a `JSON.Codec[User]` with `decode`, `encode` and
@@ -23,14 +31,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Breaking:** `Base64` and `Digest` are reserved names.
-- **Breaking:** `HMAC` is a reserved name.
-- **Breaking:** `SecureRandom` is a reserved name.
-- **Breaking:** `Crypto.sha256` is now `Digest.sha256`; rebuild old `.agcb` files.
-- `--jit on` keeps short loops that wait on channels, tasks, processes,
-  sockets, stdin or files interpreted.
+- **Breaking:** `Base64`, `Digest`, `HMAC` and `SecureRandom` are reserved
+  names.
+- **Breaking:** `Crypto.sha256` is now `Digest.sha256`; rebuild old `.agcb`
+  files.
 - `--jit on` is the default on x86-64; `--jit off` or `AGENTICA_JIT=off` turns
   the JIT off.
+- `--jit on` keeps short loops that wait on channels, tasks, processes,
+  sockets, stdin or files interpreted, and starts faster.
 
 ## [0.14.0] - 2026-10-28
 
@@ -617,7 +625,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.14.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.15.0...HEAD
+[0.15.0]: https://github.com/agentica-lang/agentica/compare/0.14.0...0.15.0
 [0.14.0]: https://github.com/agentica-lang/agentica/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/agentica-lang/agentica/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/agentica-lang/agentica/compare/0.11.0...0.12.0
