@@ -8,32 +8,25 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-29
+
 ### Added
 
-- `HTTP.request` and `HTTP.post` default `headers` to `[]` and `body` to `""`,
-  so `HTTP.request(client, "DELETE", url)` works.
-- `std/uri` percent-encodes and decodes URL components and query strings, with
-  the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
-- `std/html` escapes and unescapes HTML text, with the behaviour of Ruby's
-  `CGI.escape_html` (`HTML.escape`, `HTML.unescape`).
-- `std/cookie` reads a `Cookie` header and writes a `Set-Cookie` header, with
-  the behaviour of Rack (`Cookie.parse`, `Cookie.set_header`).
-- `HMAC.secure_compare(a, b)` compares two byte lists in constant time, for
-  checking MACs, signatures and tokens.
-- `std/mime` gives the media type of a file by its extension, with the name
-  and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
-- `Archive.Options()` and `HTTP.DownloadOptions()` give the default options
-  without `Archive.options()` or `HTTP.download_options()`.
-- `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`,
-  `append_text`, `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`,
-  `mkdir_private`, `Path.remove` and `Path.rename`. `File.open(path)` defaults
-  both `mode` (`"read"`) and `timeout_ms`.
-- `timeout_ms` defaults to 30000 on `File.read_bytes`, `read_line`, `write`,
-  `write_bytes`, `flush`, `close`, `try_lock`, `each_line`, `foreach` and
-  `Lazy.write_lines`, and `buffer_bytes` to 65536 on `File.each_line` and
-  `foreach`, as on `File.chunks`.
-- `Process.spawn` defaults `timeout_ms` to 30000, and `Process.spawn_captured`
-  and `spawn_channel` default `dir` to `"."` and `timeout_ms` to 30000.
+- `std/uri` encodes and decodes URL components and query strings.
+- `std/html` escapes and unescapes HTML text.
+- `std/cookie` reads a `Cookie` header and writes a `Set-Cookie` header.
+- `std/mime` gives the media type of a file by its extension.
+- `HMAC.secure_compare(a, b)` compares two byte lists in constant time.
+- `Archive.Options()` and `HTTP.DownloadOptions()` give the default options.
+
+### Changed
+
+- `HTTP.request` and `HTTP.post` default `headers` to `[]` and `body` to `""`.
+- `timeout_ms` defaults to 30000 on every `File`, `Dir` and `Path` call that
+  takes one, and on `Process.spawn`, `spawn_captured` and `spawn_channel`.
+- `File.open` defaults `mode` to `"read"`, `File.each_line` and `File.foreach`
+  default `buffer_bytes` to 65536, and `spawn_captured` and `spawn_channel`
+  default `dir` to `"."`.
 
 ## [0.15.0] - 2026-10-29
 
@@ -645,7 +638,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.15.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.16.0...HEAD
+[0.16.0]: https://github.com/agentica-lang/agentica/compare/0.15.0...0.16.0
 [0.15.0]: https://github.com/agentica-lang/agentica/compare/0.14.0...0.15.0
 [0.14.0]: https://github.com/agentica-lang/agentica/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/agentica-lang/agentica/compare/0.12.0...0.13.0
