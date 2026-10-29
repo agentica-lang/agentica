@@ -287,7 +287,9 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
 
 `Process` is an opaque handle, with no constructor, fields, equality or JSON
 encoding; `IO.inspect` prints `<Process>`. Signatures are in
-[`library/io-and-system/process.md`][agentica-link-3].
+[`library/io-and-system/process.md`][agentica-link-3]. `spawn`,
+`spawn_captured` and `spawn_channel` default `timeout_ms` to 30000, and the last
+two default `dir` to `"."`.
 
 - Starting a program needs no flag. With `agentica --deny-run file.agc` (or
   `--sandbox`, or `agentica run --deny-run`) every start returns an error that
@@ -330,13 +332,13 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   program stops its own children the same way. Other descendants are not
   covered.
 - `spawn_captured` works like `spawn`, with the same lookup, permission and
-  cleanup, except that the child starts in `dir` (`"."` keeps the working
-  directory; an empty, NUL or non-directory `dir` is an error) and its streams
-  are read by the VM. The child never blocks on a full pipe. Stdout is read by
-  `read_line` and `read_bytes`; stderr never reaches the program's stderr. Past
-  1 MiB of unread stdout, or of stderr, that stream is truncated and later bytes
-  are dropped; after a truncation every stdout read returns `error("process:
-  output exceeds 1048576 bytes")`.
+  cleanup, except that the child starts in `dir` (`"."`, the default, keeps the
+  working directory; an empty, NUL or non-directory `dir` is an error) and its
+  streams are read by the VM. The child never blocks on a full pipe. Stdout is
+  read by `read_line` and `read_bytes`; stderr never reaches the program's
+  stderr. Past 1 MiB of unread stdout, or of stderr, that stream is truncated
+  and later bytes are dropped; after a truncation every stdout read returns
+  `error("process: output exceeds 1048576 bytes")`.
 - `output` waits until both streams end and returns `ProcessOutput(stdout,
   stderr, truncated)`: the stdout not read yet, all of stderr (invalid UTF-8
   becomes U+FFFD), and whether a stream was truncated. It consumes nothing. A
@@ -346,10 +348,10 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   a child that is itself an Agentica program can stop its own children first.
   `close` and a timeout never wait. At the end of a run a captured child gets
   about one second; a child from `spawn` is killed at once.
-- `spawn_channel(command, args, dir, timeout_ms)` works like `spawn_captured`
-  and also opens a channel to the child: a private channel (a socket pair; on
-  Windows a pipe per direction), separate from its stdin, stdout and stderr,
-  that carries text lines in both directions.
+- `spawn_channel(command, args, dir = ".", timeout_ms = 30000)` works like
+  `spawn_captured` and also opens a channel to the child: a private channel (a
+  socket pair; on Windows a pipe per direction), separate from its stdin,
+  stdout and stderr, that carries text lines in both directions.
   The child finds it on descriptor 3, and its environment holds
   `AGENTICA_CHANNEL=3`. On Windows the channel is a pipe in each direction: the
   child reads descriptor 3 and writes descriptor 4, and the variable is

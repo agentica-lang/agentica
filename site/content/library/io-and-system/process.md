@@ -10,13 +10,13 @@ A program can start other programs unless it runs with `--deny-run` (or `--sandb
 agentica --deny-run tool.agc
 ```
 
-- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds.
+- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds, and the spawn functions default it to 30000. `Process.spawn_captured` and `Process.spawn_channel` also default `dir` to `"."`; arguments fill from the left, so a timeout cannot be given without `dir`.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 
 ## Process.spawn
 
 ```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
+Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000) -> Result[Process]
 ```
 
 Starts a program with your program's environment.
@@ -118,10 +118,10 @@ Its standard error goes to yours, unless started with `Process.spawn_captured`. 
 ## Process.spawn_captured
 
 ```text
-Process.spawn_captured(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 ```
 
-Starts a program in the folder `dir` (`"."` is the current one) and keeps its output. The command is found as for `Process.spawn`, from the current folder, not from `dir`.
+Starts a program in the folder `dir` (`"."`, the default, is the current one) and keeps its output. The command is found as for `Process.spawn`, from the current folder, not from `dir`.
 
 - Standard output and error are read all the time into buffers of 1 MiB each, so the program never blocks on a full pipe and its standard error is never printed. `read_line` and `read_bytes` read standard output as usual.
 - Past 1 MiB of waiting standard output, or of standard error, the rest is dropped and every read of standard output gives `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0, timeout)` gives it at once, to check without waiting.
@@ -159,7 +159,7 @@ false
 ## Process.spawn_channel
 
 ```text
-Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 ```
 
 Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows.

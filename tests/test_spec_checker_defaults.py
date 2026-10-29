@@ -149,6 +149,12 @@ SINGLE_FILE = [
                '  File.each_line("a.txt") do |line|\n    puts(line)\n    ok()\n  end\n'
                '  puts(File.foreach("a.txt").first(1))\n  puts(File.foreach("a.txt", 4096).first(1))\n'
                '  puts(File.foreach("a.txt").write_lines("b.txt"))\n'), None, None),
+    ("the process starts may leave out the timeout, and the captured ones the directory too",
+     main_with('  a = Process.spawn("ls", ["-l"])\n  b = Process.spawn("ls", [], 50)\n'
+               '  c = Process.spawn_captured("ls", [])\n  d = Process.spawn_captured("ls", [], "d")\n'
+               '  e = Process.spawn_channel("ls", [], "d", 50)\n  f = Process.spawn_channel("ls", [])\n'), None, None),
+    ("Process.spawn_captured still needs its command and arguments",
+     main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("a builtin has no function value, defaults or not",

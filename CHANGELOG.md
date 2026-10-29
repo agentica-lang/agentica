@@ -32,6 +32,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `write_bytes`, `flush`, `close`, `try_lock`, `each_line`, `foreach` and
   `Lazy.write_lines`, and `buffer_bytes` to 65536 on `File.each_line` and
   `foreach`, as on `File.chunks`.
+- `Process.spawn` defaults `timeout_ms` to 30000, and `Process.spawn_captured`
+  and `spawn_channel` default `dir` to `"."` and `timeout_ms` to 30000.
 
 ## [0.15.0] - 2026-10-29
 
