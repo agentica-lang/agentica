@@ -144,7 +144,7 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
 end
 
 # A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.
-export def write_private(path: String, data: List[Int]) -> Result[Void]
+export def write_private(path: String, data: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT_MS)
   rest = data
   while rest.size > 0
@@ -165,7 +165,7 @@ end
 # a miss, and a run that dies in between leaves no entry. False when anything fails, and then `temporary` is removed:
 # a run that lost the race to another one (its rename finds the entry the other made) must not leave its file. The
 # write handle is closed by then (write_private closes it on every path).
-export def install(temporary: String, data: List[Int], target: String) -> Bool
+export def install(temporary: String, data: Bytes, target: String) -> Bool
   if !write_private(temporary, data).ok?
     discard(temporary)
     return false
@@ -230,17 +230,8 @@ export def sweep(folder: String) -> Void
   end
 end
 
-export def digest(data: List[Int]) -> String
-  # The callers pass bytes read from a file or a String as a List[Int] until #805 PR 4, so Bytes.from_list cannot
-  # fail. If it did, the items' decimal text is hashed instead, behind an "x" that no hex digest starts with: such an
-  # input never shares a key with real bytes, and two of them share one only when they hold the same items.
-  bytes = Bytes.from_list(data)
-  if !bytes.ok?
-    text = data.map do |item: Int| item.to_s end.join(" ")
-    return "x#{Digest.sha256_hexdigest(text.bytes)}"
-  end
-
-  return Digest.sha256_hexdigest(bytes.unwrap!)
+export def digest(data: Bytes) -> String
+  return Digest.sha256_hexdigest(data)
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
@@ -260,7 +251,7 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       parts = parts.concat(workspace_parts(workspace, manifest))
   end
 
-  return ok(digest(String.to_bytes(parts.join("\n"))))
+  return ok(digest(parts.join("\n").bytes))
 end
 
 # The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each

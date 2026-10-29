@@ -13,7 +13,7 @@ def main() -> Void
   IO.inspect(Process.close_stdin(p, 0))
   IO.inspect(Process.spawn("sh", ["-c", "true"], 0))
   IO.inspect(Process.spawn("", [], 1000))
-  IO.inspect(Process.spawn("sh", [Result.unwrap!(String.from_bytes([0]))], 1000))
+  IO.inspect(Process.spawn("sh", [String.from_code(0)], 1000))
   IO.inspect(Process.spawn("agentica-no-such-command-7h", [], 1000))
   IO.inspect(Process.spawn("./agentica-no-such-command-7h", [], 1000))
   Process.close(p)

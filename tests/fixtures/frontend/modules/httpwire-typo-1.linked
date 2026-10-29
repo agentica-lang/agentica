@@ -4160,359 +4160,361 @@ program #6 0:1:1-73:6:1
             operand: call #4154 49417:1373:43-49444:1373:70 name="@2::time_left" piped=false
               arg: name-ref #4152 49427:1373:53-49433:1373:59 name="socket"
               arg: name-ref #4153 49435:1373:61-49443:1373:69 name="deadline"
-    declaration: function-decl #4185 49514:1377:1-49730:1384:1 name="@2::write_body"
-      param: param #4160 49529:1377:16-49544:1377:31 name="out"
-        type: type-ref #4159 49534:1377:21-49544:1377:31 name="FileHandle"
-      param: param #4163 49546:1377:33-49561:1377:48 name="data"
-        type: type-ref #4162 49552:1377:39-49561:1377:48 name="List"
-          arg: type-ref #4161 49557:1377:44-49560:1377:47 name="Int"
-      param: param #4165 49563:1377:50-49576:1377:63 name="deadline"
-        type: type-ref #4164 49573:1377:60-49576:1377:63 name="Int"
-      result: type-ref #4167 49581:1377:68-49593:1377:80 name="Result"
-        arg: type-ref #4166 49588:1377:75-49592:1377:79 name="Void"
-      body: binding #4171 49596:1378:3-49634:1379:1 name="left"
-        value: binary #4170 49603:1378:10-49633:1378:40 op=minus op-span=49612:1378:19-49613:1378:20
-          left: name-ref #4168 49603:1378:10-49611:1378:18 name="deadline"
-          right: call #4169 49614:1378:21-49633:1378:40 name="Time.monotonic_ms" piped=false
-      body: if-stmt #4179 49636:1379:3-49683:1382:1
-        branch: if-branch #4178 49636:1379:3-49677:1381:1
-          condition: binary #4174 49639:1379:6-49648:1379:15 op=less-equal op-span=49644:1379:11-49646:1379:13
-            left: name-ref #4172 49639:1379:6-49643:1379:10 name="left"
-            right: literal #4173 49647:1379:14-49648:1379:15 value=int:0
-          body: return-stmt #4177 49653:1380:5-49677:1381:1
-            value: call #4176 49660:1380:12-49676:1380:28 name="error" piped=false
-              arg: const-ref #4175 49666:1380:18-49675:1380:27 name="@2::TIMED_OUT"
-      body: return-stmt #4184 49685:1382:3-49726:1383:1
-        value: call #4183 49692:1382:10-49725:1382:43 name="File.write_bytes" piped=false
-          arg: name-ref #4180 49709:1382:27-49712:1382:30 name="out"
-          arg: name-ref #4181 49714:1382:32-49718:1382:36 name="data"
-          arg: name-ref #4182 49720:1382:38-49724:1382:42 name="left"
-    declaration: function-decl #4237 49835:1386:1-50209:1403:1 name="@2::write_bounded"
-      param: param #4187 49856:1387:3-49871:1387:18 name="out"
-        type: type-ref #4186 49861:1387:8-49871:1387:18 name="FileHandle"
-      param: param #4190 49875:1388:3-49890:1388:18 name="data"
-        type: type-ref #4189 49881:1388:9-49890:1388:18 name="List"
-          arg: type-ref #4188 49886:1388:14-49889:1388:17 name="Int"
-      param: param #4192 49894:1389:3-49906:1389:15 name="written"
-        type: type-ref #4191 49903:1389:12-49906:1389:15 name="Int"
-      param: param #4194 49910:1390:3-49921:1390:14 name="budget"
-        type: type-ref #4193 49918:1390:11-49921:1390:14 name="Int"
-      param: param #4196 49925:1391:3-49938:1391:16 name="deadline"
-        type: type-ref #4195 49935:1391:13-49938:1391:16 name="Int"
-      result: type-ref #4198 49945:1392:6-49956:1392:17 name="Result"
-        arg: type-ref #4197 49952:1392:13-49955:1392:16 name="Int"
-      body: binding #4202 49959:1393:3-49983:1394:1 name="room"
-        value: binary #4201 49966:1393:10-49982:1393:26 op=minus op-span=49973:1393:17-49974:1393:18
-          left: name-ref #4199 49966:1393:10-49972:1393:16 name="budget"
-          right: name-ref #4200 49975:1393:19-49982:1393:26 name="written"
-      body: if-stmt #4224 49985:1394:3-50128:1400:1
-        branch: if-branch #4223 49985:1394:3-50122:1399:1
-          condition: binary #4206 49988:1394:6-50010:1394:28 op=greater op-span=50004:1394:22-50005:1394:23
-            left: call #4204 49988:1394:6-50003:1394:21 name="List.size" piped=false
-              arg: name-ref #4203 49998:1394:16-50002:1394:20 name="data"
-            right: name-ref #4205 50006:1394:24-50010:1394:28 name="room"
-          body: if-stmt #4219 50015:1395:5-50094:1398:1
-            branch: if-branch #4218 50015:1395:5-50086:1397:1
-              condition: binary #4209 50018:1395:8-50026:1395:16 op=greater op-span=50023:1395:13-50024:1395:14
-                left: name-ref #4207 50018:1395:8-50022:1395:12 name="room"
-                right: literal #4208 50025:1395:15-50026:1395:16 value=int:0
-              body: expr-stmt #4217 50033:1396:7-50086:1397:1
-                value: try-expr #4216 50033:1396:7-50085:1396:59
-                  operand: call #4215 50037:1396:11-50085:1396:59 name="@2::write_body" piped=false
-                    arg: name-ref #4210 50048:1396:22-50051:1396:25 name="out"
-                    arg: call #4213 50053:1396:27-50074:1396:48 name="List.take" piped=false
-                      arg: name-ref #4211 50063:1396:37-50067:1396:41 name="data"
-                      arg: name-ref #4212 50069:1396:43-50073:1396:47 name="room"
-                    arg: name-ref #4214 50076:1396:50-50084:1396:58 name="deadline"
-          body: return-stmt #4222 50098:1398:5-50122:1399:1
-            value: call #4221 50105:1398:12-50121:1398:28 name="error" piped=false
-              arg: const-ref #4220 50111:1398:18-50120:1398:27 name="@2::TOO_LARGE"
-      body: expr-stmt #4230 50130:1400:3-50166:1401:1
-        value: try-expr #4229 50130:1400:3-50165:1400:38
-          operand: call #4228 50134:1400:7-50165:1400:38 name="@2::write_body" piped=false
-            arg: name-ref #4225 50145:1400:18-50148:1400:21 name="out"
-            arg: name-ref #4226 50150:1400:23-50154:1400:27 name="data"
-            arg: name-ref #4227 50156:1400:29-50164:1400:37 name="deadline"
-      body: return-stmt #4236 50168:1401:3-50205:1402:1
-        value: call #4235 50175:1401:10-50204:1401:39 name="ok" piped=false
-          arg: binary #4234 50178:1401:13-50203:1401:38 op=plus op-span=50186:1401:21-50187:1401:22
-            left: name-ref #4231 50178:1401:13-50185:1401:20 name="written"
-            right: call #4233 50188:1401:23-50203:1401:38 name="List.size" piped=false
-              arg: name-ref #4232 50198:1401:33-50202:1401:37 name="data"
-    declaration: function-decl #4291 50311:1405:1-50734:1418:1 name="@2::save_length"
-      param: param #4239 50327:1405:17-50341:1405:31 name="socket"
-        type: type-ref #4238 50335:1405:25-50341:1405:31 name="Socket"
-      param: param #4241 50343:1405:33-50358:1405:48 name="out"
-        type: type-ref #4240 50348:1405:38-50358:1405:48 name="FileHandle"
-      param: param #4243 50360:1405:50-50371:1405:61 name="length"
-        type: type-ref #4242 50368:1405:58-50371:1405:61 name="Int"
-      param: param #4245 50373:1405:63-50384:1405:74 name="budget"
-        type: type-ref #4244 50381:1405:71-50384:1405:74 name="Int"
-      param: param #4247 50386:1405:76-50399:1405:89 name="deadline"
-        type: type-ref #4246 50396:1405:86-50399:1405:89 name="Int"
-      result: type-ref #4249 50404:1405:94-50415:1405:105 name="Result"
-        arg: type-ref #4248 50411:1405:101-50414:1405:104 name="Int"
-      body: binding #4251 50418:1406:3-50432:1407:1 name="left"
-        value: name-ref #4250 50425:1406:10-50431:1406:16 name="length"
-      body: binding #4253 50434:1407:3-50446:1408:1 name="written"
-        value: literal #4252 50444:1407:13-50445:1407:14 value=int:0
-      body: while-stmt #4287 50448:1408:3-50709:1416:1
-        condition: binary #4256 50454:1408:9-50462:1408:17 op=greater op-span=50459:1408:14-50460:1408:15
-          left: name-ref #4254 50454:1408:9-50458:1408:13 name="left"
-          right: literal #4255 50461:1408:16-50462:1408:17 value=int:0
-        body: binding #4264 50467:1409:5-50533:1410:1 name="data"
-          value: try-expr #4263 50474:1409:12-50532:1409:70
-            operand: call #4262 50478:1409:16-50532:1409:70 name="@2::recv_body" piped=false
-              arg: name-ref #4257 50488:1409:26-50494:1409:32 name="socket"
-              arg: call #4260 50496:1409:34-50521:1409:59 name="@2::smaller" piped=false
-                arg: name-ref #4258 50504:1409:42-50508:1409:46 name="left"
-                arg: const-ref #4259 50510:1409:48-50520:1409:58 name="@2::TEXT_BYTES"
-              arg: name-ref #4261 50523:1409:61-50531:1409:69 name="deadline"
-        body: if-stmt #4273 50537:1410:5-50599:1413:1
-          branch: if-branch #4272 50537:1410:5-50591:1412:1
-            condition: binary #4268 50540:1410:8-50560:1410:28 op=equal op-span=50556:1410:24-50558:1410:26
-              left: call #4266 50540:1410:8-50555:1410:23 name="List.size" piped=false
-                arg: name-ref #4265 50550:1410:18-50554:1410:22 name="data"
-              right: literal #4267 50559:1410:27-50560:1410:28 value=int:0
-            body: return-stmt #4271 50567:1411:7-50591:1412:1
-              value: call #4270 50574:1411:14-50590:1411:30 name="error" piped=false
-                arg: const-ref #4269 50580:1411:20-50589:1411:29 name="@2::TRUNCATED"
-        body: binding #4281 50603:1413:5-50669:1414:1 name="written"
-          value: try-expr #4280 50613:1413:15-50668:1413:70
-            operand: call #4279 50617:1413:19-50668:1413:70 name="@2::write_bounded" piped=false
-              arg: name-ref #4274 50631:1413:33-50634:1413:36 name="out"
-              arg: name-ref #4275 50636:1413:38-50640:1413:42 name="data"
-              arg: name-ref #4276 50642:1413:44-50649:1413:51 name="written"
-              arg: name-ref #4277 50651:1413:53-50657:1413:59 name="budget"
-              arg: name-ref #4278 50659:1413:61-50667:1413:69 name="deadline"
-        body: binding #4286 50673:1414:5-50703:1415:1 name="left"
-          value: binary #4285 50680:1414:12-50702:1414:34 op=minus op-span=50685:1414:17-50686:1414:18
-            left: name-ref #4282 50680:1414:12-50684:1414:16 name="left"
-            right: call #4284 50687:1414:19-50702:1414:34 name="List.size" piped=false
-              arg: name-ref #4283 50697:1414:29-50701:1414:33 name="data"
-      body: return-stmt #4290 50711:1416:3-50730:1417:1
-        value: call #4289 50718:1416:10-50729:1416:21 name="ok" piped=false
-          arg: name-ref #4288 50721:1416:13-50728:1416:20 name="written"
-    declaration: function-decl #4397 50837:1420:1-51752:1446:1 name="@2::save_chunked"
-      param: param #4293 50854:1420:18-50868:1420:32 name="socket"
-        type: type-ref #4292 50862:1420:26-50868:1420:32 name="Socket"
-      param: param #4295 50870:1420:34-50885:1420:49 name="out"
-        type: type-ref #4294 50875:1420:39-50885:1420:49 name="FileHandle"
-      param: param #4297 50887:1420:51-50898:1420:62 name="budget"
-        type: type-ref #4296 50895:1420:59-50898:1420:62 name="Int"
-      param: param #4299 50900:1420:64-50913:1420:77 name="deadline"
-        type: type-ref #4298 50910:1420:74-50913:1420:77 name="Int"
-      result: type-ref #4301 50918:1420:82-50929:1420:93 name="Result"
-        arg: type-ref #4300 50925:1420:89-50928:1420:92 name="Int"
-      body: binding #4305 50932:1421:3-50953:1422:1 name="data"
-        type: type-ref #4303 50938:1421:9-50947:1421:18 name="List"
-          arg: type-ref #4302 50943:1421:14-50946:1421:17 name="Int"
-        value: list-lit #4304 50950:1421:21-50952:1421:23
-      body: binding #4308 50955:1422:3-50988:1423:1 name="state"
-        value: call #4307 50963:1422:11-50987:1422:35 name="HttpWire.chunked" piped=false
-          arg: name-ref #4306 50980:1422:28-50986:1422:34 name="budget"
-      body: binding #4310 50990:1423:3-51002:1424:1 name="written"
-        value: literal #4309 51000:1423:13-51001:1423:14 value=int:0
-      body: while-stmt #4393 51004:1424:3-51727:1444:1
-        condition: unary #4313 51010:1424:9-51024:1424:23 op=not op-span=51010:1424:9-51013:1424:12
-          operand: field-access #4312 51014:1424:13-51024:1424:23 name="done"
-            target: name-ref #4311 51014:1424:13-51019:1424:18 name="state"
-        body: if-stmt #4392 51029:1425:5-51721:1443:1
-          branch: if-branch #4349 51029:1425:5-51337:1432:1
-            condition: binary #4317 51032:1425:8-51051:1425:27 op=greater op-span=51048:1425:24-51049:1425:25
-              left: field-access #4315 51032:1425:8-51047:1425:23 name="remaining"
-                target: name-ref #4314 51032:1425:8-51037:1425:13 name="state"
-              right: literal #4316 51050:1425:26-51051:1425:27 value=int:0
-            body: binding #4326 51058:1426:7-51135:1427:1 name="data"
-              value: try-expr #4325 51065:1426:14-51134:1426:83
-                operand: call #4324 51069:1426:18-51134:1426:83 name="@2::recv_body" piped=false
-                  arg: name-ref #4318 51079:1426:28-51085:1426:34 name="socket"
-                  arg: call #4322 51087:1426:36-51123:1426:72 name="@2::smaller" piped=false
-                    arg: field-access #4320 51095:1426:44-51110:1426:59 name="remaining"
-                      target: name-ref #4319 51095:1426:44-51100:1426:49 name="state"
-                    arg: const-ref #4321 51112:1426:61-51122:1426:71 name="@2::TEXT_BYTES"
-                  arg: name-ref #4323 51125:1426:74-51133:1426:82 name="deadline"
-            body: if-stmt #4335 51141:1427:7-51207:1430:1
-              branch: if-branch #4334 51141:1427:7-51197:1429:1
-                condition: binary #4330 51144:1427:10-51164:1427:30 op=equal op-span=51160:1427:26-51162:1427:28
-                  left: call #4328 51144:1427:10-51159:1427:25 name="List.size" piped=false
-                    arg: name-ref #4327 51154:1427:20-51158:1427:24 name="data"
-                  right: literal #4329 51163:1427:29-51164:1427:30 value=int:0
-                body: return-stmt #4333 51173:1428:9-51197:1429:1
-                  value: call #4332 51180:1428:16-51196:1428:32 name="error" piped=false
-                    arg: const-ref #4331 51186:1428:22-51195:1428:31 name="@2::TRUNCATED"
-            body: binding #4343 51213:1430:7-51279:1431:1 name="written"
-              value: try-expr #4342 51223:1430:17-51278:1430:72
-                operand: call #4341 51227:1430:21-51278:1430:72 name="@2::write_bounded" piped=false
-                  arg: name-ref #4336 51241:1430:35-51244:1430:38 name="out"
-                  arg: name-ref #4337 51246:1430:40-51250:1430:44 name="data"
-                  arg: name-ref #4338 51252:1430:46-51259:1430:53 name="written"
-                  arg: name-ref #4339 51261:1430:55-51267:1430:61 name="budget"
-                  arg: name-ref #4340 51269:1430:63-51277:1430:71 name="deadline"
-            body: binding #4348 51285:1431:7-51337:1432:1 name="state"
-              value: call #4347 51293:1431:15-51336:1431:58 name="HttpWire.chunk_read" piped=false
-                arg: name-ref #4344 51313:1431:35-51318:1431:40 name="state"
-                arg: call #4346 51320:1431:42-51335:1431:57 name="List.size" piped=false
-                  arg: name-ref #4345 51330:1431:52-51334:1431:56 name="data"
+    declaration: function-decl #4187 49602:1378:1-49839:1385:1 name="@2::write_body"
+      param: param #4160 49617:1378:16-49632:1378:31 name="out"
+        type: type-ref #4159 49622:1378:21-49632:1378:31 name="FileHandle"
+      param: param #4163 49634:1378:33-49649:1378:48 name="data"
+        type: type-ref #4162 49640:1378:39-49649:1378:48 name="List"
+          arg: type-ref #4161 49645:1378:44-49648:1378:47 name="Int"
+      param: param #4165 49651:1378:50-49664:1378:63 name="deadline"
+        type: type-ref #4164 49661:1378:60-49664:1378:63 name="Int"
+      result: type-ref #4167 49669:1378:68-49681:1378:80 name="Result"
+        arg: type-ref #4166 49676:1378:75-49680:1378:79 name="Void"
+      body: binding #4171 49684:1379:3-49722:1380:1 name="left"
+        value: binary #4170 49691:1379:10-49721:1379:40 op=minus op-span=49700:1379:19-49701:1379:20
+          left: name-ref #4168 49691:1379:10-49699:1379:18 name="deadline"
+          right: call #4169 49702:1379:21-49721:1379:40 name="Time.monotonic_ms" piped=false
+      body: if-stmt #4179 49724:1380:3-49771:1383:1
+        branch: if-branch #4178 49724:1380:3-49765:1382:1
+          condition: binary #4174 49727:1380:6-49736:1380:15 op=less-equal op-span=49732:1380:11-49734:1380:13
+            left: name-ref #4172 49727:1380:6-49731:1380:10 name="left"
+            right: literal #4173 49735:1380:14-49736:1380:15 value=int:0
+          body: return-stmt #4177 49741:1381:5-49765:1382:1
+            value: call #4176 49748:1381:12-49764:1381:28 name="error" piped=false
+              arg: const-ref #4175 49754:1381:18-49763:1381:27 name="@2::TIMED_OUT"
+      body: return-stmt #4186 49773:1383:3-49835:1384:1
+        value: call #4185 49780:1383:10-49834:1383:64 name="File.write_bytes" piped=false
+          arg: name-ref #4180 49797:1383:27-49800:1383:30 name="out"
+          arg: try-expr #4183 49802:1383:32-49827:1383:57
+            operand: call #4182 49806:1383:36-49827:1383:57 name="Bytes.from_list" piped=false
+              arg: name-ref #4181 49822:1383:52-49826:1383:56 name="data"
+          arg: name-ref #4184 49829:1383:59-49833:1383:63 name="left"
+    declaration: function-decl #4239 49944:1387:1-50318:1404:1 name="@2::write_bounded"
+      param: param #4189 49965:1388:3-49980:1388:18 name="out"
+        type: type-ref #4188 49970:1388:8-49980:1388:18 name="FileHandle"
+      param: param #4192 49984:1389:3-49999:1389:18 name="data"
+        type: type-ref #4191 49990:1389:9-49999:1389:18 name="List"
+          arg: type-ref #4190 49995:1389:14-49998:1389:17 name="Int"
+      param: param #4194 50003:1390:3-50015:1390:15 name="written"
+        type: type-ref #4193 50012:1390:12-50015:1390:15 name="Int"
+      param: param #4196 50019:1391:3-50030:1391:14 name="budget"
+        type: type-ref #4195 50027:1391:11-50030:1391:14 name="Int"
+      param: param #4198 50034:1392:3-50047:1392:16 name="deadline"
+        type: type-ref #4197 50044:1392:13-50047:1392:16 name="Int"
+      result: type-ref #4200 50054:1393:6-50065:1393:17 name="Result"
+        arg: type-ref #4199 50061:1393:13-50064:1393:16 name="Int"
+      body: binding #4204 50068:1394:3-50092:1395:1 name="room"
+        value: binary #4203 50075:1394:10-50091:1394:26 op=minus op-span=50082:1394:17-50083:1394:18
+          left: name-ref #4201 50075:1394:10-50081:1394:16 name="budget"
+          right: name-ref #4202 50084:1394:19-50091:1394:26 name="written"
+      body: if-stmt #4226 50094:1395:3-50237:1401:1
+        branch: if-branch #4225 50094:1395:3-50231:1400:1
+          condition: binary #4208 50097:1395:6-50119:1395:28 op=greater op-span=50113:1395:22-50114:1395:23
+            left: call #4206 50097:1395:6-50112:1395:21 name="List.size" piped=false
+              arg: name-ref #4205 50107:1395:16-50111:1395:20 name="data"
+            right: name-ref #4207 50115:1395:24-50119:1395:28 name="room"
+          body: if-stmt #4221 50124:1396:5-50203:1399:1
+            branch: if-branch #4220 50124:1396:5-50195:1398:1
+              condition: binary #4211 50127:1396:8-50135:1396:16 op=greater op-span=50132:1396:13-50133:1396:14
+                left: name-ref #4209 50127:1396:8-50131:1396:12 name="room"
+                right: literal #4210 50134:1396:15-50135:1396:16 value=int:0
+              body: expr-stmt #4219 50142:1397:7-50195:1398:1
+                value: try-expr #4218 50142:1397:7-50194:1397:59
+                  operand: call #4217 50146:1397:11-50194:1397:59 name="@2::write_body" piped=false
+                    arg: name-ref #4212 50157:1397:22-50160:1397:25 name="out"
+                    arg: call #4215 50162:1397:27-50183:1397:48 name="List.take" piped=false
+                      arg: name-ref #4213 50172:1397:37-50176:1397:41 name="data"
+                      arg: name-ref #4214 50178:1397:43-50182:1397:47 name="room"
+                    arg: name-ref #4216 50185:1397:50-50193:1397:58 name="deadline"
+          body: return-stmt #4224 50207:1399:5-50231:1400:1
+            value: call #4223 50214:1399:12-50230:1399:28 name="error" piped=false
+              arg: const-ref #4222 50220:1399:18-50229:1399:27 name="@2::TOO_LARGE"
+      body: expr-stmt #4232 50239:1401:3-50275:1402:1
+        value: try-expr #4231 50239:1401:3-50274:1401:38
+          operand: call #4230 50243:1401:7-50274:1401:38 name="@2::write_body" piped=false
+            arg: name-ref #4227 50254:1401:18-50257:1401:21 name="out"
+            arg: name-ref #4228 50259:1401:23-50263:1401:27 name="data"
+            arg: name-ref #4229 50265:1401:29-50273:1401:37 name="deadline"
+      body: return-stmt #4238 50277:1402:3-50314:1403:1
+        value: call #4237 50284:1402:10-50313:1402:39 name="ok" piped=false
+          arg: binary #4236 50287:1402:13-50312:1402:38 op=plus op-span=50295:1402:21-50296:1402:22
+            left: name-ref #4233 50287:1402:13-50294:1402:20 name="written"
+            right: call #4235 50297:1402:23-50312:1402:38 name="List.size" piped=false
+              arg: name-ref #4234 50307:1402:33-50311:1402:37 name="data"
+    declaration: function-decl #4293 50420:1406:1-50843:1419:1 name="@2::save_length"
+      param: param #4241 50436:1406:17-50450:1406:31 name="socket"
+        type: type-ref #4240 50444:1406:25-50450:1406:31 name="Socket"
+      param: param #4243 50452:1406:33-50467:1406:48 name="out"
+        type: type-ref #4242 50457:1406:38-50467:1406:48 name="FileHandle"
+      param: param #4245 50469:1406:50-50480:1406:61 name="length"
+        type: type-ref #4244 50477:1406:58-50480:1406:61 name="Int"
+      param: param #4247 50482:1406:63-50493:1406:74 name="budget"
+        type: type-ref #4246 50490:1406:71-50493:1406:74 name="Int"
+      param: param #4249 50495:1406:76-50508:1406:89 name="deadline"
+        type: type-ref #4248 50505:1406:86-50508:1406:89 name="Int"
+      result: type-ref #4251 50513:1406:94-50524:1406:105 name="Result"
+        arg: type-ref #4250 50520:1406:101-50523:1406:104 name="Int"
+      body: binding #4253 50527:1407:3-50541:1408:1 name="left"
+        value: name-ref #4252 50534:1407:10-50540:1407:16 name="length"
+      body: binding #4255 50543:1408:3-50555:1409:1 name="written"
+        value: literal #4254 50553:1408:13-50554:1408:14 value=int:0
+      body: while-stmt #4289 50557:1409:3-50818:1417:1
+        condition: binary #4258 50563:1409:9-50571:1409:17 op=greater op-span=50568:1409:14-50569:1409:15
+          left: name-ref #4256 50563:1409:9-50567:1409:13 name="left"
+          right: literal #4257 50570:1409:16-50571:1409:17 value=int:0
+        body: binding #4266 50576:1410:5-50642:1411:1 name="data"
+          value: try-expr #4265 50583:1410:12-50641:1410:70
+            operand: call #4264 50587:1410:16-50641:1410:70 name="@2::recv_body" piped=false
+              arg: name-ref #4259 50597:1410:26-50603:1410:32 name="socket"
+              arg: call #4262 50605:1410:34-50630:1410:59 name="@2::smaller" piped=false
+                arg: name-ref #4260 50613:1410:42-50617:1410:46 name="left"
+                arg: const-ref #4261 50619:1410:48-50629:1410:58 name="@2::TEXT_BYTES"
+              arg: name-ref #4263 50632:1410:61-50640:1410:69 name="deadline"
+        body: if-stmt #4275 50646:1411:5-50708:1414:1
+          branch: if-branch #4274 50646:1411:5-50700:1413:1
+            condition: binary #4270 50649:1411:8-50669:1411:28 op=equal op-span=50665:1411:24-50667:1411:26
+              left: call #4268 50649:1411:8-50664:1411:23 name="List.size" piped=false
+                arg: name-ref #4267 50659:1411:18-50663:1411:22 name="data"
+              right: literal #4269 50668:1411:27-50669:1411:28 value=int:0
+            body: return-stmt #4273 50676:1412:7-50700:1413:1
+              value: call #4272 50683:1412:14-50699:1412:30 name="error" piped=false
+                arg: const-ref #4271 50689:1412:20-50698:1412:29 name="@2::TRUNCATED"
+        body: binding #4283 50712:1414:5-50778:1415:1 name="written"
+          value: try-expr #4282 50722:1414:15-50777:1414:70
+            operand: call #4281 50726:1414:19-50777:1414:70 name="@2::write_bounded" piped=false
+              arg: name-ref #4276 50740:1414:33-50743:1414:36 name="out"
+              arg: name-ref #4277 50745:1414:38-50749:1414:42 name="data"
+              arg: name-ref #4278 50751:1414:44-50758:1414:51 name="written"
+              arg: name-ref #4279 50760:1414:53-50766:1414:59 name="budget"
+              arg: name-ref #4280 50768:1414:61-50776:1414:69 name="deadline"
+        body: binding #4288 50782:1415:5-50812:1416:1 name="left"
+          value: binary #4287 50789:1415:12-50811:1415:34 op=minus op-span=50794:1415:17-50795:1415:18
+            left: name-ref #4284 50789:1415:12-50793:1415:16 name="left"
+            right: call #4286 50796:1415:19-50811:1415:34 name="List.size" piped=false
+              arg: name-ref #4285 50806:1415:29-50810:1415:33 name="data"
+      body: return-stmt #4292 50820:1417:3-50839:1418:1
+        value: call #4291 50827:1417:10-50838:1417:21 name="ok" piped=false
+          arg: name-ref #4290 50830:1417:13-50837:1417:20 name="written"
+    declaration: function-decl #4399 50946:1421:1-51861:1447:1 name="@2::save_chunked"
+      param: param #4295 50963:1421:18-50977:1421:32 name="socket"
+        type: type-ref #4294 50971:1421:26-50977:1421:32 name="Socket"
+      param: param #4297 50979:1421:34-50994:1421:49 name="out"
+        type: type-ref #4296 50984:1421:39-50994:1421:49 name="FileHandle"
+      param: param #4299 50996:1421:51-51007:1421:62 name="budget"
+        type: type-ref #4298 51004:1421:59-51007:1421:62 name="Int"
+      param: param #4301 51009:1421:64-51022:1421:77 name="deadline"
+        type: type-ref #4300 51019:1421:74-51022:1421:77 name="Int"
+      result: type-ref #4303 51027:1421:82-51038:1421:93 name="Result"
+        arg: type-ref #4302 51034:1421:89-51037:1421:92 name="Int"
+      body: binding #4307 51041:1422:3-51062:1423:1 name="data"
+        type: type-ref #4305 51047:1422:9-51056:1422:18 name="List"
+          arg: type-ref #4304 51052:1422:14-51055:1422:17 name="Int"
+        value: list-lit #4306 51059:1422:21-51061:1422:23
+      body: binding #4310 51064:1423:3-51097:1424:1 name="state"
+        value: call #4309 51072:1423:11-51096:1423:35 name="HttpWire.chunked" piped=false
+          arg: name-ref #4308 51089:1423:28-51095:1423:34 name="budget"
+      body: binding #4312 51099:1424:3-51111:1425:1 name="written"
+        value: literal #4311 51109:1424:13-51110:1424:14 value=int:0
+      body: while-stmt #4395 51113:1425:3-51836:1445:1
+        condition: unary #4315 51119:1425:9-51133:1425:23 op=not op-span=51119:1425:9-51122:1425:12
+          operand: field-access #4314 51123:1425:13-51133:1425:23 name="done"
+            target: name-ref #4313 51123:1425:13-51128:1425:18 name="state"
+        body: if-stmt #4394 51138:1426:5-51830:1444:1
+          branch: if-branch #4351 51138:1426:5-51446:1433:1
+            condition: binary #4319 51141:1426:8-51160:1426:27 op=greater op-span=51157:1426:24-51158:1426:25
+              left: field-access #4317 51141:1426:8-51156:1426:23 name="remaining"
+                target: name-ref #4316 51141:1426:8-51146:1426:13 name="state"
+              right: literal #4318 51159:1426:26-51160:1426:27 value=int:0
+            body: binding #4328 51167:1427:7-51244:1428:1 name="data"
+              value: try-expr #4327 51174:1427:14-51243:1427:83
+                operand: call #4326 51178:1427:18-51243:1427:83 name="@2::recv_body" piped=false
+                  arg: name-ref #4320 51188:1427:28-51194:1427:34 name="socket"
+                  arg: call #4324 51196:1427:36-51232:1427:72 name="@2::smaller" piped=false
+                    arg: field-access #4322 51204:1427:44-51219:1427:59 name="remaining"
+                      target: name-ref #4321 51204:1427:44-51209:1427:49 name="state"
+                    arg: const-ref #4323 51221:1427:61-51231:1427:71 name="@2::TEXT_BYTES"
+                  arg: name-ref #4325 51234:1427:74-51242:1427:82 name="deadline"
+            body: if-stmt #4337 51250:1428:7-51316:1431:1
+              branch: if-branch #4336 51250:1428:7-51306:1430:1
+                condition: binary #4332 51253:1428:10-51273:1428:30 op=equal op-span=51269:1428:26-51271:1428:28
+                  left: call #4330 51253:1428:10-51268:1428:25 name="List.size" piped=false
+                    arg: name-ref #4329 51263:1428:20-51267:1428:24 name="data"
+                  right: literal #4331 51272:1428:29-51273:1428:30 value=int:0
+                body: return-stmt #4335 51282:1429:9-51306:1430:1
+                  value: call #4334 51289:1429:16-51305:1429:32 name="error" piped=false
+                    arg: const-ref #4333 51295:1429:22-51304:1429:31 name="@2::TRUNCATED"
+            body: binding #4345 51322:1431:7-51388:1432:1 name="written"
+              value: try-expr #4344 51332:1431:17-51387:1431:72
+                operand: call #4343 51336:1431:21-51387:1431:72 name="@2::write_bounded" piped=false
+                  arg: name-ref #4338 51350:1431:35-51353:1431:38 name="out"
+                  arg: name-ref #4339 51355:1431:40-51359:1431:44 name="data"
+                  arg: name-ref #4340 51361:1431:46-51368:1431:53 name="written"
+                  arg: name-ref #4341 51370:1431:55-51376:1431:61 name="budget"
+                  arg: name-ref #4342 51378:1431:63-51386:1431:71 name="deadline"
+            body: binding #4350 51394:1432:7-51446:1433:1 name="state"
+              value: call #4349 51402:1432:15-51445:1432:58 name="HttpWire.chunk_read" piped=false
+                arg: name-ref #4346 51422:1432:35-51427:1432:40 name="state"
+                arg: call #4348 51429:1432:42-51444:1432:57 name="List.size" piped=false
+                  arg: name-ref #4347 51439:1432:52-51443:1432:56 name="data"
           else:
-            body: binding #4355 51352:1433:7-51404:1434:1 name="data"
-              value: try-expr #4354 51359:1433:14-51403:1433:58
-                operand: call #4353 51363:1433:18-51403:1433:58 name="@2::recv_body" piped=false
-                  arg: name-ref #4350 51373:1433:28-51379:1433:34 name="socket"
-                  arg: const-ref #4351 51381:1433:36-51392:1433:47 name="@2::FRAME_BYTES"
-                  arg: name-ref #4352 51394:1433:49-51402:1433:57 name="deadline"
-            body: if-stmt #4364 51410:1434:7-51476:1437:1
-              branch: if-branch #4363 51410:1434:7-51466:1436:1
-                condition: binary #4359 51413:1434:10-51433:1434:30 op=equal op-span=51429:1434:26-51431:1434:28
-                  left: call #4357 51413:1434:10-51428:1434:25 name="List.size" piped=false
-                    arg: name-ref #4356 51423:1434:20-51427:1434:24 name="data"
-                  right: literal #4358 51432:1434:29-51433:1434:30 value=int:0
-                body: return-stmt #4362 51442:1435:9-51466:1436:1
-                  value: call #4361 51449:1435:16-51465:1435:32 name="error" piped=false
-                    arg: const-ref #4360 51455:1435:22-51464:1435:31 name="@2::TRUNCATED"
-            body: case-stmt #4381 51482:1437:7-51632:1441:1
-              value: call #4368 51487:1437:12-51517:1437:42 name="HttpWire.chunk" piped=false
-                arg: name-ref #4365 51502:1437:27-51507:1437:32 name="state"
-                arg: name-ref #4366 51509:1437:34-51513:1437:38 name="data"
-                arg: literal #4367 51515:1437:40-51516:1437:41 value=int:0
-              arm: case-arm #4372 51526:1438:9-51551:1439:1
-                pattern: variant-pattern #4369 51526:1438:9-51534:1438:17 enum="Result" variant="Ok" bindings=["next"]
-                body: binding #4371 51538:1438:21-51551:1439:1 name="state"
-                  value: name-ref #4370 51546:1438:29-51550:1438:33 name="next"
-              arm: case-arm #4380 51559:1439:9-51622:1440:1
-                pattern: variant-pattern #4373 51559:1439:9-51573:1439:23 enum="Result" variant="Err" bindings=["problem"]
-                body: return-stmt #4379 51577:1439:27-51622:1440:1
-                  value: call #4378 51584:1439:34-51621:1439:71 name="error" piped=false
-                    arg: interpolation #4377 51590:1439:40-51620:1439:70
+            body: binding #4357 51461:1434:7-51513:1435:1 name="data"
+              value: try-expr #4356 51468:1434:14-51512:1434:58
+                operand: call #4355 51472:1434:18-51512:1434:58 name="@2::recv_body" piped=false
+                  arg: name-ref #4352 51482:1434:28-51488:1434:34 name="socket"
+                  arg: const-ref #4353 51490:1434:36-51501:1434:47 name="@2::FRAME_BYTES"
+                  arg: name-ref #4354 51503:1434:49-51511:1434:57 name="deadline"
+            body: if-stmt #4366 51519:1435:7-51585:1438:1
+              branch: if-branch #4365 51519:1435:7-51575:1437:1
+                condition: binary #4361 51522:1435:10-51542:1435:30 op=equal op-span=51538:1435:26-51540:1435:28
+                  left: call #4359 51522:1435:10-51537:1435:25 name="List.size" piped=false
+                    arg: name-ref #4358 51532:1435:20-51536:1435:24 name="data"
+                  right: literal #4360 51541:1435:29-51542:1435:30 value=int:0
+                body: return-stmt #4364 51551:1436:9-51575:1437:1
+                  value: call #4363 51558:1436:16-51574:1436:32 name="error" piped=false
+                    arg: const-ref #4362 51564:1436:22-51573:1436:31 name="@2::TRUNCATED"
+            body: case-stmt #4383 51591:1438:7-51741:1442:1
+              value: call #4370 51596:1438:12-51626:1438:42 name="HttpWire.chunk" piped=false
+                arg: name-ref #4367 51611:1438:27-51616:1438:32 name="state"
+                arg: name-ref #4368 51618:1438:34-51622:1438:38 name="data"
+                arg: literal #4369 51624:1438:40-51625:1438:41 value=int:0
+              arm: case-arm #4374 51635:1439:9-51660:1440:1
+                pattern: variant-pattern #4371 51635:1439:9-51643:1439:17 enum="Result" variant="Ok" bindings=["next"]
+                body: binding #4373 51647:1439:21-51660:1440:1 name="state"
+                  value: name-ref #4372 51655:1439:29-51659:1439:33 name="next"
+              arm: case-arm #4382 51668:1440:9-51731:1441:1
+                pattern: variant-pattern #4375 51668:1440:9-51682:1440:23 enum="Result" variant="Err" bindings=["problem"]
+                body: return-stmt #4381 51686:1440:27-51731:1441:1
+                  value: call #4380 51693:1440:34-51730:1440:71 name="error" piped=false
+                    arg: interpolation #4379 51699:1440:40-51729:1440:70
                       part: text "http: "
-                      part: call #4376 51599:1439:49-51618:1439:68 name="@2::rest_of" piped=false
-                        arg: name-ref #4374 51607:1439:57-51614:1439:64 name="problem"
-                        arg: literal #4375 51616:1439:66-51617:1439:67 value=int:4
-            body: binding #4391 51638:1441:7-51713:1442:1 name="written"
-              value: try-expr #4390 51648:1441:17-51712:1441:81
-                operand: call #4389 51652:1441:21-51712:1441:81 name="@2::write_runs" piped=false
-                  arg: name-ref #4382 51663:1441:32-51666:1441:35 name="out"
-                  arg: name-ref #4383 51668:1441:37-51672:1441:41 name="data"
-                  arg: field-access #4385 51674:1441:43-51684:1441:53 name="runs"
-                    target: name-ref #4384 51674:1441:43-51679:1441:48 name="state"
-                  arg: name-ref #4386 51686:1441:55-51693:1441:62 name="written"
-                  arg: name-ref #4387 51695:1441:64-51701:1441:70 name="budget"
-                  arg: name-ref #4388 51703:1441:72-51711:1441:80 name="deadline"
-      body: return-stmt #4396 51729:1444:3-51748:1445:1
-        value: call #4395 51736:1444:10-51747:1444:21 name="ok" piped=false
-          arg: name-ref #4394 51739:1444:13-51746:1444:20 name="written"
-    declaration: function-decl #4448 51819:1448:1-52188:1464:1 name="@2::write_runs"
-      param: param #4399 51837:1449:3-51852:1449:18 name="out"
-        type: type-ref #4398 51842:1449:8-51852:1449:18 name="FileHandle"
-      param: param #4402 51856:1450:3-51871:1450:18 name="data"
-        type: type-ref #4401 51862:1450:9-51871:1450:18 name="List"
-          arg: type-ref #4400 51867:1450:14-51870:1450:17 name="Int"
-      param: param #4405 51875:1451:3-51890:1451:18 name="runs"
-        type: type-ref #4404 51881:1451:9-51890:1451:18 name="List"
-          arg: type-ref #4403 51886:1451:14-51889:1451:17 name="Int"
-      param: param #4407 51894:1452:3-51906:1452:15 name="written"
-        type: type-ref #4406 51903:1452:12-51906:1452:15 name="Int"
-      param: param #4409 51910:1453:3-51921:1453:14 name="budget"
-        type: type-ref #4408 51918:1453:11-51921:1453:14 name="Int"
-      param: param #4411 51925:1454:3-51938:1454:16 name="deadline"
-        type: type-ref #4410 51935:1454:13-51938:1454:16 name="Int"
-      result: type-ref #4413 51945:1455:6-51956:1455:17 name="Result"
-        arg: type-ref #4412 51952:1455:13-51955:1455:16 name="Int"
-      body: binding #4415 51959:1456:3-51966:1457:1 name="at"
-        value: literal #4414 51964:1456:8-51965:1456:9 value=int:0
-      body: while-stmt #4444 51968:1457:3-52163:1462:1
-        condition: binary #4419 51974:1457:9-51994:1457:29 op=less op-span=51977:1457:12-51978:1457:13
-          left: name-ref #4416 51974:1457:9-51976:1457:11 name="at"
-          right: call #4418 51979:1457:14-51994:1457:29 name="List.size" piped=false
-            arg: name-ref #4417 51989:1457:24-51993:1457:28 name="runs"
-        body: binding #4431 51999:1458:5-52070:1459:1 name="piece"
-          value: method-call #4430 52007:1458:13-52069:1458:75 name="take"
-            target: call #4424 52007:1458:13-52041:1458:47 name="List.drop" piped=false
-              arg: name-ref #4420 52017:1458:23-52021:1458:27 name="data"
-              arg: call #4423 52023:1458:29-52040:1458:46 name="List.at" piped=false
-                arg: name-ref #4421 52031:1458:37-52035:1458:41 name="runs"
-                arg: name-ref #4422 52037:1458:43-52039:1458:45 name="at"
-            arg: call #4429 52047:1458:53-52068:1458:74 name="List.at" piped=false
-              arg: name-ref #4425 52055:1458:61-52059:1458:65 name="runs"
-              arg: binary #4428 52061:1458:67-52067:1458:73 op=plus op-span=52064:1458:70-52065:1458:71
-                left: name-ref #4426 52061:1458:67-52063:1458:69 name="at"
-                right: literal #4427 52066:1458:72-52067:1458:73 value=int:1
-        body: binding #4439 52074:1459:5-52141:1460:1 name="written"
-          value: try-expr #4438 52084:1459:15-52140:1459:71
-            operand: call #4437 52088:1459:19-52140:1459:71 name="@2::write_bounded" piped=false
-              arg: name-ref #4432 52102:1459:33-52105:1459:36 name="out"
-              arg: name-ref #4433 52107:1459:38-52112:1459:43 name="piece"
-              arg: name-ref #4434 52114:1459:45-52121:1459:52 name="written"
-              arg: name-ref #4435 52123:1459:54-52129:1459:60 name="budget"
-              arg: name-ref #4436 52131:1459:62-52139:1459:70 name="deadline"
-        body: binding #4443 52145:1460:5-52157:1461:1 name="at"
-          value: binary #4442 52150:1460:10-52156:1460:16 op=plus op-span=52153:1460:13-52154:1460:14
-            left: name-ref #4440 52150:1460:10-52152:1460:12 name="at"
-            right: literal #4441 52155:1460:15-52156:1460:16 value=int:2
-      body: return-stmt #4447 52165:1462:3-52184:1463:1
-        value: call #4446 52172:1462:10-52183:1462:21 name="ok" piped=false
-          arg: name-ref #4445 52175:1462:13-52182:1462:20 name="written"
-    declaration: function-decl #4497 52279:1466:1-52708:1480:1 name="@2::save_until_close"
-      param: param #4450 52300:1466:22-52314:1466:36 name="socket"
-        type: type-ref #4449 52308:1466:30-52314:1466:36 name="Socket"
-      param: param #4452 52316:1466:38-52331:1466:53 name="out"
-        type: type-ref #4451 52321:1466:43-52331:1466:53 name="FileHandle"
-      param: param #4454 52333:1466:55-52344:1466:66 name="budget"
-        type: type-ref #4453 52341:1466:63-52344:1466:66 name="Int"
-      param: param #4456 52346:1466:68-52359:1466:81 name="deadline"
-        type: type-ref #4455 52356:1466:78-52359:1466:81 name="Int"
-      result: type-ref #4458 52364:1466:86-52375:1466:97 name="Result"
-        arg: type-ref #4457 52371:1466:93-52374:1466:96 name="Int"
-      body: binding #4460 52378:1467:3-52390:1468:1 name="written"
-        value: literal #4459 52388:1467:13-52389:1467:14 value=int:0
-      body: while-stmt #4493 52392:1468:3-52678:1478:1
-        condition: literal #4461 52398:1468:9-52402:1468:13 value=bool:true
-        body: binding #4467 52407:1469:5-52458:1470:1 name="data"
-          value: try-expr #4466 52414:1469:12-52457:1469:55
-            operand: call #4465 52418:1469:16-52457:1469:55 name="@2::recv_body" piped=false
-              arg: name-ref #4462 52428:1469:26-52434:1469:32 name="socket"
-              arg: const-ref #4463 52436:1469:34-52446:1469:44 name="@2::TEXT_BYTES"
-              arg: name-ref #4464 52448:1469:46-52456:1469:54 name="deadline"
-        body: if-stmt #4484 52462:1470:5-52602:1476:1
-          branch: if-branch #4483 52462:1470:5-52594:1475:1
-            condition: binary #4471 52465:1470:8-52485:1470:28 op=equal op-span=52481:1470:24-52483:1470:26
-              left: call #4469 52465:1470:8-52480:1470:23 name="List.size" piped=false
-                arg: name-ref #4468 52475:1470:18-52479:1470:22 name="data"
-              right: literal #4470 52484:1470:27-52485:1470:28 value=int:0
-            body: if-stmt #4479 52492:1471:7-52569:1474:1
-              branch: if-branch #4478 52492:1471:7-52559:1473:1
-                condition: unary #4474 52495:1471:10-52526:1471:41 op=not op-span=52495:1471:10-52498:1471:13
-                  operand: call #4473 52499:1471:14-52526:1471:41 name="HttpWire.clean_eof?" piped=false
-                    arg: name-ref #4472 52519:1471:34-52525:1471:40 name="socket"
-                body: return-stmt #4477 52535:1472:9-52559:1473:1
-                  value: call #4476 52542:1472:16-52558:1472:32 name="error" piped=false
-                    arg: const-ref #4475 52548:1472:22-52557:1472:31 name="@2::TRUNCATED"
-            body: return-stmt #4482 52575:1474:7-52594:1475:1
-              value: call #4481 52582:1474:14-52593:1474:25 name="ok" piped=false
-                arg: name-ref #4480 52585:1474:17-52592:1474:24 name="written"
-        body: binding #4492 52606:1476:5-52672:1477:1 name="written"
-          value: try-expr #4491 52616:1476:15-52671:1476:70
-            operand: call #4490 52620:1476:19-52671:1476:70 name="@2::write_bounded" piped=false
-              arg: name-ref #4485 52634:1476:33-52637:1476:36 name="out"
-              arg: name-ref #4486 52639:1476:38-52643:1476:42 name="data"
-              arg: name-ref #4487 52645:1476:44-52652:1476:51 name="written"
-              arg: name-ref #4488 52654:1476:53-52660:1476:59 name="budget"
-              arg: name-ref #4489 52662:1476:61-52670:1476:69 name="deadline"
-      body: return-stmt #4496 52680:1478:3-52704:1479:1
-        value: call #4495 52687:1478:10-52703:1478:26 name="error" piped=false
-          arg: const-ref #4494 52693:1478:16-52702:1478:25 name="@2::TRUNCATED"
-    declaration: function-decl #4512 52709:1481:1-52788:1487:1 name="@2::larger"
-      param: param #4499 52720:1481:12-52726:1481:18 name="a"
-        type: type-ref #4498 52723:1481:15-52726:1481:18 name="Int"
-      param: param #4501 52728:1481:20-52734:1481:26 name="b"
-        type: type-ref #4500 52731:1481:23-52734:1481:26 name="Int"
-      result: type-ref #4502 52739:1481:31-52742:1481:34 name="Int"
-      body: if-stmt #4509 52745:1482:3-52773:1485:1
-        branch: if-branch #4508 52745:1482:3-52767:1484:1
-          condition: binary #4505 52748:1482:6-52753:1482:11 op=greater op-span=52750:1482:8-52751:1482:9
-            left: name-ref #4503 52748:1482:6-52749:1482:7 name="a"
-            right: name-ref #4504 52752:1482:10-52753:1482:11 name="b"
-          body: return-stmt #4507 52758:1483:5-52767:1484:1
-            value: name-ref #4506 52765:1483:12-52766:1483:13 name="a"
-      body: return-stmt #4511 52775:1485:3-52784:1486:1
-        value: name-ref #4510 52782:1485:10-52783:1485:11 name="b"
+                      part: call #4378 51708:1440:49-51727:1440:68 name="@2::rest_of" piped=false
+                        arg: name-ref #4376 51716:1440:57-51723:1440:64 name="problem"
+                        arg: literal #4377 51725:1440:66-51726:1440:67 value=int:4
+            body: binding #4393 51747:1442:7-51822:1443:1 name="written"
+              value: try-expr #4392 51757:1442:17-51821:1442:81
+                operand: call #4391 51761:1442:21-51821:1442:81 name="@2::write_runs" piped=false
+                  arg: name-ref #4384 51772:1442:32-51775:1442:35 name="out"
+                  arg: name-ref #4385 51777:1442:37-51781:1442:41 name="data"
+                  arg: field-access #4387 51783:1442:43-51793:1442:53 name="runs"
+                    target: name-ref #4386 51783:1442:43-51788:1442:48 name="state"
+                  arg: name-ref #4388 51795:1442:55-51802:1442:62 name="written"
+                  arg: name-ref #4389 51804:1442:64-51810:1442:70 name="budget"
+                  arg: name-ref #4390 51812:1442:72-51820:1442:80 name="deadline"
+      body: return-stmt #4398 51838:1445:3-51857:1446:1
+        value: call #4397 51845:1445:10-51856:1445:21 name="ok" piped=false
+          arg: name-ref #4396 51848:1445:13-51855:1445:20 name="written"
+    declaration: function-decl #4450 51928:1449:1-52297:1465:1 name="@2::write_runs"
+      param: param #4401 51946:1450:3-51961:1450:18 name="out"
+        type: type-ref #4400 51951:1450:8-51961:1450:18 name="FileHandle"
+      param: param #4404 51965:1451:3-51980:1451:18 name="data"
+        type: type-ref #4403 51971:1451:9-51980:1451:18 name="List"
+          arg: type-ref #4402 51976:1451:14-51979:1451:17 name="Int"
+      param: param #4407 51984:1452:3-51999:1452:18 name="runs"
+        type: type-ref #4406 51990:1452:9-51999:1452:18 name="List"
+          arg: type-ref #4405 51995:1452:14-51998:1452:17 name="Int"
+      param: param #4409 52003:1453:3-52015:1453:15 name="written"
+        type: type-ref #4408 52012:1453:12-52015:1453:15 name="Int"
+      param: param #4411 52019:1454:3-52030:1454:14 name="budget"
+        type: type-ref #4410 52027:1454:11-52030:1454:14 name="Int"
+      param: param #4413 52034:1455:3-52047:1455:16 name="deadline"
+        type: type-ref #4412 52044:1455:13-52047:1455:16 name="Int"
+      result: type-ref #4415 52054:1456:6-52065:1456:17 name="Result"
+        arg: type-ref #4414 52061:1456:13-52064:1456:16 name="Int"
+      body: binding #4417 52068:1457:3-52075:1458:1 name="at"
+        value: literal #4416 52073:1457:8-52074:1457:9 value=int:0
+      body: while-stmt #4446 52077:1458:3-52272:1463:1
+        condition: binary #4421 52083:1458:9-52103:1458:29 op=less op-span=52086:1458:12-52087:1458:13
+          left: name-ref #4418 52083:1458:9-52085:1458:11 name="at"
+          right: call #4420 52088:1458:14-52103:1458:29 name="List.size" piped=false
+            arg: name-ref #4419 52098:1458:24-52102:1458:28 name="runs"
+        body: binding #4433 52108:1459:5-52179:1460:1 name="piece"
+          value: method-call #4432 52116:1459:13-52178:1459:75 name="take"
+            target: call #4426 52116:1459:13-52150:1459:47 name="List.drop" piped=false
+              arg: name-ref #4422 52126:1459:23-52130:1459:27 name="data"
+              arg: call #4425 52132:1459:29-52149:1459:46 name="List.at" piped=false
+                arg: name-ref #4423 52140:1459:37-52144:1459:41 name="runs"
+                arg: name-ref #4424 52146:1459:43-52148:1459:45 name="at"
+            arg: call #4431 52156:1459:53-52177:1459:74 name="List.at" piped=false
+              arg: name-ref #4427 52164:1459:61-52168:1459:65 name="runs"
+              arg: binary #4430 52170:1459:67-52176:1459:73 op=plus op-span=52173:1459:70-52174:1459:71
+                left: name-ref #4428 52170:1459:67-52172:1459:69 name="at"
+                right: literal #4429 52175:1459:72-52176:1459:73 value=int:1
+        body: binding #4441 52183:1460:5-52250:1461:1 name="written"
+          value: try-expr #4440 52193:1460:15-52249:1460:71
+            operand: call #4439 52197:1460:19-52249:1460:71 name="@2::write_bounded" piped=false
+              arg: name-ref #4434 52211:1460:33-52214:1460:36 name="out"
+              arg: name-ref #4435 52216:1460:38-52221:1460:43 name="piece"
+              arg: name-ref #4436 52223:1460:45-52230:1460:52 name="written"
+              arg: name-ref #4437 52232:1460:54-52238:1460:60 name="budget"
+              arg: name-ref #4438 52240:1460:62-52248:1460:70 name="deadline"
+        body: binding #4445 52254:1461:5-52266:1462:1 name="at"
+          value: binary #4444 52259:1461:10-52265:1461:16 op=plus op-span=52262:1461:13-52263:1461:14
+            left: name-ref #4442 52259:1461:10-52261:1461:12 name="at"
+            right: literal #4443 52264:1461:15-52265:1461:16 value=int:2
+      body: return-stmt #4449 52274:1463:3-52293:1464:1
+        value: call #4448 52281:1463:10-52292:1463:21 name="ok" piped=false
+          arg: name-ref #4447 52284:1463:13-52291:1463:20 name="written"
+    declaration: function-decl #4499 52388:1467:1-52817:1481:1 name="@2::save_until_close"
+      param: param #4452 52409:1467:22-52423:1467:36 name="socket"
+        type: type-ref #4451 52417:1467:30-52423:1467:36 name="Socket"
+      param: param #4454 52425:1467:38-52440:1467:53 name="out"
+        type: type-ref #4453 52430:1467:43-52440:1467:53 name="FileHandle"
+      param: param #4456 52442:1467:55-52453:1467:66 name="budget"
+        type: type-ref #4455 52450:1467:63-52453:1467:66 name="Int"
+      param: param #4458 52455:1467:68-52468:1467:81 name="deadline"
+        type: type-ref #4457 52465:1467:78-52468:1467:81 name="Int"
+      result: type-ref #4460 52473:1467:86-52484:1467:97 name="Result"
+        arg: type-ref #4459 52480:1467:93-52483:1467:96 name="Int"
+      body: binding #4462 52487:1468:3-52499:1469:1 name="written"
+        value: literal #4461 52497:1468:13-52498:1468:14 value=int:0
+      body: while-stmt #4495 52501:1469:3-52787:1479:1
+        condition: literal #4463 52507:1469:9-52511:1469:13 value=bool:true
+        body: binding #4469 52516:1470:5-52567:1471:1 name="data"
+          value: try-expr #4468 52523:1470:12-52566:1470:55
+            operand: call #4467 52527:1470:16-52566:1470:55 name="@2::recv_body" piped=false
+              arg: name-ref #4464 52537:1470:26-52543:1470:32 name="socket"
+              arg: const-ref #4465 52545:1470:34-52555:1470:44 name="@2::TEXT_BYTES"
+              arg: name-ref #4466 52557:1470:46-52565:1470:54 name="deadline"
+        body: if-stmt #4486 52571:1471:5-52711:1477:1
+          branch: if-branch #4485 52571:1471:5-52703:1476:1
+            condition: binary #4473 52574:1471:8-52594:1471:28 op=equal op-span=52590:1471:24-52592:1471:26
+              left: call #4471 52574:1471:8-52589:1471:23 name="List.size" piped=false
+                arg: name-ref #4470 52584:1471:18-52588:1471:22 name="data"
+              right: literal #4472 52593:1471:27-52594:1471:28 value=int:0
+            body: if-stmt #4481 52601:1472:7-52678:1475:1
+              branch: if-branch #4480 52601:1472:7-52668:1474:1
+                condition: unary #4476 52604:1472:10-52635:1472:41 op=not op-span=52604:1472:10-52607:1472:13
+                  operand: call #4475 52608:1472:14-52635:1472:41 name="HttpWire.clean_eof?" piped=false
+                    arg: name-ref #4474 52628:1472:34-52634:1472:40 name="socket"
+                body: return-stmt #4479 52644:1473:9-52668:1474:1
+                  value: call #4478 52651:1473:16-52667:1473:32 name="error" piped=false
+                    arg: const-ref #4477 52657:1473:22-52666:1473:31 name="@2::TRUNCATED"
+            body: return-stmt #4484 52684:1475:7-52703:1476:1
+              value: call #4483 52691:1475:14-52702:1475:25 name="ok" piped=false
+                arg: name-ref #4482 52694:1475:17-52701:1475:24 name="written"
+        body: binding #4494 52715:1477:5-52781:1478:1 name="written"
+          value: try-expr #4493 52725:1477:15-52780:1477:70
+            operand: call #4492 52729:1477:19-52780:1477:70 name="@2::write_bounded" piped=false
+              arg: name-ref #4487 52743:1477:33-52746:1477:36 name="out"
+              arg: name-ref #4488 52748:1477:38-52752:1477:42 name="data"
+              arg: name-ref #4489 52754:1477:44-52761:1477:51 name="written"
+              arg: name-ref #4490 52763:1477:53-52769:1477:59 name="budget"
+              arg: name-ref #4491 52771:1477:61-52779:1477:69 name="deadline"
+      body: return-stmt #4498 52789:1479:3-52813:1480:1
+        value: call #4497 52796:1479:10-52812:1479:26 name="error" piped=false
+          arg: const-ref #4496 52802:1479:16-52811:1479:25 name="@2::TRUNCATED"
+    declaration: function-decl #4514 52818:1482:1-52897:1488:1 name="@2::larger"
+      param: param #4501 52829:1482:12-52835:1482:18 name="a"
+        type: type-ref #4500 52832:1482:15-52835:1482:18 name="Int"
+      param: param #4503 52837:1482:20-52843:1482:26 name="b"
+        type: type-ref #4502 52840:1482:23-52843:1482:26 name="Int"
+      result: type-ref #4504 52848:1482:31-52851:1482:34 name="Int"
+      body: if-stmt #4511 52854:1483:3-52882:1486:1
+        branch: if-branch #4510 52854:1483:3-52876:1485:1
+          condition: binary #4507 52857:1483:6-52862:1483:11 op=greater op-span=52859:1483:8-52860:1483:9
+            left: name-ref #4505 52857:1483:6-52858:1483:7 name="a"
+            right: name-ref #4506 52861:1483:10-52862:1483:11 name="b"
+          body: return-stmt #4509 52867:1484:5-52876:1485:1
+            value: name-ref #4508 52874:1484:12-52875:1484:13 name="a"
+      body: return-stmt #4513 52884:1486:3-52893:1487:1
+        value: name-ref #4512 52891:1486:10-52892:1486:11 name="b"

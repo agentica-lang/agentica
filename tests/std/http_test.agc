@@ -104,7 +104,7 @@ def main() -> Void
       try HTTP.wait(server)
       try Test.eq(got.message, "http: body exceeds max_body_bytes")
       handle = try File.open("download-over.bin", "read", 5000)
-      try Test.eq(List.size(try File.read_bytes(handle, 100, 5000)), 0)
+      try Test.eq((try File.read_bytes(handle, 100, 5000)).size, 0)
       try File.close(handle, 5000)
       Path.remove("download-over.bin", 5000)
     end,

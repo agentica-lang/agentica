@@ -48,14 +48,14 @@ File.each_line
 File.flush
 File.lstat
 File.open
-File.read_bytes
+File.read_bytes.bytes
 File.read_line
 File.read_text
-File.sha256
+File.sha256.bytes
 File.stat
 File.try_lock
 File.write
-File.write_bytes
+File.write_bytes.bytes
 File.write_text
 Float.from_bits
 Float.from_bits32
@@ -64,9 +64,9 @@ Float.to_bits
 Float.to_bits32
 Float.to_int
 Float.to_int!
-FrontEnd.hand_off
+FrontEnd.hand_off.bytes
 FrontEnd.std_source
-FrontEnd.stdin_bytes
+FrontEnd.stdin_bytes.bytes
 HMAC.secure_compare.bytes
 HMAC.sha256.bytes
 HMAC.sha256_hexdigest.bytes
@@ -103,7 +103,7 @@ IO.gets!
 IO.inspect
 IO.print
 IO.read
-IO.read_bytes
+IO.read_bytes.bytes
 IO.warn
 Int.bit_and
 Int.bit_not
@@ -271,7 +271,7 @@ String.compare
 String.contains?
 String.downcase
 String.ends_with?
-String.from_bytes
+String.from_bytes.bytes
 String.from_code
 String.from_float
 String.from_int
@@ -283,7 +283,6 @@ String.reverse
 String.slice
 String.split
 String.starts_with?
-String.to_bytes
 String.to_float
 String.to_float!
 String.to_int

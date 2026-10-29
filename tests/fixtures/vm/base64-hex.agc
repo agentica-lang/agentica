@@ -3,7 +3,7 @@
 # decode64 skips and where it stops, and what the strict forms reject.
 # tests/test_vm_crypto.py checks generated inputs against Python's base64.
 def text(bytes: Bytes) -> String
-  return String.from_bytes(bytes.to_a).unwrap!
+  return String.from_bytes(bytes).unwrap!
 end
 
 def bytes(items: List[Int]) -> Bytes

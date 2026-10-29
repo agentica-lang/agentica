@@ -165,7 +165,7 @@ inherited it.
 ## Standard streams and the environment
 
 ```text
-IO.read_bytes(count: Int) -> Result[List[Int]]   # count 0..1048576; bytes 0..255
+IO.read_bytes(count: Int) -> Result[Bytes]       # count 0..1048576
 IO.flush() -> Void                               # stdout only
 System.env(name: String) -> Result[String]       # error if unset or the name is empty, has = or NUL; ok("") if set empty
 System.os() -> String                            # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
@@ -173,7 +173,7 @@ System.pid() -> Int                              # the process id of this progra
 ```
 
 - `IO.read_bytes` waits for `count` bytes or end of input. A short final read
-  succeeds; end of input before any byte, or a zero count, gives `ok([])`.
+  succeeds; end of input before any byte, or a zero count, gives empty bytes.
   Invalid counts return an error without consuming input. Read larger streams in
   several calls. `String.from_bytes` decodes complete UTF-8 sequences only
   (`binary.md`).

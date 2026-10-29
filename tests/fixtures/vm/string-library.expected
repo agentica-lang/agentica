@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 931,
+  "steps": 942,
   "stdout": [
     "25",
     "0",
@@ -62,8 +62,8 @@
     "error(\"invalid or incomplete UTF-8\")",
     "error(\"invalid or incomplete UTF-8\")",
     "error(\"invalid or incomplete UTF-8\")",
-    "error(\"bytes must be integers between 0 and 255\")",
-    "error(\"bytes must be integers between 0 and 255\")",
+    "error(\"item 1 is 256, not a byte (0 to 255)\")",
+    "error(\"item 0 is -1, not a byte (0 to 255)\")",
     "[97, 195, 169, 226, 130, 172, 240, 159, 152, 128]",
     "[]",
     "2",

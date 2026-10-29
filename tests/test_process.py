@@ -96,7 +96,7 @@ def test_unavailable_and_malformed_commands_return_errors_without_a_child(tmp_pa
     assert output(
         tmp_path,
         'def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn("agentica-nonexistent-command-5l", [], 1000)))\n'
-        '  IO.inspect(Result.ok?(Process.spawn("", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n'
+        '  IO.inspect(Result.ok?(Process.spawn("", [], 1000)))\n  nul = String.from_code(0)\n'
         '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n') == "false\nfalse\nfalse\n"
 
 

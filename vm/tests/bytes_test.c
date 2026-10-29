@@ -1,8 +1,8 @@
 /*
- * The Bytes value: equality, the Map key hash, the text forms, the JSON
- * refusal, the shared empty value, every builtin with good and bad arguments,
- * bounds, the size overflow guard, values that live through a collection, and
- * the two keys of each crypto builtin (vm/crypto.c).
+ * The Bytes value: equality, the Map key hash, the text forms, the JSON refusal,
+ * the shared empty value, every builtin with good and bad arguments, bounds, the
+ * size overflow guard, values that live through a collection, and the two keys
+ * of each crypto builtin (vm/crypto.c), String.from_bytes and FrontEnd.hand_off.
  */
 #include "../core.h"
 #include "../services.h"
@@ -14,6 +14,10 @@
 #ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
+
+#ifndef AGC_NO_GC
+#include <gc.h>
 #endif
 
 static agc_vm vm;
@@ -400,6 +404,110 @@ static void test_crypto_keys(void) {
   fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
 }
 
+/* String.from_bytes on a Bytes ("String.from_bytes.bytes") and on a byte list (the old key, for front ends and .agcb
+   files compiled before #805 PR 4) gives the same answer, and the old String.to_bytes gives the list of String.bytes.
+   A bad item is an error of the old key only; the new key with a list is a wrong tag. */
+static void test_string_keys(void) {
+  agc_value samples[] = {raw("", 0), raw("h", 1), raw("caf\xc3\xa9", 5), raw("\xc3", 1), raw("\xed\xa0\x80", 3),
+                         raw("a\x00b", 3)};
+  for (size_t k = 0; k < sizeof samples / sizeof samples[0]; k++) {
+    agc_value list = call("Bytes.to_a", 1, &samples[k]);
+    agc_value old = call("String.from_bytes", 1, &list), now = call("String.from_bytes.bytes", 1, &samples[k]);
+    const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
+    assert(a->ok == b->ok);
+    if (a->ok) {
+      agc_value decoded = b->value, made = call("String.bytes", 1, &decoded);
+      assert(agc_equal(&vm, a->value, decoded, 0));
+      assert(agc_equal(&vm, call("String.to_bytes", 1, &decoded), call("Bytes.to_a", 1, &made), 0));
+    }
+  }
+  const int64_t bad[] = {104, 256};
+  agc_value list = ints(bad, 2);
+  assert(!agc_as_result(&vm, call("String.from_bytes", 1, &list))->ok);
+  fails("String.from_bytes.bytes", 1, &list, "RUNTIME-INTERNAL");
+}
+
+/* FrontEnd.hand_off under both keys gives the driver the same program bytes: "FrontEnd.hand_off.bytes" takes a Bytes,
+   the old key (an older stage0) a byte list. The hand-off ends the run, which comes back here through vm.fail. */
+static void handed(const char *name, agc_value program, agc_front_end *fe) {
+  agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
+  memset(fe, 0, sizeof *fe);
+  if (setjmp(vm.fail) == 0) {
+    (void)row(name, 3)->fn(&vm, args, 0);
+    assert(0);
+  }
+  assert(fe->handed && fe->option_count == 0 && fe->argument_count == 0);
+}
+
+static void test_hand_off_keys(void) {
+  agc_front_end fe;
+  vm.rt->front_end = &fe;
+  agc_value program = raw("AGCB\x06\x00\xff", 7);
+  handed("FrontEnd.hand_off.bytes", program, &fe);
+  assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
+  handed("FrontEnd.hand_off", call("Bytes.to_a", 1, &program), &fe);
+  assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
+  const int64_t bad[] = {1, 300};
+  agc_value args[3] = {ints(bad, 2), vm.rt->empty_list, vm.rt->empty_list};
+  assert(!agc_as_result(&vm, call("FrontEnd.hand_off", 3, args))->ok);
+  args[0] = call("Bytes.to_a", 1, &program);
+  fails("FrontEnd.hand_off.bytes", 3, args, "RUNTIME-INTERNAL");
+  vm.rt->front_end = NULL;
+}
+
+#ifndef AGC_NO_GC
+/* A hidden pointer to the handed Bytes block, registered as a disappearing link: the collector sets it to 0 when the
+   block is unreachable, so a test can see that the block was kept, not only that its memory was not reused yet. */
+static GC_word handed_block;
+#endif
+
+/* Hands off 1 MiB of patterned Bytes and drops every other reference to them, so after it returns only the interior
+   pointer fe->program can keep the block alive. */
+static void hand_off_large(agc_front_end *fe) {
+  agc_bytes *b = agc_new_bytes((size_t)1 << 20);
+  for (size_t k = 0; k < b->len; k++) b->data[k] = (uint8_t)(k * 13);
+#ifndef AGC_NO_GC
+  /* GC_base: under GC_DEBUG (the GC-stress build) an allocation starts after a debug header. */
+  void *base = GC_base(b);
+  handed_block = GC_HIDE_POINTER(base);
+  int registered = GC_general_register_disappearing_link((void **)&handed_block, base);
+  assert(registered == GC_SUCCESS);
+#endif
+  handed("FrontEnd.hand_off.bytes", agc_bytes_value(b), fe);
+}
+
+/* Overwrites the stack below the caller, so stale copies of the Bytes value left by hand_off_large do not hold it. */
+static void scrub_stack(void) {
+  volatile char big[65536];
+  for (size_t k = 0; k < sizeof big; k++) big[k] = 0;
+}
+
+/* Called through volatile pointers so the compiler cannot inline them and leave the value in this frame. */
+static void (*volatile hand_off_large_fn)(agc_front_end *) = hand_off_large;
+static void (*volatile scrub_stack_fn)(void) = scrub_stack;
+
+/* The driver's agc_front_end on a scanned stack is all that keeps the handed program alive (interior pointers are
+   on): the block stays reachable and intact through collections that reclaim other blocks of the same size. With
+   fe.program hidden, the same run clears handed_block. */
+static void test_hand_off_survives_collection(void) {
+  agc_front_end fe;
+  vm.rt->front_end = &fe;
+  hand_off_large_fn(&fe);
+  scrub_stack_fn();
+  /* The jmp_buf of the hand-off's setjmp lives in the static vm and may still hold the value in a saved register. */
+  memset(&vm.fail, 0, sizeof vm.fail);
+  for (int round = 0; round < 5; round++) {
+    for (int k = 0; k < 200; k++) memset(agc_new_bytes((size_t)1 << 20)->data, 0xAA, (size_t)1 << 20);
+    agc_gc_collect();
+  }
+#ifndef AGC_NO_GC
+  assert(handed_block != 0);
+#endif
+  assert(fe.program_len == (size_t)1 << 20);
+  for (size_t k = 0; k < fe.program_len; k++) assert(fe.program[k] == (uint8_t)(k * 13));
+  vm.rt->front_end = NULL;
+}
+
 /* No pointers inside, so the collector never scans the data: Bytes held only by a list keep their contents through
    collections. */
 static void test_collection(void) {
@@ -478,6 +586,9 @@ int main(void) {
   test_builtins();
   test_wrong_tags();
   test_crypto_keys();
+  test_string_keys();
+  test_hand_off_keys();
+  test_hand_off_survives_collection();
   test_costs();
   test_collection();
 #ifndef _WIN32

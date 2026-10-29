@@ -362,15 +362,15 @@ end
 ## from_bytes
 
 ```text
-String.from_bytes(data: List[Int]) -> Result[String]
+String.from_bytes(data: Bytes) -> Result[String]
 ```
 
-Decodes UTF-8 bytes. Invalid bytes give an error Result.
+Decodes UTF-8 bytes. Invalid bytes give an error Result. It is the inverse of [`s.bytes`](#bytes).
 
 ```agentica
 def main() -> Void
-  puts(String.from_bytes([104, 105]))
-  puts(String.from_bytes([255]).ok?)
+  puts(String.from_bytes("hi".bytes))
+  puts(String.from_bytes(Bytes.from_list([255]).unwrap!).ok?)
 end
 ```
 
@@ -379,33 +379,13 @@ ok("hi")
 false
 ```
 
-## to_bytes
-
-```text
-String.to_bytes(s: String) -> List[Int]
-```
-
-Encodes the text as UTF-8: a list of integers from 0 to 255. It is the inverse of `String.from_bytes`, and it cannot fail. Use it to send text with `TCP.send_bytes` or to write it with `File.write_bytes`.
-
-```agentica
-def main() -> Void
-  puts(String.to_bytes("hé"))
-  puts(String.from_bytes(String.to_bytes("hé")))
-end
-```
-
-```output
-[104, 195, 169]
-ok("hé")
-```
-
 ## bytes
 
 ```text
 String.bytes(s: String) -> Bytes
 ```
 
-The same UTF-8 bytes as a [`Bytes`](/library/data-structures/bytes/), which stores one byte for each item. `s.bytes.to_a` is the list of integers that `to_bytes` gives.
+Encodes the text as UTF-8, as a [`Bytes`](/library/data-structures/bytes/). It cannot fail, and `String.from_bytes` turns it back into the text. `s.bytes.to_a` gives the bytes as a list of integers from 0 to 255.
 
 ```agentica
 def main() -> Void
@@ -426,7 +406,7 @@ end
 String.bytesize(s: String) -> Int
 ```
 
-Counts the UTF-8 bytes of the text, as many as `String.to_bytes(s)` gives, without building the list. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).
+Counts the UTF-8 bytes of the text, as many as `s.bytes` gives, without building them. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).
 
 ```agentica
 def main() -> Void

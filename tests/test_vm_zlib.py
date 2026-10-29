@@ -54,12 +54,12 @@ BYTES_PEER = (
     "  cap: Int = System.args()[3].to_i!\n"
     "  level: Int = System.args()[4].to_i!\n"
     '  fd = File.open(src, "read", 30000).unwrap!\n'
-    "  data = File.read_bytes(fd, 1048576, 30000).unwrap!\n"
+    "  data = File.read_bytes(fd, 1048576, 30000).unwrap!.to_a\n"
     "  File.close(fd, 30000)\n"
     "  out = convert(op, data, cap, level)\n"
     "  if out.ok?\n"
     '  w = File.open(dst, "write", 30000).unwrap!\n'
-    "  File.write_bytes(w, out.unwrap!, 30000).unwrap!\n"
+    "  File.write_bytes(w, Bytes.from_list(out.unwrap!).unwrap!, 30000).unwrap!\n"
     "  File.close(w, 30000)\n"
     '  puts(\"ok\")\n'
     "  else\n"

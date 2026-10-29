@@ -53,10 +53,10 @@ def main() -> Void
   IO.inspect(File.flush(h, 0))
   IO.inspect(File.close(h, 0))
   w = Result.unwrap!(File.open(at(dir, "w.txt"), "write", 60000))
-  IO.inspect(File.write_bytes(w, [256], 0))
-  IO.inspect(File.write_bytes(w, [-1], 60000))
+  IO.inspect(File.write_bytes(w, "a".bytes, 0))
+  IO.inspect(File.write_bytes(w, String.join(List.repeat("x", 1048577), "").bytes, 60000))
   IO.inspect(File.write(w, "x", 0))
-  IO.inspect(File.write_bytes(w, [1], -1))
+  IO.inspect(File.write_bytes(w, "a".bytes, -1))
   File.close(w, 60000)
   IO.inspect(File.close(w, 0))
 end

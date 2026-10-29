@@ -349,7 +349,7 @@ def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result
 end
 
 # A file is at most Tree.MAX_FILE_BYTES (1 MiB, the most File.write_bytes takes in one call), so it goes in one write.
-def write_file(place: Place, path: String, data: List[Int]) -> Result[Void]
+def write_file(place: Place, path: String, data: Bytes) -> Result[Void]
   folder = Paths.directory_of(path)
   made = Dir.mkdir(folder, FS_TIMEOUT_MS)
   if !made.ok?
@@ -429,13 +429,13 @@ end
 
 # Runs git in the temporary folder; a git that does not start, one whose output cannot be read and a non-zero status
 # are PKG-FETCH at the git key, the last with the start of git's errors.
-def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[List[Int]]
+def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[Bytes]
   return git_at(place, scratch, "git", arguments)
 end
 
 # The same, with a non-zero status reported at `key`: a command that fails because of one value of the entry (the
 # subdir that the commit lacks) names that value.
-def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String]) -> Result[List[Int]]
+def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String]) -> Result[Bytes]
   case GitProcess.run(arguments, scratch.temp)
     GitProcess.Ran.Missing(message) ->
       return error(fail(place, "PKG-FETCH", "git", "cannot run git: #{message}", "install git and put it on PATH"))

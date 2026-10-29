@@ -620,9 +620,9 @@ current list operations; no constant-time FIFO is promised.
 #### Binary data (`std/binary`)
 
 `std/binary` reads and writes binary numbers in a `List[Int]` of bytes, each
-item in `0 .. 255`, the list that `IO.read_bytes`, `File.read_bytes` and the
-other `*_bytes` builtins use. It is written in Agentica on the `Int` and `Float`
-bit builtins; its signatures are in
+item in `0 .. 255` (`b.to_a` turns a `Bytes`, such as one from
+`File.read_bytes`, into that list). It is written in Agentica on the `Int` and
+`Float` bit builtins; its signatures are in
 [`library/text-and-data/binary.md`][agentica-link-2].
 With the alias `Binary`:
 

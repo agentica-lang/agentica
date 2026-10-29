@@ -24,17 +24,9 @@ SIZES = [0, 1, 3, 55, 56, 63, 64, 65, 119, 120, 128, 1000, 4096 + 7, 65535, 6553
 
 PEER = (
     "def main() -> Void\n"
-    "  puts(File.sha256(System.args()[0], 30000).unwrap!)\n"
+    "  puts(File.sha256(System.args()[0], 30000).unwrap!.to_a)\n"
     "end\n"
 )
-
-HEXER = (
-    "def hex(digest: List[Int]) -> String\n"
-    '  digits = "0123456789abcdef"\n'
-    "  return digest.map do |b| digits.at(b / 16) + digits.at(b % 16) end.join(\"\")\n"
-    "end\n"
-)
-
 
 def hex_of(data):
     return hashlib.sha256(data).hexdigest()
@@ -73,13 +65,12 @@ def test_sha256_matches_digest_sha256_on_the_same_bytes(tmp_path):
     target = write_data(tmp_path, "same.bin", data)
     source = tmp_path / "same.agc"
     source.write_text(
-        HEXER + "\n"
         "def main() -> Void\n"
-        "  from_fs = hex(File.sha256(System.args()[0], 30000).unwrap!)\n"
+        "  from_fs = File.sha256(System.args()[0], 30000).unwrap!\n"
         '  handle = File.open(System.args()[0], "read", 30000).unwrap!\n'
         "  bytes = File.read_bytes(handle, 1048576, 30000).unwrap!\n"
         "  File.close(handle, 30000)\n"
-        "  puts(from_fs == Digest.sha256_hexdigest(Bytes.from_list(bytes).unwrap!))\n"
+        "  puts(from_fs == Digest.sha256(bytes))\n"
         "end\n",
         encoding="utf-8",
     )
@@ -165,9 +156,8 @@ def test_sha256_runs_beside_other_tasks_and_each_hash_is_right(tmp_path):
     second = write_data(tmp_path, "second.bin", random.Random(2).randbytes(140000))
     source = tmp_path / "fair.agc"
     source.write_text(
-        HEXER + "\n"
         "def hash_it(path: String) -> String\n"
-        "  return hex(File.sha256(path, 30000).unwrap!)\n"
+        "  return Digest.hexencode(File.sha256(path, 30000).unwrap!)\n"
         "end\n"
         "\n"
         "def main() -> Void\n"

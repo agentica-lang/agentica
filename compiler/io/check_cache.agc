@@ -131,7 +131,7 @@ end
 # The path of the entry for the file `key`. The name holds the project inputs too, so two projects that share a build
 # folder (AGENTICA_BUILD_DIR) do not replace each other's entries for a file they both import.
 def entry_path(plan: Plan, key: String) -> String
-  name = CacheFiles.digest(String.to_bytes(CheckCache.piece(plan.inputs) + key)).slice(0, NAME_CHARS)
+  name = CacheFiles.digest((CheckCache.piece(plan.inputs) + key).bytes).slice(0, NAME_CHARS)
   return Paths.join(plan.folder, "#{name}#{ENTRY_END}")
 end
 
@@ -169,7 +169,7 @@ def write_entry(plan: Plan, key: String, text: String) -> Bool
 
   path = entry_path(plan, key)
   temporary = "#{path}#{CacheFiles.TEMP_MARK}#{suffix.unwrap!}"
-  return CacheFiles.install(temporary, String.to_bytes("#{plan.head}\n#{text}"), path)
+  return CacheFiles.install(temporary, "#{plan.head}\n#{text}".bytes, path)
 end
 
 # Both folders must be ones this program may trust, or be made now. The .gitignore goes in `_build/` when the cache
@@ -177,7 +177,7 @@ end
 def prepare(plan: Plan) -> Result[Void]
   made = try CacheFiles.private_folder(plan.build, plan.user)
   if made and plan.beside
-    CacheFiles.write_private(Paths.join(plan.build, ".gitignore"), String.to_bytes("*\n"))
+    CacheFiles.write_private(Paths.join(plan.build, ".gitignore"), "*\n".bytes)
   end
 
   try CacheFiles.private_folder(plan.folder, plan.user)

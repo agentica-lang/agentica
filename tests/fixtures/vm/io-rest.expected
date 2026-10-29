@@ -1,12 +1,12 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 24,
+  "steps": 25,
   "stdout": [
     "\"head\"",
     "\"body ��\\nline\\r\\n😀 tail\\r\"",
     "\"\"",
-    "ok([])",
+    "ok(<Bytes 0>)",
     "true",
     "error(\"IO.gets reached the end of input\")",
     ""

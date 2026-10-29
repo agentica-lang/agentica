@@ -115,6 +115,7 @@ export def foreign_names() -> Map[String, String]
     "Request": "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]",
     "Set.empty": "write Set.new([]) where the type is known: seen: Set[Int] = Set.new([])",
     "SizedQueue.new": "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)",
+    "String.to_bytes": "use s.bytes",
     "Task.async": "use Task.spawn(&f, arg), and Task.await(task) for its result",
     "Task.async_stream": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
     "Thread.new": "use Task.spawn do ... end (or Task.spawn(&f, arg)), and Task.await(task) for its result",
@@ -244,6 +245,7 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.substring": "use s.slice(start, length) for a part of the text; length is end - start",
     "String.take": "use s.split(\"\").take(n).join(\"\") for the first n characters; n may exceed the length",
     "String.to_a": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
+    "String.to_bytes": "use s.bytes, or s.bytes.to_a for a List[Int]",
     "String.to_s": "a String is already text; s.to_s gives the same string",
   }
 end

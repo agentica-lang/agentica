@@ -14,7 +14,7 @@ def main() -> Void
   IO.inspect(File.read_text(big, 60000))
   input = Result.unwrap!(File.open(big, "read", 60000))
   sizes = [1000000, 1000000, 1000000, 1000000].map do |n|
-    File.read_bytes(input, n, 60000).unwrap_or([-1]).size
+    File.read_bytes(input, n, 60000).unwrap_or("!".bytes).size
   end
   IO.inspect(sizes)
   File.close(input, 60000)

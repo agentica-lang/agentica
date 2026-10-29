@@ -6,7 +6,7 @@ description: The std/binary module, which reads and writes binary numbers in a l
 
 `std/binary` is written in Agentica, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it: `import Binary from "std/binary"`.
 
-Binary data is a `List[Int]` of bytes (0 to 255), as `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. A reader takes the list and a zero-based `offset`.
+Binary data is a `List[Int]` of bytes (0 to 255), as `TCP.recv_bytes` and `Process.read_bytes` give; `b.to_a` gives that list for the `Bytes` of `IO.read_bytes` and `File.read_bytes`. A reader takes the list and a zero-based `offset`.
 
 ```agentica
 import Binary from "std/binary"

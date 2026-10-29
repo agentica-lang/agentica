@@ -518,7 +518,7 @@ def check_relative(path: String, name: String, suffix: String) -> Result[String]
   if String.starts_with?(path, "/")
     return error("archive: #{name} is absolute#{suffix}")
   end
-  for b in String.to_bytes(path)
+  for b in path.bytes
     if b == 0
       return error("archive: #{name} holds a NUL byte#{suffix}")
     end
@@ -547,7 +547,7 @@ def normalize_selector(text: String) -> Result[String]
   if text == ""
     return error("archive: a member must not be empty")
   end
-  if String.to_bytes(text).size > NAME_BYTES
+  if text.bytesize > NAME_BYTES
     return error("archive: member is too long: #{text}")
   end
   path = text
@@ -616,17 +616,22 @@ def find_match(wanted: List[Wanted], canon: String) -> Int
 end
 
 def key_text_of(key: List[Int], entry: Int) -> Result[String]
-  case String.from_bytes(key)
+  case utf8_of(key)
     ok(text) -> return ok(text)
     error(_) -> return error("archive: bad PAX key at entry #{entry}")
   end
 end
 
 def decode_or_empty(raw: List[Int]) -> String
-  case String.from_bytes(raw)
+  case utf8_of(raw)
     ok(decoded) -> return decoded
     error(_) -> return ""
   end
+end
+
+# The bytes as strict UTF-8. The TAR data is a List[Int] until #805 PR 5; its items are bytes.
+def utf8_of(data: List[Int]) -> Result[String]
+  return String.from_bytes(try Bytes.from_list(data))
 end
 
 def join_one(parts: List[String]) -> Result[String]
@@ -707,9 +712,10 @@ end
 # Appends one piece of a selected file's data.
 def append_out(out: String, piece: List[Int], deadline: Int) -> Result[Void]
   left = try time_left(deadline)
+  data = try Bytes.from_list(piece)
   case File.open(out, "append", left)
     ok(handle) ->
-      case File.write_bytes(handle, piece, left)
+      case File.write_bytes(handle, data, left)
         ok(_) ->
           case File.close(handle, close_budget(deadline))
             ok(_) -> return ok()

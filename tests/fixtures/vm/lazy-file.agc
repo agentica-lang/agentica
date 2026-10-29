@@ -52,7 +52,7 @@ def main() -> Void
   long = put(dir, "long.txt", String.join(List.repeat("z", 2000), ""))
   bad = at(dir, "bad.bin")
   out = Result.unwrap!(File.open(bad, "write", 60000))
-  Result.unwrap!(File.write_bytes(out, [97, 10, 255, 10], 60000))
+  Result.unwrap!(File.write_bytes(out, Bytes.from_list([97, 10, 255, 10]).unwrap!, 60000))
   Result.unwrap!(File.close(out, 60000))
   recipe = lines(numbers).map do |line| line.length end
   puts("a recipe opens nothing: #{recipe.first(0)}")

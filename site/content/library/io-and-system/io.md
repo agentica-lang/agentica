@@ -207,17 +207,17 @@ The last line ends with `\n`, so `split` gives an empty last part.
 ## IO.read_bytes
 
 ```text
-IO.read_bytes(count: Int) -> Result[List[Int]]
+IO.read_bytes(count: Int) -> Result[Bytes]
 ```
 
-Reads up to `count` bytes, from 0 to 1048576. At the end of input it gives `ok([])`.
+Reads up to `count` bytes, from 0 to 1048576, as a [`Bytes`](/library/data-structures/bytes/). At the end of input the bytes are empty.
 
 Text reads and byte reads share one input. Bytes that one of them takes are not seen by the other.
 
 ```agentica
 def main() -> Void
   bytes = IO.read_bytes(2).unwrap!
-  puts(bytes)
+  puts(bytes.to_a)
   puts(String.from_bytes(bytes))
 end
 ```

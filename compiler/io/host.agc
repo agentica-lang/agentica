@@ -100,14 +100,14 @@ def entry_kind(kind: String) -> Workspace.EntryKind
 end
 
 # The whole file, read in chunks of 256 KiB (File.read_bytes gives at most 1 MiB a call).
-def read_bytes(path: String) -> Result[List[Int]]
+def read_bytes(path: String) -> Result[Bytes]
   opened = File.open(path, "read", STAT_TIMEOUT_MS)
   if !opened.ok?
     return error(opened.message)
   end
 
   handle = opened.unwrap!
-  data: List[Int] = []
+  parts: List[Bytes] = []
   finished = false
   while !finished
     got = File.read_bytes(handle, CHUNK_BYTES, STAT_TIMEOUT_MS)
@@ -116,12 +116,12 @@ def read_bytes(path: String) -> Result[List[Int]]
       return error(got.message)
     end
 
-    finished = got.unwrap!.size == 0
-    data = data.concat(got.unwrap!)
+    finished = got.unwrap!.empty?
+    parts = parts.push(got.unwrap!)
   end
 
   File.close(handle, STAT_TIMEOUT_MS)
-  return ok(data)
+  return ok(Bytes.concat(parts))
 end
 
 # The verified local path of the downloaded member named by the request, from the cache alone and without

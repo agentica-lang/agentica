@@ -78,10 +78,16 @@ end
 def write(root_dir: String, written: Writer.Written, output: String, settings: Env.Settings) -> String
   case written
     Writer.Written.Failed(problem) -> return LowerText.problem_text(settings.workspace, root_dir, problem)
-    Writer.Written.Done(bytes) ->
-      saved = SaveFile.bytes(output, bytes, 60_000)
+    Writer.Written.Done(list) ->
+      # The writer gives a List[Int] until #805 PR 7; every item is a byte.
+      bytes = Bytes.from_list(list)
+      if !bytes.ok?
+        return "cannot write #{output}: #{bytes.message}"
+      end
+
+      saved = SaveFile.bytes(output, bytes.unwrap!, 60_000)
       if saved.ok?
-        return "wrote #{bytes.size} bytes"
+        return "wrote #{list.size} bytes"
       end
 
       return "cannot write #{output}: #{saved.message}"

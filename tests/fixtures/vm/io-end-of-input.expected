@@ -1,10 +1,10 @@
 {
   "exit": 1,
   "code": "RUNTIME-END-OF-INPUT",
-  "steps": 20,
+  "steps": 21,
   "stdout": [
     "prompt> error(\"IO.gets reached the end of input\")",
-    "ok([])",
+    "ok(<Bytes 0>)",
     "true",
     ""
   ],

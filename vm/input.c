@@ -424,7 +424,7 @@ agc_input_status agc_input_all(agc_vm *vm, agc_string **text) {
   return AGC_INPUT_OK;
 }
 
-agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
+agc_input_status agc_input_bytes(agc_vm *vm, size_t count, const agc_bytes **out) {
   agc_input *in = &vm->rt->in;
   while (in->end - in->start < count) {
     int r = fill(vm);
@@ -433,12 +433,12 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
     if (r == 0) break;
   }
   size_t n = in->end - in->start < count ? in->end - in->start : count;
-  *out = agc_list_of_bytes(n ? in->buf + in->start : NULL, n);
+  *out = agc_make_bytes(n ? in->buf + in->start : NULL, n);
   consume(in, in->start + n);
   return AGC_INPUT_OK;
 }
 
-agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out) {
+agc_input_status agc_input_whole(agc_vm *vm, size_t max, const agc_bytes **out) {
   agc_input *in = &vm->rt->in;
   if (in->fd < 0) agc_input_open(vm, 0, false);
   for (;;) {
@@ -455,7 +455,7 @@ agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out) {
     if (r == 0) break;
   }
   size_t n = in->end - in->start;
-  *out = agc_list_of_bytes(n ? in->buf + in->start : NULL, n);
+  *out = agc_make_bytes(n ? in->buf + in->start : NULL, n);
   consume(in, in->end);
   return AGC_INPUT_OK;
 }

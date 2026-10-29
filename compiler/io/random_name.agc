@@ -24,7 +24,7 @@ export def hex() -> Result[String]
       return error("cannot read /dev/urandom")
     end
 
-    bytes = bytes.concat(got.unwrap!)
+    bytes = bytes.concat(got.unwrap!.to_a)
   end
 
   try File.close(source, IO_TIMEOUT_MS)

@@ -23,7 +23,7 @@ DEL = 127
 export NO_MAX_AGE = -9223372036854775808
 
 # The bytes that RFC 6265 allows in a cookie name (an RFC 7230 token): letters, digits and !#$%&'*+-.^_`|~
-TOKEN_SYMBOLS = Set.new("!#$%&'*+-.^_`|~".to_bytes)
+TOKEN_SYMBOLS = Set.new("!#$%&'*+-.^_`|~".bytes.to_a)
 
 # The same-site values that `set_header` writes.
 SAME_SITE_VALUES = Set.new(["Strict", "Lax", "None"])
@@ -130,7 +130,7 @@ def check_cookie(cookie: Cookie) -> Result[Bool]
 end
 
 def valid_name?(name: String) -> Bool
-  bytes = name.to_bytes
+  bytes = name.bytes.to_a
   return !bytes.empty? and bytes.all? do |byte| token_byte?(byte) end
 end
 
@@ -144,7 +144,7 @@ end
 # The position of the first byte of `value` that is not an RFC 6265 cookie-octet (printable ASCII except space, `"`,
 # `,`, `;` and `\`), or -1.
 def bad_value_position(value: String) -> Int
-  bytes = value.to_bytes
+  bytes = value.bytes
   i = 0
   while i < bytes.size
     byte = bytes[i]
@@ -162,7 +162,7 @@ def add_attribute(parts: List[String], label: String, field: String, text: Strin
   if text == ""
     return ok(parts)
   end
-  if text != text.strip or !text.to_bytes.all? do |byte| byte >= SPACE and byte < DEL and byte != SEMICOLON end
+  if text != text.strip or !text.bytes.to_a.all? do |byte| byte >= SPACE and byte < DEL and byte != SEMICOLON end
     return error("invalid cookie #{field} (#{printable(text)})")
   end
   return ok(parts.push("#{label}=#{text}"))
@@ -170,8 +170,8 @@ end
 
 # `text` without control bytes, for an error message. Removing ASCII bytes keeps valid UTF-8 valid.
 def printable(text: String) -> String
-  kept = text.to_bytes.select do |byte| byte >= SPACE and byte != DEL end
-  return String.from_bytes(kept).unwrap_or("")
+  kept = text.bytes.to_a.select do |byte| byte >= SPACE and byte != DEL end
+  return String.from_bytes(Bytes.from_list(kept).unwrap_or("".bytes)).unwrap_or("")
 end
 
 def max_of(a: Int, b: Int) -> Int

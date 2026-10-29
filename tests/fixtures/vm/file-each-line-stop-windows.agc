@@ -11,7 +11,7 @@ end
 def put_bytes(dir: String, name: String, bytes: List[Int]) -> String
   path = at(dir, name)
   out = Result.unwrap!(File.open(path, "write", 60000))
-  Result.unwrap!(File.write_bytes(out, bytes, 60000))
+  Result.unwrap!(File.write_bytes(out, Bytes.from_list(bytes).unwrap!, 60000))
   Result.unwrap!(File.close(out, 60000))
   return path
 end

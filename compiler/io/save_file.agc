@@ -5,7 +5,7 @@ PIECE = 1_048_576
 
 ## Writes the bytes to the file at `path`, which is created or truncated, in pieces of 1 MiB. Every call waits at most
 ## `timeout_ms`.
-export def bytes(path: String, data: List[Int], timeout_ms: Int) -> Result[Void]
+export def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
   out = try File.open(path, "write", timeout_ms)
   rest = data
   while rest.size > 0
@@ -24,7 +24,7 @@ end
 ## Puts `data` in the file at `path` so that no reader sees a half-written file there: it is written to a file beside
 ## it first, and that file is renamed into place (`Path.rename` never replaces, so an old file, `replacing`, is moved
 ## to a backup name first and removed at the end). A step that fails puts the old file back and removes what was made.
-export def replace(path: String, data: List[Int], replacing: Bool, timeout_ms: Int) -> Result[Void]
+export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) -> Result[Void]
   stamp = System.pid()
   fresh = "#{path}.new-#{stamp}"
   backup = "#{path}.old-#{stamp}"

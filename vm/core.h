@@ -354,7 +354,7 @@ void agc_input_close(agc_vm *vm);
 agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text);
-agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
+agc_input_status agc_input_bytes(agc_vm *vm, size_t count, const agc_bytes **out);
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd);
 void agc_output_leave(agc_vm *vm, agc_task *t);

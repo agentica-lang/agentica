@@ -8,7 +8,6 @@
 #   hand-off FILE.agcb [OPTIONS... -- ARGUMENTS...]
 #                        hands the program in FILE to the VM with the options and the arguments
 #   crash                stops with a runtime error, as the driver of `agentica test` could
-#   bad-program          hands over a "program" with a byte that is not one
 #   bad-word             hands over a program with an argument that has a character 0
 #   too-many-options     hands over more options than the driver takes
 #   too-many-arguments   hands over more arguments than the driver takes
@@ -36,14 +35,12 @@ def main() -> Void
     hand_off(words[1], words.drop(2))
   elsif words[0] == "crash"
     puts(1 / (words.size - 1))
-  elsif words[0] == "bad-program"
-    shown_void(FrontEnd.hand_off([1, 300], [], []))
   elsif words[0] == "bad-word"
-    shown_void(FrontEnd.hand_off([1], [], ["a#{String.from_code(0)}b"]))
+    shown_void(FrontEnd.hand_off("a".bytes, [], ["a#{String.from_code(0)}b"]))
   elsif words[0] == "too-many-options"
-    shown_void(FrontEnd.hand_off([1], List.repeat("--deny-run", 65), []))
+    shown_void(FrontEnd.hand_off("a".bytes, List.repeat("--deny-run", 65), []))
   elsif words[0] == "too-many-arguments"
-    shown_void(FrontEnd.hand_off([1], [], List.repeat("a", 1048576).push("a")))
+    shown_void(FrontEnd.hand_off("a".bytes, [], List.repeat("a", 1048576).push("a")))
   end
 end
 
@@ -55,9 +52,9 @@ def shown(result: Result[String]) -> Void
   end
 end
 
-def shown_stdin(result: Result[List[Int]]) -> Void
+def shown_stdin(result: Result[Bytes]) -> Void
   if result.ok?
-    puts("#{result.unwrap!.size} bytes, sum #{result.unwrap!.sum()}")
+    puts("#{result.unwrap!.size} bytes, sum #{result.unwrap!.to_a.sum()}")
   else
     puts("error: #{result.message}")
   end
@@ -83,14 +80,14 @@ def hand_off(file: String, rest: List[String]) -> Void
   shown_void(FrontEnd.hand_off(program(file), options, arguments))
 end
 
-def program(file: String) -> List[Int]
+def program(file: String) -> Bytes
   handle = File.open(file, "read", 5000).unwrap!
-  bytes: List[Int] = []
+  parts: List[Bytes] = []
   chunk = File.read_bytes(handle, 1048576, 5000).unwrap!
   while chunk.size > 0
-    bytes = bytes.concat(chunk)
+    parts = parts.push(chunk)
     chunk = File.read_bytes(handle, 1048576, 5000).unwrap!
   end
   File.close(handle, 5000)
-  return bytes
+  return Bytes.concat(parts)
 end

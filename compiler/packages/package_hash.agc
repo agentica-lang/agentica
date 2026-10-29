@@ -25,6 +25,8 @@ NATIVE_FOLDER = "native"
 MANIFEST_FILE = "agentica.toml"
 # Files that a file manager adds to a folder: not part of the package, so they are not hashed or copied.
 NATIVE_JUNK = Set.new(["thumbs.db", "desktop.ini"])
+# The separator of the fields of a file's header in the hashed stream. A string literal has no escape for it.
+NUL = String.from_code(0)
 
 ## What hashing a folder gives: the hash, a link among the .agc files (its path), or the system's message for a file
 ## or folder that cannot be read.
@@ -177,32 +179,6 @@ export def fold(name: String) -> String
   return name.upcase.downcase
 end
 
-## The pieces one after the other. Each level joins neighbours, so a byte is copied about log2(pieces) times.
-export def concat_all(pieces: List[List[Int]]) -> List[Int]
-  level = pieces
-  while level.size > 1
-    merged: List[List[Int]] = []
-    index = 0
-    while index < level.size
-      if index + 1 < level.size
-        merged = merged.push(level[index].concat(level[index + 1]))
-      else
-        merged = merged.push(level[index])
-      end
-
-      index += 2
-    end
-
-    level = merged
-  end
-
-  if level.size == 0
-    return []
-  end
-
-  return level[0]
-end
-
 def regular?(kind: Workspace.EntryKind) -> Bool
   case kind
     Workspace.EntryKind.File -> return true
@@ -213,25 +189,19 @@ def regular?(kind: Workspace.EntryKind) -> Bool
 end
 
 def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
-  # The pieces are joined at the end, in pairs level by level: appending each file to the stream would copy the whole
-  # stream once for each file (a list cannot grow by a long piece in constant time).
-  pieces: List[List[Int]] = []
+  # The pieces are joined once at the end: appending each file to the stream would copy the whole stream once for
+  # each file.
+  pieces: List[Bytes] = []
   for path in paths
     read = workspace.read_bytes.call(Paths.join(root, path))
     if !read.ok?
       return Hashed.Unreadable(read.message)
     end
 
-    pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
+    pieces = pieces.concat([header(path, read.unwrap!.size), read.unwrap!])
   end
 
-  # The workspace reads a file as a List[Int] until #805 PR 4, so the stream is converted once; its items are bytes.
-  stream = Bytes.from_list(concat_all(pieces))
-  if !stream.ok?
-    return Hashed.Unreadable(stream.message)
-  end
-
-  return Hashed.Hash("sha256:#{Digest.sha256_hexdigest(stream.unwrap!)}")
+  return Hashed.Hash("sha256:#{Digest.sha256_hexdigest(Bytes.concat(pieces))}")
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
@@ -248,6 +218,6 @@ def join(folder: String, name: String) -> String
 end
 
 # path, 0, size in decimal, 0.
-def header(path: String, size: Int) -> List[Int]
-  return String.to_bytes(path).push(0).concat(String.to_bytes(size.to_s)).push(0)
+def header(path: String, size: Int) -> Bytes
+  return "#{path}#{NUL}#{size}#{NUL}".bytes
 end

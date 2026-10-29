@@ -315,7 +315,7 @@ end
 
 def main() -> Void
   out = File.open(System.args()[0], "create_private", 1000).unwrap!
-  File.write_bytes(out, [48, 49, 50, 51, 52, 53, 54, 55, 56, 57], 1000)
+  File.write_bytes(out, "0123456789".bytes, 1000)
   Task.spawn(&digest, System.args()[1])
   Task.sleep(100)
   File.close(out, 1)
@@ -645,7 +645,7 @@ def test_file_streams_whole_text_helpers_directories_metadata_and_paths_work_tog
   opened: Result[FileHandle] = File.open(%s, "write", 1000)
   handle: FileHandle = Result.unwrap!(opened)
   wrote: Result[Void] = File.write(handle, "alpha\n", 1000)
-  wrote_bytes: Result[Void] = File.write_bytes(handle, [98, 101, 116, 97], 1000)
+  wrote_bytes: Result[Void] = File.write_bytes(handle, "beta".bytes, 1000)
   closed: Result[Void] = File.close(handle, 1000)
   closed_again: Result[Void] = File.close(handle, 1000)
   appended: Result[Void] = File.append_text(%s, "\nend", 1000)
@@ -682,9 +682,9 @@ def test_invalid_modes_closed_handles_invalid_utf8_and_whole_file_bounds_return_
   invalid_mode: Result[FileHandle] = File.open(%s, "readwrite", 1000)
   opened: Result[FileHandle] = File.open(%s, "write", 1000)
   handle: FileHandle = Result.unwrap!(opened)
-  wrote: Result[Void] = File.write_bytes(handle, [255], 1000)
+  wrote: Result[Void] = File.write_bytes(handle, Bytes.from_list([255]).unwrap!, 1000)
   closed: Result[Void] = File.close(handle, 1000)
-  closed_read: Result[List[Int]] = File.read_bytes(handle, 1, 1000)
+  closed_read: Result[Bytes] = File.read_bytes(handle, 1, 1000)
   invalid_utf8: Result[String] = File.read_text(%s, 1000)
   oversized: Result[String] = File.read_text(%s, 1000)
   IO.inspect(invalid_mode)
@@ -708,8 +708,8 @@ def test_bounded_stream_reads_and_line_decoding_preserve_eof_semantics(new_dir, 
   handle: FileHandle = Result.unwrap!(opened)
   first: Result[String] = File.read_line(handle, 1000)
   second: Result[String] = File.read_line(handle, 1000)
-  rest: Result[List[Int]] = File.read_bytes(handle, 100, 1000)
-  eof: Result[List[Int]] = File.read_bytes(handle, 100, 1000)
+  rest: Result[Bytes] = File.read_bytes(handle, 100, 1000)
+  eof: Result[Bytes] = File.read_bytes(handle, 100, 1000)
   closed: Result[Void] = File.close(handle, 1000)
   IO.inspect(first)
   IO.inspect(second)
@@ -720,8 +720,8 @@ end
 """ % literal(path))
     assert 'ok("one")' in output
     assert 'ok("two")' in output
-    assert "ok([108, 97, 115, 116])" in output
-    assert "ok([])" in output
+    assert "ok(<Bytes 4 6c617374>)" in output
+    assert "ok(<Bytes 0>)" in output
 
 
 def test_file_operations_follow_symlinks_to_regular_files(new_dir, run_program):

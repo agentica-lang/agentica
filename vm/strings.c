@@ -538,31 +538,33 @@ static agc_value builtin_from_code(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_small_string(vm, buf, n, 1));
 }
 
+/* The String of n bytes, decoded strictly: error for invalid or incomplete UTF-8. The one body of String.from_bytes
+   under both keys: "String.from_bytes.bytes" on a Bytes, and the old "String.from_bytes" on a byte list, which front
+   ends and .agcb files compiled before #805 PR 4 import (PR 9 removes it). */
+static agc_value from_utf8(agc_vm *vm, const uint8_t *data, size_t n) {
+  size_t chars;
+  if (!agc_utf8_chars(data, n, &chars)) return failure(ascii("invalid or incomplete UTF-8"));
+  return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, n, chars)));
+}
+
 static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *data = agc_as_list(vm, args[0]);
-  agc_list_cursor cursor;
-  agc_value item;
-  agc_list_cursor_begin(&cursor, data, 0);
-  while (agc_list_cursor_next(&cursor, &item)) {
-    int64_t b = agc_as_int(vm, item);
-    if (b < 0 || b > 255) return failure(ascii("bytes must be integers between 0 and 255"));
-  }
-  size_t count = agc_list_len(data);
-  if (count == 0) return agc_result_value(true, agc_string_value(vm->rt->empty_string));
-  if (count == 1) {
-    int64_t b = agc_as_int(vm, agc_list_get(data, 0));
-    if (b < AGC_ASCII_CHARS) return agc_result_value(true, agc_string_value(vm->rt->chars[b]));
-  }
-  agc_string *s = agc_new_string(count, 0);
-  agc_list_cursor_begin(&cursor, data, 0);
-  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) s->data[k] = (char)(uint8_t)agc_as_int(vm, item);
-  if (!agc_utf8_chars((const uint8_t *)s->data, s->bytes, &s->chars))
-    return failure(ascii("invalid or incomplete UTF-8"));
-  return agc_result_value(true, agc_string_value(s));
+  const uint8_t *bytes = agc_byte_list(vm, data, SIZE_MAX);
+  if (!bytes) return failure(ascii("bytes must be integers between 0 and 255"));
+  return from_utf8(vm, bytes, agc_list_len(data));
 }
 
-/* The bytes of the String as it is stored: valid UTF-8 by the String invariant, so this is the inverse of from_bytes. */
+static agc_value builtin_from_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  size_t n;
+  const uint8_t *data = agc_bytes_data(vm, args[0], &n);
+  return from_utf8(vm, data, n);
+}
+
+/* The bytes of the String as it is stored, as a byte list: valid UTF-8 by the String invariant, so this is the inverse
+   of from_bytes. Not in the catalog since #805 PR 4 (s.bytes, in vm/bytes.c, replaces it); the key stays for front
+   ends and .agcb files compiled before it, until PR 9. */
 static agc_value builtin_to_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
@@ -644,6 +646,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.from_bytes.bytes", 1, builtin_from_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];

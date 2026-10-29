@@ -6,7 +6,7 @@ description: The Base64 and Digest builtins, which write bytes as base64 or hex 
 
 `Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `Digest.hexencode` writes hex digits as Ruby's does, and `Digest.hexdecode`, Agentica's own name for its inverse, reads them back. The VM computes them in plain C; nothing is written in Agentica.
 
-They take and give [`Bytes`](/library/data-structures/bytes/), as `Digest.sha256` does. For text, encode its UTF-8 bytes from `s.bytes` and decode the bytes back with `String.from_bytes(b.to_a)`.
+They take and give [`Bytes`](/library/data-structures/bytes/), as `Digest.sha256` does. For text, encode its UTF-8 bytes from `s.bytes` and decode the bytes back with `String.from_bytes(b)`.
 
 ## Base64
 
@@ -31,7 +31,7 @@ def main() -> Void
   puts(Base64.strict_encode64(data))
   puts(Base64.urlsafe_encode64(Bytes.from_list([251, 255]).unwrap!, false))
   back = Base64.strict_decode64("aGVsbG8sIHdvcmxk").unwrap!
-  puts(String.from_bytes(back.to_a).unwrap!)
+  puts(String.from_bytes(back).unwrap!)
   puts(Base64.strict_decode64("aGVsbG8\n"))
   puts(Base64.decode64("aGVs\nbG8=\n").to_a)
 end
