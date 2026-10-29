@@ -111,10 +111,11 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 
 ## write_lines
 
-- `write_lines(path, timeout_ms = 30000)` takes a `Lazy[String]` (a `Lazy[Int]` is
-  `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates the
-  file and writes each item and `\n`: `File.foreach(src, 4096, 1000).drop(1).map
-  do |line| ... end.write_lines("out.txt", 1000)` is `ok()` or the first error.
+- `write_lines(path, timeout_ms = 30000)` takes a `Lazy[String]` (a `Lazy[Int]`
+  is `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates
+  the file and writes each item and `\n`: `File.foreach(src, 4096,
+  1000).drop(1).map do |line| ... end.write_lines("out.txt", 1000)` is `ok()`
+  or the first error.
 - The file opens before the first item is pulled (a failed open reads nothing)
   and is flushed and closed before the terminal returns, on every path. What was
   written before an error stays. A crash or cancel of the task closes it at the

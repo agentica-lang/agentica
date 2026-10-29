@@ -638,7 +638,7 @@ ROWS_6: List[Model.Builtin] = [
       name: "File.try_lock",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Bool),
       rule: Model.Rule.Plain,

@@ -136,10 +136,9 @@ at once with an error. Streams that can wait reach the program there as
 standard input, output or error, as process pipes and as sockets.
 Signatures are in
 [`library/io-and-system/files.md`][agentica-link-2]. Every File, Dir and Path
-call that takes `timeout_ms` defaults it to 30000, except `File.try_lock`;
-`File.open` defaults `mode` to `"read"`, and `File.each_line` and
-`File.foreach` default `buffer_bytes` to 65536 (see "Default parameter values"
-in section 6).
+call that takes `timeout_ms` defaults it to 30000; `File.open` defaults `mode`
+to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
+65536 (see "Default parameter values" in section 6).
 
 - `File.open` modes: `read` (an existing path that is not a directory), `write`
   (creates or truncates), `append` (creates or appends) and `create_private` (a
@@ -148,22 +147,22 @@ in section 6).
   is mode 0600, less where the umask clears bits. On Windows the file is made
   with a protected DACL that grants only the current user, and creation fails
   unless the object it opened has that owner and that DACL; there is no mode.
-- `File.try_lock(handle, timeout_ms)` takes an exclusive lock on the open file
-  without waiting, for any handle mode: `ok(true)` when taken (again on the same
-  handle too), `ok(false)` when another handle or process holds it. The lock
-  lasts until the handle is closed, its task ends or the process ends, and a
-  child process never keeps it. Only a regular file can be locked: a handle on a
-  pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock
-  call (close the handle). On Unix the lock is advisory (`flock`): code that
-  does not ask for a lock can still access the file. On Windows it locks the
-  whole byte range with `LockFileEx`, so the OS also rejects reads and writes
+- `File.try_lock(handle, timeout_ms = 30000)` takes an exclusive lock on the
+  open file without waiting, for any handle mode: `ok(true)` when taken (again
+  on the same handle too), `ok(false)` when another handle or process holds it.
+  The lock lasts until the handle is closed, its task ends or the process
+  ends, and a child process never keeps it. Only a regular file can be locked:
+  a handle on a pipe, a FIFO or a device (such as `/dev/null`) is an error.
+  There is no unlock call (close the handle). On Unix the lock is advisory
+  (`flock`): code that does not ask for a lock can still access the file. On
+  Windows it locks the whole byte range with `LockFileEx`, so the OS also rejects reads and writes
   through other handles while the lock is held.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at
   EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it
   is an error at EOF or on invalid UTF-8.
-- `File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end` gives
-  `Result[Void]`. It opens `path` for reading and passes the block one line at a
+- `File.each_line(path, buffer_bytes = 65536, timeout_ms = 30000) do |line|
+  ... end` gives `Result[Void]`. It opens `path` for reading and passes the block one line at a
   time, never reading the whole file. A line is at most `buffer_bytes` bytes
   including its terminator; a longer line ends the call with `error("filesystem:
   line exceeds buffer_bytes")`. `buffer_bytes` is 1024 to 16777216, otherwise

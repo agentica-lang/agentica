@@ -132,8 +132,8 @@ be read twice. The library page is
 - Sources: `xs.lazy` (`List[T]` to `Lazy[T]`), `(a..b).lazy` and
   `(a...b).lazy` (`Lazy[Int]`), and `Lazy.produce(seed) do |x| ... end`, the
   endless `seed`, `f(seed)`, `f(f(seed))`, ...
-- `File.foreach(path, buffer_bytes, timeout_ms)` (`Lazy[String]`): the lines
-  of a file, read as `File.each_line` reads them. The file opens when a
+- `File.foreach(path, buffer_bytes = 65536, timeout_ms = 30000)`
+  (`Lazy[String]`): the lines of a file, read as `File.each_line` reads them. The file opens when a
   terminal starts and is closed before the terminal returns, whatever ended it
   (the end, a step that had enough, an error from a block, a failed `try`, a
   read error); a crash or cancel of the task closes it at the task's end. After
@@ -174,7 +174,8 @@ be read twice. The library page is
   stop the source: an endless source then ends, and `Lazy.produce` does not
   call its block for an item that no step needs. `to_a`, `reduce` and `each` on
   an endless source never end.
-- `lz.write_lines(path, timeout_ms)` (on a `Lazy[String]`, `Result[Void]`) is
+- `lz.write_lines(path, timeout_ms = 30000)` (on a `Lazy[String]`,
+  `Result[Void]`) is
   the terminal that writes each item and a line feed to a file, created or
   truncated. The file opens before the first item is pulled (a failed open
   pulls nothing) and is flushed and closed before the terminal returns,

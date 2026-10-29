@@ -22,7 +22,7 @@ File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[V
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
-File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
+File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
 Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -34,9 +34,8 @@ Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Every `timeout_ms` above may be left out (default 30000), except the one of
-`File.try_lock`. `File.open(path)` also reads, and `each_line` and `foreach`
-default `buffer_bytes` to 65536.
+Every `timeout_ms` above may be left out (default 30000). `File.open(path)`
+also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
 
 ## Opening and reading
 

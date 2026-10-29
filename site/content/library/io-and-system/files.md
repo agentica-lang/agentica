@@ -4,7 +4,7 @@ weight: 2
 description: Read and write files, list and create directories, and build paths.
 ---
 
-Every file function takes a timeout in milliseconds and returns a `Result`. It defaults to 30000 and may be left out, except for `File.try_lock`, which needs it. `File.open` also defaults its mode to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to 65536.
+Every file function takes a timeout in milliseconds and returns a `Result`. It defaults to 30000 and may be left out. `File.open` also defaults its mode to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to 65536.
 
 - Text is UTF-8. One text call reads or writes at most 1 MiB (`File.sha256` streams bytes and has no cap). Files have the permissions of the user who runs the program.
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
@@ -164,7 +164,7 @@ end
 ## File.try_lock
 
 ```text
-File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
+File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
 ```
 
 Takes an exclusive lock on the open file, without waiting. `ok(true)` means it is yours (also if this handle already holds it), `ok(false)` that another handle or process holds it.

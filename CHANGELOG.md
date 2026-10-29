@@ -29,7 +29,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `mkdir_private`, `Path.remove` and `Path.rename`. `File.open(path)` defaults
   both `mode` (`"read"`) and `timeout_ms`.
 - `timeout_ms` defaults to 30000 on `File.read_bytes`, `read_line`, `write`,
-  `write_bytes`, `flush`, `close`, `each_line`, `foreach` and
+  `write_bytes`, `flush`, `close`, `try_lock`, `each_line`, `foreach` and
   `Lazy.write_lines`, and `buffer_bytes` to 65536 on `File.each_line` and
   `foreach`, as on `File.chunks`.
 
