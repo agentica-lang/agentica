@@ -4,7 +4,7 @@
 encoding; inspect prints `<Process>`.
 
 ```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
+Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000) -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -12,9 +12,9 @@ Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
-Process.spawn_captured(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
-Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]

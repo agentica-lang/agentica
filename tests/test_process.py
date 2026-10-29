@@ -309,6 +309,19 @@ def test_the_child_starts_in_the_given_directory_and_a_bad_directory_is_an_error
         assert output(tmp_path, python_child("cwd", dir=str(bad))) == "not started\n"
 
 
+def test_the_spawns_leave_out_the_timeout_and_the_directory(tmp_path):
+    peer = "%s, [%s, " % (agc_literal(PYTHON), agc_literal(PY_PEER))
+    body = ('def main() -> Void\n  a = Result.unwrap!(Process.spawn(%s"args", "x"]))\n'
+            '  puts(Result.unwrap!(Process.read_line(a, 5000)))\n  Process.close(a)\n'
+            '  c = Result.unwrap!(Process.spawn_captured(%s"cwd"]))\n'
+            '  puts(Result.unwrap!(Process.read_line(c, 5000)))\n  Process.close(c)\n'
+            '  d = Result.unwrap!(Process.spawn_channel(%s"cwd"], "."))\n'
+            '  puts(Result.unwrap!(Process.read_line(d, 5000)))\n  Process.close(d)\nend\n\n' % (peer, peer, peer))
+    lines = output(tmp_path, body).split("\n")
+    assert json.loads(lines[0]) == ["x"]
+    assert os.path.samefile(lines[1], os.getcwd()) and os.path.samefile(lines[2], os.getcwd())
+
+
 def test_the_child_environment_is_inherited_without_the_vm_private_entries(tmp_path):
     # Windows names are case-insensitive, so a differently cased private name must go too; elsewhere it is another variable.
     channel = "Agentica_Channel" if TARGET_OS == "windows" else "AGENTICA_CHANNEL"

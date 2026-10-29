@@ -3662,7 +3662,7 @@ ROWS_33: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "command", type: Types.Type.String),
         Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Opaque("Process")),
       rule: Model.Rule.Plain,
@@ -3679,8 +3679,8 @@ ROWS_34: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "command", type: Types.Type.String),
         Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-        Model.Named(name: "dir", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Opaque("Process")),
       rule: Model.Rule.Plain,
@@ -3694,8 +3694,8 @@ ROWS_34: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "command", type: Types.Type.String),
         Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-        Model.Named(name: "dir", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Opaque("Process")),
       rule: Model.Rule.Plain,
