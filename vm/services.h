@@ -91,8 +91,8 @@ void agc_lines_stop(agc_line_reader *r, agc_value outcome);
 /* The lines of Lazy.write_lines (vm/lazy.c) into a file by path, created or truncated: the same rules as the reader.
    agc_writer_new opens nothing; the first agc_writer_next opens the file. READY means the writer waits for a line:
    the next call passes it as `line` (a String, or a byte chunk written as it is: Lazy.write_bytes, a Bytes with
-   AGC_WRITE_BYTES, a List[Int] with AGC_WRITE_BYTE_LISTS for the old __lazy_write_bytes key; Void passes none). WAIT means the task parks on a file job, whose
-   result is the `last` of the next call (with a Void line). END puts the outcome in *out and comes only after the
+   AGC_WRITE_BYTES, a List[Int] with AGC_WRITE_BYTE_LISTS for the old __lazy_write_bytes key; Void passes none). WAIT
+   means the task parks on a file job, whose result is the `last` of the next call (with a Void line). END puts the outcome in *out and comes only after the
    file is flushed and closed. agc_writer_stop, while READY, ends the writer with that outcome: the next calls close
    the file. */
 typedef struct agc_line_writer agc_line_writer;
@@ -170,7 +170,8 @@ extern const size_t agc_file_builtin_count;
    level or max_bytes. agc_zstep_open starts the codec as a registered entry the calling task owns, so the task's end
    frees it when the run did not; agc_zstep_close frees it (idempotent). agc_zstep_next runs one pass over `in` with
    `finish` once no item will come, sets *used, and puts a chunk of at most 64 KiB in *out when it produced bytes
-   (Void when not): a Bytes, or a List[Int] for a stream opened with `list` (the old __lazy_zlib key). INPUT: the stream wants the next item. AGAIN: call again with what is left of `in` (maybe none).
+   (Void when not): a Bytes, or a List[Int] for a stream opened with `list` (the old __lazy_zlib key). INPUT: the
+   stream wants the next item. AGAIN: call again with what is left of `in` (maybe none).
    END: the stream ended; a later call with bytes is a trailing byte. FAILED: *out is the error Result. */
 typedef enum { AGC_ZSTEP_INPUT, AGC_ZSTEP_AGAIN, AGC_ZSTEP_END, AGC_ZSTEP_FAILED } agc_zstep_status;
 agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes);

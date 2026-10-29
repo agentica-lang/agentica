@@ -19,7 +19,7 @@ builtin Dir.mkdir_private forms=1
 builtin File.append_text forms=1
   File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
 builtin File.chunks forms=1
-  File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]] shape=(String, Int = 65536, Int = 30000) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
+  File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes] shape=(String, Int = 65536, Int = 30000) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.close forms=1
   File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), Int = 30000) -> Result(Void) rule=Plain impl="File.close" effects=["filesystem"] desc="Flush and close a file handle idempotently."
 builtin File.each_line forms=1
@@ -205,7 +205,7 @@ builtin JSON.string forms=1
 builtin Lazy.chunk_while forms=1
   Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Prelude impl="" effects=[] desc="Lazy step: group runs of items, a new group where f(previous, item) is false."
 builtin Lazy.deflate forms=1
-  Lazy.deflate(lazy: Lazy[List[Int]], level: Int = 6, raw: Bool = false) -> Lazy[List[Int]] shape=(Lazy(List(Int)), Int = 6, Bool = false) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Lazy step: compress byte chunks of any size to one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, at level 0 to 9; VM only."
+  Lazy.deflate(lazy: Lazy[Bytes], level: Int = 6, raw: Bool = false) -> Lazy[Bytes] shape=(Lazy(Bytes), Int = 6, Bool = false) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: compress byte chunks of any size to one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, at level 0 to 9; VM only."
 builtin Lazy.drop forms=1
   Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Lazy step: skip the first count items; negative counts halt."
 builtin Lazy.drop_while forms=1
@@ -225,11 +225,11 @@ builtin Lazy.first forms=1
 builtin Lazy.flat_map forms=1
   Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], List(Var(B)))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: the items of the lists f returns, in order."
 builtin Lazy.gunzip forms=1
-  Lazy.gunzip(lazy: Lazy[List[Int]], max_bytes: Int = 1073741824) -> Lazy[List[Int]] shape=(Lazy(List(Int)), Int = 1073741824) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one gzip member (RFC 1952) with its CRC and size checked; truncation, any trailing byte (a second member too) and output past max_bytes end the run with an error; VM only."
+  Lazy.gunzip(lazy: Lazy[Bytes], max_bytes: Int = 1073741824) -> Lazy[Bytes] shape=(Lazy(Bytes), Int = 1073741824) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one gzip member (RFC 1952) with its CRC and size checked; truncation, any trailing byte (a second member too) and output past max_bytes end the run with an error; VM only."
 builtin Lazy.gzip forms=1
-  Lazy.gzip(lazy: Lazy[List[Int]], level: Int = 6) -> Lazy[List[Int]] shape=(Lazy(List(Int)), Int = 6) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Lazy step: compress byte chunks of any size to one gzip member (RFC 1952), level 0 to 9; VM only."
+  Lazy.gzip(lazy: Lazy[Bytes], level: Int = 6) -> Lazy[Bytes] shape=(Lazy(Bytes), Int = 6) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: compress byte chunks of any size to one gzip member (RFC 1952), level 0 to 9; VM only."
 builtin Lazy.inflate forms=1
-  Lazy.inflate(lazy: Lazy[List[Int]], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[List[Int]] shape=(Lazy(List(Int)), Bool = false, Int = 1073741824) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, with its checksum checked; truncation, any trailing byte and output past max_bytes end the run with an error; VM only."
+  Lazy.inflate(lazy: Lazy[Bytes], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes] shape=(Lazy(Bytes), Bool = false, Int = 1073741824) -> Lazy(Bytes) rule=Prelude impl="" effects=[] desc="Lazy step: decompress byte chunks of one zlib stream (RFC 1950), or raw deflate (RFC 1951) when raw is true, with its checksum checked; truncation, any trailing byte and output past max_bytes end the run with an error; VM only."
 builtin Lazy.map forms=1
   Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A)], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: f applied to each item."
 builtin Lazy.produce forms=1
@@ -245,7 +245,7 @@ builtin Lazy.to_a forms=1
 builtin Lazy.with_index forms=1
   Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Prelude impl="" effects=[] desc="Lazy step: f(item, index) for each item, the index from 0."
 builtin Lazy.write_bytes forms=1
-  Lazy.write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int = 30000) -> Result[Int] shape=(Lazy(List(Int)), String, Int = 30000) -> Result(Int) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each byte chunk to a file, created or truncated, and return the bytes written; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
+  Lazy.write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int = 30000) -> Result[Int] shape=(Lazy(Bytes), String, Int = 30000) -> Result(Int) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each byte chunk to a file, created or truncated, and return the bytes written; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin Lazy.write_lines forms=1
   Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(Lazy(String), String, Int = 30000) -> Result(Void) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each item and a line feed to a file, created or truncated; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin List.all? forms=1
@@ -679,7 +679,7 @@ builtin __lazy_channel forms=1
 builtin __lazy_chunk_while forms=1
   __lazy_chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] shape=(Lazy(Var(A)), Fn([Var(A), Var(A)], Bool)) -> Lazy(List(Var(A))) rule=Plain impl="__lazy_chunk_while" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_chunks forms=1
-  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[List[Int]] shape=(String, Int, Int) -> Lazy(List(Int)) rule=Plain impl="__lazy_chunks" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes] shape=(String, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_chunks.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_count forms=1
   __lazy_count(lazy: Lazy[A], kind: Int, count: Int) -> Lazy[A] shape=(Lazy(Var(A)), Int, Int) -> Lazy(Var(A)) rule=Plain impl="__lazy_count" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_each forms=1
@@ -709,11 +709,11 @@ builtin __lazy_to_a forms=1
 builtin __lazy_with_index forms=1
   __lazy_with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B] shape=(Lazy(Var(A)), Fn([Var(A), Int], Var(B))) -> Lazy(Var(B)) rule=Plain impl="__lazy_with_index" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_write_bytes forms=1
-  __lazy_write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int) -> Result[Int] shape=(Lazy(List(Int)), String, Int) -> Result(Int) rule=Plain impl="__lazy_write_bytes" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int) -> Result[Int] shape=(Lazy(Bytes), String, Int) -> Result(Int) rule=Plain impl="__lazy_write_bytes.bytes" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_write_lines forms=1
   __lazy_write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void] shape=(Lazy(String), String, Int) -> Result(Void) rule=Plain impl="__lazy_write_lines" effects=["filesystem"] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin __lazy_zlib forms=1
-  __lazy_zlib(lazy: Lazy[List[Int]], kind: Int, level: Int, max_bytes: Int) -> Lazy[List[Int]] shape=(Lazy(List(Int)), Int, Int, Int) -> Lazy(List(Int)) rule=Plain impl="__lazy_zlib" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
+  __lazy_zlib(lazy: Lazy[Bytes], kind: Int, level: Int, max_bytes: Int) -> Lazy[Bytes] shape=(Lazy(Bytes), Int, Int, Int) -> Lazy(Bytes) rule=Plain impl="__lazy_zlib.bytes" effects=[] desc="Internal to the prelude: a step or terminal of Lazy (vm/lazy.c)."
 builtin error forms=1
   error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="Construct an error; needs an expected Result type."
 builtin gets forms=1
@@ -728,15 +728,15 @@ builtin print forms=1
 builtin puts forms=1
   puts(value: T) -> Void shape=(Var(T)) -> Void rule=Show impl="puts" effects=["stdout"] desc="Write a value and a newline; non-String values print as in interpolation."
 builtin Zlib.deflate forms=1
-  Zlib.deflate(data: List[Int], level: Int = 6, max_bytes: Int = 1048576) -> Result[List[Int]] shape=(List(Int), Int = 6, Int = 1048576) -> Result(List(Int)) rule=Plain impl="Zlib.deflate" effects=[] desc="Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
+  Zlib.deflate(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 6, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.deflate.bytes" effects=[] desc="Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.inflate forms=1
-  Zlib.inflate(data: List[Int], max_bytes: Int = 1048576) -> Result[List[Int]] shape=(List(Int), Int = 1048576) -> Result(List(Int)) rule=Plain impl="Zlib.inflate" effects=[] desc="Decompress one zlib stream (RFC 1950) with its checksum checked; empty input, truncation and any trailing byte are errors; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
+  Zlib.inflate(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.inflate.bytes" effects=[] desc="Decompress one zlib stream (RFC 1950) with its checksum checked; empty input, truncation and any trailing byte are errors; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.gzip forms=1
-  Zlib.gzip(data: List[Int], level: Int = 6, max_bytes: Int = 1048576) -> Result[List[Int]] shape=(List(Int), Int = 6, Int = 1048576) -> Result(List(Int)) rule=Plain impl="Zlib.gzip" effects=[] desc="Compress bytes to one gzip member (RFC 1952) at level 0 to 9; empty input is valid; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
+  Zlib.gzip(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 6, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.gzip.bytes" effects=[] desc="Compress bytes to one gzip member (RFC 1952) at level 0 to 9; empty input is valid; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.gunzip forms=1
-  Zlib.gunzip(data: List[Int], max_bytes: Int = 1048576) -> Result[List[Int]] shape=(List(Int), Int = 1048576) -> Result(List(Int)) rule=Plain impl="Zlib.gunzip" effects=[] desc="Decompress one gzip member (RFC 1952) with its CRC and size checked; empty input, truncation and any trailing byte (a second member too) are errors; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
+  Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes] shape=(Bytes, Int = 1048576) -> Result(Bytes) rule=Plain impl="Zlib.gunzip.bytes" effects=[] desc="Decompress one gzip member (RFC 1952) with its CRC and size checked; empty input, truncation and any trailing byte (a second member too) are errors; data at most 1048576 bytes, the output at most max_bytes, 1 to 1048576; VM only."
 builtin Zlib.crc32 forms=1
-  Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int] shape=(List(Int), Int = 0) -> Result(Int) rule=Plain impl="Zlib.crc32" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
+  Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int] shape=(Bytes, Int = 0) -> Result(Int) rule=Plain impl="Zlib.crc32.bytes" effects=[] desc="CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next chunk the previous result as its seed; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; VM only."
 builtin ATS.add forms=1
   ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int shape=(ATS(Var(K), Int), Var(K), Int) -> Int rule=AtsCall impl="ATS.add" effects=["concurrency"] desc="Add n to the Int value of key (absent counts as 0) and return the new value, atomically; overflow halts with RUNTIME-INTEGER-OVERFLOW and leaves the table unchanged; VM only."
 builtin ATS.delete forms=1

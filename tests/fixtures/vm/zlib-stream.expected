@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 886,
+  "steps": 772,
   "stdout": [
     "deflate 13 round ok([[104, 101, 108, 108, 111]])",
     "raw 7 round ok([[104, 101, 108, 108, 111]])",
