@@ -315,7 +315,7 @@ def test_the_spawns_leave_out_the_timeout_and_the_directory(tmp_path):
             '  puts(Result.unwrap!(Process.read_line(a, 5000)))\n  Process.close(a)\n'
             '  c = Result.unwrap!(Process.spawn_captured(%s"cwd"]))\n'
             '  puts(Result.unwrap!(Process.read_line(c, 5000)))\n  Process.close(c)\n'
-            '  d = Result.unwrap!(Process.spawn_channel(%s"cwd"], "."))\n'
+            '  d = Result.unwrap!(Process.spawn_channel(%s"cwd"]))\n'
             '  puts(Result.unwrap!(Process.read_line(d, 5000)))\n  Process.close(d)\nend\n\n' % (peer, peer, peer))
     lines = output(tmp_path, body).split("\n")
     assert json.loads(lines[0]) == ["x"]

@@ -10,7 +10,7 @@ A program can start other programs unless it runs with `--deny-run` (or `--sandb
 agentica --deny-run tool.agc
 ```
 
-- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds.
+- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds, and the spawn functions default it to 30000. `Process.spawn_captured` and `Process.spawn_channel` also default `dir` to `"."`; arguments fill from the left, so a timeout cannot be given without `dir`.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 
 ## Process.spawn
