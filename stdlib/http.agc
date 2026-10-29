@@ -36,7 +36,8 @@ READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
 # The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
-# check_options; only a download streamed to a file may use up to this.
+# check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
+# this value as a literal (a field default cannot name a constant), so the two must match.
 DOWNLOAD_MAX_BYTES = 268435456
 
 struct Target
