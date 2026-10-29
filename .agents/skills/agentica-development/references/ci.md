@@ -174,8 +174,10 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
 
 - `test` runs `vm-test test-bdd`, `test-remove-actions`, the whole suite,
   `test-shared`, `test-multicore-modules`, `vm-jit-test`, `fixed-point`,
-  `stage0-check`, `test-slow`, `vm-latency` and `vm-task-map` alone,
-  `smoke`, the vendored check, then `dup-check`. The vendored check is the last
+  `test-slow`, `vm-latency` and `vm-task-map` alone, `smoke`,
+  `stage0-check` (after the tests, so a hand bootstrap still runs them), the
+  vendored check (it also runs when only `stage0-check` failed), then
+  `dup-check`. The vendored check is the last
   step that builds: it rebuilds `build/vm/release/obj` with other flags, so
   nothing that builds may run beside it. `dup-check` runs even when an earlier
   step fails.
