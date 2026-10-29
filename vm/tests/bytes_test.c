@@ -14,6 +14,9 @@
 #ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
+#ifndef AGC_NO_GC
+#include <gc.h>
+#endif
 #endif
 
 static agc_vm vm;
@@ -451,6 +454,59 @@ static void test_hand_off_keys(void) {
   vm.rt->front_end = NULL;
 }
 
+#ifndef AGC_NO_GC
+/* A hidden pointer to the handed Bytes block, registered as a disappearing link: the collector sets it to 0 when the
+   block is unreachable, so a test can see that the block was kept, not only that its memory was not reused yet. */
+static GC_word handed_block;
+#endif
+
+/* Hands off 1 MiB of patterned Bytes and drops every other reference to them, so after it returns only the interior
+   pointer fe->program can keep the block alive. */
+static void hand_off_large(agc_front_end *fe) {
+  agc_bytes *b = agc_new_bytes((size_t)1 << 20);
+  for (size_t k = 0; k < b->len; k++) b->data[k] = (uint8_t)(k * 13);
+#ifndef AGC_NO_GC
+  /* GC_base: under GC_DEBUG (the GC-stress build) an allocation starts after a debug header. */
+  void *base = GC_base(b);
+  handed_block = GC_HIDE_POINTER(base);
+  int registered = GC_general_register_disappearing_link((void **)&handed_block, base);
+  assert(registered == GC_SUCCESS);
+#endif
+  handed("FrontEnd.hand_off.bytes", agc_bytes_value(b), fe);
+}
+
+/* Overwrites the stack below the caller, so stale copies of the Bytes value left by hand_off_large do not hold it. */
+static void scrub_stack(void) {
+  volatile char big[65536];
+  for (size_t k = 0; k < sizeof big; k++) big[k] = 0;
+}
+
+/* Called through volatile pointers so the compiler cannot inline them and leave the value in this frame. */
+static void (*volatile hand_off_large_fn)(agc_front_end *) = hand_off_large;
+static void (*volatile scrub_stack_fn)(void) = scrub_stack;
+
+/* The driver's agc_front_end on a scanned stack is all that keeps the handed program alive (interior pointers are
+   on): the block stays reachable and intact through collections that reclaim other blocks of the same size. With
+   fe.program hidden, the same run clears handed_block. */
+static void test_hand_off_survives_collection(void) {
+  agc_front_end fe;
+  vm.rt->front_end = &fe;
+  hand_off_large_fn(&fe);
+  scrub_stack_fn();
+  /* The jmp_buf of the hand-off's setjmp lives in the static vm and may still hold the value in a saved register. */
+  memset(&vm.fail, 0, sizeof vm.fail);
+  for (int round = 0; round < 5; round++) {
+    for (int k = 0; k < 200; k++) memset(agc_new_bytes((size_t)1 << 20)->data, 0xAA, (size_t)1 << 20);
+    agc_gc_collect();
+  }
+#ifndef AGC_NO_GC
+  assert(handed_block != 0);
+#endif
+  assert(fe.program_len == (size_t)1 << 20);
+  for (size_t k = 0; k < fe.program_len; k++) assert(fe.program[k] == (uint8_t)(k * 13));
+  vm.rt->front_end = NULL;
+}
+
 /* No pointers inside, so the collector never scans the data: Bytes held only by a list keep their contents through
    collections. */
 static void test_collection(void) {
@@ -531,6 +587,7 @@ int main(void) {
   test_crypto_keys();
   test_string_keys();
   test_hand_off_keys();
+  test_hand_off_survives_collection();
   test_costs();
   test_collection();
 #ifndef _WIN32

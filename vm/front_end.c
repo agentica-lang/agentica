@@ -42,8 +42,10 @@ static char **copy_words(agc_vm *vm, const agc_list *list, const char *what, agc
  * (AGC_FRONT_END_MAX_OPTIONS, AGC_FRONT_END_MAX_ARGUMENTS), so the hand-off cannot make the driver allocate more than a
  * compiled file and a process's arguments ever do, and the driver can count the words in an int. The program is a
  * Bytes under the catalog's "FrontEnd.hand_off.bytes" key and a byte list under the old "FrontEnd.hand_off" key, which
- * a front end compiled before #805 PR 4 (an older stage0) imports; PR 9 removes it. Either way the driver gets bytes
- * that stay valid after this runtime is gone: a Bytes is immutable, and the list is copied into a GC block. */
+ * a front end compiled before #805 PR 4 (an older stage0) imports; PR 9 removes it. fe->program points into GC memory:
+ * into the Bytes block (an interior pointer, not a copy) or at the block the list is copied into. After this runtime
+ * is gone only fe keeps that block alive, so fe must stay where the collector scans it: the driver keeps it on main()'s
+ * stack (vm/agentica.c), and agc_init turns interior pointers on, so a pointer into the block holds the whole block. */
 static agc_value hand_off(agc_vm *vm, agc_value *args, uint32_t span, bool list) {
   agc_front_end *fe = guarded(vm, span);
   const agc_list *program = list ? agc_as_list(vm, args[0]) : NULL;
