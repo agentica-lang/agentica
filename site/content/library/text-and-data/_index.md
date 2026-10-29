@@ -9,7 +9,8 @@ description: Work with text and numbers, read and write JSON and TOML, encode UR
 - Use [JSON](/library/text-and-data/json/) to move data in and out of programs, for a known shape (structs) or not.
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a list of bytes, and to frame messages.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.
-- Use [CGI](/library/text-and-data/cgi/) (`std/cgi`) to escape and unescape HTML, to read a `Cookie` header and to write a `Set-Cookie` header.
+- Use [HTML](/library/text-and-data/html/) (`std/html`) to escape and unescape HTML text.
+- Use [Cookie](/library/text-and-data/cookie/) (`std/cookie`) to read a `Cookie` header and to write a `Set-Cookie` header.
 - Use [MIME](/library/text-and-data/mime/) (`std/mime`) to find the media type of a file from its name, and to tell which types are text.
 - Use [URI](/library/text-and-data/uri/) (`std/uri`) to percent-encode and decode URL components and to read and write query strings.
 - Use [Digest, HMAC and SecureRandom](/library/text-and-data/crypto/) to hash a list of bytes with MD5, SHA-1, SHA-256 or SHA-512, to sign it with HMAC-SHA256 or HMAC-SHA512, to compare MACs in constant time, and to draw secure random bytes, hex and UUIDs.

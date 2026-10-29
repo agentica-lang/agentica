@@ -64,7 +64,8 @@ Read only what the task needs.
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
-| `cgi.md` | `std/cgi` (HTML escaping, cookies) |
+| `html.md` | `std/html` (HTML escaping) |
+| `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
 | `mime.md` | `std/mime` (media type of a file) |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
