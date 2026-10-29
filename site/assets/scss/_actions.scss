@@ -135,14 +135,14 @@
     text-align: left;
     text-decoration: none;
 
-    &:hover,
-    &:focus-visible {
+    &:hover {
       background: var(--code-bg);
     }
 
     &:focus-visible {
       outline: var(--focus-ring);
       outline-offset: -2px;
+      background: var(--code-bg);
     }
   }
 

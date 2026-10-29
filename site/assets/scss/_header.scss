@@ -48,8 +48,8 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: var(--target);
+  height: var(--target);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -138,8 +138,8 @@
 // A touch target of 44px, like the menu button.
 @media (max-width: $narrow) {
   .theme-toggle {
-    width: 2.75rem;
-    height: 2.75rem;
+    width: var(--target);
+    height: var(--target);
   }
 }
 
