@@ -566,9 +566,9 @@ ROWS_5: List[Model.Builtin] = [
         Model.Named(name: "max_bytes", type: Types.Type.Int),
         Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "File.read_bytes",
+      implementation: "File.read_bytes.bytes",
       effects: ["filesystem"],
       description: "Read up to max_bytes; empty means EOF.",
       alternatives: [],
@@ -608,9 +608,9 @@ ROWS_6: List[Model.Builtin] = [
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "File.sha256",
+      implementation: "File.sha256.bytes",
       effects: ["filesystem"],
       description: (
         "Hash the whole file at path with SHA-256, streaming in fixed chunks, and return the 32 digest bytes; " +
@@ -671,14 +671,14 @@ ROWS_7: List[Model.Builtin] = [
       name: "File.write_bytes",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
         Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
-      implementation: "File.write_bytes",
+      implementation: "File.write_bytes.bytes",
       effects: ["filesystem"],
-      description: "Write bytes 0..255, at most 1 MiB per call.",
+      description: "Write bytes, at most 1 MiB per call.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -777,18 +777,19 @@ ROWS_9: List[Model.Builtin] = [
     Model.Builtin(
       name: "FrontEnd.hand_off",
       parameters: [
-        Model.Named(name: "program", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "program", type: Types.Type.Bytes),
         Model.Named(name: "options", type: Types.Type.List(Types.Type.String)),
         Model.Named(name: "arguments", type: Types.Type.List(Types.Type.String)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
-      implementation: "FrontEnd.hand_off",
+      implementation: "FrontEnd.hand_off.bytes",
       effects: ["process"],
       description: (
         "Front end only: hand the compiled program, the VM options and the program arguments to the VM, which ends " +
         "this run and runs the program in a new one; it returns an error only when an argument cannot be passed on " +
-        "(a byte outside 0 to 255, or a character 0 in a word). Any other program fails with RUNTIME-FRONT-END-ONLY."
+        "(a program too large to load, or a character 0 in a word). Any other program fails with " +
+        "RUNTIME-FRONT-END-ONLY."
       ),
       alternatives: [],
     ),
@@ -808,9 +809,9 @@ ROWS_9: List[Model.Builtin] = [
     Model.Builtin(
       name: "FrontEnd.stdin_bytes",
       parameters: [],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "FrontEnd.stdin_bytes",
+      implementation: "FrontEnd.stdin_bytes.bytes",
       effects: ["process"],
       description: (
         "Front end only: standard input as bytes, read to its end (a later call reads on from there); more than " +
@@ -1240,11 +1241,11 @@ ROWS_14: List[Model.Builtin] = [
     Model.Builtin(
       name: "IO.read_bytes",
       parameters: [Model.Named(name: "count", type: Types.Type.Int)],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "IO.read_bytes",
+      implementation: "IO.read_bytes.bytes",
       effects: ["stdin"],
-      description: "Read count bytes or fewer at EOF; count must be 0..1048576. EOF gives an empty list.",
+      description: "Read count bytes or fewer at EOF; count must be 0..1048576. EOF gives empty bytes.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -4143,10 +4144,10 @@ ROWS_41: List[Model.Builtin] = [
     ),
     Model.Builtin(
       name: "String.from_bytes",
-      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
       result: Types.Type.Result(Types.Type.String),
       rule: Model.Rule.Plain,
-      implementation: "String.from_bytes",
+      implementation: "String.from_bytes.bytes",
       effects: [],
       description: "Decode UTF-8 strictly; invalid bytes or incomplete sequences return an error.",
       alternatives: [],
@@ -4288,16 +4289,6 @@ ROWS_44: List[Model.Builtin] = [
       implementation: "String.starts_with?",
       effects: [],
       description: "Check a prefix.",
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "String.to_bytes",
-      parameters: [Model.Named(name: "s", type: Types.Type.String)],
-      result: Types.Type.List(Types.Type.Int),
-      rule: Model.Rule.Plain,
-      implementation: "String.to_bytes",
-      effects: [],
-      description: "Encode a string as its UTF-8 bytes; the inverse of String.from_bytes.",
       alternatives: [],
     ),
     Model.Builtin(

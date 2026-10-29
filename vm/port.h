@@ -297,8 +297,8 @@ typedef struct {
 #define AGC_FRONT_END_MAX_OPTIONS 64
 #define AGC_FRONT_END_MAX_ARGUMENTS 1048576
 
-/* The most bytes of standard input that FrontEnd.stdin_bytes takes. The front end holds them as a List of Int, 16
- * bytes a byte, so the cap is far below a source file the loader would accept (AGC_MAX_FILE_BYTES). */
+/* The most bytes of standard input that FrontEnd.stdin_bytes takes, far below a source file the loader would accept
+ * (AGC_MAX_FILE_BYTES): the old key gives them as a List of Int, 8 bytes a byte. */
 #define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
 
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the hand-off of
@@ -307,7 +307,7 @@ typedef struct {
  * docs/vm/08-loader-and-cli.md. */
 typedef struct {
   bool handed;
-  uint8_t *program;
+  const uint8_t *program;
   size_t program_len;
   char **options, **arguments;
   size_t option_count, argument_count;
@@ -793,8 +793,8 @@ void agc_stdin_close(agc_stdin_reader *r);
 /* All of standard input to its end, for FrontEnd.stdin_bytes (vm/input.c, the one stdin reader). A runtime with no
    input stream (the front end's) opens descriptor 0 at the first call. The task parks while a read is in flight
    (AGC_INPUT_WAIT: return void, the builtin runs again); a failed read is AGC_INPUT_FAILED. At most MAX + 1 bytes are
-   kept: more than MAX gives AGC_INPUT_OK with *OUT NULL, and no list is built. */
-agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out);
+   kept: more than MAX gives AGC_INPUT_OK with *OUT NULL, and no value is built. */
+agc_input_status agc_input_whole(agc_vm *vm, size_t max, const agc_bytes **out);
 
 void agc_charge(agc_vm *vm, uint64_t units);
 void agc_charge_bytes(agc_vm *vm, size_t bytes);
