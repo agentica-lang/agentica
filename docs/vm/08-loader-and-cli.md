@@ -310,12 +310,13 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   `compiler/catalog/builtins_data.agc`). The driver sets `rt->front_end` (an
   `agc_front_end`) only for the front end it loads itself. Without it, in a user
   program or in a front end run by `agentica run`, all three fail with
-  `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` copies the bytes (at most 256
-  MiB, each 0 to 255) and the words (no character 0) into GC memory, records
-  them in the `agc_front_end`, and ends the run with `agc_exit(vm, 0)`; it
-  returns an error for a bad byte or word and never for an option, which the
-  driver reads after the run. `std_source` returns the text of the embedded file
-  at that path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`), or an error.
+  `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` keeps the program `Bytes`
+  (at most 256 MiB; it is immutable, so it is not copied), copies the words (no
+  character 0) into GC memory, records them in the `agc_front_end`, and ends the
+  run with `agc_exit(vm, 0)`; it returns an error for a program over the cap or
+  a bad word and never for an option, which the driver reads after the run.
+  `std_source` returns the text of the embedded file at that path in `stdlib/`
+  (`queue.agc`, `bdd/gherkin.agc`), or an error.
   `Std.source` (`agc_std_builtins`, same file) does the same for any program.
   The driver builds the table of std sources once and every runtime gets it
   (`rt->std`, through `agc_launch`); it is never written after the start, so the

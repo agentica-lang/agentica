@@ -81,8 +81,7 @@ String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort or
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
 n.to_s() -> String                                       # Int
 x.to_s() -> String                                       # Float
-String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8; binary.md
-String.to_bytes(s: String) -> List[Int]                  # UTF-8 bytes, 0..255
+String.from_bytes(data: Bytes) -> Result[String]         # strict UTF-8; binary.md
 s.to_i() -> Result[Int]                                  # signed decimal; overflow is an error
 s.to_f() -> Result[Float]                                # 1.5, 1e+20, +inf.0: reads x.to_s back
 s.to_i!() -> Int                                         # halts on bad text (RUNTIME-INVALID-NUMBER)
@@ -94,8 +93,8 @@ s.to_f!() -> Float
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
 - No regex builtin (`=~`, `matches?`). `s.chars` is `s.split("")`, `s.ord` is
-  `s.code`. `s.bytes` gives a `Bytes` (`bytes.md`); `s.to_bytes` still gives a
-  `List[Int]`.
+  `s.code`. `s.bytes` gives the UTF-8 bytes as a `Bytes` (`bytes.md`);
+  `s.bytes.to_a` gives a `List[Int]`.
 
 ## List
 

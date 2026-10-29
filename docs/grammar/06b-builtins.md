@@ -280,13 +280,12 @@ Expected types flow into these operations for empty collections and Results.
   `RUNTIME-END-OF-INPUT` at EOF. `IO.read()` drains stdin to EOF, so it cannot
   read one message from a peer that keeps stdin open.
 - `IO.read_bytes(count)` waits for exactly `count` bytes or EOF, and gives
-  integers 0 to 255 with no decoding. Counts are 0 to 1048576; zero gives
-  `ok([])` without consuming input. `String.from_bytes` decodes strictly as
-  UTF-8: invalid, overlong, surrogate and incomplete sequences are errors, never
-  replacement characters. `String.to_bytes(s)` is its inverse: the UTF-8 bytes
-  of `s` as a `List[Int]` of 0 to 255 (`[]` for `""`); it cannot fail, so
-  `String.from_bytes(String.to_bytes(s))` is `ok(s)`. `s.bytes` gives the same
-  bytes as a `Bytes` (`docs/grammar/06-semantics.md`, "Bytes").
+  them as a `Bytes` with no decoding. Counts are 0 to 1048576; zero gives empty
+  bytes without consuming input. `String.from_bytes(data)` decodes a `Bytes`
+  strictly as UTF-8: invalid, overlong, surrogate and incomplete sequences are
+  errors, never replacement characters. `s.bytes` is its inverse: the UTF-8
+  bytes of `s` as a `Bytes` (`docs/grammar/06-semantics.md`, "Bytes"); it
+  cannot fail, so `String.from_bytes(s.bytes)` is `ok(s)`.
 - `Digest.md5(data)`, `Digest.sha1(data)`, `Digest.sha256(data)` and
   `Digest.sha512(data)` give the digest of the `Bytes` in `data` as a `Bytes`
   of 16, 20, 32 or 64 bytes, as Ruby's `Digest::SHA256.digest` does. Each has
@@ -399,10 +398,10 @@ Expected types flow into these operations for empty collections and Results.
 - `FrontEnd.hand_off(program, options, arguments)`,
   `FrontEnd.std_source(path)` and `FrontEnd.stdin_bytes()` belong to the front
   end of the single `agentica` binary: the first hands a compiled program (a
-  `List[Int]` of bytes) to the VM, which runs it in a new runtime with the given
-  VM options and arguments, the second reads an embedded `std/` source by its
-  path in `stdlib/`, and the third reads standard input to its end as a
-  `Result[List[Int]]` (an error over 16 MiB or when the read fails; a later
+  `Bytes`) to the VM, which runs it in a new runtime with the given VM options
+  and arguments, the second reads an embedded `std/` source by its path in
+  `stdlib/`, and the third reads standard input to its end as a
+  `Result[Bytes]` (an error over 16 MiB or when the read fails; a later
   call reads on from there). They are not for programs: they need no flag, but
   any program that calls them, and any front end run by `agentica run`, halts
   with `RUNTIME-FRONT-END-ONLY`.

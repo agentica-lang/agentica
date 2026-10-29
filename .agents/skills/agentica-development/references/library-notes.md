@@ -7,7 +7,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 ## Stdio bytes and flushing
 
 - `IO.read()` remains the all-text-until-EOF API. `IO.read_bytes(count)` returns
-  Result[List[Int]]; wait for count bytes or EOF, return short/empty success at
+  Result[Bytes]; wait for count bytes or EOF, return short/empty success at
   EOF, and do not consume input for zero or invalid counts. The fixed 1 MiB
   per-call cap prevents eager allocations from arbitrary Int sizes; larger
   streams use repeated reads. Port read failures are local Results, not

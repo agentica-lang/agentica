@@ -20,6 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   import alias called `Bytes` is `CHECK-REDEFINED-NAME`.
 - **Breaking:** `Digest`, `HMAC`, `Base64` and `SecureRandom.random_bytes` take
   and return `Bytes` instead of `List[Int]`.
+- **Breaking:** `IO.read_bytes`, `File.read_bytes`, `File.write_bytes`,
+  `File.sha256` and `String.from_bytes` use `Bytes`; `String.to_bytes` is now
+  `s.bytes`.
 
 ### Fixed
 

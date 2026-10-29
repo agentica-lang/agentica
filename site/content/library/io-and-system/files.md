@@ -58,15 +58,15 @@ end
 ## File.sha256
 
 ```text
-File.sha256(path: String, timeout_ms: Int = 30000) -> Result[List[Int]]
+File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 ```
 
-Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Digest.sha256` gives for the same content. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
+Hashes a whole file with SHA-256 and returns the 32 digest bytes as a [`Bytes`](/library/data-structures/bytes/), the same bytes `Digest.sha256` gives for the same content; `Digest.hexencode` writes them as hex. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
 
 ```agentica {mode="check"}
 def main() -> Void
   case File.sha256("notes.txt", 1000)
-    ok(digest) -> puts("#{digest.size} digest bytes")
+    ok(digest) -> puts(Digest.hexencode(digest))
     error(message) -> IO.warn("cannot hash: #{message}")
   end
 end
@@ -222,24 +222,24 @@ end
 ## File.read_bytes and File.write_bytes
 
 ```text
-File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[List[Int]]
-File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int = 30000) -> Result[Void]
+File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
+File.write_bytes(handle: FileHandle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Bytes are `Int` values from 0 to 255. `read_bytes` gives `ok([])` at the end of the file.
+Both take and give a [`Bytes`](/library/data-structures/bytes/). `read_bytes` reads 1 to 1048576 bytes and gives empty bytes at the end of the file; `write_bytes` writes at most 1048576 bytes per call.
 
 ```agentica {mode="check"}
 def main() -> Void
   out = File.open("data.bin", "write", 1000).unwrap!
-  w = File.write_bytes(out, [0, 1, 255], 1000)
+  w = File.write_bytes(out, Bytes.from_list([0, 1, 255]).unwrap!, 1000)
   c = File.close(out, 1000)
   input = File.open("data.bin", "read", 1000).unwrap!
-  puts(File.read_bytes(input, 16, 1000))
+  puts(File.read_bytes(input, 16, 1000).unwrap!.to_a)
 end
 ```
 
 ```text
-ok([0, 1, 255])
+[0, 1, 255]
 ```
 
 ## Dir.list

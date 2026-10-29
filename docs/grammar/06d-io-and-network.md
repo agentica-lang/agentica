@@ -158,9 +158,10 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
   Windows it locks the whole byte range with `LockFileEx`, so the OS also rejects reads and writes
   through other handles while the lock is held.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
-  limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at
-  EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it
-  is an error at EOF or on invalid UTF-8.
+  limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives a `Bytes`,
+  empty at EOF; `write_bytes` takes a `Bytes` of at most 1048576 bytes.
+  `read_line` strips LF or CRLF and accepts a final unterminated line; it is an
+  error at EOF or on invalid UTF-8.
 - `File.each_line(path, buffer_bytes = 65536, timeout_ms = 30000) do |line|
   ... end` gives `Result[Void]`. It opens `path` for reading and passes the block one line at a
   time, never reading the whole file. A line is at most `buffer_bytes` bytes
@@ -174,9 +175,9 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
   returns `Result[Void]`: `ok()` goes on to the next line and an error stops and
   is returned by `each_line`. `try` works in the block. The file is closed on
   every return path.
-- `File.sha256(path, timeout_ms)` gives `Result[List[Int]]`: the 32 bytes of
-  the SHA-256 digest of the whole file, in the order `Digest.sha256` gives
-  them, as a list (compose with hex yourself). It streams the
+- `File.sha256(path, timeout_ms)` gives `Result[Bytes]`: the 32 bytes of the
+  SHA-256 digest of the whole file, as `Digest.sha256` gives them
+  (`Digest.hexencode` writes them as hex). It streams the
   file in fixed 64 KiB chunks with O(chunk) memory, so unlike the whole-text
   helpers it has no 1 MiB cap. Only regular files are hashed, read from the
   first byte through a private descriptor that closes on every path;

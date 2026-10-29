@@ -105,10 +105,8 @@ in a PR that rewrites the goldens.
 - `to_int!` fails with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`,
   `to_float!` with `RUNTIME-INVALID-NUMBER`, both at the call span. The `Result`
   forms return the same text as an `error(...)` value.
-- `String.from_bytes` checks every item is 0 to 255, then decodes strictly: no
-  surrogates, no overlong forms, no code points above U+10FFFF.
-  `String.to_bytes` returns the UTF-8 bytes as a `List[Int]` and costs by size,
-  like `from_bytes`.
+- `String.from_bytes` decodes a `Bytes` strictly: no surrogates, no overlong
+  forms, no code points above U+10FFFF. It costs by size.
 - The `Digest` hashes (`md5`, `sha1`, `sha256`, `sha512` and their
   `_hexdigest` forms) take a `Bytes`, hash it with OpenSSL's EVP digests
   (`vm/digest_openssl.c`, behind `digest.h`) and return the digest as a
@@ -245,8 +243,8 @@ in a PR that rewrites the goldens.
 
 Every failure is an error value. The checks run in this order:
 
-- Arguments: text above 1 MiB; `File.write_bytes` bytes 0 to 255 and at most 1
-  MiB per call; `File.read_bytes` `max_bytes` 1 to 1 MiB; a positive timeout.
+- Arguments: text above 1 MiB; `File.write_bytes` at most 1 MiB per call;
+  `File.read_bytes` `max_bytes` 1 to 1 MiB; a positive timeout.
 - The mode, then the handle: a closed handle, or one not readable or writable,
   fails. `File.close` of a closed handle does no I/O.
 - A path is a nonempty String without NUL. A relative path is completed with the
