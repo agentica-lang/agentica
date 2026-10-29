@@ -76,6 +76,7 @@ phase 13).
 | a PR from branch to merge (reviews, fixes, CI, merge) | `.agents/skills/agentica-dev-workflow/` |
 | a release or beta (version bump, tag, notes, Pages) | `.agents/skills/agentica-release/` |
 | docs, a site page, a skill, a CHANGELOG entry, a doc comment or a PR body | `.agents/skills/documentation-writing/` |
+| an audit of builtin or std/ signatures (defaults, simpler APIs) | `.agents/skills/api-simplification-audit/` |
 | language rules | `docs/grammar/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
 | writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` (`site/content/style.md` is its page for people) |
