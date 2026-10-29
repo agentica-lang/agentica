@@ -15,11 +15,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
 
-### Changed
-
-- The language specification is one page per part, under `/reference/`, so
-  links to its sections change.
-
 ## [0.15.0] - 2026-10-29
 
 ### Added

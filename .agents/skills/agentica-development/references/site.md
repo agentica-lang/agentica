@@ -71,14 +71,14 @@ rule that a site page shows.
   index is `content/reference/_index.md`. The content adapter
   `content/_content.gotmpl` adds one page per file at `/reference/<slug>/`,
   the file name without its number (`04-lexical.md` is `lexical`), read through
-  an assets mount (`hugo.toml`). Weights follow the sorted file names. A
-  page's title is its short title in the adapter's `$info` table, else the
-  file's first heading without its section number. That heading is removed
-  from the body, so no heading shows twice. A file with neither takes its slug
-  as title. The adapter fails the build when fewer than 10 files are found, so
-  change that number with the files. The `$info` table also holds the
-  one-line descriptions of the index. `layouts/reference/list.html` lists the
-  parts with their descriptions.
+  an assets mount (`hugo.toml`). Weights follow the sorted file names. Every
+  file needs an entry in the adapter's `$info` table (short title and one-line
+  description), and every entry needs a file; the build fails otherwise. A
+  file's first heading is the page's own heading: it is removed from the body
+  so no heading shows twice. The other headings move up so the top sections are
+  h2, which the in-page TOC lists. The adapter fails the build when fewer than
+  10 files are found. `layouts/reference/list.html` lists the parts with their
+  descriptions.
 - The adapter rewrites the links between parts: `](NN-name.md#anchor)` (or
   `./NN-name.md`) becomes `](/reference/<slug>/#anchor)`, and
   `](../../site/content/library/TOPIC/NAME.md)` becomes

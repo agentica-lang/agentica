@@ -1,11 +1,12 @@
 {{- /*
-The language specification at /reference/: an index section and one page per file of docs/grammar/. The files are not under content/, so this adapter adds the pages. Each page keeps its file's text, with the links between parts rewritten to the pages. A page's title is its short title from $info, else the file's first heading without its section number; that heading is removed from the body, so no heading shows twice. A link to a removed heading goes to the page top. Weights follow the sorted file names, so the sidebar and the pager read the parts in order.
+The language specification at /reference/: an index section and one page per file of docs/grammar/. The files are not under content/, so this adapter adds the pages. Each page keeps its file's text, with the links between parts rewritten to the pages. Every file needs an entry in $info (its short title and its one-line description), and every entry needs a file, so a mismatch fails the build. The first heading of a file is the page's own heading: it is removed from the body, so no heading shows twice, and a link to it goes to the page top. The other headings move up so that the top sections are h2, which the in-page table of contents lists; fenced code keeps its lines. Weights follow the sorted file names, so the sidebar and the pager read the parts in order.
 */ -}}
 {{- $parts := sort (resources.Match "grammar/*.md") "Name" -}}
 {{- if lt (len $parts) 10 -}}
-  {{- errorf "the language specification: expected the 10 files of docs/grammar/, found %d" (len $parts) -}}
+  {{- errorf "the language specification: expected at least 10 files of docs/grammar/, found %d" (len $parts) -}}
 {{- end -}}
 {{- $info := dict
+  "overview" (dict "title" "Overview" "description" "The purpose of the language, its design decisions and a core program.")
   "lexical" (dict "title" "Lexical conventions" "description" "The source text: encoding, comments, doc comments, literals and heredocs.")
   "syntax" (dict "title" "Syntax" "description" "The grammar in EBNF, with the statements and the precedence of expressions.")
   "modules" (dict "title" "Modules" "description" "File modules, imports and re-exports, constants, and packages.")
@@ -15,24 +16,41 @@ The language specification at /reference/: an index section and one page per fil
   "io-and-network" (dict "title" "I/O and network" "description" "TCP, TLS and HTTP, logging, files and paths, processes and native code.")
   "diagnostics" (dict "title" "Diagnostics" "description" "The format of each error, and the stable codes that agents rely on.")
   "examples" (dict "title" "Examples" "description" "Example programs that show the design, and programs that must be rejected.")
-  "overview" (dict "title" "Overview" "description" "The purpose of the language, its design decisions and a core program.")
 -}}
+{{- $slugs := slice -}}
+{{- range $parts -}}
+  {{- $slugs = $slugs | append (replaceRE `^[0-9]+[a-z]?-` "" (strings.TrimSuffix ".md" (path.Base .Name))) -}}
+{{- end -}}
+{{- range $slug, $entry := $info -}}
+  {{- if not (in $slugs $slug) -}}
+    {{- errorf "the language specification: $info has an entry for %q, but docs/grammar/ has no file with that slug" $slug -}}
+  {{- end -}}
+{{- end -}}
 {{- $metas := slice -}}
 {{- range $parts -}}
   {{- $stem := strings.TrimSuffix ".md" (path.Base .Name) -}}
   {{- $slug := replaceRE `^[0-9]+[a-z]?-` "" $stem -}}
+  {{- $entry := index $info $slug -}}
+  {{- if not $entry -}}
+    {{- errorf "the language specification: docs/grammar/%s.md has no entry in $info" $stem -}}
+  {{- end -}}
+  {{- if not $entry.title -}}
+    {{- errorf "the language specification: the $info entry of %q has no title" $slug -}}
+  {{- end -}}
+  {{- if not $entry.description -}}
+    {{- errorf "the language specification: the $info entry of %q has no description" $slug -}}
+  {{- end -}}
   {{- $head := "" -}}
   {{- with findRESubmatch `(?m)\A\s*#{1,6}[ \t]+(.+?)[ \t]*$` .Content -}}
     {{- $head = index . 0 1 -}}
+  {{- else -}}
+    {{- errorf "the language specification: docs/grammar/%s.md must start with a heading" $stem -}}
   {{- end -}}
-  {{- $entry := index $info $slug | default (dict) -}}
-  {{- $title := or $entry.title (replaceRE `^[0-9]+[a-z]?\.[ \t]+` "" $head) $slug -}}
   {{- $removed := replace (replaceRE `[^a-z0-9 _-]` "" (lower $head)) " " "-" -}}
-  {{- $metas = $metas | append (dict "stem" $stem "slug" $slug "title" $title "removed" $removed) -}}
+  {{- $metas = $metas | append (dict "stem" $stem "slug" $slug "title" $entry.title "description" $entry.description "removed" $removed) -}}
 {{- end -}}
 {{- range $i, $part := $parts -}}
   {{- $m := index $metas $i -}}
-  {{- $meta := index $info $m.slug | default (dict) -}}
   {{- $text := replaceRE `\A\s*#{1,6}[ \t]+.*(\n|\z)` "" $part.Content 1 -}}
   {{- range $metas -}}
     {{- $text = replaceRE (printf `\]\((?:\./)?%s\.md(#[^)\s]*)?\)` .stem) (printf "](/reference/%s/${1})" .slug) $text -}}
@@ -45,5 +63,33 @@ The language specification at /reference/: an index section and one page per fil
     {{- end -}}
   {{- end -}}
   {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2}/${3})` $text -}}
-  {{- $.AddPage (dict "path" (printf "reference/%s" $m.slug) "title" $m.title "description" $meta.description "weight" (add $i 1) "content" (dict "mediaType" "text/markdown" "value" $text)) -}}
+  {{- $min := 7 -}}
+  {{- $fence := false -}}
+  {{- range split $text "\n" -}}
+    {{- if findRE "^[ \t]*```" . -}}
+      {{- $fence = not $fence -}}
+    {{- else if not $fence -}}
+      {{- with findRESubmatch `^(#{1,6})[ \t]+\S` . -}}
+        {{- if lt (len (index . 0 1)) $min -}}{{- $min = len (index . 0 1) -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and (lt $min 7) (gt $min 2) -}}
+    {{- $shift := sub $min 2 -}}
+    {{- $out := slice -}}
+    {{- $fence = false -}}
+    {{- range split $text "\n" -}}
+      {{- $line := . -}}
+      {{- if findRE "^[ \t]*```" . -}}
+        {{- $fence = not $fence -}}
+      {{- else if not $fence -}}
+        {{- with findRESubmatch `^(#{1,6})([ \t]+.*)$` . -}}
+          {{- $line = printf "%s%s" (strings.Repeat (sub (len (index . 0 1)) $shift) "#") (index . 0 2) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $out = $out | append $line -}}
+    {{- end -}}
+    {{- $text = delimit $out "\n" -}}
+  {{- end -}}
+  {{- $.AddPage (dict "path" (printf "reference/%s" $m.slug) "title" $m.title "description" $m.description "weight" (add $i 1) "content" (dict "mediaType" "text/markdown" "value" $text)) -}}
 {{- end -}}
