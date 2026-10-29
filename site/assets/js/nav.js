@@ -30,7 +30,8 @@ if (navButton && sidebar) {
   });
   document.querySelector(".scrim")?.addEventListener("click", close);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && sidebar.classList.contains("open")) close();
+    // Escape in the search box belongs to the search (search.js).
+    if (event.key === "Escape" && sidebar.classList.contains("open") && !event.target.closest?.(".site-search")) close();
   });
   narrow.addEventListener("change", (event) => {
     if (!event.matches) setOpen(false);
