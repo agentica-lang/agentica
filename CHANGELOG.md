@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/uri` percent-encodes and decodes URL components and query strings, with
+  the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
+
 ## [0.15.0] - 2026-10-29
 
 ### Added
