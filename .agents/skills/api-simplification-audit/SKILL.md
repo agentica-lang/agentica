@@ -58,13 +58,14 @@ python3 .agents/skills/api-simplification-audit/scripts/signatures.py \
   <binary> --root . --tsv <scratch>/signatures.tsv
 ```
 
-It lists the most repeated parameters without a default, the tuning-like
-ones (`timeout_ms`, `max_*`, `size`, `count`, `mode`, `options`...) and the
-defaults that exist today, and names the builtins with overloads
-(`Task.await`...), which take no defaults and are read by hand.
-Group the candidates by family (all `timeout_ms` of `File.*`, of
-`Channel.*`...), not one by one. Drop the ones that are the subject of the
-call (`List.take(count)`: the count is the point).
+It lists the most repeated parameters without a default, the tuning-like ones
+(`timeout_ms`, `max_*`, `size`, `count`, `mode`, `options`...) and the defaults
+that exist today, and names the builtins with overloads (`Task.await`...), which
+take no defaults and are read by hand. `help --json` does not show a row's rule;
+read it from the golden `tests/fixtures/frontend/catalog/catalog.text`. Group
+the candidates by family (all `timeout_ms` of `File.*`, of `Channel.*`...), not
+one by one. Drop the ones that are the subject of the call (`List.take(count)`:
+the count is the point).
 
 ## Pass 2: real usage (an hour)
 
@@ -72,19 +73,20 @@ For each family, count how callers pass the argument:
 
 ```bash
 python3 .agents/skills/api-simplification-audit/scripts/arg_usage.py \
-  <binary> File.read_text stdlib/*.agc examples compiler --root .
+  <binary> File.read_text examples compiler --root .
 ```
 
-Run it on `stdlib/*.agc`, `examples`, `compiler`, and on the sibling repos
-when present (`../bond`, `../agentica-db` next to the checkout). `refs`
-stops at the first check error of any file, so pass folders that check
-(bare `stdlib` and test fixtures do not; `site/content` has no `.agc`).
-The script lists the files `refs` skipped because they do not link: read
+Run it on `examples`, `compiler`, and on the sibling repos when present
+(`../bond`, `../agentica-db` next to the checkout). `refs` stops at the first
+check error of any file, so pass folders that check (bare `stdlib` and test
+fixtures do not; `site/content` has no `.agc`). Many `stdlib/*.agc` files do not
+check alone: count calls inside `stdlib/` with `rg`, and treat the `std/...`
+spans a run reports (from programs that import std, mostly `examples`) as a
+bonus. The script lists the files `refs` skipped because they do not link: read
 their calls by hand. Count the site samples with `rg`, compare the total with
-`rg -c 'read_text\('`, and read the unparsed sites by hand. A value used
-in most calls is the default candidate; a spread of values means keep it
-required. Note the values in tests apart: tests pick small timeouts on
-purpose.
+`rg -c 'read_text\('`, and read the unparsed sites by hand. A value used in most
+calls is the default candidate; a spread of values means keep it required. Note
+the values in tests apart: tests pick small timeouts on purpose.
 
 ## Pass 3: proposal (the full report)
 
