@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
 - `HMAC.secure_compare(a, b)` compares two byte lists in constant time, for
   checking MACs, signatures and tokens.
+- `std/mime` gives the media type of a file by its extension, with the name
+  and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
 
 ## [0.15.0] - 2026-10-29
 

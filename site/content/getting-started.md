@@ -92,7 +92,7 @@ expected Int, found String
 ```
 
 - Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
-- Codes start with `LEX-`, `PARSE-`, `CHECK-` or `RUNTIME-`. A runtime error also prints the call stack. See [Diagnostics](/reference/).
+- Codes start with `LEX-`, `PARSE-`, `CHECK-` or `RUNTIME-`. A runtime error also prints the call stack. See [Diagnostics](/reference/diagnostics/).
 - `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`.
 
 ## Look up a builtin
@@ -116,7 +116,7 @@ It prints the exported declarations in source order, each with its signature and
 
 ## Query the code
 
-`outline`, `type-at`, `symbol` and `refs` answer questions about the code, for editors and agents. None of them runs the program. Each prints text, or one JSON object with `--json`. Exit codes: `0` answered, `1` the code has an error (its first diagnostic is the answer), `2` a bad question or an unreadable file. The `QUERY-` codes are `QUERY-USAGE` (bad arguments or file), `QUERY-NO-EXPRESSION` (no expression at the position), `QUERY-NOT-FOUND` and `QUERY-AMBIGUOUS-NAME`; see [Diagnostics](/reference/).
+`outline`, `type-at`, `symbol` and `refs` answer questions about the code, for editors and agents. None of them runs the program. Each prints text, or one JSON object with `--json`. Exit codes: `0` answered, `1` the code has an error (its first diagnostic is the answer), `2` a bad question or an unreadable file. The `QUERY-` codes are `QUERY-USAGE` (bad arguments or file), `QUERY-NO-EXPRESSION` (no expression at the position), `QUERY-NOT-FOUND` and `QUERY-AMBIGUOUS-NAME`; see [Diagnostics](/reference/diagnostics/).
 
 ## List a file's declarations
 

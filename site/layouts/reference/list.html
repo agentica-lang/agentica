@@ -1,0 +1,12 @@
+{{ define "main" }}
+<article class="content">
+  <div class="page-head"><h1>{{ .Title }}</h1>{{ partial "page-actions.html" . }}</div>
+  {{ .Content }}
+  <ul class="pages">
+    {{- range .Pages.ByWeight }}
+    <li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>{{ with .Description }} <span>{{ . }}</span>{{ end }}</li>
+    {{- end }}
+  </ul>
+</article>
+{{ partial "pager.html" . }}
+{{ end }}

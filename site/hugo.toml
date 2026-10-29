@@ -37,13 +37,6 @@ disableKinds = ["taxonomy", "term", "rss"]
   source = "../docs/grammar"
   target = "assets/grammar"
 
-[[cascade]]
-  title = "Language specification"
-  description = "The formal grammar and rules of the Agentica language."
-  weight = 4
-  [cascade.target]
-    path = "/reference"
-
 [outputs]
   home = ["html", "markdown", "search", "llms", "llmsfull"]
   section = ["html", "markdown"]
