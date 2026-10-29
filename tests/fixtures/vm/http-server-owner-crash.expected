@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2500,
+  "steps": 2514,
   "stdout": [
     "handling",
     "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-crash.agc:20:16: division by zero\")",

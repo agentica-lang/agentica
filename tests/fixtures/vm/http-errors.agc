@@ -17,7 +17,7 @@ def serve(listener: Listener) -> Void
   while line != ""
     line = Result.unwrap!(TCP.read_line(socket, 5000))
   end
-  TCP.send_bytes(socket, [72, 84, 84, 80, 47, 49, 46, 49, 32, 50, 48, 48, 32, 79, 75, 13, 10, 67, 111, 110, 116, 101, 110, 116, 45, 76, 101, 110, 103, 116, 104, 58, 32, 49, 13, 10, 13, 10, 255], 5000)
+  TCP.send_bytes(socket, Bytes.from_list([72, 84, 84, 80, 47, 49, 46, 49, 32, 50, 48, 48, 32, 79, 75, 13, 10, 67, 111, 110, 116, 101, 110, 116, 45, 76, 101, 110, 103, 116, 104, 58, 32, 49, 13, 10, 13, 10, 255]).unwrap!, 5000)
   TCP.close(socket)
 end
 

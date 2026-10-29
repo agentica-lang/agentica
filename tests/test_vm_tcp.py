@@ -45,8 +45,8 @@ def require_ipv6():
 CLIENT_PROGRAM = """\
 def main() -> Void
   echo = Result.unwrap!(TCP.connect("localhost", %d, 5000))
-  Result.unwrap!(TCP.send_bytes(echo, [195], 5000))
-  Result.unwrap!(TCP.send_bytes(echo, [177, 10], 5000))
+  Result.unwrap!(TCP.send_bytes(echo, Bytes.from_list([195]).unwrap!, 5000))
+  Result.unwrap!(TCP.send_bytes(echo, Bytes.from_list([177, 10]).unwrap!, 5000))
   puts(Result.unwrap!(TCP.read_line(echo, 5000)))
   TCP.close(echo)
   pieces = Result.unwrap!(TCP.connect("127.0.0.1", %d, 5000))
@@ -268,7 +268,7 @@ def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_pee
                              "ñ😀\n"
                              'ok("tail")\n'
                              'error("network: end of input")\n'
-                             "ok([])\n"
+                             "ok(<Bytes 0>)\n"
                              + RESET +
                              'error("network: line exceeds 1048576 bytes")\n'
                              'error("network: socket is closed")\n'
@@ -319,6 +319,49 @@ def test_listener_on_localhost_takes_ipv4_and_ipv6_clients(tmp_path, adopt):
         assert vm.next_line() == "v6"
     send_line("127.0.0.1", "end")
     assert vm.next_line() == "end"
+    assert vm.wait() == 0, vm.stderr_text()
+
+
+BYTES_PROGRAM = """\
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = Result.unwrap!(TCP.accept(listener, 10000))
+  every = Result.unwrap!(Bytes.from_list((0..255).to_a))
+  got = "".bytes
+  while got.size < 512
+    piece = Result.unwrap!(TCP.recv_bytes(socket, 100, 10000))
+    Result.unwrap!(TCP.send_bytes(socket, piece, 10000))
+    got = got + piece
+  end
+  puts(got == every + every)
+  puts(Digest.hexencode(got))
+  IO.inspect(TCP.recv_bytes(socket, 1, 10000))
+  TCP.close(socket)
+  TCP.close_listener(listener)
+end
+"""
+
+
+def test_bytes_round_trip_every_byte_value_with_a_python_socket_peer(tmp_path, adopt):
+    vm = adopt(start_vm(compile_text(BYTES_PROGRAM, "bytes", tmp_path)))
+    port = int(vm.next_line())
+    sent = bytes(range(256)) * 2
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as connection:
+        for start, end in ((0, 1), (1, 255), (255, 300), (300, 512)):
+            connection.sendall(sent[start:end])
+            time.sleep(0.01)
+        echoed = b""
+        while len(echoed) < len(sent):
+            piece = connection.recv(4096)
+            assert piece, "the VM closed before echoing every byte"
+            echoed += piece
+        connection.shutdown(socket.SHUT_WR)
+        assert vm.next_line() == "true"
+        assert vm.next_line() == sent.hex()
+        assert vm.next_line() == "ok(<Bytes 0>)"
+    assert echoed == sent
     assert vm.wait() == 0, vm.stderr_text()
 
 

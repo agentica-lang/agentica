@@ -367,6 +367,10 @@ def test_truncations_and_end_blocks(tmp_path):
     extra = bytearray(1024)
     extra[100] = 7
     (work / "nonzero-pad.tar").write_bytes(whole + bytes(extra))
+    # A long zero tail is checked a piece at a time (one == per 4 KiB), well inside the deadline; a non-zero byte
+    # at its very end, past an odd number of pieces, is still found.
+    (work / "zero-tail.tar").write_bytes(whole + bytes(16 * 1024 * 1024))
+    (work / "late-pad.tar").write_bytes(whole + bytes(16 * 1024 * 1024 + 4097) + b"\x01")
     garbage = whole[:1024] + b"not a header" + b"\x00" * 501 + b"\x00" * 1024
     (work / "garbage.tar").write_bytes(garbage)
     (work / "one-byte.tar").write_bytes(b"x")
@@ -382,6 +386,8 @@ def test_truncations_and_end_blocks(tmp_path):
         ("garbage", "garbage.tar", q("a.txt"), "d6", options),
         ("one-byte", "one-byte.tar", q("a.txt"), "d7", options),
         ("empty", "empty.tar", q("a.txt"), "d8", options),
+        ("zero-tail", "zero-tail.tar", q("a.txt"), "d9", options),
+        ("late-pad", "late-pad.tar", q("a.txt"), "d10", options),
     ]
     lines = run_driver(work, "trunc", driver(calls))
     assert lines[0] == "full ok [10, 2]"
@@ -393,6 +399,8 @@ def test_truncations_and_end_blocks(tmp_path):
     assert lines[6] == "garbage error archive: bad header checksum at entry 2"
     assert lines[7].startswith("one-byte error archive: truncated TAR data, ")
     assert lines[8] == "empty error archive: empty.tar is empty, not a TAR archive"
+    assert lines[9] == "zero-tail ok [10]"
+    assert lines[10] == "late-pad error archive: non-zero padding after the archive end"
 
 
 def test_non_regular_selections_and_output_safety(tmp_path):

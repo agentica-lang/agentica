@@ -75,7 +75,7 @@ builtin HttpWire.accept forms=1
 builtin HttpWire.awaited? forms=1
   HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool shape=(Channel(Result(Struct(HttpResponse)))) -> Bool rule=Plain impl="HttpWire.awaited?" effects=[] desc="Internal to std/http: false once a receiver that parked on reply left without a value."
 builtin HttpWire.chunk forms=1
-  HttpWire.chunk(state: HttpWire.Chunk, data: List[Int], from: Int) -> Result[HttpWire.Chunk] shape=(Struct(HttpWire.Chunk), List(Int), Int) -> Result(Struct(HttpWire.Chunk)) rule=Plain impl="HttpWire.chunk" effects=[] desc="Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and length of each piece of body; the error is the answer status and the reason."
+  HttpWire.chunk(state: HttpWire.Chunk, data: Bytes, from: Int) -> Result[HttpWire.Chunk] shape=(Struct(HttpWire.Chunk), Bytes, Int) -> Result(Struct(HttpWire.Chunk)) rule=Plain impl="HttpWire.chunk.bytes" effects=[] desc="Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and length of each piece of body; the error is the answer status and the reason."
 builtin HttpWire.chunk_read forms=1
   HttpWire.chunk_read(state: HttpWire.Chunk, bytes: Int) -> HttpWire.Chunk shape=(Struct(HttpWire.Chunk), Int) -> Struct(HttpWire.Chunk) rule=Plain impl="HttpWire.chunk_read" effects=[] desc="Internal to std/http: the state after std read bytes of chunk data itself, at most remaining."
 builtin HttpWire.chunked forms=1
@@ -103,11 +103,11 @@ builtin HttpWire.local_port forms=1
 builtin HttpWire.options forms=1
   HttpWire.options(client: HttpClient) -> HttpClientOptions shape=(Opaque(HttpClient)) -> Struct(HttpClientOptions) rule=Plain impl="HttpWire.options" effects=[] desc="Internal to std/http: the options a client was made with."
 builtin HttpWire.read_head forms=1
-  HttpWire.read_head(socket: Socket, rest: List[Int], max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head] shape=(Opaque(Socket), List(Int), Int, Int) -> Result(Struct(HttpWire.Head)) rule=Plain impl="HttpWire.read_head" effects=["network"] desc="Internal to std/http: put rest back in front of the input, then read and parse the next request head; a bad head has the answer's status and reason (status 0 for a good one)."
+  HttpWire.read_head(socket: Socket, rest: Bytes, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head] shape=(Opaque(Socket), Bytes, Int, Int) -> Result(Struct(HttpWire.Head)) rule=Plain impl="HttpWire.read_head.bytes" effects=["network"] desc="Internal to std/http: put rest back in front of the input, then read and parse the next request head; a bad head has the answer's status and reason (status 0 for a good one)."
 builtin HttpWire.read_response forms=1
   HttpWire.read_response(socket: Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Response] shape=(Opaque(Socket), Bool, Int, Int) -> Result(Struct(HttpWire.Response)) rule=Plain impl="HttpWire.read_response" effects=["network"] desc="Internal to std/http: read and parse the next response head, with the framing of a response to HEAD when head_only; an interim (1xx) head comes back as it is."
 builtin HttpWire.read_text forms=1
-  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, List(Int), Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, buffered counts the input bytes left unread, and ended is true once the input has ended or failed."
+  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: Bytes, timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, Bytes, Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text.bytes" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, buffered counts the input bytes left unread, and ended is true once the input has ended or failed."
 builtin HttpWire.server forms=1
   HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer shape=(Opaque(Listener), Int, Fn([Opaque(HttpServer)], Void)) -> Opaque(HttpServer) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
 builtin HttpWire.service forms=1
@@ -115,7 +115,7 @@ builtin HttpWire.service forms=1
 builtin HttpWire.spawn forms=1
   HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void shape=(Opaque(HttpServer), Opaque(Socket), Fn([Opaque(Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
 builtin HttpWire.text forms=1
-  HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> HttpWire.Text shape=(List(Int), List(Int), List(Int)) -> Struct(HttpWire.Text) rule=Plain impl="HttpWire.text" effects=[] desc="Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an unfinished last character is the new carry, and valid is false for bytes that are not UTF-8."
+  HttpWire.text(carry: Bytes, data: Bytes, runs: List[Int]) -> HttpWire.Text shape=(Bytes, Bytes, List(Int)) -> Struct(HttpWire.Text) rule=Plain impl="HttpWire.text.bytes" effects=[] desc="Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an unfinished last character is the new carry, and valid is false for bytes that are not UTF-8."
 builtin HttpWire.wait forms=1
   HttpWire.wait(server: HttpServer) -> Result[Void] shape=(Opaque(HttpServer)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
 builtin IO.eof? forms=1
@@ -481,13 +481,13 @@ builtin Process.parent_send forms=1
 builtin Process.read_available forms=1
   Process.read_available(p: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_available" effects=["subprocess"] desc="Read the captured stdout written so far without waiting for more; timeout_ms bounds only the wait for the reader lock."
 builtin Process.read_bytes forms=1
-  Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]] shape=(Opaque(Process), Int, Int) -> Result(List(Int)) rule=Plain impl="Process.read_bytes" effects=["subprocess"] desc="Read count bytes or fewer at EOF; count is 0..1048576."
+  Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Process), Int, Int) -> Result(Bytes) rule=Plain impl="Process.read_bytes.bytes" effects=["subprocess"] desc="Read count bytes or fewer at EOF; count is 0..1048576."
 builtin Process.read_line forms=1
   Process.read_line(p: Process, timeout_ms: Int) -> Result[String] shape=(Opaque(Process), Int) -> Result(String) rule=Plain impl="Process.read_line" effects=["subprocess"] desc="Read a bounded UTF-8 line; empty EOF is an error."
 builtin Process.send forms=1
   Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), String, Int) -> Result(Void) rule=Plain impl="Process.send" effects=["subprocess"] desc="Send at most 1 MiB of UTF-8 text and flush."
 builtin Process.send_bytes forms=1
-  Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), List(Int), Int) -> Result(Void) rule=Plain impl="Process.send_bytes" effects=["subprocess"] desc="Send at most 1 MiB of bytes 0..255 and flush."
+  Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), Bytes, Int) -> Result(Void) rule=Plain impl="Process.send_bytes.bytes" effects=["subprocess"] desc="Send at most 1 MiB of bytes and flush."
 builtin Process.spawn forms=1
   Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000) -> Result[Process] shape=(String, List(String), Int = 30000) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn" effects=["subprocess"] desc="Start an executable with literal arguments; --deny-run makes it an error."
 builtin Process.spawn_captured forms=1
@@ -627,11 +627,11 @@ builtin TCP.local_port forms=1
 builtin TCP.read_line forms=1
   TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String] shape=(Opaque(Socket), Int) -> Result(String) rule=Plain impl="TCP.read_line" effects=["network"] desc="Read a bounded UTF-8 line, removing its terminator."
 builtin TCP.recv_bytes forms=1
-  TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]] shape=(Opaque(Socket), Int, Int) -> Result(List(Int)) rule=Plain impl="TCP.recv_bytes" effects=["network"] desc="Read available bytes; an empty list indicates EOF."
+  TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Socket), Int, Int) -> Result(Bytes) rule=Plain impl="TCP.recv_bytes.bytes" effects=["network"] desc="Read available bytes; empty Bytes indicate EOF."
 builtin TCP.send forms=1
   TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Socket), String, Int) -> Result(Void) rule=Plain impl="TCP.send" effects=["network"] desc="Send UTF-8 text and flush."
 builtin TCP.send_bytes forms=1
-  TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Void] shape=(Opaque(Socket), List(Int), Int) -> Result(Void) rule=Plain impl="TCP.send_bytes" effects=["network"] desc="Send bytes 0..255 and flush, at most 1 MiB per call."
+  TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(Socket), Bytes, Int) -> Result(Void) rule=Plain impl="TCP.send_bytes.bytes" effects=["network"] desc="Send bytes and flush, at most 1 MiB per call."
 builtin TLS.connect forms=1
   TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket] shape=(String, Int, String, Int) -> Result(Opaque(Socket)) rule=Plain impl="TLS.connect" effects=["network"] desc="Connect with certificate and hostname verification; empty CA uses system trust."
 builtin TLS.listen forms=1
@@ -838,7 +838,7 @@ record HttpWire.Head method: String, target: String, path: String, headers: List
 record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: String, deadline: Int, reply: Channel(Result(Struct(HttpResponse))), worker: Int, kept: Bool
 record HttpWire.Reply head: String, closes: Bool
 record HttpWire.Response status: Int, headers: List(Struct(Header)), length: Int, chunked: Bool, until_close: Bool, closes: Bool, buffered: Int, ended: Bool
-record HttpWire.Text text: String, carry: List(Int), bytes: Int, valid: Bool, buffered: Int, ended: Bool
+record HttpWire.Text text: String, carry: Bytes, bytes: Int, valid: Bool, buffered: Int, ended: Bool
 record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, String), time_ms: Int, task: Int
 record ProcessOutput stdout: String, stderr: String, truncated: Bool
 record StructMember name: String, type: String

@@ -1,6 +1,6 @@
 def client(port: Int) -> Result[String]
   socket = TLS.connect("localhost", port, "#{System.args()[0]}/ca.pem", 5000).unwrap!
-  TCP.send_bytes(socket, [104, 195, 177, 10], 5000).unwrap!
+  TCP.send_bytes(socket, Bytes.from_list([104, 195, 177, 10]).unwrap!, 5000).unwrap!
   return TCP.read_line(socket, 5000)
 end
 

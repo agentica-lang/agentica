@@ -2476,6 +2476,70 @@
       "actual": "Result[Bytes]"
     }
   ],
+  "TCP.recv_bytes, TCP.send_bytes, Process.read_bytes and Process.send_bytes use Bytes": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!",
+        "  sent: Result[Void] = TCP.send_bytes(socket, \"ab\".bytes, 10)",
+        "  got: Result[Bytes] = TCP.recv_bytes(socket, 4, 10)",
+        "  p = Process.spawn(\"cat\", [], 10).unwrap!",
+        "  fed: Result[Void] = Process.send_bytes(p, got.unwrap!, 10)",
+        "  back: Result[Bytes] = Process.read_bytes(p, 4, 10)",
+        "  puts(sent.ok? and fed.ok? and back.ok?)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!",
+        "  TCP.send_bytes(socket, [97, 98], 10)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 26],
+      "covers": "[97, 98]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!",
+        "  got: Result[List[Int]] = TCP.recv_bytes(socket, 4, 10)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 28],
+      "covers": "TCP.recv_bytes(socket, 4, 10)",
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  p = Process.spawn(\"cat\", [], 10).unwrap!",
+        "  Process.send_bytes(p, [0, 255], 10)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 25],
+      "covers": "[0, 255]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  p = Process.spawn(\"cat\", [], 10).unwrap!",
+        "  got: Result[List[Int]] = Process.read_bytes(p, 4, 10)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 28],
+      "covers": "Process.read_bytes(p, 4, 10)",
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
+    }
+  ],
   "network handles are opaque and HTTP records are checked": [
     {
       "program": [
