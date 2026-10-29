@@ -10,14 +10,22 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.request` and `HTTP.post` default `headers` to `[]` and `body` to `""`,
+  so `HTTP.request(client, "DELETE", url)` works.
 - `std/uri` percent-encodes and decodes URL components and query strings, with
   the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
-- `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
-  names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
+- `std/html` escapes and unescapes HTML text, with the behaviour of Ruby's
+  `CGI.escape_html` (`HTML.escape`, `HTML.unescape`).
+- `std/cookie` reads a `Cookie` header and writes a `Set-Cookie` header, with
+  the behaviour of Rack (`Cookie.parse`, `Cookie.set_header`).
 - `std/mime` gives the media type of a file by its extension, with the name
   and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
 - `Archive.Options()` and `HTTP.DownloadOptions()` give the default options
   without `Archive.options()` or `HTTP.download_options()`.
+- `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`,
+  `append_text`, `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`,
+  `mkdir_private`, `Path.remove` and `Path.rename`. `File.open(path)` defaults
+  both `mode` (`"read"`) and `timeout_ms`.
 
 ## [0.15.0] - 2026-10-29
 

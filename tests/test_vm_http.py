@@ -81,6 +81,8 @@ def main() -> Void
   show(HTTP.get(pool, plain + "/close"))
   puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body != first)
   show(HTTP.get(pool, plain + "/nothing"))
+  show(HTTP.post(pool, plain + "/post"))
+  show(HTTP.request(pool, "DELETE", plain + "/item"))
   HTTP.close_client(pool)
   slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
   show(HTTP.get(slow, plain + "/slow"))
@@ -272,6 +274,8 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "200 until the end 13",
         "true",
         "404 missing 7",
+        "200 None 0  7",
+        "200 deleted /item None 18",
         "network: operation timed out",
         "true",
         "true",

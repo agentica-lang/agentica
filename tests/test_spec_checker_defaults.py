@@ -135,6 +135,14 @@ SINGLE_FILE = [
      main_with("  puts(Zlib.crc32([1], 0, 1))\n"), "CHECK-ARITY", "Zlib.crc32([1], 0, 1)"),
     ("a builtin default does not change the type of a given argument",
      main_with('  puts(Zlib.crc32([1], "x"))\n'), "CHECK-TYPE-MISMATCH", '"x"'),
+    ("a filesystem builtin may leave out the timeout, and File.open the mode and the timeout",
+     main_with('  puts(File.read_text("a.txt"))\n  puts(File.stat("a.txt", 50))\n  puts(Path.rename("a", "b"))\n'
+               '  a = File.open("a.txt")\n  b = File.open("a.txt", "write")\n'
+               '  c = File.open("a.txt", "append", 50)\n'), None, None),
+    ("a filesystem builtin timeout is still an Int",
+     main_with('  puts(Dir.list("d", "soon"))\n'), "CHECK-TYPE-MISMATCH", '"soon"'),
+    ("File.open still needs its path",
+     main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("a builtin has no function value, defaults or not",
      main_with("  f = &Zlib.crc32\n"), "CHECK-UNKNOWN-NAME", "&Zlib.crc32"),
     ("main takes no parameters, defaults included",

@@ -4,7 +4,7 @@ weight: 2
 description: Read and write files, list and create directories, and build paths.
 ---
 
-Every file function takes a timeout in milliseconds and returns a `Result`.
+Every file function takes a timeout in milliseconds and returns a `Result`. The calls on a path (`File.read_text`, `File.write_text`, `File.append_text`, `File.sha256`, `File.stat`, `File.lstat`, `File.open`, `Dir.list`, `Dir.mkdir`, `Dir.mkdir_private`, `Path.remove`, `Path.rename`) default it to 30000 and may leave it out; the calls on a handle still need it.
 
 - Text is UTF-8. One text call reads or writes at most 1 MiB (`File.sha256` streams bytes and has no cap). Files have the permissions of the user who runs the program.
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
@@ -14,7 +14,7 @@ Every file function takes a timeout in milliseconds and returns a `Result`.
 ## File.write_text
 
 ```text
-File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
+File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Creates or replaces a file with the text.
@@ -33,7 +33,7 @@ ok()
 ## File.append_text
 
 ```text
-File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
+File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Adds text at the end of a file. It creates the file when it is missing.
@@ -41,7 +41,7 @@ Adds text at the end of a file. It creates the file when it is missing.
 ## File.read_text
 
 ```text
-File.read_text(path: String, timeout_ms: Int) -> Result[String]
+File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
 ```
 
 Reads a whole file as text.
@@ -58,7 +58,7 @@ end
 ## File.sha256
 
 ```text
-File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
+File.sha256(path: String, timeout_ms: Int = 30000) -> Result[List[Int]]
 ```
 
 Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Digest.sha256` gives for the same content. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
@@ -79,7 +79,7 @@ end
 ## File.stat
 
 ```text
-File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
+File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 ```
 
 Gives a `FileInfo`: `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
@@ -97,7 +97,7 @@ end
 ## File.lstat
 
 ```text
-File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
+File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 ```
 
 Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own.
@@ -105,7 +105,7 @@ Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size
 ## File.open and File.close
 
 ```text
-File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 ```
 
@@ -245,7 +245,7 @@ ok([0, 1, 255])
 ## Dir.list
 
 ```text
-Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
+Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 ```
 
 Gives the names in a directory, sorted.
@@ -261,7 +261,7 @@ end
 ## Dir.mkdir
 
 ```text
-Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
+Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Creates a directory and any missing parents. An existing directory is fine.
@@ -269,7 +269,7 @@ Creates a directory and any missing parents. An existing directory is fine.
 ## Dir.mkdir_private
 
 ```text
-Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
+Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Creates one directory that only you can enter, for a scratch directory in a shared place such as `/tmp`. It makes no parents, and an existing path is an error, so success means the directory is new and yours. Unix: mode 0700, less where the umask clears bits. Windows: the owner-and-DACL check of `File.open`.
@@ -339,7 +339,7 @@ false
 ## Path.remove
 
 ```text
-Path.remove(path: String, timeout_ms: Int) -> Result[Void]
+Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Deletes a file, a symbolic link, or a directory with everything in it. A missing path gives `ok()`.
@@ -359,7 +359,7 @@ end
 ## Path.rename
 
 ```text
-Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
+Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step.

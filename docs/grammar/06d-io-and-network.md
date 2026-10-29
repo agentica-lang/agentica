@@ -45,7 +45,8 @@ the server had already closed is retried once on a new connection, within the
 same timeout, if no response byte arrived. `POST`, `PATCH` and other methods are
 never retried.
 
-URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`,
+`post` and `request` default `headers` to `[]` and `body` to `""`. URLs are
+`http://` or `https://`. A request that sets `Host`, `Content-Length`,
 `Transfer-Encoding` or `Connection` itself is an error. Status codes 4xx and 5xx
 are normal responses. Protocol errors start with `http: `; connection errors
 keep their TCP or TLS text; a timeout is `network: operation timed out`.
@@ -134,7 +135,11 @@ On Windows no File call waits on a stream: they accept only regular files
 at once with an error. Streams that can wait reach the program there as
 standard input, output or error, as process pipes and as sockets.
 Signatures are in
-[`library/io-and-system/files.md`][agentica-link-2].
+[`library/io-and-system/files.md`][agentica-link-2]. `File.read_text`,
+`write_text`, `append_text`, `sha256`, `stat`, `lstat`, `open`, `Dir.list`,
+`Dir.mkdir`, `Dir.mkdir_private`, `Path.remove` and `Path.rename` default
+`timeout_ms` to 30000, and `File.open` defaults `mode` to `"read"` (see
+"Default parameter values" in section 6).
 
 - `File.open` modes: `read` (an existing path that is not a directory), `write`
   (creates or truncates), `append` (creates or appends) and `create_private` (a

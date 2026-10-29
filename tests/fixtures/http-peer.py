@@ -101,6 +101,9 @@ class Web(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers["Content-Length"]))
         self.reply(200, "%s %d %s" % (self.headers.get("X-Kind"), len(body), body[:8].decode()))
 
+    def do_DELETE(self):
+        self.reply(200, "deleted %s %s" % (self.path, self.headers.get("Content-Length")))
+
 
 class Quiet(http.server.ThreadingHTTPServer):
     daemon_threads = True

@@ -11,13 +11,13 @@ builtin Channel.recv forms=1
 builtin Channel.send forms=1
   Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void] shape=(Channel(Var(T)), Var(T), Int) -> Result(Void) rule=ChannelSend impl="Channel.send" effects=["concurrency"] desc="Add a value in order; wait for room up to timeout_ms; error(\"channel: closed\") or error(\"channel: timed out\"); VM only."
 builtin Dir.list forms=1
-  Dir.list(path: String, timeout_ms: Int) -> Result[List[String]] shape=(String, Int) -> Result(List(String)) rule=Plain impl="Dir.list" effects=["filesystem"] desc="List immediate entry names in sorted order."
+  Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]] shape=(String, Int = 30000) -> Result(List(String)) rule=Plain impl="Dir.list" effects=["filesystem"] desc="List immediate entry names in sorted order."
 builtin Dir.mkdir forms=1
-  Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Dir.mkdir" effects=["filesystem"] desc="Create a directory and missing parents; existing directories succeed."
+  Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, Int = 30000) -> Result(Void) rule=Plain impl="Dir.mkdir" effects=["filesystem"] desc="Create a directory and missing parents; existing directories succeed."
 builtin Dir.mkdir_private forms=1
-  Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Dir.mkdir_private" effects=["filesystem"] desc="Create one directory only the current user can use; an existing path or a missing parent is an error; VM only."
+  Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, Int = 30000) -> Result(Void) rule=Plain impl="Dir.mkdir_private" effects=["filesystem"] desc="Create one directory only the current user can use; an existing path or a missing parent is an error; VM only."
 builtin File.append_text forms=1
-  File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void] shape=(String, String, Int) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
+  File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
 builtin File.chunks forms=1
   File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]] shape=(String, Int = 65536, Int = 30000) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.close forms=1
@@ -29,19 +29,19 @@ builtin File.flush forms=1
 builtin File.foreach forms=1
   File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Prelude impl="" effects=[] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.lstat forms=1
-  File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo] shape=(String, Int) -> Result(Struct(FileInfo)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
+  File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo] shape=(String, Int = 30000) -> Result(Struct(FileInfo)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=1
-  File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle] shape=(String, String, Int) -> Result(Opaque(FileHandle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file only the current user can use and fails when the path exists."
+  File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle] shape=(String, String = "read", Int = 30000) -> Result(Opaque(FileHandle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file only the current user can use and fails when the path exists."
 builtin File.read_bytes forms=1
   File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]] shape=(Opaque(FileHandle), Int, Int) -> Result(List(Int)) rule=Plain impl="File.read_bytes" effects=["filesystem"] desc="Read up to max_bytes; empty means EOF."
 builtin File.read_line forms=1
   File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String] shape=(Opaque(FileHandle), Int) -> Result(String) rule=Plain impl="File.read_line" effects=["filesystem"] desc="Read one bounded UTF-8 line, removing LF or CRLF."
 builtin File.read_text forms=1
-  File.read_text(path: String, timeout_ms: Int) -> Result[String] shape=(String, Int) -> Result(String) rule=Plain impl="File.read_text" effects=["filesystem"] desc="Read and strictly decode at most 1 MiB of UTF-8 text."
+  File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String] shape=(String, Int = 30000) -> Result(String) rule=Plain impl="File.read_text" effects=["filesystem"] desc="Read and strictly decode at most 1 MiB of UTF-8 text."
 builtin File.sha256 forms=1
-  File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]] shape=(String, Int) -> Result(List(Int)) rule=Plain impl="File.sha256" effects=["filesystem"] desc="Hash the whole file at path with SHA-256, streaming in fixed chunks, and return the 32 digest bytes; VM only."
+  File.sha256(path: String, timeout_ms: Int = 30000) -> Result[List[Int]] shape=(String, Int = 30000) -> Result(List(Int)) rule=Plain impl="File.sha256" effects=["filesystem"] desc="Hash the whole file at path with SHA-256, streaming in fixed chunks, and return the 32 digest bytes; VM only."
 builtin File.stat forms=1
-  File.stat(path: String, timeout_ms: Int) -> Result[FileInfo] shape=(String, Int) -> Result(Struct(FileInfo)) rule=Plain impl="File.stat" effects=["filesystem"] desc="Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic links."
+  File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo] shape=(String, Int = 30000) -> Result(Struct(FileInfo)) rule=Plain impl="File.stat" effects=["filesystem"] desc="Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic links."
 builtin File.try_lock forms=1
   File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool] shape=(Opaque(FileHandle), Int) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
 builtin File.write forms=1
@@ -49,7 +49,7 @@ builtin File.write forms=1
 builtin File.write_bytes forms=1
   File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), List(Int), Int) -> Result(Void) rule=Plain impl="File.write_bytes" effects=["filesystem"] desc="Write bytes 0..255, at most 1 MiB per call."
 builtin File.write_text forms=1
-  File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void] shape=(String, String, Int) -> Result(Void) rule=Plain impl="File.write_text" effects=["filesystem"] desc="Overwrite a file with at most 1 MiB of UTF-8 text."
+  File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.write_text" effects=["filesystem"] desc="Overwrite a file with at most 1 MiB of UTF-8 text."
 builtin Float.from_bits forms=1
   Float.from_bits(bits: Int) -> Float shape=(Int) -> Float rule=Plain impl="Float.from_bits" effects=[] desc="Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN."
 builtin Float.from_bits32 forms=1
@@ -457,9 +457,9 @@ builtin Path.join forms=1
 builtin Path.real forms=1
   Path.real(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Path.real" effects=["filesystem"] desc="Return the absolute canonical path with every symbolic link resolved; the path must exist."
 builtin Path.remove forms=1
-  Path.remove(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Path.remove" effects=["filesystem"] desc="Delete a file, a symbolic link (the link itself) or a directory with everything in it, never following a link; a missing path is ok; refuses /, . and ..; VM only."
+  Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, Int = 30000) -> Result(Void) rule=Plain impl="Path.remove" effects=["filesystem"] desc="Delete a file, a symbolic link (the link itself) or a directory with everything in it, never following a link; a missing path is ok; refuses /, . and ..; VM only."
 builtin Path.rename forms=1
-  Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void] shape=(String, String, Int) -> Result(Void) rule=Plain impl="Path.rename" effects=["filesystem"] desc="Rename a file, a symbolic link (moved as a link) or a directory to a path that does not exist yet, atomically (renameat2 with RENAME_NOREPLACE); an existing target is an error, never replaced; VM only."
+  Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="Path.rename" effects=["filesystem"] desc="Rename a file, a symbolic link (moved as a link) or a directory to a path that does not exist yet, atomically (renameat2 with RENAME_NOREPLACE); an existing target is an error, never replaced; VM only."
 builtin Path.resolve forms=1
   Path.resolve(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="Path.resolve" effects=["filesystem"] desc="Return a lexical absolute path without resolving symlinks."
 builtin Process.channel_close forms=1

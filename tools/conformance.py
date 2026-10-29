@@ -134,8 +134,8 @@ AREAS = {
         "stdout and stderr, extern functions",
         [
             "tests/test_std_analysis.py", "tests/test_std_archive.py", "tests/test_std_archive_zip.py",
-            "tests/test_std_binary.py", "tests/test_std_cgi.py", "tests/test_std_mime.py", "tests/test_std_toml.py",
-            "tests/test_std_uri.py",
+            "tests/test_std_binary.py", "tests/test_std_cookie.py", "tests/test_std_html.py", "tests/test_std_mime.py",
+            "tests/test_std_toml.py", "tests/test_std_uri.py",
             "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
             "tests/test_vm_crypto.py", "tests/test_vm_native.py", "tests/test_examples_ffi.py",
