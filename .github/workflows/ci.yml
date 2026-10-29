@@ -144,9 +144,19 @@ jobs:
         run: make vm-jit-test
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point
+      - name: Slow tests
+        run: make test-slow
+      - run: make vm-latency
+      - run: make vm-task-map
+      - name: Example smoke runs
+        run: make smoke
       # A PR that changes bootstrap/stage0.agcb must carry the stage2 that the base branch's stage0 builds from the PR's
       # compiler/. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip. The sums go to the job summary.
+      # It runs after the tests, so a hand bootstrap (a red check that the owner approves) still runs them, and before
+      # the vendored check, which rebuilds the objects with other flags. When only this check failed, the vendored steps
+      # still run (each needs the step before it to have passed), and the job stays red.
       - name: A changed bootstrap/stage0.agcb rebuilds from the stage0 of the base branch
+        id: stage0
         if: github.event_name == 'pull_request'
         run: |
           if git diff --quiet HEAD^1 HEAD -- bootstrap/stage0.agcb; then
@@ -165,14 +175,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
-      - name: Slow tests
-        run: make test-slow
-      - run: make vm-latency
-      - run: make vm-task-map
-      - name: Example smoke runs
-        run: make smoke
-      - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
+      - id: openssl_key
+        if: ${{ !cancelled() && (success() || steps.stage0.outcome == 'failure') }}
+        run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
+        if: ${{ !cancelled() && (success() || steps.stage0.outcome == 'failure') && steps.openssl_key.outcome == 'success' }}
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -181,9 +188,9 @@ jobs:
             build/vm/release/openssl/libcrypto.a
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
-      - if: steps.vendored.outputs.cache-hit != 'true'
+      - if: ${{ !cancelled() && (success() || steps.stage0.outcome == 'failure') && steps.vendored.outcome == 'success' && steps.vendored.outputs.cache-hit != 'true' }}
         run: echo "::notice::Vendored OpenSSL check skipped - no cached release-mode OpenSSL for this key; warm-third-party checks it on master"
-      - if: steps.vendored.outputs.cache-hit == 'true'
+      - if: ${{ !cancelled() && (success() || steps.stage0.outcome == 'failure') && steps.vendored.outcome == 'success' && steps.vendored.outputs.cache-hit == 'true' }}
         run: make vendored-test
       - if: ${{ !cancelled() }}
         run: make dup-check

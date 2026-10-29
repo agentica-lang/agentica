@@ -21,6 +21,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `Digest`, `HMAC`, `Base64` and `SecureRandom.random_bytes` take
   and return `Bytes` instead of `List[Int]`.
 
+### Fixed
+
+- The JIT no longer overwrites the first argument register of a function value
+  call with its result, which made a hand-made `.agcb` fail where the
+  interpreter ran it.
+
 ## [0.16.0] - 2026-10-29
 
 ### Added

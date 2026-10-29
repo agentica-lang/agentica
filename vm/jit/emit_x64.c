@@ -33,6 +33,8 @@ enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7
 #define REGS R12
 #define CONSTS R13
 #define DEPTH R14
+/* A native RETURN hands its value to the caller's code in RETURNED_TAG:RDX, which the epilogue keeps. */
+#define RETURNED_TAG R10
 /* The shadow space and 8 bytes that keep rsp 16-byte aligned at a helper call, under the 4 saved registers. */
 #define FRAME 40
 
@@ -619,13 +621,21 @@ void agc_emit_plain_leaf(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t bui
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_plain);
 }
 
+/* R[a] = the value of a native RETURN, after the callee's code answered AGC_JIT_EXIT_RETURNED. The callee leaves its
+   own registers as they were, as return_value does: after a CALL_VALUE its R[0] is the caller's R[a + 1], not the
+   frame's ret, and hand-made bytecode may read it after the call (#807). */
+static void store_returned(agc_emitter *e, uint32_t a) {
+  store(e, REGS, TAG(a), RETURNED_TAG);
+  store(e, REGS, WORD(a), RDX);
+}
+
 /* CALL of function bx with the window at R[a], as a native call when it can be one: the callee has code (its slot in
    the code table at SLOT, read when the call runs), the native depth is below AGC_JIT_NATIVE_DEPTH, and the task has
    room for the frame, its REGISTERS and one more depth without growing an array or failing, so no pointer that a
    compiled caller holds moves. The frame is written as push_frame writes it, with the caller's pc after the CALL for
    a stack trace and the return. Anything else, and the frame push that may grow or fail, exits for run_compiled.
-   The callee answers AGC_JIT_EXIT_RETURNED after its RETURN, and the code goes on; any other exit word is the
-   callee's (or a deeper callee's), with its frame on top, and goes up unchanged. */
+   The callee answers AGC_JIT_EXIT_RETURNED after its RETURN, with its value for R[a] (store_returned), and the code
+   goes on; any other exit word is the callee's (or a deeper callee's), with its frame on top, and goes up unchanged. */
 void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers) {
   uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
   BYTES(e, 0x49, 0x81, 0xFE); /* cmp r14, depth */
@@ -673,6 +683,7 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   BYTES(e, 0x41, 0xFF, 0xD3);                       /* call r11 */
   BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+  store_returned(e, in.a);
 }
 
 /* The TAIL_CALL exit at PC when CC holds (always for CC < 0). With COUNTER, the jit trace's agc_jit_count_tail(COUNTER,
@@ -749,9 +760,9 @@ void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, ui
 /* CALL_VALUE of the function value in R[a] with in.b arguments after it, as a native call when it can be one:
    below AGC_JIT_NATIVE_DEPTH, agc_jit_call_value(vm, &R[a], argc, pc) checks the value and the room and pushes the
    frame (base a + 1, result to R[a]) as call_value does, and returns the callee's code, which is called at its native
-   entry as a native CALL calls it. Its native RETURN leaves the result in its R[0], the caller's R[a + 1], which is
-   moved to R[a]. A NULL answer takes the CALL_VALUE exit with nothing pushed; an exit of the callee goes up
-   unchanged, with its frame on top, whose RETURN then writes R[a] through return_value. */
+   entry as a native CALL calls it. Its native RETURN hands over the result for R[a] (store_returned). A NULL answer
+   takes the CALL_VALUE exit with nothing pushed; an exit of the callee goes up unchanged, with its frame on top, whose
+   RETURN then writes R[a] through return_value. */
 void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
   BYTES(e, 0x49, 0x81, 0xFE); /* cmp r14, depth */
   word32(e, AGC_JIT_NATIVE_DEPTH);
@@ -768,14 +779,14 @@ void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
   BYTES(e, 0xFF, 0xD0);                             /* call rax */
   BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
-  agc_emit_move(e, in.a, (uint32_t)in.a + 1);
+  store_returned(e, in.a);
 }
 
-/* RETURN R[a]: under a native call, as return_value does it (the frame's ret is its base, R[0], where the native
-   CALL put it), and AGC_JIT_EXIT_RETURNED to the caller's code. Else agc_jit_block_return(vm, &R[a]) first: when the
-   frame returns to a block call that calls the same function again, the frame starts over with the next arguments,
-   and the code goes on at instruction 0 with its registers (or takes the YIELD exit at AGC_JIT_PC_RESTART when the
-   turn ended, which leaves the frame's pc at 0); otherwise the RETURN exit for run_compiled. */
+/* RETURN R[a]: under a native call, the frame popped as return_value pops it, and AGC_JIT_EXIT_RETURNED with R[a] in
+   RETURNED_TAG:RDX for the caller's code to write (store_returned). Else agc_jit_block_return(vm, &R[a]) first: when
+   the frame returns to a block call that calls the same function again, the frame starts over with the next arguments,
+   and the code goes on at instruction 0 with its registers (or takes the YIELD exit at AGC_JIT_PC_RESTART when the turn
+   ended, which leaves the frame's pc at 0); otherwise the RETURN exit for run_compiled. */
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
   BYTES(e, 0x4D, 0x85, 0xF6); /* test r14, r14 */
   size_t native = jump_to_patch(e, CC_NE);
@@ -790,10 +801,8 @@ void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
   exit_if(e, CC_NE, AGC_JIT_EXIT_YIELD, AGC_JIT_PC_RESTART);
   agc_emit_jump(e, 0);
   land(e, native);
-  load(e, RAX, REGS, TAG(a));
+  load(e, RETURNED_TAG, REGS, TAG(a));
   load(e, RDX, REGS, WORD(a));
-  store(e, REGS, TAG(0), RAX);
-  store(e, REGS, WORD(0), RDX);
   load(e, RCX, VM, (int64_t)offsetof(agc_vm, task));
   op_mem(e, false, 0xFF, 1, RCX, TASK_FIELD(frame_count)); /* dec dword [rcx + frame_count] */
   op_mem(e, false, 0xFF, 1, RCX, TASK_FIELD(depth));       /* dec dword [rcx + depth] */
