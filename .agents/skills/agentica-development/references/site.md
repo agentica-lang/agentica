@@ -5,6 +5,8 @@ rule that a site page shows.
 
 ## Build
 
+- The design rules (tokens, components, accessibility) are in
+  `site/DESIGN.md`. Read it before a style or layout change.
 - The site is in `site/` and uses Hugo extended (the version and the Dart Sass
   version, with their sha256, are pinned in `pages.yml`).
 - `make site` builds `site/public`. Warnings fail the build.
