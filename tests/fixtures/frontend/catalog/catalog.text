@@ -43,7 +43,7 @@ builtin File.sha256 forms=1
 builtin File.stat forms=1
   File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo] shape=(String, Int = 30000) -> Result(Struct(FileInfo)) rule=Plain impl="File.stat" effects=["filesystem"] desc="Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic links."
 builtin File.try_lock forms=1
-  File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool] shape=(Opaque(FileHandle), Int) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
+  File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool] shape=(Opaque(FileHandle), Int = 30000) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
 builtin File.write forms=1
   File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), String, Int = 30000) -> Result(Void) rule=Plain impl="File.write" effects=["filesystem"] desc="Write UTF-8 text, at most 1 MiB per call."
 builtin File.write_bytes forms=1
