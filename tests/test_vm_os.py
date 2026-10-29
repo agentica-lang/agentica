@@ -23,7 +23,7 @@ def main() -> Void
   path = dir + "/secret.bin"
   file = Result.unwrap!(File.open(path, "create_private", 5000))
   IO.inspect(File.write(file, "top secret\\n", 5000).ok?)
-  IO.inspect(File.write_bytes(file, [1, 2, 255], 5000).ok?)
+  IO.inspect(File.write_bytes(file, Bytes.from_list([1, 2, 255]).unwrap!, 5000).ok?)
   IO.inspect(File.close(file, 5000).ok?)
   IO.inspect(File.open(path, "create_private", 5000).ok?)
   IO.inspect(File.open(base + "/missing/child", "create_private", 5000).ok?)
