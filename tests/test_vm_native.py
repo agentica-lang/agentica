@@ -425,6 +425,29 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1600\n", "")
 
 
+# A compute call is cancelled only once it has started: a call cancelled while it still waits for a pool thread never
+# runs (run_compute in vm/loop.c), so a test that needs the call to run waits for it (#780). CALLS is the total of
+# peer_wait_flag starts in the program, not a count from now, so a later wait names the calls before it too. The
+# helper needs peer_waiting in an extern of the program; PEER_WAITING declares it.
+WAIT_WAITING = """def wait_waiting(calls: Int) -> Void
+  n = 0
+  while peer_waiting() < calls and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+  if peer_waiting() < calls
+    puts("never started")
+  end
+end
+
+"""
+
+PEER_WAITING = """extern "{library}"
+  def peer_waiting() -> C.Int32
+end
+
+""" + WAIT_WAITING
+
 COMPUTE_EXTERN = """extern "{library}"
   compute def peer_wait_flag(limit_ms: C.Int32) -> C.Int32
   def peer_set_flag() -> Void
@@ -435,6 +458,7 @@ COMPUTE_EXTERN = """extern "{library}"
   def peer_bumps() -> C.Int32
   compute def peer_nap(ms: C.Int32) -> C.Int32
   def peer_naps() -> C.Int32
+  def peer_nap_starts() -> C.Int32
 end
 
 """
@@ -471,7 +495,7 @@ end
 
 def main() -> Void
   waiter = Task.spawn(&wait_flag, 20_000)
-  Task.sleep(20)
+  wait_waiting(1)
   Task.cancel(waiter)
   puts(Task.await(waiter))
   puts(peer_returned())
@@ -485,7 +509,7 @@ def main() -> Void
   puts(peer_word(3))
 end
 """
-    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    source = program(tmp_path, (COMPUTE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ['error("task: cancelled")', "0", "ddd", ""]
@@ -719,7 +743,8 @@ end
 
 
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
-# cancelled, the waiting calls are never made: only the first nap is counted, even after a second nap would have ended.
+# cancelled (after the first nap has started, so that one runs), the waiting calls are never made: only the first nap
+# is counted, even after a second nap would have ended.
 @NATIVE_CALLS
 def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
     main = """def nap(ms: Int) -> Result[Int]
@@ -731,7 +756,14 @@ def main() -> Void
   for k in 1..50
     tasks = tasks.push(Task.spawn(&nap, 100))
   end
-  Task.sleep(20)
+  n = 0
+  while peer_nap_starts() == 0 and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+  if peer_nap_starts() == 0
+    puts("never started")
+  end
   for task in tasks
     Task.cancel(task)
   end
@@ -747,22 +779,6 @@ end
     result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
-
-# A compute call is cancelled only once it has started (peer_wait_flag counts each start): a call cancelled while it
-# still waits for a pool thread never runs (run_compute in vm/loop.c), so it makes nothing to free (#780).
-WAIT_STARTED = """extern "{library}"
-  def peer_waiting() -> C.Int32
-end
-
-def wait_started(calls: Int) -> Void
-  n = 0
-  while peer_waiting() < calls and n < 5000
-    Task.sleep(1)
-    n += 1
-  end
-end
-
-"""
 
 RESOURCE_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
@@ -913,15 +929,7 @@ def out_later(n: Int) -> Result[Int]
   return ok(peer_res_get(opened.res))
 end
 
-def wait_waiting(calls: Int) -> Void
-  n = 0
-  while peer_waiting() < calls and n < 5000
-    Task.sleep(1)
-    n += 1
-  end
-end
-
-def wait_closes(closes: Int) -> Void
+""" + WAIT_WAITING + """def wait_closes(closes: Int) -> Void
   n = 0
   while peer_res_closes() < closes and n < 5000
     Task.sleep(1)
@@ -1544,7 +1552,7 @@ end
 
 def main() -> Void
   opener = Task.spawn(&later, 3)
-  wait_started(1)
+  wait_waiting(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -1552,7 +1560,7 @@ def main() -> Void
   puts(peer_res_frees())
 end
 """
-    source = program(tmp_path, (RESOURCE_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    source = program(tmp_path, (RESOURCE_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", "2", source)
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
 
@@ -2099,7 +2107,7 @@ end
 
 def main() -> Void
   opener = Task.spawn(&later, 3)
-  wait_started(1)
+  wait_waiting(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -2110,7 +2118,7 @@ def main() -> Void
   puts(peer_res_frees())
 end
 """
-    source = program(tmp_path, (OUT_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    source = program(tmp_path, (OUT_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\nok(4)\n2\n', "")
 
@@ -2261,7 +2269,7 @@ def main() -> Void
   wait_releases(11)
   puts(peer_api_releases())
   opener = Task.spawn(&later, 4)
-  wait_started(1)
+  wait_waiting(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -2269,7 +2277,7 @@ def main() -> Void
   puts(peer_api_releases())
 end
 """
-    source = program(tmp_path, (API_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    source = program(tmp_path, (API_EXTERN + PEER_WAITING).format(library=literal(peer)) + main)
     result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
