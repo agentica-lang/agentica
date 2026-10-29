@@ -49,7 +49,7 @@ A name with no dot (`css`, `README`), an empty extension (`a.`) and an extension
 
 The table holds: `html htm css js mjs cjs json map jsonld webmanifest txt csv xml xhtml rss atom ics md yaml yml toml agc svg png jpg jpeg gif webp avif ico bmp tif tiff woff woff2 ttf otf pdf zip gz tar bz2 7z wasm mp4 webm mp3 m4a flac wav ogg`. It is not meant to be complete, and `agc` is `text/plain`.
 
-Where sources differ, it uses the registered type: `js`, `mjs` and `cjs` are `text/javascript` (RFC 9239, where Rack and older Python say `application/javascript`), `xml` is `application/xml`, `yaml` and `yml` are `application/yaml` and `ico` is `image/vnd.microsoft.icon`. `wav` is `audio/wav`, the common type (the registered one is `audio/vnd.wave`).
+Where sources differ, it uses the registered type: `js`, `mjs` and `cjs` are `text/javascript` (RFC 9239, where Rack and older Python say `application/javascript`), `xml` is `application/xml`, `yaml` and `yml` are `application/yaml` and `ico` is `image/vnd.microsoft.icon`. `wav` is `audio/wav`, the common type (the registered one is `audio/vnd.wave`), and `tar`, `bz2` and `7z` use their common `x-` types, which have no registered form.
 
 ## Charset
 

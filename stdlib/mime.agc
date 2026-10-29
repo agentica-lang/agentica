@@ -8,9 +8,10 @@
 ## `MIME::Type#ascii?` of the mime-types gem); it exists so that a server that sends text can tell when to add the
 ## charset, as in `"#{type}; charset=utf-8"`.
 
-# Extension (lowercase, no dot) to type. Where sources differ, the choice is the registered type, except `audio/wav`,
-# the common one (the registered type is `audio/vnd.wave`): `text/javascript` (RFC 9239), `application/xml`,
-# `application/yaml`, `image/vnd.microsoft.icon`.
+# Extension (lowercase, no dot) to type. Where sources differ, the choice is the registered type: `text/javascript`
+# (RFC 9239), `application/xml`, `application/yaml`, `image/vnd.microsoft.icon`. Without a registered type, or when
+# everyone uses another one, it is the common type: `audio/wav` (registered: `audio/vnd.wave`) and the `x-` types of
+# tar, bz2 and 7z.
 TYPES = {
   "html": "text/html",
   "htm": "text/html",
