@@ -200,17 +200,18 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
   are gzip (RFC 1952). There is no auto-detect, no dictionary and no metadata
   option. Signatures are in [`library/text-and-data/zlib.md`][agentica-link-5].
 - `Zlib.deflate(data, level = 6, max_bytes = 1048576)` and `Zlib.gzip(data,
-  level = 6, max_bytes = 1048576)` give `Result[List[Int]]` with `level` 0 to
-  9; empty input is valid and gives the empty stream or member.
+  level = 6, max_bytes = 1048576)` take `Bytes` and give `Result[Bytes]` with
+  `level` 0 to 9; empty input is valid and gives the empty stream or member.
   `Zlib.inflate(data, max_bytes = 1048576)` and `Zlib.gunzip(data, max_bytes
-  = 1048576)` give `Result[List[Int]]`: one stream or member only, with its
+  = 1048576)` give `Result[Bytes]`: one stream or member only, with its
   checksum (zlib) or CRC and size (gzip) checked. Empty compressed input
   fails, and any trailing byte after the single stream or member (a second
   member or zeros alike) is an error, on purpose: unlike Python's
   `gzip.decompress`, concatenated members never decode. `data` is at most
   1048576 bytes and `max_bytes`, the cap of the output, is 1 to 1048576,
   otherwise a contract error; output past the cap is an error.
-- `Zlib.crc32(data, seed = 0)` gives `Result[Int]`, the CRC32 (RFC 1952) of
+- `Zlib.crc32(data, seed = 0)` takes `Bytes` and gives `Result[Int]`, the
+  CRC32 (RFC 1952) of
   `data` chained after `seed`: leave the seed out first, then pass each next
   chunk the previous result. Empty input returns `seed` unchanged. `data` is at
   most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.

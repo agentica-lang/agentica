@@ -7,16 +7,16 @@ checksum verified; trailing bytes (a second member included) are an error,
 unlike Python's `gzip.decompress`.
 
 ```text
-Zlib.deflate(data: List[Int], level: Int = 6, max_bytes: Int = 1048576) -> Result[List[Int]]
-Zlib.inflate(data: List[Int], max_bytes: Int = 1048576) -> Result[List[Int]]
-Zlib.gzip(data: List[Int], level: Int = 6, max_bytes: Int = 1048576) -> Result[List[Int]]
-Zlib.gunzip(data: List[Int], max_bytes: Int = 1048576) -> Result[List[Int]]
-Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int]
-File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]
-lazy.deflate(level: Int = 6, raw: Bool = false) -> Lazy[List[Int]]
-lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[List[Int]]
-lazy.gzip(level: Int = 6) -> Lazy[List[Int]]
-lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[List[Int]]
+Zlib.deflate(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]
+Zlib.inflate(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
+Zlib.gzip(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]
+Zlib.gunzip(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
+Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int]
+File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
+lazy.deflate(level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
+lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]
+lazy.gzip(level: Int = 6) -> Lazy[Bytes]
+lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[Bytes]
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
@@ -27,10 +27,12 @@ def main() -> Void
     n + chunk.size
   end
   puts(total)                                                 # ok(size of notes.txt)
-  puts(Zlib.inflate(Zlib.deflate([104, 105]).unwrap!))        # ok([104, 105])
+  back = Zlib.inflate(Zlib.deflate("hi".bytes).unwrap!).unwrap!
+  puts(back == "hi".bytes)                                    # true
 end
 ```
 
+- The data is `Bytes` (`bytes.md`); a stream is a `Lazy[Bytes]` of chunks.
 - One-shot `data` is at most 1048576 bytes (empty input is valid for
   encoding); `max_bytes` caps the output, 1..1048576; `level` is 0..9.
 - `Zlib.crc32` chains the CRC32 (RFC 1952) after `seed`: leave it out first (0),
