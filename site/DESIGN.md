@@ -187,7 +187,7 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 - Native first: `<button>` for controls, `<details>` and `<summary>` for the
   tree, `<a>` for links.
 - Targets are at least 24px square everywhere, and 44px (2.75rem) on narrow
-  pages.
+  pages. Links inside running text, such as heading anchors, are exempt.
 - Forced colors: the chevron is a mask. Under `forced-colors: active` it uses
   `CanvasText`, and focus outlines stay. Reduced motion: see Motion & Focus.
 - Without JS the page works: the content comes first, the tree is a list, and
