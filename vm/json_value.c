@@ -135,6 +135,12 @@ static _Noreturn void not_finite(agc_vm *vm, uint32_t span) {
   agc_fail(vm, "RUNTIME-JSON-ENCODE", "cannot encode a non-finite Float", span);
 }
 
+/* JSON has no byte type and the checker refuses a Bytes there (CHECK-NOT-ENCODABLE), so only hand-made bytecode gets
+   here; a Bytes Map key fails the same way, as a key that is not a String. */
+static _Noreturn void not_encodable(agc_vm *vm, uint32_t span) {
+  agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a Bytes value has no JSON form", span);
+}
+
 static void put_scalar(agc_vm *vm, agc_json_buffer *b, agc_value v, uint32_t span) {
   char text[AGC_SCALAR_TEXT];
   if (agc_is(v, AGC_T_JSON)) {
@@ -158,6 +164,8 @@ static void put_scalar(agc_vm *vm, agc_json_buffer *b, agc_value v, uint32_t spa
     double x = agc_as_float(vm, v);
     if (!isfinite(x)) not_finite(vm, span);
     agc_json_put(b, text, agc_float_text(x, text));
+  } else if (agc_is(v, AGC_T_BYTES)) {
+    not_encodable(vm, span);
   } else {
     agc_json_put(b, text, (size_t)snprintf(text, sizeof text, "%" PRId64, agc_as_int(vm, v)));
   }
@@ -304,6 +312,7 @@ static agc_value scalar_json(agc_vm *vm, agc_value v, uint32_t span) {
     if (!isfinite(agc_as_float(vm, v))) not_finite(vm, span);
     return agc_json_leaf(AGC_JSON_FLOAT, v);
   }
+  if (agc_is(v, AGC_T_BYTES)) not_encodable(vm, span);
   agc_as_string(vm, v);
   return agc_json_leaf(AGC_JSON_STRING, v);
 }

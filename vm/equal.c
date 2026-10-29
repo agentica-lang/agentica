@@ -36,6 +36,12 @@ bool agc_same_string(agc_vm *vm, const agc_string *x, const agc_string *y) {
   return x->bytes == 0 || memcmp(x->data, y->data, x->bytes) == 0;
 }
 
+bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y) {
+  if (x->len != y->len) return false;
+  agc_charge_bytes(vm, x->len);
+  return x->len == 0 || memcmp(x->data, y->data, x->len) == 0;
+}
+
 static bool push_map(agc_vm *vm, pair_stack *s, const agc_map *x, const agc_map *y) {
   if (x->size != y->size) return false;
   const agc_value *keys = agc_map_keys(vm, x, 0);
@@ -47,9 +53,9 @@ static bool push_map(agc_vm *vm, pair_stack *s, const agc_map *x, const agc_map 
   return true;
 }
 
-/* Elements are Ints or Strings, so no pair is pushed: equal sets have the same
-   size and every element of x is in y, in any order. Each element costs a
-   lookup, so the walk is charged its size up front. */
+/* Elements are Ints, Strings or Bytes, so no pair is pushed: equal sets have
+   the same size and every element of x is in y, in any order. Each element
+   costs a lookup, so the walk is charged its size up front. */
 static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
   if (x->size != y->size) return false;
   agc_charge(vm, x->size);
@@ -80,6 +86,7 @@ static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t
     case AGC_T_INT: return agc_as_int(vm, a) == agc_as_int(vm, b);
     case AGC_T_FLOAT: return agc_as_float(vm, a) == agc_as_float(vm, b);
     case AGC_T_STRING: return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
+    case AGC_T_BYTES: return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
     case AGC_T_RANGE: {
       const agc_range *x = agc_as_range(vm, a), *y = agc_as_range(vm, b);
       return x->start == y->start && x->end == y->end && x->exclusive == y->exclusive;

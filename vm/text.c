@@ -10,6 +10,11 @@
 #include <inttypes.h>
 #include <string.h>
 
+/* The inspect form of a Bytes shows this many bytes in hex, then "..." when there are more. */
+#define BYTES_SHOWN 32
+/* "<Bytes ", a size_t, a space, the hex, "..." and ">". */
+#define BYTES_FORM (7 + 20 + 1 + 2 * BYTES_SHOWN + 3 + 1)
+
 typedef struct {
   agc_string *s;
   size_t cap;
@@ -103,6 +108,27 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b) {
   return s;
 }
 
+/* The text of a Bytes: "<Bytes N>" for to_s, and with hex, the inspect form "<Bytes N 616263>" that shows the first
+   BYTES_SHOWN bytes. Raw bytes are not text and may not be UTF-8, so neither form holds them. */
+static size_t bytes_form(const agc_bytes *b, bool hex, char out[BYTES_FORM]) {
+  static const char digits[] = "0123456789abcdef";
+  size_t n = (size_t)snprintf(out, BYTES_FORM, "<Bytes %zu", b->len);
+  if (hex && b->len) {
+    size_t shown = b->len < BYTES_SHOWN ? b->len : BYTES_SHOWN;
+    out[n++] = ' ';
+    for (size_t k = 0; k < shown; k++) {
+      out[n++] = digits[b->data[k] >> 4];
+      out[n++] = digits[b->data[k] & 15];
+    }
+    if (shown < b->len) {
+      memcpy(out + n, "...", 3);
+      n += 3;
+    }
+  }
+  out[n++] = '>';
+  return n;
+}
+
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_NIL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "nil");
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
@@ -174,6 +200,9 @@ static void append_item(agc_vm *vm, builder *b, agc_value v, bool json, bool *is
     agc_write_form(s, reserve(b, len), &chars);
     b->s->bytes += len;
     b->s->chars += chars;
+  } else if (agc_is(v, AGC_T_BYTES)) {
+    char form[BYTES_FORM];
+    append(b, form, bytes_form(agc_as_bytes(vm, v), true, form));
   } else {
     char text[AGC_SCALAR_TEXT];
     append(b, text, agc_scalar_text(vm, v, text));
@@ -312,9 +341,18 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json, bool *i
   }
 }
 
+/* The to_s form of a Bytes at the top level ("<Bytes N>"); inside a List, Map or other value it takes the inspect form,
+   as a String there is quoted. */
+static agc_string *bytes_text(agc_vm *vm, agc_value v) {
+  char form[BYTES_FORM];
+  size_t n = bytes_form(agc_as_bytes(vm, v), false, form);
+  return agc_make_string(form, n, n);
+}
+
 agc_string *agc_text(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
   if (agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
+  if (agc_is(v, AGC_T_BYTES)) return bytes_text(vm, v);
   return agc_debug(vm, v);
 }
 
@@ -329,6 +367,11 @@ static agc_string *debug_text(agc_vm *vm, agc_value v, bool json, bool *is_void)
   if (is_void && agc_is(v, AGC_T_VOID)) {
     *is_void = true;
     return vm->rt->empty_string;
+  }
+  if (agc_is(v, AGC_T_BYTES)) {
+    char form[BYTES_FORM];
+    size_t n = bytes_form(agc_as_bytes(vm, v), true, form);
+    return agc_make_string(form, n, n);
   }
   if (!agc_is(v, AGC_T_STRING)) {
     char text[AGC_SCALAR_TEXT];
@@ -356,6 +399,10 @@ bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
   }
   if (agc_is(v, AGC_T_JSON)) {
     *text = agc_json_encode(vm, v, 0);
+    return true;
+  }
+  if (agc_is(v, AGC_T_BYTES)) {
+    *text = bytes_text(vm, v);
     return true;
   }
   bool is_void = false;

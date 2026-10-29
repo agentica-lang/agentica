@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES
 } agc_tag;
 
 typedef struct {
@@ -66,6 +66,13 @@ typedef struct {
   size_t bytes, chars;
   char data[];
 } agc_string;
+
+/* A Bytes value: an immutable byte string, one atomic block (no pointers for the collector to scan). Nothing writes
+   data after the value is returned; the empty one is agc_empty_bytes. */
+typedef struct {
+  size_t len;
+  uint8_t data[];
+} agc_bytes;
 
 typedef struct agc_list agc_list;
 
@@ -542,6 +549,15 @@ static inline agc_value agc_string_value(agc_string *s) {
   return v;
 }
 
+/* A Bytes is never written after it is made (the empty one is read-only memory), so the value keeps a const
+   object and agc_as_bytes gives it back const. */
+static inline agc_value agc_bytes_value(const agc_bytes *b) {
+  agc_value v;
+  v.tag = AGC_T_BYTES;
+  v.as.p = (void *)b;
+  return v;
+}
+
 static inline agc_value agc_list_value(agc_list *l) {
   agc_value v;
   v.tag = AGC_T_LIST;
@@ -611,6 +627,18 @@ static inline agc_string *agc_as_string(agc_vm *vm, agc_value v) {
   return v.as.p;
 }
 
+static inline const agc_bytes *agc_as_bytes(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_BYTES) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+/* The input helper of the byte builtins: the data and length of a Bytes argument, RUNTIME-INTERNAL for another tag. */
+static inline const uint8_t *agc_bytes_data(agc_vm *vm, agc_value v, size_t *len) {
+  const agc_bytes *b = agc_as_bytes(vm, v);
+  *len = b->len;
+  return b->data;
+}
+
 static inline agc_list *agc_as_list(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LIST) agc_wrong_tag(vm);
   return v.as.p;
@@ -674,6 +702,14 @@ agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 /* The String of these bytes: the run's shared empty String for no bytes, its shared one-character String for one ASCII
    byte, else a new String. chars is the number of characters in the bytes. */
 agc_string *agc_small_string(agc_vm *vm, const char *data, size_t bytes, size_t chars);
+/* A Bytes object of len bytes, not filled: the caller writes every byte before the value is stored anywhere. */
+agc_bytes *agc_new_bytes(size_t len);
+/* The one empty Bytes of the process, a constant outside the GC heap: like the shared empty String of a run
+   (docs/future/34-shared-small-values.md), but with nothing in it that belongs to a run. Never written. */
+const agc_bytes *agc_empty_bytes(void);
+/* The output helper of the byte builtins: agc_empty_bytes for no bytes, else a copy of data. */
+const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len);
+bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y);
 agc_value agc_error_value(const char *message);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);

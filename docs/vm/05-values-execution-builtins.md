@@ -16,6 +16,17 @@ so zeroed registers are valid values.
     == bytes` means ASCII, so indexing is O(1). Not NUL-terminated by contract.
     Character counts are always computed, never read from a file.
 
+- **Type:** Bytes
+  - **Representation:** `{ len, data[] }`, `GC_MALLOC_ATOMIC`, immutable (tag
+    `AGC_T_BYTES`). Items read as Int 0 to 255. The empty Bytes is one
+    constant (`agc_empty_bytes`); `slice`, `take` and `drop` copy. `==` is the
+    builtin `Bytes.equal`, not `EQ`, so the turn loop stays as it is: the same
+    length and bytes (`memcmp`, not constant time). A Map key or Set item
+    hashes its bytes with the tag as SipHash domain, so it never equals a
+    String of the same bytes. `to_s` is `<Bytes 3>`; inspect adds the first 32
+    bytes in hex (`<Bytes 3 616263>`, `...` past them). No JSON form: the
+    encoder fails with `RUNTIME-INTERNAL`. No bytecode constant holds one.
+
 - **Type:** List
   - **Representation:** Opaque: `struct agc_list` is defined in `vm/list.c` and
     the private `vm/list_impl.h`, and every other file reaches a list through
@@ -41,9 +52,9 @@ so zeroed registers are valid values.
     dead by adding the key's insertion number to the map's dropped list, and
     the list is rebuilt without dead cells (O(n)) once they outnumber the live
     ones. Printing, `keys` and `values` walk the key list oldest first and skip
-    dead cells by insertion number, with no key lookup. Keys are Int or String,
-    compared by tag and value. They are hashed with SipHash-1-3. The key is
-    seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
+    dead cells by insertion number, with no key lookup. Keys are Int, String or
+    Bytes, compared by tag and value. They are hashed with SipHash-1-3. The key
+    is seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
     `rand_s` on Windows), independent of `--seed`. Tests and the fuzzer use
     the fixed default key. Iteration order never depends on the hash.
     `Map.delete` copies the path to the key and returns the same map for a

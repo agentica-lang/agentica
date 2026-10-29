@@ -386,6 +386,7 @@ uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
     case AGC_T_STRING: return ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES;
+    case AGC_T_BYTES: return ((const agc_bytes *)v.as.p)->len / AGC_COST_BYTES;
     case AGC_T_LIST: return agc_list_len(v.as.p);
     case AGC_T_MAP:
     case AGC_T_SET: return ((const agc_map *)v.as.p)->size;
@@ -443,6 +444,23 @@ agc_string *agc_small_string(agc_vm *vm, const char *data, size_t bytes, size_t 
   if (bytes == 0) return vm->rt->empty_string;
   if (bytes == 1 && (uint8_t)data[0] < AGC_ASCII_CHARS) return vm->rt->chars[(uint8_t)data[0]];
   return agc_make_string(data, bytes, chars);
+}
+
+agc_bytes *agc_new_bytes(size_t len) {
+  agc_bytes *b = agc_alloc_atomic(agc_size_add(sizeof(agc_bytes), len));
+  b->len = len;
+  return b;
+}
+
+static const agc_bytes empty_bytes = {0};
+
+const agc_bytes *agc_empty_bytes(void) { return &empty_bytes; }
+
+const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len) {
+  if (len == 0) return agc_empty_bytes();
+  agc_bytes *b = agc_new_bytes(len);
+  memcpy(b->data, data, len);
+  return b;
 }
 
 agc_value agc_error_value(const char *message) {
