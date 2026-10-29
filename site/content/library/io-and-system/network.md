@@ -196,7 +196,7 @@ def main() -> Void
     ok(created) -> puts("#{created.status} #{created.body}")
     error(message) -> IO.warn(message)
   end
-  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", [], "")
+  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1")
   puts(deleted.ok?)
   HTTP.close_client(client)
 end
