@@ -192,15 +192,14 @@ export def get(pool: HttpClient, url: String) -> Result[HttpResponse]
   return request(pool, "GET", url, [], "")
 end
 
-## Sends a `POST` request to `url` with `headers` and the text `body`. Both default to none: no extra headers and an
-## empty body.
+## Sends a `POST` request to `url` with `headers` and the text `body`, which default to none.
 export def post(pool: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
   return request(pool, "POST", url, headers, body)
 end
 
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
 ## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
-## `Connection`. `headers` and `body` default to none: no extra headers and an empty body.
+## `Connection`. `headers` and `body` default to none.
 export def request(
   pool: HttpClient,
   method: String,
