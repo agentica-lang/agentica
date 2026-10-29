@@ -62,7 +62,8 @@ Source: `_tokens.scss`, `_base.scss`, `_content.scss`, `_code.scss`.
   At 50rem and below, h1 is 1.7rem and h2 is 1.3rem.
 - Small text (labels, tree, TOC, pager, footer) is 0.75rem to 0.95rem. Each
   partial sets its own size; there is no size token.
-- Code blocks keep their line breaks and scroll sideways. They do not wrap.
+- Code blocks keep their line breaks and scroll sideways. They do not wrap,
+  except signature blocks (see Code blocks and samples).
 
 ## Layout, Spacing & Radius
 
@@ -88,7 +89,7 @@ Source: `_tokens.scss`, `_layout.scss`, `_header.scss`, `_content.scss`.
   `--shadow`, with z-index: page menu 5, scrim 8, drawer 9, header 10, search
   panel 20.
 - Phone width: 16px side gutters. Long text wraps. Code and tables scroll in
-  their own box, except a one-line signature, which wraps. The goal is no
+  their own box, except signature blocks, which wrap. The goal is no
   sideways scroll on the page itself.
 
 ## Motion & Focus
@@ -174,9 +175,10 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 - `expect="CODE"` adds an accent box under the code. It says "Does not compile",
   or "Runtime error" for `RUNTIME-` codes, and shows `error[CODE]`.
 - Code and tables scroll sideways in their own box. The exception is a
-  one-line `text` block (a signature): `render-codeblock.html` wraps it in
-  `div.signature`, and `_code.scss` lets it wrap at any character, with the
-  continuation lines indented.
+  signature block: a `text` block whose every non-empty line has `(` and
+  ` -> `. `render-codeblock.html` wraps it in `div.signature`, and `_code.scss`
+  lets it wrap at any character, each line hanging one step. Output,
+  diagnostics and imports are also `text` and keep scrolling.
 
 ### Search, page actions and headings
 

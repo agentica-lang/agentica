@@ -6,8 +6,16 @@
 {{- $agentica := in (slice "agentica" "agc") $lang -}}
 {{- if $agentica }}{{ $lang = "ruby" }}{{ $expect = .Attributes.expect | default "" }}{{ end -}}
 {{- if and $agentica .Options }}{{ errorf "%s: agentica code blocks take no highlight options, found %v" .Page.File.Path .Options }}{{ end -}}
-{{- /* A one-line text block is a signature: it wraps (_code.scss), where other code scrolls. */ -}}
-{{- $signature := and (eq $lang "text") (not (strings.Contains (strings.TrimSpace .Inner) "\n")) -}}
+{{- /* A signature block (each line "Name(...) -> Type") wraps (_code.scss), where other code scrolls. Output, diagnostics and imports are also `text`, and keep scrolling. */ -}}
+{{- $signature := false -}}
+{{- if eq $lang "text" -}}
+  {{- $signature = ne (strings.TrimSpace .Inner) "" -}}
+  {{- range split .Inner "\n" -}}
+    {{- with strings.TrimSpace . -}}
+      {{- if not (and (strings.Contains . "(") (strings.Contains . " -> ")) }}{{ $signature = false }}{{ end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- if $agentica }}<div class="agc-code">{{ else if $signature }}<div class="signature">{{ end -}}
 {{- transform.Highlight .Inner $lang (cond $agentica (dict) .Options) -}}
 {{- if or $agentica $signature }}</div>{{ end -}}
