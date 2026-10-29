@@ -24,6 +24,7 @@
       {{ block "main" . }}{{ end }}
     </main>
   </div>
+  <div class="scrim" aria-hidden="true"></div>
   {{ partial "footer.html" . }}
   {{- with resources.Get "js/theme.js" | js.Build (dict "minify" true "targetPath" "js/theme.js") | fingerprint }}
   <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>

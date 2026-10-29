@@ -1,13 +1,19 @@
+{{- /* A section is a <details>, open only on the way to the current page, so the tree stays short and works without JavaScript. */ -}}
 {{- $page := .page -}}
 {{- $current := .current -}}
 <li>
+  {{- if $page.IsSection }}
+  <details{{ if or (eq $page $current) ($page.IsAncestor $current) }} open{{ end }}>
+    <summary><a href="{{ $page.RelPermalink }}"{{ if eq $page $current }} aria-current="page"{{ end }}>{{ $page.LinkTitle }}</a></summary>
+    {{- if eq $page $current }}{{ partial "toc.html" $page }}{{ end }}
+    <ul>
+      {{- range $page.Pages.ByWeight }}
+      {{ partial "sidebar-item.html" (dict "page" . "current" $current) }}
+      {{- end }}
+    </ul>
+  </details>
+  {{- else }}
   <a href="{{ $page.RelPermalink }}"{{ if eq $page $current }} aria-current="page"{{ end }}>{{ $page.LinkTitle }}</a>
   {{- if eq $page $current }}{{ partial "toc.html" $page }}{{ end }}
-  {{- if $page.IsSection }}
-  <ul>
-    {{- range $page.Pages.ByWeight }}
-    {{ partial "sidebar-item.html" (dict "page" . "current" $current) }}
-    {{- end }}
-  </ul>
   {{- end }}
 </li>

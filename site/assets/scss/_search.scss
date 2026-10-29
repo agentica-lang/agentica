@@ -34,7 +34,7 @@
   }
 
   &:focus {
-    outline: 2px solid var(--link);
+    outline: var(--focus-ring);
     outline-offset: -1px;
     background: var(--bg);
   }
@@ -161,7 +161,7 @@
 
   .search-input {
     width: 100%;
-    min-width: 6rem;
+    min-width: 0;
     max-width: 16rem;
     padding-right: 0.75rem;
   }
