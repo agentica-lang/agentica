@@ -466,7 +466,7 @@ ROWS_3: List[Model.Builtin] = [
       name: "File.close",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -482,8 +482,8 @@ ROWS_4: List[Model.Builtin] = [
       name: "File.each_line",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "buffer_bytes", type: Types.Type.Int),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "buffer_bytes", type: Types.Type.Int, default: Model.Default.Whole(65536)),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
         Model.Named(name: "f", type: Types.Type.Fn([Types.Type.String], Types.Type.Result(Types.Type.Void))),
       ],
       result: Types.Type.Result(Types.Type.Void),
@@ -500,7 +500,7 @@ ROWS_4: List[Model.Builtin] = [
       name: "File.flush",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -513,8 +513,8 @@ ROWS_4: List[Model.Builtin] = [
       name: "File.foreach",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "buffer_bytes", type: Types.Type.Int),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "buffer_bytes", type: Types.Type.Int, default: Model.Default.Whole(65536)),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Lazy(Types.Type.String),
       rule: Model.Rule.Prelude,
@@ -564,7 +564,7 @@ ROWS_5: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
         Model.Named(name: "max_bytes", type: Types.Type.Int),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
       rule: Model.Rule.Plain,
@@ -577,7 +577,7 @@ ROWS_5: List[Model.Builtin] = [
       name: "File.read_line",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.String),
       rule: Model.Rule.Plain,
@@ -638,7 +638,7 @@ ROWS_6: List[Model.Builtin] = [
       name: "File.try_lock",
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Bool),
       rule: Model.Rule.Plain,
@@ -658,7 +658,7 @@ ROWS_7: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
         Model.Named(name: "text", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -672,7 +672,7 @@ ROWS_7: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
         Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -1948,7 +1948,7 @@ ROWS_20: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.String)),
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Prelude,

@@ -4,7 +4,7 @@ weight: 2
 description: Read and write files, list and create directories, and build paths.
 ---
 
-Every file function takes a timeout in milliseconds and returns a `Result`. The calls on a path (`File.read_text`, `File.write_text`, `File.append_text`, `File.sha256`, `File.stat`, `File.lstat`, `File.open`, `Dir.list`, `Dir.mkdir`, `Dir.mkdir_private`, `Path.remove`, `Path.rename`) default it to 30000 and may leave it out; the calls on a handle still need it.
+Every file function takes a timeout in milliseconds and returns a `Result`. It defaults to 30000 and may be left out. `File.open` also defaults its mode to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to 65536.
 
 - Text is UTF-8. One text call reads or writes at most 1 MiB (`File.sha256` streams bytes and has no cap). Files have the permissions of the user who runs the program.
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
@@ -106,7 +106,7 @@ Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size
 
 ```text
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
-File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Opens a file for streaming.
@@ -140,8 +140,8 @@ end
 ## File.write and File.flush
 
 ```text
-File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
-File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 `write` adds text to an open file. `flush` sends what is buffered to the disk.
@@ -164,7 +164,7 @@ end
 ## File.try_lock
 
 ```text
-File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
+File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
 ```
 
 Takes an exclusive lock on the open file, without waiting. `ok(true)` means it is yours (also if this handle already holds it), `ok(false)` that another handle or process holds it.
@@ -188,7 +188,7 @@ end
 ## File.read_line
 
 ```text
-File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
+File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
 ```
 
 Reads one line without its line ending. At the end of the file it gives an error result. Loop with `while line.ok?`, or use `File.each_line`.
@@ -196,7 +196,7 @@ Reads one line without its line ending. At the end of the file it gives an error
 ## File.each_line
 
 ```text
-File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
+File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) do |line| ... end -> Result[Void]
 ```
 
 Calls the block with each line, without its line ending (LF and CRLF; a last line without one is passed too). The file is never read whole, so a file larger than memory works, and so do FIFOs and pipes. The file closes on every way out.
@@ -222,8 +222,8 @@ end
 ## File.read_bytes and File.write_bytes
 
 ```text
-File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
-File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[List[Int]]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Bytes are `Int` values from 0 to 255. `read_bytes` gives `ok([])` at the end of the file.

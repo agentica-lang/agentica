@@ -266,15 +266,21 @@ def test_the_filesystem_calls_leave_out_the_timeout_and_file_open_the_mode(new_d
   IO.inspect(File.read_text(path))
   IO.inspect(File.stat(path).unwrap!.size_bytes)
   file = File.open(path).unwrap!
-  IO.inspect(File.read_line(file, 1000))
-  IO.inspect(File.write(file, "x", 1000).ok?)
-  IO.inspect(File.close(file, 1000))
+  IO.inspect(File.read_line(file))
+  IO.inspect(File.write(file, "x").ok?)
+  IO.inspect(File.close(file))
+  File.each_line(path) do |line|
+    IO.inspect(line)
+    ok()
+  end
+  IO.inspect(File.foreach(path).write_lines(root + "/c.txt"))
+  IO.inspect(File.read_text(root + "/c.txt"))
   IO.inspect(Dir.list(root))
   IO.inspect(Path.rename(path, root + "/b.txt"))
   IO.inspect(Path.remove(root + "/b.txt"))
 end
 """, args=[str(root)])
-    assert output == 'ok()\nok()\nok("hi!")\n3\nok("hi!")\nfalse\nok()\nok(["a.txt"])\nok()\nok()\n'
+    assert output == 'ok()\nok()\nok("hi!")\n3\nok("hi!")\nfalse\nok()\n"hi!"\nok()\nok("hi!\\n")\nok(["a.txt", "c.txt"])\nok()\nok()\n'
 
 
 def test_the_run_waits_for_the_close_of_a_crashed_tasks_file_so_its_buffered_write_reaches_the_disk(new_dir, run_program):

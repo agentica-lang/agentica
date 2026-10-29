@@ -21,21 +21,21 @@ builtin File.append_text forms=1
 builtin File.chunks forms=1
   File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]] shape=(String, Int = 65536, Int = 30000) -> Lazy(List(Int)) rule=Prelude impl="" effects=[] desc="Source: the bytes of a regular file in chunks of size bytes (1 to 16777216), the last one shorter; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.close forms=1
-  File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), Int) -> Result(Void) rule=Plain impl="File.close" effects=["filesystem"] desc="Flush and close a file handle idempotently."
+  File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), Int = 30000) -> Result(Void) rule=Plain impl="File.close" effects=["filesystem"] desc="Flush and close a file handle idempotently."
 builtin File.each_line forms=1
-  File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int, f: Fn[String, Result[Void]]) -> Result[Void] shape=(String, Int, Int, Fn([String], Result(Void))) -> Result(Void) rule=Plain impl="File.each_line" effects=["filesystem"] desc="Call the block once for each line of a file, in order, reading blocks of buffer_bytes (1024 to 16777216, also the longest line); the block returns Result[Void] and an error stops the call; VM only."
+  File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000, f: Fn[String, Result[Void]]) -> Result[Void] shape=(String, Int = 65536, Int = 30000, Fn([String], Result(Void))) -> Result(Void) rule=Plain impl="File.each_line" effects=["filesystem"] desc="Call the block once for each line of a file, in order, reading blocks of buffer_bytes (1024 to 16777216, also the longest line); the block returns Result[Void] and an error stops the call; VM only."
 builtin File.flush forms=1
-  File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), Int) -> Result(Void) rule=Plain impl="File.flush" effects=["filesystem"] desc="Flush pending file output."
+  File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), Int = 30000) -> Result(Void) rule=Plain impl="File.flush" effects=["filesystem"] desc="Flush pending file output."
 builtin File.foreach forms=1
-  File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Prelude impl="" effects=[] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
+  File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String] shape=(String, Int = 65536, Int = 30000) -> Lazy(String) rule=Prelude impl="" effects=[] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.lstat forms=1
   File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo] shape=(String, Int = 30000) -> Result(Struct(FileInfo)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=1
   File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle] shape=(String, String = "read", Int = 30000) -> Result(Opaque(FileHandle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file only the current user can use and fails when the path exists."
 builtin File.read_bytes forms=1
-  File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]] shape=(Opaque(FileHandle), Int, Int) -> Result(List(Int)) rule=Plain impl="File.read_bytes" effects=["filesystem"] desc="Read up to max_bytes; empty means EOF."
+  File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[List[Int]] shape=(Opaque(FileHandle), Int, Int = 30000) -> Result(List(Int)) rule=Plain impl="File.read_bytes" effects=["filesystem"] desc="Read up to max_bytes; empty means EOF."
 builtin File.read_line forms=1
-  File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String] shape=(Opaque(FileHandle), Int) -> Result(String) rule=Plain impl="File.read_line" effects=["filesystem"] desc="Read one bounded UTF-8 line, removing LF or CRLF."
+  File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String] shape=(Opaque(FileHandle), Int = 30000) -> Result(String) rule=Plain impl="File.read_line" effects=["filesystem"] desc="Read one bounded UTF-8 line, removing LF or CRLF."
 builtin File.read_text forms=1
   File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String] shape=(String, Int = 30000) -> Result(String) rule=Plain impl="File.read_text" effects=["filesystem"] desc="Read and strictly decode at most 1 MiB of UTF-8 text."
 builtin File.sha256 forms=1
@@ -43,11 +43,11 @@ builtin File.sha256 forms=1
 builtin File.stat forms=1
   File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo] shape=(String, Int = 30000) -> Result(Struct(FileInfo)) rule=Plain impl="File.stat" effects=["filesystem"] desc="Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic links."
 builtin File.try_lock forms=1
-  File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool] shape=(Opaque(FileHandle), Int) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
+  File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool] shape=(Opaque(FileHandle), Int = 30000) -> Result(Bool) rule=Plain impl="File.try_lock" effects=["filesystem"] desc="Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
 builtin File.write forms=1
-  File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), String, Int) -> Result(Void) rule=Plain impl="File.write" effects=["filesystem"] desc="Write UTF-8 text, at most 1 MiB per call."
+  File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), String, Int = 30000) -> Result(Void) rule=Plain impl="File.write" effects=["filesystem"] desc="Write UTF-8 text, at most 1 MiB per call."
 builtin File.write_bytes forms=1
-  File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), List(Int), Int) -> Result(Void) rule=Plain impl="File.write_bytes" effects=["filesystem"] desc="Write bytes 0..255, at most 1 MiB per call."
+  File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int = 30000) -> Result[Void] shape=(Opaque(FileHandle), List(Int), Int = 30000) -> Result(Void) rule=Plain impl="File.write_bytes" effects=["filesystem"] desc="Write bytes 0..255, at most 1 MiB per call."
 builtin File.write_text forms=1
   File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void] shape=(String, String, Int = 30000) -> Result(Void) rule=Plain impl="File.write_text" effects=["filesystem"] desc="Overwrite a file with at most 1 MiB of UTF-8 text."
 builtin Float.from_bits forms=1
@@ -247,7 +247,7 @@ builtin Lazy.with_index forms=1
 builtin Lazy.write_bytes forms=1
   Lazy.write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int = 30000) -> Result[Int] shape=(Lazy(List(Int)), String, Int = 30000) -> Result(Int) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each byte chunk to a file, created or truncated, and return the bytes written; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin Lazy.write_lines forms=1
-  Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void] shape=(Lazy(String), String, Int) -> Result(Void) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each item and a line feed to a file, created or truncated; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
+  Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void] shape=(Lazy(String), String, Int = 30000) -> Result(Void) rule=Prelude impl="" effects=["filesystem"] desc="Terminal: write each item and a line feed to a file, created or truncated; the file opens before the first item is pulled and is flushed and closed before the terminal returns; VM only."
 builtin List.all? forms=1
   List.all?(list: List[A], f: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAll impl="List.all?" effects=[] desc="True when f is true for every element; stops at the first false."
 builtin List.any? forms=1

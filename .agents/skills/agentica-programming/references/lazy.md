@@ -16,7 +16,7 @@ use the eager `List` methods.
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]                         # (1..n).lazy, (0...n).lazy
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]                 # seed, f(seed), f(f(seed)) ... without end
-File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lines, read as File.each_line
+File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]   # lines, read as File.each_line
 File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]   # bytes, size at a time
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]  # ch.lazy(ms): values until closed and drained
 
@@ -41,7 +41,7 @@ Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]      # take(count) then
 Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]   # stops at f's first error and returns it
 Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
 Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]         # error("not found") when the source ends
-Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # each item + LF into a file
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]   # each item + LF into a file
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]   # byte chunks into a file, bytes written
 ```
 
@@ -111,10 +111,11 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 
 ## write_lines
 
-- `write_lines(path, timeout_ms)` takes a `Lazy[String]` (a `Lazy[Int]` is
-  `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates the
-  file and writes each item and `\n`: `File.foreach(src, 4096, 1000).drop(1).map
-  do |line| ... end.write_lines("out.txt", 1000)` is `ok()` or the first error.
+- `write_lines(path, timeout_ms = 30000)` takes a `Lazy[String]` (a `Lazy[Int]`
+  is `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates
+  the file and writes each item and `\n`: `File.foreach(src, 4096,
+  1000).drop(1).map do |line| ... end.write_lines("out.txt", 1000)` is `ok()`
+  or the first error.
 - The file opens before the first item is pulled (a failed open reads nothing)
   and is flushed and closed before the terminal returns, on every path. What was
   written before an error stays. A crash or cancel of the task closes it at the

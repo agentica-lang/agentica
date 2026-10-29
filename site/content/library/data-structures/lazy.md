@@ -31,7 +31,7 @@ A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. 
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
-File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]
+File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]
 File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
 ```
@@ -261,7 +261,7 @@ error("not found")
 ## write_lines
 
 ```text
-Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
 Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled and is flushed and closed before the terminal returns, whatever ended it. What was written before an error stays in the file. `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
