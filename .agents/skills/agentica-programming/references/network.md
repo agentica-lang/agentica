@@ -69,8 +69,8 @@ HTTP.client_options() -> HttpClientOptions
 HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download_options() -> DownloadOptions
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
