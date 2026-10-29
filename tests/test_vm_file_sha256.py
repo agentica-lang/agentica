@@ -79,7 +79,7 @@ def test_sha256_matches_digest_sha256_on_the_same_bytes(tmp_path):
         '  handle = File.open(System.args()[0], "read", 30000).unwrap!\n'
         "  bytes = File.read_bytes(handle, 1048576, 30000).unwrap!\n"
         "  File.close(handle, 30000)\n"
-        "  puts(from_fs == hex(Digest.sha256(bytes)))\n"
+        "  puts(from_fs == Digest.sha256_hexdigest(Bytes.from_list(bytes).unwrap!))\n"
         "end\n",
         encoding="utf-8",
     )

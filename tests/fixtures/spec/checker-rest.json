@@ -10648,16 +10648,18 @@
       "start": [1, 1]
     }
   ],
-  "The Digest hashes take a List[Int]; the plain form gives a List[Int], the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto stays a reserved name": [
+  "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto stays a reserved name": [
     {
       "program": [
         "def main() -> Void",
-        "  digest: List[Int] = Digest.sha256([97, 98, 99])",
-        "  empty = Digest.sha256([])",
-        "  others: List[Int] = Digest.md5([1]).concat(Digest.sha1([1])).concat(Digest.sha512([1]))",
-        "  hex: String = Digest.md5_hexdigest([]) + Digest.sha1_hexdigest([]) + Digest.sha256_hexdigest([])",
-        "  long: String = Digest.sha512_hexdigest([97])",
+        "  digest: Bytes = Digest.sha256(\"abc\".bytes)",
+        "  empty = Digest.sha256(\"\".bytes)",
+        "  others: Bytes = Digest.md5(digest) + Digest.sha1(digest) + Digest.sha512(digest)",
+        "  hex: String = Digest.md5_hexdigest(empty) + Digest.sha1_hexdigest(empty) + Digest.sha256_hexdigest(empty)",
+        "  long: String = Digest.sha512_hexdigest(\"a\".bytes)",
+        "  same: Bool = digest == Digest.sha256(\"abc\".bytes)",
         "  puts(digest.size + empty.size + others.size + hex.length + long.length)",
+        "  puts(same)",
         "end"
       ],
       "code": null
@@ -10671,20 +10673,21 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 21],
       "covers": "\"abc\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  d = Digest.sha256([\"a\"])",
+        "  items = [97, 98, 99]",
+        "  d = Digest.sha256(items)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 22],
-      "covers": "\"a\"",
-      "expected": "Int",
-      "actual": "String"
+      "start": [3, 21],
+      "covers": "items",
+      "expected": "Bytes",
+      "actual": "List[Int]"
     },
     {
       "program": [
@@ -10699,35 +10702,47 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Digest.sha256([1], [2])",
+        "  d = Digest.sha256(\"a\".bytes, \"b\".bytes)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Digest.sha256([1], [2])"
+      "covers": "Digest.sha256(\"a\".bytes, \"b\".bytes)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: String = Digest.sha256([1])",
+        "  s: String = Digest.sha256(\"a\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 15],
-      "covers": "Digest.sha256([1])",
+      "covers": "Digest.sha256(\"a\".bytes)",
       "expected": "String",
-      "actual": "List[Int]"
+      "actual": "Bytes"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = Digest.sha512_hexdigest([1])",
+        "  b: List[Int] = Digest.sha512(\"a\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 18],
-      "covers": "Digest.sha512_hexdigest([1])",
+      "covers": "Digest.sha512(\"a\".bytes)",
       "expected": "List[Int]",
+      "actual": "Bytes"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: Bytes = Digest.sha512_hexdigest(\"a\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 14],
+      "covers": "Digest.sha512_hexdigest(\"a\".bytes)",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
@@ -10739,28 +10754,18 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 28],
       "covers": "\"abc\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  h = Digest.sha1([1], [2])",
-        "end"
-      ],
-      "code": "CHECK-ARITY",
-      "start": [2, 7],
-      "covers": "Digest.sha1([1], [2])"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  puts(Crypto.sha256([1]))",
+        "  puts(Crypto.sha256(\"a\".bytes))",
         "end"
       ],
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 8],
-      "covers": "Crypto.sha256([1])",
+      "covers": "Crypto.sha256(\"a\".bytes)",
       "help": true
     },
     {
@@ -10777,13 +10782,14 @@
       "start": [1, 1]
     }
   ],
-  "The HMAC builtins take a key and data, both List[Int]; the plain form gives a List[Int], the _hexdigest form a String; HMAC is a reserved name": [
+  "The HMAC builtins take a key and data, both Bytes; the plain form gives a Bytes, the _hexdigest form a String; HMAC is a reserved name": [
     {
       "program": [
         "def main() -> Void",
-        "  mac: List[Int] = HMAC.sha256([107], [100])",
-        "  empty = HMAC.sha512([], [])",
-        "  hex: String = HMAC.sha256_hexdigest([], [1]) + HMAC.sha512_hexdigest([1], [])",
+        "  key = \"key\".bytes",
+        "  mac: Bytes = HMAC.sha256(key, \"data\".bytes)",
+        "  empty = HMAC.sha512(\"\".bytes, \"\".bytes)",
+        "  hex: String = HMAC.sha256_hexdigest(key, mac) + HMAC.sha512_hexdigest(mac, key)",
         "  puts(mac.size + empty.size + hex.length)",
         "end"
       ],
@@ -10792,81 +10798,70 @@
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha256(\"key\", [1])",
+        "  m = HMAC.sha256(\"key\", \"data\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 19],
       "covers": "\"key\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha512_hexdigest([1], \"data\")",
+        "  m = HMAC.sha512_hexdigest(\"key\".bytes, [1])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 34],
-      "covers": "\"data\"",
-      "expected": "List[Int]",
-      "actual": "String"
+      "start": [2, 42],
+      "covers": "[1]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha256([1], [\"a\"])",
-        "end"
-      ],
-      "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 25],
-      "covers": "\"a\"",
-      "expected": "Int",
-      "actual": "String"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  m = HMAC.sha256([1])",
+        "  m = HMAC.sha256(\"key\".bytes)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "HMAC.sha256([1])"
+      "covers": "HMAC.sha256(\"key\".bytes)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha512([1], [2], [3])",
+        "  k = \"k\".bytes",
+        "  m = HMAC.sha512(k, k, k)",
         "end"
       ],
       "code": "CHECK-ARITY",
-      "start": [2, 7],
-      "covers": "HMAC.sha512([1], [2], [3])"
+      "start": [3, 7],
+      "covers": "HMAC.sha512(k, k, k)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: String = HMAC.sha512([1], [2])",
+        "  k = \"k\".bytes",
+        "  s: String = HMAC.sha512(k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 15],
-      "covers": "HMAC.sha512([1], [2])",
+      "start": [3, 15],
+      "covers": "HMAC.sha512(k, k)",
       "expected": "String",
-      "actual": "List[Int]"
+      "actual": "Bytes"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = HMAC.sha256_hexdigest([1], [2])",
+        "  k = \"k\".bytes",
+        "  b: Bytes = HMAC.sha256_hexdigest(k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 18],
-      "covers": "HMAC.sha256_hexdigest([1], [2])",
-      "expected": "List[Int]",
+      "start": [3, 14],
+      "covers": "HMAC.sha256_hexdigest(k, k)",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
@@ -10883,14 +10878,14 @@
       "start": [1, 1]
     }
   ],
-  "HMAC.secure_compare takes two List[Int] and gives a Bool": [
+  "HMAC.secure_compare takes two Bytes and gives a Bool": [
     {
       "program": [
         "def main() -> Void",
-        "  key = [1, 2]",
-        "  mac = HMAC.sha256(key, [3])",
-        "  same: Bool = HMAC.secure_compare(mac, HMAC.sha256(key, [3]))",
-        "  puts(same and HMAC.secure_compare([], []))",
+        "  key = \"key\".bytes",
+        "  mac = HMAC.sha256(key, \"data\".bytes)",
+        "  same: Bool = HMAC.secure_compare(mac, HMAC.sha256(key, \"data\".bytes))",
+        "  puts(same and HMAC.secure_compare(\"\".bytes, \"\".bytes))",
         "end"
       ],
       "code": null
@@ -10898,50 +10893,61 @@
     {
       "program": [
         "def main() -> Void",
-        "  same = HMAC.secure_compare(\"abc\", [1])",
+        "  same = HMAC.secure_compare(\"abc\", \"abc\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 30],
       "covers": "\"abc\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  same = HMAC.secure_compare([1])",
+        "  same = HMAC.secure_compare(\"abc\".bytes, [1])",
         "end"
       ],
-      "code": "CHECK-ARITY",
-      "start": [2, 10],
-      "covers": "HMAC.secure_compare([1])"
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 43],
+      "covers": "[1]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  n: Int = HMAC.secure_compare([1], [2])",
+        "  same = HMAC.secure_compare(\"abc\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 10],
+      "covers": "HMAC.secure_compare(\"abc\".bytes)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = \"a\".bytes",
+        "  n: Int = HMAC.secure_compare(a, a)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 12],
-      "covers": "HMAC.secure_compare([1], [2])",
+      "start": [3, 12],
+      "covers": "HMAC.secure_compare(a, a)",
       "expected": "Int",
       "actual": "Bool"
     }
   ],
-  "Base64 and Digest.hexencode take a List[Int] and give a String; the strict decodes give a Result; Base64 and Digest are reserved names": [
+  "Base64 and Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
     {
       "program": [
         "def main() -> Void",
-        "  text: String = Base64.strict_encode64([102, 111])",
-        "  lines: String = Base64.encode64([])",
-        "  url: String = Base64.urlsafe_encode64([251], false) + Base64.urlsafe_encode64([251])",
-        "  hex: String = Digest.hexencode([255])",
-        "  loose: List[Int] = Base64.decode64(text)",
-        "  bytes: Result[List[Int]] = Base64.strict_decode64(text)",
-        "  more: Result[List[Int]] = Base64.urlsafe_decode64(url)",
-        "  back: Result[List[Int]] = Digest.hexdecode(hex)",
+        "  text: String = Base64.strict_encode64(\"fo\".bytes)",
+        "  lines: String = Base64.encode64(\"\".bytes)",
+        "  url: String = Base64.urlsafe_encode64(\"a\".bytes, false) + Base64.urlsafe_encode64(\"a\".bytes)",
+        "  hex: String = Digest.hexencode(\"a\".bytes)",
+        "  loose: Bytes = Base64.decode64(text)",
+        "  bytes: Result[Bytes] = Base64.strict_decode64(text)",
+        "  more: Result[Bytes] = Base64.urlsafe_decode64(url)",
+        "  back: Result[Bytes] = Digest.hexdecode(hex)",
         "  puts(lines + hex + loose.size.to_s + bytes.ok?.to_s + more.ok?.to_s + back.ok?.to_s)",
         "end"
       ],
@@ -10956,27 +10962,51 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 30],
       "covers": "\"abc\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b = Base64.decode64([1])",
+        "  s = Digest.hexencode([255])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 23],
-      "covers": "[1]"
+      "start": [2, 24],
+      "covers": "[255]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s = Base64.urlsafe_encode64([1], 0)",
+        "  b = Base64.decode64(\"abc\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 36],
+      "start": [2, 23],
+      "covers": "\"abc\".bytes",
+      "expected": "String",
+      "actual": "Bytes"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = Base64.decode64(\"YQ==\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "Base64.decode64(\"YQ==\")",
+      "expected": "List[Int]",
+      "actual": "Bytes"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = Base64.urlsafe_encode64(\"a\".bytes, 0)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 42],
       "covers": "0",
       "expected": "Bool",
       "actual": "Int"
@@ -10984,24 +11014,25 @@
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = Digest.hexdecode(\"00\")",
+        "  b: Bytes = Digest.hexdecode(\"00\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 18],
+      "start": [2, 14],
       "covers": "Digest.hexdecode(\"00\")",
-      "expected": "List[Int]",
-      "actual": "Result[List[Int]]"
+      "expected": "Bytes",
+      "actual": "Result[Bytes]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s = Base64.strict_encode64([1], [2])",
+        "  a = \"a\".bytes",
+        "  s = Base64.strict_encode64(a, a)",
         "end"
       ],
       "code": "CHECK-ARITY",
-      "start": [2, 7],
-      "covers": "Base64.strict_encode64([1], [2])"
+      "start": [3, 7],
+      "covers": "Base64.strict_encode64(a, a)"
     },
     {
       "program": [
@@ -11034,8 +11065,8 @@
     {
       "program": [
         "def main() -> Void",
-        "  bytes: List[Int] = SecureRandom.random_bytes(32)",
-        "  key: List[Int] = SecureRandom.random_bytes",
+        "  bytes: Bytes = SecureRandom.random_bytes(32)",
+        "  key: Bytes = SecureRandom.random_bytes",
         "  token: String = SecureRandom.hex + SecureRandom.hex(8)",
         "  id: String = SecureRandom.uuid + SecureRandom.uuid()",
         "  puts(bytes.size + key.size + token.size + id.size)",
@@ -11054,6 +11085,18 @@
       "covers": "\"16\"",
       "expected": "Int",
       "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b: List[Int] = SecureRandom.random_bytes(4)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "SecureRandom.random_bytes(4)",
+      "expected": "List[Int]",
+      "actual": "Bytes"
     },
     {
       "program": [

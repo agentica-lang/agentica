@@ -13,11 +13,11 @@
 #   from_list,N,N,...  Bytes.from_list of the Ints: the hex, or "error"
 #   to_a,A             the bytes as Ints
 def bytes_of(hex: String) -> Bytes
-  return Bytes.from_list(Digest.hexdecode(hex).unwrap!).unwrap!
+  return Digest.hexdecode(hex).unwrap!
 end
 
 def hex_of(data: Bytes) -> String
-  return Digest.hexencode(data.to_a)
+  return Digest.hexencode(data)
 end
 
 def answer(fields: List[String]) -> String

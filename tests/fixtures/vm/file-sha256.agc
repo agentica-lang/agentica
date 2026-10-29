@@ -23,7 +23,7 @@ def main() -> Void
   abc = put_bytes(dir, "abc.bin", [97, 98, 99])
   puts("empty #{hex(File.sha256(empty, 60000).unwrap!)}")
   puts("abc #{hex(File.sha256(abc, 60000).unwrap!)}")
-  puts("digest agrees #{hex(File.sha256(abc, 60000).unwrap!) == hex(Digest.sha256([97, 98, 99]))}")
+  puts("digest agrees #{hex(File.sha256(abc, 60000).unwrap!) == Digest.sha256_hexdigest("abc".bytes)}")
   puts("missing -> #{File.sha256(at(dir, "missing.bin"), 60000)}")
   puts("directory -> #{File.sha256(dir, 60000)}")
   puts("empty path -> #{File.sha256("", 60000)}")

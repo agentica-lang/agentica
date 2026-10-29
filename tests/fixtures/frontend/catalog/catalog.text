@@ -760,53 +760,53 @@ builtin ATS.size forms=1
 builtin ATS.to_map forms=1
   ATS.to_map(table: ATS[K, V]) -> Map[K, V] shape=(ATS(Var(K), Var(V))) -> Map(Var(K), Var(V)) rule=AtsCall impl="ATS.to_map" effects=[] desc="A snapshot of the table as a Map in first-insertion order; VM only."
 builtin Base64.encode64 forms=1
-  Base64.encode64(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Base64.encode64" effects=[] desc="Encode bytes (each 0..255) as padded base64 (RFC 4648) in lines of 60 characters, each ending in a newline, as Ruby does; VM only."
+  Base64.encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) in lines of 60 characters, each ending in a newline, as Ruby does; VM only."
 builtin Base64.strict_encode64 forms=1
-  Base64.strict_encode64(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Base64.strict_encode64" effects=[] desc="Encode bytes (each 0..255) as padded base64 (RFC 4648) on one line with no newline; VM only."
+  Base64.strict_encode64(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Base64.strict_encode64.bytes" effects=[] desc="Encode bytes as padded base64 (RFC 4648) on one line with no newline; VM only."
 builtin Base64.urlsafe_encode64 forms=1
-  Base64.urlsafe_encode64(data: List[Int], padding: Bool = true) -> String shape=(List(Int), Bool = true) -> String rule=Plain impl="Base64.urlsafe_encode64" effects=[] desc="Encode bytes (each 0..255) as base64url (RFC 4648 section 5), with the = padding unless padding is false; VM only."
+  Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String shape=(Bytes, Bool = true) -> String rule=Plain impl="Base64.urlsafe_encode64.bytes" effects=[] desc="Encode bytes as base64url (RFC 4648 section 5), with the = padding unless padding is false; VM only."
 builtin Base64.decode64 forms=1
-  Base64.decode64(text: String) -> List[Int] shape=(String) -> List(Int) rule=Plain impl="Base64.decode64" effects=[] desc="Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two places ends the text; never an error; VM only."
+  Base64.decode64(text: String) -> Bytes shape=(String) -> Bytes rule=Plain impl="Base64.decode64.bytes" effects=[] desc="Decode base64 leniently, as Ruby does: other characters are skipped and a = in a group's last two places ends the text; never an error; VM only."
 builtin Base64.strict_decode64 forms=1
-  Base64.strict_decode64(text: String) -> Result[List[Int]] shape=(String) -> Result(List(Int)) rule=Plain impl="Base64.strict_decode64" effects=[] desc="Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
+  Base64.strict_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.strict_decode64.bytes" effects=[] desc="Decode padded base64 (RFC 4648) with nothing else in the text, or error(\"invalid base64\"); VM only."
 builtin Base64.urlsafe_decode64 forms=1
-  Base64.urlsafe_decode64(text: String) -> Result[List[Int]] shape=(String) -> Result(List(Int)) rule=Plain impl="Base64.urlsafe_decode64" effects=[] desc="Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
+  Base64.urlsafe_decode64(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Base64.urlsafe_decode64.bytes" effects=[] desc="Decode base64url (RFC 4648 section 5), padded or not, or error(\"invalid base64\"); VM only."
 builtin Digest.hexdecode forms=1
-  Digest.hexdecode(text: String) -> Result[List[Int]] shape=(String) -> Result(List(Int)) rule=Plain impl="Digest.hexdecode" effects=[] desc="Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
+  Digest.hexdecode(text: String) -> Result[Bytes] shape=(String) -> Result(Bytes) rule=Plain impl="Digest.hexdecode.bytes" effects=[] desc="Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
 builtin Digest.hexencode forms=1
-  Digest.hexencode(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Digest.hexencode" effects=[] desc="Encode bytes (each 0..255) as two lowercase hex digits each; VM only."
+  Digest.hexencode(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Digest.hexencode.bytes" effects=[] desc="Encode bytes as two lowercase hex digits each; VM only."
 builtin Digest.md5 forms=1
-  Digest.md5(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.md5" effects=[] desc="Hash bytes (each 0..255) with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old APIs), not for security; VM only."
+  Digest.md5(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="Digest.md5.bytes" effects=[] desc="Hash bytes with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old APIs), not for security; VM only."
 builtin Digest.md5_hexdigest forms=1
-  Digest.md5_hexdigest(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Digest.md5_hexdigest" effects=[] desc="Hash bytes (each 0..255) with MD5 and return the digest as 32 lowercase hex digits; for compatibility (ETags, old APIs), not for security; VM only."
+  Digest.md5_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Digest.md5_hexdigest.bytes" effects=[] desc="Hash bytes with MD5 and return the digest as 32 lowercase hex digits; for compatibility (ETags, old APIs), not for security; VM only."
 builtin Digest.sha1 forms=1
-  Digest.sha1(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.sha1" effects=[] desc="Hash bytes (each 0..255) with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old APIs), not for security; VM only."
+  Digest.sha1(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="Digest.sha1.bytes" effects=[] desc="Hash bytes with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old APIs), not for security; VM only."
 builtin Digest.sha1_hexdigest forms=1
-  Digest.sha1_hexdigest(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Digest.sha1_hexdigest" effects=[] desc="Hash bytes (each 0..255) with SHA-1 and return the digest as 40 lowercase hex digits; for compatibility (git, old APIs), not for security; VM only."
+  Digest.sha1_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Digest.sha1_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-1 and return the digest as 40 lowercase hex digits; for compatibility (git, old APIs), not for security; VM only."
 builtin Digest.sha256 forms=1
-  Digest.sha256(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.sha256" effects=[] desc="Hash bytes (each 0..255) with SHA-256 and return the 32 bytes of the digest; VM only."
+  Digest.sha256(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="Digest.sha256.bytes" effects=[] desc="Hash bytes with SHA-256 and return the 32 bytes of the digest; VM only."
 builtin Digest.sha256_hexdigest forms=1
-  Digest.sha256_hexdigest(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Digest.sha256_hexdigest" effects=[] desc="Hash bytes (each 0..255) with SHA-256 and return the digest as 64 lowercase hex digits; VM only."
+  Digest.sha256_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Digest.sha256_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-256 and return the digest as 64 lowercase hex digits; VM only."
 builtin Digest.sha512 forms=1
-  Digest.sha512(data: List[Int]) -> List[Int] shape=(List(Int)) -> List(Int) rule=Plain impl="Digest.sha512" effects=[] desc="Hash bytes (each 0..255) with SHA-512 and return the 64 bytes of the digest; VM only."
+  Digest.sha512(data: Bytes) -> Bytes shape=(Bytes) -> Bytes rule=Plain impl="Digest.sha512.bytes" effects=[] desc="Hash bytes with SHA-512 and return the 64 bytes of the digest; VM only."
 builtin Digest.sha512_hexdigest forms=1
-  Digest.sha512_hexdigest(data: List[Int]) -> String shape=(List(Int)) -> String rule=Plain impl="Digest.sha512_hexdigest" effects=[] desc="Hash bytes (each 0..255) with SHA-512 and return the digest as 128 lowercase hex digits; VM only."
+  Digest.sha512_hexdigest(data: Bytes) -> String shape=(Bytes) -> String rule=Plain impl="Digest.sha512_hexdigest.bytes" effects=[] desc="Hash bytes with SHA-512 and return the digest as 128 lowercase hex digits; VM only."
 builtin HMAC.sha256 forms=1
-  HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int] shape=(List(Int), List(Int)) -> List(Int) rule=Plain impl="HMAC.sha256" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the 32 bytes of the MAC; VM only."
+  HMAC.sha256(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="HMAC.sha256.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the 32 bytes of the MAC; VM only."
 builtin HMAC.sha256_hexdigest forms=1
-  HMAC.sha256_hexdigest(key: List[Int], data: List[Int]) -> String shape=(List(Int), List(Int)) -> String rule=Plain impl="HMAC.sha256_hexdigest" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the MAC as 64 lowercase hex digits; VM only."
+  HMAC.sha256_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="HMAC.sha256_hexdigest.bytes" effects=[] desc="HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 64 lowercase hex digits; VM only."
 builtin HMAC.sha512 forms=1
-  HMAC.sha512(key: List[Int], data: List[Int]) -> List[Int] shape=(List(Int), List(Int)) -> List(Int) rule=Plain impl="HMAC.sha512" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the 64 bytes of the MAC; VM only."
+  HMAC.sha512(key: Bytes, data: Bytes) -> Bytes shape=(Bytes, Bytes) -> Bytes rule=Plain impl="HMAC.sha512.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the 64 bytes of the MAC; VM only."
 builtin HMAC.sha512_hexdigest forms=1
-  HMAC.sha512_hexdigest(key: List[Int], data: List[Int]) -> String shape=(List(Int), List(Int)) -> String rule=Plain impl="HMAC.sha512_hexdigest" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
+  HMAC.sha512_hexdigest(key: Bytes, data: Bytes) -> String shape=(Bytes, Bytes) -> String rule=Plain impl="HMAC.sha512_hexdigest.bytes" effects=[] desc="HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the MAC as 128 lowercase hex digits; VM only."
 builtin SecureRandom.random_bytes forms=1
-  SecureRandom.random_bytes(n: Int = 16) -> List[Int] shape=(Int = 16) -> List(Int) rule=Plain impl="SecureRandom.random_bytes" effects=["random"] desc="Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
+  SecureRandom.random_bytes(n: Int = 16) -> Bytes shape=(Int = 16) -> Bytes rule=Plain impl="SecureRandom.random_bytes.bytes" effects=["random"] desc="Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), for keys, salts and tokens; unlike Random, never seeded; VM only."
 builtin SecureRandom.hex forms=1
   SecureRandom.hex(n: Int = 16) -> String shape=(Int = 16) -> String rule=Plain impl="SecureRandom.hex" effects=["random"] desc="Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
 builtin SecureRandom.uuid forms=1
   SecureRandom.uuid() -> String shape=() -> String rule=Plain impl="SecureRandom.uuid" effects=["random"] desc="Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only."
 builtin HMAC.secure_compare forms=1
-  HMAC.secure_compare(a: List[Int], b: List[Int]) -> Bool shape=(List(Int), List(Int)) -> Bool rule=Plain impl="HMAC.secure_compare" effects=[] desc="Whether the bytes a and b (each 0..255) are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
+  HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool shape=(Bytes, Bytes) -> Bool rule=Plain impl="HMAC.secure_compare.bytes" effects=[] desc="Whether the bytes a and b are the same, in constant time: it compares their SHA-256 digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and tokens; VM only."
 builtin Bytes.at forms=1
   Bytes.at(bytes: Bytes, index: Int) -> Int shape=(Bytes, Int) -> Int rule=Plain impl="Bytes.at" effects=[] desc="Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts."
 builtin Bytes.concat forms=1
