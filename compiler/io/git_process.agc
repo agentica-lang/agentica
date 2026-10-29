@@ -3,8 +3,6 @@
 ## shell. Standard input is closed at once, so git never waits for text from this process (git may still ask on a
 ## terminal, which the deadline below ends).
 
-import PackageHash from "../packages/package_hash"
-
 # The deadline of each read and of the wait for the exit, in milliseconds: a fetch of a large repository is slow.
 GIT_TIMEOUT_MS = 300_000
 START_TIMEOUT_MS = 10_000
@@ -17,7 +15,7 @@ CHUNK_BYTES = 65_536
 ## error as text; `Missing` is a git that did not start; `Broken` is a git that started but whose output could not be
 ## read in time or in full (a deadline, or more output than the VM keeps).
 export enum Ran
-  Exited(Int, List[Int], String)
+  Exited(Int, Bytes, String)
   Missing(String)
   Broken(String)
 end
@@ -37,8 +35,9 @@ export def run(arguments: List[String], dir: String) -> Ran
 end
 
 # Reads standard output to its end, then standard error and the exit status. The pieces are joined once at the end.
+# Process.read_bytes gives a List[Int] until #805 PR 6, so each piece is converted as it comes; its items are bytes.
 def finish(child: Process) -> Ran
-  pieces: List[List[Int]] = []
+  pieces: List[Bytes] = []
   finished = false
   while !finished
     got = Process.read_bytes(child, CHUNK_BYTES, GIT_TIMEOUT_MS)
@@ -46,8 +45,13 @@ def finish(child: Process) -> Ran
       return Ran.Broken(got.message)
     end
 
-    finished = got.unwrap!.size == 0
-    pieces = pieces.push(got.unwrap!)
+    piece = Bytes.from_list(got.unwrap!)
+    if !piece.ok?
+      return Ran.Broken(piece.message)
+    end
+
+    finished = piece.unwrap!.empty?
+    pieces = pieces.push(piece.unwrap!)
   end
 
   output = Process.output(child, GIT_TIMEOUT_MS)
@@ -60,5 +64,5 @@ def finish(child: Process) -> Ran
     return Ran.Broken(waited.message)
   end
 
-  return Ran.Exited(waited.unwrap!, PackageHash.concat_all(pieces), output.unwrap!.stderr)
+  return Ran.Exited(waited.unwrap!, Bytes.concat(pieces), output.unwrap!.stderr)
 end

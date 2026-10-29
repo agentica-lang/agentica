@@ -81,7 +81,7 @@ end
 
 def encode(text: String, space: List[Int]) -> String
   out: List[Int] = []
-  for byte in text.to_bytes
+  for byte in text.bytes
     if byte == SPACE
       for s in space
         out = out.push(s)
@@ -92,8 +92,8 @@ def encode(text: String, space: List[Int]) -> String
       out = out.push(PERCENT).push(HEX_DIGITS[byte.shift_right(4)]).push(HEX_DIGITS[byte.bit_and(15)])
     end
   end
-  # Every output byte is ASCII (a plain byte, `%`, a hex digit, `+`), so this cannot halt.
-  return String.from_bytes(out).unwrap!
+  # Every output byte is ASCII (a plain byte, `%`, a hex digit, `+`), so neither step can halt.
+  return String.from_bytes(Bytes.from_list(out).unwrap!).unwrap!
 end
 
 # Decodes the bytes of `text`. Text without a `%` (or a `+` to turn into a space) is returned as it is.
@@ -101,7 +101,7 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
   if !needs_decoding?(text, plus_is_space)
     return ok(text)
   end
-  bytes = text.to_bytes
+  bytes = text.bytes
   out: List[Int] = []
   i = 0
   while i < bytes.size
@@ -125,7 +125,8 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
       i = i + 1
     end
   end
-  case String.from_bytes(out)
+  # Every item of `out` is a byte (one of `text`, or two hex digits), so Bytes.from_list cannot fail.
+  case String.from_bytes(try Bytes.from_list(out))
     ok(decoded) -> return ok(decoded)
     error(_) -> return error("invalid UTF-8 after decoding (#{text})")
   end

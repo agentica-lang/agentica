@@ -61,14 +61,6 @@ struct HostPort
   port: String
 end
 
-## The two hex digits of each digest byte, in lowercase.
-export def hex_of(bytes: List[Int]) -> String
-  digits = "0123456789abcdef"
-  return bytes.map do |byte: Int|
-    "#{digits.slice(byte.shift_right(4), 1)}#{digits.slice(byte.bit_and(15), 1)}"
-  end.join("")
-end
-
 ## Whether the hash names 32 bytes in 64 lowercase hex digits. The archive check compares it after the download, so a
 ## row with a short, long or uppercase hash fails here, before any network use.
 export def valid_sha?(sha: String) -> Bool
@@ -96,7 +88,7 @@ export def canonical_member(member: String) -> Result[String]
     return error("a member must not be empty")
   end
 
-  if String.to_bytes(member).size > NAME_LIMIT_BYTES
+  if member.bytesize > NAME_LIMIT_BYTES
     return error("a member is longer than 1024 bytes")
   end
 
@@ -113,7 +105,7 @@ export def canonical_member(member: String) -> Result[String]
     return error("a member must be a relative path")
   end
 
-  for b in String.to_bytes(path)
+  for b in path.bytes
     if b == 0
       return error("a member must not hold a NUL byte")
     end
@@ -231,7 +223,7 @@ export def resolve_location(current: String, location: String) -> Result[String]
     return error("the redirect holds no usable location")
   end
 
-  for b in String.to_bytes(bare)
+  for b in bare.bytes
     if b < 32 or b == 127
       return error("the redirect holds no usable location")
     end
@@ -335,7 +327,7 @@ def first_index(text: String, part: String) -> Int
 end
 
 def parse_url(url: String) -> Result[Parts]
-  for b in String.to_bytes(url)
+  for b in url.bytes
     if b < 32 or b == 127
       return error("the URL holds a control character")
     end
@@ -372,7 +364,7 @@ def parse_url(url: String) -> Result[Parts]
     return error("the URL must not hold user info")
   end
 
-  for b in String.to_bytes(authority)
+  for b in authority.bytes
     if b < 33 or b > 126
       return error("the URL holds a bad authority")
     end

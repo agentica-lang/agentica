@@ -265,7 +265,7 @@ end
 def compile_steps(directory: String, options: Opts.Options, settings: Env.Settings) -> Result[Steps]
   source = "#{directory}/steps.agc"
   root = ""
-  compiled = Pipeline.Compiled.Bytes([])
+  compiled = Pipeline.Compiled.Bytes("".bytes)
   if options.steps.size == 0 and embedded?(settings)
     return ok(Steps(bytecode: "", source: EMBEDDED_STEPS_SOURCE, root: root, failure: "", given: false))
   elsif options.steps.size == 0

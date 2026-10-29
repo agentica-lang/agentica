@@ -98,7 +98,7 @@ end
 
 ## What a lookup found: the bytes of the program, or nothing usable.
 export enum Lookup
-  Hit(List[Int])
+  Hit(Bytes)
   Miss
 end
 
@@ -139,7 +139,7 @@ end
 ## Keeps `program`, which was compiled from `modules`, as the entry of the plan. It gives false when it could not (a
 ## folder that is not safe or not writable); the run goes on either way. The probes are taken here, after the compile,
 ## so a file that appears between the two is the one gap: it is seen as present, not as absent.
-export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: List[Int]) -> Bool
+export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: Bytes) -> Bool
   case plan
     Plan.Off -> return false
     Plan.On(entry) ->
@@ -162,7 +162,7 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
 end
 
 def source_line(module: Linker.LinkedModule) -> String
-  return "#{SOURCE_WORD}#{CacheFiles.digest(String.to_bytes(module.text))} #{module.key}"
+  return "#{SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"
 end
 
 # One `source` line for each file that a native library of the program may come from or load (the manifest that names
@@ -201,7 +201,7 @@ end
 
 # The digest of the names of the native/ files of a package folder.
 def names_digest(workspace: Workspace.Workspace, root: String) -> String
-  return CacheFiles.digest(String.to_bytes(PackageHash.native_files(workspace, root).join("\n")))
+  return CacheFiles.digest(PackageHash.native_files(workspace, root).join("\n").bytes)
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
@@ -215,7 +215,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   site = try CacheFiles.site(settings, real)
   key = [FORMAT, "version #{settings.version}", site.binary, "root #{real}", site.inputs].join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
-  name = "#{Paths.last_part(real)}-#{CacheFiles.digest(String.to_bytes(real)).slice(0, 16)}.agcb"
+  name = "#{Paths.last_part(real)}-#{CacheFiles.digest(real.bytes).slice(0, 16)}.agcb"
   return ok(
     Entry(
       build: site.build,
@@ -282,7 +282,7 @@ def plain?(path: String) -> Bool
   return !path.contains?("\n") and !path.contains?("\t") and !path.contains?(String.from_code(0))
 end
 
-def read_entry(entry: Entry, settings: Env.Settings) -> Result[List[Int]]
+def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
   user = try CacheFiles.own_user()
   try CacheFiles.private_kind(entry.build, "directory", user)
   try CacheFiles.private_kind(entry.folder, "directory", user)
@@ -293,7 +293,7 @@ def read_entry(entry: Entry, settings: Env.Settings) -> Result[List[Int]]
   return read
 end
 
-def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Result[List[Int]]
+def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Result[Bytes]
   head = try read_exact(handle, HEAD_BYTES)
   size = try text_size(head)
   bytes = try read_exact(handle, size)
@@ -314,7 +314,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
 end
 
 # The length that the head of an entry gives.
-def text_size(head: List[Int]) -> Result[Int]
+def text_size(head: Bytes) -> Result[Int]
   text = try String.from_bytes(head)
   # The length is checked in characters: a head with a multi-byte character is shorter and not an entry.
   if text.length != HEAD_BYTES or !text.starts_with?(HEAD_WORD) or !text.ends_with?("\n")
@@ -407,8 +407,8 @@ end
 
 # Whether the bytes begin as a program of this version does (the check that an entry of another build, with the same
 # size and time, is not run): the magic, and the version text after the format number and the length.
-def made_by?(program: List[Int], version: String) -> Bool
-  wanted = String.to_bytes(version)
+def made_by?(program: Bytes, version: String) -> Bool
+  wanted = version.bytes
   if program.size < VERSION_AT + wanted.size or program[8] != wanted.size
     return false
   end
@@ -419,8 +419,8 @@ def made_by?(program: List[Int], version: String) -> Bool
 end
 
 # Exactly `count` bytes, or an error when the file ends first.
-def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
-  pieces: List[List[Int]] = []
+def read_exact(handle: FileHandle, count: Int) -> Result[Bytes]
+  pieces: List[Bytes] = []
   left = count
   while left > 0
     got = try File.read_bytes(handle, piece(left), CacheFiles.IO_TIMEOUT_MS)
@@ -432,7 +432,7 @@ def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
     left -= got.size
   end
 
-  return ok(PackageHash.concat_all(pieces))
+  return ok(Bytes.concat(pieces))
 end
 
 def piece(left: Int) -> Int
@@ -444,8 +444,8 @@ def piece(left: Int) -> Int
 end
 
 # The rest of the file, up to the size the VM takes.
-def read_rest(handle: FileHandle) -> Result[List[Int]]
-  pieces: List[List[Int]] = []
+def read_rest(handle: FileHandle) -> Result[Bytes]
+  pieces: List[Bytes] = []
   total = 0
   finished = false
   while !finished
@@ -459,7 +459,7 @@ def read_rest(handle: FileHandle) -> Result[List[Int]]
     pieces = pieces.push(got)
   end
 
-  return ok(PackageHash.concat_all(pieces))
+  return ok(Bytes.concat(pieces))
 end
 
 # Writes the entry to a new private file beside its place under a name nobody can guess, and renames it there. A
@@ -467,7 +467,7 @@ end
 # which is a miss, and a run that dies in between leaves no entry. A file system that cannot rename without replacing
 # (the rename then fails) never gets an entry; the run is not affected. A `_build/` made by the cache gets a
 # .gitignore of its own, so the bytecode is not committed by mistake.
-def publish(entry: Entry, text: String, program: List[Int]) -> Bool
+def publish(entry: Entry, text: String, program: Bytes) -> Bool
   if !prepare_folder(entry).ok?
     return false
   end
@@ -478,8 +478,8 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
     return false
   end
 
-  body = String.to_bytes(text)
-  data = String.to_bytes(head(body.size)).concat(body).concat(program)
+  body = text.bytes
+  data = Bytes.concat([head(body.size).bytes, body, program])
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
   return CacheFiles.install(temporary, data, entry.file)
 end
@@ -490,7 +490,7 @@ def prepare_folder(entry: Entry) -> Result[Void]
   user = try CacheFiles.own_user()
   made = try CacheFiles.private_folder(entry.build, user)
   if made and entry.beside
-    CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
+    CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), "*\n".bytes)
   end
 
   try CacheFiles.private_folder(entry.folder, user)

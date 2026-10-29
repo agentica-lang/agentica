@@ -224,7 +224,7 @@ def probe_member(
 
       case File.sha256(payload, left)
         ok(found) ->
-          if text.trim == NativeArtifact.hex_of(found)
+          if text.trim == Digest.hexencode(found)
             return Probe.Present(payload)
           end
 
@@ -266,7 +266,7 @@ def archive_state(
 
       case File.sha256(archive, left)
         ok(found) ->
-          if NativeArtifact.hex_of(found) == sha
+          if Digest.hexencode(found) == sha
             return ArchiveSeen.Ready
           end
 
@@ -355,7 +355,7 @@ def download_archive(
 
           case File.sha256(dest, deadline - Time.monotonic_ms())
             ok(found) ->
-              if NativeArtifact.hex_of(found) != sha
+              if Digest.hexencode(found) != sha
                 HTTP.close_client(pool)
                 message = "the file is not the one its sha256 names"
                 return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
@@ -434,7 +434,7 @@ def publish_file(
 
       case File.sha256(target, left)
         ok(found) ->
-          if NativeArtifact.hex_of(found) == sha
+          if Digest.hexencode(found) == sha
             return ok(target)
           end
 
@@ -462,7 +462,7 @@ def publish_member(
   left = try time_left(deadline, context)
   case File.sha256(archive, left)
     ok(found) ->
-      if NativeArtifact.hex_of(found) != sha
+      if Digest.hexencode(found) != sha
         message = "the cached archive is not the one its sha256 names"
         return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
       end
@@ -501,7 +501,7 @@ def publish_member(
 
   receipt = Paths.join(tmp, "receipt")
   left = try time_left(deadline, context)
-  wrote = File.write_text(receipt, NativeArtifact.hex_of(found.unwrap!), left)
+  wrote = File.write_text(receipt, Digest.hexencode(found.unwrap!), left)
   if !wrote.ok?
     return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", ""))
   end

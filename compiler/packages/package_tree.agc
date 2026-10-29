@@ -9,7 +9,7 @@ import PackageHash from "package_hash"
 MANIFEST_FILE = "agentica.toml"
 
 # The end of a record of `git ls-tree -z`. A string literal has no escape for it.
-NUL = String.from_bytes([0]).unwrap!
+NUL = String.from_code(0)
 
 # The most a file of a package may hold, and all the copied files together. The VM keeps at most 1 MiB of the output
 # of a child that was not read yet (docs/grammar/06d-io-and-network.md), and a file is a list of bytes in memory.

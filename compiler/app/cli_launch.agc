@@ -4,7 +4,7 @@
 ## `--flush-timeout`, `--schedulers`, `--jit`, the `--deny-*` flags and `--sandbox` as given, `--source-root DIR`,
 ## `--ai` or `--json`, in this order), and the arguments of the program (`System.args()`).
 export struct Launch
-  bytes: List[Int]
+  bytes: Bytes
   flags: List[String]
   arguments: List[String]
 end

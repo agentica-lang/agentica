@@ -9,7 +9,7 @@ PIECE_BYTES = 1_048_576
 PIECE_CHARACTERS = 250_000
 
 ## Writes bytes to a new file with mode 0600. It fails when the path exists (a link in the way included).
-export def write_bytes(path: String, bytes: List[Int]) -> Result[Void]
+export def write_bytes(path: String, bytes: Bytes) -> Result[Void]
   out = try File.open(path, "create_private", IO_TIMEOUT)
   rest = bytes
   while rest.size > 0

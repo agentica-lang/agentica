@@ -63,7 +63,7 @@ export struct Workspace
   resolve_path: Fn[String, Result[String]]
   std_source: Fn[String, Result[String]]
   list_folder: Fn[String, Result[List[Entry]]]
-  read_bytes: Fn[String, Result[List[Int]]]
+  read_bytes: Fn[String, Result[Bytes]]
   native_artifact: Fn[NativeRequest, Result[String]]
   check_cache: CheckCache
 end

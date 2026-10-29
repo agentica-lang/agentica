@@ -65,7 +65,7 @@ end
 # The code point that an entity name like `#65` or `#x41` stands for, or -1 when it is not a number or not a Unicode
 # scalar value.
 def numeric_code(name: String) -> Int
-  bytes = name.to_bytes
+  bytes = name.bytes.to_a
   if bytes.size < 2 or bytes[0] != HASH
     return -1
   end

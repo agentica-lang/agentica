@@ -4,14 +4,16 @@
 
 import Front from "../analysis/front"
 import BytecodeCache from "../io/bytecode_cache"
+import Failure from "../bytecode/bytecode_failure"
 import Writer from "../bytecode/bytecode_writer"
 import Problems from "../diagnostics/problem"
+import Ir from "../lower/ir"
 import Lowering from "../lower/lowering"
 import Env from "../modules/link_env"
 
 ## The result of compiling: the bytes of the program, or the first problem.
 export enum Compiled
-  Bytes(List[Int])
+  Bytes(Bytes)
   Rejected(Problems.Problem)
 end
 
@@ -20,7 +22,7 @@ export def build(front: Front.Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
     Lowering.Lowered.Done(program) ->
-      return write(Writer.write(program, settings.version))
+      return write(program, Writer.write(program, settings.version))
   end
 end
 
@@ -44,9 +46,18 @@ export def compile(path: String, settings: Env.Settings) -> Compiled
   end
 end
 
-def write(written: Writer.Written) -> Compiled
+# The writer gives a List[Int] (#805 PR 7 moves it to Bytes); it is converted once here, for the run, the file and the
+# cache. Every item is a byte, so the conversion cannot fail; if it did, that is a problem of the writer.
+def write(program: Ir.Program, written: Writer.Written) -> Compiled
   case written
     Writer.Written.Failed(problem) -> return Compiled.Rejected(problem)
-    Writer.Written.Done(bytes) -> return Compiled.Bytes(bytes)
+    Writer.Written.Done(list) ->
+      bytes = Bytes.from_list(list)
+      if !bytes.ok?
+        found = Failure.internal(program, "the writer gave an item that is not a byte")
+        return Compiled.Rejected(Problems.unpack(found))
+      end
+
+      return Compiled.Bytes(bytes.unwrap!)
   end
 end

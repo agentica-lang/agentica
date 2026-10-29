@@ -308,10 +308,16 @@ def make_dest(dest: String, deadline: Int) -> Result[Void]
 end
 
 def read_chunk(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[List[Int]]
+  # The ZIP reader holds its data as a List[Int] until #805 PR 5.
   case File.read_bytes(handle, n, try time_left(deadline))
-    ok(bytes) -> return ok(bytes)
+    ok(bytes) -> return ok(bytes.to_a)
     error(message) -> return error("archive: cannot read #{src}: #{message}")
   end
+end
+
+# The bytes as strict UTF-8. The ZIP data is a List[Int] until #805 PR 5; its items are bytes.
+def utf8_of(data: List[Int]) -> Result[String]
+  return String.from_bytes(try Bytes.from_list(data))
 end
 
 def strip_slashes(path: String) -> String
@@ -440,7 +446,7 @@ def check_relative(path: String, name: String, suffix: String) -> Result[String]
   if String.starts_with?(path, "/")
     return error("archive: #{name} is absolute#{suffix}")
   end
-  for b in String.to_bytes(path)
+  for b in path.bytes
     if b == 0
       return error("archive: #{name} holds a NUL byte#{suffix}")
     end
@@ -469,7 +475,7 @@ def normalize_selector(text: String) -> Result[String]
   if text == ""
     return error("archive: a member must not be empty")
   end
-  if String.to_bytes(text).size > NAME_BYTES
+  if text.bytesize > NAME_BYTES
     return error("archive: member is too long: #{text}")
   end
   path = text
@@ -728,7 +734,7 @@ def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
   end
   path = ""
   if Int.bit_and(flags, FLAG_UTF8) == FLAG_UTF8
-    case String.from_bytes(raw)
+    case utf8_of(raw)
       ok(text) -> path = text
       error(_) -> return error("archive: entry name is not valid UTF-8 at entry #{index}")
     end
@@ -738,7 +744,7 @@ def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
         return error("archive: non-ASCII names need the UTF-8 flag at entry #{index}")
       end
     end
-    case String.from_bytes(raw)
+    case utf8_of(raw)
       ok(text) -> path = text
       error(_) -> return ok("")
     end
@@ -1042,7 +1048,7 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     end
     piece = try stream_take(st, smaller(rest, CHUNK), INPUT_BYTES, deadline, src, "file data of #{entry.canon}")
     st = piece.stream
-    case File.write_bytes(handle, piece.bytes, try time_left(deadline))
+    case write_piece(handle, piece.bytes, try time_left(deadline))
       ok(_) -> rest -= piece.bytes.size
       error(message) -> return error("archive: cannot write a selected file: #{message}")
     end
@@ -1052,6 +1058,11 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}")
   end
   return ok(st)
+end
+
+# Writes one piece of a selected file, which the reader holds as a List[Int] until #805 PR 5; its items are bytes.
+def write_piece(handle: FileHandle, piece: List[Int], timeout_ms: Int) -> Result[Void]
+  return File.write_bytes(handle, try Bytes.from_list(piece), timeout_ms)
 end
 
 def chain_crc(piece: List[Int], crc: Int, canon: String) -> Result[Int]
@@ -1111,7 +1122,7 @@ end
 
 # Writes one inflated piece of a selected file and chains its CRC32.
 def pump_out(handle: FileHandle, pump: Pump, out: List[Int], deadline: Int, entry: Entry) -> Result[Pump]
-  case File.write_bytes(handle, out, try time_left(deadline))
+  case write_piece(handle, out, try time_left(deadline))
     ok(_) -> return ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
     error(message) -> return error("archive: cannot write a selected file: #{message}")
   end

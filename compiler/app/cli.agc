@@ -385,7 +385,7 @@ def checked(
 end
 
 # Runs the program `bytes`: the VM gets the options in a fixed order, and the program its arguments.
-def start(session: Session, rest: List[String], bytes: List[Int]) -> Int
+def start(session: Session, rest: List[String], bytes: Bytes) -> Int
   launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, rest[0]), arguments: rest.drop(1))
   return session.hand_off.call(launch)
 end
@@ -440,7 +440,7 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
 end
 
 # `compile`: the bytes to the file, which is created or emptied first.
-def save(output: String, bytes: List[Int]) -> Int
+def save(output: String, bytes: Bytes) -> Int
   if !SaveFile.bytes(output, bytes, SAVE_TIMEOUT).ok?
     return emit(Reply.failed(2, "agentica: cannot write #{output}\n"))
   end

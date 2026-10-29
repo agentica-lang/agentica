@@ -39,7 +39,7 @@ end
 # The bytes of a character that a chunk cuts in two wait in `carry` for the next chunk.
 def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
   parts: List[String] = []
-  carry: List[Int] = []
+  carry = "".bytes
   finished = false
   while !finished
     got = File.read_bytes(handle, CHUNK_BYTES, IO_TIMEOUT_MS)
@@ -49,7 +49,7 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
 
     chunk = got.unwrap!
     finished = chunk.size == 0
-    data = carry.concat(chunk)
+    data = carry + chunk
     cut = data.size
     if !finished
       cut = SourceFile.complete_prefix(data)

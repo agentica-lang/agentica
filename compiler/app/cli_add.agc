@@ -232,7 +232,7 @@ end
 # PKG-WRITE; `later` is more help for the user, when a file was written before this one.
 def save(settings: Env.Settings, file: String, text: String, later: String) -> Result[Void]
   replacing = settings.workspace.file_exists.call(file)
-  written = SaveFile.replace(file, String.to_bytes(text), replacing, WRITE_TIMEOUT_MS)
+  written = SaveFile.replace(file, text.bytes, replacing, WRITE_TIMEOUT_MS)
   if !written.ok?
     message = "cannot write #{file}"
     return error(Failure.fail_file(file, "PKG-WRITE", message, Failure.hint("#{written.message}#{later}")))

@@ -1373,13 +1373,14 @@ def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[List[Int]]
   return TCP.recv_bytes(socket, most, try time_left(socket, deadline))
 end
 
-# Appends data to the download within the whole-call deadline.
+# Appends data to the download within the whole-call deadline. The body comes from TCP.recv_bytes, a List[Int] until
+# #805 PR 6; its items are bytes.
 def write_body(out: FileHandle, data: List[Int], deadline: Int) -> Result[Void]
   left = deadline - Time.monotonic_ms()
   if left <= 0
     return error(TIMED_OUT)
   end
-  return File.write_bytes(out, data, left)
+  return File.write_bytes(out, try Bytes.from_list(data), left)
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
