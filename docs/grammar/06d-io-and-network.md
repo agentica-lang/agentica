@@ -45,6 +45,8 @@ the server had already closed is retried once on a new connection, within the
 same timeout, if no response byte arrived. `POST`, `PATCH` and other methods are
 never retried.
 
+`post` and `request` default `headers` to `[]` and `body` to `""`.
+
 URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`,
 `Transfer-Encoding` or `Connection` itself is an error. Status codes 4xx and 5xx
 are normal responses. Protocol errors start with `http: `; connection errors

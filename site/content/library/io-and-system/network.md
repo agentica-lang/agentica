@@ -178,11 +178,11 @@ end
 
 ```text
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
 ```
 
-- `HttpResponse` has `status`, `headers` (names in lowercase) and `body`. `post` sends a text body; `request` takes any method.
+- `HttpResponse` has `status`, `headers` (names in lowercase) and `body`. `post` sends a text body; `request` takes any method. `headers` and `body` default to `[]` and `""`, so `HTTP.request(client, "DELETE", url)` needs no empty arguments.
 - URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result.
 - The client adds `Host` and `Content-Length`; a request may not set them, nor `Transfer-Encoding` or `Connection`.
 

@@ -192,20 +192,21 @@ export def get(pool: HttpClient, url: String) -> Result[HttpResponse]
   return request(pool, "GET", url, [], "")
 end
 
-## Sends a `POST` request to `url` with `headers` and the text `body`.
-export def post(pool: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+## Sends a `POST` request to `url` with `headers` and the text `body`. Both default to none: no extra headers and an
+## empty body.
+export def post(pool: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
   return request(pool, "POST", url, headers, body)
 end
 
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
 ## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
-## `Connection`.
+## `Connection`. `headers` and `body` default to none: no extra headers and an empty body.
 export def request(
   pool: HttpClient,
   method: String,
   url: String,
-  headers: List[Header],
-  body: String,
+  headers: List[Header] = [],
+  body: String = "",
 ) -> Result[HttpResponse]
   where = try parse_url(url)
   options = HttpWire.options(pool)

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.request` and `HTTP.post` default `headers` to `[]` and `body` to `""`,
+  so `HTTP.request(client, "DELETE", url)` works.
 - `std/uri` percent-encodes and decodes URL components and query strings, with
   the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
