@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
+- `std/mime` gives the media type of a file by its extension, with the name
+  and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
 
 ## [0.15.0] - 2026-10-29
 
