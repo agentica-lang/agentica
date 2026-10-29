@@ -1,14 +1,10 @@
-"""std/cgi: HTML escaping and cookies, with the names of Ruby's CGI and Rack.
+"""std/cookie: the Cookie header reader and the Set-Cookie writer, with the behaviour of Rack.
 
-tests/fixtures/cgi/driver.agc reads one JSON case per line of stdin and prints one JSON reply per line. The fixed
-vectors are the forms written out from reading Ruby's cgi/util and Rack (no Ruby ran here); the generated cases are
-checked against Python's html and http.cookies, which are not the code under test. Python writes `'` as `&#x27;` where
-Ruby writes `&#39;`, so the peer's escape is rewritten. html.unescape also decodes entities without their `;`, names
-that Ruby does not know and numbers that are controls or not characters, so the generated text uses only the entities
-Ruby decodes. http.cookies reads back what std/cgi writes, and a header built from known pairs gives the expected map
-of the reader.
+tests/fixtures/cookie/driver.agc reads one JSON case per line of stdin and prints one JSON reply per line. The fixed
+vectors are the forms written out from reading Rack (no Ruby ran here); the generated cases are checked against
+Python's http.cookies, which is not the code under test. http.cookies reads back what std/cookie writes, and a header
+built from known pairs gives the expected map of the reader.
 """
-import html
 import json
 import random
 from email.utils import formatdate
@@ -25,7 +21,7 @@ DEFAULTS = {"name": "", "value": "", "path": "", "domain": "", "max_age": NO_MAX
 
 @pytest.fixture(scope="module")
 def driver(tmp_path_factory):
-    return compile_agc(FIXTURES / "cgi" / "driver.agc", tmp_path_factory.mktemp("agentica-cgi-") / "driver.agcb")
+    return compile_agc(FIXTURES / "cookie" / "driver.agc", tmp_path_factory.mktemp("agentica-cookie-") / "driver.agcb")
 
 
 def call(driver, cases):
@@ -41,42 +37,6 @@ def call(driver, cases):
     assert len(replies) == len(cases)
     return replies
 
-
-def texts(driver, op, inputs):
-    replies = call(driver, [(op, text) for text in inputs])
-    assert all(reply["success"] for reply in replies)
-    return [reply["text"] for reply in replies]
-
-
-ESCAPE_VECTORS = [
-    ("", ""),
-    ("plain text 123", "plain text 123"),
-    ("<script>alert('x') & \"y\"</script>", "&lt;script&gt;alert(&#39;x&#39;) &amp; &quot;y&quot;&lt;/script&gt;"),
-    ("&amp; &lt;", "&amp;amp; &amp;lt;"),
-    ("é 日 😀\n\t", "é 日 😀\n\t"),
-]
-
-# Text that unescape_html decodes: the five named entities, decimal and hex numbers (either `x`, leading zeros), and
-# one pass only.
-UNESCAPE_VECTORS = [
-    ("&lt;&gt;&amp;&quot;&apos;", "<>&\"'"),
-    ("&#39;&#x27;&#X27;&#0039;&#x0027;", "'''''"),
-    ("&#65;&#x41;&#x1F600;&#233;&#x20AC;", "AA😀é€"),
-    ("&amp;lt;&amp;#65;", "&lt;&#65;"),
-    ("&&amp;&amp;&", "&&&&"),
-    ("&#0;&#x0;&#1;", "\u0000\u0000\u0001"),
-    ("&#x10FFFF;&#1114111;", "\U0010FFFF\U0010FFFF"),
-    ("a &lt; b &amp;&amp; c &gt; d", "a < b && c > d"),
-]
-
-# Text that stays as it is: an entity Ruby does not decode, a number that is not a scalar value, a missing `;`, and
-# digits that cannot be read.
-UNESCAPE_UNCHANGED = [
-    "", "no entities", "a & b", "&", "&;", "&#;", "&#x;", "&#xZZ;", "&#12a;", "&#x1G;", "&# 65;", "&#-65;",
-    "&nbsp;", "&copy;", "&AMP;", "&Lt;", "&amp", "&lt &gt", "&#65", "&bogus;", "& amp;", "&am p;",
-    "&#1114112;", "&#x110000;", "&#xD800;", "&#xDFFF;", "&#55296;", "&#57343;", "&#99999999999999999999;",
-    "&#x" + "F" * 40 + ";", "&" * 5,
-]
 
 COOKIE_HEADERS = [
     ("", {}),
@@ -152,77 +112,23 @@ def test_max_age_default_is_the_smallest_int(driver):
     assert [reply["text"] for reply in replies] == [str(NO_MAX_AGE)] * 2
 
 
-def test_escape_html_vectors(driver):
-    assert texts(driver, "escape_html", [text for text, _ in ESCAPE_VECTORS]) == [out for _, out in ESCAPE_VECTORS]
-
-
-def test_unescape_html_decodes_what_ruby_decodes_and_leaves_the_rest(driver):
-    decoded = texts(driver, "unescape_html", [text for text, _ in UNESCAPE_VECTORS])
-    assert decoded == [out for _, out in UNESCAPE_VECTORS]
-    assert texts(driver, "unescape_html", UNESCAPE_UNCHANGED) == UNESCAPE_UNCHANGED
-
-
-def test_parse_cookies_header_vectors(driver):
-    replies = call(driver, [("parse_cookies_header", header) for header, _ in COOKIE_HEADERS])
+def test_parse_vectors(driver):
+    replies = call(driver, [("parse", header) for header, _ in COOKIE_HEADERS])
     for (header, expected), reply in zip(COOKIE_HEADERS, replies):
         assert reply["cookies"] == expected, header
         assert list(reply["cookies"]) == list(expected), header
 
 
-def test_set_cookie_header_vectors(driver):
-    replies = call(driver, [("set_cookie_header", cookie) for cookie, _ in SET_COOKIE_VECTORS])
+def test_set_header_vectors(driver):
+    replies = call(driver, [("set_header", cookie) for cookie, _ in SET_COOKIE_VECTORS])
     for (cookie, expected), reply in zip(SET_COOKIE_VECTORS, replies):
         assert (reply["success"], reply["text"]) == (True, expected), cookie
 
 
-def test_set_cookie_header_errors_name_the_field_and_never_halt(driver):
-    replies = call(driver, [("set_cookie_header", cookie) for cookie, _ in SET_COOKIE_ERRORS])
+def test_set_header_errors_name_the_field_and_never_halt(driver):
+    replies = call(driver, [("set_header", cookie) for cookie, _ in SET_COOKIE_ERRORS])
     for (cookie, message), reply in zip(SET_COOKIE_ERRORS, replies):
         assert (reply["success"], reply["message"]) == (False, message), cookie
-
-
-# The alphabet mixes the five characters that are escaped, entity-like text, and characters of one to four UTF-8 bytes.
-ALPHABET = list("abcXYZ019 .,-_/?=#;:\n\t\x00\x7f") + ["&", "<", ">", "\"", "'", "&amp;", "&#39;", "é", "日", "😀"]
-
-
-def random_text(rng, longest=40):
-    return "".join(rng.choice(ALPHABET) for _ in range(rng.randint(0, longest)))
-
-
-def generated_texts(seed, count, long=False):
-    rng = random.Random(seed)
-    values = [random_text(rng) for _ in range(count)]
-    if long:
-        # One long text for the cost of one pass.
-        values.append("".join(rng.choice(ALPHABET) for _ in range(100000)))
-    return values
-
-
-def test_escape_html_matches_html_escape_for_generated_text(driver):
-    values = generated_texts(1, 400, long=True)
-    for value, got in zip(values, texts(driver, "escape_html", values)):
-        assert got == html.escape(value, quote=True).replace("&#x27;", "&#39;"), value[:60]
-
-
-# The entities that Ruby and html.unescape decode alike, and filler that html.unescape leaves: numbers it does not map
-# (controls, C1, noncharacters, surrogates) and entities it knows but Ruby does not are not generated.
-ENTITIES = ["&lt;", "&gt;", "&amp;", "&quot;", "&apos;", "&#39;", "&#x41;", "&#X41;", "&#0065;", "&#233;", "&#xe9;",
-            "&#8364;", "&#x1F600;", "&#128512;", "&#55295;", "&#57344;", "&#1114109;", "&#x20;"]
-FILLER = list("abcXYZ019 .,-_/?=#:\n\t<>\"'é日😀") + ["& ", "&;", "&#;", "&#x;", "&xyzzy;", "&#xZZ;"]
-
-
-def entity_text(rng):
-    return "".join(rng.choice(ENTITIES if rng.randint(0, 2) == 0 else FILLER) for _ in range(rng.randint(0, 30)))
-
-
-def test_unescape_html_matches_html_unescape_and_undoes_escape_html(driver):
-    rng = random.Random(2)
-    values = [entity_text(rng) for _ in range(500)]
-    for value, got in zip(values, texts(driver, "unescape_html", values)):
-        assert got == html.unescape(value), value
-    raw = generated_texts(3, 300)
-    escaped = texts(driver, "escape_html", raw)
-    assert texts(driver, "unescape_html", escaped) == raw
 
 
 TOKEN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&'*+-.^_`|~"
@@ -257,11 +163,11 @@ def random_cookie(rng):
     return cookie
 
 
-def test_set_cookie_header_is_read_back_by_http_cookies_and_parse_cookies_header(driver):
+def test_set_header_is_read_back_by_http_cookies_and_parse(driver):
     rng = random.Random(4)
     cookies = [random_cookie(rng) for _ in range(300)]
-    replies = call(driver, [("set_cookie_header", cookie) for cookie in cookies])
-    heads = call(driver, [("parse_cookies_header", reply["text"].split("; ")[0]) for reply in replies])
+    replies = call(driver, [("set_header", cookie) for cookie in cookies])
+    heads = call(driver, [("parse", reply["text"].split("; ")[0]) for reply in replies])
     for cookie, reply, head in zip(cookies, replies, heads):
         assert reply["success"], cookie
         parsed = SimpleCookie()
@@ -297,10 +203,10 @@ def random_cookie_header(rng):
     return header, expected, plain and len(expected) == len(pairs)
 
 
-def test_parse_cookies_header_matches_the_pairs_it_was_built_from_and_http_cookies(driver):
+def test_parse_matches_the_pairs_it_was_built_from_and_http_cookies(driver):
     rng = random.Random(5)
     cases = [random_cookie_header(rng) for _ in range(500)]
-    replies = call(driver, [("parse_cookies_header", header) for header, _, _ in cases])
+    replies = call(driver, [("parse", header) for header, _, _ in cases])
     compared = 0
     for (header, expected, unique), reply in zip(cases, replies):
         assert reply["cookies"] == expected, header
