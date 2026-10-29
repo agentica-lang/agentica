@@ -43,7 +43,11 @@ def std_modules(root):
 
 def rows(binary, root):
     for entry in run_json(binary, "help", "--json"):
-        for at, p in enumerate(entry.get("parameters", [])):
+        if "parameters" not in entry:
+            # A builtin with overloads (Task.await, Map.get...): never a default candidate by rule.
+            yield ("overloads", entry["name"], 0, "", "", None, "")
+            continue
+        for at, p in enumerate(entry["parameters"]):
             yield ("builtin", entry["name"], at, p["name"], p["type"], p.get("default"), entry["signature"])
     for module in std_modules(root):
         doc = run_json(binary, "doc", module, "--json", required=False)
@@ -74,6 +78,8 @@ def main():
             for r in table:
                 out.write("\t".join("" if v is None else str(v) for v in r) + "\n")
 
+    overloaded = [r[1] for r in table if r[0] == "overloads"]
+    table = [r for r in table if r[0] != "overloads"]
     functions = {(r[0], r[1]) for r in table}
     with_default = [r for r in table if r[5] is not None]
     print(
@@ -90,6 +96,8 @@ def main():
     for r in table:
         if r[5] is None and any(word in r[3] for word in TUNING):
             print(f"  {r[0]:9} {r[1]}  {r[3]}: {r[4]}")
+
+    print(f"\nbuiltins with overloads, not candidates (read by hand): {', '.join(overloaded)}")
 
     print("\nexisting defaults (precedents):")
     for r in with_default:

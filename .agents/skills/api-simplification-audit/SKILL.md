@@ -7,9 +7,9 @@ description: >-
   signature scan to a full per-function proposal, and report the result as a
   GitHub tracking issue split into small PRs. Use when asked to simplify
   builtin or std signatures, find required arguments that should be optional,
-  or run an API defaults campaign. Read-only: it does not change the catalog
-  or std/ itself, and it is not a code-style review (agentica-code-guidelines)
-  or a docs cleanup (documentation-pruning).
+  or run an API defaults campaign. Only the audit and its report: adding a
+  default is agentica-development work, a general plan is
+  iterative-issue-planning, style is agentica-code-guidelines.
 ---
 
 # API simplification audit
@@ -37,6 +37,8 @@ Check every proposal against these rules first; they decide its cost.
   bigger PR, and the cost line of the proposal says so.
 - A **std struct** field may have a default (`NAME: type = expr`), so a
   `*_options()` function that only returns defaults may become field defaults.
+  A builtin record (such as `HttpClientOptions`) cannot: only builtin
+  parameters take defaults (`compiler/catalog/builtin_model.agc`).
 - "Nothing waits forever" stays true: a timeout default is a finite number,
   never "no timeout". Precedent: `File.chunks(path, size = 65536,
   timeout_ms = 30000)`.
@@ -47,8 +49,9 @@ Check every proposal against these rules first; they decide its cost.
 
 ## Pass 1: signatures (minutes)
 
-Build or pick a binary that matches the checkout (a worktree's
-`dist/agentica`; the main checkout's `dist/` may be stale). Then:
+Use a binary built from the checkout you audit (a worktree's
+`dist/agentica`; the main checkout's `dist/` may be stale). An older binary
+skips the newer std/ modules and makes pass 2 read the wrong lines. Then:
 
 ```bash
 python3 .agents/skills/api-simplification-audit/scripts/signatures.py \
@@ -57,7 +60,8 @@ python3 .agents/skills/api-simplification-audit/scripts/signatures.py \
 
 It lists the most repeated parameters without a default, the tuning-like
 ones (`timeout_ms`, `max_*`, `size`, `count`, `mode`, `options`...) and the
-defaults that exist today. A module the binary lacks is skipped with a note.
+defaults that exist today, and names the builtins with overloads
+(`Task.await`...), which take no defaults and are read by hand.
 Group the candidates by family (all `timeout_ms` of `File.*`, of
 `Channel.*`...), not one by one. Drop the ones that are the subject of the
 call (`List.take(count)`: the count is the point).
@@ -68,35 +72,34 @@ For each family, count how callers pass the argument:
 
 ```bash
 python3 .agents/skills/api-simplification-audit/scripts/arg_usage.py \
-  <binary> File.read_text stdlib examples site/content --root .
+  <binary> File.read_text stdlib/*.agc examples compiler --root .
 ```
 
-Run it on `stdlib/`, `examples/`, `compiler/`, and on the sibling repos when
-present (`../bond`, `../agentica-db` next to the checkout).
-`refs` checks the files, so a file that does not check is missing; compare
-with `rg -c 'read_text\('` and read the unparsed sites by hand. A value used
+Run it on `stdlib/*.agc`, `examples`, `compiler`, and on the sibling repos
+when present (`../bond`, `../agentica-db` next to the checkout). `refs`
+stops at the first check error of any file, so pass folders that check
+(bare `stdlib` and test fixtures do not; `site/content` has no `.agc`).
+Count the site samples with `rg` instead, compare the total with
+`rg -c 'read_text\('`, and read the unparsed sites by hand. A value used
 in most calls is the default candidate; a spread of values means keep it
 required. Note the values in tests apart: tests pick small timeouts on
 purpose.
 
 ## Pass 3: proposal (the full report)
 
-For each family that survives, write one entry:
+For each family that survives, write one entry (the numbers here are
+invented):
 
 ```text
-### File.* timeout_ms (23 builtins)
+### File.* timeout_ms (N builtins)
 Now:      File.read_text(path: String, timeout_ms: Int) -> Result[String]
 Proposal: timeout_ms: Int = 30000
-Usage:    41 calls; 30000 in 25, 5000 in 6, test values in 10
+Usage:    M calls; 30000 in most, a few 5000, test values apart
 Rule:     Plain, no alternatives: default allowed as is
 Risk:     not breaking; programs that pass it keep working
 Ruby:     File.read(path) has no timeout; the default keeps the call Ruby-like
 Cost:     S: catalog rows + goldens + docs (grammar, site, skill, CHANGELOG)
 ```
-
-Also note, as you go, problems you see in how the docs site renders these
-signatures (a cut or scrolled signature box on a phone, a wrong type). Put
-them in a separate "Docs site" section with the page URL.
 
 ## Report
 
@@ -107,8 +110,7 @@ Write the report as one GitHub tracking issue on agentica-lang/agentica:
   rows before checker rule changes, non-breaking before breaking);
 - each item links its pass 3 entry and names the docs it must update
   (AGENTS.md: grammar, site page, programming skill, CHANGELOG);
-- use the org token for `gh` there, as the development workflow says, and
-  check for an existing issue first (`gh issue list --search "API
+- check for an existing issue first (`gh issue list --search "API
   simplification"`) and update it rather than open a second one.
 
 Give the owner the issue link and the top three items. Open no PR until the
