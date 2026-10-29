@@ -255,7 +255,7 @@
  "def main() -> Void\n  x = String.length()\nend\n\n",
  "def main() -> Void\n  x = String.nope(\"a\")\nend\n\n",
  "def main() -> Void\n  x = String.join(\"a\", \",\")\nend\n\n",
- "def main() -> Void\n  IO.puts(\"a\")\n  IO.print(\"b\")\n  IO.warn(\"c\")\n  x: Int = IO.inspect(1)\n  s: Result[String] = IO.gets()\n  line: String = IO.gets!()\n  r: String = IO.read()\n  bytes: Result[List[Int]] = IO.read_bytes(3)\n  decoded: Result[String] = String.from_bytes([195, 177])\n  IO.flush()\n  e: Bool = IO.eof?()\n  a: List[String] = System.args()\n  System.exit(0)\nend\n\n",
+ "def main() -> Void\n  IO.puts(\"a\")\n  IO.print(\"b\")\n  IO.warn(\"c\")\n  x: Int = IO.inspect(1)\n  s: Result[String] = IO.gets()\n  line: String = IO.gets!()\n  r: String = IO.read()\n  bytes: Result[Bytes] = IO.read_bytes(3)\n  decoded: Result[String] = String.from_bytes(Bytes.from_list([195, 177]).unwrap!)\n  IO.flush()\n  e: Bool = IO.eof?()\n  a: List[String] = System.args()\n  System.exit(0)\nend\n\n",
  "def main() -> Void\n  IO.puts(IO.flush())\nend\n\n",
  "def main() -> Void\n  x = IO.gets(1)\nend\n\n",
  "def main() -> Void\n  x = IO.nope()\nend\n\n",
