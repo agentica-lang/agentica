@@ -80,13 +80,13 @@ Run it on `examples`, `compiler`, and on the sibling repos when present
 (`../bond`, `../agentica-db` next to the checkout). `refs` stops at the first
 check error of any file, so pass folders that check (bare `stdlib` and test
 fixtures do not; `site/content` has no `.agc`). Many `stdlib/*.agc` files do not
-check alone, so take the `std/...` calls from a run whose programs import them
-(`compiler`, `../bond`), once, and read the rest of `stdlib/` with `rg`. The
-script lists the files `refs` skipped because they do not link: read their calls
-by hand. Count the site samples with `rg`, compare the total with `rg -c
-'read_text\('`, and read the unparsed sites by hand. A value used in most calls
-is the default candidate; a spread of values means keep it required. Note the
-values in tests apart: tests pick small timeouts on purpose.
+check alone: count calls inside `stdlib/` with `rg`, and treat the `std/...`
+spans a run reports (from programs that import std, mostly `examples`) as a
+bonus. The script lists the files `refs` skipped because they do not link: read
+their calls by hand. Count the site samples with `rg`, compare the total with
+`rg -c 'read_text\('`, and read the unparsed sites by hand. A value used in most
+calls is the default candidate; a spread of values means keep it required. Note
+the values in tests apart: tests pick small timeouts on purpose.
 
 ## Pass 3: proposal (the full report)
 
