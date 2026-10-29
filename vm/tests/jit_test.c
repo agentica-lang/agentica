@@ -347,15 +347,16 @@ static AGC_JIT_CALLER void wide_tail_calls(void) {
   assert(!looped[0]);
 }
 
-/* Function 0 calls the function value in R2 with R3 as its argument: function 1, which adds its capture to it. The
-   call is native once function 1 has code (agc_jit_call_value pushes the frame, base 3 and result to R2, with the
-   capture after the argument) and the result lands in R2. A callee without code yet, a task without room for the
-   frame, its registers or one more depth, and a value that does not match the call take the CALL_VALUE exit with
-   nothing pushed, for run_compiled to call it, or fail, as the interpreter does. */
+/* Function 0 calls the function value in R2 with R3 as its argument: function 1, which adds its capture to it into its
+   R1. The call is native once function 1 has code (agc_jit_call_value pushes the frame, base 3 and result to R2, with
+   the capture after the argument) and the result lands in R2, while R3, the callee's R0, keeps what the callee left
+   there, as the interpreter's RETURN leaves it (#807: hand-made bytecode may read it after the call). A callee without
+   code yet, a task without room for the frame, its registers or one more depth, and a value that does not match the
+   call take the CALL_VALUE exit with nothing pushed, for run_compiled to call it, or fail, as the interpreter does. */
 static AGC_JIT_CALLER void call_values(void) {
   static const agc_trace quiet = {0};
   static agc_instr caller[] = {{AGC_OP_CALL_VALUE, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
-  static agc_instr callee[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ADD_I, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static agc_instr callee[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ADD_I, 1, 0, 1}, {AGC_OP_RETURN, 1, 0, 0}};
   static uint32_t spans[3] = {0};
   agc_value constants[1] = {agc_int(0)};
   agc_function fns[2] = {
@@ -388,6 +389,7 @@ static AGC_JIT_CALLER void call_values(void) {
   assert(agc_jit_code_of(jit, 1, 0));
   expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
   assert(same_bits(regs[2], agc_int(141)) && t->frame_count == 1 && t->depth == 1 && frames[0].pc == 1);
+  assert(same_bits(regs[3], agc_int(41)) && same_bits(regs[4], agc_int(141)));
   assert(vm.next_stop == 999);
   regs[2] = fn;
   regs[3] = agc_int(41);
