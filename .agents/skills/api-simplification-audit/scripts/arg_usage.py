@@ -111,7 +111,8 @@ def main():
     if skipped:
         print(f"\n  files refs skipped (they do not link): {len(skipped)}")
         for item in skipped[:20]:
-            print(f"    {item}")
+            code = (item.get("diagnostic") or {}).get("code", "") if isinstance(item, dict) else ""
+            print(f"    {item.get('file', item) if isinstance(item, dict) else item} {code}")
     if unparsed:
         print("\n  unparsed (read by hand):")
         for where in unparsed[:20]:

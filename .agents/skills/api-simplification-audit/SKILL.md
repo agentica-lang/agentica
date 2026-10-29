@@ -79,7 +79,8 @@ Run it on `stdlib/*.agc`, `examples`, `compiler`, and on the sibling repos
 when present (`../bond`, `../agentica-db` next to the checkout). `refs`
 stops at the first check error of any file, so pass folders that check
 (bare `stdlib` and test fixtures do not; `site/content` has no `.agc`).
-Count the site samples with `rg` instead, compare the total with
+The script lists the files `refs` skipped because they do not link: read
+their calls by hand. Count the site samples with `rg`, compare the total with
 `rg -c 'read_text\('`, and read the unparsed sites by hand. A value used
 in most calls is the default candidate; a spread of values means keep it
 required. Note the values in tests apart: tests pick small timeouts on
