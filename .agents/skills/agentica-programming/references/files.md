@@ -7,15 +7,15 @@ interpreter uses the host user's filesystem permissions. With `--deny-fs` (or
 
 ```text
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
-File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
-File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
-File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
-File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
-File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
-File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
-File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lazy.md
-Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # lazy.md
+File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[List[Int]]
+File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
+File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int = 30000) -> Result[Void]
+File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
+File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
+File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) do |line| ... end -> Result[Void]
+File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]   # lazy.md
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]   # lazy.md
 File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[List[Int]]
 File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -34,9 +34,9 @@ Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-A call on a path may leave out `timeout_ms` (default 30000): the rows above
-with `= 30000`. `File.open(path)` also reads. The handle rows, `each_line`,
-`foreach` and `Lazy.write_lines` still need it.
+Every `timeout_ms` above may be left out (default 30000), except the one of
+`File.try_lock`. `File.open(path)` also reads, and `each_line` and `foreach`
+default `buffer_bytes` to 65536.
 
 ## Opening and reading
 

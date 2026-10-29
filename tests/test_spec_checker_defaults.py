@@ -141,6 +141,14 @@ SINGLE_FILE = [
                '  c = File.open("a.txt", "append", 50)\n'), None, None),
     ("a filesystem builtin timeout is still an Int",
      main_with('  puts(Dir.list("d", "soon"))\n'), "CHECK-TYPE-MISMATCH", '"soon"'),
+    ("a file handle call and each_line, foreach and write_lines may leave out the timeout",
+     main_with('  f = File.open("a.txt").unwrap!\n  puts(File.read_line(f))\n  puts(File.write(f, "x"))\n'
+               '  puts(File.close(f, 50))\n  puts(File.read_bytes(f, 4))\n'
+               '  File.each_line("a.txt") do |line|\n    puts(line)\n    ok()\n  end\n'
+               '  puts(File.foreach("a.txt").first(1))\n  puts(File.foreach("a.txt", 4096).first(1))\n'
+               '  puts(File.foreach("a.txt").write_lines("b.txt"))\n'), None, None),
+    ("File.try_lock still needs its timeout",
+     main_with('  f = File.open("a.txt").unwrap!\n  puts(File.try_lock(f))\n'), "CHECK-ARITY", "File.try_lock(f)"),
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("a builtin has no function value, defaults or not",

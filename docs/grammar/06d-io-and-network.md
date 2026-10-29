@@ -135,11 +135,11 @@ On Windows no File call waits on a stream: they accept only regular files
 at once with an error. Streams that can wait reach the program there as
 standard input, output or error, as process pipes and as sockets.
 Signatures are in
-[`library/io-and-system/files.md`][agentica-link-2]. `File.read_text`,
-`write_text`, `append_text`, `sha256`, `stat`, `lstat`, `open`, `Dir.list`,
-`Dir.mkdir`, `Dir.mkdir_private`, `Path.remove` and `Path.rename` default
-`timeout_ms` to 30000, and `File.open` defaults `mode` to `"read"` (see
-"Default parameter values" in section 6).
+[`library/io-and-system/files.md`][agentica-link-2]. Every File, Dir and Path
+call that takes `timeout_ms` defaults it to 30000, except `File.try_lock`;
+`File.open` defaults `mode` to `"read"`, and `File.each_line` and
+`File.foreach` default `buffer_bytes` to 65536 (see "Default parameter values"
+in section 6).
 
 - `File.open` modes: `read` (an existing path that is not a directory), `write`
   (creates or truncates), `append` (creates or appends) and `create_private` (a
