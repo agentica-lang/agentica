@@ -6,7 +6,7 @@ interpreter uses the host user's filesystem permissions. With `--deny-fs` (or
 `Lazy.write_bytes`, returns an error starting `denied: --deny-fs`.
 
 ```text
-File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
 File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
 File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
@@ -16,23 +16,27 @@ File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lazy.md
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # lazy.md
-File.read_text(path: String, timeout_ms: Int) -> Result[String]
-File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
-File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
-File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
-File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
-File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
+File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
+File.sha256(path: String, timeout_ms: Int = 30000) -> Result[List[Int]]
+File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
+File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
-Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
-Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
-Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
+Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
+Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
+Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
 Path.cwd() -> Result[String]
 Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
-Path.remove(path: String, timeout_ms: Int) -> Result[Void]
-Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
+Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
+Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
+
+A call on a path may leave out `timeout_ms` (default 30000): the rows above
+with `= 30000`. `File.open(path)` also reads. The handle rows, `each_line`,
+`foreach` and `Lazy.write_lines` still need it.
 
 ## Opening and reading
 
