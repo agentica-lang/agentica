@@ -748,6 +748,22 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
+# A compute call is cancelled only once it has started (peer_wait_flag counts each start): a call cancelled while it
+# still waits for a pool thread never runs (run_compute in vm/loop.c), so it makes nothing to free (#780).
+WAIT_STARTED = """extern "{library}"
+  def peer_waiting() -> C.Int32
+end
+
+def wait_started(calls: Int) -> Void
+  n = 0
+  while peer_waiting() < calls and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+"""
+
 RESOURCE_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
   def peer_res_open(value: C.Int32) -> Res
@@ -1528,7 +1544,7 @@ end
 
 def main() -> Void
   opener = Task.spawn(&later, 3)
-  Task.sleep(20)
+  wait_started(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -1536,7 +1552,8 @@ def main() -> Void
   puts(peer_res_frees())
 end
 """
-    result = agentica("--schedulers", "2", program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    source = program(tmp_path, (RESOURCE_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    result = agentica("--schedulers", "2", source)
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
 
 
@@ -2082,7 +2099,7 @@ end
 
 def main() -> Void
   opener = Task.spawn(&later, 3)
-  Task.sleep(20)
+  wait_started(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -2093,7 +2110,8 @@ def main() -> Void
   puts(peer_res_frees())
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, OUT_EXTERN.format(library=literal(peer)) + main))
+    source = program(tmp_path, (OUT_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\nok(4)\n2\n', "")
 
 
@@ -2243,7 +2261,7 @@ def main() -> Void
   wait_releases(11)
   puts(peer_api_releases())
   opener = Task.spawn(&later, 4)
-  Task.sleep(20)
+  wait_started(1)
   Task.cancel(opener)
   puts(Task.await(opener))
   peer_set_flag()
@@ -2251,7 +2269,8 @@ def main() -> Void
   puts(peer_api_releases())
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
+    source = program(tmp_path, (API_EXTERN + WAIT_STARTED).format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "55", "10", 'error("task: cancelled")', "11", 'error("task: cancelled")', "12", "",
