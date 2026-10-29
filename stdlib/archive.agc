@@ -43,10 +43,10 @@ SPARSE_KEY = [115, 112, 97, 114, 115, 101]
 
 ## The knobs of `extract_tar`. Every other limit is a fixed ceiling named in `extract_tar`.
 export struct Options
-  ## The whole call in milliseconds, 1 to 86400000. Defaults to 30000.
-  timeout_ms: Int
-  ## The largest total of extracted file bytes, 1 to 1073741824. Defaults to 268435456.
-  max_output_bytes: Int
+  ## The whole call in milliseconds, 1 to 86400000.
+  timeout_ms: Int = 30000
+  ## The largest total of extracted file bytes, 1 to 1073741824.
+  max_output_bytes: Int = 268435456
 end
 
 # One validated allowlist member: the canonical archive path and its segments under the new base.
@@ -122,9 +122,9 @@ struct Scan
   total: Int
 end
 
-## Returns the default options: a 30 s deadline and at most 256 MiB of extracted files.
+## Returns the default options: a 30 s deadline and at most 256 MiB of extracted files. `Options()` gives the same.
 export def options() -> Options
-  return Options(timeout_ms: 30000, max_output_bytes: 268435456)
+  return Options()
 end
 
 ## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in

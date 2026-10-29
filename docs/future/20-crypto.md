@@ -22,11 +22,10 @@ with a `_hexdigest` form (`Digest.sha256(data: List[Int]) -> List[Int]`,
 give `List[Int]` until `Bytes` exists, and move to `Bytes` with the other byte
 APIs.
 
-**Plan** (issue #757, one PR each): a constant-time compare, PBKDF2 and
-AES-256-GCM. Their names follow Ruby's (`OpenSSL::PKCS5.pbkdf2_hmac`),
-flattened as `Digest` and `HMAC` are
-(`Digest::SHA256.hexdigest` is `Digest.sha256_hexdigest`); each PR settles its
-names. `Crypto` stays a reserved type name only.
+**Plan** (issue #757, one PR each): PBKDF2 and AES-256-GCM. Their names
+follow Ruby's (`OpenSSL::PKCS5.pbkdf2_hmac`), flattened as `Digest` and `HMAC`
+are (`Digest::SHA256.hexdigest` is `Digest.sha256_hexdigest`); each PR settles
+its names. `Crypto` stays a reserved type name only.
 
 - Hex and Base64 are the `Digest.hexencode`/`hexdecode` and `Base64` builtins
   (`docs/grammar/06b-builtins.md`).

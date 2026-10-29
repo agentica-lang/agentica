@@ -26,7 +26,7 @@ def main() -> Void
 end
 ```
 
-- `Archive.options()` is a 30 s deadline with at most 268435456 extracted bytes; `timeout_ms` is 1 to 86400000 and `max_output_bytes` is 1 to 1073741824.
+- `Archive.Options()` is a 30 s deadline with at most 268435456 extracted bytes, and `Archive.options()` gives the same; `timeout_ms` is 1 to 86400000 and `max_output_bytes` is 1 to 1073741824.
 - The destination is created private and must not exist; each file is created never-overwriting, with parents made under the new base. Only regular files are written: links, directories, devices and sparse entries are refused when selected and skipped otherwise.
 - Names keep their archive spelling: absolute paths, drive letters, UNC shares, backslashes, colons, NUL bytes and `.` or `..` segments are rejected, as are two members that only differ in case. The call scans the whole container through the two zero end blocks, so a duplicate, a missing member or a bad checksum after a selected file is still an error.
 - Fixed ceilings: the raw TAR scan is at most 1073741824 bytes, a gzipped source at most 268435456 compressed bytes, 8192 entries, 1024 name bytes and 65536 bytes of PAX and GNU extension data. Headers follow USTAR with PAX `path` and `size` records and GNU long names; other PAX records are ignored and sparse entries are refused.

@@ -90,8 +90,10 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   Ruby's `OpenSSL::HMAC.digest`); `HMAC.sha256_hexdigest(key, data) -> String`
   and `sha512_hexdigest` return them as lowercase hex. Any key length works,
   empty included. A bad item in the key or the data halts at that argument
-  (`RUNTIME-INVALID-NUMBER`). Compare a received MAC in constant time, not
-  with `==` (no such compare builtin yet). `HMAC` is a reserved type name.
+  (`RUNTIME-INVALID-NUMBER`). `HMAC` is a reserved type name.
+- `HMAC.secure_compare(a: List[Int], b: List[Int]) -> Bool` compares bytes in
+  constant time (Ruby's `OpenSSL.secure_compare`): check a received MAC,
+  signature or token with it, never with `==`. Other lengths give `false`.
 
 ```text
 Base64.strict_encode64(data: List[Int]) -> String     # padded, one line

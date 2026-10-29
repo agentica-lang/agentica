@@ -1,9 +1,10 @@
 /*
  * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
  * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
- * hash (files.c), which streams a whole file in fixed chunks, and secure random
- * bytes for SecureRandom (crypto.c). The OpenSSL code is in digest_openssl.c.
- * Adapter header. Design: docs/vm/15-layers.md §15.1.
+ * hash (files.c), which streams a whole file in fixed chunks, secure random
+ * bytes for SecureRandom and a constant-time compare for HMAC.secure_compare
+ * (crypto.c). The OpenSSL code is in digest_openssl.c. Adapter header. Design:
+ * docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
@@ -49,5 +50,10 @@ void agc_sha256_free(agc_sha256_stream *stream);
    to give, or n is above INT_MAX); out then holds no usable bytes. Safe on any thread: OpenSSL 3 keeps one generator
    per thread. */
 bool agc_secure_random(unsigned char *out, size_t n);
+
+/* True when the n bytes at a and at b are the same, in a time that depends on n only, never on the bytes or on where
+   they differ (OpenSSL's CRYPTO_memcmp). a and b may be NULL when n is 0. It reads only the two buffers: no library
+   state, so it is safe on any thread. */
+bool agc_secure_equal(const unsigned char *a, const unsigned char *b, size_t n);
 
 #endif
