@@ -6,6 +6,7 @@
  */
 #include "../core.h"
 #include "../services.h"
+#include "builtin_test.h"
 
 #include <assert.h>
 #include <setjmp.h>
@@ -33,14 +34,7 @@ static const agc_builtin *row(const char *name, uint32_t arity) {
 static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  const agc_builtin *b = row(name, arity);
-  const char *got = "nothing";
-  if (setjmp(vm.fail) == 0)
-    (void)b->fn(&vm, args, 0);
-  else
-    got = vm.outcome->code;
-  if (strcmp(got, code) != 0) fprintf(stderr, "%s/%u: got %s, expected %s\n", name, arity, got, code);
-  assert(strcmp(got, code) == 0);
+  agc_test_fails(&vm, name, row(name, arity), args, code);
 }
 
 static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }

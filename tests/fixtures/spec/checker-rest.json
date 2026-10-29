@@ -11289,19 +11289,19 @@
       "start": [1, 1]
     }
   ],
-  "Zlib compresses bytes and Lazy streams, with defaults": [
+  "Zlib compresses Bytes and Lazy streams of Bytes, with defaults": [
     {
       "program": [
         "def main() -> Void",
-        "  packed: Result[List[Int]] = Zlib.deflate([104, 105])",
-        "  full = Zlib.deflate([104], 9, 100).unwrap!",
+        "  packed: Result[Bytes] = Zlib.deflate(\"hi\".bytes)",
+        "  full = Zlib.deflate(\"h\".bytes, 9, 100).unwrap!",
         "  back = Zlib.inflate(packed.unwrap!).unwrap!",
-        "  gz = Zlib.gzip([104], 9).unwrap!",
-        "  raw: Result[List[Int]] = Zlib.gunzip(gz, 10)",
+        "  gz = Zlib.gzip(\"h\".bytes, 9).unwrap!",
+        "  raw: Result[Bytes] = Zlib.gunzip(gz, 10)",
         "  sum: Result[Int] = Zlib.crc32(back)",
-        "  chunks: Lazy[List[Int]] = File.chunks(\"a\")",
+        "  chunks: Lazy[Bytes] = File.chunks(\"a\")",
         "  sized = File.chunks(\"a\", 4096, 1000)",
-        "  steps: Lazy[List[Int]] = chunks.gzip.gunzip(100).deflate(9, true).inflate(true, 100).deflate.inflate",
+        "  steps: Lazy[Bytes] = chunks.gzip.gunzip(100).deflate(9, true).inflate(true, 100).deflate.inflate",
         "  n: Result[Int] = steps.write_bytes(\"b\")",
         "  m: Result[Int] = sized.gzip(1).write_bytes(\"c\", 1000)",
         "  puts(full.size + raw.unwrap!.size + sum.unwrap! + n.unwrap! + m.unwrap!)",
@@ -11313,7 +11313,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  chunks: Lazy[List[Int]] = \"p\" |> File.chunks(4)",
+        "  chunks: Lazy[Bytes] = \"p\" |> File.chunks(4)",
         "  puts(chunks.to_a)",
         "end",
         ""
@@ -11330,18 +11330,29 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 20],
       "covers": "\"abc\"",
-      "expected": "List[Int]",
+      "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  d = Zlib.deflate([1], \"6\", 100)",
+        "  d = Zlib.deflate([1], 6, 100)",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 25],
+      "start": [2, 20],
+      "covers": "[1]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Zlib.deflate(\"a\".bytes, \"6\", 100)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 31],
       "covers": "\"6\"",
       "expected": "Int",
       "actual": "String",
@@ -11350,27 +11361,27 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Zlib.inflate([1], 2, 3)",
+        "  d = Zlib.inflate(\"a\".bytes, 2, 3)",
         "end",
         ""
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Zlib.inflate([1], 2, 3)",
-      "callee": "Zlib.inflate(data: List[Int], max_bytes: Int = 1048576) -> Result[List[Int]]"
+      "covers": "Zlib.inflate(\"a\".bytes, 2, 3)",
+      "callee": "Zlib.inflate(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: String = Zlib.gzip([1])",
+        "  s: String = Zlib.gzip(\"a\".bytes)",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 15],
-      "covers": "Zlib.gzip([1])",
+      "covers": "Zlib.gzip(\"a\".bytes)",
       "expected": "String",
-      "actual": "Result[List[Int]]"
+      "actual": "Result[Bytes]"
     },
     {
       "program": [
@@ -11448,24 +11459,24 @@
     {
       "program": [
         "def main() -> Void",
-        "  puts([[1]].lazy.deflate(6, true, 1).to_a)",
+        "  puts([\"a\".bytes].lazy.deflate(6, true, 1).to_a)",
         "end",
         ""
       ],
       "code": "CHECK-ARITY",
       "start": [2, 8],
-      "covers": "[[1]].lazy.deflate(6, true, 1)",
-      "callee": "Lazy.deflate(lazy: Lazy[List[Int]], level: Int = 6, raw: Bool = false) -> Lazy[List[Int]]"
+      "covers": "[\"a\".bytes].lazy.deflate(6, true, 1)",
+      "callee": "Lazy.deflate(lazy: Lazy[Bytes], level: Int = 6, raw: Bool = false) -> Lazy[Bytes]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  puts([[1]].lazy.inflate(1).to_a)",
+        "  puts([\"a\".bytes].lazy.inflate(1).to_a)",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 27],
+      "start": [2, 33],
       "covers": "1",
       "expected": "Bool",
       "actual": "Int"
@@ -11473,26 +11484,26 @@
     {
       "program": [
         "def main() -> Void",
-        "  puts([1].lazy.gzip.to_a)",
+        "  puts([[1]].lazy.gzip.to_a)",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 8],
-      "covers": "[1].lazy",
-      "expected": "Lazy[List[Int]]",
-      "actual": "Lazy[Int]"
+      "covers": "[[1]].lazy",
+      "expected": "Lazy[Bytes]",
+      "actual": "Lazy[List[Int]]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: Result[String] = [[1]].lazy.write_bytes(\"x\")",
+        "  s: Result[String] = [\"a\".bytes].lazy.write_bytes(\"x\")",
         "end",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 23],
-      "covers": "[[1]].lazy.write_bytes(\"x\")",
+      "covers": "[\"a\".bytes].lazy.write_bytes(\"x\")",
       "expected": "Result[String]",
       "actual": "Result[Int]"
     },
@@ -11520,7 +11531,7 @@
       "code": "CHECK-ARITY",
       "start": [2, 8],
       "covers": "File.chunks()",
-      "callee": "File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]"
+      "callee": "File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]"
     },
     {
       "program": [

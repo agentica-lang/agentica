@@ -1,29 +1,35 @@
 # Zlib through the Lazy steps: round trips of each wrapper over chunks of any
 # size (empty ones too), the raw form, the caps and the strict decoders;
 # tests/test_vm_zlib.py checks the bytes against Python's stdlib zlib.
-def joined(chunks: List[List[Int]]) -> List[Int]
-  return chunks.flat_map do |c| c end
+def b(items: List[Int]) -> Bytes
+  return Bytes.from_list(items).unwrap!
+end
+
+# The chunks of a Lazy as lists, to print them.
+def lists(lazy: Lazy[Bytes]) -> Result[List[List[Int]]]
+  return lazy.map do |chunk| chunk.to_a end.to_a
 end
 
 def main() -> Void
-  none: List[Int] = []
-  items: List[List[Int]] = [[104, 101], none, [108], [108, 111], none]
+  none = "".bytes
+  items: List[Bytes] = [b([104, 101]), none, b([108]), b([108, 111]), none]
   packed = items.lazy.deflate.to_a.unwrap!
-  puts("deflate #{joined(packed).size} round #{packed.lazy.inflate.to_a}")
+  puts("deflate #{Bytes.concat(packed).size} round #{lists(packed.lazy.inflate)}")
   raw = items.lazy.deflate(9, true).to_a.unwrap!
-  puts("raw #{joined(raw).size} round #{raw.lazy.inflate(true).to_a}")
+  puts("raw #{Bytes.concat(raw).size} round #{lists(raw.lazy.inflate(true))}")
   puts("raw as zlib -> #{raw.lazy.inflate.to_a}")
   gz = items.lazy.gzip(1).to_a.unwrap!
-  bytes = joined(gz)
-  puts("gzip #{bytes.size} one byte at a time #{bytes.map do |b| [b] end.lazy.gunzip.to_a}")
-  puts("one-shot agrees #{Test.eq(Zlib.gunzip(bytes).unwrap!, joined(items))}")
+  bytes = Bytes.concat(gz)
+  singles = bytes.to_a.map do |x| b([x]) end
+  puts("gzip #{bytes.size} one byte at a time #{lists(singles.lazy.gunzip)}")
+  puts("one-shot agrees #{Test.eq(Zlib.gunzip(bytes).unwrap!, Bytes.concat(items))}")
   puts("small cap -> #{gz.lazy.gunzip(4).to_a}")
-  puts("exact cap -> #{gz.lazy.gunzip(5).to_a}")
-  puts("trailing -> #{[bytes, [0]].lazy.gunzip.to_a}")
+  puts("exact cap -> #{lists(gz.lazy.gunzip(5))}")
+  puts("trailing -> #{[bytes, b([0])].lazy.gunzip.to_a}")
   puts("truncated -> #{[bytes.take(10)].lazy.gunzip.to_a}")
   puts("nothing -> #{[none].lazy.inflate.to_a}")
-  puts("empty deflate #{joined([none].lazy.deflate.to_a.unwrap!)}")
+  puts("empty deflate #{Bytes.concat([none].lazy.deflate.to_a.unwrap!).to_a}")
   puts("bad level -> #{items.lazy.gzip(10).to_a}")
   puts("bad cap -> #{items.lazy.inflate(false, 0).to_a}")
-  puts("first #{gz.lazy.gunzip.first(1)}")
+  puts("first #{lists(gz.lazy.gunzip.take(1))}")
 end

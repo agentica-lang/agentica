@@ -1,7 +1,7 @@
 """Zlib.crc32 against Python's binascii, on every system.
 
 The checksum is the zlib CRC32 (RFC 1952, the ZIP polynomial): a pure
-function of its byte list and seed, with no handle and no shared state.
+function of its bytes and seed, with no handle and no shared state.
 The peer hashes what it reads on stdin with the seed of argv[0] ("none"
 leaves the seed out, so the default of 0 applies), so the empty input, NUL
 bytes, binary bytes and 1 MiB inputs all go through the same path as the
@@ -10,8 +10,8 @@ calls chain the previous result as the next seed; empty input returns the
 seed unchanged, even 0xFFFFFFFF (zlib would reset an empty call to zero, so
 the VM never hands it one).
 
-The refusals are the call's error Result (bad bytes, a seed outside
-0..4294967295, more than 1 MiB of input), while a wrong type or arity is
+The refusals are the call's error Result (a seed outside 0..4294967295,
+more than 1 MiB of input), while a wrong type (a List[Int] too) or arity is
 a checker diagnostic: the tests assert the code and the span, never the
 message.
 """
@@ -28,12 +28,13 @@ from tests.spec_support import check_diagnostic as problem
 CRC_PEER = (
     "def main() -> Void\n"
     "  seed_text = System.args()[0]\n"
-    "  data: List[Int] = []\n"
+    "  parts: List[Bytes] = []\n"
     "  chunk = IO.read_bytes(1048576).unwrap!\n"
     "  while chunk.size > 0\n"
-    "    data = data.concat(chunk.to_a)\n"
+    "    parts = parts.push(chunk)\n"
     "    chunk = IO.read_bytes(1048576).unwrap!\n"
     "  end\n"
+    "  data = Bytes.concat(parts)\n"
     "  if seed_text == \"none\"\n"
     "    puts(Zlib.crc32(data).unwrap!)\n"
     "  else\n"
@@ -110,22 +111,14 @@ def run_body(tmp_path, name, body):
 def test_crc32_rejects_a_seed_outside_0_to_2_to_the_32(tmp_path):
     for seed in ("-1", "4294967296", "99999999999"):
         result = run_body(tmp_path, "seed-%s.agc" % seed,
-                          "def main() -> Void\n  puts(Zlib.crc32([1, 2, 3], %s))\nend\n" % seed)
+                          "def main() -> Void\n  puts(Zlib.crc32(\"abc\".bytes, %s))\nend\n" % seed)
         assert result.code == 0, result.stderr
         assert result.stdout == 'error("zlib: seed must be between 0 and 4294967295")\n', result.stdout
 
 
-def test_crc32_rejects_bytes_outside_0_to_255(tmp_path):
-    for bad in ("256", "-1"):
-        result = run_body(tmp_path, "byte-%s.agc" % bad,
-                          "def main() -> Void\n  puts(Zlib.crc32([1, %s, 3], 0))\nend\n" % bad)
-        assert result.code == 0, result.stderr
-        assert result.stdout == 'error("zlib: bytes must be between 0 and 255")\n', result.stdout
-
-
 def test_crc32_rejects_more_than_1_mib_of_input(tmp_path):
     body = ("def main() -> Void\n"
-            "  data = List.concat(List.repeat(0, 600000), List.repeat(0, 448577))\n"
+            "  data = Bytes.from_list(List.repeat(0, 1048576)).unwrap! + \"a\".bytes\n"
             "  puts(Zlib.crc32(data, 0))\n"
             "end\n")
     result = run_body(tmp_path, "huge.agc", body)
@@ -153,15 +146,17 @@ def test_crc32_checks_the_types_of_both_arguments(tmp_path):
     found = check_code("def main() -> Void\n  puts(Zlib.crc32(\"abc\", 0))\nend\n", "CHECK-TYPE-MISMATCH",
                        tmp_path)
     assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 19), found
-    found = check_code("def main() -> Void\n  puts(Zlib.crc32([1], 0.5))\nend\n", "CHECK-TYPE-MISMATCH",
+    found = check_code("def main() -> Void\n  puts(Zlib.crc32([1], 0))\nend\n", "CHECK-TYPE-MISMATCH", tmp_path)
+    assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 19), found
+    found = check_code("def main() -> Void\n  puts(Zlib.crc32(\"a\".bytes, 0.5))\nend\n", "CHECK-TYPE-MISMATCH",
                        tmp_path)
-    assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 24), found
+    assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 30), found
 
 
 def test_crc32_checks_the_arity(tmp_path):
     found = check_code("def main() -> Void\n  puts(Zlib.crc32())\nend\n", "CHECK-ARITY", tmp_path)
     assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 8), found
-    found = check_code("def main() -> Void\n  puts(Zlib.crc32([1], 0, 0))\nend\n", "CHECK-ARITY", tmp_path)
+    found = check_code("def main() -> Void\n  puts(Zlib.crc32(\"a\".bytes, 0, 0))\nend\n", "CHECK-ARITY", tmp_path)
     assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (2, 8), found
 
 
@@ -170,9 +165,9 @@ def test_crc32_has_the_catalog_signature():
     assert result.code == 0, result.stderr
     entry = json.loads(result.stdout)
     assert entry["name"] == "Zlib.crc32"
-    assert entry["signature"] == "Zlib.crc32(data: List[Int], seed: Int = 0) -> Result[Int]", entry
+    assert entry["signature"] == "Zlib.crc32(data: Bytes, seed: Int = 0) -> Result[Int]", entry
     assert entry["arity"] == 2
     assert entry["parameters"] == [
-        {"name": "data", "type": "List[Int]"},
+        {"name": "data", "type": "Bytes"},
         {"name": "seed", "type": "Int", "default": "0"},
     ], entry

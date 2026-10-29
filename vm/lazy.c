@@ -29,6 +29,11 @@ struct lazy_node {
                               chunk size, the kind of a zlib step (__lazy_zlib) */
   int64_t timeout;         /* a file or channel source: the timeout of each wait */
   int64_t level, cap;      /* a zlib step: the level of an encoder, the max_bytes of a decoder */
+  /* File.chunks and a zlib step: the chunks are byte lists, not Bytes. The byte rows (File.chunks, the zlib steps,
+     write_bytes) carry Bytes under the catalog's ".bytes" keys and byte lists under the old keys, which stay for front
+     ends and .agcb files compiled before #805 PR 5; PR 9 removes them. A chunk of the other form fails through
+     agc_as_bytes or agc_as_list. */
+  bool list;
 };
 
 /* The state of one stage in one run. */
@@ -77,6 +82,7 @@ typedef struct {
   agc_line_reader *lines; /* a file source: its reader, which owns the open file */
   agc_line_writer *sink;  /* write_lines and write_bytes: the writer, which owns the file it writes */
   bool sink_ready;        /* write_lines and write_bytes: the file is open, so items may be pulled */
+  bool list;              /* write_bytes: the chunks are byte lists (the old key), not Bytes */
   int64_t written;        /* write_bytes: the bytes given to the writer */
   agc_value io_last;      /* a file source: the result of the job it waited on */
   agc_value final;        /* the result, kept while the files close */
@@ -169,15 +175,23 @@ static agc_value builtin_file(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_lazy_value(node);
 }
 
-/* __lazy_chunks(path, size, timeout_ms): File.chunks. Nothing is opened here, as for File.foreach. */
-static agc_value builtin_chunks(agc_vm *vm, agc_value *args, uint32_t span) {
+/* __lazy_chunks(path, size, timeout_ms): File.chunks. Nothing is opened here, as for File.foreach. Bytes chunks
+   under "__lazy_chunks.bytes", byte lists under the old key. */
+static agc_value chunks(agc_vm *vm, const agc_value *args, uint32_t span, bool list) {
   agc_as_string(vm, args[0]);
   int64_t size = agc_as_int(vm, args[1]);
   if (!agc_chunks_size_ok(size)) lazy_fail_count(vm, "size must be between 1 and 16777216", span);
   lazy_node *node = lazy_new_source(LAZY_CHUNKS, args[0], agc_void());
   node->count = size;
   node->timeout = agc_as_int(vm, args[2]);
+  node->list = list;
   return agc_lazy_value(node);
+}
+
+static agc_value builtin_chunks(agc_vm *vm, agc_value *args, uint32_t span) { return chunks(vm, args, span, true); }
+
+static agc_value builtin_chunks_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return chunks(vm, args, span, false);
 }
 
 /* __lazy_channel(channel, timeout_ms): ch.lazy. */
@@ -244,15 +258,23 @@ static agc_value builtin_group(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* __lazy_zlib(lazy, kind, level, max_bytes): the zlib steps (stdlib/prelude/lazy.agc). A bad level or max_bytes is
-   kept on the node and becomes the terminal's error, as Zlib.deflate returns it; no codec starts before a terminal. */
-static agc_value builtin_zlib(agc_vm *vm, agc_value *args, uint32_t span) {
+   kept on the node and becomes the terminal's error, as Zlib.deflate returns it; no codec starts before a terminal.
+   Bytes chunks in and out under "__lazy_zlib.bytes", byte lists under the old key. */
+static agc_value zlib_step(agc_vm *vm, const agc_value *args, uint32_t span, bool list) {
   int64_t kind = agc_as_int(vm, args[1]);
   if (kind < 0 || kind > 5) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown Lazy zlib step", span);
   lazy_node *node = lazy_new_step(vm, args[0], LAZY_ZLIB, agc_void(), kind);
   node->level = agc_as_int(vm, args[2]);
   node->cap = agc_as_int(vm, args[3]);
   node->value = agc_zstep_check(kind, node->level, node->cap);
+  node->list = list;
   return agc_lazy_value(node);
+}
+
+static agc_value builtin_zlib(agc_vm *vm, agc_value *args, uint32_t span) { return zlib_step(vm, args, span, true); }
+
+static agc_value builtin_zlib_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return zlib_step(vm, args, span, false);
 }
 
 /* Room for one more item in a stage's buffer. The buffer grows as items come, never past the size of the step, so a
@@ -673,7 +695,9 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         case LAZY_WRITE:
         case LAZY_WRITE_BYTES:
           run->at = 0;
-          if (run->terminal == LAZY_WRITE_BYTES) run->written += (int64_t)agc_list_len(agc_as_list(vm, run->item));
+          if (run->terminal == LAZY_WRITE_BYTES)
+            run->written += (int64_t)(run->list ? agc_list_len(agc_as_list(vm, run->item))
+                                                : agc_as_bytes(vm, run->item)->len);
           if (lazy_sink(vm, run, agc_void(), run->item, &step)) return step;
           continue;
       }
@@ -754,11 +778,18 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         break;
       }
       case LAZY_ZLIB: {
-        /* The item's bytes go to the stream; lazy_next gives its output, so the item itself goes no further. */
-        const agc_list *chunk = agc_as_list(vm, run->item);
-        size_t n = agc_list_len(chunk);
-        const uint8_t *bytes = agc_byte_list(vm, chunk, n);
-        if (!bytes) return lazy_done(vm, run, lazy_error("zlib: bytes must be between 0 and 255"), agc_void());
+        /* The item's bytes go to the stream; lazy_next gives its output, so the item itself goes no further. A Bytes
+           item lends its own data: s->in points into it, and with interior pointers on that keeps it alive. */
+        size_t n = 0;
+        const uint8_t *bytes = NULL;
+        if (node->list) {
+          const agc_list *chunk = agc_as_list(vm, run->item);
+          n = agc_list_len(chunk);
+          bytes = agc_byte_list(vm, chunk, n);
+          if (!bytes) return lazy_done(vm, run, lazy_error("zlib: bytes must be between 0 and 255"), agc_void());
+        } else {
+          bytes = agc_bytes_data(vm, run->item, &n);
+        }
         s->in = bytes;
         s->in_len = n;
         s->in_at = 0;
@@ -774,9 +805,9 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
 }
 
 /* Starts a terminal on the calling task. fn is the callback (none for to_a) and acc the initial value of reduce;
-   write_lines and write_bytes pass their path and timeout in them. */
+   write_lines and write_bytes pass their path and timeout in them; list is the chunk form of write_bytes. */
 static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal, agc_value fn, agc_value acc,
-                            uint32_t span) {
+                            bool list, uint32_t span) {
   const lazy_node *node = agc_as_lazy(vm, recipe);
   bool writes = terminal == LAZY_WRITE || terminal == LAZY_WRITE_BYTES;
   if (terminal != LAZY_TO_A && !writes) agc_as_fn(vm, fn);
@@ -785,6 +816,7 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   run->stepper.no_block = true;
   run->stepper.lazy = true;
   run->terminal = terminal;
+  run->list = list;
   run->fn = fn;
   run->acc = acc;
   run->span = span;
@@ -806,15 +838,19 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
   if (source->kind == LAZY_FILE) run->lines = agc_lines_new(vm, source->value, source->count, source->timeout, span);
-  if (source->kind == LAZY_CHUNKS) run->lines = agc_chunks_new(vm, source->value, source->count, source->timeout, span);
-  if (writes) run->sink = agc_writer_new(vm, fn, agc_as_int(vm, acc), terminal == LAZY_WRITE_BYTES, span);
+  if (source->kind == LAZY_CHUNKS)
+    run->lines = agc_chunks_new(vm, source->value, source->count, source->timeout, source->list, span);
+  if (writes) {
+    agc_writer_form form = terminal == LAZY_WRITE ? AGC_WRITE_LINES : list ? AGC_WRITE_BYTE_LISTS : AGC_WRITE_BYTES;
+    run->sink = agc_writer_new(vm, fn, agc_as_int(vm, acc), form, span);
+  }
   /* The streams start with the run and belong to the calling task until lazy_done frees them; a bad argument of a
      zlib step starts none and ends the run at its first step. */
   for (size_t i = 0; i < run->count; i++)
     if (run->nodes[i]->kind == LAZY_ZLIB && agc_is(run->refused, AGC_T_VOID)) run->refused = run->nodes[i]->value;
   for (size_t i = 0; i < run->count && agc_is(run->refused, AGC_T_VOID); i++) {
     const lazy_node *n = run->nodes[i];
-    if (n->kind == LAZY_ZLIB) run->stages[i].zlib = agc_zstep_open(vm, n->count, n->level, n->cap);
+    if (n->kind == LAZY_ZLIB) run->stages[i].zlib = agc_zstep_open(vm, n->count, n->level, n->cap, n->list);
   }
   /* A run reads immutable nodes and writes only this run, which belongs to the calling task. An I/O source also starts
      file jobs, closes the file and parks on channel lists, and write_lines starts file jobs: they take rt->sync around
@@ -825,33 +861,42 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
 }
 
 static agc_value builtin_to_a(agc_vm *vm, agc_value *args, uint32_t span) {
-  return lazy_start(vm, args[0], LAZY_TO_A, agc_void(), agc_void(), span);
+  return lazy_start(vm, args[0], LAZY_TO_A, agc_void(), agc_void(), false, span);
 }
 
 static agc_value builtin_each(agc_vm *vm, agc_value *args, uint32_t span) {
-  return lazy_start(vm, args[0], LAZY_EACH, args[1], agc_void(), span);
+  return lazy_start(vm, args[0], LAZY_EACH, args[1], agc_void(), false, span);
 }
 
 static agc_value builtin_reduce(agc_vm *vm, agc_value *args, uint32_t span) {
-  return lazy_start(vm, args[0], LAZY_REDUCE, args[2], args[1], span);
+  return lazy_start(vm, args[0], LAZY_REDUCE, args[2], args[1], false, span);
 }
 
 static agc_value builtin_find(agc_vm *vm, agc_value *args, uint32_t span) {
-  return lazy_start(vm, args[0], LAZY_FIND, args[1], agc_void(), span);
+  return lazy_start(vm, args[0], LAZY_FIND, args[1], agc_void(), false, span);
 }
 
 /* __lazy_write_lines(lazy, path, timeout_ms): the file opens in the terminal; a bad timeout or path is its error. */
 static agc_value builtin_write_lines(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_as_string(vm, args[1]);
   agc_as_int(vm, args[2]);
-  return lazy_start(vm, args[0], LAZY_WRITE, args[1], args[2], span);
+  return lazy_start(vm, args[0], LAZY_WRITE, args[1], args[2], false, span);
 }
 
-/* __lazy_write_bytes(lazy, path, timeout_ms): as write_lines, with byte chunks written as they are. */
-static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+/* __lazy_write_bytes(lazy, path, timeout_ms): as write_lines, with byte chunks written as they are: Bytes under
+   "__lazy_write_bytes.bytes", byte lists under the old key. */
+static agc_value write_bytes(agc_vm *vm, const agc_value *args, uint32_t span, bool list) {
   agc_as_string(vm, args[1]);
   agc_as_int(vm, args[2]);
-  return lazy_start(vm, args[0], LAZY_WRITE_BYTES, args[1], args[2], span);
+  return lazy_start(vm, args[0], LAZY_WRITE_BYTES, args[1], args[2], list, span);
+}
+
+static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return write_bytes(vm, args, span, true);
+}
+
+static agc_value builtin_write_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return write_bytes(vm, args, span, false);
 }
 
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
@@ -879,6 +924,9 @@ const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_chunks", 3, builtin_chunks, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"__lazy_zlib", 4, builtin_zlib, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"__lazy_write_bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"__lazy_chunks.bytes", 3, builtin_chunks_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"__lazy_zlib.bytes", 4, builtin_zlib_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"__lazy_write_bytes.bytes", 3, builtin_write_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_lazy_builtin_count = sizeof agc_lazy_builtins / sizeof agc_lazy_builtins[0];

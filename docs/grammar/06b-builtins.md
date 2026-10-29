@@ -143,7 +143,7 @@ be read twice. The library page is
   `File.foreach(...).each do ... end`, with no step in between, written as one
   chain, is `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
 - `File.chunks(path, size = 65536, timeout_ms = 30000)`
-  (`Lazy[List[Int]]`): the bytes of a regular file in chunks of `size` bytes,
+  (`Lazy[Bytes]`): the bytes of a regular file in chunks of `size` bytes,
   the last one shorter. It opens and closes as `File.foreach` does; a missing
   file or one that is not regular (decided on the open descriptor) ends the
   terminal with `error("filesystem: path does not refer to a regular
@@ -184,12 +184,11 @@ be read twice. The library page is
   or close, and a line over 1 MiB end the terminal with that error. What was
   written before an error stays in the file. A line holding a line feed reads
   back as two lines.
-- `lz.write_bytes(path, timeout_ms = 30000)` (on a `Lazy[List[Int]]`,
+- `lz.write_bytes(path, timeout_ms = 30000)` (on a `Lazy[Bytes]`,
   `Result[Int]`) writes each chunk of bytes to a file as `write_lines` writes
   lines and gives the bytes written. A chunk may have any size, empty
-  included; a byte outside 0..255 ends the terminal with `error("filesystem:
-  bytes must be between 0 and 255")`.
-- The zlib steps, on a `Lazy[List[Int]]` of byte chunks, give one:
+  included.
+- The zlib steps, on a `Lazy[Bytes]` of byte chunks, give one:
   `lz.deflate(level = 6, raw = false)`, `lz.inflate(raw = false, max_bytes =
   1073741824)`, `lz.gzip(level = 6)` and `lz.gunzip(max_bytes = 1073741824)`.
   `raw` is raw deflate (RFC 1951); otherwise the formats are those of the

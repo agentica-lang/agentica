@@ -269,8 +269,8 @@ Every failure is an error value. The checks run in this order:
   whole-file calls.
 - `File.chunks` reads a regular file through the reader of `File.foreach`,
   with the `fstat` of the open descriptor deciding regular, and hands each
-  read on as one chunk of at most `size` bytes. A zlib step of a Lazy run
-  (`vm/lazy.c`) holds one zlib stream of the shared codec (no `gz*` calls),
+  read on as one `Bytes` chunk of at most `size` bytes. A zlib step of a Lazy
+  run (`vm/lazy.c`) holds one zlib stream of the shared codec (no `gz*` calls),
   registered and owned by the task that runs the terminal, and freed when the
   run ends or at the task's end. Each pass gives a chunk of at most 64 KiB;
   a decoder's output buffer is one byte past what `max_bytes` still allows,
@@ -278,7 +278,10 @@ Every failure is an error value. The checks run in this order:
   header, a refused wrapper and a short stream are `zlib: invalid compressed
   data` or `zlib: truncated stream`; a second member or any trailing byte is
   `zlib: trailing bytes after stream end`; a trailer mismatch is `zlib:
-  checksum mismatch`.
+  checksum mismatch`. The `Zlib` builtins, `__lazy_chunks`, `__lazy_zlib` and
+  `__lazy_write_bytes` have their catalog key `<name>.bytes` on `Bytes` and
+  their old key `<name>` on byte lists, which refuses an item outside 0 to 255:
+  front ends and `.agcb` files compiled before #805 PR 5 import the old keys.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is
   0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and

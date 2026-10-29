@@ -35,7 +35,7 @@ CAP_1MIB = 1048576
 
 # One-shot bytes through files: argv is op, src, dst, max_out, level.
 BYTES_PEER = (
-    "def convert(op: String, data: List[Int], cap: Int, level: Int) -> Result[List[Int]]\n"
+    "def convert(op: String, data: Bytes, cap: Int, level: Int) -> Result[Bytes]\n"
     '  if op == "deflate"\n'
     "    return Zlib.deflate(data, level, cap)\n"
     '  elsif op == "inflate"\n'
@@ -54,12 +54,12 @@ BYTES_PEER = (
     "  cap: Int = System.args()[3].to_i!\n"
     "  level: Int = System.args()[4].to_i!\n"
     '  fd = File.open(src, "read", 30000).unwrap!\n'
-    "  data = File.read_bytes(fd, 1048576, 30000).unwrap!.to_a\n"
+    "  data = File.read_bytes(fd, 1048576, 30000).unwrap!\n"
     "  File.close(fd, 30000)\n"
     "  out = convert(op, data, cap, level)\n"
     "  if out.ok?\n"
     '  w = File.open(dst, "write", 30000).unwrap!\n'
-    "  File.write_bytes(w, Bytes.from_list(out.unwrap!).unwrap!, 30000).unwrap!\n"
+    "  File.write_bytes(w, out.unwrap!, 30000).unwrap!\n"
     "  File.close(w, 30000)\n"
     '  puts(\"ok\")\n'
     "  else\n"
@@ -230,8 +230,8 @@ def test_zlib_bytes_reject_the_wrong_wrapper(bytes_peer, tmp_path):
 def test_zlib_bytes_reject_a_bad_level(bytes_peer, tmp_path):
     body = (
         "def main() -> Void\n"
-        "  puts(Zlib.deflate([1, 2], %s, 1048576))\n"
-        "  puts(Zlib.gzip([1, 2], %s, 1048576))\n"
+        "  puts(Zlib.deflate(\"ab\".bytes, %s, 1048576))\n"
+        "  puts(Zlib.gzip(\"ab\".bytes, %s, 1048576))\n"
         "end\n"
     )
     for level in ("-1", "10"):
@@ -243,7 +243,7 @@ def test_zlib_bytes_reject_a_bad_level(bytes_peer, tmp_path):
 def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  big = List.concat(List.repeat(7, 600000), List.repeat(7, 600000))\n"
+        "  big = Bytes.from_list(List.repeat(7, 1048576)).unwrap! + \"a\".bytes\n"
         "  puts(Zlib.deflate(big, 6, 1048576))\n"
         "  puts(Zlib.gzip(big, 6, 1048576))\n"
         "end\n"
@@ -256,10 +256,10 @@ def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
 def test_zlib_bytes_reject_a_max_outside_its_bounds(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  puts(Zlib.deflate([1, 2], 6, %s))\n"
-        "  puts(Zlib.inflate([1, 2], %s))\n"
-        "  puts(Zlib.gzip([1, 2], 6, %s))\n"
-        "  puts(Zlib.gunzip([1, 2], %s))\n"
+        "  puts(Zlib.deflate(\"ab\".bytes, 6, %s))\n"
+        "  puts(Zlib.inflate(\"ab\".bytes, %s))\n"
+        "  puts(Zlib.gzip(\"ab\".bytes, 6, %s))\n"
+        "  puts(Zlib.gunzip(\"ab\".bytes, %s))\n"
         "end\n"
     )
     for bound in ("0", "1048577"):
@@ -276,23 +276,11 @@ def test_zlib_bytes_cut_output_past_its_cap(bytes_peer, tmp_path):
         assert result.stdout.startswith("error("), result.stdout
 
 
-def test_zlib_bytes_reject_a_byte_outside_0_to_255(tmp_path):
-    body = (
-        "def main() -> Void\n"
-        "  puts(Zlib.deflate([256], 6, 1048576))\n"
-        "  puts(Zlib.gzip([1, -1], 6, 1048576))\n"
-        "end\n"
-    )
-    result = run_source(tmp_path, "range.agc", body, [])
-    assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
-
-
 # The Lazy steps through argv: op, src, dst, chunk size, then the level of an
 # encoder or the max_bytes of a decoder. File.chunks reads src and write_bytes
 # writes dst; the printed Result is the byte count or the error.
 LAZY_PEER = (
-    "def step(op: String, chunks: Lazy[List[Int]], arg: Int) -> Lazy[List[Int]]\n"
+    "def step(op: String, chunks: Lazy[Bytes], arg: Int) -> Lazy[Bytes]\n"
     '  if op == "deflate"\n'
     "    return chunks.deflate(arg)\n"
     '  elsif op == "raw_deflate"\n'
@@ -401,13 +389,13 @@ def test_lazy_runs_the_same_in_every_jit_tier(lazy_peer, tmp_path):
 def test_lazy_steps_take_empty_items_and_match_python_bytes(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  items: List[List[Int]] = [[], [104], [], [], [105], []]\n"
+        "  none = \"\".bytes\n"
+        "  items: List[Bytes] = [none, \"h\".bytes, none, none, \"i\".bytes, none]\n"
         "  packed = items.lazy.deflate.to_a.unwrap!\n"
-        '  puts(packed.flat_map do |c| c end.map do |b| b.to_s end.join(","))\n'
-        "  none: List[Int] = []\n"
+        '  puts(Bytes.concat(packed).to_a.map do |x| x.to_s end.join(","))\n'
         "  spaced = packed.flat_map do |c| [none, c, none] end\n"
-        "  puts(spaced.lazy.inflate.to_a)\n"
-        "  puts(items.lazy.gzip.gunzip.to_a)\n"
+        "  puts(spaced.lazy.inflate.map do |c| c.to_a end.to_a)\n"
+        "  puts(items.lazy.gzip.gunzip.map do |c| c.to_a end.to_a)\n"
         "end\n"
     )
     result = run_source(tmp_path, "empty-items.agc", body, [])
@@ -451,10 +439,11 @@ def test_lazy_caps_hold_while_streaming(lazy_peer, tmp_path):
 def test_lazy_bad_arguments(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  puts([[1]].lazy.deflate(10).to_a)\n"
-        "  puts([[1]].lazy.gzip(-1).to_a)\n"
-        "  puts([[1]].lazy.inflate(false, 0).to_a)\n"
-        "  puts([[1]].lazy.gunzip(0).to_a)\n"
+        "  one = [\"a\".bytes]\n"
+        "  puts(one.lazy.deflate(10).to_a)\n"
+        "  puts(one.lazy.gzip(-1).to_a)\n"
+        "  puts(one.lazy.inflate(false, 0).to_a)\n"
+        "  puts(one.lazy.gunzip(0).to_a)\n"
         "  puts(File.chunks(System.args()[0], 0).to_a)\n"
         "end\n"
     )
@@ -472,8 +461,8 @@ def test_lazy_bad_arguments(tmp_path):
 def test_file_chunks_reads_a_file_and_refuses_what_is_not_regular(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  puts(File.chunks(System.args()[0], 2).to_a)\n"
-        "  puts(File.chunks(System.args()[1]).to_a)\n"
+        "  puts(File.chunks(System.args()[0], 2).map do |c| c.to_a end.to_a)\n"
+        "  puts(File.chunks(System.args()[1]).map do |c| c.to_a end.to_a)\n"
         "  puts(File.chunks(System.args()[2]).to_a)\n"
         "  puts(File.chunks(System.args()[3]).to_a)\n"
         "end\n"
@@ -504,24 +493,26 @@ def test_file_chunks_refuses_a_fifo_without_waiting(tmp_path):
 
 def test_write_bytes_errors(tmp_path):
     body = (
+        "def b(items: List[Int]) -> Bytes\n"
+        "  return Bytes.from_list(items).unwrap!\n"
+        "end\n"
+        "\n"
         "def main() -> Void\n"
         "  args = System.args()\n"
-        "  puts([[1, 2], [], [3]].lazy.write_bytes(args[0]))\n"
-        "  puts([[1], [256]].lazy.write_bytes(args[1]))\n"
-        "  puts([[1]].lazy.write_bytes(args[2]))\n"
-        "  puts([[1]].lazy.write_bytes(args[3]))\n"
-        "  puts(File.chunks(args[4]).gzip.write_bytes(args[5]))\n"
+        "  puts([b([1, 2]), b([]), b([3])].lazy.write_bytes(args[0]))\n"
+        "  puts([b([1])].lazy.write_bytes(args[1]))\n"
+        "  puts([b([1])].lazy.write_bytes(args[2]))\n"
+        "  puts(File.chunks(args[3]).gzip.write_bytes(args[4]))\n"
         "end\n"
     )
     out = tmp_path / "out.bin"
     out.write_bytes(b"old content that is longer")
-    args = [out, tmp_path / "range.bin", tmp_path / "no" / "parent.bin", tmp_path, tmp_path / "missing.bin",
-            tmp_path / "never.gz"]
+    args = [out, tmp_path / "no" / "parent.bin", tmp_path, tmp_path / "missing.bin", tmp_path / "never.gz"]
     result = run_source(tmp_path, "write.agc", body, args)
     assert result.code == 0, result.stderr
     lines = result.stdout.splitlines()
-    assert lines[:2] == ["ok(3)", 'error("filesystem: bytes must be between 0 and 255")'], lines
-    assert result.stdout.count('error("') == 4, result.stdout
+    assert lines[0] == "ok(3)", lines
+    assert result.stdout.count('error("') == 3, result.stdout
     assert read_bytes(out) == b"\x01\x02\x03"
 
 
@@ -529,8 +520,8 @@ def test_deny_fs_refuses_file_chunks_and_write_bytes_but_not_the_steps(tmp_path)
     body = (
         "def main() -> Void\n"
         "  puts(File.chunks(System.args()[0]).to_a)\n"
-        "  puts([[1]].lazy.write_bytes(System.args()[1]))\n"
-        "  puts([[104, 105]].lazy.gzip.gunzip.to_a)\n"
+        "  puts([\"a\".bytes].lazy.write_bytes(System.args()[1]))\n"
+        "  puts([\"hi\".bytes].lazy.gzip.gunzip.map do |c| c.to_a end.to_a)\n"
         "end\n"
     )
     source = tmp_path / "deny.agc"
@@ -549,7 +540,7 @@ def test_deny_fs_refuses_file_chunks_and_write_bytes_but_not_the_steps(tmp_path)
 # closed once, before the program ends. The run of "cancel" is parked in its
 # block when the task is cancelled.
 EARLY_STOP = (
-    "def check(c: List[Int]) -> Result[Int]\n"
+    "def check(c: Bytes) -> Result[Int]\n"
     "  if c.size > 1000\n"
     '    return error("big chunk")\n'
     "  end\n"

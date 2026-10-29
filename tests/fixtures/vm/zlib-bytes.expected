@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 107,
+  "steps": 106,
   "stdout": [
     "deflate 13 round ok()",
     "empty deflate 8 round ok()",

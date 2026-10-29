@@ -82,7 +82,7 @@ PROBE_ROW = """    Model.Builtin(
       ],
       result: Types.Type.Result(Types.Type.Int),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.crc32",
+      implementation: "Zlib.crc32.bytes",
       effects: [],
       description: "Probe.",
       alternatives: [],

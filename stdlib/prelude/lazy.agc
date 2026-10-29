@@ -36,7 +36,7 @@ end
 
 # File.chunks. Argument 1 of the call is size: a size outside 1..16777216 is reported there. The file opens only in a
 # terminal, which closes it before it returns.
-def from_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[List[Int]]
+def from_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[Bytes]
   return __lazy_chunks(path, size, timeout_ms)
 end
 
@@ -93,7 +93,7 @@ end
 
 # The zlib steps: __lazy_zlib(lazy, kind, level, max_bytes) with kind 0 deflate, 1 raw deflate, 2 gzip, 3 inflate,
 # 4 raw inflate, 5 gunzip. A bad level or max_bytes is the error of the terminal, as in Zlib.deflate.
-def deflate(lazy: Lazy[List[Int]], level: Int, raw: Bool) -> Lazy[List[Int]]
+def deflate(lazy: Lazy[Bytes], level: Int, raw: Bool) -> Lazy[Bytes]
   if raw
     return __lazy_zlib(lazy, 1, level, 0)
   end
@@ -101,11 +101,11 @@ def deflate(lazy: Lazy[List[Int]], level: Int, raw: Bool) -> Lazy[List[Int]]
   return __lazy_zlib(lazy, 0, level, 0)
 end
 
-def gzip(lazy: Lazy[List[Int]], level: Int) -> Lazy[List[Int]]
+def gzip(lazy: Lazy[Bytes], level: Int) -> Lazy[Bytes]
   return __lazy_zlib(lazy, 2, level, 0)
 end
 
-def inflate(lazy: Lazy[List[Int]], raw: Bool, max_bytes: Int) -> Lazy[List[Int]]
+def inflate(lazy: Lazy[Bytes], raw: Bool, max_bytes: Int) -> Lazy[Bytes]
   if raw
     return __lazy_zlib(lazy, 4, 0, max_bytes)
   end
@@ -113,7 +113,7 @@ def inflate(lazy: Lazy[List[Int]], raw: Bool, max_bytes: Int) -> Lazy[List[Int]]
   return __lazy_zlib(lazy, 3, 0, max_bytes)
 end
 
-def gunzip(lazy: Lazy[List[Int]], max_bytes: Int) -> Lazy[List[Int]]
+def gunzip(lazy: Lazy[Bytes], max_bytes: Int) -> Lazy[Bytes]
   return __lazy_zlib(lazy, 5, 0, max_bytes)
 end
 
@@ -144,6 +144,6 @@ def write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Voi
 end
 
 # write_bytes. As for write_lines, the path and timeout are checked when the terminal starts.
-def write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int) -> Result[Int]
+def write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int) -> Result[Int]
   return __lazy_write_bytes(lazy, path, timeout_ms)
 end

@@ -32,7 +32,7 @@ List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
 File.foreach(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) -> Lazy[String]
-File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]
+File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
 ```
 
@@ -282,19 +282,19 @@ end
 ## Zlib steps
 
 ```text
-Lazy.deflate(lazy: Lazy[List[Int]], level: Int = 6, raw: Bool = false) -> Lazy[List[Int]]
-Lazy.inflate(lazy: Lazy[List[Int]], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[List[Int]]
-Lazy.gzip(lazy: Lazy[List[Int]], level: Int = 6) -> Lazy[List[Int]]
-Lazy.gunzip(lazy: Lazy[List[Int]], max_bytes: Int = 1073741824) -> Lazy[List[Int]]
-Lazy.write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int = 30000) -> Result[Int]
+Lazy.deflate(lazy: Lazy[Bytes], level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
+Lazy.inflate(lazy: Lazy[Bytes], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]
+Lazy.gzip(lazy: Lazy[Bytes], level: Int = 6) -> Lazy[Bytes]
+Lazy.gunzip(lazy: Lazy[Bytes], max_bytes: Int = 1073741824) -> Lazy[Bytes]
+Lazy.write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
-The steps compress or decompress a stream of byte chunks, such as the chunks of `File.chunks`, which reads a regular file `size` bytes (1 to 16777216) at a time; `write_bytes` writes the chunks to a file, created or truncated, and gives the bytes written. A decoder error, output past `max_bytes`, a bad `level` and a byte outside 0 to 255 end the terminal with that error; a run that stops early frees its zlib streams. [Zlib](/library/text-and-data/zlib/#streams) has the details.
+The steps compress or decompress a stream of [`Bytes`](/library/data-structures/bytes/) chunks, such as the chunks of `File.chunks`, which reads a regular file `size` bytes (1 to 16777216) at a time; `write_bytes` writes the chunks to a file, created or truncated, and gives the bytes written. A decoder error, output past `max_bytes` and a bad `level` end the terminal with that error; a run that stops early frees its zlib streams. [Zlib](/library/text-and-data/zlib/#streams) has the details.
 
 ```agentica
 def main() -> Void
-  packed = [[104, 105], [], [33]].lazy.gzip.to_a.unwrap!
-  puts(packed.lazy.gunzip.to_a)
+  packed = ["hi".bytes, "".bytes, "!".bytes].lazy.gzip.to_a.unwrap!
+  puts(packed.lazy.gunzip.map do |chunk| chunk.to_a end.to_a)
 end
 ```
 

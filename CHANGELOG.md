@@ -23,6 +23,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `IO.read_bytes`, `File.read_bytes`, `File.write_bytes`,
   `File.sha256` and `String.from_bytes` use `Bytes`; `String.to_bytes` is now
   `s.bytes`.
+- **Breaking:** `Zlib`, `File.chunks` and the Lazy byte steps (`gzip`,
+  `gunzip`, `deflate`, `inflate`, `write_bytes`) use `Bytes`.
 
 ### Fixed
 

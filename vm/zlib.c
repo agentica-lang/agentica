@@ -1,6 +1,6 @@
 /*
  * The Zlib builtins (agc_zlib_builtins): one-shot compression and
- * decompression of byte lists and the CRC32 checksum, and the zlib streams of
+ * decompression of bytes and the CRC32 checksum, and the zlib streams of
  * the Lazy steps deflate, inflate, gzip and gunzip (agc_zstep_*, driven by
  * vm/lazy.c). The codec itself is the adapter of zlib_codec.h, which alone
  * includes zlib.h. Service layer. Design: RFC 1950 (zlib), RFC 1951
@@ -33,6 +33,7 @@ typedef struct {
   agc_zcodec *codec;
   uint8_t *buf; /* one quantum, the output of every pass */
   bool encode, full, done;
+  bool list; /* the output chunks are byte lists (the old __lazy_zlib key), not Bytes */
   int idle;
   uint64_t total_out, max_out;
 } zstep;
@@ -56,21 +57,32 @@ static agc_value zlib_error(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
 }
 
-/* The bytes of a List[Int] argument of at most ZLIB_ONE_SHOT_MAX items, or
-   NULL with *failed set to the call's error. A non-Int item fails through
-   agc_as_int, as in the other byte-list builtins. */
-static const uint8_t *zlib_bytes(agc_vm *vm, agc_value list, agc_value *failed) {
-  const agc_list *values = agc_as_list(vm, list);
-  if (agc_list_len(values) > ZLIB_ONE_SHOT_MAX) {
+/* The bytes of a byte argument of at most ZLIB_ONE_SHOT_MAX bytes, with *n
+   their count, or NULL with *failed set to the call's error. A Bytes (the
+   catalog's ".bytes" keys) gives its own data, which the argument keeps
+   alive. A List[Int] (list, the old keys) is copied into a GC-atomic block; a
+   non-Int item fails through agc_as_int, as in the other byte-list builtins.
+   The old keys stay for front ends and .agcb files compiled before #805 PR 5;
+   PR 9 removes them. */
+static const uint8_t *zlib_bytes(agc_vm *vm, agc_value arg, bool list, size_t *n, agc_value *failed) {
+  const agc_list *values = list ? agc_as_list(vm, arg) : NULL;
+  const uint8_t *bytes = list ? NULL : agc_bytes_data(vm, arg, n);
+  if (list) *n = agc_list_len(values);
+  if (*n > ZLIB_ONE_SHOT_MAX) {
     *failed = zlib_error("zlib: input exceeds 1048576 bytes");
     return NULL;
   }
-  const uint8_t *bytes = agc_byte_list(vm, values, agc_list_len(values));
+  if (!list) return bytes;
+  bytes = agc_byte_list(vm, values, *n);
   if (!bytes) *failed = zlib_error("zlib: bytes must be between 0 and 255");
   return bytes;
 }
 
-static agc_value byte_list_value(const uint8_t *data, size_t n) { return agc_list_value(agc_list_of_bytes(data, n)); }
+/* The n bytes at data as a value of the call's form: a byte list (list) or a new Bytes. */
+static agc_value zlib_value(const uint8_t *data, size_t n, bool list) {
+  if (list) return agc_list_value(agc_list_of_bytes(data, n));
+  return agc_bytes_value(agc_make_bytes(data, n));
+}
 
 static bool accum_push(out_accum *a, const uint8_t *chunk, size_t n, size_t max_out) {
   if (a->len + n > max_out) return false;
@@ -91,7 +103,7 @@ static bool accum_push(out_accum *a, const uint8_t *chunk, size_t n, size_t max_
    exactly where the input ends. The output never grows past max_out, and a
    decoder refuses every trailing byte. */
 static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, const uint8_t *input, size_t n,
-                             size_t max_out) {
+                             size_t max_out, bool list) {
   uint8_t *chunk = malloc(ZLIB_QUANTUM);
   out_accum out = {malloc(ZLIB_QUANTUM), 0, ZLIB_QUANTUM};
   if (!chunk || !out.data) agc_out_of_memory();
@@ -154,33 +166,36 @@ static agc_value oneshot_run(agc_vm *vm, zlib_kind kind, agc_zcodec *codec, cons
     return zlib_error("zlib: trailing bytes after stream end");
   }
   agc_charge_bytes(vm, n + out.len);
-  agc_value result = agc_result_value(true, byte_list_value(out.data, out.len));
+  agc_value result = agc_result_value(true, zlib_value(out.data, out.len, list));
   free(out.data);
   return result;
 }
 
 static agc_value oneshot_compress(agc_vm *vm, const uint8_t *input, size_t n, int window_bits, int64_t level,
-                                  size_t max_out) {
+                                  size_t max_out, bool list) {
   agc_zcodec *codec = agc_zcodec_encode_begin(window_bits, (int)level);
   if (!codec) agc_out_of_memory();
-  return oneshot_run(vm, ZLIB_ENCODER, codec, input, n, max_out);
+  return oneshot_run(vm, ZLIB_ENCODER, codec, input, n, max_out, list);
 }
 
-static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int window_bits, size_t max_out) {
+static agc_value oneshot_decode(agc_vm *vm, const uint8_t *input, size_t n, int window_bits, size_t max_out,
+                                bool list) {
   if (n == 0) return zlib_error("zlib: invalid compressed data");
   agc_zcodec *codec = agc_zcodec_decode_begin(window_bits);
   if (!codec) agc_out_of_memory();
-  return oneshot_run(vm, ZLIB_DECODER, codec, input, n, max_out);
+  return oneshot_run(vm, ZLIB_DECODER, codec, input, n, max_out, list);
 }
 
 /* One-shot calls are pure functions of their arguments: they hold no shared
    state, so they run without the shared lock, like Digest.sha256, with the
-   1 MiB input and output bounds keeping each call's work bounded. */
-static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool compress) {
+   1 MiB input and output bounds keeping each call's work bounded. Each
+   builtin has two thin entries: "<name>.bytes" on Bytes and the old "<name>"
+   on byte lists (list). */
+static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool compress, bool list) {
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
+  size_t n = 0;
+  const uint8_t *input = zlib_bytes(vm, args[0], list, &n, &failed);
   if (!input) return failed;
-  size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t level = 0;
   if (compress) {
     level = agc_as_int(vm, args[1]);
@@ -189,28 +204,48 @@ static agc_value oneshot_args(agc_vm *vm, agc_value *args, int window_bits, bool
   int64_t max_out = agc_as_int(vm, args[compress ? 2 : 1]);
   if (max_out < 1 || (uint64_t)max_out > ZLIB_ONE_SHOT_MAX)
     return zlib_error("zlib: max_bytes must be between 1 and 1048576");
-  return compress ? oneshot_compress(vm, input, n, window_bits, level, (size_t)max_out)
-                  : oneshot_decode(vm, input, n, window_bits, (size_t)max_out);
+  return compress ? oneshot_compress(vm, input, n, window_bits, level, (size_t)max_out, list)
+                  : oneshot_decode(vm, input, n, window_bits, (size_t)max_out, list);
 }
 
 static agc_value builtin_deflate(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return oneshot_args(vm, args, 15, true);
+  return oneshot_args(vm, args, 15, true, true);
+}
+
+static agc_value builtin_deflate_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return oneshot_args(vm, args, 15, true, false);
 }
 
 static agc_value builtin_inflate(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return oneshot_args(vm, args, 15, false);
+  return oneshot_args(vm, args, 15, false, true);
+}
+
+static agc_value builtin_inflate_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return oneshot_args(vm, args, 15, false, false);
 }
 
 static agc_value builtin_gzip(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return oneshot_args(vm, args, 31, true);
+  return oneshot_args(vm, args, 31, true, true);
+}
+
+static agc_value builtin_gzip_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return oneshot_args(vm, args, 31, true, false);
 }
 
 static agc_value builtin_gunzip(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return oneshot_args(vm, args, 31, false);
+  return oneshot_args(vm, args, 31, false, true);
+}
+
+static agc_value builtin_gunzip_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return oneshot_args(vm, args, 31, false, false);
 }
 
 /* Zlib.crc32(data, seed): the zlib CRC32 of the bytes chained after seed,
@@ -220,17 +255,27 @@ static agc_value builtin_gunzip(agc_vm *vm, agc_value *args, uint32_t span) {
    bounded. Empty input returns the seed unchanged (zlib crc32(Z_NULL, 0)
    resets to zero, so the empty case never reaches the codec). The bytes and
    the checksum are computed first; the Result is built only after, so no
-   GC allocation happens while a caller buffer is held. */
-static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
+   GC allocation happens while a caller buffer is held. A Bytes under
+   "Zlib.crc32.bytes", a byte list under the old key. */
+static agc_value crc32_of(agc_vm *vm, agc_value *args, bool list) {
   agc_value failed = agc_void();
-  const uint8_t *input = zlib_bytes(vm, args[0], &failed);
+  size_t n = 0;
+  const uint8_t *input = zlib_bytes(vm, args[0], list, &n, &failed);
   if (!input) return failed;
-  size_t n = agc_list_len(agc_as_list(vm, args[0]));
   int64_t seed = agc_as_int(vm, args[1]);
   if (seed < 0 || seed > 4294967295LL) return zlib_error("zlib: seed must be between 0 and 4294967295");
   uint32_t crc = agc_zlib_crc32((uint32_t)seed, input, n);
   return agc_result_value(true, agc_int((int64_t)crc));
+}
+
+static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return crc32_of(vm, args, true);
+}
+
+static agc_value builtin_crc32_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return crc32_of(vm, args, false);
 }
 
 /* The end of the run: frees a stream no run and no task end freed. No
@@ -273,7 +318,7 @@ agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes) {
 
 /* The caller checked the kind (0 to 5) and agc_zstep_check passed. The registry and the owner list are shared, so
    the entry is made under rt->sync: a Lazy terminal runs unlocked. */
-agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes) {
+agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes, bool list) {
   bool encode = kind < 3;
   int bits = step_bits[kind];
   agc_zcodec *codec = encode ? agc_zcodec_encode_begin(bits, (int)level) : agc_zcodec_decode_begin(bits);
@@ -289,6 +334,7 @@ agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t ma
   z->codec = codec;
   z->buf = buf;
   z->encode = encode;
+  z->list = list;
   z->max_out = encode ? UINT64_MAX : (uint64_t)max_bytes;
   agc_sync_take(vm);
   agc_resource *r = agc_register(vm, z, release_zstep);
@@ -335,7 +381,7 @@ agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, 
   }
   z->total_out += produced;
   agc_charge_bytes(vm, consumed + produced);
-  if (produced) *out = byte_list_value(buf, produced);
+  if (produced) *out = zlib_value(buf, produced, z->list);
   if (fed == AGC_ZCODEC_DONE) {
     z->done = true;
     return left ? zstep_failed(out, "zlib: trailing bytes after stream end") : AGC_ZSTEP_END;
@@ -355,6 +401,11 @@ const agc_builtin agc_zlib_builtins[] = {
   {"Zlib.gzip", 3, builtin_gzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Zlib.gunzip", 2, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.deflate.bytes", 3, builtin_deflate_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.inflate.bytes", 2, builtin_inflate_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gzip.bytes", 3, builtin_gzip_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.gunzip.bytes", 2, builtin_gunzip_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Zlib.crc32.bytes", 2, builtin_crc32_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];

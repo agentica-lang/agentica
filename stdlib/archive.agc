@@ -108,7 +108,7 @@ end
 # under its case-folded name `fold`; an entry that is skipped has `out` "". `total` counts the bytes of the stream.
 struct Scan
   ctx: Ctx
-  carry: List[Int]
+  carry: Bytes
   phase: Phase
   zeros: Int
   rest: Int
@@ -218,7 +218,7 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
   )
   scan = Scan(
     ctx: ctx,
-    carry: [],
+    carry: "".bytes,
     phase: Phase.Header,
     zeros: 0,
     rest: 0,
@@ -277,11 +277,11 @@ def stat_src(src: String, deadline: Int) -> Result[FileInfo]
 end
 
 # The first bytes of the source, to tell a gzipped archive by its magic.
-def read_first(src: String, deadline: Int) -> Result[List[Int]]
+def read_first(src: String, deadline: Int) -> Result[Bytes]
   case File.chunks(src, 2, try time_left(deadline)).first(1)
     ok(chunks) ->
       if chunks.size == 0
-        return ok([])
+        return ok("".bytes)
       end
       return ok(chunks[0])
     error(message) -> return error("archive: cannot open #{src}: #{message}")
@@ -629,7 +629,7 @@ def decode_or_empty(raw: List[Int]) -> String
   end
 end
 
-# The bytes as strict UTF-8. The TAR data is a List[Int] until #805 PR 5; its items are bytes.
+# The bytes as strict UTF-8. Headers and records are parsed as a List[Int] (feed); its items are bytes.
 def utf8_of(data: List[Int]) -> Result[String]
   return String.from_bytes(try Bytes.from_list(data))
 end
@@ -710,12 +710,11 @@ def create_out(out: String, deadline: Int) -> Result[Void]
 end
 
 # Appends one piece of a selected file's data.
-def append_out(out: String, piece: List[Int], deadline: Int) -> Result[Void]
+def append_out(out: String, piece: Bytes, deadline: Int) -> Result[Void]
   left = try time_left(deadline)
-  data = try Bytes.from_list(piece)
   case File.open(out, "append", left)
     ok(handle) ->
-      case File.write_bytes(handle, data, left)
+      case File.write_bytes(handle, piece, left)
         ok(_) ->
           case File.close(handle, close_budget(deadline))
             ok(_) -> return ok()
@@ -735,10 +734,10 @@ def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Resu
   deadline = scan.ctx.deadline
   stream = File.chunks(src, CHUNK, try time_left(deadline))
   if gzip
-    stream = stream.with_index do |chunk: List[Int], index: Int| try within_input(chunk, index) end
+    stream = stream.with_index do |chunk: Bytes, index: Int| try within_input(chunk, index) end
       .gunzip(SCAN_BYTES)
   end
-  outcome = stream.reduce(scan) do |sc: Scan, chunk: List[Int]| try feed(sc, chunk, gzip) end
+  outcome = stream.reduce(scan) do |sc: Scan, chunk: Bytes| try feed(sc, chunk, gzip) end
   case outcome
     ok(done) ->
       try check_end(done)
@@ -750,7 +749,7 @@ end
 
 # A compressed chunk passes while the file bytes read so far stay within INPUT_BYTES: File.chunks gives CHUNK bytes
 # each, the last one fewer.
-def within_input(chunk: List[Int], index: Int) -> Result[List[Int]]
+def within_input(chunk: Bytes, index: Int) -> Result[Bytes]
   if index * CHUNK + chunk.size > INPUT_BYTES
     return error("archive: compressed input exceeds 268435456 bytes")
   end
@@ -779,9 +778,10 @@ def stream_error(message: String, src: String) -> String
   return "archive: cannot read #{src}: #{message}"
 end
 
-# Takes one chunk of the TAR stream: each phase takes what it needs of the bytes held so far, and what a phase still
-# needs more of waits in `carry` for the next chunk.
-def feed(sc: Scan, chunk: List[Int], gzip: Bool) -> Result[Scan]
+# Takes one chunk of the TAR stream: each phase takes what it needs of the bytes held so far, from `at` on, and what
+# a phase still needs more of waits in `carry` for the next chunk. Each phase copies only the bytes it takes (a slice),
+# never the rest of the chunk. Headers and records are parsed as lists; file data stays Bytes.
+def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
   if Time.monotonic_ms() >= sc.ctx.deadline
     return error("archive: operation timed out")
   end
@@ -791,38 +791,41 @@ def feed(sc: Scan, chunk: List[Int], gzip: Bool) -> Result[Scan]
   end
   buf = chunk
   if sc.carry.size > 0
-    buf = List.concat(sc.carry, chunk)
+    buf = sc.carry + chunk
   end
-  sc = sc.with(carry: [], total: total)
-  while buf.size > 0
+  sc = sc.with(carry: "".bytes, total: total)
+  at = 0
+  while at < buf.size
+    left = buf.size - at
     case sc.phase
       Phase.Header ->
-        if buf.size < HEADER_BYTES
-          return ok(sc.with(carry: buf))
+        if left < HEADER_BYTES
+          return ok(sc.with(carry: buf.drop(at)))
         end
-        sc = try take_header(sc, List.take(buf, HEADER_BYTES))
-        buf = List.drop(buf, HEADER_BYTES)
+        sc = try take_header(sc, buf.slice(at, HEADER_BYTES).to_a)
+        at = at + HEADER_BYTES
       Phase.Meta ->
-        if buf.size < sc.rest
-          return ok(sc.with(carry: buf))
+        if left < sc.rest
+          return ok(sc.with(carry: buf.drop(at)))
         end
         n = sc.rest
-        sc = try take_meta(sc, List.take(buf, n))
-        buf = List.drop(buf, n)
+        sc = try take_meta(sc, buf.slice(at, n).to_a)
+        at = at + n
       Phase.Data ->
-        n = smaller(sc.rest, buf.size)
-        sc = try take_data(sc, List.take(buf, n))
-        buf = List.drop(buf, n)
+        n = smaller(sc.rest, left)
+        sc = try take_data(sc, buf.slice(at, n))
+        at = at + n
       Phase.Pad ->
-        n = smaller(sc.rest, buf.size)
+        n = smaller(sc.rest, left)
         sc = after_pad(sc.with(rest: sc.rest - n))
-        buf = List.drop(buf, n)
+        at = at + n
       Phase.Trailer ->
-        counts = List.tally(buf)
-        if Map.size(counts) != 1 or !Map.has_key?(counts, 0)
-          return error("archive: non-zero padding after the archive end")
+        for i in at...buf.size
+          if buf[i] != 0
+            return error("archive: non-zero padding after the archive end")
+          end
         end
-        buf = []
+        at = buf.size
     end
   end
   return ok(sc)
@@ -948,7 +951,7 @@ def take_meta(sc: Scan, data: List[Int]) -> Result[Scan]
 end
 
 # One piece of an entry's data: written when the entry is selected, dropped when not.
-def take_data(sc: Scan, piece: List[Int]) -> Result[Scan]
+def take_data(sc: Scan, piece: Bytes) -> Result[Scan]
   if sc.out != ""
     try append_out(sc.out, piece, sc.ctx.deadline)
   end

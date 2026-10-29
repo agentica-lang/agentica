@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 400,
+  "steps": 472,
   "stdout": [
     "write ok(23)",
     "chunks ok([[31, 139, 8, 0, 0, 0, 0, 0, 2, 255], [75, 76, 74, 6, 0, 194, 65, 36, 53, 3], [0, 0, 0]])",
@@ -13,7 +13,6 @@
     "missing -> error(\"filesystem: path does not refer to a regular file\")",
     "directory -> error(\"filesystem: path does not refer to a regular file\")",
     "into a directory -> false",
-    "byte range -> error(\"filesystem: bytes must be between 0 and 255\")",
     "zero timeout -> error(\"filesystem: timeout must be positive milliseconds\")",
     ""
   ],

@@ -120,7 +120,7 @@ end
 # One piece of the compressed window of a deflated entry, as Lazy.produce gives it: the bytes read last, how many
 # are still to read, and whether the window is over.
 struct Piece
-  bytes: List[Int]
+  bytes: Bytes
   left: Int
   done: Bool
 end
@@ -307,15 +307,21 @@ def make_dest(dest: String, deadline: Int) -> Result[Void]
   end
 end
 
+# The ZIP reader holds headers and records as a List[Int], which std/binary reads, until #805 PR 7; the data of a
+# deflated entry stays Bytes (read_raw).
 def read_chunk(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[List[Int]]
-  # The ZIP reader holds its data as a List[Int] until #805 PR 5.
+  bytes = try read_raw(handle, n, deadline, src)
+  return ok(bytes.to_a)
+end
+
+def read_raw(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[Bytes]
   case File.read_bytes(handle, n, try time_left(deadline))
-    ok(bytes) -> return ok(bytes.to_a)
+    ok(bytes) -> return ok(bytes)
     error(message) -> return error("archive: cannot read #{src}: #{message}")
   end
 end
 
-# The bytes as strict UTF-8. The ZIP data is a List[Int] until #805 PR 5; its items are bytes.
+# The bytes as strict UTF-8. The ZIP headers are a List[Int] until #805 PR 7; its items are bytes.
 def utf8_of(data: List[Int]) -> Result[String]
   return String.from_bytes(try Bytes.from_list(data))
 end
@@ -1048,11 +1054,13 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     end
     piece = try stream_take(st, smaller(rest, CHUNK), INPUT_BYTES, deadline, src, "file data of #{entry.canon}")
     st = piece.stream
-    case write_piece(handle, piece.bytes, try time_left(deadline))
-      ok(_) -> rest -= piece.bytes.size
+    # The stream holds a List[Int] until #805 PR 7; its items are bytes.
+    data = try Bytes.from_list(piece.bytes)
+    case write_piece(handle, data, try time_left(deadline))
+      ok(_) -> rest -= data.size
       error(message) -> return error("archive: cannot write a selected file: #{message}")
     end
-    crc = try chain_crc(piece.bytes, crc, entry.canon)
+    crc = try chain_crc(data, crc, entry.canon)
   end
   if crc != entry.crc
     return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}")
@@ -1060,12 +1068,11 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
   return ok(st)
 end
 
-# Writes one piece of a selected file, which the reader holds as a List[Int] until #805 PR 5; its items are bytes.
-def write_piece(handle: FileHandle, piece: List[Int], timeout_ms: Int) -> Result[Void]
-  return File.write_bytes(handle, try Bytes.from_list(piece), timeout_ms)
+def write_piece(handle: FileHandle, piece: Bytes, timeout_ms: Int) -> Result[Void]
+  return File.write_bytes(handle, piece, timeout_ms)
 end
 
-def chain_crc(piece: List[Int], crc: Int, canon: String) -> Result[Int]
+def chain_crc(piece: Bytes, crc: Int, canon: String) -> Result[Int]
   case Zlib.crc32(piece, crc)
     ok(next) -> return ok(next)
     error(message) -> return error("archive: cannot checksum #{canon}: #{message}")
@@ -1078,7 +1085,7 @@ end
 # stream's handle, csize bytes in all.
 def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src: String) -> Result[Stream]
   held = List.take(st.buf, entry.csize)
-  start = Piece(bytes: held, left: entry.csize - held.size, done: false)
+  start = Piece(bytes: try Bytes.from_list(held), left: entry.csize - held.size, done: false)
   raw = try add_cap(st.raw, start.left, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
   cap = entry.usize
   if cap == 0
@@ -1089,7 +1096,7 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
     .take_while do |piece: Piece| !piece.done end
     .map do |piece: Piece| piece.bytes end
     .inflate(true, cap)
-    .reduce(Pump(got: 0, crc: 0)) do |pump: Pump, out: List[Int]| try pump_out(handle, pump, out, deadline, entry) end
+    .reduce(Pump(got: 0, crc: 0)) do |pump: Pump, out: Bytes| try pump_out(handle, pump, out, deadline, entry) end
   case outcome
     ok(pump) ->
       if pump.got != entry.usize
@@ -1107,13 +1114,13 @@ end
 # truncated.
 def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, canon: String) -> Result[Piece]
   if piece.left == 0
-    return ok(Piece(bytes: [], left: 0, done: true))
+    return ok(Piece(bytes: "".bytes, left: 0, done: true))
   end
   if Time.monotonic_ms() >= deadline
     return error("archive: operation timed out")
   end
   want = smaller(piece.left, CHUNK)
-  bytes = try read_chunk(handle, want, deadline, src)
+  bytes = try read_raw(handle, want, deadline, src)
   if bytes.size < want
     return error("archive: truncated ZIP data, needed #{want} bytes for compressed data of #{canon}")
   end
@@ -1121,7 +1128,7 @@ def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, can
 end
 
 # Writes one inflated piece of a selected file and chains its CRC32.
-def pump_out(handle: FileHandle, pump: Pump, out: List[Int], deadline: Int, entry: Entry) -> Result[Pump]
+def pump_out(handle: FileHandle, pump: Pump, out: Bytes, deadline: Int, entry: Entry) -> Result[Pump]
   case write_piece(handle, out, try time_left(deadline))
     ok(_) -> return ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
     error(message) -> return error("archive: cannot write a selected file: #{message}")

@@ -452,7 +452,7 @@ ROWS_3: List[Model.Builtin] = [
         Model.Named(name: "size", type: Types.Type.Int, default: Model.Default.Whole(65536)),
         Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -1658,11 +1658,11 @@ ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "Lazy.deflate",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "level", type: Types.Type.Int, default: Model.Default.Whole(6)),
         Model.Named(name: "raw", type: Types.Type.Bool, default: Model.Default.Flag(false)),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -1792,10 +1792,10 @@ ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "Lazy.gunzip",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1073741824)),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -1809,10 +1809,10 @@ ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "Lazy.gzip",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "level", type: Types.Type.Int, default: Model.Default.Whole(6)),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -1822,11 +1822,11 @@ ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "Lazy.inflate",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "raw", type: Types.Type.Bool, default: Model.Default.Flag(false)),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1073741824)),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -1929,7 +1929,7 @@ ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "Lazy.write_bytes",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
@@ -4873,9 +4873,9 @@ ROWS_53: List[Model.Builtin] = [
         Model.Named(name: "size", type: Types.Type.Int),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "__lazy_chunks",
+      implementation: "__lazy_chunks.bytes",
       effects: [],
       description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
       alternatives: [],
@@ -5061,13 +5061,13 @@ ROWS_53: List[Model.Builtin] = [
     Model.Builtin(
       name: "__lazy_write_bytes",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Int),
       rule: Model.Rule.Plain,
-      implementation: "__lazy_write_bytes",
+      implementation: "__lazy_write_bytes.bytes",
       effects: ["filesystem"],
       description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
       alternatives: [],
@@ -5089,14 +5089,14 @@ ROWS_53: List[Model.Builtin] = [
     Model.Builtin(
       name: "__lazy_zlib",
       parameters: [
-        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.List(Types.Type.Int))),
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Bytes)),
         Model.Named(name: "kind", type: Types.Type.Int),
         Model.Named(name: "level", type: Types.Type.Int),
         Model.Named(name: "max_bytes", type: Types.Type.Int),
       ],
-      result: Types.Type.Lazy(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Lazy(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "__lazy_zlib",
+      implementation: "__lazy_zlib.bytes",
       effects: [],
       description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
       alternatives: [],
@@ -5185,13 +5185,13 @@ ROWS_56: List[Model.Builtin] = [
     Model.Builtin(
       name: "Zlib.deflate",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "level", type: Types.Type.Int, default: Model.Default.Whole(6)),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.deflate",
+      implementation: "Zlib.deflate.bytes",
       effects: [],
       description: (
         "Compress bytes to one zlib stream (RFC 1950) at level 0 to 9; empty input is valid; data at most " +
@@ -5202,12 +5202,12 @@ ROWS_56: List[Model.Builtin] = [
     Model.Builtin(
       name: "Zlib.inflate",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.inflate",
+      implementation: "Zlib.inflate.bytes",
       effects: [],
       description: (
         "Decompress one zlib stream (RFC 1950) with its checksum checked; empty input, truncation and any " +
@@ -5219,13 +5219,13 @@ ROWS_56: List[Model.Builtin] = [
     Model.Builtin(
       name: "Zlib.gzip",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "level", type: Types.Type.Int, default: Model.Default.Whole(6)),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.gzip",
+      implementation: "Zlib.gzip.bytes",
       effects: [],
       description: (
         "Compress bytes to one gzip member (RFC 1952) at level 0 to 9; empty input is valid; data at most " +
@@ -5236,12 +5236,12 @@ ROWS_56: List[Model.Builtin] = [
     Model.Builtin(
       name: "Zlib.gunzip",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "max_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.gunzip",
+      implementation: "Zlib.gunzip.bytes",
       effects: [],
       description: (
         "Decompress one gzip member (RFC 1952) with its CRC and size checked; empty input, truncation and any " +
@@ -5253,12 +5253,12 @@ ROWS_56: List[Model.Builtin] = [
     Model.Builtin(
       name: "Zlib.crc32",
       parameters: [
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "seed", type: Types.Type.Int, default: Model.Default.Whole(0)),
       ],
       result: Types.Type.Result(Types.Type.Int),
       rule: Model.Rule.Plain,
-      implementation: "Zlib.crc32",
+      implementation: "Zlib.crc32.bytes",
       effects: [],
       description: (
         "CRC32 (RFC 1952) of bytes chained after seed (0 when left out): start with no seed, then give each next " +

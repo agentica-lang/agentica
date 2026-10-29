@@ -32,7 +32,7 @@ export VM_BUILTINS = Set.new([
   "File.each_line",
   "File.read_text", "File.sha256.bytes", "File.write_text", "File.append_text", "File.stat", "File.lstat",
   "File.try_lock",
-  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32",
+  "Zlib.deflate.bytes", "Zlib.inflate.bytes", "Zlib.gzip.bytes", "Zlib.gunzip.bytes", "Zlib.crc32.bytes",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
   "ATS.new", "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.add", "ATS.size", "ATS.keys",
@@ -76,7 +76,8 @@ export VM_BUILTINS = Set.new([
   "__lazy_channel",
   "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group",
   "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a",
-  "__lazy_with_index", "__lazy_write_lines", "__lazy_chunks", "__lazy_zlib", "__lazy_write_bytes",
+  "__lazy_with_index", "__lazy_write_lines", "__lazy_chunks.bytes", "__lazy_zlib.bytes",
+  "__lazy_write_bytes.bytes",
   "Bytes.from_list", "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take", "Bytes.drop",
   "Bytes.equal", "Bytes.plus", "Bytes.concat", "String.bytes",
 ])

@@ -98,25 +98,26 @@ typedef struct {
 
 typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_READ, LINES_CLOSE, LINES_CLOSED } lines_phase;
 
-/* A line reader, or with `chunks` a reader of byte chunks of `limit` bytes (File.chunks). */
+/* A line reader, or with `chunks` a reader of byte chunks of `limit` bytes (File.chunks): Bytes, or byte lists with
+   `list` (the old __lazy_chunks key). */
 struct agc_line_reader {
   lines_phase phase;
   agc_value path, handle, outcome;
   size_t limit;
   int64_t timeout;
-  bool chunks;
+  bool chunks, list;
 };
 
 typedef enum {
   WRITER_START, WRITER_OPENED, WRITER_READY, WRITER_WROTE, WRITER_CLOSE, WRITER_CLOSING, WRITER_CLOSED
 } writer_phase;
 
-/* A line writer, or with `bytes` a writer of byte chunks (Lazy.write_bytes). */
+/* A line writer, or a writer of byte chunks (Lazy.write_bytes) for the other forms. */
 struct agc_line_writer {
   writer_phase phase;
   agc_value path, handle, outcome;
   int64_t timeout;
-  bool bytes;
+  agc_writer_form form;
 };
 
 /* File.each_line: the reader and whether the block is running (its result comes back as `last`). */
@@ -1874,6 +1875,7 @@ static void lines_init(agc_line_reader *r, agc_value path, size_t limit, int64_t
   r->limit = limit;
   r->timeout = timeout;
   r->chunks = false;
+  r->list = false;
 }
 
 bool agc_lines_buffer_ok(int64_t buffer_bytes) {
@@ -1892,13 +1894,14 @@ agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes,
 
 bool agc_chunks_size_ok(int64_t size) { return size >= 1 && size <= MAX_LINE_BUFFER; }
 
-agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span) {
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, bool list, uint32_t span) {
   files_on(vm, span);
   agc_as_string(vm, path);
   if (!agc_chunks_size_ok(size)) agc_fail(vm, "RUNTIME-INTERNAL", "a chunk reader with an unchecked size", span);
   agc_line_reader *r = agc_alloc(sizeof(agc_line_reader));
   lines_init(r, path, (size_t)size, timeout);
   r->chunks = true;
+  r->list = list;
   return r;
 }
 
@@ -1909,7 +1912,8 @@ static bool chunks_take(agc_vm *vm, const agc_line_reader *r, file_state *st, ag
   if (have < r->limit && !(st->eof && have > 0)) return false;
   size_t n = have < r->limit ? have : r->limit;
   agc_charge_bytes(vm, n);
-  *chunk = agc_list_value(agc_list_of_bytes(st->buf + st->start, n));
+  const uint8_t *data = st->buf + st->start;
+  *chunk = r->list ? agc_list_value(agc_list_of_bytes(data, n)) : agc_bytes_value(agc_make_bytes(data, n));
   st->start += n;
   return true;
 }
@@ -2033,7 +2037,7 @@ static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, bool bytes, uint32_t span) {
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc_writer_form form, uint32_t span) {
   files_on(vm, span);
   agc_as_string(vm, path);
   agc_line_writer *w = agc_alloc(sizeof(agc_line_writer));
@@ -2042,7 +2046,7 @@ agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, boo
   w->handle = agc_void();
   w->outcome = ok_void();
   w->timeout = timeout;
-  w->bytes = bytes;
+  w->form = form;
   return w;
 }
 
@@ -2052,7 +2056,9 @@ agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, boo
 static agc_value writer_put(agc_vm *vm, agc_line_writer *w, file_state *st, agc_value item) {
   const uint8_t *data;
   size_t len;
-  if (w->bytes) {
+  if (w->form == AGC_WRITE_BYTES) {
+    data = agc_bytes_data(vm, item, &len);
+  } else if (w->form == AGC_WRITE_BYTE_LISTS) {
     const agc_list *list = agc_as_list(vm, item);
     len = agc_list_len(list);
     data = agc_byte_list(vm, list, len);
@@ -2063,7 +2069,7 @@ static agc_value writer_put(agc_vm *vm, agc_line_writer *w, file_state *st, agc_
     data = (const uint8_t *)line->data;
     len = line->bytes;
   }
-  bool newline = !w->bytes;
+  bool newline = w->form == AGC_WRITE_LINES;
   size_t total = agc_size_add(len, newline ? 1 : 0);
   agc_charge_bytes(vm, total);
   if (!st->buf) {
@@ -2354,17 +2360,18 @@ void agc_lines_stop(agc_line_reader *r, agc_value outcome) {
 
 bool agc_chunks_size_ok(int64_t size) { return size >= 1 && size <= MAX_LINE_BUFFER; }
 
-agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span) {
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, bool list, uint32_t span) {
   (void)path;
   (void)size;
   (void)timeout;
+  (void)list;
   agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
-agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, bool bytes, uint32_t span) {
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc_writer_form form, uint32_t span) {
   (void)path;
   (void)timeout;
-  (void)bytes;
+  (void)form;
   agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
