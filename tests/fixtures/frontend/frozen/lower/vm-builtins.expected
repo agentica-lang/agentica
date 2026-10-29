@@ -57,6 +57,7 @@ Float.to_int!
 FrontEnd.hand_off
 FrontEnd.std_source
 FrontEnd.stdin_bytes
+HMAC.secure_compare
 HMAC.sha256
 HMAC.sha256_hexdigest
 HMAC.sha512

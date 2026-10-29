@@ -1,7 +1,8 @@
 /*
- * The digest adapter over OpenSSL's EVP interface and RAND_bytes, the same
- * library that tls_openssl.c links (system OpenSSL 3 or the vendored one).
- * Adapter layer, behind digest.h. Design: docs/vm/15-layers.md §15.1.
+ * The digest adapter over OpenSSL's EVP interface, RAND_bytes and
+ * CRYPTO_memcmp, the same library that tls_openssl.c links (system OpenSSL 3
+ * or the vendored one). Adapter layer, behind digest.h. Design:
+ * docs/vm/15-layers.md §15.1.
  */
 #include "digest.h"
 
@@ -123,4 +124,9 @@ bool agc_secure_random(unsigned char *out, size_t n) {
   bool done = n <= INT_MAX && digest_ready() && RAND_bytes(out, (int)n) == 1;
   if (!done) ERR_clear_error();
   return done;
+}
+
+bool agc_secure_equal(const unsigned char *a, const unsigned char *b, size_t n) {
+  /* CRYPTO_memcmp gives 0 for equal bytes and nonzero otherwise, not an order; it reads all n bytes of both. */
+  return n == 0 || CRYPTO_memcmp(a, b, n) == 0;
 }

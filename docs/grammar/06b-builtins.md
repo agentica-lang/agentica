@@ -307,8 +307,17 @@ Expected types flow into these operations for empty collections and Results.
   the hash's block (64 or 128 bytes) is hashed first. An item outside 0 to 255
   is `RUNTIME-INVALID-NUMBER` at the argument that holds it. They are built on
   OpenSSL, take time in proportion to both lists and have no effect label. A
-  received MAC is to be compared in constant time, which `==` is not; a
-  constant-time compare is planned. `HMAC` is a reserved type name.
+  received MAC is to be compared in constant time, which `==` is not: use
+  `HMAC.secure_compare`. `HMAC` is a reserved type name.
+- `HMAC.secure_compare(a, b)` gives `true` when the bytes in `a` and `b` are the
+  same, in a time that never depends on valid bytes or on where they differ, as
+  Ruby's `OpenSSL.secure_compare(a, b)` does: it compares the SHA-256 digests of
+  both lists with OpenSSL's `CRYPTO_memcmp`, then the lists themselves when the
+  digests match. Lists of other lengths give `false`; the time grows with both
+  lengths, which it does not hide. It is for checking a received MAC, signature
+  or token against the expected one. An item outside 0 to 255 is
+  `RUNTIME-INVALID-NUMBER` at the argument that holds it, and it has no effect
+  label.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
   same in lines of 60 characters that each end in a newline (`""` for `[]`),

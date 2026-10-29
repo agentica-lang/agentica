@@ -1,12 +1,12 @@
 /*
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of byte lists
- * (MD5, SHA-1, SHA-256, SHA-512, each as bytes and as hex) and their HMACs
- * (HMAC-SHA256 and HMAC-SHA512, RFC 2104), the first parts of
- * docs/future/20-crypto.md, and the Base64 and Digest.hexencode/hexdecode text
- * forms of bytes, in plain C, and the SecureRandom draws. The hash, the HMAC and
- * the random bytes come from the OpenSSL adapter (digest.h). Service layer.
- * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC
- * 4648 and Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
+ * (MD5, SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104)
+ * and the constant-time HMAC.secure_compare, the SecureRandom draws, and the
+ * Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. The
+ * hashes, HMACs, random bytes and compare come from the OpenSSL adapter
+ * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
+ * Base64 and hex follow RFC 4648 and Ruby's Base64 module, SecureRandom.uuid
+ * RFC 9562 §5.4.
  */
 #include "services.h"
 #include "digest.h"
@@ -429,6 +429,24 @@ static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_string_value(text);
 }
 
+/* HMAC.secure_compare(a, b): Ruby's OpenSSL.secure_compare, for checking a received MAC or token against the expected
+   one. Like Ruby it compares the SHA-256 digests of the two lists in constant time (CRYPTO_memcmp), so lists of other
+   lengths give false in a time that depends on the lengths only, never on valid bytes or on where they differ (a bad
+   byte stops the run at its position). Equal digests then also need equal lists, as Ruby's `&& a == b` does, so a
+   SHA-256 collision cannot pass; that second compare runs only when the digests match, so its branch tells nothing the
+   answer does not. The time grows with the lengths, which the row charges (AGC_COST_SIZE), and the call runs without
+   the shared lock, as HMAC does. */
+static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t a_n, b_n;
+  const uint8_t *a = text_form_bytes(vm, args[0], "HMAC.secure_compare needs bytes between 0 and 255", span, &a_n);
+  const uint8_t *b = text_form_bytes(vm, args[1], "HMAC.secure_compare needs bytes between 0 and 255", span + 1, &b_n);
+  unsigned char a_digest[AGC_DIGEST_MAX_BYTES], b_digest[AGC_DIGEST_MAX_BYTES];
+  size_t len = digest_compute(vm, AGC_DIGEST_SHA256, a, a_n, a_digest, span);
+  digest_compute(vm, AGC_DIGEST_SHA256, b, b_n, b_digest, span);
+  bool same = agc_secure_equal(a_digest, b_digest, len);
+  return agc_bool(same && a_n == b_n && agc_secure_equal(a, b, a_n));
+}
+
 const agc_builtin agc_crypto_builtins[] = {
   {"Digest.md5", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Digest.md5_hexdigest", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
@@ -453,6 +471,7 @@ const agc_builtin agc_crypto_builtins[] = {
   {"SecureRandom.random_bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HMAC.secure_compare", 2, builtin_secure_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

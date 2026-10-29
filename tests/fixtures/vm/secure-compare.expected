@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 199,
+  "stdout": [
+    "same true true",
+    "empty true true",
+    "first false false",
+    "middle false false",
+    "last false false",
+    "prefix false false",
+    "one false false",
+    "zeros false false",
+    "rfc4231 true true",
+    "forged false false",
+    ""
+  ],
+  "stderr": []
+}

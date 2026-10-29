@@ -18,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `CGI.escape_html` (`HTML.escape`, `HTML.unescape`).
 - `std/cookie` reads a `Cookie` header and writes a `Set-Cookie` header, with
   the behaviour of Rack (`Cookie.parse`, `Cookie.set_header`).
+- `HMAC.secure_compare(a, b)` compares two byte lists in constant time, for
+  checking MACs, signatures and tokens.
 - `std/mime` gives the media type of a file by its extension, with the name
   and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
 - `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`,
