@@ -143,10 +143,11 @@ def test_basic_roundtrips_keep_member_order_and_counts(tmp_path):
         "\n"
         "def main() -> Void\n"
         "  o = Archive.options()\n"
-        '  puts("defaults #{o.timeout_ms} #{o.max_output_bytes}")\n'
+        "  d = Archive.Options()\n"
+        '  puts("defaults #{o.timeout_ms} #{o.max_output_bytes} #{d.timeout_ms} #{d.max_output_bytes}")\n'
         "end\n"
     )
-    assert run_driver(work, "defaults", defaults_text) == ["defaults 30000 268435456", ""]
+    assert run_driver(work, "defaults", defaults_text) == ["defaults 30000 268435456 30000 268435456", ""]
     calls = [
         ("pax", "p.tar", q("readme.txt", "lib.so", "sub/nested.bin"), "d1", options),
         ("dot", "p.tar", q("./sub/nested.bin"), "d2", options),

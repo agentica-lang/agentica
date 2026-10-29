@@ -77,7 +77,7 @@ HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOp
 
 Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: String)
-DownloadOptions(timeout_ms: Int, max_total_bytes: Int)
+DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[Header], bytes_written: Int)
 HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String)
 ```
@@ -105,7 +105,7 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   exist (`create_private`, so an existing path fails untouched) and a failed
   download keeps the partial file. 4xx and 5xx still return `ok` with their
   status and written body, without redirect follow; the connection is not
-  pooled. `download_options()` gives 30 s and 256 MiB.
+  pooled. `DownloadOptions()` and `download_options()` give 30 s and 256 MiB.
 - Names that do not exist: `HTTP.client()` (write
   `HTTP.client(HTTP.client_options())`), `HTTP.text(response.body, t)`
   (`response.body`), `header_timeout_ms` (`request_timeout_ms`), and `read`,

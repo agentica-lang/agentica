@@ -65,6 +65,7 @@ def main() -> Void
     end,
     Test.test("download options carry the 256 MiB budget") do
       Test.eq(HTTP.download_options(), HTTP.DownloadOptions(timeout_ms: 30000, max_total_bytes: 268435456))
+      Test.eq(HTTP.DownloadOptions(), HTTP.download_options())
     end,
     Test.test("a download writes the body to a new file") do
       server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())

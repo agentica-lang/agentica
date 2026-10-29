@@ -22,6 +22,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   checking MACs, signatures and tokens.
 - `std/mime` gives the media type of a file by its extension, with the name
   and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
+- `Archive.Options()` and `HTTP.DownloadOptions()` give the default options
+  without `Archive.options()` or `HTTP.download_options()`.
 - `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`,
   `append_text`, `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`,
   `mkdir_private`, `Path.remove` and `Path.rename`. `File.open(path)` defaults
