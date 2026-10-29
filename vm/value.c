@@ -452,12 +452,11 @@ agc_bytes *agc_new_bytes(size_t len) {
   return b;
 }
 
-/* const, so it is no mutable global; a Bytes is never written after it is made, so the cast gives no write. */
 static const agc_bytes empty_bytes = {0};
 
-agc_bytes *agc_empty_bytes(void) { return (agc_bytes *)&empty_bytes; }
+const agc_bytes *agc_empty_bytes(void) { return &empty_bytes; }
 
-agc_bytes *agc_make_bytes(const uint8_t *data, size_t len) {
+const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len) {
   if (len == 0) return agc_empty_bytes();
   agc_bytes *b = agc_new_bytes(len);
   memcpy(b->data, data, len);

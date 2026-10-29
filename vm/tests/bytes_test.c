@@ -253,6 +253,43 @@ static void test_builtins(void) {
   assert(agc_value_units(raw(big, sizeof big)) == 10);
 }
 
+/* The turn cost each path charges (the call sites add nothing for these rows, which are AGC_COST_NONE): a cut charges
+   the bytes it copies, not the parent's size, and nothing when it returns the whole input; a compare and a key hash
+   charge len / 64, and a compare of two lengths charges nothing. */
+static int64_t cost_of(const char *name, uint32_t arity, agc_value *args) {
+  vm.task->turn_cost = 0;
+  (void)call(name, arity, args);
+  return vm.task->turn_cost;
+}
+
+static void test_costs(void) {
+  char data[1000];
+  memset(data, 7, sizeof data);
+  agc_value big = raw(data, sizeof data), same = raw(data, sizeof data), part = raw(data, 640);
+  agc_value slice[3] = {big, agc_int(10), agc_int(640)};
+  assert(cost_of("Bytes.slice", 3, slice) == 10);
+  slice[1] = agc_int(0);
+  slice[2] = agc_int(1000);
+  assert(cost_of("Bytes.slice", 3, slice) == 0);
+  agc_value count[2] = {big, agc_int(128)};
+  assert(cost_of("Bytes.take", 2, count) == 2);
+  assert(cost_of("Bytes.drop", 2, count) == (1000 - 128) / 64);
+  count[1] = agc_int(INT64_MAX);
+  assert(cost_of("Bytes.take", 2, count) == 0);
+  count[1] = agc_int(0);
+  assert(cost_of("Bytes.drop", 2, count) == 0);
+  agc_value pair[2] = {big, same};
+  assert(cost_of("Bytes.equal", 2, pair) == 1000 / 64);
+  pair[1] = part;
+  assert(cost_of("Bytes.equal", 2, pair) == 0);
+  vm.task->turn_cost = 0;
+  assert(agc_same_bytes(&vm, agc_as_bytes(&vm, part), agc_as_bytes(&vm, raw(data, 640))) && vm.task->turn_cost == 10);
+  vm.task->turn_cost = 0;
+  (void)agc_key_hash(&vm, part);
+  assert(vm.task->turn_cost == 10);
+  vm.task->turn_cost = 0;
+}
+
 /* Hand-made bytecode can pass any value to any builtin: a wrong tag, or a list with an item that is not of its type,
    fails with RUNTIME-INTERNAL. */
 static void test_wrong_tags(void) {
@@ -365,6 +402,7 @@ int main(void) {
   test_json();
   test_builtins();
   test_wrong_tags();
+  test_costs();
   test_collection();
 #ifndef _WIN32
   test_overflow();

@@ -108,11 +108,11 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
   return siphash13(vm->rt->hash_key, (uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
 }
 
-static bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
+static inline bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
-  if (agc_is(a, AGC_T_BYTES)) return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
-  return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
+  if (agc_is(a, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
+  return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
 }
 
 static agc_hamt *const *kids(const agc_hamt *node) { return (agc_hamt *const *)(const void *)(node->leaf + node->leaves); }

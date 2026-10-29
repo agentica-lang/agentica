@@ -12,10 +12,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static agc_value bytes_of(const uint8_t *data, size_t len) {
-  return agc_bytes_value(agc_make_bytes(data, len));
-}
-
 /* error on the first item outside 0..255, with its index: the type cannot say that an Int is a byte. */
 static agc_value builtin_from_list(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -65,7 +61,7 @@ static agc_value cut(agc_vm *vm, agc_value whole, size_t from, size_t count) {
   const agc_bytes *b = agc_as_bytes(vm, whole);
   if (count == b->len) return whole;
   agc_charge_bytes(vm, count);
-  return bytes_of(b->data + from, count);
+  return agc_bytes_value(agc_make_bytes(b->data + from, count));
 }
 
 static agc_value builtin_slice(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -149,7 +145,7 @@ static agc_value builtin_concat(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_string_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
-  return bytes_of((const uint8_t *)s->data, s->bytes);
+  return agc_bytes_value(agc_make_bytes((const uint8_t *)s->data, s->bytes));
 }
 
 const agc_builtin agc_bytes_builtins[] = {
