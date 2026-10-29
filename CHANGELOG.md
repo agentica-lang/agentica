@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
+- `HMAC.secure_compare(a, b)` compares two byte lists in constant time, for
+  checking MACs, signatures and tokens.
 
 ## [0.15.0] - 2026-10-29
 

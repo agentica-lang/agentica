@@ -10883,6 +10883,53 @@
       "start": [1, 1]
     }
   ],
+  "HMAC.secure_compare takes two List[Int] and gives a Bool": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  key = [1, 2]",
+        "  mac = HMAC.sha256(key, [3])",
+        "  same: Bool = HMAC.secure_compare(mac, HMAC.sha256(key, [3]))",
+        "  puts(same and HMAC.secure_compare([], []))",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  same = HMAC.secure_compare(\"abc\", [1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 30],
+      "covers": "\"abc\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  same = HMAC.secure_compare([1])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 10],
+      "covers": "HMAC.secure_compare([1])"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n: Int = HMAC.secure_compare([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 12],
+      "covers": "HMAC.secure_compare([1], [2])",
+      "expected": "Int",
+      "actual": "Bool"
+    }
+  ],
   "Base64 and Digest.hexencode take a List[Int] and give a String; the strict decodes give a Result; Base64 and Digest are reserved names": [
     {
       "program": [

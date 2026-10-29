@@ -1,10 +1,10 @@
 ---
 title: Digest, HMAC and SecureRandom
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key, and SecureRandom, which draws secure random bytes, hex and UUIDs.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, and the secure random draws of `SecureRandom`, as Ruby names them. More (a constant-time compare) are planned.
+The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, and the secure random draws of `SecureRandom`, as Ruby names them.
 
 ## Digests
 
@@ -60,6 +60,7 @@ HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]
 HMAC.sha256_hexdigest(key: List[Int], data: List[Int]) -> String
 HMAC.sha512(key: List[Int], data: List[Int]) -> List[Int]
 HMAC.sha512_hexdigest(key: List[Int], data: List[Int]) -> String
+HMAC.secure_compare(a: List[Int], b: List[Int]) -> Bool
 ```
 
 `HMAC.sha256` gives the HMAC-SHA256 (RFC 2104) of `data` under `key`: 32 integers from 0 to 255. `HMAC.sha512` gives the 64 of HMAC-SHA512. Each `_hexdigest` form gives the same MAC as lowercase hex, as Ruby's `OpenSSL::HMAC.hexdigest("SHA256", key, data)` does. The key can have any length, empty included; a key longer than the hash's block (64 bytes for SHA-256, 128 for SHA-512) is hashed first, as RFC 2104 says. They sign webhook payloads, JSON Web Tokens with HS256 (the MAC in unpadded base64url) and signed URLs.
@@ -80,10 +81,34 @@ f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
 97yD9DBThCSxMpjmqm-xQ-9NWaFJRhdZl0edvC0aPNg
 ```
 
-- To check a MAC you received, compare it with the one you compute in constant time. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right; a constant-time compare is planned.
 - An item outside 0 to 255, in the key or in the data, stops the program with `RUNTIME-INVALID-NUMBER` at that argument.
 - The time grows with the key and the data, as for the digests, and they need no effect label.
 - `HMAC` is a reserved type name too.
+
+### Checking a MAC
+
+To check a MAC, signature or token you received, compare it with the one you compute using `HMAC.secure_compare(a, b)`, never with `==`. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right. `HMAC.secure_compare` gives `true` when the two lists hold the same bytes, in a time that does not depend on the bytes or on where they differ: like Ruby's `OpenSSL.secure_compare`, it compares the SHA-256 digests of both lists with OpenSSL's `CRYPTO_memcmp`.
+
+```agentica
+def main() -> Void
+  key = String.to_bytes("key")
+  body = String.to_bytes("{\"event\":\"paid\"}")
+  received = HMAC.sha256(key, body)
+  puts(HMAC.secure_compare(HMAC.sha256(key, body), received))
+  puts(HMAC.secure_compare(HMAC.sha256(key, String.to_bytes("{}")), received))
+  puts(HMAC.secure_compare(received, received.take(16)))
+end
+```
+
+```output
+true
+false
+false
+```
+
+- Lists of other lengths give `false`. The time grows with both lengths, so it shows how long the lists are, never what they hold.
+- To check a hex MAC, such as the one in a webhook header, decode it first with [`Digest.hexdecode`](/library/text-and-data/base64/#hex); an `error` there means a bad MAC.
+- An item outside 0 to 255 stops the program with `RUNTIME-INVALID-NUMBER` at that argument. It needs no effect label.
 
 ## SecureRandom
 

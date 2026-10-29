@@ -17,13 +17,14 @@ with a `_hexdigest` form (`Digest.sha256(data: List[Int]) -> List[Int]`,
 `docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
 `vm/digest_openssl.c`, HMAC-SHA256 and HMAC-SHA512
 (`HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]`, each with a
-`_hexdigest` form, Ruby's `OpenSSL::HMAC.digest`), and
-`SecureRandom.random_bytes`, `hex` and `uuid` from `RAND_bytes`. They take and
+`_hexdigest` form, Ruby's `OpenSSL::HMAC.digest`), the constant-time
+`HMAC.secure_compare(a, b) -> Bool` (Ruby's `OpenSSL.secure_compare`, on
+`CRYPTO_memcmp`), and `SecureRandom.random_bytes`, `hex` and `uuid` from
+`RAND_bytes`. They take and
 give `List[Int]` until `Bytes` exists, and move to `Bytes` with the other byte
 APIs.
 
-**Plan** (issue #757, one PR each): a constant-time compare, PBKDF2 and
-AES-256-GCM. Their names follow Ruby's (`OpenSSL::PKCS5.pbkdf2_hmac`),
+**Plan** (issue #757, one PR each): PBKDF2 and AES-256-GCM. Their names follow Ruby's (`OpenSSL::PKCS5.pbkdf2_hmac`),
 flattened as `Digest` and `HMAC` are
 (`Digest::SHA256.hexdigest` is `Digest.sha256_hexdigest`); each PR settles its
 names. `Crypto` stays a reserved type name only.

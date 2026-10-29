@@ -117,7 +117,11 @@ in a PR that rewrites the goldens.
   without the shared lock, as it reads only its argument. The `HMAC` builtins
   (`sha256`, `sha512` and their `_hexdigest` forms) check the key and the data
   the same way, each at its own argument, and compute the MAC with OpenSSL's
-  `EVP_Q_mac` (`agc_hmac` in `digest.h`), with the same cost and lock. The
+  `EVP_Q_mac` (`agc_hmac` in `digest.h`), with the same cost and lock.
+  `HMAC.secure_compare(a, b)` checks both lists the same way, hashes each with
+  SHA-256 and compares the digests, and then the lists when their lengths
+  match, with `CRYPTO_memcmp` (`agc_secure_equal`), again with the same cost
+  and lock. The
   eight `Base64` and hex builtins in `vm/crypto.c`
   (`Digest.hexencode`/`hexdecode`) are plain C; the encoders check items the
   same way, and all eight charge `AGC_COST_SIZE`.
