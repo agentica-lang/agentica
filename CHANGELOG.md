@@ -16,9 +16,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
 - `std/mime` gives the media type of a file by its extension, with the name
   and fallback of Ruby's `Rack::Mime.mime_type` (`MIME.mime_type("app.css")`).
-- `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`, `append_text`,
-  `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`, `mkdir_private`, `Path.remove`
-  and `Path.rename`; `File.open(path)` also defaults `mode` to `"read"`.
+- `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`,
+  `append_text`, `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`,
+  `mkdir_private`, `Path.remove` and `Path.rename`. `File.open(path)` defaults
+  both `mode` (`"read"`) and `timeout_ms`.
 
 ## [0.15.0] - 2026-10-29
 

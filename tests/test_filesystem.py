@@ -267,13 +267,14 @@ def test_the_filesystem_calls_leave_out_the_timeout_and_file_open_the_mode(new_d
   IO.inspect(File.stat(path).unwrap!.size_bytes)
   file = File.open(path).unwrap!
   IO.inspect(File.read_line(file, 1000))
+  IO.inspect(File.write(file, "x", 1000).ok?)
   IO.inspect(File.close(file, 1000))
   IO.inspect(Dir.list(root))
   IO.inspect(Path.rename(path, root + "/b.txt"))
   IO.inspect(Path.remove(root + "/b.txt"))
 end
 """, args=[str(root)])
-    assert output == 'ok()\nok()\nok("hi!")\n3\nok("hi!")\nok()\nok(["a.txt"])\nok()\nok()\n'
+    assert output == 'ok()\nok()\nok("hi!")\n3\nok("hi!")\nfalse\nok()\nok(["a.txt"])\nok()\nok()\n'
 
 
 def test_the_run_waits_for_the_close_of_a_crashed_tasks_file_so_its_buffered_write_reaches_the_disk(new_dir, run_program):
