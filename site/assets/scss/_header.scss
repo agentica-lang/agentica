@@ -135,6 +135,14 @@
   display: inline-flex;
 }
 
+// A touch target of 44px, like the menu button.
+@media (max-width: $narrow) {
+  .theme-toggle {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}
+
 // The button shows the theme it switches to: the moon on a light page, the sun on a dark one.
 @include dark {
   .theme-toggle {

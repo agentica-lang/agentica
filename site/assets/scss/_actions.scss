@@ -68,6 +68,8 @@
   &:focus-visible {
     position: relative;
     z-index: 1;
+    outline: var(--focus-ring);
+    outline-offset: 2px;
   }
 }
 
@@ -136,6 +138,11 @@
     &:hover,
     &:focus-visible {
       background: var(--code-bg);
+    }
+
+    &:focus-visible {
+      outline: var(--focus-ring);
+      outline-offset: -2px;
     }
   }
 
