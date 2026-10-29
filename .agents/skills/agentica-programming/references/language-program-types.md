@@ -75,9 +75,11 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   `Bool`: `true` / `false` only. `String`: Unicode text. `Nil`: the value `nil`.
 - `Void`: completion without a value; no literal.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
-  keeps insertion order, `K` is `Int` or `String`. `Set[T]`: distinct,
-  immutable, first-insertion order, `T` is `Int` or `String`
+  keeps insertion order, `K` is `Int`, `String` or `Bytes`. `Set[T]`: distinct,
+  immutable, first-insertion order, `T` is `Int`, `String` or `Bytes`
   (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, no `==`, not JSON-encodable.
+- `Bytes`: immutable byte string (`references/bytes.md`); `Bytes` is a reserved
+  name.
 - `Result[T]`: `ok(value)` or `error(message)` (the message is a String); one
   type argument.
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints

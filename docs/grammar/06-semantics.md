@@ -17,6 +17,10 @@ programs are valid and how they run.
 - **Type:** `String`
   - **Rule:** Unicode text; concatenation with `+`
 
+- **Type:** `Bytes`
+  - **Rule:** Immutable byte string, one byte for each item (`0..255`); no
+    literal (§6, "Bytes")
+
 - **Type:** `Nil`
   - **Rule:** A single data value, `nil`
 
@@ -27,12 +31,12 @@ programs are valid and how they run.
   - **Rule:** Homogeneous, immutable list; `Int` indexes from zero
 
 - **Type:** `Map[K, V]`
-  - **Rule:** Homogeneous, immutable map; the key `K` is `Int` or `String`;
-    keeps insertion order
+  - **Rule:** Homogeneous, immutable map; the key `K` is `Int`, `String` or
+    `Bytes`; keeps insertion order
 
 - **Type:** `Set[T]`
-  - **Rule:** Immutable set of distinct `Int` or `String` values; keeps
-    first-insertion order
+  - **Rule:** Immutable set of distinct `Int`, `String` or `Bytes` values;
+    keeps first-insertion order
 
 - **Type:** `Result[T]`
   - **Rule:** `ok(value)`, or `error(message)` with a `String` message
@@ -89,13 +93,14 @@ nullable wildcard: `name: String = nil` is invalid; use an enum such as
 ### Operators
 
 - `+`, `-`, `*` and `/` take two operands of one numeric type; `+` also
-  concatenates `String`s. Integer `/` truncates toward zero, and `%` takes
-  integers only, with `a = (a / b) * b + (a % b)`. Division by zero is
+  concatenates `String`s and `Bytes`. Integer `/` truncates toward zero, and `%`
+  takes integers only, with `a = (a / b) * b + (a % b)`. Division by zero is
   `RUNTIME-DIVISION-BY-ZERO`, for `Float` too. An integer result outside `Int`
   is an error.
 - Ordering operators take two numbers of one type. `==` and `!=` take one
-  primitive type, or two `Range` values (equal when start, end and kind match).
-  There is no list or struct equality. `..` and `...` take two `Int` values.
+  primitive type, two `Range` values (equal when start, end and kind match), or
+  two `Bytes` (equal when they have the same length and bytes). There is no
+  list or struct equality. `..` and `...` take two `Int` values.
 - `and`, `or` and `not` take only `Bool`. `&&`, `||` and `!` are the same
   operators. A `!` directly after a name belongs to it (`read!`); `!=` is
   inequality.
@@ -147,10 +152,10 @@ builtin with effects (`stdout`, `stdin`, `filesystem`, `network`, `subprocess`,
 `clock`, `random`, `concurrency` and the rest): each is
 `CHECK-CONSTANT-EXPRESSION`, located at that form. Every expression inside the
 initializer, not only the result, has a data type: numbers, `String`, `Bool`,
-`Nil`, `List`, `Map`, `Set`, `Range`, `Result` and `JSON` of data types, and
-structs and enums whose fields and payloads are data; a function, `Channel`,
-task, handle or `ATS` table type (and `Void`) is `CHECK-CONSTANT-TYPE`, located
-at the expression. `Channel.new` has no effects, but it makes a value with
+`Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result` and `JSON` of data
+types, and structs and enums whose fields and payloads are data; a function,
+`Channel`, task, handle or `ATS` table type (and `Void`) is
+`CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no effects, but it makes a value with
 identity and state, which is why the type rule exists.
 
 A scalar literal constant is part of the bytecode. Every other constant is built
@@ -421,7 +426,8 @@ is `CHECK-UNKNOWN-NAME`.
 A list index runs from zero to length minus one; a negative or out-of-range
 index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most
 four steps for a million items; `for` visits the items in order. `for` iterates
-a `List` in order, a `Set` in first-insertion order, or a `Range`. The core has
+a `List` in order, a `Set` in first-insertion order, a `Range`, or a `Bytes`
+byte by byte. The core has
 no slices and no string indexing.
 
 ### Generic structs
@@ -625,10 +631,55 @@ end
 - Ranges print as `1..5`. They are not JSON-encodable and cannot be `Map` keys.
   Ranges of `String` or `Float`, and `step`, are not supported.
 
+### Bytes
+
+`Bytes` is an immutable string of bytes, stored one byte for each item (a
+`List[Int]` takes eight). It holds data that is not text: digests, file
+contents, wire formats. There is no literal; write `"PK".bytes` (the UTF-8
+bytes of a `String`), `Digest.hexdecode(text)` or `Bytes.from_list([80, 75])`.
+A byte is read as an `Int` in `0..255`.
+
+```ruby
+data = "héllo".bytes
+puts(data.length)        # 6
+puts(data[0])            # 104
+puts(data == "héllo".bytes)
+for byte in data
+  puts(byte)
+end
+```
+
+- `s.bytes` gives the UTF-8 bytes of a `String`. `Bytes.from_list(list)` takes a
+  `List[Int]` and gives a `Result[Bytes]`: the error names the first item
+  outside `0..255` and its index. `b.to_a` gives the `List[Int]` back, the way
+  to `map`, `select` and the other `List` methods; `Bytes` has none of them.
+- `b.length` and `b.size`, `b.empty?`, `b.at(i)` and `b[i]` (`Int`),
+  `b.slice(start, length)`, `b.take(n)`, `b.drop(n)` and `b.each` are the other
+  methods. `at`, `[i]` and `slice` halt outside the bounds
+  (`RUNTIME-INDEX-OUT-OF-RANGE`); `take` and `drop` clamp to the length like
+  the `List` ones (`RUNTIME-INVALID-COUNT` for a negative count). `slice`,
+  `take` and `drop` copy; a view would keep a large parent alive.
+- `a + b` joins two `Bytes`; `Bytes.concat(parts)` joins a `List[Bytes]` in one
+  copy. `+` in a loop copies everything on each pass and takes quadratic time,
+  so join many parts with `Bytes.concat`. To build bytes one at a time, build a
+  `List[Int]` and call `Bytes.from_list` once.
+- `==` and `!=` compare length and bytes. They are not constant time: compare a
+  MAC or a token with `HMAC.secure_compare`. A `Bytes` never equals a `String`
+  with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering (`<`).
+- A `Bytes` is a `Map` key or a `Set` item, and a field, a list item or a map
+  value. It is not an `ATS` key (`CHECK-MAP-KEY-TYPE`). It is not
+  JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`):
+  write it as text first, with `Base64.strict_encode64`.
+- `"#{b}"` and `b.to_s` give `<Bytes 3>`; `b.inspect`, `Test.eq` messages and
+  the text of a `Bytes` inside a list or map give `<Bytes 3 616263>`: the length
+  and the first 32 bytes in hex, then `...` if there are more.
+- `Bytes` is a reserved type name (`CHECK-REDEFINED-NAME`). `String` has no
+  index (`CHECK-NOT-INDEXABLE`); `s.bytes[i]` reads a byte.
+
 ### Maps
 
-`Map[K, V]` has exactly two type arguments: `K` is `Int` or `String`, and `V` is
-any type.
+`Map[K, V]` has exactly two type arguments: `K` is `Int`, `String` or `Bytes`,
+and `V` is any type.
 
 ```ruby
 stock: Map[String, Int] = {"apple": 3, "pear": 0}
@@ -650,7 +701,7 @@ more = Map.put(stock, "kiwi", 7)
 
 ### Sets
 
-`Set[T]` has one type argument, `Int` or `String`, like a `Map` key: any other
+`Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key: any other
 element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once and keeps
 the order of first insertion.
 

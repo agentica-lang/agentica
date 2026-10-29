@@ -1,10 +1,10 @@
 ---
 title: Set
 weight: 3
-description: Functions for Set[T], a collection of distinct Int or String values. Each one is also a method on sets.
+description: Functions for Set[T], a collection of distinct Int, String or Bytes values. Each one is also a method on sets.
 ---
 
-A set holds each value once, in the order first added. Elements are `Int` or `String`, like map keys. Sets are immutable.
+A set holds each value once, in the order first added. Elements are `Int`, `String` or `Bytes`, like map keys. Sets are immutable.
 
 - `for` walks a set in order. A set prints as `Set[1, 2]`.
 - There is no `==`; use `a.subset?(b) and b.subset?(a)`.
@@ -33,7 +33,7 @@ Set["b", "a"]
 Set.new(items: List[T]) -> Set[T]
 ```
 
-Builds a set from a list. A repeated item is dropped, and the first one keeps its place. `T` must be `Int` or `String`, otherwise `CHECK-SET-ELEMENT-TYPE`. An empty list needs an expected type, like `[]` and `{}`: `CHECK-EMPTY-SET-TYPE` without one.
+Builds a set from a list. A repeated item is dropped, and the first one keeps its place. `T` must be `Int`, `String` or `Bytes`, otherwise `CHECK-SET-ELEMENT-TYPE`. An empty list needs an expected type, like `[]` and `{}`: `CHECK-EMPTY-SET-TYPE` without one.
 
 ```agentica
 def main() -> Void

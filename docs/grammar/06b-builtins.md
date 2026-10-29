@@ -1,10 +1,10 @@
 ### Methods on builtin types
 
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
-type. The checker picks the module from the static type (`String`, `List`,
-`Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`, and
-`JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch. `s.strip`
-is `String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec
+type. The checker picks the module from the static type (`String`, `Bytes`,
+`List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
+and `JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch.
+`s.strip` is `String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec
 have no function form: `JSON.Codec.decode(c, s)` is `CHECK-UNKNOWN-NAME`.
 Without parentheses, `receiver.name` on a non-struct value is a method without
 arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
@@ -16,11 +16,10 @@ Ruby aliases are the module functions named in the library pages: `strip`,
 `include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
 `to_f`, and `to_s` and `inspect` on any data value. Ruby's other names for a
 method work too, and the texts show only the first: `length` and `size` on
-`String`, `List`, `Map`, `Set` and `Range`; `collect` for `map`, `inject` for
-`reduce` and `detect` for `find` (on `List` and `Lazy`); `member?` for
-`include?` on `Set` and `Range`; `include?` and `member?` for `key?` on `Map`.
-Two differ from Ruby: `to_i`
-and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
+`String`, `Bytes`, `List`, `Map`, `Set` and `Range`; `collect` for `map`,
+`inject` for `reduce` and `detect` for `find` (on `List` and `Lazy`); `member?`
+for `include?` on `Set` and `Range`; `include?` and `member?` for `key?` on
+`Map`. Two differ from Ruby: `to_i` and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
 `to_i!` and `to_f!` halt on bad text. An unknown method is
 `CHECK-UNKNOWN-METHOD`.
 
@@ -286,7 +285,8 @@ Expected types flow into these operations for empty collections and Results.
   UTF-8: invalid, overlong, surrogate and incomplete sequences are errors, never
   replacement characters. `String.to_bytes(s)` is its inverse: the UTF-8 bytes
   of `s` as a `List[Int]` of 0 to 255 (`[]` for `""`); it cannot fail, so
-  `String.from_bytes(String.to_bytes(s))` is `ok(s)`.
+  `String.from_bytes(String.to_bytes(s))` is `ok(s)`. `s.bytes` gives the same
+  bytes as a `Bytes` (`docs/grammar/06-semantics.md`, "Bytes").
 - `Digest.md5(data)`, `Digest.sha1(data)`, `Digest.sha256(data)` and
   `Digest.sha512(data)` give the digest of the bytes in `data` as a
   `List[Int]` of 16, 20, 32 or 64 integers 0 to 255 (`Digest.sha256([])`

@@ -55,7 +55,7 @@ tests/            # pytest modules test_<area>.py (VM tests: references/vm-tests
   bdd/            # feature specs and step handlers (references/bdd.md)
   eval/           # agent evaluation, not part of make test (references/bench-eval.md)
 stdlib/           # std/ modules, embedded in the binary; MODULES is the registry; CORE lists the compiler/ files std/analysis embeds as std/internal/compiler/<path>
-  prelude/        # bodies of List, Map and Lazy methods; not importable (references/stages.md)
+  prelude/        # bodies of List, Map, Lazy, String and Bytes methods; not importable (references/stages.md)
   bdd/ test/      # internal to agentica test (references/bdd.md)
 tools/            # refreeze.py (references/frontend.md); jscpd/, conformance.py, release.py, release-check.sh (references/ci.md)
 ```

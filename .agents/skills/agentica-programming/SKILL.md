@@ -29,7 +29,7 @@ cases/*.txt; do agentica p.agc < "$f" || break; done`.
 - Values never change: `xs = xs.push(4)`; a block cannot assign an outer
   variable (`reduce` for a total; a `for` loop, which can, to update several).
 - No implicit Int/Float (`n.to_f`); `<` only on numbers (strings: `a.compare(b)
-  < 0`); `==` only on Int, Float, Bool, String, Nil (`CHECK-TYPE-MISMATCH`).
+  < 0`); `==` only on Int, Float, Bool, String, Nil, Bytes, Range (`CHECK-TYPE-MISMATCH`).
 - `try` only in a function that returns `Result[T]`, never in `main`;
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
@@ -51,6 +51,7 @@ Read only what the task needs.
 | `modules.md` | several files, `std/`, `pkg/`, packages |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
+| `bytes.md` | `Bytes`: the byte string type, `s.bytes`, slicing, joining, keys |
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
 | `archive.md` | `std/archive` (explicit-allowlist TAR extraction into a new directory) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |

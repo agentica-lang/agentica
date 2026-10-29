@@ -70,14 +70,14 @@ variables, functions and struct fields.
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
-`Channel`, `Crypto`, `Digest`, `Dir`, `File`, `FileHandle`, `FileInfo`, `Float`,
-`Fn`, `HMAC`, `Header`, `HttpClient`, `HttpClientOptions`, `HttpRequest`,
-`HttpResponse`, `HttpServer`, `HttpServerOptions`, `HttpWire`, `IO`, `Int`,
-`JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`,
-`LogRegistry`, `Map`, `Nil`, `Path`, `Process`, `ProcessOutput`, `Profile`,
-`Random`, `Range`, `Result`, `SecureRandom`, `Set`, `Socket`, `Std`, `String`,
-`StructMember`, `System`, `TCP`, `TLS`, `Task`, `Test`, `TestCase`, `Time`,
-`Void` and `Zlib`. `HTTP` is not reserved: it is the usual alias of `std/http`.
+`Bytes`, `Channel`, `Crypto`, `Digest`, `Dir`, `File`, `FileHandle`, `FileInfo`,
+`Float`, `Fn`, `HMAC`, `Header`, `HttpClient`, `HttpClientOptions`,
+`HttpRequest`, `HttpResponse`, `HttpServer`, `HttpServerOptions`, `HttpWire`,
+`IO`, `Int`, `JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`,
+`LogEvent`, `LogLevel`, `LogRegistry`, `Map`, `Nil`, `Path`, `Process`,
+`ProcessOutput`, `Profile`, `Random`, `Range`, `Result`, `SecureRandom`, `Set`,
+`Socket`, `Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
+`Test`, `TestCase`, `Time`, `Void` and `Zlib`. `HTTP` is not reserved: it is the usual alias of `std/http`.
 `ok` and `error` are names, but cannot be declared as functions, variables,
 parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds
 for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables
