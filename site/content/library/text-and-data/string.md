@@ -399,6 +399,27 @@ end
 ok("hé")
 ```
 
+## bytes
+
+```text
+String.bytes(s: String) -> Bytes
+```
+
+The same UTF-8 bytes as a [`Bytes`](/library/data-structures/bytes/), which stores one byte for each item. `s.bytes.to_a` is the list of integers that `to_bytes` gives.
+
+```agentica
+def main() -> Void
+  b = "hé".bytes
+  puts(b.length)
+  puts(b.to_a)
+end
+```
+
+```output
+3
+[104, 195, 169]
+```
+
 ## bytesize
 
 ```text

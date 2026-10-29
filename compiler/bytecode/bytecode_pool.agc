@@ -2,7 +2,7 @@
 ## and the spans. An entry is found by a text key, and the table keeps the bytes of its entries in the order they were
 ## added, which is the order of the section in the file.
 
-import Bytes from "bytecode_bytes"
+import Wire from "bytecode_bytes"
 
 ## The entries added so far. index maps a key to the number of its first item. count is the number of items: an entry
 ## is one item, except a run of spans, which is one item for each span.
@@ -20,13 +20,13 @@ end
 
 ## A pool with no entry.
 export def empty() -> Pool
-  return Pool(index: {}, chunks: Bytes.start(), count: 0)
+  return Pool(index: {}, chunks: Wire.start(), count: 0)
 end
 
 ## The pool with a new entry for the key: its bytes, and how many items it adds. The first item of the entry is
 ## numbered pool.count of the pool before.
 export def add(pool: Pool, key: String, bytes: List[Int], items: Int) -> Pool
-  return Pool(index: pool.index.put(key, pool.count), chunks: Bytes.add(pool.chunks, bytes), count: pool.count + items)
+  return Pool(index: pool.index.put(key, pool.count), chunks: Wire.add(pool.chunks, bytes), count: pool.count + items)
 end
 
 ## The number of the first item of the entry for the key, or an error when the pool has no such entry. Callers build

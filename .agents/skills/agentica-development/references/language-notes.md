@@ -65,6 +65,20 @@ section for the area you are changing.
   list slot and then the list loop (`compiler/lower/lower_stmt.agc`). The VM
   keeps a set as an `agc_map` with nil values under `AGC_T_SET`.
 
+## Bytes
+
+- `Type.Bytes` is its own variant (a reserved type name), not an `Opaque`: it
+  has `==`, keys, `to_s` and `inspect`. It is a Map key or Set item
+  (`key_type?`) but not an `ATS` key (`resolve_ats`), and not JSON
+  (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks the Base64 help). Its method
+  module is `Bytes`; `b.size` is the synonym of `b.length`; `each` and `empty?`
+  are prelude rows (`stdlib/prelude/bytes.agc`).
+- The VM's `eq`, `ne`, `concat`, `list-get` and `list-len` do not take a Bytes,
+  so lowering calls builtins: `a + b` is `Bytes.plus`, `==` is `Bytes.equal`
+  (`!=` adds `not`), `b[i]` and the element read of `for` are `Bytes.at`, and
+  the length of `for` is `Bytes.length` (`lower_bytes_operator`, `bytes_reads`).
+  These have no catalog row; their keys are in `VM_BUILTINS`.
+
 ## File modules
 
 - The linker (`compiler/modules/declarations.agc`, called by `modules.agc`)

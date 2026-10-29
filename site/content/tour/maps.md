@@ -6,7 +6,7 @@ description: Map literals, reading keys, adding and removing entries.
 
 ## Make a map
 
-A map links keys to values. Keys are `Int` or `String`. All keys have one type, and all values have one type: `Map[K, V]`. A map keeps the order in which keys were added.
+A map links keys to values. Keys are `Int`, `String` or `Bytes`. All keys have one type, and all values have one type: `Map[K, V]`. A map keeps the order in which keys were added.
 
 ```agentica
 def main() -> Void

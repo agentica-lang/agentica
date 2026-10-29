@@ -253,8 +253,9 @@ def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
   return fx.with(vars: fx.vars.put(name, slot))
 end
 
-# A for over a list or a set (a set is read as a list in first-insertion order): the length is read once, an index
-# counts up, and each pass starts by reading the element, in the instruction put after the body's first `step`.
+# A for over a list, a set or a Bytes (a set is read as a list in first-insertion order): the length is read once, an
+# index counts up, and each pass starts by reading the element, in the instructions put after the body's first
+# `step`. A Bytes has no list instructions: its length and its element are the builtins Bytes.length and Bytes.at.
 def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -> Result[Lowering.Fx]
   span = node.span
   type = Lowering.static_type(cx, node.iterable)
@@ -271,6 +272,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     fx = Lowering.emit_builtin(fx, items, "Set.to_a", 1, [span, span])
   end
 
+  bytes = Types.is?(type, "Bytes")
   if node.body.size > 0
     fx = Lowering.alloc(Lowering.alloc(Lowering.alloc(Lowering.alloc(fx))))
     index = fx.next - 4
@@ -283,7 +285,13 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     test = fx.labels - 2
     exit = fx.labels - 1
     fx = Lowering.emit_const(fx, index, Ir.Imm.Int(0), span)
-    fx = Lowering.emit_at(fx, "list-len", [count, items], span)
+    if bytes
+      fx = Lowering.emit_at(fx, "move", [count, items], span)
+      fx = Lowering.emit_builtin(fx, count, "Bytes.length", 1, [span, span])
+    else
+      fx = Lowering.emit_at(fx, "list-len", [count, items], span)
+    end
+
     fx = Lowering.emit_const(fx, one, Ir.Imm.Int(1), span)
     fx = Lowering.emit_at(fx, "jump", [test], span)
     outer_next = fx.loop_next
@@ -295,7 +303,14 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
       fx = Lowering.alloc(fx)
       element = fx.next - 1
       fx = fx.with(vars: fx.vars.put(node.variable, element))
-      fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
+      reads = [Ir.instr("list-get", [element, items, index], fx.file, [span])]
+      if bytes
+        # The call takes its arguments in the register of the result and the next one.
+        fx = Lowering.alloc(fx)
+        reads = bytes_reads(fx, element, items, index, span)
+      end
+
+      fx = fx.with(pending: reads)
     end
 
     fx = try lower_block(cx, fx, node.body)
@@ -310,6 +325,24 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
   end
 
   return ok(fx.with(next: saved))
+end
+
+# The instructions that read the Bytes at index into element: the Bytes and the index are copied to element and the
+# register after it, and Bytes.at leaves the byte in element.
+def bytes_reads(fx: Lowering.Fx, element: Int, items: Int, index: Int, span: Source.Span) -> List[Ir.Instr]
+  call = Ir.Instr(
+    op: "call-builtin",
+    args: [element, 2],
+    imm: Ir.Imm.Void,
+    name: "Bytes.at",
+    file: fx.file,
+    spans: [span, span, span],
+  )
+  return [
+    Ir.instr("move", [element, items], fx.file, [span]),
+    Ir.instr("move", [element + 1, index], fx.file, [span]),
+    call,
+  ]
 end
 
 # A for over a range counts its bounds in registers; a literal range a..b or a...b is not built, and the body runs

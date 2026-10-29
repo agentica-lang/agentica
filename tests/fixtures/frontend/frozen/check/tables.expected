@@ -6,6 +6,7 @@
 export def method_modules() -> Map[String, String]
   return {
     "ATS": "ATS",
+    "Bytes": "Bytes",
     "Channel": "Channel",
     "Codec": "JSON.Codec",
     "Float": "Float",
@@ -25,6 +26,7 @@ end
 export def method_aliases() -> Map[String, String]
   return {
     "ATS.length": "ATS.size",
+    "Bytes.size": "Bytes.length",
     "Float.to_i": "Float.to_int",
     "Float.to_i!": "Float.to_int!",
     "Float.to_s": "String.from_float",
@@ -69,9 +71,9 @@ end
 ## name here (`strip` for `String.trim`, `select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
   return [
-    "ATS.length", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect", "List.inject",
-    "List.length", "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?", "Set.length",
-    "Set.member?", "String.size",
+    "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
+    "List.inject", "List.length", "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?",
+    "Set.length", "Set.member?", "String.size",
   ]
 end
 
@@ -161,6 +163,11 @@ end
 ## The help for a method another language has, by receiver kind.
 export def foreign_kind_methods() -> Map[String, String]
   return {
+    "Bytes.each_byte": "use b.each do |byte| ... end",
+    "Bytes.getbyte": "use b.at(i), or b[i], which halts on a bad index",
+    "Bytes.inject": "Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end",
+    "Bytes.map": "Bytes has no map; use b.to_a.map do |x| ... end",
+    "Bytes.select": "Bytes has no select; use b.to_a.select do |x| ... end",
     "Int.chr": "use String.from_code(n) for the character of a code point",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",

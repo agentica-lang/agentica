@@ -362,10 +362,37 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   type = try CheckTypes.resolve_type(cx, st, ref, false)
   try json_field_place(cx, st, type, "decode target", node.span)
   if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type)
-    return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
+    return error(
+      State.fail_maybe(
+        cx,
+        st,
+        "CHECK-NOT-DECODABLE",
+        "target contains types that cannot be decoded",
+        node.span,
+        bytes_help(cx, type, "decode"),
+      ),
+    )
   end
 
   return ok(type)
+end
+
+# The help of a JSON builtin that refuses a type with a Bytes inside, or "": JSON has no byte type, so the bytes are
+# written as Base64 text and read back from it.
+def bytes_help(cx: State.Cx, type: T.Type, verb: String) -> String
+  if !CheckTypes.bytes_inside?(cx, type)
+    return ""
+  end
+
+  if verb == "encode"
+    return "JSON has no byte type; encode it first: Base64.strict_encode64(b)"
+  end
+
+  if T.is?(type, "Bytes")
+    return "JSON has no byte type; decode a String and convert it with Base64.strict_decode64(text)"
+  end
+
+  return "JSON has no byte type; use a String field and decode it with Base64.strict_decode64(text)"
 end
 
 # JSON.encode and JSON.from: any value that can be written as JSON.
@@ -374,12 +401,13 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
   try json_field_place(cx, out.st, out.type, "encode argument", Ast.expr_span(site.args[0]))
   if !CheckTypes.encodable?(cx, out.type)
     return error(
-      State.fail(
+      State.fail_maybe(
         cx,
         out.st,
         "CHECK-NOT-ENCODABLE",
         "cannot JSON.encode #{T.to_text(out.type)} or its nested types",
         Ast.expr_span(site.args[0]),
+        bytes_help(cx, out.type, "encode"),
       ),
     )
   end

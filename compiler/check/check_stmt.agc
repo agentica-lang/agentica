@@ -410,20 +410,20 @@ end
 def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
   iterable = try State.expr(cx, st, node.iterable, T.Type.Unknown)
   type = iterable.type
-  if !T.is?(type, "List") and !T.is?(type, "Set") and !T.is?(type, "Range")
+  if !T.is?(type, "List") and !T.is?(type, "Set") and !T.is?(type, "Range") and !T.is?(type, "Bytes")
     return error(
       State.fail(
         cx,
         iterable.st,
         "CHECK-NOT-A-LIST",
-        "\"for\" iterates over a list, a set or a range, found #{T.to_text(type)}",
+        "\"for\" iterates over a list, a set, a range or a Bytes, found #{T.to_text(type)}",
         node.span,
       ),
     )
   end
 
   element = T.Type.Int
-  if !T.is?(type, "Range")
+  if !T.is?(type, "Range") and !T.is?(type, "Bytes")
     element = T.item(type)
   end
 

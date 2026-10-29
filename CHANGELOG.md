@@ -8,6 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Bytes`, a compact immutable byte string: `s.bytes`, `Bytes.from_list`,
+  `b.to_a`, `b[i]`, `slice`, `take`, `drop`, `+`, `Bytes.concat`, `==`, and use
+  as a `Map` key or `Set` item.
+
+### Changed
+
+- **Breaking:** `Bytes` is a reserved type name. A struct, enum, type alias or
+  import alias called `Bytes` is `CHECK-REDEFINED-NAME`.
+
 ## [0.16.0] - 2026-10-29
 
 ### Added

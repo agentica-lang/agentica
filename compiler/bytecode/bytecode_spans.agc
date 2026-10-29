@@ -65,10 +65,10 @@ def run_bytes(body: List[Ir.Instr], at: Int, count: Int) -> List[Int]
   return entry
 end
 
-# The five numbers of a span as u32, written out in one list: that costs about half of five calls of Bytes.u32. Nearly
+# The five numbers of a span as u32, written out in one list: that costs about half of five calls of Wire.u32. Nearly
 # every number is below 65536 and has two zero high bytes, which the first list leaves out of the arithmetic. Both
-# lists are Bytes.u32 of file, line, column, line, column joined: for a number below 65536 u32 gives [n % 256, n / 256,
-# 0, 0], and the second list is its general formula. The numbers are never negative (see Bytes.u32).
+# lists are Wire.u32 of file, line, column, line, column joined: for a number below 65536 u32 gives [n % 256, n / 256,
+# 0, 0], and the second list is its general formula. The numbers are never negative (see Wire.u32).
 def span_bytes(file: Int, span: Source.Span) -> List[Int]
   start = span.start
   stop = span.stop

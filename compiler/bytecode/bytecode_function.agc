@@ -5,7 +5,7 @@
 ## A function body is flat, so this is a loop over the instructions and uses no recursion.
 
 import Ir from "../lower/ir"
-import Bytes from "bytecode_bytes"
+import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
@@ -72,16 +72,16 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     code = code.concat(words)
     interned = Spans.intern_run(span_pool, body, at, run)
     span_pool = interned.pool
-    refs = refs.concat(Bytes.u32(interned.id))
+    refs = refs.concat(Wire.u32(interned.id))
     count += 1
     at += run
   end
 
   # The span of the function comes after those of its instructions.
   own = Spans.intern_one(span_pool, function.file, function.span)
-  head = Bytes.string(function.name).concat(Bytes.u32(function.params)).concat(Bytes.u32(function.captures))
-  head = head.concat(Bytes.u32(function.slots)).concat(Bytes.u32(own.id))
-  head = head.concat(Bytes.u32(prelude_flag(program, function))).concat(Bytes.u32(count))
+  head = Wire.string(function.name).concat(Wire.u32(function.params)).concat(Wire.u32(function.captures))
+  head = head.concat(Wire.u32(function.slots)).concat(Wire.u32(own.id))
+  head = head.concat(Wire.u32(prelude_flag(program, function))).concat(Wire.u32(count))
   return ok(Encoded(tables: state.with(spans: own.pool), parts: [head, code, refs]))
 end
 
@@ -175,9 +175,9 @@ def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Res
     return error(Failure.limit(program, 0, "struct updates", program.span))
   end
 
-  entry = Bytes.u32(args[2]).concat(Bytes.u32(positions.size))
+  entry = Wire.u32(args[2]).concat(Wire.u32(positions.size))
   for position in positions
-    entry = entry.concat(Bytes.u32(position))
+    entry = entry.concat(Wire.u32(position))
   end
 
   return ok(plain(tables.with(updates: Pool.add(updates, key, entry, 1)), args[0], args[1], updates.count))
@@ -193,7 +193,7 @@ def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Re
     return wide_operands(program, tables, instr.op, args[0], found.unwrap!)
   end
 
-  bytes = Bytes.string(instr.name).concat(Bytes.u32(args[1]))
+  bytes = Wire.string(instr.name).concat(Wire.u32(args[1]))
   added = Pool.add(tables.builtins, key, bytes, 1)
   return wide_operands(program, tables.with(builtins: added), instr.op, args[0], tables.builtins.count)
 end
@@ -229,7 +229,7 @@ def instr_words(program: Ir.Program, instr: Ir.Instr, found: Operands) -> Result
         return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
       end
 
-      words = words.concat(Bytes.u16(arg))
+      words = words.concat(Wire.u16(arg))
     end
 
     return ok(words)
@@ -298,9 +298,9 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Void -> return [0]
     Ir.Imm.Nil -> return [1]
     Ir.Imm.Bool(flag) -> return flag_bytes(flag)
-    Ir.Imm.Int(number) -> return [4].concat(Bytes.i64(number))
-    Ir.Imm.Float(number) -> return [5].concat(Bytes.f64(number))
-    Ir.Imm.Text(text) -> return [6].concat(Bytes.string(text))
+    Ir.Imm.Int(number) -> return [4].concat(Wire.i64(number))
+    Ir.Imm.Float(number) -> return [5].concat(Wire.f64(number))
+    Ir.Imm.Text(text) -> return [6].concat(Wire.string(text))
   end
 end
 

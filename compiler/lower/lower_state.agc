@@ -232,6 +232,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Nil -> return true
     Types.Type.String -> return true
     Types.Type.Range -> return true
+    Types.Type.Bytes -> return true
     Types.Type.Json -> return true
     # A type variable stands for a value of the VM: the functions of the prelude are written for any type, and so is
     # a generic function of the program (its body is checked once, whatever the type argument), and the default of a

@@ -94,7 +94,8 @@ s.to_f!() -> Float
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
 - No regex builtin (`=~`, `matches?`). `s.chars` is `s.split("")`, `s.ord` is
-  `s.code`, `s.bytes` is `s.to_bytes`.
+  `s.code`. `s.bytes` gives a `Bytes` (`bytes.md`); `s.to_bytes` still gives a
+  `List[Int]`.
 
 ## List
 
@@ -175,7 +176,7 @@ m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f a
 ## Set
 
 ```text
-Set.new(items: List[T]) -> Set[T]                        # T is Int or String; repeats dropped, first keeps its place
+Set.new(items: List[T]) -> Set[T]                        # T is Int, String or Bytes; repeats dropped, first keeps its place
 Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
 Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(log n) amortized
 Set.include?(set: Set[T], value: T) -> Bool

@@ -11,7 +11,7 @@
 import Problems from "../diagnostics/problem"
 import Ir from "../lower/ir"
 import Types from "../syntax/types"
-import Bytes from "bytecode_bytes"
+import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Function from "bytecode_function"
 import Pool from "bytecode_pool"
@@ -53,11 +53,11 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
   # The span of the program is the first run of the span table.
   spans = Spans.intern_one(Pool.empty(), 0, program.span).pool
   tables = Function.Tables(constants: Pool.empty(), updates: Pool.empty(), builtins: Pool.empty(), spans: spans)
-  functions = Bytes.start()
+  functions = Wire.start()
   for function in program.functions
     encoded = try Function.encode(program, tables, function)
     tables = encoded.tables
-    functions = Bytes.add_all(functions, encoded.parts)
+    functions = Wire.add_all(functions, encoded.parts)
   end
 
   out = (
@@ -67,17 +67,17 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
     |> pool_section(tables.constants)
     |> structs(program)
     |> pool_section(json.types)
-    |> Bytes.add(Bytes.u32(json.decodable_count))
-    |> Bytes.add_all(json.decodable)
+    |> Wire.add(Wire.u32(json.decodable_count))
+    |> Wire.add_all(json.decodable)
     |> enums(program)
     |> pool_section(tables.updates)
-    |> Bytes.add(Bytes.u32(program.globals))
+    |> Wire.add(Wire.u32(program.globals))
     |> pool_section(tables.builtins)
-    |> Bytes.add(Bytes.u32(program.functions.size))
-    |> Bytes.add_all(functions)
-    |> Bytes.add(Bytes.u32(program.entry))
+    |> Wire.add(Wire.u32(program.functions.size))
+    |> Wire.add_all(functions)
+    |> Wire.add(Wire.u32(program.entry))
   )
-  return ok(Bytes.join(out))
+  return ok(Wire.join(out))
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met
@@ -120,22 +120,22 @@ end
 
 # The magic, the format version and the Agentica version.
 def header(version: String) -> List[List[Int]]
-  out = Bytes.add(Bytes.start(), [65, 71, 67, 66])
-  out = Bytes.add(out, Bytes.u32(FORMAT_VERSION))
-  return Bytes.add(out, Bytes.string(version))
+  out = Wire.add(Wire.start(), [65, 71, 67, 66])
+  out = Wire.add(out, Wire.u32(FORMAT_VERSION))
+  return Wire.add(out, Wire.string(version))
 end
 
 # The count of a table of entries, then its entries.
 def pool_section(out: List[List[Int]], pool: Pool.Pool) -> List[List[Int]]
-  return Bytes.add_all(Bytes.add(out, Bytes.u32(pool.count)), pool.chunks)
+  return Wire.add_all(Wire.add(out, Wire.u32(pool.count)), pool.chunks)
 end
 
 # The sources: the stored name of each file and its text.
 def sources(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
-  chunks = Bytes.add(out, Bytes.u32(program.sources.size))
+  chunks = Wire.add(out, Wire.u32(program.sources.size))
   for source in program.sources
-    chunks = Bytes.add(chunks, Bytes.string(source.name))
-    chunks = Bytes.add(chunks, Bytes.string(source.text))
+    chunks = Wire.add(chunks, Wire.string(source.name))
+    chunks = Wire.add(chunks, Wire.string(source.text))
   end
 
   return chunks
@@ -143,12 +143,12 @@ end
 
 # The structs: the name as the user wrote it, and the fields.
 def structs(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
-  chunks = Bytes.add(out, Bytes.u32(program.structs.size))
+  chunks = Wire.add(out, Wire.u32(program.structs.size))
   for entry in program.structs
-    chunks = Bytes.add(chunks, Bytes.string(Types.display_name(entry.name)))
-    chunks = Bytes.add(chunks, Bytes.u32(entry.fields.size))
+    chunks = Wire.add(chunks, Wire.string(Types.display_name(entry.name)))
+    chunks = Wire.add(chunks, Wire.u32(entry.fields.size))
     for field in entry.fields
-      chunks = Bytes.add(chunks, Bytes.string(field))
+      chunks = Wire.add(chunks, Wire.string(field))
     end
   end
 
@@ -157,13 +157,13 @@ end
 
 # The enums: the name as the user wrote it, and the variants with their payload sizes.
 def enums(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
-  chunks = Bytes.add(out, Bytes.u32(program.enums.size))
+  chunks = Wire.add(out, Wire.u32(program.enums.size))
   for entry in program.enums
-    chunks = Bytes.add(chunks, Bytes.string(Types.display_name(entry.name)))
-    chunks = Bytes.add(chunks, Bytes.u32(entry.variants.size))
+    chunks = Wire.add(chunks, Wire.string(Types.display_name(entry.name)))
+    chunks = Wire.add(chunks, Wire.u32(entry.variants.size))
     for variant in entry.variants
-      chunks = Bytes.add(chunks, Bytes.string(variant.name))
-      chunks = Bytes.add(chunks, Bytes.u32(variant.size))
+      chunks = Wire.add(chunks, Wire.string(variant.name))
+      chunks = Wire.add(chunks, Wire.u32(variant.size))
     end
   end
 

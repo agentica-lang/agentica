@@ -20,6 +20,7 @@ export def receiver_kind(type: T.Type) -> String
     word == "Json" or
     word == "Int" or
     word == "Range" or
+    word == "Bytes" or
     word == "Channel" or
     word == "Lazy" or
     word == "Codec" or

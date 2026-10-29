@@ -4,7 +4,7 @@ weight: 2
 description: Functions for Map[K, V]. Each one is also a method on maps.
 ---
 
-Maps are immutable and keep the order in which keys were added. Keys are `Int` or `String`.
+Maps are immutable and keep the order in which keys were added. Keys are `Int`, `String` or `Bytes`.
 
 ## size and empty?
 

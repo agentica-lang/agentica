@@ -412,7 +412,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
         cx,
         key.st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int or String, found #{T.to_text(key.type)}",
+        "a Map key must be Int, String or Bytes, found #{T.to_text(key.type)}",
         Ast.expr_span(first.key),
       ),
     )
@@ -440,6 +440,9 @@ def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[Sta
   elsif T.is?(target.type, "List")
     index = try State.expr(cx, target.st, node.index, T.Type.Int)
     return ok(State.Out(st: index.st, type: T.item(target.type)))
+  elsif T.is?(target.type, "Bytes")
+    index = try State.expr(cx, target.st, node.index, T.Type.Int)
+    return ok(State.Out(st: index.st, type: T.Type.Int))
   end
 
   return error(
@@ -447,7 +450,7 @@ def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[Sta
       cx,
       target.st,
       "CHECK-NOT-INDEXABLE",
-      "indexing needs a list or a map, found #{T.to_text(target.type)}",
+      "indexing needs a list, a map or a Bytes, found #{T.to_text(target.type)}",
       node.span,
       index_help(target.type),
     ),
@@ -683,10 +686,18 @@ def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     return ok(sides.left)
   elsif T.is?(sides.left, "String") and T.is?(sides.right, "String")
     return ok(T.Type.String)
+  elsif T.is?(sides.left, "Bytes") and T.is?(sides.right, "Bytes")
+    return ok(T.Type.Bytes)
   end
 
   return error(
-    type_error(cx, sides, node, "\"+\" expects two numbers or two strings, found #{T.to_text(sides.left)}", ""),
+    type_error(
+      cx,
+      sides,
+      node,
+      "\"+\" expects two numbers, two strings or two Bytes, found #{T.to_text(sides.left)}",
+      "",
+    ),
   )
 end
 
@@ -747,7 +758,7 @@ end
 
 def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, true)
-  if !CheckTypes.primitive?(sides.left) and !T.is?(sides.left, "Range")
+  if !CheckTypes.primitive?(sides.left) and !T.is?(sides.left, "Range") and !T.is?(sides.left, "Bytes")
     help = ""
     if T.is?(sides.left, "Set")
       help = "two sets are equal when each is a subset of the other: a.subset?(b) and b.subset?(a)"
@@ -758,7 +769,7 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
         cx,
         sides,
         node,
-        "equality is only defined for primitive values and ranges, found #{T.to_text(sides.left)}",
+        "equality is only defined for primitive values, ranges and Bytes, found #{T.to_text(sides.left)}",
         help,
       ),
     )

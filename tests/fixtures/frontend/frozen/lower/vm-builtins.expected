@@ -14,6 +14,16 @@ Base64.strict_decode64
 Base64.strict_encode64
 Base64.urlsafe_decode64
 Base64.urlsafe_encode64
+Bytes.at
+Bytes.concat
+Bytes.drop
+Bytes.equal
+Bytes.from_list
+Bytes.length
+Bytes.plus
+Bytes.slice
+Bytes.take
+Bytes.to_a
 Channel.close
 Channel.closed?
 Channel.new
@@ -254,6 +264,7 @@ Set.to_a
 Set.union
 Std.source
 String.at
+String.bytes
 String.bytesize
 String.code
 String.compare

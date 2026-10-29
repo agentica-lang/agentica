@@ -11,6 +11,7 @@ std/http.agc
 std/internal/archive_zip.agc
 std/logger.agc
 std/mime.agc
+std/prelude/bytes.agc
 std/prelude/lazy.agc
 std/prelude/list.agc
 std/prelude/map.agc
