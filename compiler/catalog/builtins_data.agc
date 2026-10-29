@@ -160,7 +160,7 @@ export RECORDS: List[Model.Record] = [
       name: "HttpWire.Text",
       fields: [
         Model.Named(name: "text", type: Types.Type.String),
-        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "carry", type: Types.Type.Bytes),
         Model.Named(name: "bytes", type: Types.Type.Int),
         Model.Named(name: "valid", type: Types.Type.Bool),
         Model.Named(name: "buffered", type: Types.Type.Int),
@@ -846,12 +846,12 @@ ROWS_9: List[Model.Builtin] = [
       name: "HttpWire.chunk",
       parameters: [
         Model.Named(name: "state", type: Types.Type.Struct("HttpWire.Chunk", [])),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "from", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Struct("HttpWire.Chunk", [])),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.chunk",
+      implementation: "HttpWire.chunk.bytes",
       effects: [],
       description: (
         "Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and " +
@@ -1026,13 +1026,13 @@ ROWS_11: List[Model.Builtin] = [
       name: "HttpWire.read_head",
       parameters: [
         Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-        Model.Named(name: "rest", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "rest", type: Types.Type.Bytes),
         Model.Named(name: "max_body_bytes", type: Types.Type.Int),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Struct("HttpWire.Head", [])),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.read_head",
+      implementation: "HttpWire.read_head.bytes",
       effects: ["network"],
       description: (
         "Internal to std/http: put rest back in front of the input, then read and parse the next request head; " +
@@ -1063,12 +1063,12 @@ ROWS_11: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
         Model.Named(name: "max_bytes", type: Types.Type.Int),
-        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "carry", type: Types.Type.Bytes),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Struct("HttpWire.Text", [])),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.read_text",
+      implementation: "HttpWire.read_text.bytes",
       effects: ["network"],
       description: (
         "Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as " +
@@ -1128,13 +1128,13 @@ ROWS_12: List[Model.Builtin] = [
     Model.Builtin(
       name: "HttpWire.text",
       parameters: [
-        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
-        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "carry", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
         Model.Named(name: "runs", type: Types.Type.List(Types.Type.Int)),
       ],
       result: Types.Type.Struct("HttpWire.Text", []),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.text",
+      implementation: "HttpWire.text.bytes",
       effects: [],
       description: (
         "Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an " +
@@ -3607,9 +3607,9 @@ ROWS_32: List[Model.Builtin] = [
         Model.Named(name: "count", type: Types.Type.Int),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "Process.read_bytes",
+      implementation: "Process.read_bytes.bytes",
       effects: ["subprocess"],
       description: "Read count bytes or fewer at EOF; count is 0..1048576.",
       alternatives: [],
@@ -3648,14 +3648,14 @@ ROWS_33: List[Model.Builtin] = [
       name: "Process.send_bytes",
       parameters: [
         Model.Named(name: "p", type: Types.Type.Opaque("Process")),
-        Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
-      implementation: "Process.send_bytes",
+      implementation: "Process.send_bytes.bytes",
       effects: ["subprocess"],
-      description: "Send at most 1 MiB of bytes 0..255 and flush.",
+      description: "Send at most 1 MiB of bytes and flush.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -4509,11 +4509,11 @@ ROWS_48: List[Model.Builtin] = [
         Model.Named(name: "max_bytes", type: Types.Type.Int),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
-      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      result: Types.Type.Result(Types.Type.Bytes),
       rule: Model.Rule.Plain,
-      implementation: "TCP.recv_bytes",
+      implementation: "TCP.recv_bytes.bytes",
       effects: ["network"],
-      description: "Read available bytes; an empty list indicates EOF.",
+      description: "Read available bytes; empty Bytes indicate EOF.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -4534,14 +4534,14 @@ ROWS_48: List[Model.Builtin] = [
       name: "TCP.send_bytes",
       parameters: [
         Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-        Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
-      implementation: "TCP.send_bytes",
+      implementation: "TCP.send_bytes.bytes",
       effects: ["network"],
-      description: "Send bytes 0..255 and flush, at most 1 MiB per call.",
+      description: "Send bytes and flush, at most 1 MiB per call.",
       alternatives: [],
     ),
   ]

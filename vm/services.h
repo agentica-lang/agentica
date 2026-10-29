@@ -127,12 +127,18 @@ uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
 bool agc_inbuf_unread(agc_inbuf *b, const uint8_t *data, size_t len);
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
-agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
+/* The data and length of a byte argument of TCP, Process and HttpWire: a Bytes, which keeps the data alive, or for
+   the old List[Int] keys (list) a GC-atomic copy of the list; NULL when it has more than limit bytes or an item is
+   not a byte. */
+const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, bool list, size_t limit, size_t *len);
+/* A byte read's value is a Bytes, or a List[Int] with `list` (the old keys of TCP.recv_bytes and
+   Process.read_bytes). */
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count, bool list);
 void agc_inbuf_take(agc_inbuf *b, size_t n);
 void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut);
 void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut);
 agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end);
-agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut);
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut, bool list);
 void agc_inbuf_cut_free(agc_inbuf_cut *cut);
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
                      size_t len, void (*done)(struct uv_write_s *req, int status));
