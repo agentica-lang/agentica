@@ -87,7 +87,7 @@ f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
 
 ### Checking a MAC
 
-To check a MAC, signature or token you received, compare it with the one you compute using `HMAC.secure_compare(a, b)`, never with `==`. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right. `HMAC.secure_compare` gives `true` when the two lists hold the same bytes, in a time that does not depend on the bytes or on where they differ: like Ruby's `OpenSSL.secure_compare`, it compares the SHA-256 digests of both lists with OpenSSL's `CRYPTO_memcmp`.
+To check a MAC, signature or token you received, compare it with the one you compute using `HMAC.secure_compare(a, b)`, never with `==`. `==` stops at the first byte that differs, so its time can tell an attacker how much of a forged MAC is right. `HMAC.secure_compare` gives `true` when the two lists hold the same bytes, in a time that does not depend on valid bytes or on where they differ: like Ruby's `OpenSSL.secure_compare`, it compares the SHA-256 digests of both lists with OpenSSL's `CRYPTO_memcmp`.
 
 ```agentica
 def main() -> Void

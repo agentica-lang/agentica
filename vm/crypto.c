@@ -431,10 +431,11 @@ static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span)
 
 /* HMAC.secure_compare(a, b): Ruby's OpenSSL.secure_compare, for checking a received MAC or token against the expected
    one. Like Ruby it compares the SHA-256 digests of the two lists in constant time (CRYPTO_memcmp), so lists of other
-   lengths give false in a time that depends on the lengths only, never on the bytes or on where they differ. Equal
-   digests then also need equal lists, as Ruby's `&& a == b` does, so a SHA-256 collision cannot pass; that second
-   compare runs only when the digests match, so its branch tells nothing the answer does not. The time grows with the
-   lengths, which the row charges (AGC_COST_SIZE), and the call runs without the shared lock, as HMAC does. */
+   lengths give false in a time that depends on the lengths only, never on valid bytes or on where they differ (a bad
+   byte stops the run at its position). Equal digests then also need equal lists, as Ruby's `&& a == b` does, so a
+   SHA-256 collision cannot pass; that second compare runs only when the digests match, so its branch tells nothing the
+   answer does not. The time grows with the lengths, which the row charges (AGC_COST_SIZE), and the call runs without
+   the shared lock, as HMAC does. */
 static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t a_n, b_n;
   const uint8_t *a = text_form_bytes(vm, args[0], "HMAC.secure_compare needs bytes between 0 and 255", span, &a_n);
