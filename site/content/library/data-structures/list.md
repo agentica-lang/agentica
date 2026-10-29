@@ -10,10 +10,10 @@ Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, 
 
 ```text
 List.size(list: List[T]) -> Int
-List.empty?(list: List[T]) -> Bool
+List.empty?(list: List[A]) -> Bool
 List.at(list: List[T], index: Int) -> T
-List.first(list: List[T]) -> T
-List.last(list: List[T]) -> T
+List.first(list: List[A]) -> A
+List.last(list: List[A]) -> A
 List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
 List.concat(a: List[T], b: List[T]) -> List[T]

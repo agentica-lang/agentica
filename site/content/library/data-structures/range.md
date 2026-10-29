@@ -45,7 +45,7 @@ false
 ## size
 
 ```text
-Range.size(r: Range) -> Int
+Range.size(range: Range) -> Int
 ```
 
 The number of values. A count that does not fit in `Int`, as for `(0..9223372036854775807).size`, stops the program.
@@ -67,7 +67,7 @@ end
 ## to_a
 
 ```text
-Range.to_a(r: Range) -> List[Int]
+Range.to_a(range: Range) -> List[Int]
 ```
 
 The values as a list, in order. A range with more than 1048576 values stops the program.
@@ -88,7 +88,7 @@ end
 ## include?
 
 ```text
-Range.include?(r: Range, value: Int) -> Bool
+Range.include?(range: Range, value: Int) -> Bool
 ```
 
 ```agentica
@@ -106,7 +106,7 @@ false
 ## each
 
 ```text
-Range.each(r: Range, f: Fn[Int, Void]) -> Void
+Range.each(range: Range, f: Fn[Int, Void]) -> Void
 ```
 
 Calls the block with each value, in order.
@@ -128,8 +128,8 @@ end
 ## first and last
 
 ```text
-Range.first(r: Range) -> Result[Int]
-Range.last(r: Range) -> Result[Int]
+Range.first(range: Range) -> Result[Int]
+Range.last(range: Range) -> Result[Int]
 ```
 
 The first and the last included value, or an error for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)`.

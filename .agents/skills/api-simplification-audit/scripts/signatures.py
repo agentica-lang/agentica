@@ -16,8 +16,12 @@ import pathlib
 import subprocess
 import sys
 
-# Parameter names that usually hold a tuning value with a common answer.
-TUNING = ("timeout", "max_", "limit", "size", "count", "padding", "sep", "options", "flags", "mode", "level")
+# Parameter names that usually hold a tuning value with a common answer. Broad words (body, dir, buffer) also catch
+# the subject of a call; pass 1 drops those by hand.
+TUNING = (
+    "timeout", "max_", "limit", "size", "count", "padding", "sep", "options", "flags", "mode", "level",
+    "offset", "buffer", "dir", "args", "headers", "body", "ca_file",
+)
 
 
 def run_json(binary, *args, required=True):

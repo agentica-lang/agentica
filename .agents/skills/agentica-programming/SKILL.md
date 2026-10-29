@@ -65,6 +65,7 @@ Read only what the task needs.
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
 | `cgi.md` | `std/cgi` (HTML escaping, cookies) |
+| `mime.md` | `std/mime` (media type of a file) |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
 | `analysis.md` | compiler answers in a program (`std/analysis`) |
