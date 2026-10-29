@@ -1,5 +1,5 @@
 ## Reads a `Cookie` request header and writes a `Set-Cookie` response header (RFC 6265), with the behaviour of Rack's
-## `Rack::Utils.parse` and `Rack::Utils.set_header`.
+## `Rack::Utils.parse_cookies_header` and `Rack::Utils.set_cookie_header`.
 ##
 ## Import it with `import Cookie from "std/cookie"`. `parse` reads a header into a map, `set_header` writes one, and
 ## `Cookie.Cookie` is the cookie to send: it has the fields of Rack's cookie options (`max_age`, `http_only`,

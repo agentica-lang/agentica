@@ -28,3 +28,6 @@ Cookie.Cookie(name: String, value: String, path: String = "", domain: String = "
   space, a `same_site` other than `Strict`, `Lax` or `None`, `None` without
   `secure`, `__Secure-` without `secure`, and `__Host-` without `secure`,
   path `/` and no domain.
+- A program with its own `Cookie` name imports the module under another alias
+  (`import C from "std/cookie"`): `import Cookie` would clash
+  (`CHECK-REDEFINED-NAME`).

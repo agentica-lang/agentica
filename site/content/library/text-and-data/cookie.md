@@ -19,11 +19,11 @@ struct Cookie.Cookie
   value: String
   path: String = ""
   domain: String = ""
-  max_age: Int = Cookie.NO_MAX_AGE   # no Max-Age; 0 or less writes Max-Age=0, which deletes the cookie
-  expires: String = ""       # written as it is: "Wed, 21 Oct 2015 07:28:00 GMT"
+  max_age: Int = Cookie.NO_MAX_AGE  # no Max-Age; 0 or less writes Max-Age=0, which deletes the cookie
+  expires: String = ""              # written as it is: "Wed, 21 Oct 2015 07:28:00 GMT"
   secure: Bool = false
   http_only: Bool = false
-  same_site: String = ""     # "Strict", "Lax" or "None"
+  same_site: String = ""            # "Strict", "Lax" or "None"
 end
 ```
 
@@ -57,3 +57,5 @@ error("invalid cookie value (byte 1)")
 The text of an error about a name or an attribute has its control bytes removed, so it is safe in a log line.
 
 Unlike Ruby's `CGI::Cookie` and Rack, which escape the value when writing it and decode it when reading, the cookie functions never percent-encode, decode or quote, and this is final. The value is written as it is and read as the client sent it, so a caller that needs a value with a space, a comma or non-ASCII text encodes it before `set_header` and decodes it after `parse`. A `%41` in a header stays `%41`.
+
+A program that has its own name `Cookie` imports the module under another alias, such as `import C from "std/cookie"`, because `import Cookie` would clash with it (`CHECK-REDEFINED-NAME`).
