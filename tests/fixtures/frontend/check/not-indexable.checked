@@ -1,1 +1,1 @@
-ERROR CHECK-NOT-INDEXABLE 33:3:7-37:3:11 "indexing needs a list or a map, found Int" - signature="main() -> Void" file="not-indexable.agc"
+ERROR CHECK-NOT-INDEXABLE 33:3:7-37:3:11 "indexing needs a list, a map or a Bytes, found Int" - signature="main() -> Void" file="not-indexable.agc"

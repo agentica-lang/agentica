@@ -512,6 +512,8 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     fx = Lowering.emit_at(left.fx, jump, [dst, end_label], node.op_span)
     right = try lower_expression(cx, fx, node.right, dst, false, false)
     fx = Lowering.place(right.fx, end_label)
+  elsif Types.is?(Lowering.type_of(cx, node.left), "Bytes")
+    fx = try lower_bytes_operator(cx, fx, node, dst)
   else
     ops = INT_OPS
     side = Lowering.type_of(cx, node.left)
@@ -538,6 +540,37 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
+# An operator on two Bytes is a call of a builtin: the VM's `eq`, `ne` and `concat` do not take a Bytes (the value
+# is outside equal_values, which the interpreter keeps small). `+` is Bytes.plus, `==` Bytes.equal and `!=` its
+# negation. The operands go to two new registers, where the call reads them and leaves its result in the first.
+def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst: Int) -> Result[Lowering.Fx]
+  key = "Bytes.plus"
+  if node.op == "equal" or node.op == "not-equal"
+    key = "Bytes.equal"
+  end
+
+  window = try bytes_call(cx, fx, key, node.left, node.right, node.op_span)
+  if node.op == "not-equal"
+    return ok(Lowering.emit_at(window.fx, "not", [dst, window.slot], node.op_span))
+  end
+
+  return ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
+end
+
+# The call of a builtin on two operands: both are lowered into consecutive new registers, and the call leaves its
+# result in the first, which is the slot of the Out. span is the span of the call.
+def bytes_call(
+  cx: Lowering.Cx, fx: Lowering.Fx, key: String, first: Ast.Expr, second: Ast.Expr, span: Source.Span
+) -> Result[Lowering.Out]
+  fx = Lowering.alloc(fx)
+  window = fx.next - 1
+  left = try lower_expression(cx, fx, first, window, false, false)
+  right_at = Lowering.alloc(left.fx)
+  right = try lower_expression(cx, right_at, second, right_at.next - 1, false, false)
+  spans = [span, Ast.expr_span(first), Ast.expr_span(second)]
+  return ok(Lowering.Out(fx: Lowering.emit_builtin(right.fx, window, key, 2, spans), slot: window))
+end
+
 def lower_field(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.FieldAccess, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)
   saved = fx.next
@@ -552,6 +585,13 @@ def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: I
   fx = Lowering.step(fx, node.span)
   saved = fx.next
   made = Lowering.target(fx, want)
+  if Types.is?(Lowering.static_type(cx, node.target), "Bytes")
+    # Bytes.at halts at the index argument, as list-get does.
+    window = try bytes_call(cx, made.fx, "Bytes.at", node.target, node.index, node.span)
+    fx = Lowering.emit_at(window.fx, "move", [made.slot, window.slot], node.span)
+    return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  end
+
   items = try lower_expression(cx, made.fx, node.target, -1, false, false)
   index = try lower_expression(cx, items.fx, node.index, -1, false, false)
   op = "list-get"

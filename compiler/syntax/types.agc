@@ -15,6 +15,7 @@ export enum Type
   Void
   Json
   Range
+  Bytes
   Unknown
   Opaque(String)
   Result(Type)
@@ -44,6 +45,7 @@ export def tag(type: Type) -> String
     Type.Void -> return "Void"
     Type.Json -> return "Json"
     Type.Range -> return "Range"
+    Type.Bytes -> return "Bytes"
     Type.Unknown -> return "Unknown"
     Type.Opaque(name) -> return "Opaque"
     Type.Result(item) -> return "Result"
@@ -284,6 +286,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Void -> return "Void"
     Type.Json -> return "Json"
     Type.Range -> return "Range"
+    Type.Bytes -> return "Bytes"
     Type.Unknown -> return "?"
     Type.Opaque(name) -> return written_name(name, written)
     Type.Var(name) -> return name

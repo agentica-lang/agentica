@@ -1,1 +1,1 @@
-ERROR CHECK-SET-ELEMENT-TYPE 33:2:15-38:2:20 "a Set element must be Int or String, found Float" - signature="main() -> Void" file="set-element-type.agc"
+ERROR CHECK-SET-ELEMENT-TYPE 33:2:15-38:2:20 "a Set element must be Int, String or Bytes, found Float" - signature="main() -> Void" file="set-element-type.agc"

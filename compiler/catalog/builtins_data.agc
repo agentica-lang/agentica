@@ -5,10 +5,9 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and
-## hex rows, the digest rows, the HMAC rows, the SecureRandom rows and then the
-## HMAC.secure_compare row are appended last, in contract order, so the positions
-## of the existing rows never shift.
+## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
+## the SecureRandom rows, the HMAC.secure_compare row and then the Bytes rows are appended last, in contract order, so
+## the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -21,7 +20,7 @@ BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(RO
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
-BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62)
+BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -242,6 +241,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Await",
     "Base64",
     "Bool",
+    "Bytes",
     "Channel",
     "Crypto",
     "Digest",
@@ -5731,6 +5731,136 @@ ROWS_62: List[Model.Builtin] = [
         "digests with OpenSSL CRYPTO_memcmp, so the time never depends on the bytes; for checking MACs and " +
         "tokens; VM only."
       ),
+      alternatives: [],
+    ),
+  ]
+
+## The Bytes rows and String.bytes; appended last so the positions of the existing rows never shift.
+ROWS_63: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Bytes.at",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "index", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.at",
+      effects: [],
+      description: "Read the byte at a zero-based index as an Int (0..255); an index outside the bytes halts.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.concat",
+      parameters: [Model.Named(name: "parts", type: Types.Type.List(Types.Type.Bytes))],
+      result: Types.Type.Bytes,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.concat",
+      effects: [],
+      description: "Join the parts in order in one copy; prefer it to + in a loop.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.drop",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "n", type: Types.Type.Int),
+      ],
+      result: Types.Type.Bytes,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.drop",
+      effects: [],
+      description: "Copy the bytes after the first n; n above the length gives empty bytes, a negative n halts.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.each",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Void)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Call f on each byte in order; returns nothing.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.empty?",
+      parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes)],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether there are no bytes.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.from_list",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.from_list",
+      effects: [],
+      description: "Make bytes from a list of Ints; an item outside 0..255 gives an error with its index.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.length",
+      parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes)],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.length",
+      effects: [],
+      description: "Count the bytes.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.slice",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "start", type: Types.Type.Int),
+        Model.Named(name: "length", type: Types.Type.Int),
+      ],
+      result: Types.Type.Bytes,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.slice",
+      effects: [],
+      description: "Copy a byte range; halt outside bounds.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.take",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "n", type: Types.Type.Int),
+      ],
+      result: Types.Type.Bytes,
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.take",
+      effects: [],
+      description: "Copy the first n bytes; n above the length gives all of them, a negative n halts.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Bytes.to_a",
+      parameters: [Model.Named(name: "bytes", type: Types.Type.Bytes)],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.to_a",
+      effects: [],
+      description: "List the bytes as Ints (0..255); the way to map, select and the other List methods.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "String.bytes",
+      parameters: [Model.Named(name: "s", type: Types.Type.String)],
+      result: Types.Type.Bytes,
+      rule: Model.Rule.Plain,
+      implementation: "String.bytes",
+      effects: [],
+      description: "Give the UTF-8 bytes of the string.",
       alternatives: [],
     ),
   ]

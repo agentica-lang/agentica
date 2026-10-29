@@ -1,0 +1,198 @@
+program 0:1:1-30:1 entry=4 globals=0
+source 0 "bytes.agc" chars=502
+source 1 "<prelude>/bytes.agc" chars=0
+fn0 "joined" params=2 captures=0 slots=5 @ 0:1:1-4:1
+    step @ 0:2:3-3:1
+    step @ 0:2:10-2:15
+    step @ 0:2:10-2:11
+    move r3 r0 @ 0:2:10-2:11
+    step @ 0:2:14-2:15
+    move r4 r1 @ 0:2:14-2:15
+    call-builtin r3 "Bytes.plus" 2 @ 0:2:12-2:13 0:2:10-2:11 0:2:14-2:15
+    move r2 r3 @ 0:2:12-2:13
+    return r2 @ 0:2:3-3:1
+    const r2 void @ 0:1:1-4:1
+    return r2 @ 0:1:1-4:1
+fn1 "same" params=2 captures=0 slots=5 @ 0:5:1-8:1
+    step @ 0:6:3-7:1
+    step @ 0:6:10-6:16
+    step @ 0:6:10-6:11
+    move r3 r0 @ 0:6:10-6:11
+    step @ 0:6:15-6:16
+    move r4 r1 @ 0:6:15-6:16
+    call-builtin r3 "Bytes.equal" 2 @ 0:6:12-6:14 0:6:10-6:11 0:6:15-6:16
+    move r2 r3 @ 0:6:12-6:14
+    return r2 @ 0:6:3-7:1
+    const r2 void @ 0:5:1-8:1
+    return r2 @ 0:5:1-8:1
+fn2 "differ" params=2 captures=0 slots=5 @ 0:9:1-12:1
+    step @ 0:10:3-11:1
+    step @ 0:10:10-10:16
+    step @ 0:10:10-10:11
+    move r3 r0 @ 0:10:10-10:11
+    step @ 0:10:15-10:16
+    move r4 r1 @ 0:10:15-10:16
+    call-builtin r3 "Bytes.equal" 2 @ 0:10:12-10:14 0:10:10-10:11 0:10:15-10:16
+    not r2 r3 @ 0:10:12-10:14
+    return r2 @ 0:10:3-11:1
+    const r2 void @ 0:9:1-12:1
+    return r2 @ 0:9:1-12:1
+fn3 "total" params=1 captures=0 slots=10 @ 0:13:1-23:1
+    step @ 0:14:3-15:1
+    step @ 0:14:9-14:16
+    step @ 0:14:9-14:13
+    move r2 r0 @ 0:14:9-14:13
+    step @ 0:14:14-14:15
+    const r3 int:0 @ 0:14:14-14:15
+    call-builtin r2 "Bytes.at" 2 @ 0:14:9-14:16 0:14:9-14:13 0:14:14-14:15
+    move r1 r2 @ 0:14:9-14:16
+    step @ 0:15:3-18:1
+    step @ 0:15:15-15:19
+    move r2 r0 @ 0:15:15-15:19
+    const r3 int:0 @ 0:15:3-18:1
+    move r4 r2 @ 0:15:3-18:1
+    call-builtin r4 "Bytes.length" 1 @ 0:15:3-18:1 0:15:3-18:1
+    const r6 int:1 @ 0:15:3-18:1
+    jump L2 @ 0:15:3-18:1
+  L0:
+    step @ 0:16:5-17:1
+    move r7 r2 @ 0:15:3-18:1
+    move r8 r3 @ 0:15:3-18:1
+    call-builtin r7 "Bytes.at" 2 @ 0:15:3-18:1 0:15:3-18:1 0:15:3-18:1
+    step @ 0:16:5-17:1
+    step @ 0:16:5-16:8
+    step @ 0:16:12-16:16
+    add-i r9 r1 r7 @ 0:16:9-16:11
+    move r1 r9 @ 0:16:5-17:1
+  L1:
+    add-i r3 r3 r6 @ 0:15:3-18:1
+  L2:
+    lt-i r5 r3 r4 @ 0:15:3-18:1
+    jump-if-true r5 L0 @ 0:15:3-18:1
+  L3:
+    step @ 0:18:3-21:1
+    step @ 0:18:12-18:16
+    move r2 r0 @ 0:18:12-18:16
+    const r3 int:0 @ 0:18:3-21:1
+    move r4 r2 @ 0:18:3-21:1
+    call-builtin r4 "Bytes.length" 1 @ 0:18:3-21:1 0:18:3-21:1
+    const r6 int:1 @ 0:18:3-21:1
+    jump L6 @ 0:18:3-21:1
+  L4:
+    step @ 0:19:5-20:1
+    step @ 0:19:5-20:1
+    step @ 0:19:5-19:8
+    step @ 0:19:12-19:13
+    const r8 int:1 @ 0:19:12-19:13
+    add-i r7 r1 r8 @ 0:19:9-19:11
+    move r1 r7 @ 0:19:5-20:1
+  L5:
+    add-i r3 r3 r6 @ 0:18:3-21:1
+  L6:
+    lt-i r5 r3 r4 @ 0:18:3-21:1
+    jump-if-true r5 L4 @ 0:18:3-21:1
+  L7:
+    step @ 0:21:3-22:1
+    step @ 0:21:10-21:13
+    return r1 @ 0:21:3-22:1
+    const r2 void @ 0:13:1-23:1
+    return r2 @ 0:13:1-23:1
+fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-30:1
+    step @ 0:25:3-26:1
+    step @ 0:25:3-25:26
+    step @ 0:25:8-25:25
+    step @ 0:25:14-25:24
+    step @ 0:25:14-25:18
+    const r2 "ab" @ 0:25:14-25:18
+    call-builtin r2 "String.bytes" 1 @ 0:25:14-25:24 0:25:14-25:18
+    move r1 r2 @ 0:25:14-25:24
+    call r1 fn3 @ 0:25:8-25:25
+    move r0 r1 @ 0:25:8-25:25
+    call-builtin r0 "puts" 1 @ 0:25:3-25:26 0:25:8-25:25
+    step @ 0:26:3-27:1
+    step @ 0:26:3-26:55
+    step @ 0:26:8-26:54
+    step @ 0:26:13-26:41
+    step @ 0:26:20-26:29
+    step @ 0:26:20-26:23
+    const r3 "a" @ 0:26:20-26:23
+    call-builtin r3 "String.bytes" 1 @ 0:26:20-26:29 0:26:20-26:23
+    move r2 r3 @ 0:26:20-26:29
+    step @ 0:26:31-26:40
+    step @ 0:26:31-26:34
+    const r4 "b" @ 0:26:31-26:34
+    call-builtin r4 "String.bytes" 1 @ 0:26:31-26:40 0:26:31-26:34
+    move r3 r4 @ 0:26:31-26:40
+    call r2 fn0 @ 0:26:13-26:41
+    move r1 r2 @ 0:26:13-26:41
+    step @ 0:26:43-26:53
+    step @ 0:26:43-26:47
+    const r3 "ab" @ 0:26:43-26:47
+    call-builtin r3 "String.bytes" 1 @ 0:26:43-26:53 0:26:43-26:47
+    move r2 r3 @ 0:26:43-26:53
+    call r1 fn1 @ 0:26:8-26:54
+    move r0 r1 @ 0:26:8-26:54
+    call-builtin r0 "puts" 1 @ 0:26:3-26:55 0:26:8-26:54
+    step @ 0:27:3-28:1
+    step @ 0:27:3-27:37
+    step @ 0:27:8-27:36
+    step @ 0:27:15-27:24
+    step @ 0:27:15-27:18
+    const r2 "a" @ 0:27:15-27:18
+    call-builtin r2 "String.bytes" 1 @ 0:27:15-27:24 0:27:15-27:18
+    move r1 r2 @ 0:27:15-27:24
+    step @ 0:27:26-27:35
+    step @ 0:27:26-27:29
+    const r3 "b" @ 0:27:26-27:29
+    call-builtin r3 "String.bytes" 1 @ 0:27:26-27:35 0:27:26-27:29
+    move r2 r3 @ 0:27:26-27:35
+    call r1 fn2 @ 0:27:8-27:36
+    move r0 r1 @ 0:27:8-27:36
+    call-builtin r0 "puts" 1 @ 0:27:3-27:37 0:27:8-27:36
+    step @ 0:28:3-29:1
+    step @ 0:28:3-28:43
+    step @ 0:28:3-28:13
+    step @ 0:28:3-28:7
+    const r1 "ab" @ 0:28:3-28:7
+    call-builtin r1 "String.bytes" 1 @ 0:28:3-28:13 0:28:3-28:7
+    move r0 r1 @ 0:28:3-28:13
+    step @ 0:28:19-28:43
+    closure r1 fn6 @ 0:28:19-28:43
+    call r0 fn5 @ 0:28:3-28:43 0:28:3-28:13 0:28:19-28:43
+    const r0 void @ 0:24:1-30:1
+    return r0 @ 0:24:1-30:1
+fn5 "@prelude::bytes::each" params=2 captures=0 slots=11 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r0 @ 1:1:1-1:1
+    const r3 int:0 @ 1:1:1-1:1
+    move r4 r2 @ 1:1:1-1:1
+    call-builtin r4 "Bytes.length" 1 @ 1:1:1-1:1 1:1:1-1:1
+    const r6 int:1 @ 1:1:1-1:1
+    jump L2 @ 1:1:1-1:1
+  L0:
+    step @ 1:1:1-1:1
+    move r7 r2 @ 1:1:1-1:1
+    move r8 r3 @ 1:1:1-1:1
+    call-builtin r7 "Bytes.at" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r9 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r10 r7 @ 1:1:1-1:1
+    call-value r9 1 @ 1:1:1-1:1
+  L1:
+    add-i r3 r3 r6 @ 1:1:1-1:1
+  L2:
+    lt-i r5 r3 r4 @ 1:1:1-1:1
+    jump-if-true r5 L0 @ 1:1:1-1:1
+  L3:
+    const r2 void @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+fn6 "block@bytes.agc:28:19" params=1 captures=0 slots=2 @ 0:28:19-28:43
+    step @ 0:28:29-28:39
+    step @ 0:28:29-28:39
+    step @ 0:28:34-28:38
+    move r1 r0 @ 0:28:34-28:38
+    call-builtin r1 "puts" 1 @ 0:28:29-28:39 0:28:34-28:38
+    return r1 @ 0:28:29-28:39

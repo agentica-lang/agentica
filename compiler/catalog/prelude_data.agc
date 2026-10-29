@@ -17,6 +17,8 @@ export PRELUDE_ONLY = [
 
 ## Every prelude function, sorted by name.
 export ROWS: List[Model.PreludeRow] = [
+  Model.PreludeRow(name: "Bytes.each", module: "bytes", limits: [], selector: "", bodies: {"": "each"}),
+  Model.PreludeRow(name: "Bytes.empty?", module: "bytes", limits: [], selector: "", bodies: {"": "empty"}),
   Model.PreludeRow(name: "Channel.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_channel"}),
   Model.PreludeRow(name: "File.chunks", module: "lazy", limits: [], selector: "", bodies: {"": "from_chunks"}),
   Model.PreludeRow(name: "File.foreach", module: "lazy", limits: [], selector: "", bodies: {"": "from_file"}),

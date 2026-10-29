@@ -654,7 +654,7 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         cx,
         list.st,
         "CHECK-SET-ELEMENT-TYPE",
-        "a Set element must be Int or String, found #{T.to_text(element)}",
+        "a Set element must be Int, String or Bytes, found #{T.to_text(element)}",
         Ast.expr_span(items),
       ),
     )

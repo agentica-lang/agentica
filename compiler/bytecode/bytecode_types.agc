@@ -7,7 +7,7 @@
 
 import Ir from "../lower/ir"
 import Types from "../syntax/types"
-import Bytes from "bytecode_bytes"
+import Wire from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
@@ -23,17 +23,17 @@ end
 ## Builds the sections for the structs of the program. struct_index maps a struct name to its place in the table.
 export def build(program: Ir.Program, struct_index: Map[String, Int]) -> Result[Section]
   pool = Pool.empty()
-  chunks = Bytes.start()
+  chunks = Wire.start()
   count = 0
   index = 0
   for entry in program.structs
     if entry.decodable
-      chunks = Bytes.add(chunks, Bytes.u32(index))
-      chunks = Bytes.add(chunks, Bytes.string(entry.name))
+      chunks = Wire.add(chunks, Wire.u32(index))
+      chunks = Wire.add(chunks, Wire.string(entry.name))
       for type in entry.types
         found = try type_id(program, struct_index, pool, type)
         pool = found.pool
-        chunks = Bytes.add(chunks, Bytes.u32(found.id))
+        chunks = Wire.add(chunks, Wire.u32(found.id))
       end
 
       count += 1
@@ -99,7 +99,7 @@ def type_id(
 end
 
 def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned
-  return Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Bytes.u32(number)))
+  return Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Wire.u32(number)))
 end
 
 def unsupported(program: Ir.Program, message: String) -> String

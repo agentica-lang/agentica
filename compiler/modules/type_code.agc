@@ -22,6 +22,7 @@ SIMPLE = {
   "v": T.Type.Void,
   "j": T.Type.Json,
   "r": T.Type.Range,
+  "y": T.Type.Bytes,
   "u": T.Type.Unknown,
 }
 
@@ -80,6 +81,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Void -> return ok("v")
     T.Type.Json -> return ok("j")
     T.Type.Range -> return ok("r")
+    T.Type.Bytes -> return ok("y")
     T.Type.Unknown -> return ok("u")
     T.Type.Opaque(name) -> return ok("O" + try name_text(name, keys))
     T.Type.Struct(name, args) -> return struct_text(name, args, keys, depth)

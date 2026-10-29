@@ -1,0 +1,87 @@
+program #85 0:1:1-502:30:1
+  module "bytes.agc"
+    declaration: function-decl #9 0:1:1-59:4:1 name="joined"
+      param: param #1 11:1:12-19:1:20 name="a"
+        type: type-ref #0 14:1:15-19:1:20 name="Bytes"
+      param: param #3 21:1:22-29:1:30 name="b"
+        type: type-ref #2 24:1:25-29:1:30 name="Bytes"
+      result: type-ref #4 34:1:35-39:1:40 name="Bytes"
+      body: return-stmt #8 42:2:3-55:3:1
+        value: binary #7 49:2:10-54:2:15 op=plus op-span=51:2:12-52:2:13 type=Bytes
+          left: name-ref #5 49:2:10-50:2:11 name="a" type=Bytes
+          right: name-ref #6 53:2:14-54:2:15 name="b" type=Bytes
+    declaration: function-decl #19 60:5:1-117:8:1 name="same"
+      param: param #11 69:5:10-77:5:18 name="a"
+        type: type-ref #10 72:5:13-77:5:18 name="Bytes"
+      param: param #13 79:5:20-87:5:28 name="b"
+        type: type-ref #12 82:5:23-87:5:28 name="Bytes"
+      result: type-ref #14 92:5:33-96:5:37 name="Bool"
+      body: return-stmt #18 99:6:3-113:7:1
+        value: binary #17 106:6:10-112:6:16 op=equal op-span=108:6:12-110:6:14 type=Bool
+          left: name-ref #15 106:6:10-107:6:11 name="a" type=Bytes
+          right: name-ref #16 111:6:15-112:6:16 name="b" type=Bytes
+    declaration: function-decl #29 118:9:1-177:12:1 name="differ"
+      param: param #21 129:9:12-137:9:20 name="a"
+        type: type-ref #20 132:9:15-137:9:20 name="Bytes"
+      param: param #23 139:9:22-147:9:30 name="b"
+        type: type-ref #22 142:9:25-147:9:30 name="Bytes"
+      result: type-ref #24 152:9:35-156:9:39 name="Bool"
+      body: return-stmt #28 159:10:3-173:11:1
+        value: binary #27 166:10:10-172:10:16 op=not-equal op-span=168:10:12-170:10:14 type=Bool
+          left: name-ref #25 166:10:10-167:10:11 name="a" type=Bytes
+          right: name-ref #26 171:10:15-172:10:16 name="b" type=Bytes
+    declaration: function-decl #51 178:13:1-317:23:1 name="total"
+      param: param #31 188:13:11-199:13:22 name="data"
+        type: type-ref #30 194:13:17-199:13:22 name="Bytes"
+      result: type-ref #32 204:13:27-207:13:30 name="Int"
+      body: binding #36 210:14:3-224:15:1 name="sum"
+        value: index-access #35 216:14:9-223:14:16 type=Int
+          target: name-ref #33 216:14:9-220:14:13 name="data" type=Bytes
+          index: literal #34 221:14:14-222:14:15 value=int:0 type=Int
+      body: for-stmt #42 226:15:3-265:18:1 variable="byte"
+        iterable: name-ref #37 238:15:15-242:15:19 name="data" type=Bytes
+        body: binding #41 247:16:5-259:17:1 name="sum"
+          value: binary #40 247:16:5-259:17:1 op=plus op-span=251:16:9-253:16:11 type=Int
+            left: name-ref #38 247:16:5-250:16:8 name="sum" type=Int
+            right: name-ref #39 254:16:12-258:16:16 name="byte" type=Int
+      body: for-stmt #48 267:18:3-300:21:1 variable="_"
+        iterable: name-ref #43 276:18:12-280:18:16 name="data" type=Bytes
+        body: binding #47 285:19:5-294:20:1 name="sum"
+          value: binary #46 285:19:5-294:20:1 op=plus op-span=289:19:9-291:19:11 type=Int
+            left: name-ref #44 285:19:5-288:19:8 name="sum" type=Int
+            right: literal #45 292:19:12-293:19:13 value=int:1 type=Int
+      body: return-stmt #50 302:21:3-313:22:1
+        value: name-ref #49 309:21:10-312:21:13 name="sum" type=Int
+    declaration: function-decl #84 318:24:1-502:30:1 name="main"
+      result: type-ref #52 332:24:15-336:24:19 name="Void"
+      body: expr-stmt #57 339:25:3-363:26:1
+        value: call #56 339:25:3-362:25:26 name="puts" piped=false type=Void
+          arg: call #55 344:25:8-361:25:25 name="total" piped=false type=Int
+            arg: field-access #54 350:25:14-360:25:24 name="bytes" type=Bytes resolved=call("String.bytes", String)
+              target: literal #53 350:25:14-354:25:18 value=string:"ab" type=String
+      body: expr-stmt #67 365:26:3-418:27:1
+        value: call #66 365:26:3-417:26:55 name="puts" piped=false type=Void
+          arg: call #65 370:26:8-416:26:54 name="same" piped=false type=Bool
+            arg: call #62 375:26:13-403:26:41 name="joined" piped=false type=Bytes
+              arg: field-access #59 382:26:20-391:26:29 name="bytes" type=Bytes resolved=call("String.bytes", String)
+                target: literal #58 382:26:20-385:26:23 value=string:"a" type=String
+              arg: field-access #61 393:26:31-402:26:40 name="bytes" type=Bytes resolved=call("String.bytes", String)
+                target: literal #60 393:26:31-396:26:34 value=string:"b" type=String
+            arg: field-access #64 405:26:43-415:26:53 name="bytes" type=Bytes resolved=call("String.bytes", String)
+              target: literal #63 405:26:43-409:26:47 value=string:"ab" type=String
+      body: expr-stmt #74 420:27:3-455:28:1
+        value: call #73 420:27:3-454:27:37 name="puts" piped=false type=Void
+          arg: call #72 425:27:8-453:27:36 name="differ" piped=false type=Bool
+            arg: field-access #69 432:27:15-441:27:24 name="bytes" type=Bytes resolved=call("String.bytes", String)
+              target: literal #68 432:27:15-435:27:18 value=string:"a" type=String
+            arg: field-access #71 443:27:26-452:27:35 name="bytes" type=Bytes resolved=call("String.bytes", String)
+              target: literal #70 443:27:26-446:27:29 value=string:"b" type=String
+      body: expr-stmt #83 457:28:3-498:29:1
+        value: method-call #82 457:28:3-497:28:43 name="each" type=Void resolved=call("Bytes.each", Bytes)
+          target: field-access #76 457:28:3-467:28:13 name="bytes" type=Bytes resolved=call("String.bytes", String)
+            target: literal #75 457:28:3-461:28:7 value=string:"ab" type=String
+          arg: block-lit #81 473:28:19-497:28:43 type=Fn([Int], Void)
+            param: block-param #77 477:28:23-481:28:27 name="byte"
+            body: expr-stmt #80 483:28:29-493:28:39
+              value: call #79 483:28:29-493:28:39 name="puts" piped=false type=Void
+                arg: name-ref #78 488:28:34-492:28:38 name="byte" type=Int

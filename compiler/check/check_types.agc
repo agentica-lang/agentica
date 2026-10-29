@@ -71,12 +71,12 @@ export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result
   return ok(Types.to_text(target))
 end
 
-## True for Int and String, the types of a Map key or a Set element.
+## True for Int, String and Bytes, the types of a Map key or a Set element.
 export def key_type?(type: ResolvedType) -> Bool
-  return Types.is?(type, "Int") or Types.is?(type, "String")
+  return Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes")
 end
 
-## True when the type may be a Map key or a Set element where cx checks: Int and String, and in the files of the
+## True when the type may be a Map key or a Set element where cx checks: Int, String and Bytes, and in the files of the
 ## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
 export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
   return key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
@@ -103,6 +103,43 @@ end
 ## ("Wrapper.items", "" outside a struct). Runs before the decodable and encodable tests.
 export def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
   return place_walk(cx, type, direct, kind, owner, {}).place
+end
+
+## True when a Bytes sits anywhere in the type: the type itself, an item, a key or a value, a type argument, or a field
+## of a struct. It only picks the help of a JSON builtin that refuses the type (Bytes is not JSON; Base64 is the usual
+## way). A struct is read once, by its declared fields: its type arguments are walked on their own, so a generic struct
+## that nests itself with other arguments ends.
+export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  pending = [type]
+  seen: Map[String, Bool] = {}
+  at = 0
+  while at < pending.size
+    current = pending[at]
+    at += 1
+    if Types.is?(current, "Bytes")
+      return true
+    end
+
+    if Types.is?(current, "Map") or Types.is?(current, "ATS")
+      pending = pending.push(Types.key(current)).push(Types.value(current))
+    elsif !Types.unknown?(Types.item(current))
+      pending = pending.push(Types.item(current))
+    end
+
+    for argument in Types.args(current)
+      pending = pending.push(argument)
+    end
+
+    name = Types.name(current)
+    if Types.is?(current, "Struct") and cx.structs.has_key?(name) and !seen.has_key?(name)
+      seen = seen.put(name, true)
+      for field in cx.structs[name]
+        pending = pending.push(field.type)
+      end
+    end
+  end
+
+  return false
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
@@ -640,6 +677,8 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Json)
   elsif name == "Range"
     return ok(Types.Type.Range)
+  elsif name == "Bytes"
+    return ok(Types.Type.Bytes)
   elsif OPAQUE_TYPES.include?(name) or cx.resources.include?(name)
     return ok(Types.Type.Opaque(name))
   end
@@ -667,7 +706,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
         cx,
         st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int or String, found #{Types.to_text(key)}",
+        "a Map key must be Int, String or Bytes, found #{Types.to_text(key)}",
         args[0].span,
       ),
     )
@@ -676,9 +715,22 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
-# ATS[K, V]: the key as a Map key, and a value that ats_value? accepts (CHECK-ATS-VALUE on the value type).
+# ATS[K, V]: the key as a Map key but never Bytes (the table hashes Int and String keys only), and a value that
+# ats_value? accepts (CHECK-ATS-VALUE on the value type).
 def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   map = try resolve_map(cx, st, args)
+  if Types.is?(Types.key(map), "Bytes")
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-MAP-KEY-TYPE",
+        "an ATS key must be Int or String, found Bytes",
+        args[0].span,
+      ),
+    )
+  end
+
   value = Types.value(map)
   if !ats_value?(cx, value)
     return error(ats_value_failure(cx, st, value, args[1].span))
@@ -695,7 +747,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType
         cx,
         st,
         "CHECK-SET-ELEMENT-TYPE",
-        "a Set element must be Int or String, found #{Types.to_text(element)}",
+        "a Set element must be Int, String or Bytes, found #{Types.to_text(element)}",
         arg.span,
       ),
     )
@@ -795,6 +847,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Lazy",
     "ATS",
     "Range",
+    "Bytes",
   ].concat(OPAQUE_TYPES.to_a)
 end
 
@@ -957,7 +1010,7 @@ end
 # data? for one type. seen holds every struct and enum walked in the whole call ("Struct:name"), not only the ones on
 # the path (struct_walk says why that is sound), and a recursive type ends.
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
-  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range")
+  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range") or Types.is?(type, "Bytes")
     return passed(seen)
   elsif Types.is?(type, "Var")
     return Walk(passes: cx.prelude, seen: seen)
