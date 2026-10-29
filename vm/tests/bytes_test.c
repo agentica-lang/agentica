@@ -14,9 +14,10 @@
 #ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
+
 #ifndef AGC_NO_GC
 #include <gc.h>
-#endif
 #endif
 
 static agc_vm vm;
