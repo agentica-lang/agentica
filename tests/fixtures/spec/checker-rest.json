@@ -687,7 +687,7 @@
         "",
         ""
       ],
-      "code": "CHECK-ARITY"
+      "code": "CHECK-TYPE-MISMATCH"
     },
     {
       "program": [
