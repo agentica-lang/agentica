@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the names of Ruby's `URI` (`URI.decode_www_form`, `URI.encode_uri_component`).
 - `std/cgi` escapes and unescapes HTML and reads and writes cookies, with the
   names of Ruby's `CGI` and Rack (`CGI.escape_html`, `CGI.set_cookie_header`).
+- `timeout_ms` defaults to 30000 on `File.read_text`, `write_text`, `append_text`,
+  `sha256`, `stat`, `lstat`, `Dir.list`, `mkdir`, `mkdir_private`, `Path.remove`
+  and `Path.rename`; `File.open(path)` also defaults `mode` to `"read"`.
 
 ## [0.15.0] - 2026-10-29
 

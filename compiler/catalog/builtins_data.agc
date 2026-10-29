@@ -389,7 +389,7 @@ ROWS_2: List[Model.Builtin] = [
       name: "Dir.list",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.List(Types.Type.String)),
       rule: Model.Rule.Plain,
@@ -402,7 +402,7 @@ ROWS_2: List[Model.Builtin] = [
       name: "Dir.mkdir",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -418,7 +418,7 @@ ROWS_3: List[Model.Builtin] = [
       name: "Dir.mkdir_private",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -435,7 +435,7 @@ ROWS_3: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "text", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -529,7 +529,7 @@ ROWS_4: List[Model.Builtin] = [
       name: "File.lstat",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Struct("FileInfo", [])),
       rule: Model.Rule.Plain,
@@ -545,8 +545,8 @@ ROWS_5: List[Model.Builtin] = [
       name: "File.open",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "mode", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "mode", type: Types.Type.String, default: Model.Default.Text("read")),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Opaque("FileHandle")),
       rule: Model.Rule.Plain,
@@ -592,7 +592,7 @@ ROWS_6: List[Model.Builtin] = [
       name: "File.read_text",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.String),
       rule: Model.Rule.Plain,
@@ -605,7 +605,7 @@ ROWS_6: List[Model.Builtin] = [
       name: "File.sha256",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
       rule: Model.Rule.Plain,
@@ -621,7 +621,7 @@ ROWS_6: List[Model.Builtin] = [
       name: "File.stat",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Struct("FileInfo", [])),
       rule: Model.Rule.Plain,
@@ -685,7 +685,7 @@ ROWS_7: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "text", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -3433,7 +3433,7 @@ ROWS_29: List[Model.Builtin] = [
       name: "Path.remove",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
@@ -3450,7 +3450,7 @@ ROWS_29: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "from", type: Types.Type.String),
         Model.Named(name: "to", type: Types.Type.String),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       ],
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
