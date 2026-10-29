@@ -67,13 +67,17 @@ rule that a site page shows.
   `/library/TOPIC/NAME/`. Order and titles come from front matter (`title`,
   `weight`); the sidebar, the list pages, `llms.txt` and `search.json` follow
   the tree.
-- `docs/grammar/*.md` is the language specification (`/reference/`): the
-  content adapter `content/_content.gotmpl` reads the files through an assets
-  mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
-  file in `docs/grammar/` appears there by itself; the adapter fails the build
+- `docs/grammar/*.md` is the language specification (`/reference/`). The
+  index is `content/reference/_index.md`. The content adapter
+  `content/_content.gotmpl` adds one page per file at `/reference/<slug>/`,
+  the file name without its number (`04-lexical.md` is `lexical`), read through
+  an assets mount (`hugo.toml`). Weights follow the sorted file names. A page's
+  title is its first H1, else the title in the adapter's `$info`; a new file
+  without an `$info` entry takes its slug as title. The adapter fails the build
   when fewer than 10 files are found, so change that number with the files.
-- The adapter rewrites two kinds of joined link: a sibling grammar link
-  `](NN-name.md#anchor)` becomes `](#anchor)`, and
+  `layouts/reference/list.html` lists the parts with their descriptions.
+- The adapter rewrites the links between parts: `](NN-name.md#anchor)` (or
+  `./NN-name.md`) becomes `](/reference/<slug>/#anchor)`, and
   `](../../site/content/library/TOPIC/NAME.md)` becomes
   `](/library/TOPIC/NAME/)`; other relative links stay as written.
 - The programming skill is for agents and is not published.
