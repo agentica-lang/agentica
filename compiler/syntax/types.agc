@@ -3,8 +3,9 @@
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
 ## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
-## generic struct or a generic enum. Fn lists the parameters, then the result. Unknown is no type: the expected type
-## when none is known (Unknown), and the type of a literal the lexer could not classify.
+## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is JSON.Codec[T], the JSON codec
+## of a struct (JSON.codec). Unknown is no type: the expected type when none is known (Unknown), and the type of a
+## literal the lexer could not classify.
 export enum Type
   Int
   Float
@@ -20,6 +21,7 @@ export enum Type
   Task(Type)
   Channel(Type)
   Lazy(Type)
+  Codec(Type)
   List(Type)
   Set(Type)
   Map(Type, Type)
@@ -48,6 +50,7 @@ export def tag(type: Type) -> String
     Type.Task(item) -> return "Task"
     Type.Channel(item) -> return "Channel"
     Type.Lazy(item) -> return "Lazy"
+    Type.Codec(item) -> return "Codec"
     Type.List(item) -> return "List"
     Type.Set(item) -> return "Set"
     Type.Map(key, value) -> return "Map"
@@ -69,13 +72,14 @@ export def unknown?(type: Type) -> Bool
   return tag(type) == "Unknown"
 end
 
-## The element type of a List, Set, Result, Task, Channel or Lazy; Unknown for any other type.
+## The element type of a List, Set, Result, Task, Channel, Lazy or Codec; Unknown for any other type.
 export def item(type: Type) -> Type
   case type
     Type.Result(inner) -> return inner
     Type.Task(inner) -> return inner
     Type.Channel(inner) -> return inner
     Type.Lazy(inner) -> return inner
+    Type.Codec(inner) -> return inner
     Type.List(inner) -> return inner
     Type.Set(inner) -> return inner
     _ -> return Type.Unknown
@@ -154,6 +158,7 @@ export def same?(a: Type, b: Type) -> Bool
     Type.Task(inner) -> return same?(inner, item(b))
     Type.Channel(inner) -> return same?(inner, item(b))
     Type.Lazy(inner) -> return same?(inner, item(b))
+    Type.Codec(inner) -> return same?(inner, item(b))
     Type.List(inner) -> return same?(inner, item(b))
     Type.Set(inner) -> return same?(inner, item(b))
     _ -> return true
@@ -288,6 +293,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
     Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
     Type.Lazy(item) -> return "Lazy[#{to_text_as(item, written)}]"
+    Type.Codec(item) -> return "JSON.Codec[#{to_text_as(item, written)}]"
     Type.List(item) -> return "List[#{to_text_as(item, written)}]"
     Type.Set(item) -> return "Set[#{to_text_as(item, written)}]"
     Type.Map(key, value) -> return "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
@@ -308,6 +314,7 @@ export def debug_text(type: Type) -> String
     Type.Task(item) -> return "Task(#{debug_text(item)})"
     Type.Channel(item) -> return "Channel(#{debug_text(item)})"
     Type.Lazy(item) -> return "Lazy(#{debug_text(item)})"
+    Type.Codec(item) -> return "Codec(#{debug_text(item)})"
     Type.List(item) -> return "List(#{debug_text(item)})"
     Type.Set(item) -> return "Set(#{debug_text(item)})"
     Type.Map(key, value) -> return "Map(#{debug_text(key)}, #{debug_text(value)})"

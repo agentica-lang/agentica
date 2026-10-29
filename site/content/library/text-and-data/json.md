@@ -113,6 +113,44 @@ end
 ["x","y"]
 ```
 
+## JSON.codec
+
+```text
+JSON.codec(type: T) -> JSON.Codec[T]
+codec.decode(s: String) -> Result[T]
+codec.decode(json: Json) -> Result[T]
+codec.encode(value: T) -> String
+codec.from(value: T) -> Json
+```
+
+A generic function cannot call `JSON.encode` or `JSON.decode` on its type parameter `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct.
+
+```agentica
+struct User
+  name: String
+  age: Int
+end
+
+def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]
+  return codec.decode(body)
+end
+
+def show[T](codec: JSON.Codec[T], value: T) -> String
+  return codec.encode(value)
+end
+
+def main() -> Void
+  user = body_as("{\"name\": \"Ana\", \"age\": 25}", JSON.codec(User)).unwrap!
+  puts(show(JSON.codec(User), user))
+end
+```
+
+```output
+{"name":"Ana","age":25}
+```
+
+A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec, and `decode`, `encode` and `from` are written only as methods: `JSON.Codec.decode(c, text)` is `CHECK-UNKNOWN-NAME`.
+
 ## Optional and nullable fields
 
 Some APIs (tool calls, PATCH bodies, config files) tell three states of a key apart: the key is absent, it is `null`, or it has a value. A struct field of type `JsonField[T]` keeps them apart. It is a builtin enum with the variants `JsonField.Absent`, `JsonField.Null` and `JsonField.Value(x)`.
@@ -172,7 +210,7 @@ name: set to Ana
 {"name":"Bo","age":null}
 ```
 
-`JsonField` may only be the type of a struct field in a JSON type: a list of `JsonField`, a map of them, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` is the error `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` cannot be encoded or decoded, since `Value(nil)` would look like `Null`. A type argument counts after substitution: in `Box[JsonField[Int]]` (`struct Box[T]` with `value: T`) the field `value` is a `JsonField` field for `JSON.encode` and `JSON.from`, while `items: List[T]` with that argument is `CHECK-JSON-FIELD-PLACE`. Outside JSON it is an ordinary enum value, and `JsonField` is a reserved name.
+`JsonField` may only be the type of a struct field in a JSON type. A list or map of them, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` is `CHECK-JSON-FIELD-PLACE`; so is `items: List[T]` when `T` is a `JsonField` (a type argument counts after substitution). `JsonField[Nil]` cannot be encoded or decoded, since `Value(nil)` would look like `Null`. Outside JSON it is an ordinary enum value, and `JsonField` is a reserved name.
 
 ## JSON.parse
 

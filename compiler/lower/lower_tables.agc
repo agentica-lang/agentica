@@ -1,6 +1,11 @@
 ## The tables of the lowering that are plain data: the builtins the VM implements, the operator instructions, and the
 ## builtin structs the VM can build. tests/test_frontend_lower.py compares VM_BUILTINS with a frozen copy.
 
+## The builtins that lowering writes with no builtin of their own (lower_codec): JSON.codec, whose implementation is no
+## builtin of the VM, and the methods of a codec, which call JSON.decode, JSON.encode and JSON.from with other
+## arguments than theirs.
+export CODEC_BUILTINS = Set.new(["JSON.codec", "JSON.Codec.decode", "JSON.Codec.encode", "JSON.Codec.from"])
+
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
 export VM_BUILTINS = Set.new([
   "puts", "IO.print", "IO.warn", "IO.inspect", "IO.gets", "IO.gets!", "IO.read", "IO.read_bytes", "IO.flush",
@@ -53,7 +58,8 @@ export VM_BUILTINS = Set.new([
   "Base64.decode64", "Base64.strict_decode64", "Base64.urlsafe_decode64", "Digest.hexencode", "Digest.hexdecode",
   "Digest.md5", "Digest.md5_hexdigest", "Digest.sha1", "Digest.sha1_hexdigest", "Digest.sha256",
   "Digest.sha256_hexdigest", "Digest.sha512", "Digest.sha512_hexdigest",
-  "HMAC.sha256", "HMAC.sha256_hexdigest", "HMAC.sha512", "HMAC.sha512_hexdigest",
+  "HMAC.sha256", "HMAC.sha256_hexdigest", "HMAC.sha512", "HMAC.sha512_hexdigest", "SecureRandom.random_bytes",
+  "SecureRandom.hex", "SecureRandom.uuid",
   "Native.wait_readable", "Native.wait_writable", "Native.load",
   "Native.close", "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.address",
   "Native.offset", "Native.memory_pointer", "Native.from_string", "Native.size_of", "Native.get_struct",

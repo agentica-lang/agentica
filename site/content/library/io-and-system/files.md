@@ -61,7 +61,7 @@ end
 File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
 ```
 
-Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Digest.sha256` gives for the same content. It streams the file in fixed 64 KiB chunks with O(chunk) memory, so an archive far over the 1 MiB text cap still hashes without holding it in memory.
+Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Digest.sha256` gives for the same content. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -72,9 +72,9 @@ def main() -> Void
 end
 ```
 
-- Only regular files are hashed, read from the first byte; symbolic links are followed. A missing path, a directory, a path that reopens one of the program's own pipes, and a FIFO, pipe or device give `error("filesystem: path does not refer to a regular file")`, the same error `File.read_text` gives them.
-- `timeout_ms` covers the whole call: open, stream and digest. When it runs out the call returns `error("filesystem: operation timed out")`, while a hash already running finishes on its pool thread and its result is dropped; there is no handle to close. A cancelled task detaches the same way.
-- There is no snapshot: bytes hash in read order, so a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
+- Only regular files are hashed; symbolic links are followed. A missing path, a directory, a FIFO, pipe or device give `error("filesystem: path does not refer to a regular file")`, as `File.read_text` does.
+- `timeout_ms` covers the whole call. When it runs out the call returns `error("filesystem: operation timed out")` and a running hash is dropped. A cancelled task detaches the same way.
+- There is no snapshot: a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
 
 ## File.stat
 
@@ -122,14 +122,11 @@ Opens a file for streaming.
 
 `close` writes pending data. Closing twice is fine.
 
-- A file belongs to the task that opened it and closes, with its data written, when that task ends (also when a helper opened it and returned it through `Task.await`).
-- `Task.await` of that task returns after a regular file's data is written, so a parent that awaits a helper reads everything it wrote. It does not wait for a flush to a FIFO or a pipe.
-- A `close` on a file already closing because its task ended waits for that close and returns its result.
-- At program end the run waits for open files to be written and for `puts` and `IO.warn` output to reach its pipe or file, at most 30 seconds (`agentica --flush-timeout MS app.agc` or `AGENTICA_FLUSH_TIMEOUT_MS`; the flag wins). When time runs out the exit code stays and stderr gets one line saying file data may not be written, so a FIFO nobody reads cannot block the end.
-- On `SIGINT`, `SIGTERM` or `SIGHUP`: child programs stop first, then files are written, then the program ends by that signal. The run does not wait for a reader of stdout or stderr. A second signal ends it at once, once the children have stopped.
-- Under `agentica`, Ctrl-C reaches the program directly. `agentica` waits 2 seconds, sends `SIGTERM`, waits 2 more, then kills it.
-- A path that reopens one of the program's own internal pipes, or the descriptor behind stdout or stderr (`/proc/self/fd/5`), gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got at start open by path: stdin, stdout, stderr and a shell `<(...)`.
-- Windows: no file call waits on a stream. They accept only regular files (and folders where a folder is meant), and a named pipe or a device is refused at once with an error. Streams that can wait reach the program as standard input, output or error, as process pipes and as sockets.
+- A file belongs to the task that opened it and closes, with its data written, when that task ends. `Task.await` of that task returns after a regular file's data is written (not a flush to a FIFO or a pipe), so a parent that awaits a helper reads everything it wrote. A `close` on a file already closing waits for that close.
+- At program end the run waits for open files to be written and for `puts` and `IO.warn` output to reach its pipe or file, at most 30 seconds (`--flush-timeout MS` or `AGENTICA_FLUSH_TIMEOUT_MS`; the flag wins). When time runs out the exit code stays and stderr gets one line saying file data may not be written.
+- On `SIGINT`, `SIGTERM` or `SIGHUP`: child programs stop first, then files are written, then the program ends by that signal. A second signal ends it at once, once the children have stopped. Under `agentica`, Ctrl-C reaches the program directly; `agentica` waits 2 seconds, sends `SIGTERM`, waits 2 more, then kills it.
+- A path that reopens one of the program's own internal pipes, or the descriptor behind stdout or stderr (`/proc/self/fd/5`), gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got at start (stdin, stdout, stderr, a shell `<(...)`) open by path.
+- Windows: file calls accept only regular files (and folders where a folder is meant); a named pipe or a device is refused at once.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -324,8 +321,8 @@ Like POSIX `realpath`: the absolute path with every symbolic link resolved and `
 
 The system's own rules show through:
 
-- macOS fails a path whose absolute form is 1024 bytes or more, and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
-- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. A name under a file gives ENOENT, the result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). The binary opts in to long paths, so a path whose absolute form is 260 characters or more works when the machine sets `LongPathsEnabled` to 1; otherwise it is an error, and so is `Dir.mkdir` of one.
+- macOS fails a path of 1024 bytes or more, and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
+- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. The result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). A path of 260 characters or more works only when the machine sets `LongPathsEnabled` to 1; otherwise it is an error, as is `Dir.mkdir` of one.
 
 ```agentica
 def main() -> Void
@@ -349,7 +346,6 @@ Deletes a file, a symbolic link, or a directory with everything in it. A missing
 
 - It never follows a link: a link is deleted itself, and what it names is left alone.
 - It refuses a filesystem root, a trailing separator, `.` and `..` (also as the end of `dir/..`), and a tree more than 128 levels deep (left partly deleted).
-- `"link/"` and `"file/child"` give `Not a directory`, on purpose, so `"link/"` never reports `ok()`.
 - A failed call keeps what it already deleted; the error names the failing entry with the system error. A timeout gives an error but the started removal runs to its end.
 - Unix crosses mount points, as `rm -rf` does. Windows removes junctions and other reparse points themselves without traversing them, refuses drive or share roots, alternate-data-stream syntax and components ending in a dot or space.
 

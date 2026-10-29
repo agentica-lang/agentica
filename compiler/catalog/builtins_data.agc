@@ -6,8 +6,9 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and
-## hex rows, the digest rows and then the HMAC rows are appended last, in
-## contract order, so the positions of the existing rows never shift.
+## hex rows, the digest rows, the HMAC rows and then the SecureRandom rows are
+## appended last, in contract order, so the positions of the existing rows never
+## shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -19,7 +20,7 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
-BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
+BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60.concat(ROWS_61)))))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -278,6 +279,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Random",
     "Range",
     "Result",
+    "SecureRandom",
     "Set",
     "Socket",
     "Std",
@@ -1407,6 +1409,69 @@ ROWS_17: List[Model.Builtin] = [
       implementation: "JSON.bool",
       effects: [],
       description: "Extract a JSON boolean; wrong kind returns an error.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "JSON.codec",
+      parameters: [Model.Named(name: "type", type: Types.Type.Var("T"))],
+      result: Types.Type.Codec(Types.Type.Var("T")),
+      rule: Model.Rule.JsonCodec,
+      implementation: "JSON.codec",
+      effects: [],
+      description: "The JSON codec of a named struct, a value that generic code takes to encode and decode it.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "JSON.Codec.decode",
+      parameters: [
+        Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
+        Model.Named(name: "s", type: Types.Type.String),
+      ],
+      result: Types.Type.Result(Types.Type.Var("T")),
+      rule: Model.Rule.CodecDecode,
+      implementation: "JSON.decode",
+      effects: [],
+      description: "Decode JSON text into the codec's struct, as JSON.decode does.",
+      alternatives: [
+        Model.Builtin(
+          name: "JSON.Codec.decode",
+          parameters: [
+            Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
+            Model.Named(name: "json", type: Types.Type.Json),
+          ],
+          result: Types.Type.Result(Types.Type.Var("T")),
+          rule: Model.Rule.CodecDecode,
+          implementation: "JSON.decode",
+          effects: [],
+          description: "Decode a Json value into the codec's struct, as JSON.decode does.",
+          alternatives: [],
+        ),
+      ],
+    ),
+    Model.Builtin(
+      name: "JSON.Codec.encode",
+      parameters: [
+        Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
+        Model.Named(name: "value", type: Types.Type.Var("T")),
+      ],
+      result: Types.Type.String,
+      rule: Model.Rule.CodecEncode,
+      implementation: "JSON.encode",
+      effects: [],
+      description: "Encode a value of the codec's struct as JSON text, as JSON.encode does.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "JSON.Codec.from",
+      parameters: [
+        Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
+        Model.Named(name: "value", type: Types.Type.Var("T")),
+      ],
+      result: Types.Type.Json,
+      rule: Model.Rule.CodecEncode,
+      implementation: "JSON.from",
+      effects: [],
+      description: "Convert a value of the codec's struct to a Json value, as JSON.from does.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -5605,6 +5670,45 @@ ROWS_60: List[Model.Builtin] = [
         "HMAC-SHA512 (RFC 2104) of data (bytes, each 0..255) under a key of any length; returns the " +
         "MAC as 128 lowercase hex digits; VM only."
       ),
+      alternatives: [],
+    ),
+  ]
+
+## The SecureRandom rows; appended last so the positions of the existing rows never shift.
+ROWS_61: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "SecureRandom.random_bytes",
+      parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "SecureRandom.random_bytes",
+      effects: ["random"],
+      description: (
+        "Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), " +
+        "for keys, salts and tokens; unlike Random, never seeded; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "SecureRandom.hex",
+      parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "SecureRandom.hex",
+      effects: ["random"],
+      description: (
+        "Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "SecureRandom.uuid",
+      parameters: [],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "SecureRandom.uuid",
+      effects: ["random"],
+      description: "Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only.",
       alternatives: [],
     ),
   ]

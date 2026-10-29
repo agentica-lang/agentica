@@ -1,0 +1,56 @@
+program #54 0:1:1-466:21:1
+  module "json-codec.agc"
+    declaration: struct-decl #4 0:1:1-50:5:1 name="Reading"
+      field: field-decl #1 17:2:3-31:3:1 name="label"
+        type: type-ref #0 24:2:10-30:2:16 name="String"
+      field: field-decl #3 33:3:3-46:4:1 name="value"
+        type: type-ref #2 40:3:10-45:3:15 name="Float"
+    declaration: function-decl #16 51:6:1-147:9:1 name="read_as" type-parameters=["T"]
+      param: param #7 66:6:16-86:6:36 name="codec"
+        type: type-ref #6 73:6:23-86:6:36 name="JSON.Codec"
+          arg: type-ref #5 84:6:34-85:6:35 name="T"
+      param: param #9 88:6:38-100:6:50 name="text"
+        type: type-ref #8 94:6:44-100:6:50 name="String"
+      result: type-ref #11 105:6:55-114:6:64 name="Result"
+        arg: type-ref #10 112:6:62-113:6:63 name="T"
+      body: return-stmt #15 117:7:3-143:8:1
+        value: method-call #14 124:7:10-142:7:28 name="decode" type=Result(Var(T)) resolved=call("JSON.Codec.decode", Codec(Var(T)))
+          target: name-ref #12 124:7:10-129:7:15 name="codec" type=Codec(Var(T))
+          arg: name-ref #13 137:7:23-141:7:27 name="text" type=String
+    declaration: function-decl #27 148:10:1-239:13:1 name="write_as" type-parameters=["T"]
+      param: param #19 164:10:17-184:10:37 name="codec"
+        type: type-ref #18 171:10:24-184:10:37 name="JSON.Codec"
+          arg: type-ref #17 182:10:35-183:10:36 name="T"
+      param: param #21 186:10:39-194:10:47 name="value"
+        type: type-ref #20 193:10:46-194:10:47 name="T"
+      result: type-ref #22 199:10:52-205:10:58 name="String"
+      body: return-stmt #26 208:11:3-235:12:1
+        value: method-call #25 215:11:10-234:11:29 name="encode" type=String resolved=call("JSON.Codec.encode", Codec(Var(T)))
+          target: name-ref #23 215:11:10-220:11:15 name="codec" type=Codec(Var(T))
+          arg: name-ref #24 228:11:23-233:11:28 name="value" type=Var(T)
+    declaration: function-decl #53 240:14:1-466:21:1 name="main"
+      result: type-ref #28 254:14:15-258:14:19 name="Void"
+      body: binding #31 261:15:3-289:16:1 name="codec"
+        value: call #30 269:15:11-288:15:30 name="JSON.codec" piped=false type=Codec(Struct(Reading))
+          arg: type-expression #29 280:15:22-287:15:29 name="Reading"
+      body: binding #36 291:16:3-359:17:1 name="reading"
+        value: field-access #35 301:16:13-358:16:70 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
+          target: call #34 301:16:13-350:16:62 name="read_as" piped=false type=Result(Struct(Reading))
+            arg: name-ref #32 309:16:21-314:16:26 name="codec" type=Codec(Struct(Reading))
+            arg: literal #33 316:16:28-349:16:61 value=string:"{\"label\":\"t\",\"value\":1.5}" type=String
+      body: expr-stmt #41 361:17:3-392:18:1
+        value: call #40 361:17:3-391:17:33 name="puts" piped=false type=Void
+          arg: call #39 366:17:8-390:17:32 name="write_as" piped=false type=String
+            arg: name-ref #37 375:17:17-380:17:22 name="codec" type=Codec(Struct(Reading))
+            arg: name-ref #38 382:17:24-389:17:31 name="reading" type=Struct(Reading)
+      body: binding #45 394:18:3-421:19:1 name="tree"
+        value: method-call #44 401:18:10-420:18:29 name="from" type=Json resolved=call("JSON.Codec.from", Codec(Struct(Reading)))
+          target: name-ref #42 401:18:10-406:18:15 name="codec" type=Codec(Struct(Reading))
+          arg: name-ref #43 412:18:21-419:18:28 name="reading" type=Struct(Reading)
+      body: expr-stmt #52 423:19:3-462:20:1
+        value: call #51 423:19:3-461:19:41 name="puts" piped=false type=Void
+          arg: field-access #50 428:19:8-460:19:40 name="label" type=String
+            target: field-access #49 428:19:8-454:19:34 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
+              target: method-call #48 428:19:8-446:19:26 name="decode" type=Result(Struct(Reading)) resolved=call("JSON.Codec.decode", Codec(Struct(Reading)))
+                target: name-ref #46 428:19:8-433:19:13 name="codec" type=Codec(Struct(Reading))
+                arg: name-ref #47 441:19:21-445:19:25 name="tree" type=Json

@@ -4,7 +4,7 @@
 ## a packed Problem (diagnostics/problem.agc), so `try` stops at the first diagnostic.
 
 import Model from "../catalog/builtin_model"
-import {PUBLIC_NAMES} from "../catalog/builtins"
+import {CALLABLE_NAMES} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
@@ -345,7 +345,7 @@ end
 ## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public
 ## builtins.
 export def visible_names(cx: Cx, st: St) -> List[String]
-  return st.vars.keys.concat(cx.functions.keys).concat(PUBLIC_NAMES)
+  return st.vars.keys.concat(cx.functions.keys).concat(CALLABLE_NAMES)
 end
 
 ## A Diag.Help for a help text that may be absent ("" is absent).

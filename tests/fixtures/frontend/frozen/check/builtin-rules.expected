@@ -84,9 +84,13 @@ Int.shift_right Plain
 Int.shift_right_unsigned Plain
 Int.times Plain
 Int.upto Plain
+JSON.Codec.decode CodecDecode
+JSON.Codec.encode CodecEncode
+JSON.Codec.from CodecEncode
 JSON.array Plain
 JSON.at Plain
 JSON.bool Plain
+JSON.codec JsonCodec
 JSON.decode JsonDecode
 JSON.encode JsonEncode
 JSON.float Plain
@@ -186,6 +190,9 @@ Result.message ResultMessage
 Result.ok? ResultOk
 Result.unwrap! ResultUnwrap
 Result.unwrap_or ResultDefault
+SecureRandom.hex Plain
+SecureRandom.random_bytes Plain
+SecureRandom.uuid Plain
 Set.add SetAdd
 Set.delete SetAdd
 Set.difference SetCombine

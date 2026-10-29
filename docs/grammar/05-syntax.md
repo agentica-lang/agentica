@@ -73,16 +73,13 @@ with a C name (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a
 body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
 goes on a `def` inside the block. Each function is a `def` for the rest of the
 language: `export` makes it importable, it takes the place of a `def` in the
-declaration order (except in a block that declares a resource, below), the
-whole block needs the blank line of a declaration, and the checker sees the
-integer types (`C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`, `C.UInt8`,
-`C.UInt16`, `C.UInt32`, `C.Long`) as `Int`, `C.Double` and `C.Float` (a 32-bit
-`float`) as `Float`, `C.Bool` as `Bool` and `C.String` as `String`.
-`compute def` declares a function that runs off the scheduler while the task
-waits (section 6d); `export` comes first. `extern` is contextual: it is a
-keyword only at the start of a top-level declaration, and `compute` only before
-`def` in an extern block. `C.UInt64` and `C.ULong` are `PARSE-EXTERN-TYPE`:
-write `C.Int64` and `C.Long`, which carry the same bits.
+declaration order (except in a block that declares a resource, below), the whole
+block needs the blank line of a declaration, and the checker sees each C type as
+the Agentica type that section 6d gives it. `compute def` declares a function
+that runs off the scheduler while the task waits (section 6d); `export` comes
+first. `extern` is contextual: it is a keyword only at the start of a top-level
+declaration, and `compute` only before `def` in an extern block. `C.UInt64` and
+`C.ULong` are `PARSE-EXTERN-TYPE` (section 6d).
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function

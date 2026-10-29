@@ -155,23 +155,8 @@ flamegraph.pl app.folded > app.svg
 `each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min_by`, `max_by`, `Map.each`
 and `Map.select` are written in Agentica and run in your program, so their steps
 count against `--max-steps`. Each is one O(n) pass with no list copy per
-element. Their own steps per element (not the block's), on 100,000 elements:
-
-| Method | Steps |
-|---|---:|
-| `find` (no match), `sum` | 4 |
-| `uniq` (1,000 distinct) | 5 |
-| `Map.each` | 7 |
-| `flat_map` (1 item each), `partition` | 8 |
-| `each_with_index`, `take_while`, `drop_while` | 9 |
-| `tally` (1,000 keys) | 10 |
-| `each_slice(3)` | 11 |
-| `Map.select` | 11.5 |
-| `group_by` (1,000 keys) | 14 |
-| `min_by` (`Int`) | 20 |
-| `max_by` (`String`) | 22 |
-| `max_by` (`Int`, every key a new best) | 24 |
-| `min_by` (`Float`) | 28 |
+element, at 4 to 28 steps per element of its own (not the block's); measure
+the one you use with the profiler.
 
 Wall time of `tally`, `uniq` and `group_by` also grows with the number of
 distinct keys (the VM's `Map` and `Set` insert cost: about 4 s at 400,000

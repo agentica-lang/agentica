@@ -13,81 +13,57 @@ section for the area you are changing.
 - `try` is a unary expression node. It requires a Result-returning function
   (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through
   the current function's escape. It does not guarantee a return.
-- `IO.gets` returns Result[String]; `IO.gets!` is the String-returning form that
-  halts. Non-bang conversions recover only their documented failures.
 - `--max-steps` counts every expression/statement entry, including loop
   conditions, per run. The CLI validates the input; check never executes. This
   is not a blocking-I/O timeout.
 
-## Collections and algorithm examples
+## Collections and builtins
 
 - `List.map/select/reduce` infer input element types from exact callback
   signatures, including empty lists. Reduce is a left fold with accumulator
   first; its callback result must equal its accumulator type and supplies
-  context for the initial value. Map rejects Void results. Traversals preserve
-  inputs and order and cost O(n) excluding callback work.
+  context for the initial value. Map rejects Void results.
 - `List.sort/sort_by` are stable, order strings by code point and put NaN last.
   The checker allows only Int, Float or String elements/keys. sort_by calls the
-  key once per element, then sorts the cached keys; the key callback's parameter
-  type types an empty input list.
-- String search and conversion builtins: index_of returns character positions
-  (empty part is ok(0)); at/code/from_code report errors at the argument span;
-  from_code rejects surrogates. Float.to_int/to_int! share `fallible`:
+  key once per element; the key callback's parameter type types an empty input
+  list.
+- `index_of` returns character positions (an empty part is ok(0));
+  `from_code` rejects surrogates. `Float.to_int/to_int!` share `fallible`:
   NaN/infinity give RUNTIME-INVALID-NUMBER, out-of-range truncation
   RUNTIME-INTEGER-OVERFLOW. `Float` works as a builtin module prefix because
   catalog names are full dotted strings.
-- Time and Random: each run seeds its generator from `--seed` (0..2^31-1) or OS
+- Random: each run seeds its generator from `--seed` (0..2^31-1) or OS
   randomness; the VM uses xoshiro256** with one generator per task
-  (`references/vm-core.md`). Random.int is uniform over the full Int range; min
-  > max is RUNTIME-INVALID-RANGE at the call. `agentica --seed N test` passes
-  `--seed N` to the runner, each scenario VM and each program under test, so
-  handlers and programs under test draw the same sequence.
-- `List.concat/take/drop/at` go through the catalog and generic checker. Concat
-  propagates expected types and can infer an empty first list from the second.
-  Take/drop accept all nonnegative Int counts, clamp to length, and report
-  RUNTIME-INVALID-COUNT at negative counts. At propagates the expected element
-  type and reuses RUNTIME-INDEX-OUT-OF-RANGE at the index argument. Inputs stay
-  immutable; concat costs O(length of first list), and take/drop/at are O(n).
-- `List.append`, `set`, `repeat`, and `reverse` preserve inputs. Indexing and
-  updates remain O(n); repeat is capped at 1048576 and reports
-  RUNTIME-INVALID-COUNT at the count argument. List.set uses the existing index
-  diagnostic at the index argument.
+  (`references/vm-core.md`). `agentica --seed N test` passes `--seed N` to the
+  runner, each scenario VM and each program under test, so handlers and programs
+  under test draw the same sequence.
+- Generic rules propagate expected types into list construction/updates,
+  `List.concat` (it can infer an empty first list from the second) and
+  `Map.get`. Keep false/nil lookup payloads distinct from absent keys.
+  `Map.delete` updates both the hash and insertion-order keys; reinsertion goes
+  last; `Map.values` follows `Map.keys` order.
 - Catalog entries with several signatures (Map.get): `references/stages.md`
   (Builtin catalog).
-- Generic rules propagate expected types into list construction/updates and
-  Map.get. Keep false/nil lookup payloads distinct from absent keys. Map.delete
-  updates both the hash and insertion-order keys; reinsertion goes last.
-  Map.values follows Map.keys order.
 - A step-limit stop is not an "unsolvable" answer: the algorithm examples
   (`knight-tour`, `traveling-salesman`, `maze-bfs`) keep their sizes small and
   their tests validate complete routes and known optimal costs.
 
-## Ranges
+## Ranges and sets
 
 - `a..b` / `a...b` are `Binary` nodes with the operator kinds `dot-dot` /
   `dot-dot-dot`; ranges bind looser than `or` and do not chain. The checker type
   is `Type.Range` (a reserved type name, printable, `==` allowed, not
   encodable). `for` over a Range binds an `Int`. `Range` and `Int` are method
   modules, so `r.size` is `Range.size(r)` and `3.times` is `Int.times(3, f)`;
-  the catalog rows use the generic `#f` rule (a block gets its `Fn[Int, Void]`
-  from the parameter).
-- VM: see `references/vm-lowering.md` (counter loops, `RANGE`/`RANGE_BOUNDS`,
-  counting native frames).
-
-## Sets
-
-- `Set[T]` is the checker type `Type.Set(T)` with `T` `Int` or `String`
+  the catalog rows use the generic `#f` rule. VM: `references/vm-lowering.md`.
+- `Set[T]` is `Type.Set(T)` with `T` `Int` or `String`
   (`CHECK-SET-ELEMENT-TYPE`; `Set` is a reserved type name). Printable, not
   encodable, no `==`; `Test.eq` accepts it. `Set` is a method module
-  (`method_modules` in `check_tables.agc`), so `s.add(x)` is `Set.add(s, x)`.
-  The catalog rows carry rules (`set-new`, `set-add` for add and delete,
-  `set-include`, `set-query`, `set-to-a`, `set-combine`, `set-subset`) because
-  their generic types need the expected type: `Set.new([])` with none is
-  `CHECK-EMPTY-SET-TYPE`, and the first argument of `add`, `delete`, `union`,
-  `intersection` and `difference` takes the expected set type.
-- `for x in set` lowers to `Set.to_a` into the hidden list slot and then the
-  list loop (`compiler/lower/lower_stmt.agc`). The VM keeps a set as an
-  `agc_map` with nil values under `AGC_T_SET` (`references/vm-core.md`).
+  (`method_modules` in `check_tables.agc`). The catalog rows carry `set-*` rules
+  because their generic types need the expected type: `Set.new([])` with none is
+  `CHECK-EMPTY-SET-TYPE`. `for x in set` lowers to `Set.to_a` into the hidden
+  list slot and then the list loop (`compiler/lower/lower_stmt.agc`). The VM
+  keeps a set as an `agc_map` with nil values under `AGC_T_SET`.
 
 ## File modules
 
@@ -172,13 +148,10 @@ section for the area you are changing.
 
 ## String interpolation
 
-- The lexer scans string text; `#{` emits `interp-start`/`interp-middle` with
-  the text so far and pushes a `#` frame on `delimiters`; the `}` that meets
-  that frame resumes string scanning, and the resumed
-  `interp-middle`/`interp-end` token starts at that `}` so parse errors point at
-  it, and the closing quote emits `string` (no interpolation) or `interp-end`.
-  Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the
-  string start. `\#` escapes `#`.
+- The lexer pushes a `#` frame on `delimiters` at `#{`; the `}` that meets it
+  resumes string scanning, and the resumed token starts at that `}` so parse
+  errors point at it. Newlines and EOF inside an open frame are
+  `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
 - The parser builds `Interpolation` with text and expression parts (empty text
   pieces dropped). The checker checks each expression with no context (Void is
   rejected, and `ensure_printable` rejects types without `to_s`: functions,

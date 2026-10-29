@@ -1,8 +1,9 @@
 /*
  * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
- * the Digest and HMAC builtins (crypto.c), and an incremental SHA-256 for the
- * File hash (files.c), which streams a whole file in fixed chunks. The OpenSSL
- * code is in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
+ * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
+ * hash (files.c), which streams a whole file in fixed chunks, and secure random
+ * bytes for SecureRandom (crypto.c). The OpenSSL code is in digest_openssl.c.
+ * Adapter header. Design: docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
@@ -42,5 +43,11 @@ bool agc_sha256_final(agc_sha256_stream *stream, unsigned char out[AGC_SHA256_BY
 
 /* Frees a stream started by agc_sha256_begin; NULL is free of charge. */
 void agc_sha256_free(agc_sha256_stream *stream);
+
+/* Fills the n bytes at out from OpenSSL's CSPRNG (RAND_bytes: the default DRBG, seeded from the system and reseeded
+   after a fork), and returns true; n == 0 draws nothing. Returns false when the draw fails (the system has no entropy
+   to give, or n is above INT_MAX); out then holds no usable bytes. Safe on any thread: OpenSSL 3 keeps one generator
+   per thread. */
+bool agc_secure_random(unsigned char *out, size_t n);
 
 #endif

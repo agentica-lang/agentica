@@ -119,7 +119,7 @@ comment), then a step that calls it. Targets that are not obvious:
 ### Refreshing stage0
 
 `bootstrap/stage0.agcb` is a checked-in stage2, the only seed of the build
-(a 3.7 MB blob: refresh it only when needed). Refresh it after a change that
+(over 8 MB: refresh it only when needed). Refresh it after a change that
 the old stage0 cannot compile or load (the `stage1` recipe says so), and
 before a release.
 
@@ -147,44 +147,25 @@ older stage0; the checked-in stage0 is format 6, so it can go.
 
 ## Windows console
 
-These tests need a native Windows console; Wine skips them:
-
-- `tests/test_windows_console_stop.py`: the VM in a new process group gets
-  `CTRL_BREAK_EVENT` (exit 149, 128 + `SIGBREAK`), a child that ignores it is
-  stopped, buffered file data is written, a stuck stdout does not hold the
-  exit. Output through ConPTY (`WriteConsoleW` from a pool thread, a line
-  longer than the 64 KiB buffer). A new process group turns Ctrl+C off, so
-  these cases send Ctrl+Break; libuv reports both through one `uv_signal_t`.
-  It also types a line into the console and keeps a console read waiting
-  while file calls run.
-- `test_vm_stop.py` tests Ctrl+C itself: the CLI runs in a pseudo console
-  and the test types character 3 (`run_on_console` of
-  `tests/windows_console_support.py`, which first turns Ctrl+C on, since a
-  parent in a new process group hands "ignore Ctrl+C" to every child).
-- `tests/test_windows_handle_counts.py` (named pipes,
-  `GetProcessHandleCount`) and `tests/test_windows_process_cleanup.py` (the
-  Windows side of the SIGTERM, SIGKILL and chmod cleanup cases). Other
-  cleanup cases run everywhere; on Windows they use a Python child, the
-  PowerShell process list or a copy of `node.exe`, because the VM starts
-  only `.exe` and `.com` files there.
+`tests/test_windows_console_stop.py`, `test_vm_stop.py` (Ctrl+C through a
+pseudo console, `run_on_console` of `tests/windows_console_support.py`),
+`test_windows_handle_counts.py` and `test_windows_process_cleanup.py` need a
+native Windows console; Wine skips them. A new process group turns Ctrl+C off
+(a parent in one hands "ignore Ctrl+C" to every child), so the stop tests send
+Ctrl+Break (exit 149, 128 + `SIGBREAK`); libuv reports both through one
+`uv_signal_t`. Cleanup cases that run everywhere use a Python child, the
+PowerShell process list or a copy of `node.exe` on Windows, because the VM
+starts only `.exe` and `.com` files there.
 
 After changing Windows stdin handling, a check on a native terminal is
-useful but does not block. Save as `console-input.agc`:
+useful but does not block. Run a program that prints `waiting`, flushes and
+prints `IO.gets()` with `dist/agentica.exe` and stdin not redirected:
 
-```agentica
-def main() -> Void
-  puts("waiting")
-  IO.flush()
-  puts(IO.gets())
-end
-```
-
-1. `dist/agentica.exe console-input.agc` without redirecting stdin; after
-   `waiting`, type `hello` and Enter: `ok("hello")`, exit 0.
-2. Again, and press Ctrl+C at `waiting`: a prompt return, no read-error
-   diagnostic, no surviving VM. libuv handles the signal on the loop even if
-   `_read` stays blocked on the reader thread; retrying an interrupted
-   `_read` must not be the signal handler.
+1. Type `hello` and Enter at `waiting`: `ok("hello")`, exit 0.
+2. Press Ctrl+C at `waiting`: a prompt return, no read-error diagnostic, no
+   surviving VM. libuv handles the signal on the loop even if `_read` stays
+   blocked on the reader thread; retrying an interrupted `_read` must not be
+   the signal handler.
 
 ## Pull requests (`.github/workflows/ci.yml`)
 

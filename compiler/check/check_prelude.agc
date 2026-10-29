@@ -147,6 +147,7 @@ def free_variables(type: T.Type) -> List[String]
     T.Type.Task(item) -> return free_variables(item)
     T.Type.Channel(item) -> return free_variables(item)
     T.Type.Lazy(item) -> return free_variables(item)
+    T.Type.Codec(item) -> return free_variables(item)
     T.Type.List(item) -> return free_variables(item)
     T.Type.Set(item) -> return free_variables(item)
     T.Type.Map(key, value) -> return free_variables(key).concat(free_variables(value))

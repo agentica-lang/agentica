@@ -50,7 +50,10 @@ def test_every_builtin_implementation_is_one_the_vm_has():
     tables = (ROOT / "compiler" / "lower" / "lower_tables.agc").read_bytes().decode("utf-8")
     start = tables.index("VM_BUILTINS = Set.new([")
     vm_builtins = set(re.findall(r'"([^"]+)"', tables[start:tables.index("\n])", start)]))
-    assert sorted(names - vm_builtins) == []
+    # JSON.codec has no VM builtin: the lowering writes it as the type name (CODEC_BUILTINS).
+    codec = tables.index("CODEC_BUILTINS = Set.new([")
+    lowered = set(re.findall(r'"([^"]+)"', tables[codec:tables.index("])", codec)]))
+    assert sorted(names - vm_builtins - lowered) == []
 
 
 def test_no_builtin_has_a_default_problem():

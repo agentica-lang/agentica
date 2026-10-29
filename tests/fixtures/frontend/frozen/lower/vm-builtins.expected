@@ -237,6 +237,9 @@ Result.message
 Result.ok?
 Result.unwrap!
 Result.unwrap_or
+SecureRandom.hex
+SecureRandom.random_bytes
+SecureRandom.uuid
 Set.add
 Set.delete
 Set.difference

@@ -10,6 +10,11 @@ JSON.kind(value: Json) -> String
 JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
 JSON.decode(json: Json, type: T) -> Result[T]
+JSON.codec(type: T) -> JSON.Codec[T]
+codec.decode(s: String) -> Result[T]
+codec.decode(json: Json) -> Result[T]
+codec.encode(value: T) -> String
+codec.from(value: T) -> Json
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -31,10 +36,10 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 ## Schema and decoding
 
-- `JSON.schema(User)` and `JSON.decode(text, User)` take a named struct type,
-  not a value (bare type names are valid only there). The schema has
-  `properties` and `required` (left out when no field is required); Int schemas
-  carry signed 64-bit bounds; lists use `items`; String-keyed maps
+- `JSON.schema(User)`, `JSON.decode(text, User)` and `JSON.codec(User)` take a
+  named struct type, not a value (bare type names are valid only there). The
+  schema has `properties` and `required` (left out when no field is required);
+  Int schemas carry signed 64-bit bounds; lists use `items`; String-keyed maps
   `additionalProperties`; nested and recursive structs `$defs` and `$ref`. Extra
   struct keys stay allowed, as in decoding. A schema is a `Json` value, not
   text.
@@ -47,6 +52,32 @@ JSON.list(j: Json) -> Result[List[Json]]
   missing fields, wrong types, Int overflow and non-finite Floats. Extra object
   keys are ignored. An integer may decode as Float; a decimal or exponent value
   never decodes as Int. Decoded maps use sorted key order.
+
+## Generic code: codecs
+
+A generic function cannot `JSON.encode(x)` or `JSON.decode(text, T)` its `T`
+(`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). Take a `JSON.Codec[T]`
+parameter; the caller passes `JSON.codec(User)`. `codec.decode`, `encode` and
+`from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for that struct.
+A codec is like an `Fn` value: a parameter, field or list item, but no
+printing, `inspect` (`IO.inspect` too), `==`, constant or `ATS` value. Its
+methods have no function form (`JSON.Codec.decode(c, s)` is
+`CHECK-UNKNOWN-NAME`).
+
+```ruby
+struct User
+  name: String
+end
+
+def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]
+  return codec.decode(body)
+end
+
+def main() -> Void
+  user = body_as("{\"name\": \"Ana\"}", JSON.codec(User)).unwrap!
+  puts(JSON.codec(User).encode(user))
+end
+```
 
 ## Optional and nullable fields
 
@@ -138,8 +169,8 @@ Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
   is not needed before encoding; use builders for dynamic objects or mixed
   arrays.
 - A shared stdio helper takes the encoded `String`, prints it and flushes. There
-  are no structural unions to accept any struct, and a generic function cannot
-  encode a `T`.
+  are no structural unions to accept any struct; a generic function encodes a
+  `T` only through a `JSON.Codec[T]`.
 
 ```ruby
 def greet_json(text: String) -> Result[String]

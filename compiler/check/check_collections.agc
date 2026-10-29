@@ -38,6 +38,12 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   end
 end
 
+## True for a type that holds a JSON.Codec somewhere, walked as holds_handle? walks: IO.inspect refuses it, since a
+## codec is the name of its struct at run time and would print as that String.
+export def holds_codec?(cx: State.Cx, type: T.Type) -> Bool
+  return holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
+end
+
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
 # the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or
 # an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED), or every
@@ -123,13 +129,18 @@ end
 # many times costs it once; the type arguments of a struct or enum are walked at each use, and a type variable in a
 # field or payload holds nothing.
 def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
+  return holds?(cx, type) do |part: T.Type| handle?(cx, part) or c_pointer?(part) or T.is?(part, "Channel") end
+end
+
+# True when the type, or a type inside it (type_parts), passes found.
+def holds?(cx: State.Cx, type: T.Type, found: Fn[T.Type, Bool]) -> Bool
   todo = [type]
   seen: Set[String] = Set.new([])
   at = 0
   while at < todo.size
     current = todo[at]
     at += 1
-    if handle?(cx, current) or c_pointer?(current) or T.is?(current, "Channel")
+    if found.call(current)
       return true
     end
 
@@ -142,7 +153,7 @@ def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
   return false
 end
 
-# The types inside a type that holds_handle? walks next: the item of a Result or List, the key and value of a Map, the
+# The types inside a type that holds? walks next: the item of a Result or List, the key and value of a Map, the
 # type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
 def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type

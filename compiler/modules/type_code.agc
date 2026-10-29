@@ -88,6 +88,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Task(item) -> return ok("K" + try written(item, keys, depth + 1))
     T.Type.Channel(item) -> return ok("C" + try written(item, keys, depth + 1))
     T.Type.Lazy(item) -> return ok("Z" + try written(item, keys, depth + 1))
+    T.Type.Codec(item) -> return ok("D" + try written(item, keys, depth + 1))
     T.Type.List(item) -> return ok("L" + try written(item, keys, depth + 1))
     T.Type.Set(item) -> return ok("S" + try written(item, keys, depth + 1))
     T.Type.Map(key, value) -> return ok("M" + try written(key, keys, depth + 1) + try written(value, keys, depth + 1))
@@ -153,7 +154,7 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
   end
 
   after = at + 1
-  if "RKCZLS".contains?(letter)
+  if "RKCZDLS".contains?(letter)
     item = try read_type(text, after, depth + 1, prefixes)
     return ok(Read(type: around(letter, item.type), next: item.next))
   end
@@ -202,6 +203,7 @@ def around(letter: String, item: T.Type) -> T.Type
     "K" -> return T.Type.Task(item)
     "C" -> return T.Type.Channel(item)
     "Z" -> return T.Type.Lazy(item)
+    "D" -> return T.Type.Codec(item)
     "L" -> return T.Type.List(item)
     _ -> return T.Type.Set(item)
   end

@@ -83,15 +83,10 @@ end
   out: a loop inside a test covers them today. Either can come later, if the
   need shows.
 
-- **Tests and docs**: a spec test through the CLI (`--json check FILE`, code and
-  span) for each new code; an `agentica test` integration test (a file with only
-  `test_*` functions passes and fails as expected, its names appear in the
-  report, `--only` selects them); the programming skill's testing reference and
-  diagnostics table, the site testing page, the test-file description in
-  `docs/grammar/06c-tasks-and-tests.md`, the codes in
-  `docs/grammar/07-diagnostics.md`, and the CHANGELOG. The `main` and
-  `Test.run` form stays documented as valid. No stage0 refresh is needed while
-  `compiler/` does not use the new form.
+- **Tests and docs**: a spec test through the CLI for each new code, and an
+  `agentica test` integration test (only `test_*` functions; names in the
+  report; `--only` selects them). The `main` and `Test.run` form stays
+  documented as valid.
 
 ### 50.3 Done when
 

@@ -145,35 +145,20 @@ it.
 - Diagnostics: none new. A non-`Json` argument is `CHECK-TYPE-MISMATCH`; a
   missing variant is `CHECK-NON-EXHAUSTIVE-CASE`.
 - Front end: `JsonValue` is the first builtin enum, so the checker's enum table
-  and the import linking (`compiler/modules`, which renames each module's names
-  and rejects unknown aliases) need a path for it, like the existing `Result`
-  exception. It covers enum patterns and constructors (`JsonValue.JsonInt(n)`)
-  and the bare nullary form `JsonValue.JsonNull`, which arrives as a
-  `type-expression`. Without it, linking renames these names or rejects them
-  with `CHECK-IMPORT-NAME`.
-- VM: `JsonValue` is a builtin entry of the enum table with this fixed variant
-  order, so `case` lowers as for user enums. Like a user enum, it is written to
-  the bytecode Enums section only when a program uses it, so the file layout and
-  the opcode meanings do not change; if a fixed index or a layout change is ever
-  needed, 10b bumps the format version itself (`docs/vm/03-ir-and-bytecode.md`
-  §4). Numbers in the VM:
-  - The VM Json tree already has a big-integer node kept as decimal text
-    (`docs/vm/05-values-execution-builtins.md` §5, Json row). An integer written
-    without a fraction or exponent that is outside int64 is that node, and
-    `JSON.kind` maps it to `JsonBigInt` with its exact decimal text
-    (`9223372036854775808` and `-9223372036854775809` are `JsonBigInt`).
-  - A number with a fraction or exponent is a double (`JsonFloat`). A non-finite
-    one, such as `1e400`, is the existing `JSON number is not finite` error.
-  - The rule holds for every JSON builtin that reads the tree, not only `kind`:
-    `JSON.float` on a big integer gives the nearest float (an error when the
-    result is not finite); `JSON.encode` writes it back as its exact decimal
-    text; typed decode fails for an `Int` target and, for a `Float` target,
-    takes the float of it when that is finite.
-  - `-0` is read as exact 0, so it is `JsonInt(0)`. `-0.0` has a fraction, so it
-    is a double, but its sign is dropped: `JsonFloat(0.0)`.
-
-  `JSON.kind` is a builtin that builds the variant from the parsed node; lists
-  and maps hold the child nodes as `Json` values without copying them.
+  and the import linking need a path for it, like the existing `Result`
+  exception (patterns, constructors and the bare `JsonValue.JsonNull`).
+- VM: a builtin entry of the enum table with this fixed variant order; like a
+  user enum it is written to the bytecode only when a program uses it, so the
+  layout does not change. Numbers: the VM Json tree already has a big-integer
+  node kept as decimal text (`docs/vm/05-values-execution-builtins.md` §5),
+  which `kind` maps to `JsonBigInt` (`9223372036854775808` and
+  `-9223372036854775809` are `JsonBigInt`); a number with a fraction or exponent
+  is a double, and a non-finite one such as `1e400` is the existing `JSON number
+  is not finite` error. The rule holds for every JSON builtin that reads the
+  tree: `JSON.float` on a big integer gives the nearest float (an error when not
+  finite); `JSON.encode` writes it back as its exact decimal text; typed decode
+  fails for an `Int` target and, for a `Float` target, takes the float of it
+  when finite. `-0` is `JsonInt(0)`; `-0.0` is `JsonFloat(0.0)`.
 
 ### 15.4 JSON for enums
 
@@ -263,15 +248,9 @@ the fields of a struct type is known at compile time and is `Type.members`
 
 ### 15.6 Implementation (row 7.6)
 
-- One PR per item (10a–10e), each with its own tests and docs. 10b, 10d and
-  10e need the VM JSON work; 10e also needs 10b.
-- 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
-  `JsonValue` enum (§15.2); 10c generic structs (the grammar: section 6,
-  "Generic structs"); 10d JSON for enums (§15.4); 10e optional and nullable JSON
-  fields (the grammar's JSON section).
-- Done when: two programs run. The VM program has a `Storage` adapter with a
-  read-only memory backend and a walker over unknown JSON, using only builtin
-  library calls (golden check). The disk program uses the same `Storage` shape
-  with a disk backend whose `get` and `put` check each key with an allow-list
-  (`error("bad key")` otherwise, e.g. `../x`), in a temporary directory passed
-  as an argument.
+One PR per item (10a–10e), each with its own tests and docs; 10b, 10d and 10e
+need the VM JSON work. 10c (generic structs) and 10e (optional and nullable JSON
+fields, `JsonField`) are built. Done when two programs run: the VM program has a
+`Storage` adapter with a read-only memory backend and a walker over unknown JSON
+(golden check), and the disk program has the same `Storage` shape with a disk
+backend whose `get` and `put` check each key with an allow-list.

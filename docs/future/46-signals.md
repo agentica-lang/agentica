@@ -7,10 +7,8 @@ PR is waiting. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
 container entrypoint should stop its child, run cleanup and exit with the right
-code. The reference is a real launcher:
-`/home/sonic182/apps/gh-runner/entrypoint.py`, a Python script that registers
-and runs a GitHub Actions self-hosted runner. Section 46.4 is its Agentica
-version.
+code. The reference is a launcher script that registers and runs a GitHub
+Actions self-hosted runner; section 46.4 says how it maps to the proposed API.
 
 ### 46.1 Today
 
@@ -132,7 +130,7 @@ make the resolver resolve a function first, which is a front-end change; (B)
 move them to `System.subscribe(signals)` and `System.signal_number(sig)`, and
 keep `Signal` as an enum only. The recommendation is (B), which avoids the
 clash. The enum parameter (no builtin takes one today) is checked with a spike
-in 46a (46.8, question 12). The rest of this section, the example included, uses
+in 46a (46.8, question 12). The rest of this section uses
 the names of (A). Under (B) they change to `System.subscribe` and
 `System.signal_number`.
 
@@ -221,7 +219,7 @@ Quit while the children are being stopped.
 
 The parent's SIGKILL is a different thing. It is the parent's timer, as
 `STOP_TIMEOUT` is in the gh-runner script. The VM does not add a deadline for a
-handled stop. The program sets its own deadline, as the example does.
+handled stop. The program sets its own deadline.
 
 #### 46.3.5 Sending to a child
 
@@ -250,7 +248,7 @@ Process.signal_group(p: Process, sig: Signal) -> Result[Void]
   pid is the group id, as `start_new_session=True` does in Python. It takes
   `dir`, as `spawn_captured` does. The command still resolves against the
   program's working directory, not `dir` (`docs/grammar/06d-io-and-network.md`).
-  So the example uses an absolute path.
+  So a program uses an absolute path.
 - **Streams: the child inherits them.** The child inherits the VM's stdin,
   stdout and stderr, as Python's `Popen` does with no arguments. The VM makes no
   pipe for it, so nothing can stall, and its output goes straight to the
@@ -260,8 +258,7 @@ Process.signal_group(p: Process, sig: Signal) -> Result[Void]
   program's output. A pump that no task reads fills the pipe after 64 KiB and
   stalls run.sh. So the pump must always run, which is more machinery for the
   same result. The cost of inheriting is that the child shares stdin with the
-  program. A program that reads stdin while the child runs competes with it. The
-  example does not read stdin.
+  program. A program that reads stdin while the child runs competes with it.
 - **Wait.** A `spawn_group` child has no pipes, so `Process.wait` returns when
   the leader exits. The stderr rule of 46.1 does not apply to it. Piped children
   keep today's rule.
@@ -397,203 +394,26 @@ No `uv_signal_t` watcher is added (46.3.2).
 
 ### 46.4 The entrypoint in Agentica
 
-The program below is the `Supervisor` and the `main` flow of the gh-runner
-script, in the proposed API. It does not compile today. `Signal`,
-`Signal.channel`, `Signal.Term`, `Process.spawn_group`, `Process.signal_group`
-and `System.signal` do not exist yet. The rest of the script is plain I/O and is
-left out: the settings from the environment, the registration token request,
-`config.sh` and `sudo chown` runs, the copy of the credential files and the
-deregistration. It handles the URL and the runner name as Python does (a
-trailing slash is stripped from `GITHUB_URL`, an empty `RUNNER_NAME` falls back
-to the hostname), and differs from the script in three ways. Logging goes
-through `std/logger`, which writes to stderr unless a handler is attached (the
-stdout handler is in 46.5). The output of `config.sh` is captured and logged
-after the process ends, not streamed. `sudo chown` runs every time, because
-Agentica has no access check (46.5).
+The `Supervisor` and `main` flow of the launcher, in the proposed API (it does
+not compile today), maps from Python like this:
 
-The mapping from Python is short. `handle_signal` becomes `first_signal`. It
-returns the first value. Later values stay queued and unread, which is the
-Python "ignore later signals" rule. The 1-second poll of `Popen.wait` becomes
-`Task.await(finished, 1000)`, where `Await.TimedOut` is the tick. The timed-out
-`Process.wait` is repeated inside `wait_exit`. The `STOP_TIMEOUT` deadline is
-set in `begin_stop`. `os.killpg(pid, SIGKILL)` becomes `kill_group`. The
-`os.kill` on each listener becomes `System.signal`.
-
-```agentica
-import Logger from "std/logger"
-
-# Proposed API (46a, 46b): Signal, Signal.channel, Process.spawn_group,
-# Process.signal_group and System.signal.
-
-struct Run
-  code: Int
-  stopped: Bool
-end
-
-def runner_dir() -> String
-  return "/home/runner/actions-runner"
-end
-
-def stop_timeout_ms() -> Int
-  return 25000
-end
-
-## Returns the pids of the processes whose name is Runner.Listener.
-def listener_pids() -> Result[List[Int]]
-  names = try Dir.list("/proc", 5000)
-  pids: List[Int] = []
-  for name in names
-    pid = name.to_i.unwrap_or(0)
-    if pid > 0
-      comm = File.read_text("/proc/#{pid}/comm", 1000).unwrap_or("")
-      if comm.trim == "Runner.Listener"
-        pids = pids.push(pid)
-      end
-    end
-  end
-  return ok(pids)
-end
-
-def stop_listeners() -> Void
-  case listener_pids()
-    error(message) -> Logger.err(message)
-    ok(pids) ->
-      if pids.size == 0
-        Logger.warning("no Runner.Listener process found")
-      end
-      for pid in pids
-        Logger.info("sending SIGTERM to Runner.Listener pid=#{pid}")
-        case System.signal(pid, Signal.Term, "Runner.Listener")
-          ok(_) -> Logger.info("signal sent")
-          error(message) -> Logger.err(message)
-        end
-      end
-  end
-end
-
-## Waits for the first stop signal. Later signals stay queued and are never read.
-def first_signal(signals: Channel[Signal]) -> Result[Signal]
-  while true
-    case signals.recv(1000)
-      ok(sig) -> return ok(sig)
-      error(message) ->
-        if signals.closed?
-          return error(message)
-        end
-    end
-  end
-  return error("first_signal: the loop only ends by return")
-end
-
-## Returns the stop deadline in monotonic milliseconds, or 0 while the runner runs.
-## The first signal stops the listeners once and starts the deadline.
-def begin_stop(first: Task[Result[Signal]], deadline: Int) -> Int
-  if deadline > 0
-    return deadline
-  end
-  case Task.await(first, 1)
-    Await.TimedOut -> return 0
-    Await.Done(result) ->
-      case result
-        ok(_) ->
-          stop_listeners()
-          return Time.monotonic_ms() + stop_timeout_ms()
-        error(_) -> return 0
-      end
-  end
-end
-
-## Waits until the child exits. A timed-out wait keeps the child running,
-## so the wait is repeated. Any other error ends it.
-def wait_exit(child: Process) -> Result[Int]
-  while true
-    case Process.wait(child, 1000)
-      ok(code) -> return ok(code)
-      error(message) ->
-        # Only the timeout text tells a timed-out wait from other failures.
-        if message != "network: operation timed out"
-          return error(message)
-        end
-    end
-  end
-  return error("wait_exit: the loop only ends by return")
-end
-
-def kill_group(child: Process) -> Void
-  case Process.signal_group(child, Signal.Kill)
-    ok(_) -> Logger.warning("killed the runner's process group")
-    error(message) -> Logger.err(message)
-  end
-end
-
-## Waits for run.sh. The first stop signal starts the stop, and the group is
-## killed when the deadline passes.
-def supervise(child: Process, signals: Channel[Signal]) -> Result[Run]
-  first = Task.spawn(&first_signal, signals)
-  finished = Task.spawn(&wait_exit, child)
-  deadline = 0
-  killed = false
-  while true
-    case Task.await(finished, 1000)
-      Await.Done(outcome) ->
-        code = try outcome
-        return ok(Run(code: code, stopped: deadline > 0))
-      Await.TimedOut -> deadline = begin_stop(first, deadline)
-    end
-    if deadline > 0 and !killed and Time.monotonic_ms() > deadline
-      Logger.err("runner did not stop in #{stop_timeout_ms() / 1000}s, killing it")
-      kill_group(child)
-      killed = true
-    end
-  end
-  return error("supervise: the loop only ends by return")
-end
-
-def launch() -> Result[Int]
-  # Settings, preparation and configuration run here, as plain I/O.
-  signals = try Signal.channel([Signal.Term, Signal.Int])
-  no_args: List[String] = []
-  Logger.info("starting run.sh")
-  child = try Process.spawn_group(runner_dir() + "/run.sh", no_args, runner_dir(), 5000)
-  run = try supervise(child, signals)
-  if run.stopped
-    # Deregistration runs here.
-    return ok(0)
-  end
-  Logger.info("run.sh exited with code #{run.code}")
-  return ok(run.code)
-end
-
-def main() -> Void
-  case launch()
-    ok(code) -> System.exit(code)
-    error(message) ->
-      Logger.err(message)
-      System.exit(1)
-  end
-end
-```
-
-What the program shows:
-
-- It subscribes before run.sh starts, as the Python script installs its handlers
-  before `Popen`. The subscription lasts until `main` ends, so a TERM that
-  arrives during deregistration is queued and ignored, as in the Python script.
-- The exit code follows the gh-runner script. After its own stop the program
-  exits 0. Otherwise it exits with the run.sh code. A runner that follows the
-  shell pattern exits with 128 + N, which is one line: `System.exit(128 +
-  Signal.number(Signal.Term))`.
-- The stop starts within about one second, at the next tick. Python signals the
-  listeners inside the handler. A tick of 100 ms costs more wake-ups, and the
-  owner can choose it.
-- `first_signal` stays parked on the channel. When `launch` returns, `main`
-  calls `System.exit`, which ends the run, and the task is cancelled with it.
-  Nothing awaits it. If the program kept running, the task would end when the
-  channel closes, with `channel: closed` after the queued values.
-- A signal during the preparation or configuration (before the subscription):
-  Python has no handler yet, so a TERM kills it. This program takes the default
-  path, which stops the `config.sh` child and then ends the process by that
-  signal.
+- `handle_signal` becomes a task that reads the first value of a
+  `Signal.channel` for `Signal.Term` and `Signal.Int`. Later values stay queued
+  and unread, which is the "ignore later signals" rule.
+- The 1-second poll of `Popen.wait` becomes `Task.await(finished, 1000)`, where
+  `Await.TimedOut` is the tick; a timed-out `Process.wait` is repeated.
+- `start_new_session=True` becomes `Process.spawn_group`; `os.killpg(pid,
+  SIGKILL)` becomes `Process.signal_group`; `os.kill` on each listener (found
+  by scanning `/proc/*/comm`) becomes `System.signal(pid, sig, comm)`.
+- The stop deadline is a monotonic millisecond value set at the first signal.
+- The program subscribes before the child starts, for the whole run, so a TERM
+  during deregistration is queued and ignored.
+- After its own stop the program exits 0; otherwise it exits with the child's
+  code. A shell-style exit is `System.exit(128 + Signal.number(Signal.Term))`.
+- The stop starts at the next tick (about one second). A 100 ms tick costs more
+  wake-ups, and the owner can choose it.
+- A signal before the subscription takes the default path: it stops the
+  `config.sh` child and ends the process by that signal.
 
 ### 46.5 What the entrypoint needs, checked against today
 
@@ -611,38 +431,15 @@ Missing, and in §46:
   (46.3.6). It inherits the output, as Python does.
 - **Signal a listener by pid:** `System.signal` through a pidfd (46.3.7).
 
-Missing or partly, outside §46:
-
-- **Run `./config.sh` in a directory (partly):** `spawn_captured` takes `dir`
-  but captures stderr. `spawn` has no `dir`. The example captures config.sh and
-  logs it.
-- **Path exists check (partly):** `File.stat(path, t).ok?`. It follows symlinks
-  and has no `exists?`.
-- **Path copy that keeps the mode (missing):** `read_text` and `write_text` lose
-  the mode and are text-only. Credential files need their mode. Proposed as
-  `File.copy` (separate change).
-- **Path writable check, `os.access` (missing):** the example runs `sudo chown`
-  every time. A probe write is the workaround. Out of scope.
-- **Hostname (missing):** no builtin. Use `HOSTNAME` (set by Docker) or
-  `/etc/hostname`. A `System.hostname()` would be one row, if it is needed
-  later. Out of scope.
-- **Reap orphans as PID 1 (missing):** use `docker run --init`. Out of scope
-  (46.8, question 10).
-
-The rest exists: environment variables and boolean flags (`System.env`,
-`String.trim`), spawning `sudo chown` (`Process.spawn_captured`), the `/proc`
-scan (`Dir.list("/proc")` and `File.read_text`, not yet tested on `/proc`),
-`Process.wait(p, ms)` with a deadline (it returns
-`error("network: operation timed out")` and keeps the child, so the example
-repeats the wait), `Path.remove` (a missing path is `ok`, a link is removed
-itself, recursive and without following links, it refuses `/`, `.` and `..` and
-trees deeper than 128 levels), `Dir.mkdir` (creates parents), `Dir.list` and
-`File.lstat` (does not follow a link and gives `kind` `"link"`), `HTTP.post`
-with TLS, the `JSON` calls, `Time.monotonic_ms()`, `System.exit(code)`, and
-logging with timestamps to stdout (`Logger.attach` with a handler that calls
-`IO.puts(Logger.format_text(event))`; the default handler writes to stderr, and
-the time is UTC; `Logger.set_level` for `LOG_LEVEL`, with a few lines to parse
-the name).
+Missing or partly, outside §46 (separate changes): `File.copy` that keeps the
+mode (`read_text` and `write_text` lose it and are text-only); an `exists?` and
+an `os.access` check; `System.hostname` (use `HOSTNAME` or `/etc/hostname`);
+reaping orphans as PID 1 (use `docker run --init`, 46.8 question 10). Running
+`./config.sh` in a directory works with `spawn_captured`, which takes `dir` but
+captures stderr. The rest of the launcher exists today (`System.env`,
+`Process.spawn_captured`, `Dir.list("/proc")`, `Process.wait(p, ms)`,
+`Path.remove`, `Dir.mkdir`, `File.lstat`, `HTTP.post`, `JSON`,
+`Time.monotonic_ms`, `System.exit`, `Logger`).
 
 ### 46.6 Testing plan (for later)
 
@@ -713,8 +510,7 @@ as the recommendation, except question 12.
 4. **The grace alarm.** Options: (a) keep the 3-second alarm for the default
    path only. A handled signal never arms it. (b) a grace per subscription, such
    as `Signal.channel(signals, grace_ms)`. **Recommendation:** (a). A handled
-   stop has no VM deadline. The program sets its own deadlines, as the example
-   does.
+   stop has no VM deadline. The program sets its own deadlines.
 
 5. **The permission flag.** Options: (a) no flag for subscribing. `--deny-run`
    for `spawn_group` and `System.signal`. (b) `--deny-run` for every signal
@@ -742,7 +538,7 @@ as the recommendation, except question 12.
    as Python does. Options: (a) inherit, and document that the program must not
    read stdin while such a child runs. (b) give the child `/dev/null` as stdin,
    and let the program choose a pipe later. **Recommendation:** (a), to match
-   the script. The example does not read stdin.
+   the script.
 
 10. **Reaping orphans as PID 1.** Options: (a) document `docker run --init`. (b)
     make the VM reap orphans when it is PID 1, by calling `waitpid` on pids that
