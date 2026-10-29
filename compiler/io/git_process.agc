@@ -35,7 +35,6 @@ export def run(arguments: List[String], dir: String) -> Ran
 end
 
 # Reads standard output to its end, then standard error and the exit status. The pieces are joined once at the end.
-# Process.read_bytes gives a List[Int] until #805 PR 6, so each piece is converted as it comes; its items are bytes.
 def finish(child: Process) -> Ran
   pieces: List[Bytes] = []
   finished = false
@@ -45,13 +44,8 @@ def finish(child: Process) -> Ran
       return Ran.Broken(got.message)
     end
 
-    piece = Bytes.from_list(got.unwrap!)
-    if !piece.ok?
-      return Ran.Broken(piece.message)
-    end
-
-    finished = piece.unwrap!.empty?
-    pieces = pieces.push(piece.unwrap!)
+    finished = got.unwrap!.empty?
+    pieces = pieces.push(got.unwrap!)
   end
 
   output = Process.output(child, GIT_TIMEOUT_MS)
