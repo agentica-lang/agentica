@@ -332,12 +332,11 @@ static void same_answer(agc_value old, agc_value now) {
   if (now.tag == AGC_T_RESULT) {
     const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
     assert(a->ok == b->ok);
-    same_answer(a->value, b->value);
-  } else if (now.tag == AGC_T_BYTES) {
-    assert(agc_equal(&vm, old, call("Bytes.to_a", 1, &now), 0));
-  } else {
-    assert(agc_equal(&vm, old, now, 0));
+    old = a->value;
+    now = b->value;
   }
+  if (now.tag == AGC_T_BYTES) now = call("Bytes.to_a", 1, &now);
+  assert(agc_equal(&vm, old, now, 0));
 }
 
 /* Calls name with args and name + ".bytes" with the same args, each Bytes argument given to the old key as its list. */
