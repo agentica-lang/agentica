@@ -35,7 +35,7 @@ ok()
 ```
 
 - `data` is at most 1048576 bytes and `max_bytes`, the cap of the output, is 1 to 1048576; output past it is an error.
-- Bytes are a `List[Int]` from 0 to 255, as `Digest.sha256`, `IO.read_bytes` and `File.read_bytes` use.
+- Bytes are a `List[Int]` from 0 to 255, as `IO.read_bytes` and `File.read_bytes` use.
 - `Zlib.crc32` is the CRC32 (RFC 1952) of `data` chained after `seed`: leave the seed out first (it is 0), then pass each next chunk the previous result, so gzip members and ZIP entries can be checksummed piece by piece. Empty input returns `seed` unchanged. `data` is at most 1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
 
 ```agentica {mode="check"}

@@ -153,7 +153,7 @@ def digest(seed: Int) -> Result[List[Int]]
   data = (0..65535).to_a.map do |i|
     (i * 31 + seed * 7 + i / 256) % 256
   end
-  return ok(Digest.sha256(data))
+  return ok(Digest.sha256(try Bytes.from_list(data)).to_a)
 end
 
 def main() -> Void

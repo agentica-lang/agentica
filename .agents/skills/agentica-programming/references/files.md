@@ -58,8 +58,8 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns `ok([])` at
   EOF. Bytes are 0..255.
 - `File.sha256` hashes a whole regular file with SHA-256 and returns the 32
-  digest bytes (`Digest.sha256` order and form; hex it yourself). It streams
-  in fixed 64 KiB chunks with no 1 MiB cap; symlinks are followed, and a
+  digest bytes as a `List[Int]` (`Digest.sha256` order; hex it yourself). It
+  streams in fixed 64 KiB chunks with no 1 MiB cap; symlinks are followed, and a
   missing path, a directory, a FIFO, pipe or device is an error, never a
   wait. The timeout covers the whole call; expiry (or a cancel) drops the
   result of a hash already running, and there is no handle. No snapshot:

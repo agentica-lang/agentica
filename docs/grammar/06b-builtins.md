@@ -288,66 +288,58 @@ Expected types flow into these operations for empty collections and Results.
   `String.from_bytes(String.to_bytes(s))` is `ok(s)`. `s.bytes` gives the same
   bytes as a `Bytes` (`docs/grammar/06-semantics.md`, "Bytes").
 - `Digest.md5(data)`, `Digest.sha1(data)`, `Digest.sha256(data)` and
-  `Digest.sha512(data)` give the digest of the bytes in `data` as a
-  `List[Int]` of 16, 20, 32 or 64 integers 0 to 255 (`Digest.sha256([])`
-  starts `[227, 176, 196, ...]`), as Ruby's `Digest::SHA256.digest` does. Each
-  has a `_hexdigest` form (`Digest.sha256_hexdigest(data)`) that gives the
-  same digest as lowercase hex, as Ruby's `hexdigest` does. MD5 and SHA-1 are
-  for formats that need them (ETags, git, old APIs), not for security. An item
-  outside 0 to 255 is `RUNTIME-INVALID-NUMBER` at the argument. They are built
-  on OpenSSL, take time in proportion to the list and have no effect label. A
-  system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then stops
-  with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name; until `Bytes`
-  exists, bytes are a `List[Int]`.
+  `Digest.sha512(data)` give the digest of the `Bytes` in `data` as a `Bytes`
+  of 16, 20, 32 or 64 bytes, as Ruby's `Digest::SHA256.digest` does. Each has
+  a `_hexdigest` form (`Digest.sha256_hexdigest(data)`) that gives the same
+  digest as lowercase hex, as Ruby's `hexdigest` does. MD5 and SHA-1 are for
+  formats that need them (ETags, git, old APIs), not for security. They are
+  built on OpenSSL, take time in proportion to the data and have no effect
+  label. A system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then
+  stops with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name.
 - `HMAC.sha256(key, data)` and `HMAC.sha512(key, data)` give the HMAC
-  (RFC 2104) of the bytes in `data` under the bytes in `key`, with SHA-256 or
-  SHA-512, as a `List[Int]` of 32 or 64 integers 0 to 255, as Ruby's
+  (RFC 2104) of the `Bytes` in `data` under the `Bytes` in `key`, with SHA-256
+  or SHA-512, as a `Bytes` of 32 or 64 bytes, as Ruby's
   `OpenSSL::HMAC.digest("SHA256", key, data)` does. Each has a `_hexdigest`
   form (`HMAC.sha256_hexdigest(key, data)`) that gives the same MAC as
   lowercase hex. A key of any length is taken, empty included; one longer than
-  the hash's block (64 or 128 bytes) is hashed first. An item outside 0 to 255
-  is `RUNTIME-INVALID-NUMBER` at the argument that holds it. They are built on
-  OpenSSL, take time in proportion to both lists and have no effect label. A
-  received MAC is to be compared in constant time, which `==` is not: use
-  `HMAC.secure_compare`. `HMAC` is a reserved type name.
-- `HMAC.secure_compare(a, b)` gives `true` when the bytes in `a` and `b` are the
-  same, in a time that never depends on valid bytes or on where they differ, as
+  the hash's block (64 or 128 bytes) is hashed first. They are built on
+  OpenSSL, take time in proportion to both inputs and have no effect label. A
+  received MAC is to be compared in constant time, which `==` on `Bytes` is
+  not: use `HMAC.secure_compare`. `HMAC` is a reserved type name.
+- `HMAC.secure_compare(a, b)` gives `true` when the `Bytes` `a` and `b` are the
+  same, in a time that never depends on the bytes or on where they differ, as
   Ruby's `OpenSSL.secure_compare(a, b)` does: it compares the SHA-256 digests of
-  both lists with OpenSSL's `CRYPTO_memcmp`, then the lists themselves when the
-  digests match. Lists of other lengths give `false`; the time grows with both
+  both with OpenSSL's `CRYPTO_memcmp`, then the bytes themselves when the
+  digests match. Values of other lengths give `false`; the time grows with both
   lengths, which it does not hide. It is for checking a received MAC, signature
-  or token against the expected one. An item outside 0 to 255 is
-  `RUNTIME-INVALID-NUMBER` at the argument that holds it, and it has no effect
-  label.
+  or token against the expected one, and it has no effect label.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
-  `strict_encode64(data)` gives padded base64 on one line, `encode64(data)` the
-  same in lines of 60 characters that each end in a newline (`""` for `[]`),
-  and `urlsafe_encode64(data, padding = true)` the `-_` alphabet, without `=`
-  when `padding` is false. `strict_decode64(text)` gives `ok(bytes)` only for
-  padded base64 with zero spare bits and nothing else, else
-  `error("invalid base64")`; `urlsafe_decode64(text)` first adds the missing
-  `=` when the text does not end in one, then decodes the same way in either
-  alphabet. `decode64(text)` gives a `List[Int]` and never fails: it skips
-  other characters, stops at a `=` in the third or fourth place of a group and
-  drops a lone last character.
-- `Digest.hexencode(data)` gives two lowercase hex digits per byte, as Ruby's
-  does. `Digest.hexdecode(text)`, Agentica's own name for its inverse, gives
-  `ok(bytes)` for an even number of hex digits in either case, else
-  `error("invalid hex")`. An encoded item outside 0 to 255 is
-  `RUNTIME-INVALID-NUMBER` at the argument; the time of every `Base64` and
-  `Digest` call grows with its input, and none has an effect label. `Base64`
-  and `Digest` are reserved type names.
-- `SecureRandom.random_bytes(n = 16)` gives `n` bytes (a `List[Int]` of 0 to
-  255) from OpenSSL's secure random generator (`RAND_bytes`), as Ruby's
-  `SecureRandom` does; `SecureRandom.hex(n = 16)` gives `n` such bytes as `2n`
-  lowercase hex digits, and `SecureRandom.uuid` a version 4 UUID (RFC 9562):
-  36 lowercase characters in the `8-4-4-4-12` form. Unlike `Random`, it is
-  never seeded and `--seed` does not change it, so it is the one for keys,
-  salts, tokens and IDs. `n` outside 0 to 1048576 is `RUNTIME-INVALID-COUNT`
-  at the argument; a failed draw stops with `RUNTIME-INTERNAL` and never gives
-  weak bytes. The calls have the `random` effect label, and the time of
-  `random_bytes` and `hex` grows with `n`. `SecureRandom` is a reserved type
-  name.
+  `strict_encode64(data)` gives padded base64 of a `Bytes` on one line,
+  `encode64(data)` the same in lines of 60 characters that each end in a
+  newline (`""` for no bytes), and `urlsafe_encode64(data, padding = true)`
+  the `-_` alphabet, without `=` when `padding` is false.
+  `strict_decode64(text)` gives `ok(bytes)` only for padded base64 with zero
+  spare bits and nothing else, else `error("invalid base64")`;
+  `urlsafe_decode64(text)` first adds the missing `=` when the text does not
+  end in one, then decodes the same way in either alphabet. `decode64(text)`
+  gives a `Bytes` and never fails: it skips other characters, stops at a `=`
+  in the third or fourth place of a group and drops a lone last character.
+- `Digest.hexencode(data)` gives two lowercase hex digits per byte of a
+  `Bytes`, as Ruby's does. `Digest.hexdecode(text)`, Agentica's own name for
+  its inverse, gives `ok(bytes)` for an even number of hex digits in either
+  case, else `error("invalid hex")`. The time of every `Base64` and `Digest`
+  call grows with its input, and none has an effect label. `Base64` and
+  `Digest` are reserved type names.
+- `SecureRandom.random_bytes(n = 16)` gives `n` bytes (a `Bytes`) from
+  OpenSSL's secure random generator (`RAND_bytes`), as Ruby's `SecureRandom`
+  does; `SecureRandom.hex(n = 16)` gives `n` such bytes as `2n` lowercase hex
+  digits, and `SecureRandom.uuid` a version 4 UUID (RFC 9562): 36 lowercase
+  characters in the `8-4-4-4-12` form. Unlike `Random`, it is never seeded and
+  `--seed` does not change it, so it is the one for keys, salts, tokens and
+  IDs. `n` outside 0 to 1048576 is `RUNTIME-INVALID-COUNT` at the argument; a
+  failed draw stops with `RUNTIME-INTERNAL` and never gives weak bytes. The
+  calls have the `random` effect label, and the time of `random_bytes` and
+  `hex` grows with `n`. `SecureRandom` is a reserved type name.
 - `IO.eof?()` peeks without consuming and can block until data or EOF arrives.
   Reads have no timeout, and the step budget cannot interrupt blocking I/O.
 - `IO.flush()` flushes stdout only. On Linux, macOS and Windows, a print copies

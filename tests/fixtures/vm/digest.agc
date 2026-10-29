@@ -1,7 +1,7 @@
 # The Digest hashes on the known-answer vectors of RFC 1321 §A.5 (MD5), RFC 3174 §7.3 (SHA-1) and FIPS 180-4 / the NIST
 # examples (SHA-256, SHA-512), with the one million "a" case; tests/test_vm_crypto.py checks generated inputs against
 # Python's hashlib.
-def all_hex(label: String, data: List[Int]) -> Void
+def all_hex(label: String, data: Bytes) -> Void
   puts("#{label} md5 #{Digest.md5_hexdigest(data)}")
   puts("#{label} sha1 #{Digest.sha1_hexdigest(data)}")
   puts("#{label} sha256 #{Digest.sha256_hexdigest(data)}")
@@ -9,7 +9,7 @@ def all_hex(label: String, data: List[Int]) -> Void
 end
 
 # The byte form is the hex form decoded, with the digest's size.
-def bytes_agree(data: List[Int]) -> Void
+def bytes_agree(data: Bytes) -> Void
   same = (
     Digest.hexencode(Digest.md5(data)) == Digest.md5_hexdigest(data) and
     Digest.hexencode(Digest.sha1(data)) == Digest.sha1_hexdigest(data) and
@@ -21,26 +21,29 @@ def bytes_agree(data: List[Int]) -> Void
 end
 
 def main() -> Void
-  all_hex("empty", [])
-  all_hex("abc", String.to_bytes("abc"))
-  puts("md5 a #{Digest.md5_hexdigest(String.to_bytes("a"))}")
-  puts("md5 message #{Digest.md5_hexdigest(String.to_bytes("message digest"))}")
-  puts("md5 alphabet #{Digest.md5_hexdigest(String.to_bytes("abcdefghijklmnopqrstuvwxyz"))}")
+  all_hex("empty", "".bytes)
+  all_hex("abc", "abc".bytes)
+  puts("md5 a #{Digest.md5_hexdigest("a".bytes)}")
+  puts("md5 message #{Digest.md5_hexdigest("message digest".bytes)}")
+  puts("md5 alphabet #{Digest.md5_hexdigest("abcdefghijklmnopqrstuvwxyz".bytes)}")
   mixed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  puts("md5 mixed #{Digest.md5_hexdigest(String.to_bytes(mixed))}")
+  puts("md5 mixed #{Digest.md5_hexdigest(mixed.bytes)}")
   digits = List.repeat("1234567890", 8).join("")
-  puts("md5 digits #{Digest.md5_hexdigest(String.to_bytes(digits))}")
-  two_blocks = String.to_bytes("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")
+  puts("md5 digits #{Digest.md5_hexdigest(digits.bytes)}")
+  two_blocks = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes
   puts("448 sha1 #{Digest.sha1_hexdigest(two_blocks)}")
   puts("448 sha256 #{Digest.sha256_hexdigest(two_blocks)}")
   repeated = List.repeat("0123456701234567012345670123456701234567012345670123456701234567", 10).join("")
-  puts("sha1 repeated #{Digest.sha1_hexdigest(String.to_bytes(repeated))}")
+  puts("sha1 repeated #{Digest.sha1_hexdigest(repeated.bytes)}")
   long = (
     "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrst" +
     "nopqrstu"
   )
-  puts("896 sha512 #{Digest.sha512_hexdigest(String.to_bytes(long))}")
-  all_hex("million", List.repeat(97, 1000000))
-  bytes_agree([])
-  bytes_agree(String.to_bytes("abc"))
+  puts("896 sha512 #{Digest.sha512_hexdigest(long.bytes)}")
+  all_hex("million", List.repeat("a", 1000000).join("").bytes)
+  bytes_agree("".bytes)
+  bytes_agree("abc".bytes)
+  # Two digests compare with ==; HMAC.secure_compare is the constant-time compare for a secret.
+  abc = Digest.sha256("abc".bytes)
+  puts("equal #{abc == Digest.sha256("abc".bytes)} #{abc == Digest.sha256("abd".bytes)}")
 end

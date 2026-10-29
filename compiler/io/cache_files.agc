@@ -231,7 +231,16 @@ export def sweep(folder: String) -> Void
 end
 
 export def digest(data: List[Int]) -> String
-  return RandomName.hex_of(Digest.sha256(data))
+  # The callers pass bytes read from a file or a String as a List[Int] until #805 PR 4, so Bytes.from_list cannot
+  # fail. If it did, the items' decimal text is hashed instead, behind an "x" that no hex digest starts with: such an
+  # input never shares a key with real bytes, and two of them share one only when they hold the same items.
+  bytes = Bytes.from_list(data)
+  if !bytes.ok?
+    text = data.map do |item: Int| item.to_s end.join(" ")
+    return "x#{Digest.sha256_hexdigest(text.bytes)}"
+  end
+
+  return Digest.sha256_hexdigest(bytes.unwrap!)
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 261,
+  "steps": 283,
   "stdout": [
     "empty md5 d41d8cd98f00b204e9800998ecf8427e",
     "empty sha1 da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -26,6 +26,7 @@
     "million sha512 e718483d0ce769644e2e42c7bc15b4638e1f98b13b2044285632a803afa973ebde0ff244877ea60a4cb0432ce577c31beb009c5c2c49aa2e4eadb217ad8cc09b",
     "bytes true [16, 20, 32, 64]",
     "bytes true [16, 20, 32, 64]",
+    "equal true false",
     ""
   ],
   "stderr": []

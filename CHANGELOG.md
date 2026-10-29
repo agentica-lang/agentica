@@ -18,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `Bytes` is a reserved type name. A struct, enum, type alias or
   import alias called `Bytes` is `CHECK-REDEFINED-NAME`.
+- **Breaking:** `Digest`, `HMAC`, `Base64` and `SecureRandom.random_bytes` take
+  and return `Bytes` instead of `List[Int]`.
 
 ### Fixed
 

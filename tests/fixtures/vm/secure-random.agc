@@ -3,8 +3,8 @@
 # uuid with its version 4 and variant 10xx digits, and that two draws differ (16
 # random bytes repeat with chance 2 ** -128). tests/test_vm_crypto.py checks
 # many more draws against Python's uuid.
-def bytes?(data: List[Int]) -> Bool
-  return data.all? do |b: Int| b >= 0 and b <= 255 end
+def bytes?(data: Bytes) -> Bool
+  return data.to_a.all? do |b: Int| b >= 0 and b <= 255 end
 end
 
 def hex?(text: String) -> Bool
@@ -25,7 +25,7 @@ def main() -> Void
     puts("#{n} #{data.size} #{bytes?(data)} #{hex.size} #{hex?(hex)}")
   end
   puts("default #{SecureRandom.random_bytes.size} #{SecureRandom.hex.size}")
-  puts(Digest.hexencode(SecureRandom.random_bytes(16)) != Digest.hexencode(SecureRandom.random_bytes(16)))
+  puts(SecureRandom.random_bytes(16) != SecureRandom.random_bytes(16))
   puts(SecureRandom.hex(16) != SecureRandom.hex(16))
   first = SecureRandom.uuid
   puts("#{uuid?(first)} #{uuid?(SecureRandom.uuid())} #{first != SecureRandom.uuid}")

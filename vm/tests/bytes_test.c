@@ -1,7 +1,8 @@
 /*
  * The Bytes value: equality, the Map key hash, the text forms, the JSON
  * refusal, the shared empty value, every builtin with good and bad arguments,
- * bounds, the size overflow guard, and values that live through a collection.
+ * bounds, the size overflow guard, values that live through a collection, and
+ * the two keys of each crypto builtin (vm/crypto.c).
  */
 #include "../core.h"
 #include "../services.h"
@@ -325,6 +326,80 @@ static void test_wrong_tags(void) {
   fails("Bytes.slice", 3, three, "RUNTIME-INTERNAL");
 }
 
+/* What an old List[Int] key answered against what its ".bytes" key answered: a byte list where the new key gives a
+   Bytes (inside a Result too), the same value otherwise. */
+static void same_answer(agc_value old, agc_value now) {
+  if (now.tag == AGC_T_RESULT) {
+    const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
+    assert(a->ok == b->ok);
+    old = a->value;
+    now = b->value;
+  }
+  if (now.tag == AGC_T_BYTES) now = call("Bytes.to_a", 1, &now);
+  assert(agc_equal(&vm, old, now, 0));
+}
+
+/* Calls name with args and name + ".bytes" with the same args, each Bytes argument given to the old key as its list. */
+static void both_keys(const char *name, uint32_t arity, const agc_value *args) {
+  agc_value old[2], now[2];
+  for (uint32_t k = 0; k < arity; k++) {
+    now[k] = args[k];
+    old[k] = args[k].tag == AGC_T_BYTES ? call("Bytes.to_a", 1, &now[k]) : args[k];
+  }
+  char key[64];
+  snprintf(key, sizeof key, "%s.bytes", name);
+  same_answer(call(name, arity, old), call(key, arity, now));
+}
+
+/* Each crypto builtin on bytes has the catalog's "<name>.bytes" key on Bytes and the old "<name>" key on byte lists,
+   which front ends and .agcb files compiled before #805 PR 3 import: both give the same answer. The old key still halts on an item that is
+   not a byte (RUNTIME-INVALID-NUMBER); the new key cannot see one, and a list there is a wrong tag. */
+static void test_crypto_keys(void) {
+  static const char *const one_data[] = {
+    "Digest.md5",           "Digest.md5_hexdigest", "Digest.sha1",           "Digest.sha1_hexdigest",
+    "Digest.sha256",        "Digest.sha256_hexdigest", "Digest.sha512",      "Digest.sha512_hexdigest",
+    "Base64.encode64",      "Base64.strict_encode64", "Digest.hexencode",
+  };
+  static const char *const one_text[] = {"Base64.decode64", "Base64.strict_decode64", "Base64.urlsafe_decode64",
+                                         "Digest.hexdecode"};
+  static const char *const two_data[] = {"HMAC.sha256", "HMAC.sha256_hexdigest", "HMAC.sha512",
+                                         "HMAC.sha512_hexdigest", "HMAC.secure_compare"};
+  agc_value datas[] = {raw("", 0), raw("hello\xff\x00", 7), raw("abc", 3)};
+  agc_value texts[] = {text(""), text("aGVsbG8="), text("aGVsbG8"), text("68656C6c6f"), text("not base64!")};
+  for (size_t d = 0; d < 3; d++) {
+    for (size_t k = 0; k < sizeof one_data / sizeof one_data[0]; k++) both_keys(one_data[k], 1, &datas[d]);
+    for (size_t f = 0; f < 2; f++) {
+      agc_value args[2] = {datas[d], agc_bool(f)};
+      both_keys("Base64.urlsafe_encode64", 2, args);
+    }
+    for (size_t e = 0; e < 3; e++) {
+      agc_value args[2] = {datas[d], datas[e]};
+      for (size_t k = 0; k < sizeof two_data / sizeof two_data[0]; k++) both_keys(two_data[k], 2, args);
+    }
+  }
+  for (size_t t = 0; t < sizeof texts / sizeof texts[0]; t++)
+    for (size_t k = 0; k < sizeof one_text / sizeof one_text[0]; k++) both_keys(one_text[k], 1, &texts[t]);
+
+  agc_value count = agc_int(33);
+  assert(agc_list_len(agc_as_list(&vm, call("SecureRandom.random_bytes", 1, &count))) == 33);
+  assert(agc_as_bytes(&vm, call("SecureRandom.random_bytes.bytes", 1, &count))->len == 33);
+  count = agc_int(0);
+  assert(shared_empty(call("SecureRandom.random_bytes.bytes", 1, &count)));
+
+  const int64_t bad[] = {1, 256};
+  agc_value list = ints(bad, 2), pair[2] = {raw("k", 1), list};
+  fails("Digest.sha256", 1, &list, "RUNTIME-INVALID-NUMBER");
+  fails("Base64.strict_encode64", 1, &list, "RUNTIME-INVALID-NUMBER");
+  pair[0] = call("Bytes.to_a", 1, &pair[0]);
+  fails("HMAC.sha256", 2, pair, "RUNTIME-INVALID-NUMBER");
+  list = call("Bytes.to_a", 1, &datas[2]);
+  fails("Digest.sha256.bytes", 1, &list, "RUNTIME-INTERNAL");
+  fails("Digest.hexencode.bytes", 1, &list, "RUNTIME-INTERNAL");
+  pair[0] = datas[2];
+  pair[1] = list;
+  fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
+}
+
 /* No pointers inside, so the collector never scans the data: Bytes held only by a list keep their contents through
    collections. */
 static void test_collection(void) {
@@ -402,6 +477,7 @@ int main(void) {
   test_json();
   test_builtins();
   test_wrong_tags();
+  test_crypto_keys();
   test_costs();
   test_collection();
 #ifndef _WIN32

@@ -77,48 +77,47 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   so decode complete sequences only and switch to text reads only at character
   boundaries. `String.to_bytes(s)` encodes text for `TCP.send_bytes`,
   `File.write_bytes` and the like.
-- `Digest.md5`, `sha1`, `sha256` and `sha512(data: List[Int]) -> List[Int]`
-  hash bytes with OpenSSL and return the 16, 20, 32 or 64 digest bytes; each
+- `Digest.md5`, `sha1`, `sha256` and `sha512(data: Bytes) -> Bytes` hash
+  bytes with OpenSSL and return the 16, 20, 32 or 64 digest bytes; each
   `_hexdigest` form (`Digest.sha256_hexdigest(data) -> String`) returns them
-  as lowercase hex, as Ruby's `Digest::SHA256.hexdigest`. MD5 and SHA-1 are
-  for formats that need them (ETags, git), not for security; a FIPS-only
-  system OpenSSL lacks them, and the call halts (`RUNTIME-INTERNAL`). An item
-  outside 0..255 halts (`RUNTIME-INVALID-NUMBER`). The time grows with the list.
-  `Crypto` is a reserved type name.
-- `HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]` and
-  `HMAC.sha512(key, data)` return the 32 or 64 bytes of the HMAC (RFC 2104,
-  Ruby's `OpenSSL::HMAC.digest`); `HMAC.sha256_hexdigest(key, data) -> String`
-  and `sha512_hexdigest` return them as lowercase hex. Any key length works,
-  empty included. A bad item in the key or the data halts at that argument
-  (`RUNTIME-INVALID-NUMBER`). `HMAC` is a reserved type name.
-- `HMAC.secure_compare(a: List[Int], b: List[Int]) -> Bool` compares bytes in
-  constant time (Ruby's `OpenSSL.secure_compare`): check a received MAC,
-  signature or token with it, never with `==`. Other lengths give `false`.
+  as lowercase hex, as Ruby's `Digest::SHA256.hexdigest`. Hash text with
+  `Digest.sha256("abc".bytes)`. MD5 and SHA-1 are for formats that need them
+  (ETags, git), not for security; a FIPS-only system OpenSSL lacks them, and
+  the call halts (`RUNTIME-INTERNAL`). The time grows with the data. `Crypto`
+  is a reserved type name.
+- `HMAC.sha256(key: Bytes, data: Bytes) -> Bytes` and `HMAC.sha512(key, data)`
+  return the 32 or 64 bytes of the HMAC (RFC 2104, Ruby's
+  `OpenSSL::HMAC.digest`); `HMAC.sha256_hexdigest(key, data) -> String` and
+  `sha512_hexdigest` return them as lowercase hex. Any key length works, empty
+  included. `HMAC` is a reserved type name.
+- `HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool` compares bytes in constant
+  time (Ruby's `OpenSSL.secure_compare`): check a received MAC, signature or
+  token with it, never with `==`, which is not constant time. Other lengths
+  give `false`.
 
 ```text
-Base64.strict_encode64(data: List[Int]) -> String     # padded, one line
-Base64.encode64(data: List[Int]) -> String            # lines of 60 chars, each ends in "\n"
-Base64.urlsafe_encode64(data: List[Int], padding: Bool = true) -> String  # - and _
-Base64.strict_decode64(text: String) -> Result[List[Int]]
-Base64.urlsafe_decode64(text: String) -> Result[List[Int]]  # padded or not
-Base64.decode64(text: String) -> List[Int]            # lenient, never fails
-Digest.hexencode(data: List[Int]) -> String           # lowercase
-Digest.hexdecode(text: String) -> Result[List[Int]]   # either case
+Base64.strict_encode64(data: Bytes) -> String     # padded, one line
+Base64.encode64(data: Bytes) -> String            # lines of 60 chars, each ends in "\n"
+Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String  # - and _
+Base64.strict_decode64(text: String) -> Result[Bytes]
+Base64.urlsafe_decode64(text: String) -> Result[Bytes]  # padded or not
+Base64.decode64(text: String) -> Bytes            # lenient, never fails
+Digest.hexencode(data: Bytes) -> String           # lowercase
+Digest.hexdecode(text: String) -> Result[Bytes]   # either case
 ```
 
 - `Base64` and `hexencode` behave as Ruby's (`hexdecode` is Agentica's own
   inverse, `error("invalid hex")`): `strict_decode64` and `urlsafe_decode64`
   give `error("invalid base64")` for anything but base64 (no newlines);
   `decode64` skips other characters and stops at a `=` padding. Text goes
-  through `String.to_bytes` and `String.from_bytes`:
-  `Base64.strict_encode64(String.to_bytes("hi"))`. An encoded item outside
-  0..255 halts (`RUNTIME-INVALID-NUMBER`). `Base64` and `Digest` are reserved
+  through `s.bytes` and `String.from_bytes(b.to_a)`:
+  `Base64.strict_encode64("hi".bytes)`. `Base64` and `Digest` are reserved
   type names.
 
 ## Secure random
 
 ```text
-SecureRandom.random_bytes(n: Int = 16) -> List[Int]   # OpenSSL RAND_bytes
+SecureRandom.random_bytes(n: Int = 16) -> Bytes       # OpenSSL RAND_bytes
 SecureRandom.hex(n: Int = 16) -> String               # 2n lowercase hex digits
 SecureRandom.uuid() -> String                         # version 4, 36 chars
 ```

@@ -175,8 +175,8 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
   is returned by `each_line`. `try` works in the block. The file is closed on
   every return path.
 - `File.sha256(path, timeout_ms)` gives `Result[List[Int]]`: the 32 bytes of
-  the SHA-256 digest of the whole file, in the same order and form as
-  `Digest.sha256` returns them (compose with hex yourself). It streams the
+  the SHA-256 digest of the whole file, in the order `Digest.sha256` gives
+  them, as a list (compose with hex yourself). It streams the
   file in fixed 64 KiB chunks with O(chunk) memory, so unlike the whole-text
   helpers it has no 1 MiB cap. Only regular files are hashed, read from the
   first byte through a private descriptor that closes on every path;
