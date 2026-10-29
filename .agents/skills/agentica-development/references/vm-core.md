@@ -52,6 +52,10 @@ rules those comments do not carry.
   argument when nothing changes. Also `agc_utf8_offset` with each task's
   one-entry cursor (string, code point index, byte offset) and the KMP search
   (`agc_text_find`).
+- `vm/bytes.c`: the `Bytes` builtins (`Bytes.*` and `String.bytes`). Results
+  come from `agc_make_bytes` (the `agc_empty_bytes` constant for no bytes);
+  `slice`, `take` and `drop` charge what they copy, not the parent's size.
+  `==` and the key hash are core (`agc_equal_rest` in `vm/equal.c`, `map.c`).
 - `vm/builtins.c`: the core builtins (`agc_core_builtins`: `IO`, `System`,
   `List`, `Map`, `Set`, `Result`, `Range`) and `agc_find_builtin`, which matches
   by implementation key and arity over `agc_builtin_tables`;
@@ -378,8 +382,8 @@ rules those comments do not carry.
   `Test.eq`; there is no `==`) and charges the size. Set builtins are
   `AGC_COST_SIZE` when they walk or copy a set or a list and
   `AGC_COST_NONE` for `add`, `delete`, `include?`, `size` and `empty?`. A
-  hostile `.agcb` that puts a non-Int, non-String in a set stops in
-  `agc_key_hash` (`agc_wrong_tag`).
+  hostile `.agcb` that puts a value other than an Int, String or Bytes in a set
+  stops in `agc_key_hash` (`agc_wrong_tag`).
 - Lists can share items, so a list's text can be exponential in the code that
   built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the
   out-of-memory exit, as the trust model allows. Never print or compare nested

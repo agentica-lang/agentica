@@ -97,6 +97,12 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
     for (unsigned k = 0; k < 8; k++) bytes[k] = (uint8_t)(x >> (8 * k));
     return siphash13(vm->rt->hash_key, (uint64_t)key.tag, bytes, sizeof bytes);
   }
+  /* The tag is the domain, so a String and a Bytes of the same bytes hash apart. */
+  if (agc_is(key, AGC_T_BYTES)) {
+    const agc_bytes *b = agc_as_bytes(vm, key);
+    agc_charge_bytes(vm, b->len);
+    return siphash13(vm->rt->hash_key, (uint64_t)key.tag, b->data, b->len);
+  }
   const agc_string *s = agc_as_string(vm, key);
   agc_charge_bytes(vm, s->bytes);
   return siphash13(vm->rt->hash_key, (uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
@@ -105,6 +111,7 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
 static bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
+  if (agc_is(a, AGC_T_BYTES)) return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
   return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
 }
 

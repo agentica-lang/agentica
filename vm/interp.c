@@ -886,7 +886,9 @@ static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x
     return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
   }
   if (tags_are(x, y, AGC_T_BOOL)) return agc_as_bool(vm, *x) == agc_as_bool(vm, *y);
-  return -1;
+  int rest = agc_equal_rest(vm, x, y);
+  if (rest < -1 || rest > 1) __builtin_unreachable();
+  return rest;
 }
 
 /* equal_values for SAME: values of two tags are never the same, a NaN is the same as a NaN, and 0.0 is not the same
@@ -1062,7 +1064,7 @@ OP_HELPER agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *
    of failing, so the helper answers WRONG_TAG with dst left alone. Structs and enums come from loader-checked
    instructions, and a Json never holds a non-finite Float (JSON.parse and JSON.from refuse those), so on a loaded
    program the checked form fails for nothing else here. Unlike EQ, which answers shallow pairs without walking them
-   (equal_values returns -1 past Ints, Floats, Nils, Strings, Ranges and Bools), TO_TEXT walks and formats
+   (equal_values returns -1 past Ints, Floats, Nils, Strings, Ranges, Bools and Bytes), TO_TEXT walks and formats
    arbitrarily deep values; the check keeps that walk inside the helper's status contract. */
 OP_HELPER agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v) {
   if (agc_is(*v, AGC_T_VOID)) return AGC_STATUS_WRONG_TAG;
