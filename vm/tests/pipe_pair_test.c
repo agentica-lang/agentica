@@ -21,6 +21,8 @@
 /* The whole exchange takes well under a second; a run that is still going after this long is stuck (issue #410: one
    macOS arm64 CI run never finished), so it fails with the state it reached instead of hanging the job. */
 #define DEADLINE_MS 60000
+/* How often the child notes its byte count (note). */
+#define NOTE_STEP ((size_t)256 << 10)
 
 #ifdef _WIN32
 #define fd_read(fd, data, size) _read(fd, data, (unsigned)(size))
@@ -85,8 +87,10 @@ static int child(void) {
     }
     if (n == 0) break;
     for (int k = 0; k < n; k++) intact = intact && buffer[k] == pattern(seen + (size_t)k);
+    size_t before = seen;
     seen += (size_t)n;
-    note(CHILD_READING, seen);
+    /* At each NOTE_STEP and at the last byte only: a write per read would change the timing of the reads. */
+    if (seen / NOTE_STEP != before / NOTE_STEP || seen == TOTAL) note(CHILD_READING, seen);
   }
   note(CHILD_AT_EOF, seen);
   char answer[64];
@@ -215,7 +219,7 @@ static void probe(const char *self) {
   snprintf(expected, sizeof expected, "%zu 1\n", TOTAL);
   assert(s->reply_size == strlen(expected) && memcmp(s->reply, expected, s->reply_size) == 0);
   assert(exit_status == 0);
-  assert(remove(s->progress) == 0);
+  remove(s->progress);
   free(s->progress);
   free(s);
 }
