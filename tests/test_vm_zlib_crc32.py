@@ -31,7 +31,7 @@ CRC_PEER = (
     "  data: List[Int] = []\n"
     "  chunk = IO.read_bytes(1048576).unwrap!\n"
     "  while chunk.size > 0\n"
-    "    data = data.concat(chunk)\n"
+    "    data = data.concat(chunk.to_a)\n"
     "    chunk = IO.read_bytes(1048576).unwrap!\n"
     "  end\n"
     "  if seed_text == \"none\"\n"

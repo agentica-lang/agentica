@@ -130,7 +130,7 @@ def lister(f: Fn[String, Result[List[Workspace.Entry]]]) -> Fn[String, Result[Li
   return f
 end
 
-def byter(f: Fn[String, Result[List[Int]]]) -> Fn[String, Result[List[Int]]]
+def byter(f: Fn[String, Result[Bytes]]) -> Fn[String, Result[Bytes]]
   return f
 end
 
@@ -145,9 +145,9 @@ def read_file(files: Map[String, String], path: String) -> SourceFile.Read
   return SourceFile.Read.Unreadable("no such file")
 end
 
-def bytes_of(files: Map[String, String], path: String) -> Result[List[Int]]
+def bytes_of(files: Map[String, String], path: String) -> Result[Bytes]
   if files.has_key?(path)
-    return ok(String.to_bytes(files[path]))
+    return ok(files[path].bytes)
   end
   return error("no such file")
 end
@@ -229,12 +229,12 @@ def lower(linked: Linker.Linked, checked: Checker.Checked, out: String, settings
     Lowering.Lowered.Done(program) ->
       case Writer.write(program, settings.version)
         Writer.Written.Failed(problem) -> return "WRITE #{problem.code} #{problem.file}"
-        Writer.Written.Done(bytes) -> return save(bytes, out)
+        Writer.Written.Done(bytes) -> return save(Bytes.from_list(bytes).unwrap!, out)
       end
   end
 end
 
-def save(bytes: List[Int], out: String) -> String
+def save(bytes: Bytes, out: String) -> String
   saved = SaveFile.bytes(out, bytes, SAVE_TIMEOUT_MS)
   if saved.ok?
     return "ok"

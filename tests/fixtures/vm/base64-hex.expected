@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 604,
+  "steps": 597,
   "stdout": [
     "\"\"  \"\"  true true",
     "\"f\" Zg== \"Zg==\\n\" 66 true true",

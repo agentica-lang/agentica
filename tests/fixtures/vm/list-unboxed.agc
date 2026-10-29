@@ -137,9 +137,9 @@ def main() -> Void
   puts(Result.unwrap!(JSON.parse("[1, 2, 3, 4.5]")))
 
   bytes = [104, 195, 169, 108, 108, 111, 32, 119, 195, 182, 114, 108, 100]
-  puts(String.from_bytes(bytes.reverse.reverse))
-  puts(String.from_bytes(bytes.take(3)))
-  puts(String.from_bytes([255, 104]))
+  puts(String.from_bytes(Bytes.from_list(bytes.reverse.reverse).unwrap!))
+  puts(String.from_bytes(Bytes.from_list(bytes.take(3)).unwrap!))
+  puts(String.from_bytes(Bytes.from_list([255, 104]).unwrap!))
   puts((1..70).to_a.size)
   puts(((0...40).to_a.map do |x| x * x end).reverse.take(3))
   [3, 4, 5].each do |x| puts(x * 2) end

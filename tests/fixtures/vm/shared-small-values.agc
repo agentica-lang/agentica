@@ -45,7 +45,7 @@ def main() -> Void
   blank = " \t\n".trim
   joined = String.join(["", ""], "")
   erased = "abc".replace("abc", "")
-  no_bytes = String.from_bytes([]).unwrap!
+  no_bytes = String.from_bytes("".bytes).unwrap!
   pieces = ",a,,b,".split(",")
   puts([nothing, blank, joined, erased, no_bytes].inspect)
   puts(pieces.inspect)

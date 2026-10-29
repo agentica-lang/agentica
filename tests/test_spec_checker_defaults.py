@@ -144,7 +144,7 @@ SINGLE_FILE = [
     ("a file handle call and each_line, foreach and write_lines may leave out the timeout",
      main_with('  f = File.open("a.txt").unwrap!\n  puts(File.read_line(f))\n  puts(File.write(f, "x"))\n'
                '  puts(File.close(f, 50))\n  puts(File.read_bytes(f, 4))\n  puts(File.flush(f))\n'
-               '  puts(File.write_bytes(f, [1]))\n  puts(File.try_lock(f))\n'
+               '  puts(File.write_bytes(f, "a".bytes))\n  puts(File.try_lock(f))\n'
                '  File.each_line("a.txt", 4096) do |l|\n    ok()\n  end\n'
                '  File.each_line("a.txt") do |line|\n    puts(line)\n    ok()\n  end\n'
                '  puts(File.foreach("a.txt").first(1))\n  puts(File.foreach("a.txt", 4096).first(1))\n'

@@ -1,16 +1,16 @@
 {
   "exit": 1,
   "code": "RUNTIME-END-OF-INPUT",
-  "steps": 42,
+  "steps": 48,
   "stdout": [
     "first \"one\"",
     "eof? false",
-    "ok([])",
-    "ok([116, 119, 111])",
+    "ok(<Bytes 0>)",
+    "ok(<Bytes 3 74776f>)",
     "error(\"byte count must be between 0 and 1048576\")",
     "error(\"byte count must be between 0 and 1048576\")",
     "error(\"byte count must be between 0 and 1048576\")",
-    "ok([226, 130, 172, 13, 10, 116, 104, 114, 101, 101])",
+    "ok(<Bytes 10 e282ac0d0a7468726565>)",
     ""
   ],
   "stderr": []

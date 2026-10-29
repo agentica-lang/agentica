@@ -119,7 +119,7 @@ def test_standard_input_preserves_binary_bytes(tmp_path) -> None:
     source = root / "stdin.agc"
     source.write_text(
         'def main() -> Void\n'
-        '  puts(IO.read_bytes(5).unwrap!)\n'
+        '  puts(IO.read_bytes(5).unwrap!.to_a)\n'
         'end\n',
         encoding="utf-8",
     )
@@ -212,7 +212,7 @@ def test_regular_files_directories_and_metadata_work_together(tmp_path) -> None:
         '  puts(Dir.mkdir(dir, 5000).ok?)\n'
         '  file = File.open(path, "write", 5000).unwrap!\n'
         '  File.write(file, "alpha\\n", 5000).unwrap!\n'
-        '  File.write_bytes(file, [98, 101, 116, 97], 5000).unwrap!\n'
+        '  File.write_bytes(file, "beta".bytes, 5000).unwrap!\n'
         '  File.close(file, 5000).unwrap!\n'
         '  File.append_text(path, "\\nend", 5000).unwrap!\n'
         '  puts(File.read_text(path, 5000).unwrap!)\n'

@@ -26,7 +26,7 @@ def main() -> Void
   file = at(secret, "secret.bin")
   handle = Result.unwrap!(File.open(file, "create_private", 60000))
   IO.inspect(File.write(handle, "top secret", 60000))
-  IO.inspect(File.write_bytes(handle, [0, 255], 60000))
+  IO.inspect(File.write_bytes(handle, Bytes.from_list([0, 255]).unwrap!, 60000))
   IO.inspect(File.close(handle, 60000))
   describe("file", File.lstat(file, 60000))
   describe("followed", File.stat(file, 60000))

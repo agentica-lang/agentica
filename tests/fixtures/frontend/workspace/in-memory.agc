@@ -40,7 +40,7 @@ def no_folder(path: String) -> Result[List[Workspace.Entry]]
   return error("no such folder")
 end
 
-def no_bytes(path: String) -> Result[List[Int]]
+def no_bytes(path: String) -> Result[Bytes]
   return error("no such file")
 end
 

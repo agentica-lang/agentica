@@ -1,7 +1,7 @@
 {
-  "exit": 0,
-  "code": null,
-  "steps": 496,
+  "exit": 1,
+  "code": "RUNTIME-INVALID-COUNT",
+  "steps": 474,
   "stdout": [
     "error(\"filesystem: path does not refer to a regular file\")",
     "error(\"filesystem: path does not refer to a regular file\")",
@@ -63,10 +63,6 @@
     "error(\"filesystem: max_bytes must be between 1 and 1048576\")",
     "error(\"filesystem: timeout must be positive milliseconds\")",
     "error(\"filesystem: timeout must be positive milliseconds\")",
-    "error(\"filesystem: timeout must be positive milliseconds\")",
-    "error(\"filesystem: timeout must be positive milliseconds\")",
-    "error(\"network: bytes must be 0..255 and at most 1048576 per call\")",
-    "error(\"network: bytes must be 0..255 and at most 1048576 per call\")",
     "error(\"filesystem: timeout must be positive milliseconds\")",
     "error(\"filesystem: timeout must be positive milliseconds\")",
     "error(\"filesystem: timeout must be positive milliseconds\")",

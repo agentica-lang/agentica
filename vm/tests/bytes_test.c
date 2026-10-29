@@ -1,8 +1,8 @@
 /*
- * The Bytes value: equality, the Map key hash, the text forms, the JSON
- * refusal, the shared empty value, every builtin with good and bad arguments,
- * bounds, the size overflow guard, values that live through a collection, and
- * the two keys of each crypto builtin (vm/crypto.c).
+ * The Bytes value: equality, the Map key hash, the text forms, the JSON refusal,
+ * the shared empty value, every builtin with good and bad arguments, bounds, the
+ * size overflow guard, values that live through a collection, and the two keys
+ * of each crypto builtin (vm/crypto.c), String.from_bytes and FrontEnd.hand_off.
  */
 #include "../core.h"
 #include "../services.h"
@@ -400,6 +400,57 @@ static void test_crypto_keys(void) {
   fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
 }
 
+/* String.from_bytes on a Bytes ("String.from_bytes.bytes") and on a byte list (the old key, for front ends and .agcb
+   files compiled before #805 PR 4) gives the same answer, and the old String.to_bytes gives the list of String.bytes.
+   A bad item is an error of the old key only; the new key with a list is a wrong tag. */
+static void test_string_keys(void) {
+  agc_value samples[] = {raw("", 0), raw("h", 1), raw("caf\xc3\xa9", 5), raw("\xc3", 1), raw("\xed\xa0\x80", 3),
+                         raw("a\x00b", 3)};
+  for (size_t k = 0; k < sizeof samples / sizeof samples[0]; k++) {
+    agc_value list = call("Bytes.to_a", 1, &samples[k]);
+    agc_value old = call("String.from_bytes", 1, &list), now = call("String.from_bytes.bytes", 1, &samples[k]);
+    const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
+    assert(a->ok == b->ok);
+    if (a->ok) {
+      agc_value decoded = b->value, made = call("String.bytes", 1, &decoded);
+      assert(agc_equal(&vm, a->value, decoded, 0));
+      assert(agc_equal(&vm, call("String.to_bytes", 1, &decoded), call("Bytes.to_a", 1, &made), 0));
+    }
+  }
+  const int64_t bad[] = {104, 256};
+  agc_value list = ints(bad, 2);
+  assert(!agc_as_result(&vm, call("String.from_bytes", 1, &list))->ok);
+  fails("String.from_bytes.bytes", 1, &list, "RUNTIME-INTERNAL");
+}
+
+/* FrontEnd.hand_off under both keys gives the driver the same program bytes: "FrontEnd.hand_off.bytes" takes a Bytes,
+   the old key (an older stage0) a byte list. The hand-off ends the run, which comes back here through vm.fail. */
+static void handed(const char *name, agc_value program, agc_front_end *fe) {
+  agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
+  memset(fe, 0, sizeof *fe);
+  if (setjmp(vm.fail) == 0) {
+    (void)row(name, 3)->fn(&vm, args, 0);
+    assert(0);
+  }
+  assert(fe->handed && fe->option_count == 0 && fe->argument_count == 0);
+}
+
+static void test_hand_off_keys(void) {
+  agc_front_end fe;
+  vm.rt->front_end = &fe;
+  agc_value program = raw("AGCB\x06\x00\xff", 7);
+  handed("FrontEnd.hand_off.bytes", program, &fe);
+  assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
+  handed("FrontEnd.hand_off", call("Bytes.to_a", 1, &program), &fe);
+  assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
+  const int64_t bad[] = {1, 300};
+  agc_value args[3] = {ints(bad, 2), vm.rt->empty_list, vm.rt->empty_list};
+  assert(!agc_as_result(&vm, call("FrontEnd.hand_off", 3, args))->ok);
+  args[0] = call("Bytes.to_a", 1, &program);
+  fails("FrontEnd.hand_off.bytes", 3, args, "RUNTIME-INTERNAL");
+  vm.rt->front_end = NULL;
+}
+
 /* No pointers inside, so the collector never scans the data: Bytes held only by a list keep their contents through
    collections. */
 static void test_collection(void) {
@@ -478,6 +529,8 @@ int main(void) {
   test_builtins();
   test_wrong_tags();
   test_crypto_keys();
+  test_string_keys();
+  test_hand_off_keys();
   test_costs();
   test_collection();
 #ifndef _WIN32

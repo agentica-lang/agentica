@@ -62,7 +62,7 @@ SPAWN = (
 )
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
 STDIN_BYTES = "def main() -> Void\n  puts(FrontEnd.stdin_bytes().ok?)\nend\n"
-HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off([1], [], []).ok?)\nend\n"
+HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off(\"a\".bytes, [], []).ok?)\nend\n"
 BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
 INTERLEAVED = (
     'def main() -> Void\n  for i in 0...6\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
@@ -443,11 +443,10 @@ def _hand_off_program(work):
 
 
 @pytest.mark.parametrize("words,error", (
-    (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
     (["bad-word"], "error: argument 1 has a character 0\n"),
     (["too-many-options"], "error: too many options\n"),
     (["too-many-arguments"], "error: too many arguments\n"),
-), ids=("bad-program", "bad-word", "too-many-options", "too-many-arguments"))
+), ids=("bad-word", "too-many-options", "too-many-arguments"))
 def test_the_driver_refuses_malformed_handoff_words(tmp_path, words, error):
     front, _program = _hand_off_program(tmp_path)
     got = agentica("--front-end", front, *words)

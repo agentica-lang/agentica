@@ -3,7 +3,7 @@ def main() -> Void
   rest = IO.read()
   puts(rest.inspect)
   puts(IO.read().inspect)
-  puts(IO.read_bytes(4))
+  puts(IO.read_bytes(4).inspect)
   puts(IO.eof?())
   puts(IO.gets())
 end

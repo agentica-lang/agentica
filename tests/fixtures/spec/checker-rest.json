@@ -2425,6 +2425,57 @@
       "code": "CHECK-REDEFINED-NAME"
     }
   ],
+  "File.read_bytes, File.write_bytes and File.sha256 use Bytes": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  out = File.open(\"a.bin\", \"write\").unwrap!",
+        "  wrote: Result[Void] = File.write_bytes(out, \"ab\".bytes)",
+        "  File.close(out)",
+        "  input = File.open(\"a.bin\").unwrap!",
+        "  got: Result[Bytes] = File.read_bytes(input, 4)",
+        "  digest: Result[Bytes] = File.sha256(\"a.bin\")",
+        "  puts(wrote.ok? and got.ok? and digest.ok?)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  out = File.open(\"a.bin\", \"write\").unwrap!",
+        "  File.write_bytes(out, [97, 98])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 25],
+      "covers": "[97, 98]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  digest: List[Int] = File.sha256(\"a.bin\").unwrap!",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 23],
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  input = File.open(\"a.bin\").unwrap!",
+        "  got: Result[List[Int]] = File.read_bytes(input, 4)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 28],
+      "covers": "File.read_bytes(input, 4)",
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
+    }
+  ],
   "network handles are opaque and HTTP records are checked": [
     {
       "program": [
@@ -5797,10 +5848,9 @@
         "  s: Result[String] = IO.gets()",
         "  line: String = IO.gets!()",
         "  r: String = IO.read()",
-        "  bytes: Result[List[Int]] = IO.read_bytes(3)",
-        "  decoded: Result[String] = String.from_bytes([195, 177])",
-        "  encoded: List[Int] = String.to_bytes(\"n\")",
-        "  methodic: List[Int] = \"n\".to_bytes",
+        "  bytes: Result[Bytes] = IO.read_bytes(3)",
+        "  decoded: Result[String] = String.from_bytes(\"\u00f1\".bytes)",
+        "  encoded: Bytes = \"n\".bytes",
         "  IO.flush()",
         "  e: Bool = IO.eof?()",
         "  a: List[String] = System.args()",
@@ -5864,29 +5914,45 @@
     {
       "program": [
         "def main() -> Void",
-        "  x = String.from_bytes([\"x\"])",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-TYPE-MISMATCH"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  x = String.to_bytes(65)",
+        "  x = String.from_bytes([195, 177])",
         "end",
         "",
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 23],
-      "covers": "65"
+      "start": [2, 25],
+      "covers": "[195, 177]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  x: String = String.to_bytes(\"A\")",
+        "  x = String.to_bytes(\"A\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "String.to_bytes(\"A\")",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"A\".to_bytes",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [2, 7],
+      "covers": "\"A\".to_bytes",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = String.from_bytes(\"A\".bytes)",
         "end",
         "",
         ""
@@ -5896,32 +5962,15 @@
     {
       "program": [
         "def main() -> Void",
-        "  x = String.to_bytes()",
+        "  x: List[Int] = IO.read_bytes(1).unwrap!",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-ARITY"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  x: String = String.from_bytes([65])",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-TYPE-MISMATCH"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  x: List[Int] = IO.read_bytes(1)",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
     },
     {
       "program": [

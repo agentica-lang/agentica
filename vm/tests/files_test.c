@@ -150,11 +150,55 @@ static void write_test_file(const char *path, const uint8_t *data, size_t len) {
   assert(fclose(out) == 0);
 }
 
+/* Both keys of File.sha256: the catalog's "File.sha256.bytes" gives a Bytes, the old "File.sha256" (front ends and
+   .agcb files compiled before #805 PR 4) a byte list of the same digest. */
 static void check_sha256(agc_value path, const unsigned char expected[32]) {
   agc_value args[] = {path, agc_int(5000)};
   const agc_list *digest = agc_as_list(&vm, ok(call("File.sha256", args)));
   assert(agc_list_len(digest) == 32);
   for (size_t k = 0; k < 32; k++) assert(agc_as_int(&vm, agc_list_get(digest, k)) == expected[k]);
+  size_t len;
+  const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.sha256.bytes", args)), &len);
+  assert(len == 32 && memcmp(bytes, expected, 32) == 0);
+}
+
+/* The Bytes keys of File.write_bytes and File.read_bytes against the old byte-list keys: a file written with the new
+   key reads back the same through both, chunk by chunk, and a write over 1 MiB is refused before anything is
+   buffered. */
+static void test_byte_keys(const char *directory) {
+  char path[4300];
+  assert(snprintf(path, sizeof path, "%s/byte-keys.bin", directory) > 0);
+  uint8_t data[300];
+  for (size_t k = 0; k < sizeof data; k++) data[k] = (uint8_t)(255 - k % 256);
+  agc_value file = string(path);
+  agc_value args[] = {file, string("write"), agc_int(5000)};
+  agc_value handle = ok(call("File.open", args));
+  agc_bytes *big = agc_new_bytes(1048577);
+  memset(big->data, 0, big->len);
+  agc_value put[] = {handle, agc_bytes_value(big), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.write_bytes.bytes", put))->ok);
+  put[1] = agc_bytes_value(agc_make_bytes(data, sizeof data));
+  ok(call("File.write_bytes.bytes", put));
+  agc_value done[] = {handle, agc_int(5000)};
+  ok(call("File.close", done));
+  args[1] = string("read");
+  agc_value old_handle = ok(call("File.open", args)), new_handle = ok(call("File.open", args));
+  for (size_t at = 0; at <= sizeof data; at += 128) {
+    agc_value old_read[] = {old_handle, agc_int(128), agc_int(5000)};
+    agc_value new_read[] = {new_handle, agc_int(128), agc_int(5000)};
+    const agc_list *list = agc_as_list(&vm, ok(call("File.read_bytes", old_read)));
+    size_t len;
+    const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.read_bytes.bytes", new_read)), &len);
+    size_t want = sizeof data - at < 128 ? sizeof data - at : 128;
+    assert(agc_list_len(list) == want && len == want);
+    for (size_t k = 0; k < want; k++)
+      assert(agc_as_int(&vm, agc_list_get(list, k)) == data[at + k] && bytes[k] == data[at + k]);
+  }
+  done[0] = old_handle;
+  ok(call("File.close", done));
+  done[0] = new_handle;
+  ok(call("File.close", done));
+  assert(agc_fs_unlink(path) == 0);
 }
 
 /* File.sha256 streams a whole regular file in fixed chunks with O(chunk) memory: the digests around the padding
@@ -404,6 +448,7 @@ int main(void) {
   }
 #endif
   test_sha256(directory);
+  test_byte_keys(directory);
   int fd = agc_fs_open(path, AGC_FS_READ);
   uint8_t data[257];
   assert(fd >= 0 && agc_fs_read(fd, data, sizeof data) == 256);

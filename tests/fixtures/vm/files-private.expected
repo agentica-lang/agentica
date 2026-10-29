@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 595,
+  "steps": 597,
   "stdout": [
     "ok()",
     "error(\"make-directory: cannot make directory\\n  path: @tmp/private\\n  system error: File exists; errno=17\")",
