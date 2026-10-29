@@ -177,10 +177,9 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
   `test-slow`, `vm-latency` and `vm-task-map` alone, `smoke`,
   `stage0-check` (after the tests, so a hand bootstrap still runs them), the
   vendored check (it also runs when only `stage0-check` failed), then
-  `dup-check`. The vendored check is the last
-  step that builds: it rebuilds `build/vm/release/obj` with other flags, so
-  nothing that builds may run beside it. `dup-check` runs even when an earlier
-  step fails.
+  `dup-check`. The vendored check is the last step that builds: it rebuilds
+  `build/vm/release/obj` with other flags, so nothing that builds may run
+  beside it. `dup-check` runs even when an earlier step fails.
 - `vm-sanitizers` (`needs: test`, runs even if it fails): `vm-lint`, ASan C
   tests, 60 s of libFuzzer (`vm-libfuzz-run`, `-seed=1`,
   `LIBFUZZ_TIMEOUT=30`), `vm-layers`, the sanitizer binary's fixed point
