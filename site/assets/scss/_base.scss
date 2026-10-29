@@ -44,3 +44,8 @@ a {
     background: var(--bg);
   }
 }
+
+// The sidebar follows the content only without JavaScript on a narrow page; elsewhere it is already within reach.
+.skip-nav {
+  display: none;
+}

@@ -11,6 +11,15 @@ if (navButton && sidebar) {
     navButton.setAttribute("aria-expanded", String(open));
     const trap = open && narrow.matches;
     for (const element of behind) element.inert = trap;
+    if (trap) {
+      // Move focus into the drawer and show where the reader is in the tree.
+      sidebar.focus({ preventScroll: true });
+      sidebar.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "center" });
+    }
+  };
+  const close = () => {
+    setOpen(false);
+    navButton.focus();
   };
   navButton.addEventListener("click", () => {
     setOpen(!sidebar.classList.contains("open"));
@@ -19,11 +28,10 @@ if (navButton && sidebar) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (event.target.closest("a")) setOpen(false);
   });
+  document.querySelector(".scrim")?.addEventListener("click", close);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && sidebar.classList.contains("open")) {
-      setOpen(false);
-      navButton.focus();
-    }
+    // Escape in the search box belongs to the search (search.js).
+    if (event.key === "Escape" && sidebar.classList.contains("open") && !event.target.closest?.(".site-search")) close();
   });
   narrow.addEventListener("change", (event) => {
     if (!event.matches) setOpen(false);
