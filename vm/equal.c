@@ -42,12 +42,6 @@ bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y) {
   return x->len == 0 || memcmp(x->data, y->data, x->len) == 0;
 }
 
-int agc_equal_rest(agc_vm *vm, const agc_value *x, const agc_value *y) {
-  if (agc_is(*x, AGC_T_BYTES) && agc_is(*y, AGC_T_BYTES))
-    return agc_same_bytes(vm, agc_as_bytes(vm, *x), agc_as_bytes(vm, *y));
-  return -1;
-}
-
 static bool push_map(agc_vm *vm, pair_stack *s, const agc_map *x, const agc_map *y) {
   if (x->size != y->size) return false;
   const agc_value *keys = agc_map_keys(vm, x, 0);

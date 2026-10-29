@@ -20,7 +20,8 @@ so zeroed registers are valid values.
   - **Representation:** `{ len, data[] }`, `GC_MALLOC_ATOMIC`, immutable (tag
     `AGC_T_BYTES`). Items read as Int 0 to 255. The empty Bytes is one
     constant (`agc_empty_bytes`); `slice`, `take` and `drop` copy. `==` is the
-    same length and bytes (`memcmp`, not constant time). A Map key or Set item
+    builtin `Bytes.equal`, not `EQ`, so the turn loop stays as it is: the same
+    length and bytes (`memcmp`, not constant time). A Map key or Set item
     hashes its bytes with the tag as SipHash domain, so it never equals a
     String of the same bytes. `to_s` is `<Bytes 3>`; inspect adds the first 32
     bytes in hex (`<Bytes 3 616263>`, `...` past them). No JSON form: the

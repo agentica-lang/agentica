@@ -66,21 +66,22 @@ static void form_is(const agc_string *s, const char *expected) {
 
 static bool shared_empty(agc_value v) { return agc_as_bytes(&vm, v) == agc_empty_bytes(); }
 
-/* Same length and same bytes; never the pointer. EQ, NE and SAME (the interpreter's helpers) and agc_equal
-   (Test.eq) agree, and a Bytes is never equal to a String of the same bytes. */
+static bool equal(agc_value a, agc_value b) {
+  agc_value args[2] = {a, b};
+  return agc_as_bool(&vm, call("Bytes.equal", 2, args));
+}
+
+/* Same length and same bytes; never the pointer. Bytes.equal (==) and agc_equal (Test.eq) agree. The EQ instruction
+   refuses a Bytes (hand-made bytecode: the checker lowers == on Bytes to the builtin), and a Bytes is never equal to a
+   String of the same bytes. */
 static void test_equality(void) {
   agc_value a = raw("abc", 3), b = raw("abc", 3), c = raw("abd", 3), d = raw("ab", 2), s = text("abc");
-  agc_value out;
-  assert(agc_op_eq(&vm, &out, &a, &b) == AGC_STATUS_OK && agc_as_bool(&vm, out));
-  assert(agc_op_eq(&vm, &out, &a, &c) == AGC_STATUS_OK && !agc_as_bool(&vm, out));
-  assert(agc_op_eq(&vm, &out, &a, &d) == AGC_STATUS_OK && !agc_as_bool(&vm, out));
-  assert(agc_op_ne(&vm, &out, &a, &c) == AGC_STATUS_OK && agc_as_bool(&vm, out));
-  assert(agc_op_same(&vm, &out, &a, &b) == AGC_STATUS_OK && agc_as_bool(&vm, out));
-  assert(agc_op_same(&vm, &out, &a, &s) == AGC_STATUS_OK && !agc_as_bool(&vm, out));
-  /* EQ of two different tags is hand-made bytecode: the helper refuses the pair. */
-  assert(agc_op_eq(&vm, &out, &a, &s) == AGC_STATUS_WRONG_TAG);
+  assert(equal(a, b) && !equal(a, c) && !equal(a, d) && !equal(d, a));
   agc_value empty = agc_bytes_value(agc_empty_bytes()), fresh = agc_bytes_value(agc_new_bytes(0));
-  assert(agc_op_eq(&vm, &out, &empty, &fresh) == AGC_STATUS_OK && agc_as_bool(&vm, out));
+  assert(equal(empty, fresh) && !equal(empty, d));
+  agc_value out;
+  assert(agc_op_eq(&vm, &out, &a, &b) == AGC_STATUS_WRONG_TAG);
+  assert(agc_op_eq(&vm, &out, &a, &s) == AGC_STATUS_WRONG_TAG);
   assert(agc_equal(&vm, a, b, 0) && !agc_equal(&vm, a, c, 0) && !agc_equal(&vm, a, s, 0));
   agc_value pair[2] = {a, d}, other[2] = {b, raw("ab", 2)};
   assert(agc_equal(&vm, agc_list_value(agc_list_from_array(pair, 2)), agc_list_value(agc_list_from_array(other, 2)), 0));
@@ -279,6 +280,7 @@ static void test_wrong_tags(void) {
   two[0] = s;
   two[1] = b;
   fails("Bytes.plus", 2, two, "RUNTIME-INTERNAL");
+  fails("Bytes.equal", 2, two, "RUNTIME-INTERNAL");
   agc_value three[3] = {b, i, s};
   fails("Bytes.slice", 3, three, "RUNTIME-INTERNAL");
   three[0] = s;

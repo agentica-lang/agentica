@@ -55,7 +55,8 @@ rules those comments do not carry.
 - `vm/bytes.c`: the `Bytes` builtins (`Bytes.*` and `String.bytes`). Results
   come from `agc_make_bytes` (the `agc_empty_bytes` constant for no bytes);
   `slice`, `take` and `drop` charge what they copy, not the parent's size.
-  `==` and the key hash are core (`agc_equal_rest` in `vm/equal.c`, `map.c`).
+  `==` is the builtin `Bytes.equal`: `EQ` refuses a Bytes, since a case in
+  `equal_values` moves `plain_turn` (`make layout-check`).
 - `vm/builtins.c`: the core builtins (`agc_core_builtins`: `IO`, `System`,
   `List`, `Map`, `Set`, `Result`, `Range`) and `agc_find_builtin`, which matches
   by implementation key and arity over `agc_builtin_tables`;

@@ -1,8 +1,9 @@
 /*
  * The Bytes builtins (one of the tables that agc_find_builtin searches):
- * Bytes.from_list, to_a, length, at, slice, take, drop, plus (`+`) and concat,
- * and String.bytes. A Bytes is an immutable byte string (agc_bytes in value.h);
- * every result is a new copy or the run's shared empty value. Service layer.
+ * Bytes.from_list, to_a, length, at, slice, take, drop, equal (`==`), plus
+ * (`+`) and concat, and String.bytes. A Bytes is an immutable byte string
+ * (agc_bytes in value.h); every result is a new copy or the empty constant.
+ * Service layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
 #include "services.h"
@@ -96,6 +97,14 @@ static agc_value builtin_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   return cut(vm, args[0], k, b->len - k);
 }
 
+/* a == b: the same length and the same bytes, by memcmp (not constant time). A builtin, not the EQ instruction:
+   EQ's equal_values sits above the turn loop in vm/interp.c, and any change to it moves the loop (make
+   layout-check). The checker allows == on no type variable, so no generic code reaches EQ with a Bytes. */
+static agc_value builtin_equal(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_bool(agc_same_bytes(vm, agc_as_bytes(vm, args[0]), agc_as_bytes(vm, args[1])));
+}
+
 /* a + b. In a loop it copies everything each time; Bytes.concat joins many parts in one copy. */
 static agc_value builtin_plus(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -151,6 +160,7 @@ const agc_builtin agc_bytes_builtins[] = {
   {"Bytes.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Bytes.take", 2, builtin_take, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Bytes.drop", 2, builtin_drop, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
+  {"Bytes.equal", 2, builtin_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Bytes.plus", 2, builtin_plus, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"Bytes.concat", 1, builtin_concat, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.bytes", 1, builtin_string_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},

@@ -254,10 +254,6 @@ agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
  * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
  * compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
-/* The pairs of EQ, NE and SAME that the interpreter's equal_values leaves to vm/equal.c (two Bytes): 1 or 0, and -1
-   for a pair that has no equality. Out of line, so that equal_values keeps its size and the turn loop after it in
-   vm/interp.c keeps its place (make layout-check). */
-int agc_equal_rest(agc_vm *vm, const agc_value *x, const agc_value *y);
 agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);
