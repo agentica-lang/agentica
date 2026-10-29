@@ -1,39 +1,48 @@
 {{- /*
-The language specification at /reference/: an index section and one page per file of docs/grammar/. The files are not under content/, so this adapter adds the pages. Each page keeps its file's text, with the links between parts rewritten to the pages. The title is the file's first H1, else the title in $info. Weights follow the sorted file names, so the sidebar and the pager read the parts in order.
+The language specification at /reference/: an index section and one page per file of docs/grammar/. The files are not under content/, so this adapter adds the pages. Each page keeps its file's text, with the links between parts rewritten to the pages. A page's title is the file's first heading without its section number, and that heading is removed from the body, so no heading shows twice. A link to a removed heading goes to the page top. Weights follow the sorted file names, so the sidebar and the pager read the parts in order.
 */ -}}
 {{- $parts := sort (resources.Match "grammar/*.md") "Name" -}}
 {{- if lt (len $parts) 10 -}}
   {{- errorf "the language specification: expected the 10 files of docs/grammar/, found %d" (len $parts) -}}
 {{- end -}}
 {{- $info := dict
-  "lexical" (dict "title" "Lexical conventions" "description" "The source text: encoding, comments, doc comments, literals and heredocs.")
-  "syntax" (dict "title" "Syntax" "description" "The grammar in EBNF, with the statements and the precedence of expressions.")
-  "modules" (dict "title" "Modules and imports" "description" "File modules, imports and re-exports, constants, and packages.")
-  "semantics" (dict "title" "Semantics" "description" "Types, scope, functions, pattern matching, generics and the collections.")
-  "builtins" (dict "title" "Builtins" "description" "Methods and functions of the builtin types, JSON and the bytecode cache.")
-  "tasks-and-tests" (dict "title" "Tasks and tests" "description" "Lightweight tasks, channels, shared tables, and unit tests.")
-  "io-and-network" (dict "title" "I/O and network" "description" "TCP, TLS and HTTP, logging, files and paths, processes and native code.")
-  "diagnostics" (dict "title" "Diagnostics" "description" "The format of each error, and the stable codes that agents rely on.")
-  "examples" (dict "title" "Examples" "description" "Example programs that show the design, and programs that must be rejected.")
+  "lexical" (dict "description" "The source text: encoding, comments, doc comments, literals and heredocs.")
+  "syntax" (dict "description" "The grammar in EBNF, with the statements and the precedence of expressions.")
+  "modules" (dict "description" "File modules, imports and re-exports, constants, and packages.")
+  "semantics" (dict "description" "Types, scope, functions, pattern matching, generics and the collections.")
+  "builtins" (dict "description" "Methods and functions of the builtin types, JSON and the bytecode cache.")
+  "tasks-and-tests" (dict "description" "Lightweight tasks, channels, shared tables, and unit tests.")
+  "io-and-network" (dict "description" "TCP, TLS and HTTP, logging, files and paths, processes and native code.")
+  "diagnostics" (dict "description" "The format of each error, and the stable codes that agents rely on.")
+  "examples" (dict "description" "Example programs that show the design, and programs that must be rejected.")
   "overview" (dict "description" "The purpose of the language, its design decisions and a core program.")
 -}}
-{{- $targets := slice -}}
+{{- $metas := slice -}}
 {{- range $parts -}}
   {{- $stem := strings.TrimSuffix ".md" (path.Base .Name) -}}
-  {{- $targets = $targets | append (dict "stem" $stem "slug" (replaceRE `^[0-9]+[a-z]?-` "" $stem)) -}}
+  {{- $slug := replaceRE `^[0-9]+[a-z]?-` "" $stem -}}
+  {{- $head := "" -}}
+  {{- with findRESubmatch `(?m)\A\s*#{1,6}[ \t]+(.+?)[ \t]*$` .Content -}}
+    {{- $head = index . 0 1 -}}
+  {{- end -}}
+  {{- $title := or (replaceRE `^[0-9]+[a-z]?\.[ \t]+` "" $head) $slug -}}
+  {{- $removed := replace (replaceRE `[^a-z0-9 _-]` "" (lower $head)) " " "-" -}}
+  {{- $metas = $metas | append (dict "stem" $stem "slug" $slug "title" $title "removed" $removed) -}}
 {{- end -}}
 {{- range $i, $part := $parts -}}
-  {{- $stem := strings.TrimSuffix ".md" (path.Base $part.Name) -}}
-  {{- $slug := replaceRE `^[0-9]+[a-z]?-` "" $stem -}}
-  {{- $meta := index $info $slug | default (dict) -}}
-  {{- $text := $part.Content -}}
-  {{- range $targets -}}
+  {{- $m := index $metas $i -}}
+  {{- $meta := index $info $m.slug | default (dict) -}}
+  {{- $text := replaceRE `\A\s*#{1,6}[ \t]+.*(\n|\z)` "" $part.Content 1 -}}
+  {{- range $metas -}}
     {{- $text = replaceRE (printf `\]\((?:\./)?%s\.md(#[^)\s]*)?\)` .stem) (printf "](/reference/%s/${1})" .slug) $text -}}
   {{- end -}}
-  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2}/${3})` $text -}}
-  {{- $h1 := "" -}}
-  {{- with findRESubmatch `(?m)\A\s*#[ \t]+(.+?)[ \t]*$` $text -}}
-    {{- $h1 = index . 0 1 -}}
+  {{- range $metas -}}
+    {{- $t := . -}}
+    {{- with $t.removed -}}
+      {{- $text = replace $text (printf "](/reference/%s/#%s)" $t.slug .) (printf "](/reference/%s/)" $t.slug) -}}
+      {{- $text = replace $text (printf "](#%s)" .) (printf "](/reference/%s/)" $t.slug) -}}
+    {{- end -}}
   {{- end -}}
-  {{- $.AddPage (dict "path" (printf "reference/%s" $slug) "title" (or $h1 $meta.title $slug) "description" $meta.description "weight" (add $i 1) "content" (dict "mediaType" "text/markdown" "value" $text)) -}}
+  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2}/${3})` $text -}}
+  {{- $.AddPage (dict "path" (printf "reference/%s" $m.slug) "title" $m.title "description" $meta.description "weight" (add $i 1) "content" (dict "mediaType" "text/markdown" "value" $text)) -}}
 {{- end -}}

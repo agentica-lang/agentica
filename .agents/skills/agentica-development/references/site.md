@@ -71,15 +71,19 @@ rule that a site page shows.
   index is `content/reference/_index.md`. The content adapter
   `content/_content.gotmpl` adds one page per file at `/reference/<slug>/`,
   the file name without its number (`04-lexical.md` is `lexical`), read through
-  an assets mount (`hugo.toml`). Weights follow the sorted file names. A page's
-  title is its first H1, else the title in the adapter's `$info`; a new file
-  without an `$info` entry takes its slug as title. The adapter fails the build
-  when fewer than 10 files are found, so change that number with the files.
-  `layouts/reference/list.html` lists the parts with their descriptions.
+  an assets mount (`hugo.toml`). Weights follow the sorted file names. A
+  page's title is the file's first heading without its section number
+  (`## 4. Lexical conventions` gives "Lexical conventions"). That heading is
+  removed from the body, so no heading shows twice. A file without a heading
+  takes its slug as title. The adapter fails the build when fewer than 10 files
+  are found, so change that number with the files. The one-line descriptions
+  of the index are in its `$info` table. `layouts/reference/list.html` lists
+  the parts with their descriptions.
 - The adapter rewrites the links between parts: `](NN-name.md#anchor)` (or
   `./NN-name.md`) becomes `](/reference/<slug>/#anchor)`, and
   `](../../site/content/library/TOPIC/NAME.md)` becomes
-  `](/library/TOPIC/NAME/)`; other relative links stay as written.
+  `](/library/TOPIC/NAME/)`. A link to a removed heading goes to the page top,
+  `/reference/<slug>/`. Other relative links stay as written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.
