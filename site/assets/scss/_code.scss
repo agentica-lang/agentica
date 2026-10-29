@@ -24,6 +24,15 @@ pre {
   }
 }
 
+// A one-line `text` block (render-codeblock.html), such as a signature, wraps at any
+// character; a wrapped line is indented so it reads as a continuation.
+.signature pre {
+  padding-left: 2rem;
+  text-indent: -1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .sample {
   margin: -0.5rem 0 1rem;
 

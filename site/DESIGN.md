@@ -88,7 +88,8 @@ Source: `_tokens.scss`, `_layout.scss`, `_header.scss`, `_content.scss`.
   `--shadow`, with z-index: page menu 5, scrim 8, drawer 9, header 10, search
   panel 20.
 - Phone width: 16px side gutters. Long text wraps. Code and tables scroll in
-  their own box. The goal is no sideways scroll on the page itself.
+  their own box, except a one-line signature, which wraps. The goal is no
+  sideways scroll on the page itself.
 
 ## Motion & Focus
 
@@ -172,7 +173,10 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 - `input` and `output` blocks are samples: dashed boxes labeled Input or Output.
 - `expect="CODE"` adds an accent box under the code. It says "Does not compile",
   or "Runtime error" for `RUNTIME-` codes, and shows `error[CODE]`.
-- Code and tables scroll sideways in their own box.
+- Code and tables scroll sideways in their own box. The exception is a
+  one-line `text` block (a signature): `render-codeblock.html` wraps it in
+  `div.signature`, and `_code.scss` lets it wrap at any character, with the
+  continuation lines indented.
 
 ### Search, page actions and headings
 

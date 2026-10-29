@@ -185,7 +185,7 @@ A `Void` task gives `Await[Void]`: match its payload with `_` (`Await.Done(_)`).
 ## Task.map
 
 ```text
-Task.map(items: List[A], limit: Int, timeout_ms: Int, function: Fn[A, Result[R]]) -> List[Result[R]]
+Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
 ```
 
 Runs the function for each item in its own task, at most `limit` at a time. It gives one `Result` per item, in the order of `items`.
