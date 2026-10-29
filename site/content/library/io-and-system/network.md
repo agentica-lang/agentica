@@ -87,11 +87,11 @@ ok()
 ### TCP.send_bytes and TCP.recv_bytes
 
 ```text
-TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
+TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
+TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
 ```
 
-Raw bytes (0 to 255). `recv_bytes` gives what has arrived, up to `max_bytes`, and `ok([])` when the other side has closed.
+Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at most 1 MiB per call. `recv_bytes` gives what has arrived, up to `max_bytes`, and empty `Bytes` when the other side has closed.
 
 ### TCP.close and TCP.close_listener
 

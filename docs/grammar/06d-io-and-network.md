@@ -19,8 +19,8 @@ the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
   included. A timeout during active I/O closes that socket, and later calls fail
   with `network: socket is closed`. A timeout while only waiting for a lock
   keeps it open.
-- `send` takes UTF-8 text and flushes; `send_bytes` takes values 0 to 255, at
-  most 1 MiB per call. `recv_bytes` takes 1 to 1048576 and gives `ok([])` at
+- `send` takes UTF-8 text and flushes; `send_bytes` takes a `Bytes`, at most
+  1 MiB per call. `recv_bytes` takes 1 to 1048576 and gives a `Bytes`, empty at
   EOF. `read_line` is an error on an empty EOF, on a reset in the middle of a
   line, and on a line over 1 MiB, which also closes the socket.
 - Header values use the Latin-1 byte range. CR, LF, control characters and
@@ -314,9 +314,9 @@ two default `dir` to `"."`.
 - Timeouts are positive milliseconds and include the lock wait. A timeout during
   stream I/O kills and closes the child; a timeout while waiting for the lock
   keeps it; a timed-out wait for exit does not terminate it.
-- A send takes at most 1048576 UTF-8 bytes, or integers 0 to 255, and flushes.
-  Invalid data consumes nothing. `read_bytes` takes 0 to 1048576 and waits for
-  that many bytes or EOF. `read_line` takes at most 1 MiB, strips LF or CRLF,
+- A send takes at most 1048576 bytes, UTF-8 text or a `Bytes`, and flushes.
+  Invalid data consumes nothing. `read_bytes` takes 0 to 1048576, waits for
+  that many bytes or EOF, and gives a `Bytes`. `read_line` takes at most 1 MiB, strips LF or CRLF,
   and decodes strictly. An empty EOF is an error, and an oversized line closes
   the child.
 - `close_stdin` flushes and closes input, idempotently. `wait` returns the exit

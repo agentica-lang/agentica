@@ -6,9 +6,9 @@ encoding; inspect prints `<Process>`.
 ```text
 Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000) -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
+Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
@@ -53,7 +53,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   are independent. A timeout after starting stream I/O kills and closes the
   child; timing out while waiting for its lock preserves it. Waiting for exit
   times out without terminating the child.
-- Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before
+- Sends accept at most 1048576 bytes (UTF-8 text or a `Bytes`) and flush before
   succeeding; invalid data consumes nothing. `read_bytes` accepts 0..1048576 and
   waits for that count or EOF: a short or empty EOF read succeeds, and zero
   consumes nothing.

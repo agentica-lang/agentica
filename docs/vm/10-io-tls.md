@@ -169,15 +169,19 @@ texts.
   lock and the open state. The socket is read only while a reader waits, 4 KiB
   at a time (more when the request asks for more), so the VM reads at most about
   4 KiB past what the program asked. `recv_bytes` returns what is buffered, as
-  soon as there is one byte, and `ok([])` at EOF. `read_line` strips LF or CRLF,
-  returns a final line without a terminator at EOF (a lone CR stays), and
+  soon as there is one byte, and empty `Bytes` at EOF. `read_line` strips LF or
+  CRLF, returns a final line without a terminator at EOF (a lone CR stays), and
   returns `network: end of input` on an empty EOF. A line over 1 MiB returns
   `network: line exceeds 1048576 bytes` and closes the socket. Invalid UTF-8
   returns the `bytes->string/utf-8` error, and the line is consumed. A read
   error (`ECONNRESET`) returns `error reading from stream port`, and later reads
   return it too. Bytes that arrived before the error are still returned.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
-  the grammar says. `send_bytes` checks byte values and the 1 MiB limit first.
+  the grammar says. `send_bytes` checks the 1 MiB limit first. `send_bytes`,
+  `recv_bytes` and the HttpWire byte rows have their catalog key `<name>.bytes`
+  on `Bytes` and their old key `<name>` on byte lists (which also refuses an
+  item outside 0 to 255): front ends and `.agcb` files compiled before #805 PR 6
+  import the old keys.
   The bytes go out with `uv_try_write`, the rest with one `uv_write`, and the
   task parks until the callback. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `error writing to
