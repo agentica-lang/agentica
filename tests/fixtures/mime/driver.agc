@@ -11,7 +11,7 @@ struct Case
   has_fallback: Bool
 end
 
-# `text` is the type of `type_for`; `flag` is the answer of `text?`.
+# `text` is the type of `mime_type`; `flag` is the answer of `text?`.
 struct Reply
   message: String
   text: String
@@ -20,11 +20,11 @@ end
 
 def run_case(c: Case) -> Reply
   case c.op
-    "type_for" ->
+    "mime_type" ->
       if c.has_fallback
-        return Reply(message: "", text: MIME.type_for(c.text, c.fallback), flag: false)
+        return Reply(message: "", text: MIME.mime_type(c.text, c.fallback), flag: false)
       end
-      return Reply(message: "", text: MIME.type_for(c.text), flag: false)
+      return Reply(message: "", text: MIME.mime_type(c.text), flag: false)
     "text?" -> return Reply(message: "", text: "", flag: MIME.text?(c.text))
     _ -> return Reply(message: "unknown op #{c.op}", text: "", flag: false)
   end

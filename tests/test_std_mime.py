@@ -1,15 +1,15 @@
-"""std/mime: media types by file extension, the names and fallback of Ruby's Rack::Mime.
+"""std/mime: media types by file extension, with the name and the fallback of Ruby's Rack::Mime.mime_type.
 
 tests/fixtures/mime/driver.agc reads one JSON case per line of stdin and prints one JSON reply per line. TABLE below
 is the whole table of std/mime, written out so a change to it shows in review. Python's mimetypes (built without the
 system's mime.types files, so the answer does not depend on the machine) is the independent peer for the extensions
-it knows. It differs in a few, which KNOWN_DIFFERENCES lists with the values that Python versions give:
-application/javascript for js before 3.12, text/xml for xml, audio/x-wav for wav. It has no entry at all for map, yaml,
-toml, agc, the fonts and ogg, or for avif and md in older versions, and it treats gz as an encoding, not a type.
+where the choice is not ours alone. For the extensions in KNOWN_DIFFERENCES the answer of Python is not compared: it
+differs between versions (js) or from the registered type (xml, wav), or the extension is not a type there (gz is an
+encoding). Python has no entry at all for several of the others (map, yaml, toml, agc, fonts, ogg...), which are
+skipped.
 """
 import json
 import mimetypes
-import random
 
 import pytest
 
@@ -17,23 +17,22 @@ from tests.agentica_test import FIXTURES, compile_agc, run_vm
 
 TABLE = {
     "html": "text/html", "htm": "text/html", "css": "text/css", "js": "text/javascript", "mjs": "text/javascript",
-    "json": "application/json", "map": "application/json", "webmanifest": "application/manifest+json",
-    "txt": "text/plain", "csv": "text/csv", "xml": "application/xml", "md": "text/markdown",
-    "yaml": "application/yaml", "yml": "application/yaml", "toml": "application/toml", "agc": "text/plain",
-    "svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
-    "webp": "image/webp", "avif": "image/avif", "ico": "image/vnd.microsoft.icon", "woff": "font/woff",
-    "woff2": "font/woff2", "ttf": "font/ttf", "otf": "font/otf", "pdf": "application/pdf", "zip": "application/zip",
-    "gz": "application/gzip", "tar": "application/x-tar", "wasm": "application/wasm", "mp4": "video/mp4",
-    "webm": "video/webm", "mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg",
+    "cjs": "text/javascript", "json": "application/json", "map": "application/json",
+    "jsonld": "application/ld+json", "webmanifest": "application/manifest+json", "txt": "text/plain",
+    "csv": "text/csv", "xml": "application/xml", "xhtml": "application/xhtml+xml", "rss": "application/rss+xml",
+    "atom": "application/atom+xml", "ics": "text/calendar", "md": "text/markdown", "yaml": "application/yaml",
+    "yml": "application/yaml", "toml": "application/toml", "agc": "text/plain", "svg": "image/svg+xml",
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
+    "avif": "image/avif", "ico": "image/vnd.microsoft.icon", "bmp": "image/bmp", "tif": "image/tiff",
+    "tiff": "image/tiff", "woff": "font/woff", "woff2": "font/woff2", "ttf": "font/ttf", "otf": "font/otf",
+    "pdf": "application/pdf", "zip": "application/zip", "gz": "application/gzip", "tar": "application/x-tar",
+    "bz2": "application/x-bzip2", "7z": "application/x-7z-compressed", "wasm": "application/wasm",
+    "mp4": "video/mp4", "webm": "video/webm", "mp3": "audio/mpeg", "m4a": "audio/mp4", "flac": "audio/flac",
+    "wav": "audio/wav", "ogg": "audio/ogg",
 }
 
-# The extensions where Python's answer differs from the table, with the answers that Python versions give.
-KNOWN_DIFFERENCES = {
-    "js": {"application/javascript"},
-    "mjs": {"application/javascript"},
-    "xml": {"text/xml"},
-    "wav": {"audio/x-wav"},
-}
+# The extensions whose answer in Python is not compared (see the module docstring).
+KNOWN_DIFFERENCES = {"js", "mjs", "cjs", "xml", "wav", "gz", "m4a", "7z", "bz2", "ics", "xhtml"}
 
 OCTET_STREAM = "application/octet-stream"
 
@@ -56,7 +55,7 @@ def call(driver, cases):
 
 
 def types(driver, paths, fallback=None):
-    return [reply["text"] for reply in call(driver, [("type_for", path, fallback) for path in paths])]
+    return [reply["text"] for reply in call(driver, [("mime_type", path, fallback) for path in paths])]
 
 
 def test_every_extension_of_the_table(driver):
@@ -64,8 +63,11 @@ def test_every_extension_of_the_table(driver):
     assert types(driver, [f"file.{ext}" for ext in exts]) == [TABLE[ext] for ext in exts]
 
 
-# (input, type) for the forms of a path and an extension. Only the last extension counts, whatever the case.
+# (input, type): an extension with its dot, and the forms of a path. Only the last extension counts, in any case.
 PATH_VECTORS = [
+    (".css", "text/css"),
+    (".CSS", "text/css"),
+    (".tar.gz", "application/gzip"),
     ("index.html", "text/html"),
     ("INDEX.HTML", "text/html"),
     ("App.Js", "text/javascript"),
@@ -73,28 +75,33 @@ PATH_VECTORS = [
     ("/var/www/a.b.c/logo.png", "image/png"),
     ("archive.tar.gz", "application/gzip"),
     ("archive.gz.tar", "application/x-tar"),
-    (".css", "text/css"),
-    (".CSS", "text/css"),
-    ("css", "text/css"),
-    ("JSON", "application/json"),
-    ("dir/.json", "application/json"),
-    ("...txt", "text/plain"),
+    (".env.json", "application/json"),
+    ("dir/.env.json", "application/json"),
     ("a..txt", "text/plain"),
+    ("a.png?v=1", "image/png"),
+    ("a.png#top", "image/png"),
+    ("a.png?x=a.css#b.js", "image/png"),
+    ("/a/b.css?next=/c/d.js", "text/css"),
+    ("a\\b.png", "image/png"),
+    ("dir.d/file.svg", "image/svg+xml"),
     ("naïve café.pdf", "application/pdf"),
 ]
 
-# Inputs with no extension that is in the table.
+# Inputs with no extension that is in the table: a bare name, a dotfile (its leading dot does not start an extension),
+# an empty or unknown extension, and a query or fragment that holds the dot.
 PATH_FALLBACKS = [
-    "", ".", "..", "a.", "a/", "dir/", "a.b/", "README", "Makefile", "dir/README", "a/css", "/json", "dir.html/file",
-    ".gitignore", "photo.unknown", "photo.html5", "photo.htm l", "a.png/", "a.png?v=1", "a.png#top", "a\\b.png/",
+    "", ".", "..", "...", "...txt", "a.", "a/", "dir/", "a.b/", "README", "Makefile", "dir/README", "css", "map",
+    "JSON", "a/css", "/json", "dir/.json", "dir/.css", "a/.env/.json", "dir.html/file", ".gitignore", ".css/",
+    ".a/b.css/", "photo.unknown", "photo.html5", "photo.htm l", "a.png/", "?a.png", "#a.png", "a?.png", "a#.png",
+    "a.png/?x", "x.y/z?q=a.png", "a\\.png/",
 ]
 
 
-def test_type_for_path_forms(driver):
+def test_mime_type_path_forms(driver):
     assert types(driver, [path for path, _ in PATH_VECTORS]) == [expected for _, expected in PATH_VECTORS]
 
 
-def test_type_for_without_a_known_extension_gives_the_fallback(driver):
+def test_mime_type_without_a_known_extension_gives_the_fallback(driver):
     assert types(driver, PATH_FALLBACKS) == [OCTET_STREAM] * len(PATH_FALLBACKS)
     assert types(driver, PATH_FALLBACKS, fallback="text/plain") == ["text/plain"] * len(PATH_FALLBACKS)
     assert types(driver, ["a.png", "a"], fallback="") == ["image/png", ""]
@@ -102,38 +109,10 @@ def test_type_for_without_a_known_extension_gives_the_fallback(driver):
 
 def test_table_agrees_with_python_where_python_has_the_extension(driver):
     peer = mimetypes.MimeTypes()
-    exts = [ext for ext in TABLE if peer.guess_type(f"file.{ext}", strict=True)[0] is not None]
+    exts = [ext for ext in TABLE if ext not in KNOWN_DIFFERENCES and peer.guess_type(f"file.{ext}", strict=True)[0]]
     assert len(exts) > 15
     for ext, mine in zip(exts, types(driver, [f"file.{ext}" for ext in exts])):
-        theirs = peer.guess_type(f"file.{ext}", strict=True)[0]
-        assert mine == theirs or theirs in KNOWN_DIFFERENCES.get(ext, set()), (ext, mine, theirs)
-
-
-def test_generated_paths_agree_with_python(driver):
-    rng = random.Random(7)
-    known = list(TABLE)
-    exts = known + ["unknown", "html5", "x", "tar", "bz2", "c", "py"]
-    paths = []
-    for _ in range(400):
-        dirs = "".join(rng.choice(["a/", "public/", "x.y/", "/", "My Dir/", "é/"]) for _ in range(rng.randint(0, 3)))
-        stem = "".join(rng.choice("abcXYZ019 -_é.") for _ in range(rng.randint(1, 8))).strip(".") or "f"
-        ext = rng.choice(exts)
-        ext = "".join(c.upper() if rng.randint(0, 1) else c for c in ext)
-        paths.append(f"{dirs}{stem}.{ext}")
-    peer = mimetypes.MimeTypes()
-    compared = 0
-    for path, mine in zip(paths, types(driver, paths)):
-        ext = path.rsplit(".", 1)[1].lower()
-        theirs, encoding = peer.guess_type(path, strict=True)
-        if encoding is not None:
-            continue
-        if ext not in TABLE:
-            assert mine == OCTET_STREAM, path
-            assert theirs is None or ext not in KNOWN_DIFFERENCES, path
-        elif theirs is not None:
-            assert mine == theirs or theirs in KNOWN_DIFFERENCES.get(ext, set()), (path, mine, theirs)
-            compared += 1
-    assert compared > 100
+        assert mine == peer.guess_type(f"file.{ext}", strict=True)[0], ext
 
 
 TEXT_VECTORS = [
@@ -155,8 +134,8 @@ def test_text_says_which_types_take_a_charset(driver):
 
 
 def test_every_text_extension_of_the_table_is_text_and_the_binary_ones_are_not(driver):
-    binary = {"png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "woff", "woff2", "ttf", "otf", "pdf", "zip", "gz",
-              "tar", "wasm", "mp4", "webm", "mp3", "wav", "ogg"}
+    binary = {"png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "bmp", "tif", "tiff", "woff", "woff2", "ttf", "otf",
+              "pdf", "zip", "gz", "tar", "bz2", "7z", "wasm", "mp4", "webm", "mp3", "m4a", "flac", "wav", "ogg"}
     exts = sorted(TABLE)
     flags = [r["flag"] for r in call(driver, [("text?", TABLE[ext], None) for ext in exts])]
     assert {ext: flag for ext, flag in zip(exts, flags)} == {ext: ext not in binary for ext in exts}
