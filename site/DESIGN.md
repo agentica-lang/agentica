@@ -76,9 +76,11 @@ Source: `_tokens.scss`, `_layout.scss`, `_header.scss`, `_content.scss`.
   (3.25rem) is the sticky bar. The drawer is `min(20rem, 85vw)` wide.
 - Breakpoint: `$narrow` is 50rem, from `params.narrow` in `site/hugo.toml`. Sass
   and `nav.js` read it. A second one, 30rem, hides the header version.
-- `--nav-row` is set on `.sidebar`, not on `:root`: 2rem, and 2.75rem at 50rem
-  and below. Tree rows are at least that high, and the section toggle is that
-  square.
+- `--target` (2.75rem) is the touch size. The pager links use it at every
+  width. At 50rem and below, the menu button, the theme button, the search box
+  and the tree use it too. `--nav-row` is set on `.sidebar`: 2rem, and
+  `--target` at 50rem and below. Tree rows are at least that high, and the
+  section toggle is that square.
 - Radius: `--radius-sm` (4px) for small parts: inline code, tree links, search
   keys, section tags. `--radius` (6px) for buttons, inputs, code blocks, the
   pager, the search panel and the page menu.
@@ -98,9 +100,11 @@ Source: `_tokens.scss`, `_layout.scss`, `_header.scss`, `_pager.scss`,
   turn.
 - Reduced motion: `--motion-base` is 0ms under `prefers-reduced-motion: reduce`.
   The drawer and the scrim then switch at once.
-- `--focus-ring` is `2px solid var(--link)`. Each focusable control draws it on
-  `:focus-visible`; the search box draws it on `:focus`. Offsets differ by
-  control: 2px, -2px or -1px.
+- `--focus-ring` is `2px solid var(--link)`. The site's controls draw it on
+  `:focus-visible`: the header buttons, the tree, the pager and the page
+  actions. The search box draws it on `:focus`. Skip links, heading anchors and
+  links in the page body or footer use the browser's default outline. Offsets
+  differ by control: 2px, -2px or -1px.
 
 ## Components
 
@@ -186,8 +190,9 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 
 - Native first: `<button>` for controls, `<details>` and `<summary>` for the
   tree, `<a>` for links.
-- Targets are at least 24px square everywhere, and 44px (2.75rem) on narrow
-  pages. Links inside running text, such as heading anchors, are exempt.
+- Targets are at least 24px square everywhere. On narrow pages the menu button,
+  the theme button, the search box and the tree rows are `--target` (2.75rem).
+  Links inside running text, such as heading anchors, are exempt.
 - Forced colors: the chevron is a mask. Under `forced-colors: active` it uses
   `CanvasText`, and focus outlines stay. Reduced motion: see Motion & Focus.
 - Without JS the page works: the content comes first, the tree is a list, and
@@ -199,9 +204,10 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 - Reuse tokens. Add one only when a value repeats or changes with the theme. A
   color token needs a light value on `:root` and a dark value in the `dark`
   mixin, in the same change. Check each color, shadow and scrim in both themes.
-- Colors live in `_tokens.scss`. The SVG favicon in `baseof.html` copies the two
-  `--accent` values (light and dark), so it must change with them. The chevron
-  mask in `_layout.scss` uses black, which sets only the shape.
+- Colors live in `_tokens.scss`. The inline SVG favicon in `baseof.html` copies
+  the light and dark `--accent` and `--bg` values, so it must change with them.
+  It follows the system color setting, not the theme button. The chevron mask in
+  `_layout.scss` uses black, which sets only the shape.
 - No runtime dependency. Hugo, Dart Sass and the Node highlighter run at build
   time (`mk/site.mk`). The browser loads only the built CSS and JS. No CDN, web
   font or outside script.
