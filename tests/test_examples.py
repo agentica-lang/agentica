@@ -381,7 +381,7 @@ def test_help_lists_the_method_form_first_and_answers_include():
 
 
 def test_help_answers_length_and_size_for_every_kind_that_has_them():
-    kinds = {"ATS.size", "List.size", "Map.size", "Range.size", "Set.size", "String.length"}
+    kinds = {"ATS.size", "Bytes.length", "List.size", "Map.size", "Range.size", "Set.size", "String.length"}
     for name in ("length", "size"):
         found = {b["name"] for b in json.loads(cli_run("help", name, "--json").stdout)["builtins"]}
         assert found == kinds, name

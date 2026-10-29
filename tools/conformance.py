@@ -118,7 +118,7 @@ AREAS = {
             "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
-            "tests/test_spec_generics.py",
+            "tests/test_spec_generics.py", "tests/test_spec_bytes.py",
         ],
     ),
     "golden": (
@@ -138,7 +138,7 @@ AREAS = {
             "tests/test_std_toml.py", "tests/test_std_uri.py",
             "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
-            "tests/test_vm_crypto.py", "tests/test_vm_native.py", "tests/test_examples_ffi.py",
+            "tests/test_vm_crypto.py", "tests/test_vm_bytes.py", "tests/test_vm_native.py", "tests/test_examples_ffi.py",
             "tests/test_examples_ffi_duckdb.py", "tests/test_provision_duckdb.py",
         ],
     ),
