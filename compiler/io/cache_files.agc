@@ -231,7 +231,14 @@ export def sweep(folder: String) -> Void
 end
 
 export def digest(data: List[Int]) -> String
-  return RandomName.hex_of(Digest.sha256(data))
+  # The callers pass bytes read from a file or a String as a List[Int] until #805 PR 4, so Bytes.from_list cannot
+  # fail; if it did, "" matches no cache entry.
+  bytes = Bytes.from_list(data)
+  if !bytes.ok?
+    return ""
+  end
+
+  return Digest.sha256_hexdigest(bytes.unwrap!)
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places

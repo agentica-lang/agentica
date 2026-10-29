@@ -225,7 +225,13 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
     pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
   end
 
-  return Hashed.Hash("sha256:#{hex(Digest.sha256(concat_all(pieces)))}")
+  # The workspace reads a file as a List[Int] until #805 PR 4, so the stream is converted once; its items are bytes.
+  stream = Bytes.from_list(concat_all(pieces))
+  if !stream.ok?
+    return Hashed.Unreadable(stream.message)
+  end
+
+  return Hashed.Hash("sha256:#{Digest.sha256_hexdigest(stream.unwrap!)}")
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
@@ -244,9 +250,4 @@ end
 # path, 0, size in decimal, 0.
 def header(path: String, size: Int) -> List[Int]
   return String.to_bytes(path).push(0).concat(String.to_bytes(size.to_s)).push(0)
-end
-
-def hex(digest: List[Int]) -> String
-  digits = "0123456789abcdef"
-  return digest.map do |byte| digits.at(byte / 16) + digits.at(byte % 16) end.join("")
 end
