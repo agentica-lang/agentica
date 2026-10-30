@@ -66,19 +66,23 @@ def is_integer(text: String) -> Bool
   return true
 end
 
-def greeting(target: String) -> String
-  name = "world"
-  index = target.index_of("?")
-  if index.ok?
-    query = target.slice(index.unwrap! + 1, target.length - index.unwrap! - 1)
-    found = false
-    for pair in query.split("&")
-      if !found && pair.starts_with?("name=") && pair.length > 5
-        name = pair.slice(5, pair.length - 5)
-        found = true
-      end
+def query_name(query: String) -> String
+  for pair in query.split("&")
+    if pair.starts_with?("name=") && pair.length > 5
+      return pair.slice(5, pair.length - 5)
     end
   end
+  return "world"
+end
+
+def greeting(target: String) -> String
+  case target.index_of("?")
+    some(index) -> return greeting_for(query_name(target.slice(index + 1, target.length - index - 1)))
+    none -> return greeting_for("world")
+  end
+end
+
+def greeting_for(name: String) -> String
   return JSON.encode({"greeting": "hello, #{name}"})
 end
 
