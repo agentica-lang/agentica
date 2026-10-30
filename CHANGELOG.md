@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   replaced by `Bytes.concat`.
 - **Breaking:** `C.Bytes` parameters take `Bytes`; `Native.get_bytes` returns
   and `Native.put_bytes` takes `Bytes`.
+- **Breaking:** rebuild `.agcb` files compiled by 0.16.x: the byte builtin keys
+  they import are gone.
 
 ### Fixed
 
