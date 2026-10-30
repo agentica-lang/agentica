@@ -1,6 +1,6 @@
 ---
 title: Design decisions
-weight: 7
+weight: 8
 description: The main design decisions of Agentica and its bytecode VM, Aurora, and why each one was taken.
 ---
 

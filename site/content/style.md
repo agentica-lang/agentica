@@ -1,6 +1,6 @@
 ---
 title: Style guide
-weight: 5
+weight: 6
 description: How to write Agentica code that is simple and easy to read, with a bad and a good example for each rule.
 ---
 
