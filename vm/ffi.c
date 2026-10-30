@@ -1021,7 +1021,7 @@ static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layo
       break;
     }
     case AGC_C_POINTER: (void)buffer_of(vm, v); break;
-    case AGC_C_BYTES: agc_as_bytes(vm, v); break;
+    case AGC_C_BYTES: (void)agc_as_bytes(vm, v); break;
     /* A resource parameter takes a resource of an extern block, never an owned buffer or a view of one: only
        hand-made bytecode passes one, and held_by and c_argument read a resource as its own. */
     case AGC_C_RESOURCE:
