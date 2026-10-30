@@ -74,10 +74,10 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
-export def text_attr(label: String, doc: Ast.Maybe[String]) -> String
+export def text_attr(label: String, doc: Optional[String]) -> String
   case doc
-    Ast.Maybe.Present(text) -> return label + Text.quote(text)
-    Ast.Maybe.Absent -> return ""
+    some(text) -> return label + Text.quote(text)
+    none -> return ""
   end
 end
 
@@ -177,16 +177,16 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
   end
 end
 
-def doc_attr(doc: Ast.Maybe[String]) -> String
+def doc_attr(doc: Optional[String]) -> String
   return text_attr(" doc=", doc)
 end
 
 # The library and the C type codes of an extern function, its C name when it is not the def's name, compute=true for
 # a compute def, the resource and its free function for one that returns a resource, and each out resource with its
 # free function; nothing for an ordinary function.
-def native_attr(name: String, native: Ast.Maybe[Ast.Native]) -> String
+def native_attr(name: String, native: Optional[Ast.Native]) -> String
   case native
-    Ast.Maybe.Present(link) ->
+    some(link) ->
       extra = ""
       if link.symbol != name
         extra += " symbol=#{Text.quote(link.symbol)}"
@@ -205,7 +205,7 @@ def native_attr(name: String, native: Ast.Maybe[Ast.Native]) -> String
       end
 
       return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{extra}"
-    Ast.Maybe.Absent -> return ""
+    none -> return ""
   end
 end
 
@@ -224,12 +224,12 @@ def value_text(value: Ast.LitValue) -> String
   end
 end
 
-def visible_attr(visible: Ast.Maybe[List[String]]) -> String
+def visible_attr(visible: Optional[List[String]]) -> String
   case visible
-    Ast.Maybe.Present(names) ->
+    some(names) ->
       quoted = names.map do |name| Text.quote(name) end
       return " visible=#{list_text(quoted)}"
-    Ast.Maybe.Absent -> return ""
+    none -> return ""
   end
 end
 
@@ -251,10 +251,10 @@ def print_types(out: List[String], at: Margin, role: String, types: List[Ast.Typ
   return lines
 end
 
-def print_optional_type(out: List[String], at: Margin, role: String, type: Ast.Maybe[Ast.TypeRef]) -> List[String]
+def print_optional_type(out: List[String], at: Margin, role: String, type: Optional[Ast.TypeRef]) -> List[String]
   case type
-    Ast.Maybe.Present(found) -> return print_type(out, at, role, found)
-    Ast.Maybe.Absent -> return out
+    some(found) -> return print_type(out, at, role, found)
+    none -> return out
   end
 end
 
@@ -478,8 +478,8 @@ def print_arm(out: List[String], at: Margin, arm: Ast.CaseArm) -> List[String]
   lines = out.push(head(at, "arm", "case-arm", arm.id, arm.span, ""))
   lines = print_pattern(lines, deeper(at), "pattern", arm.pattern)
   case arm.guard
-    Ast.Maybe.Present(condition) -> lines = print_expr(lines, deeper(at), "guard", condition)
-    Ast.Maybe.Absent -> lines = lines
+    some(condition) -> lines = print_expr(lines, deeper(at), "guard", condition)
+    none -> lines = lines
   end
 
   return print_stmts(lines, deeper(at), "body", arm.body)
@@ -495,8 +495,8 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
     Ast.Stmt.Return(node) ->
       lines = out.push(head(at, role, "return-stmt", node.id, node.span, ""))
       case node.value
-        Ast.Maybe.Present(value) -> return print_expr(lines, child, "value", value)
-        Ast.Maybe.Absent -> return lines
+        some(value) -> return print_expr(lines, child, "value", value)
+        none -> return lines
       end
 
     Ast.Stmt.Expression(node) ->
@@ -509,10 +509,10 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       end
 
       case node.else_body
-        Ast.Maybe.Present(body) ->
+        some(body) ->
           lines = lines.push("#{child.indent}else:")
           return print_stmts(lines, deeper(child), "body", body)
-        Ast.Maybe.Absent -> return lines
+        none -> return lines
       end
 
     Ast.Stmt.While(node) ->
@@ -539,8 +539,8 @@ def print_param(out: List[String], at: Margin, param: Ast.Param) -> List[String]
   lines = out.push(head(at, "param", "param", param.id, param.span, name_attr(param.name)))
   lines = print_type(lines, deeper(at), "type", param.type)
   case param.default
-    Ast.Maybe.Present(value) -> return print_expr(lines, deeper(at), "default", value)
-    Ast.Maybe.Absent -> return lines
+    some(value) -> return print_expr(lines, deeper(at), "default", value)
+    none -> return lines
   end
 end
 
@@ -548,8 +548,8 @@ def print_field(out: List[String], at: Margin, field: Ast.FieldDecl) -> List[Str
   lines = out.push(head(at, "field", "field-decl", field.id, field.span, name_attr(field.name) + doc_attr(field.doc)))
   lines = print_type(lines, deeper(at), "type", field.type)
   case field.default
-    Ast.Maybe.Present(value) -> return print_expr(lines, deeper(at), "default", value)
-    Ast.Maybe.Absent -> return lines
+    some(value) -> return print_expr(lines, deeper(at), "default", value)
+    none -> return lines
   end
 end
 
@@ -582,8 +582,8 @@ end
 # rename.
 def import_attrs(node: Ast.ImportDecl) -> String
   case node.alias
-    Ast.Maybe.Present(alias) -> return " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
-    Ast.Maybe.Absent ->
+    some(alias) -> return " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
+    none ->
       texts = node.names.map do |entry| import_name_text(entry) end
       return " path=#{Text.quote(node.path)} names=[#{texts.join(",")}]"
   end

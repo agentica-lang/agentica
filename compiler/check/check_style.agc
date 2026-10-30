@@ -18,37 +18,34 @@ import Tokens from "../syntax/token"
 FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "right-brace"])
 
 ## The first `end` of `linked` that breaks the rule, among the files whose project asks for it, as a problem at that
-## `end` (there is no empty line to point at). The files are taken in program order. Absent when none does. A file of
+## `end` (there is no empty line to point at). The files are taken in program order. `none` when none does. A file of
 ## `styled`, which an earlier check found to follow the rule in this very text (modules/check_cache.agc), is not lexed.
 export def blank_line_after_end(
   linked: Linker.Linked,
   styled: Set[String],
-) -> Ast.Maybe[Failure.Problem]
+) -> Optional[Failure.Problem]
   for module in linked.modules
     if module.blank_line_after_end and !styled.include?(module.file)
       case problem_in(module.file, module.text)
-        Ast.Maybe.Present(problem) -> return Ast.Maybe.Present(problem)
-        Ast.Maybe.Absent -> next
+        some(problem) -> return some(problem)
+        none -> next
       end
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 ## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
 export def follows_rule?(file: String, text: String) -> Bool
-  case problem_in(file, text)
-    Ast.Maybe.Present(_) -> return false
-    Ast.Maybe.Absent -> return true
-  end
+  return problem_in(file, text).none?
 end
 
-def problem_in(file: String, text: String) -> Ast.Maybe[Failure.Problem]
+def problem_in(file: String, text: String) -> Optional[Failure.Problem]
   case Lexer.lex(text)
     Diag.Outcome.Done(tokens) -> return first_missing(file, text, tokens)
     # A file that linked lexes again, so this arm does not happen.
-    Diag.Outcome.Failed(_) -> return Ast.Maybe.Absent
+    Diag.Outcome.Failed(_) -> return none
   end
 end
 
@@ -56,17 +53,17 @@ end
 # break comes before and after it: a trailing comment is no token, and a line that goes on with a leading `.name` has
 # no line break after it, so neither makes it less bare. The kind of a token is checked before its neighbours, so the
 # many other tokens cost one comparison.
-def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Ast.Maybe[Failure.Problem]
+def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Optional[Failure.Problem]
   for index in 1...tokens.size - 1
     token = tokens[index]
     if token.kind == "end" and tokens[index - 1].kind == "NL" and tokens[index + 1].kind == "NL"
       if needs_empty_line?(text, tokens, index + 1)
-        return Ast.Maybe.Present(missing(file, token))
+        return some(missing(file, token))
       end
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 # Whether the line after the line break at `tokens[at]` must be empty and is not. The end of the file needs nothing. A

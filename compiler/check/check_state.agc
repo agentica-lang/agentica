@@ -40,7 +40,7 @@ end
 export struct Capture
   boundary: Int
   params: List[Ast.BlockParam]
-  each_receiver: Ast.Maybe[Ast.Expr]
+  each_receiver: Optional[Ast.Expr]
 end
 
 ## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
@@ -110,7 +110,7 @@ export struct St
   depth: Int
   result: Slot
   loops: Int
-  capture: Ast.Maybe[Capture]
+  capture: Optional[Capture]
   range_chain: List[Int]
   signature: String
   nest: Int
@@ -169,7 +169,7 @@ export def fresh() -> St
     depth: 0,
     result: Slot.Known(Types.Type.Void),
     loops: 0,
-    capture: Ast.Maybe.Absent,
+    capture: none,
     range_chain: [],
     signature: "",
     nest: 0,

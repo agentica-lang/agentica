@@ -82,8 +82,8 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
   here = done.cx.with(file: entry.file)
   declared = T.Type.Unknown
   case entry.decl.type
-    Ast.Maybe.Present(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)
-    Ast.Maybe.Absent -> declared = declared
+    some(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)
+    none -> declared = declared
   end
 
   out = try State.expr(here, done.st, entry.decl.value, declared)
@@ -193,11 +193,8 @@ def visit(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool)
   return check_data(cx, st, node, block_allowed)
 end
 
-def has_entry?(entry: Ast.Maybe[Model.Builtin]) -> Bool
-  case entry
-    Ast.Maybe.Present(found) -> return true
-    Ast.Maybe.Absent -> return false
-  end
+def has_entry?(entry: Optional[Model.Builtin]) -> Bool
+  return entry.some?
 end
 
 def refuse(cx: State.Cx, st: State.St, span: Source.Span, what: String, help: String) -> String
@@ -242,53 +239,53 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
 end
 
 # The builtin a call, method call or field access names: not a call of a function of the program.
-def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Ast.Maybe[Model.Builtin]
+def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Optional[Model.Builtin]
   case node
-    ConstWalk.Node.Stmt(stmt) -> return Ast.Maybe.Absent
+    ConstWalk.Node.Stmt(stmt) -> return none
     ConstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
           if cx.functions.has_key?(found.name)
-            return Ast.Maybe.Absent
+            return none
           end
 
           return entry_named(cx, found.name)
         Ast.Expr.MethodCall(found) -> return entry_resolved(cx, st, found.id)
         Ast.Expr.FieldAccess(found) -> return entry_resolved(cx, st, found.id)
-        _ -> return Ast.Maybe.Absent
+        _ -> return none
       end
   end
 end
 
-def entry_named(cx: State.Cx, name: String) -> Ast.Maybe[Model.Builtin]
+def entry_named(cx: State.Cx, name: String) -> Optional[Model.Builtin]
   found = ENTRIES.get(name)
   if found.ok?
-    return Ast.Maybe.Present(found.unwrap!)
+    return some(found.unwrap!)
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
-def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Ast.Maybe[Model.Builtin]
+def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builtin]
   resolved = st.resolved.get(id)
   if !resolved.ok?
-    return Ast.Maybe.Absent
+    return none
   end
 
   case resolved.unwrap!
     State.Resolved.Call(name, type) -> return entry_named(cx, name)
-    _ -> return Ast.Maybe.Absent
+    _ -> return none
   end
 end
 
-def refuse_form(cx: State.Cx, st: State.St, node: ConstWalk.Node, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
+def refuse_form(cx: State.Cx, st: State.St, node: ConstWalk.Node, entry: Optional[Model.Builtin]) -> Result[Bool]
   case node
     ConstWalk.Node.Stmt(stmt) -> return ok(true)
     ConstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
   end
 end
 
-def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
+def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Model.Builtin]) -> Result[Bool]
   span = Ast.expr_span(expr)
   case expr
     Ast.Expr.FunctionRef(found) -> return error(
@@ -327,9 +324,9 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Maybe[Mod
   end
 end
 
-def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
+def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Optional[Model.Builtin]) -> Result[Bool]
   case entry
-    Ast.Maybe.Present(found) ->
+    some(found) ->
       if found.effects.size > 0
         return error(
           refuse(
@@ -343,7 +340,7 @@ def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.May
       end
 
       return ok(true)
-    Ast.Maybe.Absent -> return ok(true)
+    none -> return ok(true)
   end
 end
 

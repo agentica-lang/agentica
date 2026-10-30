@@ -36,8 +36,8 @@ export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, 
   end
 
   case block.params[index].type
-    Ast.Maybe.Present(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
-    Ast.Maybe.Absent -> return ok(T.Type.Unknown)
+    some(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
+    none -> return ok(T.Type.Unknown)
   end
 end
 
@@ -76,9 +76,9 @@ def sort_by_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Block
     cx,
     target.st,
     block,
-    Ast.Maybe.Present([T.item(target.type)]),
+    some([T.item(target.type)]),
     T.Type.Unknown,
-    Ast.Maybe.Absent,
+    none,
   )
   try check_sort_key(cx, key.st, key.type, block.span)
   return ok(State.Out(st: key.st, type: target.type))
@@ -237,16 +237,16 @@ def block_callback(
   annotated = try annotated_parameter(cx, st, block, position)
   list = try Args.list_argument(cx, st, site, T.list_of(annotated))
   element = T.item(list.type)
-  receiver: Ast.Maybe[Ast.Expr] = Ast.Maybe.Absent
+  receiver: Optional[Ast.Expr] = none
   if each?(rule)
-    receiver = Ast.Maybe.Present(site.args[0])
+    receiver = some(site.args[0])
   end
 
   if reduces?(rule)
     return reduce_block(cx, list.st, site, block, element)
   end
 
-  return Stmt.check_block_body(cx, list.st, block, Ast.Maybe.Present([element]), block_result(rule), receiver)
+  return Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule), receiver)
 end
 
 def reduce_block(
@@ -266,9 +266,9 @@ def reduce_block(
     cx,
     accumulator.st,
     block,
-    Ast.Maybe.Present([accumulator.type, element]),
+    some([accumulator.type, element]),
     accumulator.type,
-    Ast.Maybe.Absent,
+    none,
   )
 end
 

@@ -9,12 +9,12 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 
 ## The innermost expression of `module` that holds the character at `offset` and has a type in `types` (a list indexed
-## by node id, `Checked.types`), or Absent. Among the expressions that hold it, the one with the shortest span wins,
+## by node id, `Checked.types`), or `none`. Among the expressions that hold it, the one with the shortest span wins,
 ## and the deepest of two with the same span; so `a` in `a.b` and `b` in `f(b)` are not the whole access or call. Only
 ## the function or constant that holds the position is walked. A call that is piped (`x |> f(y)`) holds `f(y)` but not
 ## `x`, so no node is skipped for its parent's span.
-export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: Int) -> Ast.Maybe[Ast.Expr]
-  best: Ast.Maybe[Ast.Expr] = Ast.Maybe.Absent
+export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: Int) -> Optional[Ast.Expr]
+  best: Optional[Ast.Expr] = none
   best_size = -1
   work = roots(module, offset)
   at = 0
@@ -27,7 +27,7 @@ export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: I
         size = span.stop.offset - span.start.offset
         closer = best_size < 0 or size <= best_size
         if closer and holds?(span, offset) and typed?(types, expr)
-          best = Ast.Maybe.Present(expr)
+          best = some(expr)
           best_size = size
         end
 
@@ -80,10 +80,10 @@ def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]
   return out
 end
 
-def default_of(default: Ast.Maybe[Ast.Expr]) -> List[Walk.Node]
+def default_of(default: Optional[Ast.Expr]) -> List[Walk.Node]
   case default
-    Ast.Maybe.Present(value) -> return [Walk.Node.Expr(value)]
-    Ast.Maybe.Absent -> return []
+    some(value) -> return [Walk.Node.Expr(value)]
+    none -> return []
   end
 end
 

@@ -33,29 +33,29 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
   return ok(true)
 end
 
-# What a method call or field access resolved to; Absent for any other expression.
-def resolution(st: State.St, value: Ast.Expr) -> Ast.Maybe[State.Resolved]
+# What a method call or field access resolved to; `none` for any other expression.
+def resolution(st: State.St, value: Ast.Expr) -> Optional[State.Resolved]
   case value
     Ast.Expr.MethodCall(node) -> return found_resolution(st, node.id)
     Ast.Expr.FieldAccess(node) -> return found_resolution(st, node.id)
-    _ -> return Ast.Maybe.Absent
+    _ -> return none
   end
 end
 
-def found_resolution(st: State.St, id: Int) -> Ast.Maybe[State.Resolved]
+def found_resolution(st: State.St, id: Int) -> Optional[State.Resolved]
   found = st.resolved.get(id)
   if found.ok?
-    return Ast.Maybe.Present(found.unwrap!)
+    return some(found.unwrap!)
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 # The builtin a dropped value calls: the one a method resolved to, or a call written by name. "" for anything else.
-def call_name(value: Ast.Expr, resolved: Ast.Maybe[State.Resolved]) -> String
+def call_name(value: Ast.Expr, resolved: Optional[State.Resolved]) -> String
   case resolved
-    Ast.Maybe.Present(found) -> return resolved_call_name(found)
-    Ast.Maybe.Absent -> return plain_call_name(value)
+    some(found) -> return resolved_call_name(found)
+    none -> return plain_call_name(value)
   end
 end
 
@@ -75,7 +75,7 @@ end
 
 # True when dropping the value loses something: a method that resolved to the receiver, to_s or inspect, a struct
 # update, or a call of a pure builtin.
-def unused_result?(value: Ast.Expr, resolved: Ast.Maybe[State.Resolved], entry: Result[Model.Builtin]) -> Bool
+def unused_result?(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Result[Model.Builtin]) -> Bool
   if struct_update?(value) or yields_value?(resolved)
     return true
   end
@@ -95,10 +95,10 @@ def struct_update?(value: Ast.Expr) -> Bool
   end
 end
 
-def yields_value?(resolved: Ast.Maybe[State.Resolved]) -> Bool
+def yields_value?(resolved: Optional[State.Resolved]) -> Bool
   case resolved
-    Ast.Maybe.Present(found) -> return !resolved_is_call?(found)
-    Ast.Maybe.Absent -> return false
+    some(found) -> return !resolved_is_call?(found)
+    none -> return false
   end
 end
 
@@ -122,7 +122,7 @@ def unused_subject(name: String) -> String
 end
 
 # The help of CHECK-UNUSED-VALUE: assign the result to the name the call was made on, when there is one.
-def unused_help(value: Ast.Expr, resolved: Ast.Maybe[State.Resolved], entry: Result[Model.Builtin]) -> String
+def unused_help(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Result[Model.Builtin]) -> String
   target = receiver_name(value)
   keeps = struct_update?(value) or resolved_self?(resolved) or (entry.ok? and keeps_first_type?(entry.unwrap!))
   if target != "" and keeps
@@ -159,10 +159,10 @@ def name_of(expr: Ast.Expr) -> String
   end
 end
 
-def resolved_self?(resolved: Ast.Maybe[State.Resolved]) -> Bool
+def resolved_self?(resolved: Optional[State.Resolved]) -> Bool
   case resolved
-    Ast.Maybe.Present(found) -> return self_resolution?(found)
-    Ast.Maybe.Absent -> return false
+    some(found) -> return self_resolution?(found)
+    none -> return false
   end
 end
 

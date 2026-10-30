@@ -54,12 +54,12 @@ enum Step
   Expr(Ast.Expr)
 end
 
-# One step of the walk: the next step, or Absent when there is nothing below; the names in scope for it; and the local
+# One step of the walk: the next step, or `none` when there is nothing below; the names in scope for it; and the local
 # found, if the position is on one.
 struct Move
-  step: Ast.Maybe[Step]
+  step: Optional[Step]
   scope: Map[String, Local]
-  found: Ast.Maybe[Found]
+  found: Optional[Found]
 end
 
 # A step of the sweep for the uses of one local, with the names in scope for it.
@@ -74,13 +74,13 @@ struct Visit
   next: List[Pending]
 end
 
-## The local that the character at `offset` is on in the root file `module`, or Absent. `bound` is `Checked.bound`. A
+## The local that the character at `offset` is on in the root file `module`, or `none`. `bound` is `Checked.bound`. A
 ## local whose type the checker recorded none for is not answered.
 export def find(
   module: Linker.LinkedModule,
   bound: Map[Int, List[T.Type]],
   offset: Int,
-) -> Ast.Maybe[Found]
+) -> Optional[Found]
   ask = Query(offset: offset, bound: bound)
   for declaration in module.declarations
     case declaration
@@ -101,7 +101,7 @@ export def find(
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 ## The names in `module` that stand for `target`, a local `find` gave, in the order of the walk: every use of it, and
@@ -133,24 +133,24 @@ end
 
 # A found local is answered only with a type; a discard has none and is kept, so the caller can tell it from a position
 # on no local.
-def typed(found: Ast.Maybe[Found]) -> Ast.Maybe[Found]
+def typed(found: Optional[Found]) -> Optional[Found]
   case found
-    Ast.Maybe.Present(at) ->
+    some(at) ->
       if at.local.kind != "discard" and T.unknown?(at.local.type)
-        return Ast.Maybe.Absent
+        return none
       end
 
       return found
-    Ast.Maybe.Absent -> return found
+    none -> return found
   end
 end
 
 # The parameters are in scope for the body. The position on the name of one is the parameter itself.
-def function_found(ask: Query, node: Ast.FunctionDecl) -> Ast.Maybe[Found]
+def function_found(ask: Query, node: Ast.FunctionDecl) -> Optional[Found]
   bound = bind_parameters(ask, parameters_of(ask, node.params), {})
   case bound.found
-    Ast.Maybe.Present(_) -> return bound.found
-    Ast.Maybe.Absent -> return walk(ask, Step.Block(node.body), bound.scope)
+    some(_) -> return bound.found
+    none -> return walk(ask, Step.Block(node.body), bound.scope)
   end
 end
 
@@ -186,23 +186,23 @@ def discard(local: Local) -> Local
 end
 
 # Follows the position down the tree. Each step goes into a smaller part of the tree, so the loop ends.
-def walk(ask: Query, first: Step, first_scope: Map[String, Local]) -> Ast.Maybe[Found]
+def walk(ask: Query, first: Step, first_scope: Map[String, Local]) -> Optional[Found]
   step = first
   scope = first_scope
   while true
     move = advance(ask, step, scope)
     case move.found
-      Ast.Maybe.Present(_) -> return move.found
-      Ast.Maybe.Absent -> scope = move.scope
+      some(_) -> return move.found
+      none -> scope = move.scope
     end
 
     case move.step
-      Ast.Maybe.Present(next) -> step = next
-      Ast.Maybe.Absent -> return Ast.Maybe.Absent
+      some(next) -> step = next
+      none -> return none
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 def advance(ask: Query, step: Step, scope: Map[String, Local]) -> Move
@@ -214,15 +214,15 @@ def advance(ask: Query, step: Step, scope: Map[String, Local]) -> Move
 end
 
 def go(step: Step, scope: Map[String, Local]) -> Move
-  return Move(step: Ast.Maybe.Present(step), scope: scope, found: Ast.Maybe.Absent)
+  return Move(step: some(step), scope: scope, found: none)
 end
 
 def stop(scope: Map[String, Local]) -> Move
-  return Move(step: Ast.Maybe.Absent, scope: scope, found: Ast.Maybe.Absent)
+  return Move(step: none, scope: scope, found: none)
 end
 
 def hit(scope: Map[String, Local], local: Local, site: Source.Span) -> Move
-  return Move(step: Ast.Maybe.Absent, scope: scope, found: Ast.Maybe.Present(Found(local: local, site: site)))
+  return Move(step: none, scope: scope, found: some(Found(local: local, site: site)))
 end
 
 # The statement of the block that holds the position; the bindings of the statements before it are in scope.
@@ -314,10 +314,10 @@ def into_statement(ask: Query, stmt: Ast.Stmt, scope: Map[String, Local]) -> Mov
   end
 end
 
-def into_optional(value: Ast.Maybe[Ast.Expr], scope: Map[String, Local]) -> Move
+def into_optional(value: Optional[Ast.Expr], scope: Map[String, Local]) -> Move
   case value
-    Ast.Maybe.Present(found) -> return go(Step.Expr(found), scope)
-    Ast.Maybe.Absent -> return stop(scope)
+    some(found) -> return go(Step.Expr(found), scope)
+    none -> return stop(scope)
   end
 end
 
@@ -341,8 +341,8 @@ def into_if(ask: Query, node: Ast.IfStmt, scope: Map[String, Local]) -> Move
   end
 
   case node.else_body
-    Ast.Maybe.Present(body) -> return go(Step.Block(body), scope)
-    Ast.Maybe.Absent -> return stop(scope)
+    some(body) -> return go(Step.Block(body), scope)
+    none -> return stop(scope)
   end
 end
 
@@ -396,12 +396,12 @@ def into_arm(ask: Query, arm: Ast.CaseArm, scope: Map[String, Local]) -> Move
   end
 
   case arm.guard
-    Ast.Maybe.Present(condition) ->
+    some(condition) ->
       if reaches?(condition, ask.offset)
         return go(Step.Expr(condition), inner)
       end
 
-    Ast.Maybe.Absent -> inner = inner
+    none -> inner = inner
   end
 
   return go(Step.Block(arm.body), inner)
@@ -527,10 +527,10 @@ def pending_expr(expr: Ast.Expr, scope: Map[String, Local]) -> Pending
   return Pending(step: Step.Expr(expr), scope: scope)
 end
 
-def optional_expr(value: Ast.Maybe[Ast.Expr], scope: Map[String, Local]) -> List[Pending]
+def optional_expr(value: Optional[Ast.Expr], scope: Map[String, Local]) -> List[Pending]
   case value
-    Ast.Maybe.Present(found) -> return [pending_expr(found, scope)]
-    Ast.Maybe.Absent -> return []
+    some(found) -> return [pending_expr(found, scope)]
+    none -> return []
   end
 end
 
@@ -541,8 +541,8 @@ def if_parts(node: Ast.IfStmt, scope: Map[String, Local]) -> List[Pending]
   end
 
   case node.else_body
-    Ast.Maybe.Present(body) -> return out.push(Pending(step: Step.Block(body), scope: scope))
-    Ast.Maybe.Absent -> return out
+    some(body) -> return out.push(Pending(step: Step.Block(body), scope: scope))
+    none -> return out
   end
 end
 
@@ -608,8 +608,8 @@ end
 def into_block(ask: Query, node: Ast.BlockLit, scope: Map[String, Local]) -> Move
   bound = bind_parameters(ask, block_parameters_of(ask, node.params), scope)
   case bound.found
-    Ast.Maybe.Present(_) -> return bound
-    Ast.Maybe.Absent -> return go(Step.Block(node.body), bound.scope)
+    some(_) -> return bound
+    none -> return go(Step.Block(node.body), bound.scope)
   end
 end
 

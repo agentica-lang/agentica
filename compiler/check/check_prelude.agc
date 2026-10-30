@@ -95,7 +95,7 @@ def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, template: T.Typ
     result = T.Type.Unknown
   end
 
-  return Stmt.check_block_in(cx, bound.st, block, Ast.Maybe.Present(params), result, Ast.Maybe.Absent, step)
+  return Stmt.check_block_in(cx, bound.st, block, some(params), result, none, step)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.

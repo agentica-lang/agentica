@@ -33,8 +33,8 @@ export def plan(
     by_name = by_name.put(constants[at].name, at)
     value = literal_value(constants[at].value)
     case value
-      Ast.Maybe.Present(imm) -> literals = literals.put(constants[at].name, imm)
-      Ast.Maybe.Absent -> literals = literals
+      some(imm) -> literals = literals.put(constants[at].name, imm)
+      none -> literals = literals
     end
 
     at += 1
@@ -72,22 +72,22 @@ export def plan(
   return Plan(kept: kept, slots: slots, literals: literals)
 end
 
-## The value of a scalar literal initializer: one literal, or `-` and a number literal. Absent for any other
+## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
 ## initializer.
-export def literal_value(value: Ast.Expr) -> Ast.Maybe[Ir.Imm]
+export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   case value
     Ast.Expr.Literal(node) -> return plain(node.value)
     Ast.Expr.Unary(node) ->
       if node.op != "minus"
-        return Ast.Maybe.Absent
+        return none
       end
 
       case node.operand
         Ast.Expr.Literal(inner) -> return negated(inner.value)
-        _ -> return Ast.Maybe.Absent
+        _ -> return none
       end
 
-    _ -> return Ast.Maybe.Absent
+    _ -> return none
   end
 end
 
@@ -125,27 +125,27 @@ def kept_names(
   return kept
 end
 
-def plain(value: Ast.LitValue) -> Ast.Maybe[Ir.Imm]
+def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
   case value
-    Ast.LitValue.Whole(number) -> return Ast.Maybe.Present(Ir.Imm.Int(number))
-    Ast.LitValue.Real(number) -> return Ast.Maybe.Present(Ir.Imm.Float(number))
-    Ast.LitValue.Text(text) -> return Ast.Maybe.Present(Ir.Imm.Text(text))
-    Ast.LitValue.Flag(flag) -> return Ast.Maybe.Present(Ir.Imm.Bool(flag))
-    Ast.LitValue.Nothing -> return Ast.Maybe.Present(Ir.Imm.Nil)
-    Ast.LitValue.Huge(digits) -> return Ast.Maybe.Absent
+    Ast.LitValue.Whole(number) -> return some(Ir.Imm.Int(number))
+    Ast.LitValue.Real(number) -> return some(Ir.Imm.Float(number))
+    Ast.LitValue.Text(text) -> return some(Ir.Imm.Text(text))
+    Ast.LitValue.Flag(flag) -> return some(Ir.Imm.Bool(flag))
+    Ast.LitValue.Nothing -> return some(Ir.Imm.Nil)
+    Ast.LitValue.Huge(digits) -> return none
   end
 end
 
-def negated(value: Ast.LitValue) -> Ast.Maybe[Ir.Imm]
+def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
   case value
-    Ast.LitValue.Whole(number) -> return Ast.Maybe.Present(Ir.Imm.Int(0 - number))
-    Ast.LitValue.Real(number) -> return Ast.Maybe.Present(Ir.Imm.Float(-number))
+    Ast.LitValue.Whole(number) -> return some(Ir.Imm.Int(0 - number))
+    Ast.LitValue.Real(number) -> return some(Ir.Imm.Float(-number))
     Ast.LitValue.Huge(digits) ->
       if digits == INT_MIN_DIGITS
-        return Ast.Maybe.Present(Ir.Imm.Int(INT_MIN))
+        return some(Ir.Imm.Int(INT_MIN))
       end
 
-      return Ast.Maybe.Absent
-    _ -> return Ast.Maybe.Absent
+      return none
+    _ -> return none
   end
 end

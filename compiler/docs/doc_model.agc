@@ -2,7 +2,7 @@
 ## declarations in source order, each with its signature, its doc and, for a function, a struct or an enum, the parts
 ## the JSON form lists. It is built from the parsed program only: nothing is linked or checked.
 ##
-## A doc is the text of the `##` block with the markers removed (`Ast.Maybe`, as on the syntax tree) and its leading
+## A doc is the text of the `##` block with the markers removed (an `Optional`, as on the syntax tree) and its leading
 ## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of an
 ## exported declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, parse_declaration), so
 ## `item_of` reads the outer doc first and the inner one when there is none. `of_program` takes the source `text` for
@@ -16,7 +16,7 @@ import Signature from "signature"
 export struct Parameter
   name: String
   type: String
-  default: Ast.Maybe[String]
+  default: Optional[String]
 end
 
 ## One field of a struct, with its doc, its span, the span of its name and the source text of its default value.
@@ -25,8 +25,8 @@ export struct Field
   span: Source.Span
   name_span: Source.Span
   type: String
-  default: Ast.Maybe[String]
-  doc: Ast.Maybe[String]
+  default: Optional[String]
+  doc: Optional[String]
 end
 
 ## One variant of an enum, with the types of its payload as written, its doc, its span and the span of its name.
@@ -35,7 +35,7 @@ export struct Variant
   span: Source.Span
   name_span: Source.Span
   payload: List[String]
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
 end
 
 ## What an item has besides the common data: the parameters and the result of a function, the fields of a struct, the
@@ -56,14 +56,14 @@ export struct Item
   name_span: Source.Span
   exported: Bool
   signature: String
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
   span: Source.Span
   detail: Detail
 end
 
 ## A documented module: its doc and its exported items.
 export struct Module
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
   items: List[Item]
 end
 
@@ -96,10 +96,10 @@ end
 
 ## A doc without its leading and trailing blank lines (a line of spaces is blank); absent when nothing else is left.
 ## The lines in between stay as written.
-export def cleaned(doc: Ast.Maybe[String]) -> Ast.Maybe[String]
+export def cleaned(doc: Optional[String]) -> Optional[String]
   case doc
-    Ast.Maybe.Absent -> return doc
-    Ast.Maybe.Present(text) ->
+    none -> return doc
+    some(text) ->
       lines = text.split("\n")
       first = 0
       while first < lines.size and lines[first].trim == ""
@@ -112,29 +112,29 @@ export def cleaned(doc: Ast.Maybe[String]) -> Ast.Maybe[String]
       end
 
       if first == last
-        return Ast.Maybe.Absent
+        return none
       end
 
-      return Ast.Maybe.Present(lines.drop(first).take(last - first).join("\n"))
+      return some(lines.drop(first).take(last - first).join("\n"))
   end
 end
 
 ## The first paragraph of a doc, on one line: its lines up to the first blank one, each trimmed, joined by a space.
-## Absent when the doc has no such text.
-export def summary(doc: Ast.Maybe[String]) -> Ast.Maybe[String]
+## `none` when the doc has no such text.
+export def summary(doc: Optional[String]) -> Optional[String]
   case cleaned(doc)
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(text) ->
+    none -> return none
+    some(text) ->
       words: List[String] = []
       for line in text.split("\n")
         if line.trim == ""
-          return Ast.Maybe.Present(words.join(" "))
+          return some(words.join(" "))
         end
 
         words = words.push(line.trim)
       end
 
-      return Ast.Maybe.Present(words.join(" "))
+      return some(words.join(" "))
   end
 end
 
@@ -184,7 +184,7 @@ def placed(detail: Detail, at: Source.Span) -> Detail
 end
 
 # The item of the declaration inside an `export`: `doc` and `span` are the ones of the export.
-def inner_items(declaration: Ast.Decl, doc: Ast.Maybe[String], span: Source.Span, text: String) -> List[Item]
+def inner_items(declaration: Ast.Decl, doc: Optional[String], span: Source.Span, text: String) -> List[Item]
   case declaration
     Ast.Decl.Function(node) -> return [function_item(node, doc, span, true, text)]
     Ast.Decl.Struct(node) -> return [struct_item(node, doc, span, true, text)]
@@ -199,16 +199,16 @@ def inner_items(declaration: Ast.Decl, doc: Ast.Maybe[String], span: Source.Span
 end
 
 # The outer doc wins; the doc of the inner declaration is the fallback for a tree that carries it there.
-def chosen(outer: Ast.Maybe[String], inner: Ast.Maybe[String]) -> Ast.Maybe[String]
+def chosen(outer: Optional[String], inner: Optional[String]) -> Optional[String]
   case outer
-    Ast.Maybe.Present(_) -> return outer
-    Ast.Maybe.Absent -> return inner
+    some(_) -> return outer
+    none -> return inner
   end
 end
 
 def function_item(
   node: Ast.FunctionDecl,
-  doc: Ast.Maybe[String],
+  doc: Optional[String],
   span: Source.Span,
   exported: Bool,
   text: String,
@@ -235,7 +235,7 @@ end
 
 def struct_item(
   node: Ast.StructDecl,
-  doc: Ast.Maybe[String],
+  doc: Optional[String],
   span: Source.Span,
   exported: Bool,
   text: String,
@@ -263,7 +263,7 @@ def struct_item(
   )
 end
 
-def enum_item(node: Ast.EnumDecl, doc: Ast.Maybe[String], span: Source.Span, exported: Bool) -> Item
+def enum_item(node: Ast.EnumDecl, doc: Optional[String], span: Source.Span, exported: Bool) -> Item
   variants = node.variants.map do |variant: Ast.EnumVariant|
     Variant(
       name: variant.name,
@@ -286,7 +286,7 @@ def enum_item(node: Ast.EnumDecl, doc: Ast.Maybe[String], span: Source.Span, exp
   )
 end
 
-def alias_item(node: Ast.TypeAliasDecl, doc: Ast.Maybe[String], span: Source.Span, exported: Bool) -> Item
+def alias_item(node: Ast.TypeAliasDecl, doc: Optional[String], span: Source.Span, exported: Bool) -> Item
   return Item(
     kind: "alias",
     name: node.name,
@@ -299,7 +299,7 @@ def alias_item(node: Ast.TypeAliasDecl, doc: Ast.Maybe[String], span: Source.Spa
   )
 end
 
-def resource_item(node: Ast.ResourceDecl, doc: Ast.Maybe[String], span: Source.Span, exported: Bool) -> Item
+def resource_item(node: Ast.ResourceDecl, doc: Optional[String], span: Source.Span, exported: Bool) -> Item
   word = "free"
   if node.by_ref
     word = "free_ref"

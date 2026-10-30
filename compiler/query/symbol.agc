@@ -44,7 +44,7 @@ export struct Match
   file: String
   exported: Bool
   signature: String
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
   span: Source.Span
   name_span: Source.Span
   extra: Extra
@@ -92,26 +92,26 @@ export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLin
 end
 
 ## The declaration of `module` whose name is written at `name_span`: a top-level declaration, a field or a variant, as
-## `answer` lists it (the `file` is the key of the module). Absent when the span is no declaration's name.
-export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Ast.Maybe[Match]
+## `answer` lists it (the `file` is the key of the module). `none` when the span is no declaration's name.
+export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
   at = name_span.start.offset
   for item in Model.declared(module.parsed, module.text)
     if item.name_span.start.offset == at
-      return Ast.Maybe.Present(item_match(module.key, item))
+      return some(item_match(module.key, item))
     end
 
     case item.detail
       Model.Detail.Struct(fields) ->
         for field in fields
           if field.name_span.start.offset == at
-            return Ast.Maybe.Present(field_match(module.key, item, field))
+            return some(field_match(module.key, item, field))
           end
         end
 
       Model.Detail.Enum(variants) ->
         for variant in variants
           if variant.name_span.start.offset == at
-            return Ast.Maybe.Present(variant_match(module.key, item, variant))
+            return some(variant_match(module.key, item, variant))
           end
         end
 
@@ -120,7 +120,7 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> A
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 # The aliases that the files of the roots import each module under, by the key of the module. The same alias can name
@@ -273,7 +273,7 @@ def builtin(name: String) -> List[Match]
       file: "",
       exported: true,
       signature: form_signature(entry.unwrap!),
-      doc: Ast.Maybe.Absent,
+      doc: none,
       span: nowhere,
       name_span: nowhere,
       extra: Extra.Builtin(entry.unwrap!),
@@ -285,8 +285,8 @@ end
 def not_found(name: String, linked: SymbolLink.Linked) -> Problems.Problem
   hints: List[String] = []
   case Suggest.did_you_mean(name, candidates(linked.modules).concat(PUBLIC_NAMES))
-    Ast.Maybe.Present(text) -> hints = hints.push(text)
-    Ast.Maybe.Absent -> hints = hints
+    some(text) -> hints = hints.push(text)
+    none -> hints = hints
   end
 
   if linked.skipped.size > 0
