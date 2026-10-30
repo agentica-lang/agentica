@@ -6,6 +6,9 @@ import Core from "../analysis/analysis"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Problems from "../diagnostics/problem"
 
+# The first line of the `--ai` form of a diagnostic (diagnostics/diagnostic_ai.agc).
+AI_HEADING = "check failed: 1 error"
+
 # The usage line of `check`, given as the help of QUERY-USAGE.
 USAGE = "usage: agentica check [PATH...] [--json]   or   agentica check --stdin FILE [--json]"
 
@@ -25,6 +28,27 @@ end
 ## The number of files that did not pass.
 export def failures(entries: List[Entry]) -> Int
   return entries.select do |entry: Entry| !passed?(entry) end.size
+end
+
+## The exit status of a run: 2 when a file could not be read (a QUERY- problem), else 1 when a file failed, else 0.
+export def status(entries: List[Entry]) -> Int
+  if entries.any? do |entry: Entry| unreadable?(entry) end
+    return 2
+  elsif failures(entries) > 0
+    return 1
+  end
+
+  return 0
+end
+
+## The `--ai` text of a problem of `file` with the file in place of its `check failed: 1 error` heading, which the last
+## line of a run says for all the files.
+export def headed(file: String, text: String) -> String
+  if !text.starts_with?(AI_HEADING)
+    return text
+  end
+
+  return "#{file}:#{text.slice(AI_HEADING.length, text.length - AI_HEADING.length)}"
 end
 
 ## The line of a run in which every file passed.
@@ -65,6 +89,14 @@ def json_entry(entry: Entry) -> Map[String, Json]
       }
     Entry.Failed(file, problem) ->
       return {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
+  end
+end
+
+def unreadable?(entry: Entry) -> Bool
+  case entry
+    Entry.Unreadable(_) -> return true
+    Entry.Passed(_) -> return false
+    Entry.Failed(_, _) -> return false
   end
 end
 

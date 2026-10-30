@@ -315,12 +315,13 @@ def check_entry(session: Session, file: String) -> CliCheck.Entry
 end
 
 # The answer of a run over several files. The JSON form is one document on stdout; the others print each problem on
-# stderr, in the order of the files, then the count.
+# stderr, in the order of the files, then the count. The status is 2 when a file could not be read (QUERY- problems
+# are status 2), else 1 when a file failed.
 def report(session: Session, entries: List[CliCheck.Entry]) -> Int
   failed = CliCheck.failures(entries)
   if session.options.style == "json"
     print(CliCheck.json_text(entries))
-    return failed_status(failed)
+    return CliCheck.status(entries)
   end
 
   for entry in entries
@@ -331,22 +332,20 @@ def report(session: Session, entries: List[CliCheck.Entry]) -> Int
     return emit(Reply.printed(CliCheck.ok_text(entries.size)))
   end
 
-  return emit(Reply.failed(1, CliCheck.failed_text(failed, entries.size)))
-end
-
-def failed_status(failed: Int) -> Int
-  if failed == 0
-    return 0
-  end
-
-  return 1
+  return emit(Reply.failed(CliCheck.status(entries), CliCheck.failed_text(failed, entries.size)))
 end
 
 def show_entry(session: Session, entry: CliCheck.Entry) -> Void
   case entry
     CliCheck.Entry.Passed(_) -> return
     CliCheck.Entry.Unreadable(file) -> IO.warn("agentica: cannot read #{file}")
-    CliCheck.Entry.Failed(file, problem) -> show(session, problem, file)
+    CliCheck.Entry.Failed(file, problem) ->
+      text = render(session, problem, file)
+      if session.options.style == "ai"
+        text = CliCheck.headed(file, text)
+      end
+
+      IO.warn(text)
   end
 end
 
@@ -535,27 +534,32 @@ end
 
 # Prints the problem as `reject` says, and leaves the status to the caller.
 def show(session: Session, problem: Problems.Problem, source: String) -> Void
+  IO.warn(render(session, problem, source))
+end
+
+# The problem in the form the style asks for, without the line feed that IO.warn adds.
+def render(session: Session, problem: Problems.Problem, source: String) -> String
   style = session.options.style
   root = Core.root?(problem.file, source, session.settings)
   shown = Core.named(session.settings, problem, source)
   if style == "json"
-    IO.warn(JSON.encode(DiagnosticJson.json(shown)))
-  else
-    text = ""
-    if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
-      text = source_text(session, problem.file, root)
-    end
-
-    if style == "ai" and QueryOptions.arguments?(problem)
-      IO.warn(Ai.ai(QueryOptions.unplaced(shown), text))
-    elsif style == "ai"
-      IO.warn(Ai.ai(shown, text))
-    elsif QueryOptions.arguments?(problem)
-      IO.warn(Plain.without_source(shown))
-    else
-      IO.warn(Plain.format(shown, text))
-    end
+    return JSON.encode(DiagnosticJson.json(shown))
   end
+
+  text = ""
+  if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
+    text = source_text(session, problem.file, root)
+  end
+
+  if style == "ai" and QueryOptions.arguments?(problem)
+    return Ai.ai(QueryOptions.unplaced(shown), text)
+  elsif style == "ai"
+    return Ai.ai(shown, text)
+  elsif QueryOptions.arguments?(problem)
+    return Plain.without_source(shown)
+  end
+
+  return Plain.format(shown, text)
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight

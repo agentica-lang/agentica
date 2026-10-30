@@ -4,13 +4,16 @@ The exact rules of the command line: running, checking and compiling a
 program, the bytecode cache and the sandbox flags.
 
 - `agentica FILE.agc ARGS` checks, then runs; `System.args()` returns ARGS (the
-  words after the file are the program's). `agentica check [PATH...]` only
-  checks: one file prints `check ok`; several files or folders (none: the
-  current folder; not `deps/`, `agc_libs/` or hidden folders) check every `.agc`
-  file, print each file's first diagnostic and a count, and with `--json` print
-  one object `{ok, checked, failed, files}`. `check --stdin FILE.agc` reads the
-  text from standard input. Exit 0 is success, 1 a diagnostic, 2 bad usage or an
-  unreadable file.
+  words after the file are the program's). Exit 0 is success, 1 a diagnostic,
+  2 bad usage or an unreadable file.
+- `agentica check [PATH...]` only checks. One file path prints `check ok` (with
+  `--json` `{"ok":true}`, or the diagnostic). A folder, no path (the current
+  folder) or several paths check every `.agc` file, print each failing file's
+  first diagnostic and a count line, and exit 1 (2 if a file is unreadable);
+  with `--json` they print one object `{ok, checked, failed, files}` on stdout.
+  A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and
+  symbolic links to files, as `symbol` does; `build/` is not skipped.
+  `check --stdin FILE.agc` reads the text from standard input.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);

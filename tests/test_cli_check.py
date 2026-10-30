@@ -2,11 +2,15 @@
 files, a folder or no path check every `.agc` file and end with a count. The cases read the JSON form and assert codes,
 file names, counts and exit statuses, never message text; the text form is checked by its exit status and streams."""
 import json
+import os
 
-from tests.agentica_test import cli, run, vm_environment
+import pytest
+
+from tests.agentica_test import cli, run, unreadable, vm_environment
 from tests.span_support import problem
 
 LIBRARY = "export def one() -> Int\n  return 1\nend\n"
+ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 PROGRAM = 'def main() -> Void\n  puts("ok")\nend\n'
 BROKEN_TYPE = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
 BROKEN_SYNTAX = "x = 1\n"
@@ -109,3 +113,24 @@ def test_json_may_follow_the_path(tmp_path):
     lay_out(tmp_path, {"lib.agc": LIBRARY})
     result = check("lib.agc", "--json", cwd=tmp_path)
     assert (result.code, result.stdout, result.stderr) == (0, '{"ok":true}\n', "")
+
+
+@pytest.mark.skipif(ROOT_USER, reason="root can read any file")
+def test_an_unreadable_file_is_status_2_and_the_others_are_still_reported(tmp_path):
+    lay_out(tmp_path, {"a.agc": PROGRAM, "bad.agc": BROKEN_TYPE, "locked.agc": LIBRARY})
+    with unreadable(tmp_path / "locked.agc"):
+        report = document(check_json(".", cwd=tmp_path), 2)
+        assert verdicts(report) == {"a.agc": "", "bad.agc": "CHECK-TYPE-MISMATCH", "locked.agc": "QUERY-USAGE"}
+        assert (report["checked"], report["failed"]) == (3, 2)
+        text = check(".", cwd=tmp_path)
+        assert (text.code, text.stdout) == (2, "")
+        assert text.stderr.rstrip().endswith("2 of 3 files")
+
+
+def test_ai_names_each_failing_file_apart_from_the_last_line(tmp_path):
+    lay_out(tmp_path, {"a.agc": BROKEN_TYPE, "b.agc": BROKEN_SYNTAX})
+    result = run(cli() + ["--ai", "check", "."], env=vm_environment(), cwd=tmp_path)
+    assert (result.code, result.stdout) == (1, "")
+    lines = result.stderr.splitlines()
+    assert lines.count("a.agc:") == 1 and lines.count("b.agc:") == 1
+    assert [line for line in lines if line.startswith("check failed")] == ["check failed: 2 of 2 files"]

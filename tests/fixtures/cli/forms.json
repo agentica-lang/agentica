@@ -91,7 +91,7 @@
  },
  "[[\"--ai\", \"check\", \"ok.agc\", \"tab.agc\"], {}]": {
   "code": 1,
-  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: tab.agc:2:11\n  in: main() -> Void\n  source: x: Int = \"a\"\n  expected: Int\n  actual: String\n  help: convert it with s.to_i!\ncheck failed: 1 of 2 files\n",
+  "stderr": "tab.agc:\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: tab.agc:2:11\n  in: main() -> Void\n  source: x: Int = \"a\"\n  expected: Int\n  actual: String\n  help: convert it with s.to_i!\ncheck failed: 1 of 2 files\n",
   "stdout": "",
   "written": []
  },
