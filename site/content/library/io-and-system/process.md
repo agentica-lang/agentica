@@ -44,7 +44,7 @@ ok(0)
 
 ```text
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 ```
 
 Write to the program's standard input, and flush.
@@ -66,13 +66,13 @@ ok("ping")
 
 ```text
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
+Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 ```
 
 Read from the program's standard output.
 
 - `read_line` removes the line ending. At the end of output it gives an error.
-- `read_bytes` gives up to `count` bytes. At the end of output it gives `ok([])`.
+- `read_bytes` gives up to `count` bytes as [`Bytes`](/library/data-structures/bytes/). At the end of output they are empty.
 
 ## Process.close_stdin
 

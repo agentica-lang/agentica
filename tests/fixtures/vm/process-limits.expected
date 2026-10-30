@@ -1,14 +1,13 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 149,
+  "steps": 147,
   "stdout": [
     "error(\"bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\\n  byte string: #\\\"\\\\377\\\"\")",
     "ok(\"valid\")",
     "error(\"process: count must be 0..1048576\")",
     "error(\"process: count must be 0..1048576\")",
-    "error(\"process: bytes must be 0..255 and at most 1048576 per call\")",
-    "error(\"process: bytes must be 0..255 and at most 1048576 per call\")",
+    "error(\"process: bytes exceed 1048576 per call\")",
     "error(\"process: send exceeds 1048576 bytes\")",
     "error(\"network: timeout must be positive milliseconds\")",
     "error(\"network: timeout must be positive milliseconds\")",

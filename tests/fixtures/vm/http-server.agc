@@ -39,7 +39,7 @@ end
 
 def raw(port: Int, bytes: List[Int]) -> String
   socket = TCP.connect("127.0.0.1", port, 5000).unwrap!
-  TCP.send_bytes(socket, bytes, 5000).unwrap!
+  TCP.send_bytes(socket, Bytes.from_list(bytes).unwrap!, 5000).unwrap!
   line = TCP.read_line(socket, 5000).unwrap!
   TCP.close(socket)
   return line

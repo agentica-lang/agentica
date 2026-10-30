@@ -4,7 +4,7 @@ def main() -> Void
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.inspect(Process.send(p, "ñ\n", 5000))
   IO.inspect(Process.read_line(p, 5000))
-  IO.inspect(Process.send_bytes(p, [0, 255, 10], 5000))
+  IO.inspect(Process.send_bytes(p, Bytes.from_list([0, 255, 10]).unwrap!, 5000))
   IO.inspect(Process.read_bytes(p, 0, 5000))
   IO.inspect(Process.read_bytes(p, 3, 5000))
   IO.inspect(Process.send(p, "one\r\ntwo", 5000))

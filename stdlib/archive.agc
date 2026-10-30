@@ -41,6 +41,10 @@ GZIP_SECOND = 139
 # The bytes of "sparse", which no PAX key may hold.
 SPARSE_KEY = [115, 112, 97, 114, 115, 101]
 
+# A run of zero bytes. The padding after the archive end is compared with it piece by piece: `==` on Bytes is one
+# memcmp, where a loop over each byte took about 0.34 s per 8 MiB.
+ZERO_RUN = Bytes.from_list((1..4096).to_a.map do |_| 0 end).unwrap!
+
 ## The knobs of `extract_tar`. Every other limit is a fixed ceiling named in `extract_tar`.
 export struct Options
   ## The whole call in milliseconds, 1 to 86400000.
@@ -820,12 +824,13 @@ def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
         sc = after_pad(sc.with(rest: sc.rest - n))
         at = at + n
       Phase.Trailer ->
-        for i in at...buf.size
-          if buf[i] != 0
+        while at < buf.size
+          n = smaller(ZERO_RUN.size, buf.size - at)
+          if buf.slice(at, n) != ZERO_RUN.take(n)
             return error("archive: non-zero padding after the archive end")
           end
+          at = at + n
         end
-        at = buf.size
     end
   end
   return ok(sc)

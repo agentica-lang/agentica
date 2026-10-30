@@ -35,6 +35,8 @@ END_OF_INPUT = "network: end of input"
 READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
+# No bytes: the empty rest and carry.
+NO_BYTES = "".bytes
 # The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
 # this value as a literal (a field default cannot name a constant), so the two must match.
@@ -55,12 +57,12 @@ end
 
 struct Incoming
   request: HttpRequest
-  rest: List[Int]
+  rest: Bytes
 end
 
 struct Body
   pieces: List[String]
-  carry: List[Int]
+  carry: Bytes
 end
 
 struct Reading
@@ -493,7 +495,7 @@ end
 def serve(socket: Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
-  rest: List[Int] = []
+  rest = NO_BYTES
   while true
     case read_request(socket, rest, wait_ms, options)
       ok(incoming) ->
@@ -510,11 +512,11 @@ end
 # One whole request. rest holds the bytes the last chunked body read past its end. The first byte may take first_ms;
 # then the rest of the request has request_timeout_ms. A request that breaks the rules gets its error answer here, and
 # the result is the error.
-def read_request(socket: Socket, rest: List[Int], first_ms: Int, options: HttpServerOptions) -> Result[Incoming]
+def read_request(socket: Socket, rest: Bytes, first_ms: Int, options: HttpServerOptions) -> Result[Incoming]
   first = rest
-  if List.size(first) == 0
+  if first.empty?
     first = try TCP.recv_bytes(socket, 1, first_ms)
-    if List.size(first) == 0
+    if first.empty?
       return error(END_OF_INPUT)
     end
   end
@@ -530,8 +532,8 @@ def read_request(socket: Socket, rest: List[Int], first_ms: Int, options: HttpSe
   return read_length(reading)
 end
 
-# The head stays in the socket's input until it is whole (HttpWire.read_head), so a slow head holds no List here.
-def read_head(socket: Socket, rest: List[Int], deadline: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
+# The head stays in the socket's input until it is whole (HttpWire.read_head), so a slow head holds no bytes here.
+def read_head(socket: Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
   left = try time_left(socket, deadline)
   case HttpWire.read_head(socket, rest, max_body_bytes, left)
     ok(head) ->
@@ -546,20 +548,20 @@ def read_head(socket: Socket, rest: List[Int], deadline: Int, max_body_bytes: In
 end
 
 def read_length(reading: Reading) -> Result[Incoming]
-  body = Body(pieces: [], carry: [])
+  body = Body(pieces: [], carry: NO_BYTES)
   left = reading.head.length
   while left > 0
     piece = try more_text(reading, body.carry, smaller(left, TEXT_BYTES))
     body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
     left = left - piece.bytes
   end
-  return finish(reading, body, [])
+  return finish(reading, body, NO_BYTES)
 end
 
 def read_chunked(reading: Reading) -> Result[Incoming]
-  data: List[Int] = []
+  data = NO_BYTES
   state = HttpWire.chunked(reading.max_body_bytes)
-  body = Body(pieces: [], carry: [])
+  body = Body(pieces: [], carry: NO_BYTES)
   while not state.done
     if state.remaining > 0
       # The rest of a chunk goes straight into text; only framing goes through the decoder.
@@ -573,10 +575,10 @@ def read_chunked(reading: Reading) -> Result[Incoming]
       body = try add_text(reading, body, data, state.runs)
     end
   end
-  return finish(reading, body, List.drop(data, state.next))
+  return finish(reading, body, data.drop(state.next))
 end
 
-def next_chunk(reading: Reading, state: HttpWire.Chunk, data: List[Int]) -> Result[HttpWire.Chunk]
+def next_chunk(reading: Reading, state: HttpWire.Chunk, data: Bytes) -> Result[HttpWire.Chunk]
   case HttpWire.chunk(state, data, 0)
     ok(next) -> return ok(next)
     error(problem) -> return error(refuse_problem(reading.socket, problem, reading.deadline))
@@ -584,7 +586,7 @@ def next_chunk(reading: Reading, state: HttpWire.Chunk, data: List[Int]) -> Resu
 end
 
 # Adds the runs of data to the body text; an unfinished character waits in carry for the next bytes.
-def add_text(reading: Reading, body: Body, data: List[Int], runs: List[Int]) -> Result[Body]
+def add_text(reading: Reading, body: Body, data: Bytes, runs: List[Int]) -> Result[Body]
   piece = HttpWire.text(body.carry, data, runs)
   if not piece.valid
     return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
@@ -593,7 +595,7 @@ def add_text(reading: Reading, body: Body, data: List[Int], runs: List[Int]) -> 
 end
 
 # The next bytes of a body, read straight into text.
-def more_text(reading: Reading, carry: List[Int], most: Int) -> Result[HttpWire.Text]
+def more_text(reading: Reading, carry: Bytes, most: Int) -> Result[HttpWire.Text]
   left = try time_left(reading.socket, reading.deadline)
   piece = try HttpWire.read_text(reading.socket, most, carry, left)
   if not piece.valid
@@ -606,8 +608,8 @@ def more_text(reading: Reading, carry: List[Int], most: Int) -> Result[HttpWire.
   return ok(piece)
 end
 
-def finish(reading: Reading, body: Body, rest: List[Int]) -> Result[Incoming]
-  if List.size(body.carry) > 0
+def finish(reading: Reading, body: Body, rest: Bytes) -> Result[Incoming]
+  if not body.carry.empty?
     return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
   end
   head = reading.head
@@ -629,9 +631,9 @@ def smaller(a: Int, b: Int) -> Int
 end
 
 # The next bytes of a request that has started: the end of input here closes the connection with no answer.
-def more_request(socket: Socket, most: Int, deadline: Int) -> Result[List[Int]]
+def more_request(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
   data = try TCP.recv_bytes(socket, most, try time_left(socket, deadline))
-  if List.size(data) == 0
+  if data.empty?
     TCP.close(socket)
     return error("http: connection closed before the request was complete")
   end
@@ -686,10 +688,10 @@ def drain(socket: Socket, deadline: Int) -> Void
       ok(left) ->
         case TCP.recv_bytes(socket, most, left)
           ok(data) ->
-            if List.size(data) == 0
+            if data.empty?
               return
             end
-            rest = rest - List.size(data)
+            rest = rest - data.size
           error(_) -> return
         end
       error(_) -> return
@@ -1172,7 +1174,7 @@ def read_body(answer: Answer, head: HttpWire.Response) -> Received
 end
 
 # The next bytes of a body as text, at most most of them; bytes is 0 at the end of input.
-def more_body(answer: Answer, carry: List[Int], most: Int) -> Result[HttpWire.Text]
+def more_body(answer: Answer, carry: Bytes, most: Int) -> Result[HttpWire.Text]
   left = try time_left(answer.socket, answer.job.deadline)
   piece = try HttpWire.read_text(answer.socket, most, carry, left)
   if not piece.valid
@@ -1182,14 +1184,14 @@ def more_body(answer: Answer, carry: List[Int], most: Int) -> Result[HttpWire.Te
 end
 
 def whole_text(body: Body, kept: Bool) -> Result[Whole]
-  if List.size(body.carry) > 0
+  if not body.carry.empty?
     return error(BAD_BODY)
   end
   return ok(Whole(text: String.join(body.pieces, ""), kept: kept))
 end
 
 def read_length_body(answer: Answer, length: Int) -> Result[Whole]
-  body = Body(pieces: [], carry: [])
+  body = Body(pieces: [], carry: NO_BYTES)
   left = length
   clean = true
   while left > 0
@@ -1206,9 +1208,9 @@ end
 
 # Bytes read past the end of the body, or still in the input after it, stop the connection from being kept.
 def read_chunked_body(answer: Answer) -> Result[Whole]
-  data: List[Int] = []
+  data = NO_BYTES
   state = HttpWire.chunked(answer.max_body_bytes)
-  body = Body(pieces: [], carry: [])
+  body = Body(pieces: [], carry: NO_BYTES)
   while not state.done
     if state.remaining > 0
       piece = try more_body(answer, body.carry, smaller(state.remaining, TEXT_BYTES))
@@ -1219,7 +1221,7 @@ def read_chunked_body(answer: Answer) -> Result[Whole]
       state = HttpWire.chunk_read(state, piece.bytes)
     else
       data = try TCP.recv_bytes(answer.socket, FRAME_BYTES, try time_left(answer.socket, answer.job.deadline))
-      if List.size(data) == 0
+      if data.empty?
         return error(TRUNCATED)
       end
       case HttpWire.chunk(state, data, 0)
@@ -1233,14 +1235,14 @@ def read_chunked_body(answer: Answer) -> Result[Whole]
       body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
     end
   end
-  return whole_text(body, state.next == List.size(data) and nothing_buffered(answer))
+  return whole_text(body, state.next == data.size and nothing_buffered(answer))
 end
 
 # Whether the socket's input holds no byte now and has not ended: a read of 0 bytes does not wait.
 def nothing_buffered(answer: Answer) -> Bool
   case time_left(answer.socket, answer.job.deadline)
     ok(left) ->
-      case HttpWire.read_text(answer.socket, 0, [], left)
+      case HttpWire.read_text(answer.socket, 0, NO_BYTES, left)
         ok(piece) -> return piece.buffered == 0 and not piece.ended
         error(_) -> return false
       end
@@ -1250,7 +1252,7 @@ end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
 def read_until_close(answer: Answer) -> Result[Whole]
-  body = Body(pieces: [], carry: [])
+  body = Body(pieces: [], carry: NO_BYTES)
   total = 0
   while true
     piece = try more_body(answer, body.carry, TEXT_BYTES)
@@ -1368,38 +1370,37 @@ def save_body(
   return save_length(socket, out, head.length, budget, deadline)
 end
 
-# The next body bytes, at most most of them; an empty list means the peer closed the input.
-def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[List[Int]]
+# The next body bytes, at most most of them; no bytes means the peer closed the input.
+def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
   return TCP.recv_bytes(socket, most, try time_left(socket, deadline))
 end
 
-# Appends data to the download within the whole-call deadline. The body comes from TCP.recv_bytes, a List[Int] until
-# #805 PR 6; its items are bytes.
-def write_body(out: FileHandle, data: List[Int], deadline: Int) -> Result[Void]
+# Appends data to the download within the whole-call deadline.
+def write_body(out: FileHandle, data: Bytes, deadline: Int) -> Result[Void]
   left = deadline - Time.monotonic_ms()
   if left <= 0
     return error(TIMED_OUT)
   end
-  return File.write_bytes(out, try Bytes.from_list(data), left)
+  return File.write_bytes(out, data, left)
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
 def write_bounded(
   out: FileHandle,
-  data: List[Int],
+  data: Bytes,
   written: Int,
   budget: Int,
   deadline: Int,
 ) -> Result[Int]
   room = budget - written
-  if List.size(data) > room
+  if data.size > room
     if room > 0
-      try write_body(out, List.take(data, room), deadline)
+      try write_body(out, data.take(room), deadline)
     end
     return error(TOO_LARGE)
   end
   try write_body(out, data, deadline)
-  return ok(written + List.size(data))
+  return ok(written + data.size)
 end
 
 # A Content-Length body: the head already refused one over the budget, so the count only follows it.
@@ -1408,31 +1409,31 @@ def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadl
   written = 0
   while left > 0
     data = try recv_body(socket, smaller(left, TEXT_BYTES), deadline)
-    if List.size(data) == 0
+    if data.empty?
       return error(TRUNCATED)
     end
     written = try write_bounded(out, data, written, budget, deadline)
-    left = left - List.size(data)
+    left = left - data.size
   end
   return ok(written)
 end
 
 # A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
 def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
-  data: List[Int] = []
+  data = NO_BYTES
   state = HttpWire.chunked(budget)
   written = 0
   while not state.done
     if state.remaining > 0
       data = try recv_body(socket, smaller(state.remaining, TEXT_BYTES), deadline)
-      if List.size(data) == 0
+      if data.empty?
         return error(TRUNCATED)
       end
       written = try write_bounded(out, data, written, budget, deadline)
-      state = HttpWire.chunk_read(state, List.size(data))
+      state = HttpWire.chunk_read(state, data.size)
     else
       data = try recv_body(socket, FRAME_BYTES, deadline)
-      if List.size(data) == 0
+      if data.empty?
         return error(TRUNCATED)
       end
       case HttpWire.chunk(state, data, 0)
@@ -1448,7 +1449,7 @@ end
 # Appends the runs of data (start, length pairs) to the download.
 def write_runs(
   out: FileHandle,
-  data: List[Int],
+  data: Bytes,
   runs: List[Int],
   written: Int,
   budget: Int,
@@ -1456,7 +1457,7 @@ def write_runs(
 ) -> Result[Int]
   at = 0
   while at < List.size(runs)
-    piece = List.drop(data, List.at(runs, at)).take(List.at(runs, at + 1))
+    piece = data.slice(List.at(runs, at), List.at(runs, at + 1))
     written = try write_bounded(out, piece, written, budget, deadline)
     at = at + 2
   end
@@ -1468,7 +1469,7 @@ def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int
   written = 0
   while true
     data = try recv_body(socket, TEXT_BYTES, deadline)
-    if List.size(data) == 0
+    if data.empty?
       if not HttpWire.clean_eof?(socket)
         return error(TRUNCATED)
       end

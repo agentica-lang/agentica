@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 179,
+  "steps": 187,
   "stdout": [
     "<Listener>",
     "<Socket>",
@@ -10,10 +10,10 @@
     "ok(\"ñ😀\")",
     "error(\"bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\\n  byte string: #\\\"bad\\\\377\\\"\")",
     "echo hello ñ😀",
-    "ok([1, 2])",
-    "ok([3])",
+    "ok(<Bytes 2 0102>)",
+    "ok(<Bytes 1 03>)",
     "ok(\"last\\r\")",
-    "ok([])",
+    "ok(<Bytes 0>)",
     "error(\"network: end of input\")",
     ""
   ],

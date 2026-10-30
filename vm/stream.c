@@ -243,11 +243,29 @@ void agc_inbuf_take(agc_inbuf *b, size_t n) {
   b->scanned = b->scanned > n ? b->scanned - n : 0;
 }
 
-agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
+/* The n bytes at data as the read's value: a new Bytes, or a byte list for the old List[Int] keys of
+   TCP.recv_bytes and Process.read_bytes (list), which stay for front ends and .agcb files compiled before #805 PR 6;
+   PR 9 removes them. */
+static agc_value read_value(const uint8_t *data, size_t n, bool list) {
+  if (list) return agc_list_value(agc_list_of_bytes(data, n));
+  return agc_bytes_value(agc_make_bytes(data, n));
+}
+
+const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, bool list, size_t limit, size_t *len) {
+  if (!list) {
+    const uint8_t *data = agc_bytes_data(vm, arg, len);
+    return *len <= limit ? data : NULL;
+  }
+  const agc_list *values = agc_as_list(vm, arg);
+  *len = agc_list_len(values);
+  return agc_byte_list(vm, values, limit);
+}
+
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count, bool list) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
-  agc_value result = agc_result_value(true, agc_list_value(agc_list_of_bytes(pending_at(b), n)));
+  agc_value result = agc_result_value(true, read_value(pending_at(b), n, list));
   agc_inbuf_take(b, n);
   return result;
 }
@@ -285,9 +303,9 @@ agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const c
   return line_value(vm, cut->status, cut->error, cut->data, cut->len, too_long, at_end);
 }
 
-agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut) {
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut, bool list) {
   if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", cut->error);
-  return agc_result_value(true, agc_list_value(agc_list_of_bytes(cut->data, cut->len)));
+  return agc_result_value(true, read_value(cut->data, cut->len, list));
 }
 
 void agc_inbuf_cut_free(agc_inbuf_cut *cut) {

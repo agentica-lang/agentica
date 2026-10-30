@@ -11,8 +11,8 @@ def drain(p: Process) -> Int
   reading = true
   while reading
     chunk = Result.unwrap!(Process.read_bytes(p, 65536, 5000))
-    total += List.size(chunk)
-    reading = List.size(chunk) > 0
+    total += chunk.size
+    reading = !chunk.empty?
   end
   return total
 end

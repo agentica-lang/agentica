@@ -166,7 +166,7 @@ def test_flushed_text_and_bytes_reply_before_stdin_eof_stderr_stays_separate(tmp
     node = tool("node")
     body = ('  Result.unwrap!(Process.send(p, "ñ\\n", 5000))\n'
             "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n"
-            "  Result.unwrap!(Process.send_bytes(p, [0, 255, 10], 5000))\n"
+            "  Result.unwrap!(Process.send_bytes(p, Bytes.from_list([0, 255, 10]).unwrap!, 5000))\n"
             "  IO.inspect(Process.read_bytes(p, 0, 5000))\n"
             "  IO.inspect(Process.read_bytes(p, 3, 5000))\n"
             "  IO.inspect(Process.close_stdin(p, 5000))\n"
@@ -177,7 +177,7 @@ def test_flushed_text_and_bytes_reply_before_stdin_eof_stderr_stays_separate(tmp
             "  Process.close(p)\n  Process.close(p)\n"
             "  IO.inspect(Result.ok?(Process.wait(p, 5000)))")
     assert output(tmp_path, program(node, "echo", body), "peer stderr\n") == \
-        "ñ\nok([])\nok([0, 255, 10])\nok()\nok()\nfalse\nok([])\nok(0)\nfalse\n"
+        "ñ\nok(<Bytes 0>)\nok(<Bytes 3 00ff0a>)\nok()\nok()\nfalse\nok(<Bytes 0>)\nok(0)\nfalse\n"
 
 
 def test_eof_nonzero_and_repeated_exit_waits_preserve_unread_output(tmp_path):
@@ -195,17 +195,16 @@ def test_invalid_input_preserves_bytes_strict_decoding_consumes_a_complete_bad_l
             "  IO.inspect(Result.ok?(Process.read_line(p, 0)))\n  IO.inspect(Result.ok?(Process.read_line(p, 5000)))\n"
             "  puts(Result.unwrap!(Process.read_line(p, 5000)))")
     assert output(tmp_path, program(node, "invalid", body)) == "false\nfalse\nfalse\nfalse\nvalid\n"
-    body = ("  IO.inspect(Result.ok?(Process.send_bytes(p, [256], 1000)))\n"
-            "  IO.inspect(Result.ok?(Process.send_bytes(p, List.append(List.repeat(65, 1048576), 65), 1000)))\n"
+    body = ("  IO.inspect(Result.ok?(Process.send_bytes(p, (Bytes.from_list(List.repeat(65, 1048576)).unwrap! + \"A\".bytes), 1000)))\n"
             '  Result.unwrap!(Process.send(p, "valid\\n", 5000))\n  puts(Result.unwrap!(Process.read_line(p, 5000)))')
-    assert output(tmp_path, program(node, "echo", body), "peer stderr\n") == "false\nfalse\nvalid\n"
+    assert output(tmp_path, program(node, "echo", body), "peer stderr\n") == "false\nvalid\n"
 
 
 def test_streaming_exceeds_1_mib_with_concurrent_reads_and_independently_drained_stderr(tmp_path):
     node = tool("node")
     drain = ("def drain(p: Process) -> Int\n  first = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n"
              "  second = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n"
-             "  return List.size(first) + List.size(second)\nend\n\n")
+             "  return first.size + second.size\nend\n\n")
     assert output(tmp_path, program(
         node, "flood", "  reader = Task.spawn(&drain, p)\n  IO.inspect(Process.wait(p, 5000))\n  IO.inspect(Task.await(reader))",
         drain)) == "ok(0)\n2097152\n"
@@ -233,7 +232,7 @@ def test_wait_retries_preserve_children_active_stream_deadlines_abort_them(tmp_p
 
 @pytest.mark.parametrize("operation", (
     "Process.read_line(p, 20)",
-    "Process.send_bytes(p, List.repeat(65, 1048576), 20)",
+    "Process.send_bytes(p, Bytes.from_list(List.repeat(65, 1048576)).unwrap!, 20)",
 ))
 def test_hold_operations_abort_when_the_stream_deadline_passes(tmp_path, operation):
     node = tool("node")

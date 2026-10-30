@@ -9,6 +9,10 @@ import Ir from "ir"
 import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 
+# The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
+# HttpWire.Text.carry).
+UNDECODABLE = Set.new(["Enum", "Channel", "Bytes"])
+
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, variants the id of "Enum.Variant", and json_structs the
 ## structs JSON.decode may build.
@@ -121,12 +125,12 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
   )
 end
 
-# The field types of the builtin records JSON.decode can build: all but those with an enum or channel field.
+# The field types of the builtin records JSON.decode can build: all but those with a field of an UNDECODABLE type.
 def builtin_decodable() -> Map[String, List[Types.Type]]
   found: Map[String, List[Types.Type]] = {}
   for name in BUILTIN_STRUCTS
     types = RECORDS[name].map do |field: Model.Named| field.type end
-    if !types.any? do |type: Types.Type| Types.is?(type, "Enum") or Types.is?(type, "Channel") end
+    if !types.any? do |type: Types.Type| UNDECODABLE.include?(Types.tag(type)) end
       found = found.put(name, types)
     end
   end

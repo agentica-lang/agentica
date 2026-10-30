@@ -70,6 +70,8 @@ struct request {
   size_t count;
   bool posted, counted, finished, stopped;
   bool closed, over, stdin_closed;
+  /* BYTES: the read gives a byte list, for the old List[Int] key of Process.read_bytes; else a Bytes. */
+  bool list;
   /* CLOSE: the request holds the count of the resource that the builtin unregistered, until its START gives it back.
      DETACHED: the job lost its task (the cancel half ran), so the done half has no caller to fail. */
   bool holds_resource, detached;
@@ -531,10 +533,10 @@ static bool read_ready(proc *p, req_kind kind, size_t count) {
   return p->closed || p->out_cut || p->err_cut || agc_inbuf_ready(&p->out_buf, kind == REQ_LINE, count);
 }
 
-static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
+static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count, bool list) {
   if (p->closed) return agc_error_value(closed_text);
   if (p->out_cut || p->err_cut) return agc_error_value(over_text);
-  if (kind != REQ_LINE) return agc_inbuf_bytes(vm, &p->out_buf, count);
+  if (kind != REQ_LINE) return agc_inbuf_bytes(vm, &p->out_buf, count, list);
   bool over;
   agc_value line = agc_inbuf_line(vm, &p->out_buf, "process: line exceeds 1048576 bytes", "process: end of input", &over);
   if (over) shut(p);
@@ -604,7 +606,7 @@ static agc_value posted_result(agc_vm *vm, const request *q, agc_value context) 
       else if (q->kind == REQ_LINE)
         result = agc_inbuf_cut_line_value(vm, &q->cut, "process: line exceeds 1048576 bytes", "process: end of input");
       else
-        result = agc_inbuf_cut_bytes_value(vm, &q->cut);
+        result = agc_inbuf_cut_bytes_value(vm, &q->cut, q->list);
       agc_charge(vm, agc_value_units(result));
       return result;
     case REQ_SEND:
@@ -645,7 +647,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   if (q->kind == REQ_CLOSE) {
     result = agc_void();
   } else if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
-    result = take(vm, p, q->kind, q->count);
+    result = take(vm, p, q->kind, q->count, q->list);
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
     result = agc_error_value(closed_text);
@@ -1290,29 +1292,41 @@ static proc *take_lock(agc_vm *vm, agc_process *pr, agc_resource *lock, int64_t 
   return p;
 }
 
-static agc_value read_op(agc_vm *vm, agc_value handle, req_kind kind, size_t count, int64_t timeout) {
+static agc_value read_op(agc_vm *vm, agc_value handle, req_kind kind, size_t count, bool list, int64_t timeout) {
   agc_process *pr = agc_as_process(vm, handle);
   agc_value result;
   proc *p = take_lock(vm, pr, pr->reader, &timeout, &result);
   if (!p) return result;
   /* At N = 1 the buffer is this thread's: what is buffered is taken without a park. */
-  if (agc_io_here(vm) && read_ready(p, kind, count)) return take(vm, p, kind, count);
+  if (agc_io_here(vm) && read_ready(p, kind, count)) return take(vm, p, kind, count, list);
   request *q = new_request(vm, p, kind);
   q->count = count;
+  q->list = list;
   start_request(vm, q, agc_handle_value(pr->reader), timeout, begin_read);
   return agc_void();
 }
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return read_op(vm, args[0], REQ_LINE, 0, agc_as_int(vm, args[1]));
+  return read_op(vm, args[0], REQ_LINE, 0, false, agc_as_int(vm, args[1]));
+}
+
+/* Process.read_bytes gives a Bytes under "Process.read_bytes.bytes" and a byte list under the old key (list), which
+   stays for front ends and .agcb files compiled before #805 PR 6; PR 9 removes it. */
+static agc_value read_count(agc_vm *vm, const agc_value *args, bool list) {
+  int64_t count = agc_as_int(vm, args[1]);
+  if (count < 0 || (uint64_t)count > LIMIT) return agc_error_value("process: count must be 0..1048576");
+  return read_op(vm, args[0], REQ_BYTES, (size_t)count, list, agc_as_int(vm, args[2]));
 }
 
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  int64_t count = agc_as_int(vm, args[1]);
-  if (count < 0 || (uint64_t)count > LIMIT) return agc_error_value("process: count must be 0..1048576");
-  return read_op(vm, args[0], REQ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
+  return read_count(vm, args, true);
+}
+
+static agc_value builtin_read_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return read_count(vm, args, false);
 }
 
 /* A posted send carries a copy of its bytes and starts the write here; at N = 1 the builtin started it and the request
@@ -1363,12 +1377,24 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   return write_op(vm, args, (const uint8_t *)text->data, text->bytes);
 }
 
+/* Process.send_bytes takes a Bytes under "Process.send_bytes.bytes" and a byte list under the old key (list), which
+   stays for front ends and .agcb files compiled before #805 PR 6; PR 9 removes it. */
+static agc_value send_data(agc_vm *vm, const agc_value *args, bool list) {
+  size_t len = 0;
+  const uint8_t *data = agc_stream_bytes(vm, args[1], list, LIMIT, &len);
+  if (!data && list) return agc_error_value("process: bytes must be 0..255 and at most 1048576 per call");
+  if (!data) return agc_error_value("process: bytes exceed 1048576 per call");
+  return write_op(vm, args, data, len);
+}
+
 static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  const agc_list *values = agc_as_list(vm, args[1]);
-  uint8_t *data = agc_byte_list(vm, values, LIMIT);
-  if (!data) return agc_error_value("process: bytes must be 0..255 and at most 1048576 per call");
-  return write_op(vm, args, data, agc_list_len(values));
+  return send_data(vm, args, true);
+}
+
+static agc_value builtin_send_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return send_data(vm, args, false);
 }
 
 static void close_stdin_now(proc *p) {
@@ -1551,6 +1577,8 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.send_bytes.bytes", 3, builtin_send_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.read_bytes.bytes", 3, builtin_read_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

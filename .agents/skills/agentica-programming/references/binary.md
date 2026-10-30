@@ -1,9 +1,9 @@
 # Binary data (`std/binary`)
 
 `import Binary from "std/binary"`. Binary data is a `List[Int]` with each item
-in `0 .. 255`, as `TCP.recv_bytes` and `Process.read_bytes` give (`b.to_a` for
-the `Bytes` of `IO.read_bytes` and `File.read_bytes`). The module is written in
-Agentica on the bit builtins below.
+in `0 .. 255` (`b.to_a` for the `Bytes` of `IO.read_bytes`, `File.read_bytes`,
+`TCP.recv_bytes` and `Process.read_bytes`). The module is written in Agentica
+on the bit builtins below.
 
 ```text
 Binary.read_u8(data: List[Int], offset: Int) -> Result[Int]
@@ -75,8 +75,8 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
 
 - `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
   so decode complete sequences only and switch to text reads only at character
-  boundaries. `s.bytes` encodes text for `File.write_bytes` and the like
-  (`s.bytes.to_a` for `TCP.send_bytes`).
+  boundaries. `s.bytes` encodes text for `File.write_bytes`, `TCP.send_bytes`
+  and the like.
 - `Digest.md5`, `sha1`, `sha256` and `sha512(data: Bytes) -> Bytes` hash
   bytes with OpenSSL and return the 16, 20, 32 or 64 digest bytes; each
   `_hexdigest` form (`Digest.sha256_hexdigest(data) -> String`) returns them

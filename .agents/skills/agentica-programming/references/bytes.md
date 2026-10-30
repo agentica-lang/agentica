@@ -37,8 +37,9 @@ for byte in b ... end
   `List[Int]` and call `Bytes.from_list` once.
 - `Digest`, `HMAC`, `Base64`, `SecureRandom.random_bytes`, `IO.read_bytes`,
   `File.read_bytes`, `File.write_bytes`, `File.sha256`, `String.from_bytes`,
-  `Zlib`, `File.chunks` and the Lazy byte steps take and return `Bytes`. The
-  other byte builtins (`TCP`, `Process`, `std/binary` ...) still take and
-  return `List[Int]` for now; `Bytes.from_list(list)` and `b.to_a` convert.
+  `Zlib`, `File.chunks`, the Lazy byte steps, `TCP.send_bytes`,
+  `TCP.recv_bytes`, `Process.send_bytes` and `Process.read_bytes` take and
+  return `Bytes`. `std/binary` and `Native` still take and return `List[Int]`
+  for now; `Bytes.from_list(list)` and `b.to_a` convert.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
   `Set[Bytes]` or a `Map[Bytes, _]`. `List[Bytes]` has no `==`.
