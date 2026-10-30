@@ -277,14 +277,14 @@ end
 # `--ai` may stand among the paths, as for the query commands; `--stdin` after a path would check the disk while the
 # caller means the buffer, so it is a usage error.
 def check(session: Session, words: List[String]) -> Int
+  if words.any? do |word: String| word == "--stdin" end
+    return emit(Reply.failed(2, Texts.usage_text()))
+  end
+
   case QueryOptions.parse(words, session.options.style, CliCheck.usage(), false)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
-      if asked.stdin != ""
-        return emit(Reply.failed(2, Texts.usage_text()))
-      end
-
       if asked.words.size == 1 and !styled.settings.workspace.directory_exists.call(asked.words[0])
         return program(styled, "check", asked.words)
       end
