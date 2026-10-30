@@ -38,6 +38,7 @@ jobs:
           fi
 
   linux:
+    name: linux (${{ matrix.platform }})
     needs: version
     strategy:
       fail-fast: false

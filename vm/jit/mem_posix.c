@@ -39,7 +39,6 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
 
 #if defined(__aarch64__) && defined(__linux__)
-#include <stdint.h>
 /* The cache maintenance that libgcc and compiler-rt call __clear_cache, defined here on Linux arm64, where the seal
    above and libffi's closure setup call it. The release links with zig cc against glibc 2.28, and zig's compiler_rt,
    the only other definition, is one object that also brings zig's stack protector, whose canary is a constant: with

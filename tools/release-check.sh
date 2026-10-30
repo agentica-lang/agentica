@@ -72,7 +72,12 @@ case "$kind" in
     grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || die "$name is not PIE"
     grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || die "$name lacks BIND_NOW"
     grep -q 'GNU_RELRO' <<< "$segments" || die "$name lacks RELRO"
-    grep -q '__stack_chk_fail' <<< "$symbols" || die "$name lacks the stack protector"
+    # The stack protector of glibc, imported: a local definition (zig's compiler_rt has one, with a constant canary)
+    # would replace it. arm64 glibc also exports the canary itself, __stack_chk_guard; x86_64 keeps it in the TCB.
+    grep -qE '[*]UND[*].*[[:space:]]__stack_chk_fail$' <<< "$symbols" || die "$name lacks glibc's stack protector"
+    if [ "$arch" = arm64 ]; then
+      grep -qE '[*]UND[*].*[[:space:]]__stack_chk_guard$' <<< "$symbols" || die "$name lacks glibc's stack canary"
+    fi
     grep -qE '__(memcpy|read|vsnprintf)_chk' <<< "$symbols" || die "$name lacks _FORTIFY_SOURCE"
     needed=$(grep -o 'NEEDED.*' <<< "$dynamic" || true)
     echo "$name: shared libraries: $(sed 's/.*\[\(.*\)\]/\1/' <<< "$needed" | tr '\n' ' ')"

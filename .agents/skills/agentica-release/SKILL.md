@@ -121,8 +121,8 @@ that its release link opens the release.
 
 - The release page has the five archives (`linux-x86_64.tar.gz`,
   `linux-arm64.tar.gz`, `macos-x86_64.tar.gz`, `macos-arm64.tar.gz`,
-  `windows-x86_64.zip`, each `agentica-<version>-…`) and `SHA256SUMS`. A beta is Pre-release; a final
-  release is Latest.
+  `windows-x86_64.zip`, each `agentica-<version>-…`) and `SHA256SUMS`. A beta
+  is Pre-release; a final release is Latest.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
