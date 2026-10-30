@@ -8,13 +8,13 @@ a usable interpreter. Planned syntax lives in
 
 The core interpreter, Results, JSON, function values, tasks, BDD, TCP, TLS,
 HTTP, files, processes, modules, packages and the FFI core are implemented. The
-bytecode VM is the only backend (7i deleted the Racket evaluator): `agentica
-file.agc` compiles in-process and runs on the VM of the same binary, and
-`agentica run` runs a compiled `.agcb`. Small items stay open in 7e (loader
-validation for opcodes as they land) and 7f (the extra corpora).
+bytecode VM is the only backend: `agentica file.agc` compiles in-process and
+runs on the VM of the same binary, and `agentica run` runs a compiled `.agcb`.
+Small items stay open in 7e (loader validation for opcodes as they land) and 7f
+(the extra corpora).
 
-The table below is the one source for the order of pending work and its
-dependencies; each row names its phases and the sections that specify them.
+The list below is the one source for the order of pending work and its
+dependencies; each item names its phases and the sections that specify them.
 Phase and row numbers stay stable; done rows keep one line each, and git history
 keeps their records.
 
@@ -72,37 +72,34 @@ Weighed later (no fixed order):
 ### Done rows
 
 - **1 to 4:** the everyday library (5n), typed JSON (5f2, 5i), modules with
-  `std/` and `pkg/`, and the Ruby-style ergonomics (eval rounds 5 to 8; the
-  accepted forms are in [§25](../future/25-ruby-typed-idioms.md)).
+  `std/` and `pkg/`, and the Ruby-style ergonomics (the accepted forms are in
+  [§25](../future/25-ruby-typed-idioms.md)).
 - **5 to 7:** the C VM core with the Boehm GC
   (`docs/vm/12-testing-and-pr-plan.md` §12.2), tasks with the fairness rule
   (`docs/vm/10-io-scheduler.md` §10.2.1), and the VM as the default backend.
 - **7.1:** processes, VM tracing (14a), TCP, TLS, HTTP 20a and BDD in Agentica
   ([phase 21](21-bdd-in-agentica.md), [`docs/bdd.md`](../bdd.md)).
-- **7.2:** 7i deleted the evaluator and the builtin `HTTP` module, so `HTTP` is
-  the free import alias of `std/http` (owner, 2026-10-13).
+- **7.2:** `HTTP` is the free import alias of `std/http` (owner, 2026-10-13).
 - **7.2.1:** HTTP 20b and 20c (`std/http`, its server), task crash isolation
   (phase 24: a crash ends only its task; a handle belongs to the task that
   opened it, [§14.5](../vm/14-core-invariants.md#145-handles)) and unit tests
   ([phase 25](25-unit-tests.md)).
-- **7.2.1a to 7.2.1h:** VM core simplification
-  ([§14](../vm/14-core-invariants.md#14-vm-core-invariants)), the first part of
-  the [VM layers](07-vm.md#7l-vm-layers), the architecture note
-  ([§16](../vm/16-architecture.md#16-vm-architecture)), asynchronous process
+- **7.2.1a to 7.2.1h:** the VM core ([§14](../vm/14-core-invariants.md#14-vm-core-invariants)),
+  the first part of the [VM layers](07-vm.md#7l-vm-layers), the architecture
+  note ([§16](../vm/16-architecture.md#16-vm-architecture)), asynchronous process
   close and the flush limit, `Channel[T]` (17b), stdout and stderr on the loop,
   the pipe operator `|>` (15l), and `File.each_line` (17d).
 - **7.2.2, 7.2.3:** the 6c pilot and the smaller skill (`docs/eval.md`, rounds
   9 to 12).
 - **7.2a:** doc comments (22a, [§32](../future/32-doc-comments.md)) and digit
   separators (phase 23, the grammar's literals).
-- **7.2.4 to 7.2.6:** binary data (phase 13: the `Int` and `Float` bit builtins
-  and [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)), stack
-  traces (14b), and `System.env` and `Path.real` for the self-hosted front end.
+- **7.2.4 to 7.2.6:** binary data (phase 13, [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)),
+  stack traces (14b), and `System.env` and `Path.real` for the self-hosted
+  front end.
 - **7.2.7 to 7.2.9:** the self-hosted front end
-  ([§18](../future/18-front-end-language.md)): the Racket freeze and the port
-  (PRs #237 to #313, tag `bootstrap-racket`), the new import forms and module
-  constants (44a0 to 44d; 44e, static data, only if start-up numbers ask), and
-  the tests in Python.
+  ([§18](../future/18-front-end-language.md)), with the new import forms and
+  module constants (44a0 to 44d; 44e, static data, only if start-up numbers
+  ask), and the tests in Python.
 - **7.2b:** the semantic CLI and `std/analysis`
   ([§39](../future/39-semantic-cli.md)); open: the §39.12 measurement (row 10).
 - **7.3:** iteration and concurrency
@@ -121,8 +118,7 @@ Weighed later (no fixed order):
 ### Pending rows
 
 - **Order:** 22b
-  - **Next work:** Part 1 done (`agentica doc PATH [--json]`). Part 2:
-    `agentica help std/MODULE`, front end only
+  - **Next work:** part 2, `agentica help std/MODULE`, front end only
     ([§32.6](../future/32-doc-comments.md)).
 
 - **Order:** 7.4
@@ -137,9 +133,7 @@ Weighed later (no fixed order):
 
 - **Order:** 7.5
   - **Next work:** UDP (leaves the core plan, item 12 above). The crypto
-    module (`docs/future/20-crypto.md` §20) has landed: `Base64`, `Digest`,
-    `HMAC` (with `HMAC.secure_compare`), `SecureRandom`, AES-256-GCM and
-    Triple DES CBC (`Cipher`), `CMAC`, and PBKDF2 and scrypt (`KDF`)
+    module (`docs/future/20-crypto.md` §20) has landed
   - **Outcome:** Programs send UDP and encrypt
 
 - **Order:** 7.6
