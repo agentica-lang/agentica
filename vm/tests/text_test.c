@@ -87,6 +87,8 @@ int main(void) {
                                 {agc_make_string("End", 3, 3), 0, 0, end}};
   agc_program program;
   memset(&program, 0, sizeof program);
+  program.json_field = UINT32_MAX;
+  program.optional = UINT32_MAX;
   program.struct_count = 1;
   program.enum_count = 1;
   program.variant_count = 2;

@@ -78,6 +78,8 @@ static inline void agc_test_shapes_init(agc_test_shapes *shapes) {
   shapes->variants[1].arity = 2;
   shapes->variants[1].shared = NULL;
   memset(&shapes->program, 0, sizeof shapes->program);
+  shapes->program.json_field = UINT32_MAX;
+  shapes->program.optional = UINT32_MAX;
   shapes->program.struct_count = 1;
   shapes->program.structs = shapes->structs;
   shapes->program.enum_count = 1;
