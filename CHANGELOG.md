@@ -23,6 +23,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `headers`, which is `[]` by default and no longer comes first. Rebuild `.agcb`
   files that call them.
 
+### Fixed
+
+- Compiling deeply nested `some(...)` calls or list literals is much faster
+  (900 levels: from 4 s to 0.6 s).
+
 ## [0.19.0-beta.1] - 2026-10-30
 
 ### Added

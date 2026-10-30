@@ -152,9 +152,10 @@ export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) ->
 end
 
 ## An enum value: the payload items in consecutive registers and an `enum` instruction with the id of the variant.
+## known skips the type check of the items, which the type of the enum value covered (an Optional's item).
 export def lower_enum(
   cx: State.Cx, fx: State.Fx, enum_name: String, variant_name: String, args: List[Ast.Expr], span: Source.Span,
-  want: Int
+  want: Int, known: Bool
 ) -> Result[State.Out]
   fx = State.step(fx, span)
   saved = fx.next
@@ -165,7 +166,7 @@ export def lower_enum(
   start = fx.next
   for arg in args
     fx = State.alloc(fx)
-    out = try cx.expression.call(cx, fx, arg, fx.next - 1, false, false)
+    out = try cx.expression.call(cx, fx, arg, fx.next - 1, false, known)
     fx = out.fx
   end
 

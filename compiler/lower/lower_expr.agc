@@ -28,7 +28,12 @@ export def lower_expression(
   cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, want: Int, void: Bool, known: Bool
 ) -> Result[Lowering.Out]
   case expr
-    Ast.Expr.Call(node) -> return lower_call(cx, fx, node, want, void, false, false)
+    Ast.Expr.Call(node) ->
+      if known and optional_call?(node)
+        return lower_optional(cx, fx, node, want, void, true, false)
+      end
+
+      return lower_call(cx, fx, node, want, void, false, false)
     Ast.Expr.Binary(node) ->
       try typed(cx, expr, known)
       return lower_binary(cx, fx, node, want)
@@ -63,7 +68,7 @@ export def lower_expression(
       return Data.lower_map(cx, fx, node, want)
     Ast.Expr.EnumConstructor(node) ->
       try typed(cx, expr, known)
-      return Data.lower_enum(cx, fx, node.enum_name, node.variant_name, node.args, node.span, want)
+      return Data.lower_enum(cx, fx, node.enum_name, node.variant_name, node.args, node.span, want, false)
     Ast.Expr.Construct(node) ->
       try typed(cx, expr, known)
       return Data.lower_struct(cx, fx, node, want)
@@ -105,7 +110,7 @@ export def lower_call(
     key = try await_key(cx, node, checked, count)
   elsif form.ok? and CODEC_BUILTINS.include?(node.name)
     return lower_codec(cx, fx, node, key, want, void, checked, tail)
-  elsif form.ok? and (node.name == "some" or node.name == "none")
+  elsif optional_call?(node)
     return lower_optional(cx, fx, node, want, void, checked, tail)
   end
 
@@ -226,7 +231,14 @@ def lower_codec(
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
-# some(x) and none: a value of the builtin enum Optional (Program.OPTIONAL), made by an `enum` instruction.
+# A call of the builtin some or none.
+def optional_call?(node: Ast.Call) -> Bool
+  return (node.name == "some" or node.name == "none") and Builtins.ref(node.name, node.args.size).ok?
+end
+
+# some(x) and none: a value of the builtin enum Optional (Program.OPTIONAL), made by an `enum` instruction. The check
+# of Optional[T] covers T, so the payload is lowered as known: a check at each level of nested some(...) walks the
+# whole type below it, quadratic in the depth.
 def lower_optional(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, want: Int, void: Bool, checked: Bool, tail: Bool
 ) -> Result[Lowering.Out]
@@ -240,7 +252,7 @@ def lower_optional(
     variant = "Some"
   end
 
-  out = try Data.lower_enum(cx, fx, "Optional", variant, node.args, node.span, want)
+  out = try Data.lower_enum(cx, fx, "Optional", variant, node.args, node.span, want, true)
   if tail
     return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span)))
   end
@@ -337,7 +349,7 @@ def lower_builtin_default(
       return ok(text.with(fx: Lowering.emit_builtin(text.fx, text.slot, "String.bytes", 1, [span, span])))
     Model.Default.Variant(name) ->
       parts = name.split(".")
-      return Data.lower_enum(cx, fx, parts[0], parts[1], [], span, want)
+      return Data.lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)
     Model.Default.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", span))
   end
 
