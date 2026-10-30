@@ -362,11 +362,11 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
-/* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T); it
-   points to an earlier type like List and Map. */
+/* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T), and
+   AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map. */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
-  AGC_TYPE_JSON_FIELD
+  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL
 } agc_type_kind;
 
 /* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
@@ -417,8 +417,8 @@ typedef struct {
   /* The variant id of JsonField.Absent (Null and Value follow it), or UINT32_MAX when the program has no JsonField
      enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
   uint32_t json_field;
-  /* The variant id of the builtin Optional's None (Some follows it), or UINT32_MAX when the program has no enum named
-     Optional with that shape (vm/loader.c find_optional). The builtins that return an Optional build it from these. */
+  /* The variant id of Optional.None (Some follows it), or UINT32_MAX when the program has no builtin Optional enum.
+     The loader checks the shape, so the encoders and typed JSON trust these two ids. */
   uint32_t optional;
   const agc_builtin **builtins;
   agc_function *functions;
@@ -474,7 +474,6 @@ void agc_gc_measure(void);
 void agc_gc_collect(void);
 
 agc_value agc_result_value(bool ok, agc_value value);
-agc_value agc_optional_value(agc_vm *vm, bool some, agc_value value);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);

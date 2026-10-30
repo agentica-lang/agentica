@@ -236,8 +236,8 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
 /* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JsonField.Absent,
    whose key is left out; JsonField.Null is nil (null) and JsonField.Value(x) is x. Any other value is unchanged. The
    checker allows JsonField only as the direct type of a struct field, so only struct children are looked at. Only
-   hostile bytecode puts an enum anywhere else; the writers then read it as a scalar and fail with RUNTIME-INTERNAL
-   (wrong value type). */
+   hostile bytecode puts a JsonField, or an enum other than Optional, anywhere else; the writers then read it as a
+   scalar and fail with RUNTIME-INTERNAL (wrong value type). */
 static bool field_value(agc_vm *vm, agc_value *item) {
   if (!agc_is(*item, AGC_T_ENUM)) return true;
   uint32_t first = vm->rt->program->json_field;
@@ -252,6 +252,21 @@ static bool field_value(agc_vm *vm, agc_value *item) {
   if (e->n != 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid JsonField value", 0);
   *item = e->payload[0];
   return true;
+}
+
+/* A value as JSON writes it when it is an Optional, which may be anywhere a type is: none is nil (null) and some(x)
+   is x, so some(none) is null too. Any other value is unchanged. */
+static void optional_value(agc_vm *vm, agc_value *item) {
+  /* Only an enum value reads the program: the C tests encode plain values with no program loaded. */
+  if (!agc_is(*item, AGC_T_ENUM)) return;
+  uint32_t first = vm->rt->program->optional;
+  if (first == UINT32_MAX) return;
+  while (agc_is(*item, AGC_T_ENUM)) {
+    const agc_enum *e = agc_as_enum(vm, *item);
+    if (e->variant - first > 1) return;
+    if (e->n != (e->variant - first)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid Optional value", 0);
+    *item = e->n ? e->payload[0] : agc_nil();
+  }
 }
 
 /* The next child of the frame that JSON writes, skipping JsonField.Absent struct fields; false when none is left. */
@@ -274,6 +289,7 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value root, uint32_t span) {
   agc_value item = root;
   for (;;) {
     stack = agc_json_grow(stack, &capacity, depth, sizeof(walk_frame));
+    optional_value(vm, &item);
     if (open_frame(vm, item, &stack[depth])) {
       agc_json_put(&b, is_object(vm, item) ? "{" : "[", 1);
       depth++;
@@ -326,6 +342,7 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
     agc_charge(vm, 1);
     stack = agc_json_grow(stack, &capacity, depth, sizeof(walk_frame));
     walk_frame *f = &stack[depth];
+    optional_value(vm, &item);
     if (agc_is(item, AGC_T_JSON)) {
       v = item;
     } else if (open_frame(vm, item, f)) {

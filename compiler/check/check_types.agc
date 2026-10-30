@@ -110,48 +110,28 @@ end
 ## way). A struct is read once, by its declared fields: its type arguments are walked on their own, so a generic struct
 ## that nests itself with other arguments ends.
 export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
-  pending = [type]
-  seen: Map[String, Bool] = {}
-  at = 0
-  while at < pending.size
-    current = pending[at]
-    at += 1
-    if Types.is?(current, "Bytes")
-      return true
-    end
+  return inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
+end
 
-    if Types.is?(current, "Map") or Types.is?(current, "ATS")
-      pending = pending.push(Types.key(current)).push(Types.value(current))
-    elsif !Types.unknown?(Types.item(current))
-      pending = pending.push(Types.item(current))
-    end
-
-    for argument in Types.args(current)
-      pending = pending.push(argument)
-    end
-
-    name = Types.name(current)
-    if Types.is?(current, "Struct") and cx.structs.has_key?(name) and !seen.has_key?(name)
-      seen = seen.put(name, true)
-      for field in cx.structs[name]
-        pending = pending.push(field.type)
-      end
-    end
+## True when a JsonField of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
+## a JSON builtin that refuses the type, since JSON writes null for both none and JsonField.Null.
+export def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
+  return inside?(cx, type) do |current: ResolvedType|
+    json_field?(current) and Types.is?(json_item(current), "Optional")
   end
-
-  return false
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
-## those (a generic struct by its fields with the type arguments put in), and JsonField of an encodable type other than
-## Nil.
+## those (a generic struct by its fields with the type arguments put in), and JsonField and Optional of an encodable
+## type other than Nil (and other than an Optional, for a JsonField).
 export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool
   return encode_walk(cx, type, {}).passes
 end
 
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
-## structs of those, and JsonField of a decodable type (Nil is not one). A generic struct is not decodable: the schema
-## of the structs is keyed by their bare names, which Box[Int] and Box[String] would share.
+## structs of those, and JsonField and Optional of a decodable type (Nil is not one; nor is an Optional, for a
+## JsonField). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
+## Box[Int] and Box[String] would share.
 export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool
   return decode_walk(cx, type, {}).passes
 end
@@ -856,6 +836,40 @@ def shared_type_names(cx: State.Cx) -> List[String]
   ].concat(OPAQUE_TYPES.to_a)
 end
 
+# True when found holds for the type or a type anywhere in it (bytes_inside? says how the walk goes).
+def inside?(cx: State.Cx, type: ResolvedType, found: Fn[ResolvedType, Bool]) -> Bool
+  pending = [type]
+  seen: Map[String, Bool] = {}
+  at = 0
+  while at < pending.size
+    current = pending[at]
+    at += 1
+    if found.call(current)
+      return true
+    end
+
+    if Types.is?(current, "Map") or Types.is?(current, "ATS")
+      pending = pending.push(Types.key(current)).push(Types.value(current))
+    elsif !Types.unknown?(Types.item(current))
+      pending = pending.push(Types.item(current))
+    end
+
+    for argument in Types.args(current)
+      pending = pending.push(argument)
+    end
+
+    name = Types.name(current)
+    if Types.is?(current, "Struct") and cx.structs.has_key?(name) and !seen.has_key?(name)
+      seen = seen.put(name, true)
+      for field in cx.structs[name]
+        pending = pending.push(field.type)
+      end
+    end
+  end
+
+  return false
+end
+
 # json_field_place for one type. seen holds every struct walked in the whole call (place_key), not only the ones on
 # the path: the walk stops at the first place found, so a struct walked before had none, and a recursive type ends.
 # A JsonField that is the argument of a struct is placed by the fields of the struct with the argument put in
@@ -875,6 +889,8 @@ def place_walk(
     return place_walk(cx, Types.args(type)[0], false, "nested JsonField", owner, seen)
   elsif Types.is?(type, "List")
     return place_walk(cx, Types.item(type), false, "list item", owner, seen)
+  elsif Types.is?(type, "Optional")
+    return place_walk(cx, Types.item(type), false, "Optional item", owner, seen)
   elsif Types.is?(type, "Map")
     return place_walk(cx, Types.value(type), false, "map value", owner, seen)
   elsif Types.is?(type, "Struct") and cx.structs.has_key?(Types.name(type))
@@ -967,12 +983,12 @@ end
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   if primitive?(type) or Types.is?(type, "Json")
     return passed(seen)
-  elsif json_field?(type)
-    if Types.is?(Types.args(type)[0], "Nil")
+  elsif json_field?(type) or Types.is?(type, "Optional")
+    if json_null_item?(type)
       return refused(seen)
     end
 
-    return encode_walk(cx, Types.args(type)[0], seen)
+    return encode_walk(cx, json_item(type), seen)
   elsif Types.is?(type, "List")
     return encode_walk(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
@@ -991,8 +1007,12 @@ end
 def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
   if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
     return passed(seen)
-  elsif json_field?(type)
-    return decode_walk(cx, Types.args(type)[0], seen)
+  elsif json_field?(type) or Types.is?(type, "Optional")
+    if json_null_item?(type)
+      return refused(seen)
+    end
+
+    return decode_walk(cx, json_item(type), seen)
   elsif Types.is?(type, "List")
     return decode_walk(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
@@ -1010,6 +1030,22 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   end
 
   return refused(seen)
+end
+
+# T of a JsonField[T] or an Optional[T].
+def json_item(type: ResolvedType) -> ResolvedType
+  if json_field?(type)
+    return Types.args(type)[0]
+  end
+
+  return Types.item(type)
+end
+
+# True for a JsonField or an Optional whose T is Nil, or a JsonField of an Optional: JSON would write null for a value
+# that is there, so decode could not give it back.
+def json_null_item?(type: ResolvedType) -> Bool
+  item = json_item(type)
+  return Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
 # data? for one type. seen holds every struct and enum walked in the whole call ("Struct:name"), not only the ones on

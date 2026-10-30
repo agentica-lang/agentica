@@ -84,6 +84,6 @@ none -> Optional[T]
   `o.to_result("missing")` (a Result for `try`).
 - `m.get(k)` and `s.index_of(part)` give an Optional.
 - `==` compares two Optionals of a type with `==`: `o == none`,
-  `o == some(3)`. Prints as `some(3)` or `none`. A struct with an Optional
-  field is not JSON-encodable (`CHECK-NOT-ENCODABLE`).
+  `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
+  and reads `null` or a missing key as `none` (`json.md`).
 - `some`, `none`, `ok` and `error` cannot name a variable, function or field.

@@ -135,6 +135,33 @@ end
         None,
     ),
     (
+        "JSON takes Optional fields, items, map values, nesting and a top-level Optional",
+        """struct Address
+  city: String
+  zip: Optional[String] = none
+end
+
+struct User
+  age: Optional[Int]
+  home: Optional[Address]
+  tags: List[Optional[String]]
+  limits: Map[String, Optional[Float]]
+  deep: Optional[Optional[Int]]
+  nicks: Optional[List[String]]
+  note: JsonField[String]
+end
+
+def main() -> Void
+  age: Optional[Int] = none
+  user = JSON.decode("{}", User).unwrap!
+  codec = JSON.codec(User)
+  puts("#{JSON.encode(user)} #{JSON.from(user)} #{JSON.encode(age)} #{JSON.schema(User)} #{codec.encode(user)}")
+end
+""",
+        None,
+        None,
+    ),
+    (
         "Map.get and String.index_of give an Optional",
         'def main() -> Void\n  m = {"a": 1}\n  n: Optional[Int] = m.get("a")\n  i: Optional[Int] = "ab".index_of("b")\n'
         "  puts(n.unwrap_or(0) + i.unwrap_or(0) + m.get(\"a\", 0))\nend\n",
@@ -160,10 +187,41 @@ end
         'm.get("a").ok?',
     ),
     (
-        "a struct with an Optional field is not JSON-encodable",
-        "struct P\n  age: Optional[Int]\nend\n\ndef main() -> Void\n  puts(JSON.encode(P(age: none)))\nend\n",
-        "CHECK-NOT-ENCODABLE",
+        "Optional[JsonField[T]] is no JSON field",
+        "struct P\n  age: Optional[JsonField[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.encode(P(age: none)))\nend\n",
+        "CHECK-JSON-FIELD-PLACE",
         "P(age: none)",
+    ),
+    (
+        "a JsonField inside an Optional list item is no JSON field",
+        "struct P\n  ages: List[Optional[JsonField[Int]]]\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n",
+        "CHECK-JSON-FIELD-PLACE",
+        "P",
+    ),
+    (
+        "JsonField[Optional[T]] cannot be encoded",
+        "struct P\n  age: JsonField[Optional[Int]]\nend\n\n"
+        "def main() -> Void\n  puts(JSON.encode(P(age: JsonField.Absent)))\nend\n",
+        "CHECK-NOT-ENCODABLE",
+        "P(age: JsonField.Absent)",
+    ),
+    (
+        "JsonField[Optional[T]] cannot be decoded",
+        'struct P\n  age: JsonField[Optional[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.decode("{}", P))\nend\n',
+        "CHECK-NOT-DECODABLE",
+        "P",
+    ),
+    (
+        "Optional[Nil] cannot be encoded",
+        "def main() -> Void\n  x: Optional[Nil] = none\n  puts(JSON.encode(x))\nend\n",
+        "CHECK-NOT-ENCODABLE",
+        "x",
+    ),
+    (
+        "an Optional of a type JSON cannot write cannot be encoded",
+        "def main() -> Void\n  x: Optional[Set[Int]] = none\n  puts(JSON.encode(x))\nend\n",
+        "CHECK-NOT-ENCODABLE",
+        "x",
     ),
 ]
 

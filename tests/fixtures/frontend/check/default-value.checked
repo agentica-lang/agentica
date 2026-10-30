@@ -1,1 +1,1 @@
-ERROR CHECK-DEFAULT-VALUE 56:5:23-62:5:29 "a default value must be a constant" "write a literal, true, false, nil, [], {} or an enum variant without a payload, or make the parameter required" file="default-value.agc"
+ERROR CHECK-DEFAULT-VALUE 56:5:23-62:5:29 "a default value must be a constant" "write a literal, true, false, nil, none, [], {} or an enum variant without a payload, or make the parameter required" file="default-value.agc"

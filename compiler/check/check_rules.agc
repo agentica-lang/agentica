@@ -406,7 +406,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
         "CHECK-NOT-DECODABLE",
         "target contains types that cannot be decoded",
         node.span,
-        bytes_help(cx, type, "decode"),
+        json_refusal_help(cx, type, "decode"),
       ),
     )
   end
@@ -414,9 +414,16 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   return ok(type)
 end
 
-# The help of a JSON builtin that refuses a type with a Bytes inside, or "": JSON has no byte type, so the bytes are
-# written as Base64 text and read back from it.
-def bytes_help(cx: State.Cx, type: T.Type, verb: String) -> String
+# The help of a JSON builtin that refuses a type with a JsonField of an Optional or a Bytes inside, or "": JSON has no
+# byte type, so the bytes are written as Base64 text and read back from it.
+def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
+  if CheckTypes.optional_json_field_inside?(cx, type)
+    return (
+      "JsonField[Optional[T]] would write null for JsonField.Null and for none; use Optional[T], or JsonField[T] to " +
+      "tell a missing key from null"
+    )
+  end
+
   if !CheckTypes.bytes_inside?(cx, type)
     return ""
   end
@@ -444,7 +451,7 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
         "CHECK-NOT-ENCODABLE",
         "cannot JSON.encode #{T.to_text(out.type)} or its nested types",
         Ast.expr_span(site.args[0]),
-        bytes_help(cx, out.type, "encode"),
+        json_refusal_help(cx, out.type, "encode"),
       ),
     )
   end
