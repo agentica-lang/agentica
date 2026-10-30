@@ -67,14 +67,14 @@ end
 ## struct_params the type parameters of each generic struct (a plain struct has no entry); c_structs the C structs of
 ## the extern blocks (Ast.StructDecl.layout), by linked name; callbacks the Fn type that the function of each callback
 ## of the extern blocks takes (Ast.Callback), by linked name; natives the functions of the extern blocks, by linked
-## name; field_defaults the names of the fields that have a
-## default value, by struct; functions the program's; constants the type of each module constant by linked name, which
-## grows as the initializers are checked in order. type_params are the type parameters in scope (while the fields of a
-## generic struct, the variants of a generic enum or the signature and body of a generic function are checked). file is
-## the file of the declaration being checked, texts the source of every file by name. expression checks an expression:
-## the cycle between expressions and statements goes through this field (check_expr.agc puts its own function here),
-## because a module cannot import one that imports it. prelude is true while the files of the compiler prelude are
-## checked (check_prelude.agc): their type variables are opaque types, and a Map key or Set element may be one.
+## name; field_defaults the names of the fields that have a default value, by struct; functions the program's;
+## constants the type of each module constant by linked name, which grows as the initializers are checked in order.
+## type_params are the type parameters in scope (while the fields of a generic struct, the variants of a generic enum
+## or the signature and body of a generic function are checked). file is the file of the declaration being checked,
+## texts the source of every file by name. expression checks an expression: the cycle between expressions and
+## statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one
+## that imports it. prelude is true while the files of the compiler prelude are checked (check_prelude.agc): their type
+## variables are opaque types, and a Map key or Set element may be one.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]

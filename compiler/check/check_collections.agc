@@ -309,26 +309,28 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
 
   target = site.args[1]
   expected = cx.callbacks[T.name(wanted)]
-  named = callback_target(target)
-  if named == "" or cx.natives.include?(named)
-    return error(
-      State.fail_help(
-        cx,
-        current,
-        "CHECK-NATIVE-CALLBACK",
-        "Native.callback takes &name of a declared function that is not a function of an extern block",
-        Ast.expr_span(target),
-        "write a def that takes #{T.to_text(expected)} and pass &name; C's user data pointer carries any context",
-      ),
-    )
+  name = ""
+  case callback_target(target, cx.natives)
+    some(found) -> name = found
+    none ->
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-NATIVE-CALLBACK",
+          "Native.callback takes &name of a declared function that is not a function of an extern block",
+          Ast.expr_span(target),
+          "write a def that takes #{T.to_text(expected)} and pass &name; C's user data pointer carries any context",
+        ),
+      )
   end
 
   # A plain function is checked against its own type, so a mismatch gets the help below; a generic one takes its
   # type parameters from the callback.
   context = T.Type.Unknown
-  found = cx.functions.get(named)
-  if found.some? and found.unwrap!.type_parameters.size > 0
-    context = expected
+  case cx.functions.get(name)
+    some(signature) if signature.type_parameters.size > 0 -> context = expected
+    _ -> context = T.Type.Unknown
   end
 
   given = try State.expr(cx, current, target, context)
@@ -348,11 +350,12 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
   return ok(State.Out(st: given.st, type: wanted))
 end
 
-# The function that the second argument of Native.callback names with &, or "" for any other value.
-def callback_target(expr: Ast.Expr) -> String
+# The function that the second argument of Native.callback names with &, unless it is a function of an extern block
+# (NATIVES); none for any other value.
+def callback_target(expr: Ast.Expr, natives: Set[String]) -> Optional[String]
   case expr
-    Ast.Expr.FunctionRef(node) -> return node.name
-    _ -> return ""
+    Ast.Expr.FunctionRef(node) if not natives.include?(node.name) -> return some(node.name)
+    _ -> return none
   end
 end
 
