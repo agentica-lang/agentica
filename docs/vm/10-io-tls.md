@@ -22,8 +22,8 @@ reads no `openssl.cnf`, so both builds behave the same.
   key files, off the scheduler thread, and only then does the VM resolve and
   connect or listen. So a bad certificate or key fails `TLS.listen` before the
   port is bound, and `TLS.connect` before it connects. Both load the chain and
-  key the same way (`use_identity` in `vm/tls_openssl.c`). The connect timeout covers the setup, lookup,
-  connect and handshake.
+  key the same way (`use_identity` in `vm/tls_openssl.c`). The connect timeout
+  covers the setup, lookup, connect and handshake.
 - **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048 bits) on
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A

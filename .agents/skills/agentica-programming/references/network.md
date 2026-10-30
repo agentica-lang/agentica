@@ -45,8 +45,9 @@ TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Resu
 - The server takes a PEM certificate chain and key; a bad file or mismatched key
   fails the listen. `TLS.connect` sends a client certificate when `cert_file`
   and `key_file` name the same PEM forms (both empty: none; only one: an error),
-  and a bad file or mismatched key fails the connect. A peer that closes without TLS's closing message ends the
-  stream like EOF. TLS behaves the same on Linux, macOS and Windows.
+  and a bad file or mismatched key fails the connect. A peer that closes
+  without TLS's closing message ends the stream like EOF. TLS behaves the same
+  on Linux, macOS and Windows.
 - Timeouts are positive milliseconds and cover the whole operation, lock waits
   included. Reads and writes have independent locks: coordinate which task
   reads and the order of writes. A timeout during active I/O closes the socket
