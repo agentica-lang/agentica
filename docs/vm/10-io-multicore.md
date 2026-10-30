@@ -201,13 +201,11 @@ that still apply.
   "Threads"). A slot is a 16-byte value, so per-slot ordering would not stop a
   torn read. At N=1 tasks interleave on one thread and
   nothing is racy.
-- **Order of work.** The task fixtures run as a stress test with
-  `--schedulers 4`, under TSan when available (`make vm-tsan` runs the C tests
-  of the shared code, §16.9). TSan does not work with Boehm's stop-the-world,
-  so that run uses an `AGC_NO_GC`-style build with `-fsanitize=thread` that
-  never calls `agc_set_alloc_limit`. ASan and TSan, both without GC, cover
-  memory errors and races in the scheduler code. The GC-threaded build is
-  covered only by a GC-stress run with `--schedulers 4`. The parity rule stays
-  black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
-  codes match the goldens. The differential, bytecode and golden tests, the
-  `--max-steps` sweep and the seeded runs all run with `--schedulers 1`.
+- **Order of work.** The task fixtures run as a stress test with `--schedulers
+  4`, under TSan when available (§16.9, "TSan covers the shared code"). ASan and
+  TSan, both without GC, cover memory errors and races in the scheduler code.
+  The GC-threaded build is covered only by a GC-stress run with `--schedulers
+  4`. The parity rule stays black-box (1): with N=1, exit code, stdout, program
+  stderr and diagnostic codes match the goldens. The differential, bytecode and
+  golden tests, the `--max-steps` sweep and the seeded runs all run with
+  `--schedulers 1`.

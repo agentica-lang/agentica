@@ -139,14 +139,12 @@ are left: the run is over. The rules:
   still parking is not lost.
 - **To the I/O thread: its inbox.** A request is its own small `malloc`'d entry
   (`agc_request`, `vm/core.h`). A job is never linked into the inbox, so one job
-  can have several requests in flight. The kinds are: start a job (a read,
-  write, close, accept and so on, on handle H), cancel it, stop or extend its
-  timer, release it, and the libuv step of a `done`, `expired` or cancel half. A
-  scheduler marks its task as parking and posts the start request. The inbox's
-  lock publishes what it wrote, the mirror of wake after publish (§16.3). Then
-  it calls `uv_async_send` and ends the turn. The I/O thread takes the inbox
-  whole and handles every request: for a pool job it calls `uv_queue_work`, and
-  for every job with a timeout it arms the job's one timer (§14.2).
+  can have several requests in flight. The kinds are in §16.9. A scheduler marks
+  its task as parking and posts the start request. The inbox's lock publishes
+  what it wrote, the mirror of wake after publish (§16.3). Then it calls
+  `uv_async_send` and ends the turn. The I/O thread takes the inbox whole and
+  handles every request: for a pool job it calls `uv_queue_work`, and for every
+  job with a timeout it arms the job's one timer (§14.2).
 - **The pool keeps its own mechanism.** Its `after_work` callback runs on the
   I/O thread, which sets the outcome and pushes the task (§16.5). There is one
   path back from I/O, and it is always the run queue.
@@ -157,9 +155,7 @@ are left: the run is over. The rules:
     runs on its scheduler while its job may already be started, or done. §10.2.3
     covers it.
   - **A lock wait with a deadline.** The task is in the handle's lock FIFO, and
-    its timer is in its scheduler's heap (§16.9). The waker that wins takes the
-    task out of the FIFO before it pushes it, so the task is never in the FIFO
-    and the run queue at once (§16.6).
+    its timer is in its scheduler's heap (§16.9). §16.6 says who takes it out.
 
 Each kind of request is posted at most once per job, so the inbox is bounded by
 the live jobs times the number of kinds. The live jobs are those of live tasks,
@@ -193,16 +189,18 @@ The invariants:
 1. **Only the I/O thread calls libuv** (except `uv_async_send`, §16.2). Every
    libuv step from a scheduler is a request, with its own entry (§16.4).
 2. **A job is freed when its reference count reaches zero.** The count is one
-   atomic (`acq_rel`). Every holder counts: each libuv piece in progress, the
-   task until it has consumed the job, each request in flight, and a waker until
-   it has pushed. The poster takes the reference before it posts, and the
+   atomic (`acq_rel`). Every holder counts: the owner (the task until it has
+   consumed the job, or the detached ending), the wait piece while the pool work
+   or the loop wait runs (the atomic `busy`), the ready list, and each request
+   in flight. The timer is no holder: it never touches `data`, and `sweep` waits
+   for its close. The poster takes the reference before it posts, and the
    request carries it. The I/O thread drops it as its last access after it
-   handles the request, and then frees the request entry. A winning waker drops
-   its reference after its push. A scheduler gives its references back by a
-   RELEASE request, so the last drop is always on the I/O thread. That holder
-   puts the job on the dead list, and the sweep that follows frees it (§16.9).
-   Nothing touches the job after its handler frees it. `drop` runs on the I/O
-   thread even for drops that only free memory, to keep one rule.
+   handles the request, and then frees the request entry. A scheduler gives its
+   references back by a RELEASE request, so the last drop is always on the I/O
+   thread. That holder puts the job on the dead list, and the sweep that follows
+   frees it (§16.9). Nothing touches the job after its handler frees it. `drop`
+   runs on the I/O thread even for drops that only free memory, to keep one
+   rule.
 3. **The first to set the job's outcome wins.** The outcome (done, expired or
    cancelled; not the run's `outcome`) is set once, by CAS from "none". Only the
    winner takes the task off its wait list and does the state CAS. It pushes the
@@ -277,10 +275,8 @@ The rules of §14 and the component that enforces each:
   - **Enforced by:** The I/O thread owns the job's single `uv_timer_t` and arms
     it when it starts the request.
 - **Rule:** §14.3 Cancelling: `agc_task_cancel`.
-  - **Enforced by:** It runs on the canceller's scheduler. It sets the cancel
-    flag, takes the task out of the wait lists a scheduler owns, and does the
-    state CAS. It never touches the job. The resumed task detaches the job and
-    posts the cancel request to the I/O thread.
+  - **Enforced by:** `agc_task_cancel` runs on the canceller's scheduler and
+    never touches the job; the resumed task detaches it (§16.5, rule 3).
 - **Rule:** §14.4 Ending: one exit path.
   - **Enforced by:** `agc_launch_end` in `vm/launch.c` runs on the main thread,
     which is the I/O thread.
@@ -397,24 +393,19 @@ one exit path are as in §16.1 to §16.6. What differs:
   close and `Process.read_available` park too. The parent channel of a child run
   (`Test.run`) opens at the start of the run (`agc_parent_take`). `agc_io_uv`
   aborts off the I/O thread.
-- **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
-  DONE, EXPIRED or CANCELLED), set once by CAS (`agc_job_settle`, release;
-  `agc_io_finish` reads it with acquire). It also has an atomic reference count.
-  The holders are the owner (the task until `agc_io_finish`, or the detached
-  ending), the wait piece (while the pool work or the loop wait runs; the atomic
-  `busy`), the ready list, and each request in flight. The timer is no holder:
-  it never touches `data`, and `sweep` waits for its close. Only the holder that
-  clears `busy` gives back the wait piece's count, so a late end of an abandoned
-  wait changes nothing. A pool or loop completion sets DONE, the timer sets
-  EXPIRED, a detach sets CANCELLED, and a task that resumes with the outcome
-  still PENDING (a lock hand-on or an awaited task woke it) sets EXPIRED itself.
-  So the first outcome stands. The holder that brings the count to zero puts the
-  job on the loop's dead list. `sweep` walks that list only, so its cost is the
-  jobs that ended, not the jobs alive. `drop` takes `data` when the count is
-  zero, and the job is freed once the timer has closed. Only the loop's thread
-  sweeps. A START that the inbox still holds when the owner ended the job starts
-  nothing. `ended` is set before CLOSE_TIMER and RELEASE are posted, and the
-  START gives back the wait piece's count.
+- **An outcome and a count, not flags.** The rules are in §16.5, rules 2 to 4.
+  The outcome (PENDING, DONE, EXPIRED or CANCELLED) is set by CAS
+  (`agc_job_settle`; `agc_io_finish` reads it). A pool or loop completion sets
+  DONE, the timer sets EXPIRED, a detach sets CANCELLED, and a task that resumes
+  with the outcome still PENDING (a lock hand-on or an awaited task woke it)
+  sets EXPIRED itself. Only the holder that clears `busy` gives back the wait
+  piece's count, so a late end of an abandoned wait changes nothing. `sweep`
+  walks the dead list only, so its cost is the jobs that ended, not the jobs
+  alive. `drop` takes `data` when the count is zero, and the job is freed once
+  the timer has closed. Only the loop's thread sweeps. A START that the inbox
+  still holds when the owner ended the job starts nothing. `ended` is set before
+  CLOSE_TIMER and RELEASE are posted, and the START gives back the wait piece's
+  count.
 - **The detached ending runs on a scheduler once threads exist.** `drain` calls
   `end_detached` itself while one thread plays both roles. When the loop is
   shared (`agc_io_share`), the drain only queues the detached job on
@@ -520,9 +511,7 @@ one exit path are as in §16.1 to §16.6. What differs:
   of unobserved crashes and the exit path, as at N = 1. So the exit waits for
   the schedulers to stop (at most one turn, as a stop signal does, §10.2.2), and
   no running task uses a file while the exit path closes it. `--max-steps` is
-  approximate at N > 1. Each scheduler takes steps from the shared budget in
-  batches of up to `AGC_TURN_STEPS`, so the limit can trip while other
-  schedulers still hold unused steps of their batch.
+  approximate at N > 1 (§10.2.1, Quotas).
 - **Stall.** At N > 1 the I/O thread runs the check when it has nothing to do
   (not from `uv_run`'s return value). Every scheduler waits on an empty queue
   (`agc_runq_quiet`, with an epoch that any wake moves). The inbox and the ready
@@ -691,9 +680,8 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
   posts a request. A lock on the buffer that lets a scheduler take them at once
   is not built. On the polled file path, `expired` moves `o->st->buf` while the
   I/O thread may still run `ready`, `step` and `send_rest`, so the poller pause
-  must complete first. Stdin is read into a job's buffer (on Windows, the
-  reader's buffer), and `read_end` appends it to `rt->in.buf` (GC memory) on a
-  scheduler. How the schedulers lock `rt->in` between them is open.
+  must complete first. Stdin is appended to `rt->in.buf` on a scheduler (§16.2).
+  How the schedulers lock `rt->in` between them is open.
 - **A libuv step whose result a half needs** (decided, for sockets). `serve`
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread. A TLS child finishes its
   handshake there, and the request hands the child to `accept_done`.
