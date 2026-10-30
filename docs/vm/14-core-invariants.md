@@ -52,9 +52,8 @@ joined the pool, and the pool waited for a FIFO that never wrote.
 - **Native compute calls** (`compute def`) run on the compute pool, VM threads
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
-  never takes a libuv pool thread. The end of the run never makes a queued call
-  and waits for a running one only while it holds a resource that the end
-  frees, within the flush limit and not after a stop signal (§14.4). As built.
+  never takes a libuv pool thread. What the end of the run does with compute
+  calls is in §14.4 (steps 0 and 3). As built.
 
 Known exceptions, as built (the mechanisms are in §10.2.2):
 
@@ -86,11 +85,8 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   bounded by the flush limit, and a stop signal interrupts the write (`EINTR`;
   the handler has no `SA_RESTART`) and ends the run (§14.4). Otherwise a child's
   stderr goes through the same buffer (`agc_output_forward`). In the fallback it
-  takes the blocking `fwrite` on the I/O thread, under the stream's lock. With N
-  > 1 the streams are locked per stream (§16.8). At settlement on Linux, a
-  final C stdio flush skips a stream whose lock is busy; its buffered native
-  bytes may be lost. If the lock is acquired, `fflush` may still block on the
-  descriptor. macOS and Windows retain the blocking final C stdio flush.
+  takes the blocking `fwrite` on the I/O thread, under the stream's lock
+  (§10.2.3, Output). The final C stdio flush is in §14.4, step 4.
 - **Notices (text the VM writes to stderr by itself).** Crash diagnostics and
   the unobserved-task summary are queued (at most 1 MiB) ahead of waiting
   writers, never inside a print. The diagnostic of a failed run is queued after
@@ -223,8 +219,7 @@ flush. **When `main` ends, the program ends.** The steps are:
    or the DLLs' detach code, which could wait for it. On Linux, each final C
    stdio flush skips a stream whose lock is busy and may lose its buffered
    native bytes. If the lock is acquired, `fflush` can still block on the
-   descriptor. macOS and Windows keep the blocking final flush, so #616 remains
-   outside Linux.
+   descriptor. macOS and Windows keep the blocking final flush.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
@@ -239,20 +234,16 @@ flush limit. A second signal that comes before the children are stopped waits
 for step 1, so children are never left behind.
 
 As built, `agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
-run" and "Stop signals"). `main`'s return, `System.exit`, a diagnostic, the step
-limit and the first stop signal all reach it. A second stop signal before the
-children are stopped is recorded and acted on right after, and the stop grace
-timer bounds that at 3 seconds. A driven VM whose driver is gone takes the
-immediate path on its first signal. `agc_io_close` serves only the in-process
-harnesses and the single binary, which closes the front end's loop before it
-runs the program in a new runtime. The Windows stdin reader is not joined: a
-read that the close cannot cancel stays in `_read` and takes the next input, so
-no later runtime in the process may read that descriptor. Children are reaped by
-libuv's exit callback, never by `waitpid` or a sleep; step 1 runs the loop for
-the exits (row 7.2.1d). The streams on the loop drain inside the file flush,
-which bounds them. The blocking fallbacks of §14.1 and a successful final
-`fflush` on a descriptor that blocks remain unbounded; Windows retains the
-blocking final flush.
+run" and "Stop signals", which also say how a second signal and the stop grace
+timer bound it). `main`'s return, `System.exit`, a diagnostic, the step limit
+and the first stop signal all reach it. `agc_io_close` serves only the
+in-process harnesses and the single binary, which closes the front end's loop
+before it runs the program in a new runtime. The Windows stdin reader is not
+joined: a read that the close cannot cancel stays in `_read` and takes the next
+input, so no later runtime in the process may read that descriptor. Children
+are reaped by libuv's exit callback, never by `waitpid` or a sleep. The blocking
+fallbacks of §14.1 and a successful final `fflush` on a descriptor that blocks
+remain unbounded.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers
 end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none

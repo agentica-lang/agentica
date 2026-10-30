@@ -292,8 +292,7 @@ section says how the scheduler and the loop keep them.
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else
   (§14.4):
-  1. kill the children and drive the loop until libuv's exit callbacks have
-     reaped them (10.4, Close; at most about 2 seconds);
+  1. kill the children and reap them (§14.4, step 1; 10.4, Close);
   2. one non-blocking TLS `close_notify` on each TLS session that finished its
      handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1). Each
      TCP socket and listener still open is then closed the way a close from a
@@ -303,10 +302,9 @@ section says how the scheduler and the loop keep them.
      queue the diagnostic of a failed run as a kept notice (10.2.2), so the wait
      below covers it. Close every open file, and wait for their flush jobs and
      for the stdout and stderr buffers to drain. The wait first drains the pool
-     jobs that have already finished. It is always bounded: 30 seconds by
-     default, or `--flush-timeout MS`, or `AGENTICA_FLUSH_TIMEOUT_MS` (the flag
-     wins; there is no way to turn the limit off). So a FIFO whose reader
-     stopped cannot keep the run open for ever. When it runs out, the VM prints
+     jobs that have already finished. It is bounded by the flush limit (§14.4),
+     so a FIFO whose reader stopped cannot keep the run open for ever. When it
+     runs out, the VM prints
      `agentica: file data may not be written: the flush took longer than MS ms`
      (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). The exit code
      does not change. Then free what native code still owns, within the same
@@ -330,16 +328,14 @@ section says how the scheduler and the loop keep them.
   first signal is stored and wakes the loop. The scheduler checks it after every
   turn, before it waits and before it reports a stall, and the run ends as an
   exit with code 128 + signal. `end_run` runs the steps above, then raises the
-  signal again with its default action. A second signal ends the VM at once, but
-  only after the children are stopped. Until then it is only recorded. A
-  3-second grace timer (`STOP_GRACE_SECONDS`) backs this up. A driven VM
-  (`--driver-pid`) whose driver is gone treats even the first signal as a second
-  one. The handler has no `SA_RESTART`, so a blocking fallback write that nobody
-  reads returns `EINTR`. The run then ends as the stop (128 + signal, no
-  diagnostic), and that write is not retried. A stream on the loop has no
-  blocked write. Once a stop signal is set, its wait in step 3 ends after one
-  non-blocking write (End of run and stop). A CPU-bound task delays the stop by
-  at most one turn.
+  signal again with its default action. A second signal ends the VM at once
+  (§14.4), but only after the children are stopped. Until then it is only
+  recorded. A 3-second grace timer (`STOP_GRACE_SECONDS`) backs this up. A
+  driven VM (`--driver-pid`) whose driver is gone treats even the first signal
+  as a second one. The handler has no `SA_RESTART`, so a blocking fallback
+  write that nobody reads returns `EINTR`. The run then ends as the stop (128 +
+  signal, no diagnostic), and that write is not retried. A stream on the loop
+  has no blocked write. A CPU-bound task delays the stop by at most one turn.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight), a
   `next_owner` task, and a FIFO of waiting tasks, all in GC memory. Every handle
   builtin (`read_bytes`, `read_line`, `write`, `write_bytes`, `flush`, `close`)
@@ -550,9 +546,8 @@ section says how the scheduler and the loop keep them.
     notices in with force, and restarts the writer for each stream that is not
     writing. So the wait ends when the data is written, not at the limit. With a
     stop signal set, `agc_output_busy` makes one non-blocking write per stream
-    (on Windows, within the shared 200 ms). It then stops waiting for stdout and
-    stderr, so a reader that never reads cannot hold a stopped VM for the flush
-    limit. Files keep their wait.
+    (on Windows, within the shared 200 ms) and then stops waiting for them
+    (§14.4).
   - **A child's stderr.** `vm/process.c` hands each chunk of a plain child's
     stderr to `agc_output_forward` on the I/O thread. The bytes join the notice
     queue, so they never enter a print that holds the stream. They keep their

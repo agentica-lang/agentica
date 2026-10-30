@@ -313,11 +313,11 @@ talking to each other.
   that holds a lock. An OS lock cannot be held across a park, so whole prints at
   N > 1 are ordered by a short lock around the buffer and the FIFO (§16.11). At
   N = 1 nothing is locked.
-- **One bounded wait on the exit path.** `close_children`, run by the exit path,
-  takes about 2 seconds at most (§14.4). It does not block the loop thread: it
-  runs the loop (`await_exits` in `vm/process.c`, `uv_run` under a timer) until
-  libuv's exit callbacks have reaped the children. `Process.close` does not wait
-  on the loop thread. It parks its task on a job with a timer.
+- **One bounded wait on the exit path.** `close_children` (§14.4, step 1) does
+  not block the loop thread: it runs the loop (`await_exits` in
+  `vm/process.c`, `uv_run` under a timer) until libuv's exit callbacks have
+  reaped the children. `Process.close` does not wait on the loop thread. It
+  parks its task on a job with a timer.
 - **One lock on the run queue** is shared by every scheduler and the I/O thread.
   Measure it (§16.3).
 - **One I/O thread** may become the limit at a high rate of sockets. §16.10 is
@@ -658,8 +658,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   (`vm/value.c`) are the helpers, and each scheduler thread registers at its
   start.
 - **The exit path runs on the I/O thread.** `agc_launch_end` (`vm/launch.c`)
-  calls `agc_launch_settle`, then the output end, then `agc_launch_exit`. The
-  main thread is the I/O thread once N > 1 as well (§16.2).
+  calls `agc_launch_settle`, then the output end, then `agc_launch_exit`.
 
 ### 16.10 Later iterations
 
