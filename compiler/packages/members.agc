@@ -25,7 +25,7 @@ export struct Members
 end
 
 ## The workspace of a project that is in none.
-export def none() -> Members
+export def empty() -> Members
   return Members(root: "", repository: "", folders: [])
 end
 
@@ -37,7 +37,7 @@ end
 ## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID.
 export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[Members]
   if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
-    return ok(none())
+    return ok(empty())
   end
 
   here = project_dir
@@ -52,13 +52,13 @@ export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[M
 
     parent = Paths.directory_of(here)
     if parent == here
-      return ok(none())
+      return ok(empty())
     end
 
     here = parent
   end
 
-  return ok(none())
+  return ok(empty())
 end
 
 ## Whether a dependency source names a member of this workspace: its repository is the workspace's, and its subdir is a
@@ -109,7 +109,7 @@ def belongs(
   project_dir: String,
 ) -> Result[Members]
   if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
-    return ok(none())
+    return ok(empty())
   end
 
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")

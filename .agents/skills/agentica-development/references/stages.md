@@ -161,7 +161,7 @@ Design points: one `TypeRef` covers `Int`, `List[Int]`, and `List[List[Int]]`;
 one `Literal` covers integers, floats, strings, booleans, and `nil`; grouping `(
 expr )` produces no node; `Call`/`Construct` store the name as a string;
 `Unary`/`Binary` store the operator as the token kind (`plus`, `and`, `equal`);
-`Absent` is `Optional.Absent`.
+`Absent` is `Maybe.Absent`.
 
 ## Parser (`compiler/syntax/parse_base.agc`, `compiler/syntax/parser.agc`)
 

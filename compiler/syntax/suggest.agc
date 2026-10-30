@@ -5,7 +5,7 @@ import Types from "types"
 
 ## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may
 ## differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
-export def did_you_mean(name: String, candidates: List[String]) -> Ast.Optional[String]
+export def did_you_mean(name: String, candidates: List[String]) -> Ast.Maybe[String]
   return did_you_mean_among(name, candidates, [])
 end
 
@@ -16,15 +16,15 @@ export def did_you_mean_among(
   full_name: String,
   candidates: List[String],
   shared: List[String],
-) -> Ast.Optional[String]
+) -> Ast.Maybe[String]
   case closest_among(full_name, candidates, shared)
-    Ast.Optional.Present(name) -> return Ast.Optional.Present("did you mean \"#{name}\"?")
-    Ast.Optional.Absent -> return Ast.Optional.Absent
+    Ast.Maybe.Present(name) -> return Ast.Maybe.Present("did you mean \"#{name}\"?")
+    Ast.Maybe.Absent -> return Ast.Maybe.Absent
   end
 end
 
 ## The name nearest to full_name among the candidates of its file and the shared ones, or Absent when none is close.
-export def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Optional[String]
+export def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Maybe[String]
   prefix = file_prefix(full_name)
   name = Types.display_name(full_name)
   limit = 2
@@ -57,7 +57,7 @@ end
 
 # The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose
 # length differs by more than the limit cannot be near, which skips most of the table.
-def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Optional[String]
+def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Maybe[String]
   best = ""
   best_distance = limit + 1
   for candidate in ordered
@@ -71,10 +71,10 @@ def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Optional[Str
   end
 
   if best_distance > limit
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
-  return Ast.Optional.Present(best)
+  return Ast.Maybe.Present(best)
 end
 
 # One row of the table per character of the left word; the answer is the end of the last row.

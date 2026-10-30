@@ -188,8 +188,8 @@ def user_decodable(
     for field in decl.fields
       found = field_type(field.type, names)
       case found
-        Ast.Optional.Present(type) -> types = types.push(type)
-        Ast.Optional.Absent -> complete = false
+        Ast.Maybe.Present(type) -> types = types.push(type)
+        Ast.Maybe.Absent -> complete = false
       end
     end
 
@@ -245,45 +245,45 @@ end
 
 # The type of a struct field as JSON.decode builds it, or Absent when it cannot: a JsonField of a JSON type, or a JSON
 # type. JsonField is only allowed here, as the direct type of the field.
-def field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
+def field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Maybe[Types.Type]
   if ref.name != "JsonField" or ref.args.size != 1
     return json_field_inner(ref, names)
   end
 
   value = json_field_inner(ref.args[0], names)
   case value
-    Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Enum("JsonField", [type]))
-    Ast.Optional.Absent -> return Ast.Optional.Absent
+    Ast.Maybe.Present(type) -> return Ast.Maybe.Present(Types.Type.Enum("JsonField", [type]))
+    Ast.Maybe.Absent -> return Ast.Maybe.Absent
   end
 end
 
 # The type of a JSON value as JSON.decode builds it inside a field (the whole field type, or T of a JsonField[T]), or
 # Absent when it cannot.
-def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.Type]
+def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Ast.Maybe[Types.Type]
   args = ref.args
   if args.size == 0 and ref.name == "Int"
-    return Ast.Optional.Present(Types.Type.Int)
+    return Ast.Maybe.Present(Types.Type.Int)
   elsif args.size == 0 and ref.name == "Float"
-    return Ast.Optional.Present(Types.Type.Float)
+    return Ast.Maybe.Present(Types.Type.Float)
   elsif args.size == 0 and ref.name == "Bool"
-    return Ast.Optional.Present(Types.Type.Bool)
+    return Ast.Maybe.Present(Types.Type.Bool)
   elsif args.size == 0 and ref.name == "String"
-    return Ast.Optional.Present(Types.Type.String)
+    return Ast.Maybe.Present(Types.Type.String)
   elsif ref.name == "List" and args.size == 1
     item = json_field_inner(args[0], names)
     case item
-      Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.List(type))
-      Ast.Optional.Absent -> return Ast.Optional.Absent
+      Ast.Maybe.Present(type) -> return Ast.Maybe.Present(Types.Type.List(type))
+      Ast.Maybe.Absent -> return Ast.Maybe.Absent
     end
   elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0
     value = json_field_inner(args[1], names)
     case value
-      Ast.Optional.Present(type) -> return Ast.Optional.Present(Types.Type.Map(Types.Type.String, type))
-      Ast.Optional.Absent -> return Ast.Optional.Absent
+      Ast.Maybe.Present(type) -> return Ast.Maybe.Present(Types.Type.Map(Types.Type.String, type))
+      Ast.Maybe.Absent -> return Ast.Maybe.Absent
     end
   elsif args.size == 0 and names.include?(ref.name)
-    return Ast.Optional.Present(Types.Type.Struct(ref.name, []))
+    return Ast.Maybe.Present(Types.Type.Struct(ref.name, []))
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end

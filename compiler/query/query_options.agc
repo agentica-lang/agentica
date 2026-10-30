@@ -83,8 +83,8 @@ end
 ## The problem with no place in a text (line 0), for `--ai`, which prints the source line of a place: it shows the file
 ## name alone, as the plain form does. The JSON form keeps the span of `refusal`.
 export def unplaced(problem: Problems.Problem) -> Problems.Problem
-  none = Source.Position(offset: 0, line: 0, column: 0)
-  return problem.with(span: Source.Span(start: none, stop: none))
+  origin = Source.Position(offset: 0, line: 0, column: 0)
+  return problem.with(span: Source.Span(start: origin, stop: origin))
 end
 
 ## The QUERY-USAGE diagnostic with `message`, and `usage` as its help.

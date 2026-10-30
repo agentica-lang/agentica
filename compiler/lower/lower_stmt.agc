@@ -145,18 +145,18 @@ end
 # A return of a call of a function of the program is a tail call, which returns by itself.
 def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int) -> Result[Lowering.Fx]
   case node.value
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       call = tail_call(cx, value)
       case call
-        Ast.Optional.Present(found) ->
+        Ast.Maybe.Present(found) ->
           out = try Expr.lower_call(cx, fx, found, -1, true, false, true)
           return ok(out.fx.with(next: saved))
-        Ast.Optional.Absent -> fx = fx
+        Ast.Maybe.Absent -> fx = fx
       end
 
       out = try Expr.lower_expression(cx, fx, value, -1, true, false)
       fx = Lowering.emit_at(out.fx, "return", [out.slot], node.span)
-    Ast.Optional.Absent ->
+    Ast.Maybe.Absent ->
       fx = Lowering.alloc(fx)
       slot = fx.next - 1
       fx = Lowering.emit_const(fx, slot, Ir.Imm.Void, node.span)
@@ -167,15 +167,15 @@ def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int)
 end
 
 # The call when an expression is a call of a function of the program (not a builtin).
-def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Ast.Optional[Ast.Call]
+def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Ast.Maybe[Ast.Call]
   case value
     Ast.Expr.Call(node) ->
       if Builtins.ref(node.name, node.args.size).ok?
-        return Ast.Optional.Absent
+        return Ast.Maybe.Absent
       end
 
-      return Ast.Optional.Present(node)
-    _ -> return Ast.Optional.Absent
+      return Ast.Maybe.Present(node)
+    _ -> return Ast.Maybe.Absent
   end
 end
 
@@ -184,8 +184,8 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
   end_label = fx.labels - 1
   has_else = false
   case node.else_body
-    Ast.Optional.Present(body) -> has_else = true
-    Ast.Optional.Absent -> has_else = false
+    Ast.Maybe.Present(body) -> has_else = true
+    Ast.Maybe.Absent -> has_else = false
   end
 
   index = 1
@@ -205,8 +205,8 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
   end
 
   case node.else_body
-    Ast.Optional.Present(body) -> fx = try scoped(cx, fx, body)
-    Ast.Optional.Absent -> fx = fx
+    Ast.Maybe.Present(body) -> fx = try scoped(cx, fx, body)
+    Ast.Maybe.Absent -> fx = fx
   end
 
   return ok(Lowering.place(fx, end_label))
@@ -583,15 +583,15 @@ end
 # The guard of an arm, after its names are bound: the next arm is tried when it is false. Its registers are free after
 # the jump, but the names stay.
 def lower_guard(
-  cx: Lowering.Cx, fx: Lowering.Fx, guard: Ast.Optional[Ast.Expr], skip: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, guard: Ast.Maybe[Ast.Expr], skip: Int
 ) -> Result[Lowering.Fx]
   case guard
-    Ast.Optional.Present(condition) ->
+    Ast.Maybe.Present(condition) ->
       kept = fx.next
       lowered = try Expr.lower_expression(cx, fx, condition, -1, false, false)
       fx = Lowering.emit_at(lowered.fx, "jump-if-false", [lowered.slot, skip], Ast.expr_span(condition))
       return ok(fx.with(next: kept))
-    Ast.Optional.Absent -> return ok(fx)
+    Ast.Maybe.Absent -> return ok(fx)
   end
 end
 

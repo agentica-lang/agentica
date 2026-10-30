@@ -155,8 +155,8 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
 
   help = Diag.Help.NoHelp
   case Suggest.did_you_mean_among(name, [], seen)
-    Ast.Optional.Present(text) -> help = Failure.hint(text)
-    Ast.Optional.Absent -> help = Diag.Help.NoHelp
+    Ast.Maybe.Present(text) -> help = Failure.hint(text)
+    Ast.Maybe.Absent -> help = Diag.Help.NoHelp
   end
 
   return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)

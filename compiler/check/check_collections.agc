@@ -333,9 +333,9 @@ def task_map_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Bloc
     cx,
     counts.st,
     block,
-    Ast.Optional.Present([T.item(items.type)]),
+    Ast.Maybe.Present([T.item(items.type)]),
     task_map_block_result(site.expected),
-    Ast.Optional.Absent,
+    Ast.Maybe.Absent,
   )
   return task_map_result(cx, checked.st, checked.type, block.span)
 end
@@ -495,8 +495,8 @@ def check_block_value(
   callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->
-      known = Ast.Optional.Present(params)
-      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, Ast.Optional.Absent)
+      known = Ast.Maybe.Present(params)
+      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, Ast.Maybe.Absent)
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
       checked = try State.expr(cx, leading.st, callback, T.Type.Unknown)

@@ -18,10 +18,10 @@ export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) 
   while index < node.params.size
     param = node.params[index]
     case param.default
-      Ast.Optional.Present(value) ->
+      Ast.Maybe.Present(value) ->
         try check_value(cx, st, value, "make the parameter required")
         seen = true
-      Ast.Optional.Absent ->
+      Ast.Maybe.Absent ->
         if seen and !(index == node.params.size - 1 and param.type.name == "Fn")
           return error(order_failure(cx, st, param))
         end
@@ -45,10 +45,10 @@ export def check_types(
   index = 0
   while index < node.params.size
     case node.params[index].default
-      Ast.Optional.Present(value) ->
+      Ast.Maybe.Present(value) ->
         out = try State.expr(cx, current, value, types[index])
         current = out.st
-      Ast.Optional.Absent -> current = current
+      Ast.Maybe.Absent -> current = current
     end
 
     index += 1
@@ -60,8 +60,8 @@ end
 ## CHECK-DEFAULT-VALUE at the first field default that is not a constant.
 export def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
   case field.default
-    Ast.Optional.Present(value) -> return check_value(cx, st, value, "remove the default")
-    Ast.Optional.Absent -> return ok(true)
+    Ast.Maybe.Present(value) -> return check_value(cx, st, value, "remove the default")
+    Ast.Maybe.Absent -> return ok(true)
   end
 end
 
@@ -73,10 +73,10 @@ export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -
   index = 0
   while index < node.fields.size
     case node.fields[index].default
-      Ast.Optional.Present(value) ->
+      Ast.Maybe.Present(value) ->
         out = try State.expr(cx, current, value, types[index])
         current = out.st
-      Ast.Optional.Absent -> current = current
+      Ast.Maybe.Absent -> current = current
     end
 
     index += 1

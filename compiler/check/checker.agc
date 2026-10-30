@@ -83,7 +83,7 @@ end
 
 ## Checks a linked program. The settings tell where the files of the prelude are read.
 export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, true, false, taking(linked, Ast.Optional.Absent)))
+  return finished(run(linked, settings, true, false, taking(linked, Ast.Maybe.Absent)))
 end
 
 ## Checks a linked program as `check_query` does, but a function whose body fails to check does not stop the run: its
@@ -92,26 +92,26 @@ end
 ## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
 ## rule or of the module constants leaves no part that passes, so it is the failure, as for `check_query`.
 export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
-  return recovered(run(linked, settings, false, true, taking(linked, Ast.Optional.Absent)))
+  return recovered(run(linked, settings, false, true, taking(linked, Ast.Maybe.Absent)))
 end
 
 ## `check_recovering`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of
 ## `check_recovering` without it.
 export def check_recovering_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Recovering
-  return recovered(run(linked, settings, false, true, taking(linked, Ast.Optional.Present(reusing))))
+  return recovered(run(linked, settings, false, true, taking(linked, Ast.Maybe.Present(reusing))))
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
 ## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
 ## still be `main() -> Void`, and every other rule holds.
 export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, false, false, taking(linked, Ast.Optional.Absent)))
+  return finished(run(linked, settings, false, false, taking(linked, Ast.Maybe.Absent)))
 end
 
 ## `check_query`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of `check_query`
 ## without it, and so is the first problem.
 export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Rechecked
-  taken = taking(linked, Ast.Optional.Present(reusing))
+  taken = taking(linked, Ast.Maybe.Present(reusing))
   return Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
 end
 
@@ -246,9 +246,9 @@ def run(
 end
 
 # What the run starts from: nothing, or the entries of the unchanged modules of the earlier check.
-def taking(linked: Linker.Linked, reusing: Ast.Optional[Reusing]) -> Reuse.Taken
+def taking(linked: Linker.Linked, reusing: Ast.Maybe[Reusing]) -> Reuse.Taken
   case reusing
-    Ast.Optional.Present(found) ->
+    Ast.Maybe.Present(found) ->
       before = found.earlier
       old = State.fresh().with(
         types: before.checked.types,
@@ -258,10 +258,10 @@ def taking(linked: Linker.Linked, reusing: Ast.Optional[Reusing]) -> Reuse.Taken
         step_tries: before.checked.step_tries,
       )
       return Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)
-    Ast.Optional.Absent ->
+    Ast.Maybe.Absent ->
       st = State.fresh().with(types: State.no_types(ids_of(linked)))
-      none: Set[String] = Set.new([])
-      return Reuse.Taken(st: st, constants: {}, clean: none)
+      nothing_clean: Set[String] = Set.new([])
+      return Reuse.Taken(st: st, constants: {}, clean: nothing_clean)
   end
 end
 

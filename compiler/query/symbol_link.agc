@@ -20,7 +20,7 @@ end
 ## What linking the roots gave: the program of the roots that linked (Absent when none did), its modules in the order
 ## they were linked, with the roots among them, and the roots left out.
 export struct Linked
-  program: Ast.Optional[Linker.Linked]
+  program: Ast.Maybe[Linker.Linked]
   modules: List[Linker.LinkedModule]
   skipped: List[Skipped]
 end
@@ -35,8 +35,8 @@ export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: M
 
   modules: List[Linker.LinkedModule] = []
   case programs.linked
-    Ast.Optional.Present(together) -> modules = together.modules
-    Ast.Optional.Absent -> modules = modules
+    Ast.Maybe.Present(together) -> modules = together.modules
+    Ast.Maybe.Absent -> modules = modules
   end
 
   return Linked(program: programs.linked, modules: modules, skipped: skipped)

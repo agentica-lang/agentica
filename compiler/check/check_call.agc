@@ -485,7 +485,7 @@ def check_generic_block(
 
   case node
     Ast.Expr.BlockLit(block) ->
-      out = try Stmt.check_block_in(cx, st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, false)
+      out = try Stmt.check_block_in(cx, st, block, Ast.Maybe.Present(params), result, Ast.Maybe.Absent, false)
       learned = try Types.unify(cx, out.st, template, out.type, found, block.span)
       return ok(Inferred(st: out.st, substitutions: learned))
     _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
@@ -727,8 +727,8 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   known = expected_substitutions("Struct", name, parameters, expected)
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args, parameters, known)
   # A field with a default may be left out: the lowering fills it in at this construction.
-  none: Set[String] = Set.new([])
-  defaulted = cx.field_defaults.get(name, none)
+  no_defaults: Set[String] = Set.new([])
+  defaulted = cx.field_defaults.get(name, no_defaults)
   for field in fields.unwrap!
     if !checked.seen.include?(field.name) and !defaulted.include?(field.name)
       return error(
@@ -855,10 +855,10 @@ end
 
 # A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program
 # is not linked, every struct is visible.
-def updatable?(cx: State.Cx, visible: Ast.Optional[List[String]], name: String) -> Bool
+def updatable?(cx: State.Cx, visible: Ast.Maybe[List[String]], name: String) -> Bool
   case visible
-    Ast.Optional.Present(names) ->
+    Ast.Maybe.Present(names) ->
       return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
-    Ast.Optional.Absent -> return true
+    Ast.Maybe.Absent -> return true
   end
 end

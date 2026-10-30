@@ -54,8 +54,8 @@ end
 ## method form is offered in it (`s.strip`, not `String.trim`).
 export def near(name: String, candidates: List[String], shared: List[String]) -> String
   case Suggest.closest_among(name, candidates, shared)
-    Ast.Optional.Present(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
+    Ast.Maybe.Absent -> return ""
   end
 end
 

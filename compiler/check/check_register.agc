@@ -42,10 +42,10 @@ export def check_main(
   for module in modules
     if roots.any? do |key: String| key == module.key end
       case main_of(module)
-        Ast.Optional.Present(node) ->
+        Ast.Maybe.Present(node) ->
           try main_signature(cx.with(file: module.file), st, node)
           found = true
-        Ast.Optional.Absent -> found = found
+        Ast.Maybe.Absent -> found = found
       end
     end
   end
@@ -119,19 +119,19 @@ def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
 end
 
 # The first function of the module called main; a prefixed name (a root of several roots) counts by its own name.
-def main_of(module: Linker.LinkedModule) -> Ast.Optional[Ast.FunctionDecl]
+def main_of(module: Linker.LinkedModule) -> Ast.Maybe[Ast.FunctionDecl]
   for decl in module.declarations
     case decl
       Ast.Decl.Function(node) ->
         if T.display_name(node.name) == "main"
-          return Ast.Optional.Present(node)
+          return Ast.Maybe.Present(node)
         end
 
       _ -> next
     end
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
 def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
@@ -519,7 +519,7 @@ end
 # default a type.
 def check_generic_default(cx: State.Cx, st: State.St, param: Ast.Param, type: T.Type) -> Result[Bool]
   case param.default
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       if Types.has_variables?(type)
         return error(
           State.fail_help(
@@ -533,7 +533,7 @@ def check_generic_default(cx: State.Cx, st: State.St, param: Ast.Param, type: T.
         )
       end
 
-    Ast.Optional.Absent -> return ok(true)
+    Ast.Maybe.Absent -> return ok(true)
   end
 
   return ok(true)

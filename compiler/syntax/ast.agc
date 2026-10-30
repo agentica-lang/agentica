@@ -17,7 +17,7 @@ import Source from "source"
 import Types from "types"
 
 ## A value that may be absent.
-export enum Optional[T]
+export enum Maybe[T]
   Present(T)
   Absent
 end
@@ -45,7 +45,7 @@ end
 export struct Program
   id: Int
   declarations: List[Decl]
-  module_doc: Optional[String]
+  module_doc: Maybe[String]
   span: Source.Span
 end
 
@@ -67,7 +67,7 @@ end
 export struct ImportDecl
   id: Int
   path: String
-  alias: Optional[String]
+  alias: Maybe[String]
   names: List[ImportName]
   span: Source.Span
 end
@@ -96,7 +96,7 @@ end
 export struct ExportDecl
   id: Int
   declaration: Decl
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -107,10 +107,10 @@ export struct ConstDecl
   id: Int
   name: String
   name_span: Source.Span
-  type: Optional[TypeRef]
+  type: Maybe[TypeRef]
   value: Expr
   exported: Bool
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -127,8 +127,8 @@ export struct FunctionDecl
   params: List[Param]
   result: TypeRef
   body: List[Stmt]
-  doc: Optional[String]
-  native: Optional[Native]
+  doc: Maybe[String]
+  native: Maybe[Native]
   span: Source.Span
 end
 
@@ -174,7 +174,7 @@ export struct Param
   name: String
   name_span: Source.Span
   type: TypeRef
-  default: Optional[Expr]
+  default: Maybe[Expr]
   span: Source.Span
 end
 
@@ -190,7 +190,7 @@ export struct StructDecl
   name_span: Source.Span
   type_parameters: List[String]
   fields: List[FieldDecl]
-  doc: Optional[String]
+  doc: Maybe[String]
   record_of: String
   layout: String
   span: Source.Span
@@ -204,8 +204,8 @@ export struct FieldDecl
   name: String
   name_span: Source.Span
   type: TypeRef
-  default: Optional[Expr]
-  doc: Optional[String]
+  default: Maybe[Expr]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -216,7 +216,7 @@ export struct EnumDecl
   name_span: Source.Span
   type_parameters: List[String]
   variants: List[EnumVariant]
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -227,7 +227,7 @@ export struct TypeAliasDecl
   name_span: Source.Span
   type_parameters: List[String]
   target: TypeRef
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -241,7 +241,7 @@ export struct ResourceDecl
   name_span: Source.Span
   free: String
   by_ref: Bool
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -251,7 +251,7 @@ export struct EnumVariant
   name: String
   name_span: Source.Span
   payload_types: List[TypeRef]
-  doc: Optional[String]
+  doc: Maybe[String]
   span: Source.Span
 end
 
@@ -272,7 +272,7 @@ export struct Binding
   id: Int
   name: String
   name_span: Source.Span
-  type: Optional[TypeRef]
+  type: Maybe[TypeRef]
   value: Expr
   span: Source.Span
 end
@@ -280,7 +280,7 @@ end
 ## return with an optional value.
 export struct Return
   id: Int
-  value: Optional[Expr]
+  value: Maybe[Expr]
   span: Source.Span
 end
 
@@ -303,7 +303,7 @@ end
 export struct IfStmt
   id: Int
   branches: List[IfBranch]
-  else_body: Optional[List[Stmt]]
+  else_body: Maybe[List[Stmt]]
   span: Source.Span
 end
 
@@ -345,7 +345,7 @@ end
 export struct CaseArm
   id: Int
   pattern: Pattern
-  guard: Optional[Expr]
+  guard: Maybe[Expr]
   body: List[Stmt]
   span: Source.Span
 end
@@ -490,7 +490,7 @@ export struct StructUpdate
   id: Int
   target: Expr
   args: List[NamedArg]
-  visible: Optional[List[String]]
+  visible: Maybe[List[String]]
   span: Source.Span
 end
 
@@ -561,7 +561,7 @@ export struct BlockParam
   id: Int
   name: String
   name_span: Source.Span
-  type: Optional[TypeRef]
+  type: Maybe[TypeRef]
   span: Source.Span
 end
 

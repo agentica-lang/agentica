@@ -140,8 +140,8 @@ end
 
 ## Returns the workspace of the disk, with no buffer.
 export def workspace() -> Workspace
-  none: Map[String, String] = {}
-  return Workspace(version: 1, buffers: none)
+  no_buffers: Map[String, String] = {}
+  return Workspace(version: 1, buffers: no_buffers)
 end
 
 ## Returns a session that reads `files`.
@@ -171,8 +171,8 @@ end
 ## an error when the cache holds none: the file was not refreshed, could not be linked, or its entry left the cache.
 export def entry(session: Session, path: String) -> Result[Entry]
   case Sessions.entry(session.internal, path)
-    Ast.Optional.Present(root) -> return ok(Entry(internal: root))
-    Ast.Optional.Absent -> return error("the cache holds no entry for #{path}")
+    Ast.Maybe.Present(root) -> return ok(Entry(internal: root))
+    Ast.Maybe.Absent -> return error("the cache holds no entry for #{path}")
   end
 end
 

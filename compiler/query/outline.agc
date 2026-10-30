@@ -13,7 +13,7 @@ import Ast from "../syntax/ast"
 
 ## What a file declares: its doc, its imports and its other declarations, each in source order.
 export struct Outline
-  doc: Ast.Optional[String]
+  doc: Ast.Maybe[String]
   imports: List[Ast.ImportDecl]
   items: List[Model.Item]
 end

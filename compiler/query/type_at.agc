@@ -46,8 +46,8 @@ export struct Answer
   span: Source.Span
   text: String
   type: String
-  definition: Ast.Optional[Definitions.Definition]
-  builtin: Ast.Optional[Model.Builtin]
+  definition: Ast.Maybe[Definitions.Definition]
+  builtin: Ast.Maybe[Model.Builtin]
 end
 
 ## The answer for `asked`, a position in the root file of `linked` (checked as `checked`), or QUERY-NO-EXPRESSION.
@@ -64,13 +64,13 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
 
       # A local comes first: on the name of a binding, the innermost expression would be the one around it.
       case Locals.find(module, checked.bound, offset)
-        Ast.Optional.Present(local) ->
+        Ast.Maybe.Present(local) ->
           if local.local.kind == "discard"
             return nothing(asked, here)
           end
 
           return Diag.Outcome.Done(local_answer(linked, local))
-        Ast.Optional.Absent ->
+        Ast.Maybe.Absent ->
           # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
           if type_token?(module.text, token, offset)
             found = type_answer(linked, checked, offset)
@@ -119,8 +119,8 @@ end
 ## The file of the definition of `answered`; "" when the answer has none.
 export def definition_file(answered: Answer) -> String
   case answered.definition
-    Ast.Optional.Present(definition) -> return definition.file
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(definition) -> return definition.file
+    Ast.Maybe.Absent -> return ""
   end
 end
 
@@ -158,8 +158,8 @@ def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) ->
   module = linked.modules[0]
   sites = Sites.of_types(module, checked, Sites.declared_names(linked.modules))
   case Sites.innermost(sites, offset)
-    Ast.Optional.Absent -> return []
-    Ast.Optional.Present(site) ->
+    Ast.Maybe.Absent -> return []
+    Ast.Maybe.Present(site) ->
       text = source_text(module.text, site.reach)
       return [
         Answer(
@@ -168,7 +168,7 @@ def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) ->
           text: text,
           type: text,
           definition: Definitions.of_name(linked.modules, site.target.name),
-          builtin: Ast.Optional.Absent,
+          builtin: Ast.Maybe.Absent,
         ),
       ]
   end
@@ -192,8 +192,8 @@ def expression_answer(
   here: Source.Span,
 ) -> Diag.Outcome[Answer]
   case At.innermost(linked.modules[0], checked.types, offset)
-    Ast.Optional.Absent -> return nothing(asked, here)
-    Ast.Optional.Present(expr) -> return Diag.Outcome.Done(found(linked, checked, expr, offset))
+    Ast.Maybe.Absent -> return nothing(asked, here)
+    Ast.Maybe.Present(expr) -> return Diag.Outcome.Done(found(linked, checked, expr, offset))
   end
 end
 
@@ -206,8 +206,8 @@ def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
     span: at.site,
     text: source_text(module.text, at.site),
     type: type,
-    definition: Ast.Optional.Present(Definitions.of_local(module, at.local, type)),
-    builtin: Ast.Optional.Absent,
+    definition: Ast.Maybe.Present(Definitions.of_local(module, at.local, type)),
+    builtin: Ast.Maybe.Absent,
   )
 end
 
@@ -220,15 +220,15 @@ def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offse
   span = Ast.expr_span(expr)
   definition = Definitions.of_expr(linked.modules, checked.types, expr)
   kind = "expression"
-  builtin: Ast.Optional[Model.Builtin] = Ast.Optional.Absent
+  builtin: Ast.Maybe[Model.Builtin] = Ast.Maybe.Absent
   if on_name?(expr, module.text, offset)
     kind = "name"
     builtin = builtin_of(checked, expr, definition)
   end
 
   case builtin
-    Ast.Optional.Present(_) -> kind = "builtin"
-    Ast.Optional.Absent -> kind = kind
+    Ast.Maybe.Present(_) -> kind = "builtin"
+    Ast.Maybe.Absent -> kind = kind
   end
 
   return Answer(
@@ -246,41 +246,41 @@ end
 def builtin_of(
   checked: Checker.Checked,
   expr: Ast.Expr,
-  definition: Ast.Optional[Definitions.Definition],
-) -> Ast.Optional[Model.Builtin]
+  definition: Ast.Maybe[Definitions.Definition],
+) -> Ast.Maybe[Model.Builtin]
   case definition
-    Ast.Optional.Present(_) -> return Ast.Optional.Absent
-    Ast.Optional.Absent ->
+    Ast.Maybe.Present(_) -> return Ast.Maybe.Absent
+    Ast.Maybe.Absent ->
       case expr
         Ast.Expr.Call(node) -> return public(node.name)
         Ast.Expr.MethodCall(node) -> return resolved(checked, node.id)
         Ast.Expr.FieldAccess(node) -> return resolved(checked, node.id)
-        _ -> return Ast.Optional.Absent
+        _ -> return Ast.Maybe.Absent
       end
   end
 end
 
 # The builtin that the checker resolved the method call or field access `id` to. `to_s`, `inspect` and a receiver
 # that stays as it is resolve to no catalog row.
-def resolved(checked: Checker.Checked, id: Int) -> Ast.Optional[Model.Builtin]
+def resolved(checked: Checker.Checked, id: Int) -> Ast.Maybe[Model.Builtin]
   found = checked.resolved.get(id)
   if !found.ok?
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   case found.unwrap!
     State.Resolved.Call(name, _) -> return public(name)
-    _ -> return Ast.Optional.Absent
+    _ -> return Ast.Maybe.Absent
   end
 end
 
-def public(name: String) -> Ast.Optional[Model.Builtin]
+def public(name: String) -> Ast.Maybe[Model.Builtin]
   entry = CatalogJson.public(name)
   if entry.ok?
-    return Ast.Optional.Present(entry.unwrap!)
+    return Ast.Maybe.Present(entry.unwrap!)
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
 # The text of a span; empty when the span does not lie in the text.

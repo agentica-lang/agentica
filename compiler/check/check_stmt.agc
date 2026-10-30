@@ -53,9 +53,9 @@ export def check_block_body(
   cx: State.Cx,
   st: State.St,
   block: Ast.BlockLit,
-  known_params: Ast.Optional[List[T.Type]],
+  known_params: Ast.Maybe[List[T.Type]],
   known_result: T.Type,
-  each_receiver: Ast.Optional[Ast.Expr],
+  each_receiver: Ast.Maybe[Ast.Expr],
 ) -> Result[State.Out]
   return check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
 end
@@ -71,9 +71,9 @@ export def check_block_in(
   cx: State.Cx,
   st: State.St,
   block: Ast.BlockLit,
-  known_params: Ast.Optional[List[T.Type]],
+  known_params: Ast.Maybe[List[T.Type]],
   known_result: T.Type,
-  each_receiver: Ast.Optional[Ast.Expr],
+  each_receiver: Ast.Maybe[Ast.Expr],
   step: Bool,
 ) -> Result[State.Out]
   if !st.probe and (T.unknown?(known_result) or settling?(known_result)) and Flow.gives_error?(block.body)
@@ -135,9 +135,9 @@ def check_block_run(
   cx: State.Cx,
   st: State.St,
   block: Ast.BlockLit,
-  known_params: Ast.Optional[List[T.Type]],
+  known_params: Ast.Maybe[List[T.Type]],
   known_result: T.Type,
-  each_receiver: Ast.Optional[Ast.Expr],
+  each_receiver: Ast.Maybe[Ast.Expr],
   step: Bool,
 ) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
@@ -152,7 +152,7 @@ def check_block_run(
     loops: 0,
     result: slot,
     step: step,
-    capture: Ast.Optional.Present(
+    capture: Ast.Maybe.Present(
       State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver),
     ),
   )
@@ -230,9 +230,9 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
 
   help = "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there"
   case st.capture
-    Ast.Optional.Present(capture) ->
+    Ast.Maybe.Present(capture) ->
       help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
-    Ast.Optional.Absent -> help = help
+    Ast.Maybe.Absent -> help = help
   end
 
   return error(
@@ -249,8 +249,8 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
 
   declared = T.Type.Unknown
   case node.type
-    Ast.Optional.Present(annotation) -> declared = try Types.resolve_type(cx, st, annotation, false)
-    Ast.Optional.Absent -> declared = declared
+    Ast.Maybe.Present(annotation) -> declared = try Types.resolve_type(cx, st, annotation, false)
+    Ast.Maybe.Absent -> declared = declared
   end
 
   existing = State.lookup(st, node.name)
@@ -272,7 +272,7 @@ end
 # to a for variable.
 def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: State.Binding) -> Result[State.St]
   case st.capture
-    Ast.Optional.Present(capture) ->
+    Ast.Maybe.Present(capture) ->
       if existing.level <= capture.boundary
         return error(
           State.fail_help(
@@ -286,11 +286,11 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
         )
       end
 
-    Ast.Optional.Absent -> existing = existing
+    Ast.Maybe.Absent -> existing = existing
   end
 
   case node.type
-    Ast.Optional.Present(annotation) -> return error(
+    Ast.Maybe.Present(annotation) -> return error(
       State.fail(
         cx,
         st,
@@ -299,7 +299,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
         node.span,
       ),
     )
-    Ast.Optional.Absent -> existing = existing
+    Ast.Maybe.Absent -> existing = existing
   end
 
   if existing.immutable
@@ -330,21 +330,21 @@ end
 # A return in a block whose result is not known yet gives it.
 def return_inferred(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
   case node.value
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       out = try State.expr_completion(cx, st, value, T.Type.Unknown)
       if unsettled?(out)
         return ok(out.st)
       end
 
       return ok(out.st.with(result: State.Slot.Known(out.type)))
-    Ast.Optional.Absent -> return ok(st.with(result: State.Slot.Known(T.Type.Void)))
+    Ast.Maybe.Absent -> return ok(st.with(result: State.Slot.Known(T.Type.Void)))
   end
 end
 
 # A return in a block that must give a Result of a type not known yet: the value must be a Result and gives the type.
 def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
   case node.value
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       out = try State.expr_completion(cx, st, value, T.Type.Unknown)
       try require_result(cx, out.st, out.type, Ast.expr_span(value))
       if unsettled?(out)
@@ -352,7 +352,7 @@ def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Resu
       end
 
       return ok(out.st.with(result: State.Slot.Known(out.type)))
-    Ast.Optional.Absent ->
+    Ast.Maybe.Absent ->
       return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
   end
 end
@@ -374,10 +374,10 @@ end
 
 def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type) -> Result[State.St]
   case node.value
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       out = try State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Void"))
       return ok(out.st)
-    Ast.Optional.Absent ->
+    Ast.Maybe.Absent ->
       try State.ensure(cx, st, T.Type.Void, expected, node.span)
       return ok(st)
   end
@@ -392,10 +392,10 @@ def check_if(cx: State.Cx, st: State.St, node: Ast.IfStmt) -> Result[State.St]
   end
 
   case node.else_body
-    Ast.Optional.Present(body) ->
+    Ast.Maybe.Present(body) ->
       inner = try check_block(cx, State.enter(current), body)
       current = State.leave(inner, current)
-    Ast.Optional.Absent -> current = current
+    Ast.Maybe.Absent -> current = current
   end
 
   return ok(current)
@@ -541,8 +541,8 @@ end
 
 def guarded?(arm: Ast.CaseArm) -> Bool
   case arm.guard
-    Ast.Optional.Present(condition) -> return true
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(condition) -> return true
+    Ast.Maybe.Absent -> return false
   end
 end
 
@@ -616,10 +616,10 @@ end
 def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm) -> Result[State.St]
   current = bound
   case arm.guard
-    Ast.Optional.Present(condition) ->
+    Ast.Maybe.Present(condition) ->
       checked = try State.expr(cx, bound, condition, T.Type.Bool)
       current = checked.st
-    Ast.Optional.Absent -> current = bound
+    Ast.Maybe.Absent -> current = bound
   end
 
   return check_block(cx, current, arm.body)
@@ -820,10 +820,10 @@ def block_parameter_types(
   cx: State.Cx,
   st: State.St,
   block: Ast.BlockLit,
-  known: Ast.Optional[List[T.Type]],
+  known: Ast.Maybe[List[T.Type]],
 ) -> Result[List[T.Type]]
   case known
-    Ast.Optional.Present(types) ->
+    Ast.Maybe.Present(types) ->
       if types.size != block.params.size
         return error(
           State.fail(
@@ -836,7 +836,7 @@ def block_parameter_types(
         )
       end
 
-    Ast.Optional.Absent -> known = known
+    Ast.Maybe.Absent -> known = known
   end
 
   out: List[T.Type] = []
@@ -854,19 +854,19 @@ def block_parameter_type(
   cx: State.Cx,
   st: State.St,
   param: Ast.BlockParam,
-  known: Ast.Optional[List[T.Type]],
+  known: Ast.Maybe[List[T.Type]],
   index: Int,
 ) -> Result[T.Type]
   annotated = T.Type.Unknown
   case param.type
-    Ast.Optional.Present(annotation) -> annotated = try Types.resolve_type(cx, st, annotation, false)
-    Ast.Optional.Absent -> annotated = annotated
+    Ast.Maybe.Present(annotation) -> annotated = try Types.resolve_type(cx, st, annotation, false)
+    Ast.Maybe.Absent -> annotated = annotated
   end
 
   context = T.Type.Unknown
   case known
-    Ast.Optional.Present(types) -> context = types[index]
-    Ast.Optional.Absent -> context = context
+    Ast.Maybe.Present(types) -> context = types[index]
+    Ast.Maybe.Absent -> context = context
   end
 
   if !T.unknown?(annotated) and !T.unknown?(context)
@@ -987,7 +987,7 @@ end
 # Whether the function is declared in an extern block.
 def extern?(node: Ast.FunctionDecl) -> Bool
   case node.native
-    Ast.Optional.Present(link) -> return true
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(link) -> return true
+    Ast.Maybe.Absent -> return false
   end
 end

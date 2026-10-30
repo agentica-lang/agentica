@@ -123,7 +123,7 @@ struct DeclAt
 end
 
 struct DocAt
-  doc: Ast.Optional[String]
+  doc: Ast.Maybe[String]
   pos: Int
 end
 
@@ -162,7 +162,7 @@ struct IfBranchAt
 end
 
 struct GuardAt
-  node: Ast.Optional[Ast.Expr]
+  node: Ast.Maybe[Ast.Expr]
   pos: Int
   ids: Int
 end
@@ -390,14 +390,14 @@ end
 # x |> f(a) becomes the call f(x, a), keeping the id and span of the call written on the right, so the ids stay in
 # post-order: x was parsed first and has smaller ids. A try on the right wraps the call. Only a call written with
 # parentheses and not piped yet is a target; Absent gives PARSE-PIPE-TARGET.
-def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
+def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Maybe[Ast.Expr]
   case node
     Ast.Expr.Call(call) ->
       if call.piped or !call.parenthesized
-        return Ast.Optional.Absent
+        return Ast.Maybe.Absent
       end
 
-      return Ast.Optional.Present(
+      return Ast.Maybe.Present(
         Ast.Expr.Call(
           Ast.Call(
             id: call.id,
@@ -413,7 +413,7 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
       case wrapper.operand
         Ast.Expr.Call(call) ->
           if call.piped or !call.parenthesized
-            return Ast.Optional.Absent
+            return Ast.Maybe.Absent
           end
 
           inserted = Ast.Expr.Call(
@@ -426,11 +426,11 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
               span: call.span,
             ),
           )
-          return Ast.Optional.Present(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
-        _ -> return Ast.Optional.Absent
+          return Ast.Maybe.Present(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+        _ -> return Ast.Maybe.Absent
       end
 
-    _ -> return Ast.Optional.Absent
+    _ -> return Ast.Maybe.Absent
   end
 end
 
@@ -482,9 +482,9 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       right_start = cursor + 1
       right = try parse_climb(operand_env, right_start, next_id, 6)
       case pipe_insert(left, right.node)
-        Ast.Optional.Present(node) ->
+        Ast.Maybe.Present(node) ->
           left = node
-        Ast.Optional.Absent ->
+        Ast.Maybe.Absent ->
           return error(
             Base.bail_span(
               "PARSE-PIPE-TARGET",
@@ -644,7 +644,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
             id: args.ids,
             target: target,
             args: args.nodes,
-            visible: Ast.Optional.Absent,
+            visible: Ast.Maybe.Absent,
             span: Base.span_from(e, pos, close),
           ),
         )
@@ -742,10 +742,10 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
     after = try Base.expect(e, cursor, "name", "a block parameter name", false)
     name_pos = cursor
     cursor = after
-    type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
+    type: Ast.Maybe[Ast.TypeRef] = Ast.Maybe.Absent
     if e.tokens[cursor].kind == "colon"
       parsed = try Base.parse_type(e, cursor + 1, next_id)
-      type = Ast.Optional.Present(parsed.node)
+      type = Ast.Maybe.Present(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
     end
@@ -1452,10 +1452,10 @@ end
 def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   cursor = pos + 1
   next_id = ids
-  value: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+  value: Ast.Maybe[Ast.Expr] = Ast.Maybe.Absent
   if !statement_end?(e, cursor)
     parsed = try parse_expression(e, cursor, ids)
-    value = Ast.Optional.Present(parsed.node)
+    value = Ast.Maybe.Present(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
   end
@@ -1479,7 +1479,7 @@ end
 
 def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   cursor = try Base.expect(e, pos, "name", "a name", false)
-  type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
+  type: Ast.Maybe[Ast.TypeRef] = Ast.Maybe.Absent
   next_id = ids
   if e.tokens[cursor].kind == "colon"
     if e.tokens[pos].lexeme == "_"
@@ -1494,7 +1494,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     end
 
     parsed = try Base.parse_type(e, cursor + 1, next_id)
-    type = Ast.Optional.Present(parsed.node)
+    type = Ast.Maybe.Present(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
   end
@@ -1540,7 +1540,7 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       id: value.ids + 1,
       name: e.tokens[pos].lexeme,
       name_span: e.tokens[pos].span,
-      type: Ast.Optional.Absent,
+      type: Ast.Maybe.Absent,
       value: combined,
       span: span,
     ),
@@ -1738,7 +1738,7 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     looping = e.tokens[cursor].kind == "elsif"
   end
 
-  else_body: Ast.Optional[List[Ast.Stmt]] = Ast.Optional.Absent
+  else_body: Ast.Maybe[List[Ast.Stmt]] = Ast.Maybe.Absent
   if e.tokens[cursor].kind == "else"
     if e.tokens[cursor + 1].kind == "if"
       return error(
@@ -1753,7 +1753,7 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
 
     head = try expect_head_end(e, cursor + 1, "a newline after else", "else")
     body = try parse_block(e, head, next_id, 0)
-    else_body = Ast.Optional.Present(body.nodes)
+    else_body = Ast.Maybe.Present(body.nodes)
     cursor = body.pos
     next_id = body.ids
   end
@@ -1858,11 +1858,11 @@ end
 # The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
 def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   if e.tokens[pos].kind != "if"
-    return ok(GuardAt(node: Ast.Optional.Absent, pos: pos, ids: ids))
+    return ok(GuardAt(node: Ast.Maybe.Absent, pos: pos, ids: ids))
   end
 
   condition = try parse_expression(e, pos + 1, ids)
-  return ok(GuardAt(node: Ast.Optional.Present(condition.node), pos: condition.pos, ids: condition.ids))
+  return ok(GuardAt(node: Ast.Maybe.Present(condition.node), pos: condition.pos, ids: condition.ids))
 end
 
 def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1959,14 +1959,14 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
       after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
       colon = try Base.expect(e, after_name, "colon", "\":\"", false)
       type = try Base.parse_type(e, colon, next_id)
-      default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+      default: Ast.Maybe[Ast.Expr] = Ast.Maybe.Absent
       after_type = type.pos
       param_id = type.ids
       # Any expression is read after "=", so that the checker can say why a default is not a constant. The id of the
       # parameter follows the ids of its default (post-order).
       if e.tokens[after_type].kind == "assign"
         value = try parse_expression(e, after_type + 1, type.ids)
-        default = Ast.Optional.Present(value.node)
+        default = Ast.Maybe.Present(value.node)
         after_type = value.pos
         param_id = value.ids
       end
@@ -2050,7 +2050,7 @@ def decl_at(node: Ast.Decl, pos: Int, ids: Int) -> Result[DeclAt]
   return ok(DeclAt(node: node, pos: pos, ids: ids + 1))
 end
 
-def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   type_parameters = try parse_type_parameters(e, after_name)
   after_open = try Base.expect(e, type_parameters.pos, "left-paren", "\"(\"", false)
@@ -2084,7 +2084,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
       result: result.node,
       body: body.nodes,
       doc: doc,
-      native: Ast.Optional.Absent,
+      native: Ast.Maybe.Absent,
       span: Base.span_from(e, pos, stop),
     ),
   )
@@ -2204,7 +2204,7 @@ def parse_extern_member(
   e: Base.Env,
   pos: Int,
   ids: Int,
-  doc: Ast.Optional[String],
+  doc: Ast.Maybe[String],
   block: ExternBlock,
 ) -> Result[MemberAt]
   if resource_start?(e, pos)
@@ -2262,7 +2262,7 @@ end
 # (void f(T **)). pos is the word resource. The C name may start with a capital letter (PQfinish, SSL_free): only a
 # dotted type after the colon (C.Function) is read as a type, so a bare name is always a C name, whatever types the
 # program declares. A resource has one free function: a second free word after it is PARSE-EXTERN-FREE.
-def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], block: ExternBlock) -> Result[DeclAt]
+def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String], block: ExternBlock) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
   after_comma = try Base.expect(e, after_name, "comma", "\",\"", false)
   by_ref = free_word?(e, after_comma) and e.tokens[after_comma].lexeme == FREE_REF
@@ -2354,7 +2354,7 @@ end
 
 # The rest of resource Name, free: C.Function from at, the dotted type after the colon: any type but C.Function is
 # PARSE-EXTERN-FUNCTION at it.
-def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], at: Int) -> Result[DeclAt]
+def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String], at: Int) -> Result[DeclAt]
   type = try Base.parse_type(e, at, ids)
   if type.node.name != FUNCTION_TYPE or type.node.args.size > 0
     return error(
@@ -2391,7 +2391,7 @@ def parse_extern_struct(
   e: Base.Env,
   pos: Int,
   ids: Int,
-  doc: Ast.Optional[String],
+  doc: Ast.Maybe[String],
   block: ExternBlock,
 ) -> Result[ExternStructAt]
   parsed = try parse_struct(e, pos, ids, doc, false)
@@ -2517,7 +2517,7 @@ def parse_extern_function(
   start: Int,
   pos: Int,
   ids: Int,
-  doc: Ast.Optional[String],
+  doc: Ast.Maybe[String],
   block: ExternBlock,
 ) -> Result[ExternAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
@@ -2587,7 +2587,7 @@ def parse_extern_function(
   index = 0
   for param in params.nodes
     case param.default
-      Ast.Optional.Present(value) ->
+      Ast.Maybe.Present(value) ->
         return error(
           Base.bail_span(
             "PARSE-EXTERN-DEFAULT",
@@ -2596,7 +2596,7 @@ def parse_extern_function(
             Base.hint("C has no default values: write the parameter without = value"),
           ),
         )
-      Ast.Optional.Absent -> codes = codes
+      Ast.Maybe.Absent -> codes = codes
     end
 
     taken = try extern_type(param.type, false, block, next_id)
@@ -2702,8 +2702,8 @@ def parse_extern_function(
         name: "result",
         name_span: result.node.span,
         type: returned.type,
-        default: Ast.Optional.Absent,
-        doc: Ast.Optional.Absent,
+        default: Ast.Maybe.Absent,
+        doc: Ast.Maybe.Absent,
         span: result.node.span,
       )
       fields = [first].concat(fields)
@@ -2716,7 +2716,7 @@ def parse_extern_function(
       name_span: e.tokens[pos + 1].span,
       type_parameters: [],
       fields: fields,
-      doc: Ast.Optional.Present("The result of `#{name}`."),
+      doc: Ast.Maybe.Present("The result of `#{name}`."),
       record_of: name,
       layout: "",
       span: span,
@@ -2737,7 +2737,7 @@ def parse_extern_function(
       result: result_type,
       body: [],
       doc: doc,
-      native: Ast.Optional.Present(
+      native: Ast.Maybe.Present(
         Ast.Native(
           library: block.library,
           symbol: symbol,
@@ -2926,8 +2926,8 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     name: param.name,
     name_span: param.name_span,
     type: taken.type,
-    default: Ast.Optional.Absent,
-    doc: Ast.Optional.Absent,
+    default: Ast.Maybe.Absent,
+    doc: Ast.Maybe.Absent,
     span: param.span,
   )
   return ok(field)
@@ -2948,10 +2948,10 @@ def other_side?(params: ParamsAt, index: Int) -> Bool
 end
 
 # The doc of a record, which its export repeats.
-def record_doc(record: Ast.Decl) -> Ast.Optional[String]
+def record_doc(record: Ast.Decl) -> Ast.Maybe[String]
   case record
     Ast.Decl.Struct(node) -> return node.doc
-    _ -> return Ast.Optional.Absent
+    _ -> return Ast.Maybe.Absent
   end
 end
 
@@ -3016,18 +3016,18 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
   return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
 end
 
-def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[FieldAt]
+def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[FieldAt]
   after_name = try Base.expect(e, pos, "name", "a field name", false)
   colon = try Base.expect(e, after_name, "colon", "\":\"", false)
   type = try Base.parse_type(e, colon, ids)
-  default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+  default: Ast.Maybe[Ast.Expr] = Ast.Maybe.Absent
   after_type = type.pos
   field_id = type.ids
   # As for a parameter, any expression is read after "=" so that the checker can say why a default is not a constant.
   # The id of the field follows the ids of its default (post-order).
   if e.tokens[after_type].kind == "assign"
     value = try parse_expression(e, after_type + 1, type.ids)
-    default = Ast.Optional.Present(value.node)
+    default = Ast.Maybe.Present(value.node)
     after_type = value.pos
     field_id = value.ids
   end
@@ -3045,7 +3045,7 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
   return ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
 end
 
-def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[VariantAt]
+def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[VariantAt]
   cursor = try Base.expect(e, pos, "type-name", "an enum variant", false)
   payload: List[Ast.TypeRef] = []
   next_id = ids
@@ -3108,7 +3108,7 @@ end
 def take_doc(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
   block = doc_block(e.tokens[pos])
   if block.next == "code" and e.tokens[pos + 1].kind == "NL" and starts_member?(e, pos + 2, member)
-    return ok(DocAt(doc: Ast.Optional.Present(block.text), pos: pos + 2))
+    return ok(DocAt(doc: Ast.Maybe.Present(block.text), pos: pos + 2))
   end
 
   return error(Base.bail_detached(e, pos))
@@ -3119,17 +3119,17 @@ def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
     return take_doc(e, pos, member)
   end
 
-  return ok(DocAt(doc: Ast.Optional.Absent, pos: pos))
+  return ok(DocAt(doc: Ast.Maybe.Absent, pos: pos))
 end
 
-def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[DeclAt]
   parsed = try parse_struct(e, pos, ids, doc, true)
   return decl_at(Ast.Decl.Struct(parsed.node), parsed.pos, parsed.ids)
 end
 
 # struct Name NL fields end NL at pos, with the next position and the next free node id. generic says the name may
 # be followed by type parameters (struct Box[T]); a C struct of an extern block takes none.
-def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], generic: Bool) -> Result[StructAt]
+def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String], generic: Bool) -> Result[StructAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a struct name", false)
   parameters = TypeParametersAt(names: [], spans: [], pos: after_name)
   if generic
@@ -3195,7 +3195,7 @@ def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   return ok(TypeParametersAt(names: names, spans: spans, pos: cursor))
 end
 
-def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "an enum name", false)
   parameters = try parse_type_parameters(e, after_name)
   cursor = try Base.expect(e, parameters.pos, "NL", "a newline after the enum name", false)
@@ -3238,7 +3238,7 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) 
   return decl_at(node, stop, next_id)
 end
 
-def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[DeclAt]
   after_word = try expect_word(e, pos, "type", "")
   after_name = try Base.expect(e, after_word, "type-name", "a type alias name", false)
   parameters = try parse_type_parameters(e, after_name)
@@ -3261,7 +3261,7 @@ end
 
 def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   kind = e.tokens[pos].kind
-  absent: Ast.Optional[String] = Ast.Optional.Absent
+  absent: Ast.Maybe[String] = Ast.Maybe.Absent
   if kind == "def"
     return parse_function_decl(e, pos, ids, absent)
   end
@@ -3345,7 +3345,7 @@ def parse_constant_decl(
   name_at: Int,
   start: Int,
   ids: Int,
-  doc: Ast.Optional[String],
+  doc: Ast.Maybe[String],
   exported: Bool,
 ) -> Result[DeclAt]
   name = e.tokens[name_at].lexeme
@@ -3361,12 +3361,12 @@ def parse_constant_decl(
     )
   end
 
-  type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
+  type: Ast.Maybe[Ast.TypeRef] = Ast.Maybe.Absent
   cursor = name_at + 1
   next_id = ids
   if e.tokens[cursor].kind == "colon"
     parsed = try Base.parse_type(e, cursor + 1, next_id)
-    type = Ast.Optional.Present(parsed.node)
+    type = Ast.Maybe.Present(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
   end
@@ -3389,7 +3389,7 @@ def parse_constant_decl(
   return decl_at(node, stop, value.ids)
 end
 
-def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Maybe[String]) -> Result[DeclAt]
   kind = e.tokens[pos].kind
   if kind == "export" and constant_start?(e, pos + 1)
     return parse_constant_decl(e, pos + 1, pos, ids, doc, true)
@@ -3519,7 +3519,7 @@ def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   after_from = try expect_word(e, pos + 2, "from", mixed)
   after_path = try expect_import_path(e, after_from)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
-  alias = Ast.Optional.Present(e.tokens[pos + 1].lexeme)
+  alias = Ast.Maybe.Present(e.tokens[pos + 1].lexeme)
   node = Ast.Decl.Import(
     Ast.ImportDecl(
       id: ids,
@@ -3542,7 +3542,7 @@ def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
     Ast.ImportDecl(
       id: ids,
       path: Base.token_text(e.tokens[after_from]),
-      alias: Ast.Optional.Absent,
+      alias: Ast.Maybe.Absent,
       names: listed.nodes,
       span: Base.span_from(e, pos, stop),
     ),
@@ -3678,7 +3678,7 @@ end
 # followed by a blank line, is the module doc.
 def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
   declarations: List[Ast.Decl] = []
-  module_doc: Ast.Optional[String] = Ast.Optional.Absent
+  module_doc: Ast.Maybe[String] = Ast.Maybe.Absent
   after_declaration = false
   after_constant = false
   cursor = 0
@@ -3714,7 +3714,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       doc_block(e.tokens[cursor]).next == "blank" and
       module_doc_absent?(module_doc)
     )
-      module_doc = Ast.Optional.Present(doc_block(e.tokens[cursor]).text)
+      module_doc = Ast.Maybe.Present(doc_block(e.tokens[cursor]).text)
       cursor += 1
     elsif kind == "import"
       parsed = try parse_import(e, cursor, next_id)
@@ -3768,9 +3768,9 @@ def constant?(decl: Ast.Decl) -> Bool
   end
 end
 
-def module_doc_absent?(doc: Ast.Optional[String]) -> Bool
+def module_doc_absent?(doc: Ast.Maybe[String]) -> Bool
   case doc
-    Ast.Optional.Absent -> return true
+    Ast.Maybe.Absent -> return true
     _ -> return false
   end
 end

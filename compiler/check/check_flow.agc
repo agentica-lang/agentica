@@ -58,8 +58,8 @@ export def captured_help(name: String, capture: State.Capture) -> String
 
   path = ""
   case capture.each_receiver
-    Ast.Optional.Present(receiver) -> path = path_text(receiver)
-    Ast.Optional.Absent -> path = path
+    Ast.Maybe.Present(receiver) -> path = path_text(receiver)
+    Ast.Maybe.Absent -> path = path
   end
 
   if path != "" and path.length <= 40
@@ -84,9 +84,9 @@ end
 # An if returns on every path when it has an else and every branch returns.
 def if_returns?(node: Ast.IfStmt) -> Bool
   case node.else_body
-    Ast.Optional.Present(body) ->
+    Ast.Maybe.Present(body) ->
       return block_returns?(body) and node.branches.all? do |branch: Ast.IfBranch| block_returns?(branch.body) end
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Absent -> return false
   end
 end
 
@@ -111,17 +111,17 @@ def if_holds_return?(node: Ast.IfStmt) -> Bool
   end
 
   case node.else_body
-    Ast.Optional.Present(body) -> return contains_return?(body)
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(body) -> return contains_return?(body)
+    Ast.Maybe.Absent -> return false
   end
 end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   case node.else_body
-    Ast.Optional.Present(body) -> return (
+    Ast.Maybe.Present(body) -> return (
       "every branch of the last \"if\" must end with return, or return #{type_name} after it"
     )
-    Ast.Optional.Absent -> return (
+    Ast.Maybe.Absent -> return (
       "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
     )
   end
@@ -163,8 +163,8 @@ end
 
 def returned_error?(node: Ast.Return) -> Bool
   case node.value
-    Ast.Optional.Present(value) -> return error_call?(value)
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(value) -> return error_call?(value)
+    Ast.Maybe.Absent -> return false
   end
 end
 
@@ -174,8 +174,8 @@ def if_returns_error?(node: Ast.IfStmt) -> Bool
   end
 
   case node.else_body
-    Ast.Optional.Present(body) -> return error_returns?(body)
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(body) -> return error_returns?(body)
+    Ast.Maybe.Absent -> return false
   end
 end
 

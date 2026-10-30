@@ -118,10 +118,10 @@ def named(written: List[String], name: String, watched: Set[String]) -> List[Str
   return written
 end
 
-def optional_type(written: List[String], type: Ast.Optional[Ast.TypeRef], watched: Set[String]) -> List[String]
+def optional_type(written: List[String], type: Ast.Maybe[Ast.TypeRef], watched: Set[String]) -> List[String]
   case type
-    Ast.Optional.Present(ref) -> return written.concat(written_in(ref, watched))
-    Ast.Optional.Absent -> return written
+    Ast.Maybe.Present(ref) -> return written.concat(written_in(ref, watched))
+    Ast.Maybe.Absent -> return written
   end
 end
 

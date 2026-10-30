@@ -64,9 +64,9 @@ end
 # left (Cache.reusing).
 def recovered(cache: Cache.Cache, loaded: Modules.Loaded, program: Linker.Linked, settings: Env.Settings) -> Outcome
   case Cache.reusing(cache, loaded)
-    Ast.Optional.Present(reusing) ->
+    Ast.Maybe.Present(reusing) ->
       return answered(program, Checker.check_recovering_reusing(program, settings, reusing))
-    Ast.Optional.Absent -> return answered(program, Checker.check_recovering(program, settings))
+    Ast.Maybe.Absent -> return answered(program, Checker.check_recovering(program, settings))
   end
 end
 
@@ -82,9 +82,9 @@ end
 
 # `problems` and, after them, the style problem of the program: Front.query_file gives it too, so `problems` is empty
 # exactly when that gives Done.
-def styled(problems: List[Problems.Problem], style: Ast.Optional[Problems.Problem]) -> List[Problems.Problem]
+def styled(problems: List[Problems.Problem], style: Ast.Maybe[Problems.Problem]) -> List[Problems.Problem]
   case style
-    Ast.Optional.Present(problem) -> return problems.push(problem)
-    Ast.Optional.Absent -> return problems
+    Ast.Maybe.Present(problem) -> return problems.push(problem)
+    Ast.Maybe.Absent -> return problems
   end
 end

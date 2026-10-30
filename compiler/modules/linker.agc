@@ -73,7 +73,7 @@ end
 ## The result of linking several roots: the program of the roots that linked (Absent when none did) and the roots that
 ## were left out, in the order given.
 export struct Programs
-  linked: Ast.Optional[Linked]
+  linked: Ast.Maybe[Linked]
   skipped: List[Left]
 end
 
@@ -90,7 +90,7 @@ end
 # A pool after one root, and why the root was left out (Absent when it was kept).
 struct Admission
   pool: Pool
-  failure: Ast.Optional[Failure.Failure]
+  failure: Ast.Maybe[Failure.Failure]
 end
 
 ## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
@@ -134,19 +134,19 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
   kept: List[Modules.Entry] = []
   for entry in many.entries
     case entry.failure
-      Ast.Optional.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
-      Ast.Optional.Absent ->
+      Ast.Maybe.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
+      Ast.Maybe.Absent ->
         admitted = admit(loaded, settings, ids, pool, entry.key)
         pool = admitted.pool
         case admitted.failure
-          Ast.Optional.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
-          Ast.Optional.Absent -> kept = kept.push(entry)
+          Ast.Maybe.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
+          Ast.Maybe.Absent -> kept = kept.push(entry)
         end
     end
   end
 
   if kept.size == 0
-    return Programs(linked: Ast.Optional.Absent, skipped: skipped)
+    return Programs(linked: Ast.Maybe.Absent, skipped: skipped)
   end
 
   together = Linked(
@@ -157,7 +157,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     receivers: receivers_at(loaded),
     roots: kept.map do |entry: Modules.Entry| entry.key end,
   )
-  return Programs(linked: Ast.Optional.Present(together), skipped: skipped)
+  return Programs(linked: Ast.Maybe.Present(together), skipped: skipped)
 end
 
 ## Links files that were loaded (Modules.load_with): the second half of `link_file`.
@@ -216,7 +216,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
     if pool.held.has_key?(file)
       next
     elsif failed.has_key?(file)
-      return Admission(pool: pool.with(made: made), failure: Ast.Optional.Present(failed[file]))
+      return Admission(pool: pool.with(made: made), failure: Ast.Maybe.Present(failed[file]))
     elsif made.has_key?(file)
       fresh = fresh.push(made[file])
     else
@@ -225,7 +225,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
         failure = Failure.unpack_failure(rewritten.message)
         return Admission(
           pool: pool.with(made: made, failed: failed.put(file, failure)),
-          failure: Ast.Optional.Present(failure),
+          failure: Ast.Maybe.Present(failure),
         )
       end
 
@@ -241,7 +241,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
 
   return Admission(
     pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed),
-    failure: Ast.Optional.Absent,
+    failure: Ast.Maybe.Absent,
   )
 end
 

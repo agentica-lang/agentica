@@ -161,7 +161,7 @@ export struct Entry
   typed: String
   key: String
   root_dir: String
-  failure: Ast.Optional[Failure.Failure]
+  failure: Ast.Maybe[Failure.Failure]
 end
 
 ## What load_roots gave: every module of the roots that loaded, and one Entry for each root, in the order given. The
@@ -233,12 +233,12 @@ export def load_roots(roots: List[String], settings: Env.Settings, parses: Parse
     if loaded.ok?
       walk = loaded.unwrap!
       entries = entries.push(
-        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Optional.Absent),
+        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Maybe.Absent),
       )
     else
       failure = Failure.unpack_failure(loaded.message)
       entries = entries.push(
-        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Optional.Present(failure)),
+        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Maybe.Present(failure)),
       )
     end
   end
@@ -338,9 +338,9 @@ end
 # The tree of an imported file for a walk that uses the check cache: the stub of its entry when the walk takes stubs
 # and the stub parses, else the parse of the text. An entry is only a hint, so a stub that does not parse is not a
 # failure: the text is parsed, and any failure it has is the one `load` gives.
-def take_cached(walk: Walk, key: String, text: String, entry: Ast.Optional[CheckCache.Entry]) -> Result[Taken]
+def take_cached(walk: Walk, key: String, text: String, entry: Ast.Maybe[CheckCache.Entry]) -> Result[Taken]
   case entry
-    Ast.Optional.Present(found) ->
+    Ast.Maybe.Present(found) ->
       if walk.stubs and found.stub != ""
         stub = parse_source(key, found.stub, walk.next_id)
         if stub.ok?
@@ -348,7 +348,7 @@ def take_cached(walk: Walk, key: String, text: String, entry: Ast.Optional[Check
         end
       end
 
-    Ast.Optional.Absent -> entry = entry
+    Ast.Maybe.Absent -> entry = entry
   end
 
   return take(walk.kept, walk.next_id, key, key, text)
@@ -675,7 +675,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
   key = found.key
   text = try imported_text(settings, key, site)
   digest = ""
-  entry: Ast.Optional[CheckCache.Entry] = Ast.Optional.Absent
+  entry: Ast.Maybe[CheckCache.Entry] = Ast.Maybe.Absent
   if walk.cached
     digest = CheckCache.text_digest(text)
     entry = CheckCache.find(settings.workspace.check_cache, key, digest)
@@ -784,26 +784,26 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
 end
 
 # The types of the constants that an entry holds, empty when there is no entry.
-def held(entry: Ast.Optional[CheckCache.Entry]) -> Map[String, String]
+def held(entry: Ast.Maybe[CheckCache.Entry]) -> Map[String, String]
   case entry
-    Ast.Optional.Present(found) -> return found.constants
-    Ast.Optional.Absent -> return {}
+    Ast.Maybe.Present(found) -> return found.constants
+    Ast.Maybe.Absent -> return {}
   end
 end
 
 # The tree digest that an entry vouches for, "" when there is no entry.
-def vouched(entry: Ast.Optional[CheckCache.Entry]) -> String
+def vouched(entry: Ast.Maybe[CheckCache.Entry]) -> String
   case entry
-    Ast.Optional.Present(found) -> return found.tree
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(found) -> return found.tree
+    Ast.Maybe.Absent -> return ""
   end
 end
 
 # Whether an entry says that the text follows the style rule blank_line_after_end, false when there is no entry.
-def styled(entry: Ast.Optional[CheckCache.Entry]) -> Bool
+def styled(entry: Ast.Maybe[CheckCache.Entry]) -> Bool
   case entry
-    Ast.Optional.Present(found) -> return found.styled
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(found) -> return found.styled
+    Ast.Maybe.Absent -> return false
   end
 end
 

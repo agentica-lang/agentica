@@ -321,11 +321,11 @@ def lower_default(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Lowering.Fill, param: Int
 ) -> Result[Lowering.Out]
   case fill.params[param].default
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       here = cx.with(file: fill.file, index: fill.index)
       out = try lower_expression(here, fx.with(file: fill.index), value, fx.next - 1, false, false)
       return ok(Lowering.Out(fx: out.fx.with(file: fx.file), slot: out.slot))
-    Ast.Optional.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
+    Ast.Maybe.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
   end
 end
 
