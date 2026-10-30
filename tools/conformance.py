@@ -8,12 +8,13 @@
                                            read the JUnit files that `make conformance-*` wrote under DIR, print what
                                            ran on this system and exit 1 when an area has no evidence; it also writes
                                            DIR/summary.json, the outcome of every case on this system
-    conformance.py merge DIR               read DIR/*/summary.json of the four systems and exit 1 when a system is
+    conformance.py merge DIR               read DIR/*/summary.json of every system and exit 1 when a system is
                                            missing or a case ran on none of them
 
-The four platform names are those of release.py: linux-x86_64, windows-x86_64, macos-x86_64 and macos-arm64. A module
-that is not in an area is in EXCLUDED with the reason, and tests/test_conformance.py checks that every tests/test_*.py
-file is in one or the other, so a new test cannot stay out of the matrix by accident. Python's standard library only.
+The platform names are those of the release packages (release.py): linux-x86_64, linux-arm64, windows-x86_64,
+macos-x86_64 and macos-arm64. A module that is not in an area is in EXCLUDED with the reason, and
+tests/test_conformance.py checks that every tests/test_*.py file is in one or the other, so a new test cannot stay out
+of the matrix by accident. Python's standard library only.
 
 What counts as evidence: every module of an area has a JUnit file with no failure and at least one passed case, and every
 skipped case is one of three kinds:
@@ -24,7 +25,7 @@ skipped case is one of three kinds:
   issue number must be in KNOWN_ISSUES; the report lists every such skip as an open gap.
 - a case of the other test tier.
 A skip for any other reason, such as a tool that was not found, fails the report: CI must install the tool. The merge
-step fails when a case ran on none of the four systems.
+step fails when a case ran on none of the systems.
 """
 from __future__ import annotations
 
@@ -39,7 +40,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-arm64")
+PLATFORMS = ("linux-x86_64", "linux-arm64", "windows-x86_64", "macos-x86_64", "macos-arm64")
 
 # Prefix of the reason of a skip that belongs to one system. The text after it says which capability the other systems
 # lack, so a reader of the report can judge it: "host-only: Windows has no /proc".
@@ -82,6 +83,7 @@ _NEEDS_POSIX = frozenset({
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py"})
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
+    "linux-arm64": WINDOWS_ONLY_MODULES,
     "windows-x86_64": _NEEDS_POSIX,
     "macos-x86_64": WINDOWS_ONLY_MODULES | _NEEDS_LINUX,
     "macos-arm64": WINDOWS_ONLY_MODULES | _NEEDS_LINUX,
@@ -262,7 +264,7 @@ def check_host(expected: str) -> None:
 
 class Count:
     """What one module did: passed cases, skips by kind, and the problems found. `cases` keeps the outcome of each case
-    ("pass", "host-only", "known-issue" or "tier") for the merge of the four systems."""
+    ("pass", "host-only", "known-issue" or "tier") for the merge of the systems."""
 
     def __init__(self) -> None:
         self.passed = 0
@@ -436,13 +438,13 @@ def report(directory: Path, name: str) -> tuple[str, bool]:
 
 
 def merge(directory: Path) -> tuple[str, bool]:
-    """Compare the summaries of the four systems: every case must have passed on at least one of them, and a case
+    """Compare the summaries of every system: every case must have passed on at least one of them, and a case
     that no system ran is a test that proves nothing."""
     summaries = {}
     for path in sorted(directory.glob("**/summary.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
         summaries[data["platform"]] = data["cases"]
-    lines = ["## Conformance across the four systems", ""]
+    lines = ["## Conformance across the systems", ""]
     problems = [f"no summary of {platform_name}" for platform_name in PLATFORMS if platform_name not in summaries]
     cases: dict[str, dict[str, str]] = {}
     for platform_name, found in summaries.items():
@@ -453,7 +455,7 @@ def merge(directory: Path) -> tuple[str, bool]:
     problems.extend(f"ran on no system: {case} ({', '.join(f'{p}: {o}' for p, o in sorted(cases[case].items()))})"
                     for case in never)
     on_all = sum(1 for by in cases.values() if sum(1 for o in by.values() if o == "pass") == len(PLATFORMS))
-    lines.append(f"{len(cases)} cases, {on_all} passed on all four systems.")
+    lines.append(f"{len(cases)} cases, {on_all} passed on all {len(PLATFORMS)} systems.")
     lines.append("")
     lines.append("| system | passed | host-only | open gaps |")
     lines.append("| --- | ---: | ---: | ---: |")

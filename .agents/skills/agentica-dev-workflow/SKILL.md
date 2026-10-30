@@ -101,11 +101,11 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 - Code PRs need **CI** (`ci.yml`) green on the head commit, plus **Site
   examples** when the PR touches `site/content/` or its test. Docs-only PRs
   skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
-- **Platforms** (`platforms.yml`: Windows, macOS Intel and ARM) runs on a PR
-  only with the `platforms` label, and always on pushes to master. Add the
-  label when the PR touches platform code (`vm/`, `#if` branches, processes,
-  files, the child channel, threads, the Makefile) and wait for all four
-  systems. A master run that fails after a merge without the label is fixed
+- **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
+  Intel and ARM) runs on a PR only with the `platforms` label, and always on
+  pushes to master. Add the label when the PR touches platform code (`vm/`,
+  `#if` branches, processes, files, the child channel, threads, the Makefile)
+  and wait for all five systems. A master run that fails after a merge without the label is fixed
   in a new PR at once.
 - **Portable Agentica code** (`compiler/`, `stdlib/`, their Python tests,
   docs, the site) gets no label: do not wait for the macOS and Windows jobs.

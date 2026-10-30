@@ -92,14 +92,23 @@ def test_stage_rejects_an_oversized_member(tmp_path, monkeypatch):
         provision.stage(data, digest(data), MEMBER, tmp_path)
 
 
-def test_stage_refuses_to_overwrite_an_existing_library(tmp_path):
+def already_staged(tmp_path):
+    """native/linux/ holding a library from an earlier run."""
     out = tmp_path / "native" / "linux"
     out.mkdir(parents=True)
     (out / MEMBER).write_bytes(b"already staged")
+    return out
+
+
+def assert_stage_refused(out):
     data = archive((MEMBER, "file", LIB))
     with pytest.raises(SystemExit):
         provision.stage(data, digest(data), MEMBER, out)
     assert (out / MEMBER).read_bytes() == b"already staged"
+
+
+def test_stage_refuses_to_overwrite_an_existing_library(tmp_path):
+    assert_stage_refused(already_staged(tmp_path))
 
 
 def test_read_asset_returns_a_small_local_file(tmp_path):
@@ -123,11 +132,21 @@ def test_read_asset_fails_closed_on_a_missing_file(tmp_path):
 
 def test_stage_refuses_a_create_that_lost_the_race(tmp_path, monkeypatch):
     """The exclusive create, not the friendly check, owns the guarantee."""
-    out = tmp_path / "native" / "linux"
-    out.mkdir(parents=True)
-    (out / MEMBER).write_bytes(b"already staged")
+    out = already_staged(tmp_path)
     monkeypatch.setattr(Path, "exists", lambda self: False)
+    assert_stage_refused(out)
+
+
+def test_linux_arm64_takes_its_own_asset_and_stages_under_linux(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(provision.sys, "platform", "linux")
+    monkeypatch.setattr(provision.platform, "machine", lambda: "aarch64")
+    assert provision.this_system() == "linux-arm64"
     data = archive((MEMBER, "file", LIB))
-    with pytest.raises(SystemExit):
-        provision.stage(data, digest(data), MEMBER, out)
-    assert (out / MEMBER).read_bytes() == b"already staged"
+    path = tmp_path / "pinned.tar.gz"
+    path.write_bytes(data)
+    name = provision.ASSETS["linux-arm64"][0]
+    monkeypatch.setitem(provision.ASSETS, "linux-arm64", (name, digest(data), MEMBER))
+    assert provision.main(["--out", str(tmp_path / "out"), "--asset", str(path)]) == 0
+    target = tmp_path / "out" / "native" / "linux" / MEMBER
+    assert capsys.readouterr().out.strip() == str(target.resolve())
+    assert target.read_bytes() == LIB

@@ -201,11 +201,12 @@
     run, GC stress run
 
 - **Job:** conformance matrix (`platforms.yml`), one per system:
-  `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, `macos-arm64`
-  - **Runner:** GitHub-hosted `ubuntu-latest` (system libgc and OpenSSL),
-    `windows-2025` (`msys2/setup-msys2` UCRT64: gcc, make), `macos-15-intel`
-    and `macos-latest` (Apple clang); the last three link the vendored
-    OpenSSL; submodules
+  `linux-x86_64`, `linux-arm64`, `windows-x86_64`, `macos-x86_64`,
+  `macos-arm64`
+  - **Runner:** GitHub-hosted `ubuntu-latest` and `ubuntu-24.04-arm` (system
+    libgc and OpenSSL; no JIT on arm64), `windows-2025` (`msys2/setup-msys2`
+    UCRT64: gcc, make), `macos-15-intel` and `macos-latest` (Apple clang); the
+    last three link the vendored OpenSSL; submodules
   - **Runs:** `make vm-test`, the build from `bootstrap/stage0.agcb` and
     `make fixed-point`, then the areas of `tools/conformance.py` (command
     line, language rules, goldens, library, files, processes, tasks,

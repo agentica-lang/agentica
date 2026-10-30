@@ -143,7 +143,7 @@ rules those comments do not carry.
 - `fits_bits` is the one range rule for arguments, fields and `put_*`.
 - Every `Native.*` import counts as native code for the refusal at load
   (`agc_ffi_refusal`, called by `agc_launch_native`).
-- `ffi_libffi.c` (`AGC_FFI`: Linux x86_64, Windows x64, macOS) is the libffi
+- `ffi_libffi.c` (`AGC_FFI`: Linux, macOS, Windows x64) is the libffi
   adapter; `ffi_none.c` refuses elsewhere. `Native.wait_readable` and
   `wait_writable` wait on the loop (`agc_io_start_then`, on a duplicate
   descriptor from `agc_poller_open_copy`).

@@ -701,8 +701,8 @@ end
   a program that declares any extern function or calls a `Native.*` builtin
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
-- Native calls work on Linux x86_64, Windows x64 and macOS (x86_64 and
-  arm64), and waits on Linux x86_64, macOS and Windows (sockets only).
+- Native calls work on Linux and macOS (x86_64 and arm64) and Windows x64,
+  and waits on Linux, macOS and Windows (sockets only).
   Elsewhere such a program is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED`, exit 2.
   `check`, `compile` and the queries work on every system.

@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Linux ARM64 builds and CI, with native calls; the JIT stays x86-64 only.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
