@@ -4,9 +4,9 @@
  * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
  * CBC (Cipher) and CMAC, and the Base64 and Digest.hexencode/hexdecode text
  * forms of bytes in plain C. The hashes, HMACs, random bytes, compare, cipher
- * and CMAC come from the OpenSSL adapter (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
- * Base64 and hex follow RFC 4648 and Ruby's Base64 module, SecureRandom.uuid
- * RFC 9562 §5.4.
+ * and CMAC come from the OpenSSL adapter (digest.h). Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
+ * Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
 #include "services.h"
 #include "digest.h"
@@ -264,11 +264,10 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
 
 /* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute and cmac_compute below) each
    have their own out-of-line function whose only callees are the adapter, memset and agc_fail. vm/tools/tsan.supp
-   names these five and nothing else, so
-   a TSan report about OpenSSL's fetch caches is suppressed while a race in the VM code around them (such as reading a
-   list another task holds) is still reported. TSan unwinds by frame pointers, which libcrypto does not keep, so a
-   report skips the adapter function and shows its caller first: these must stay real frames (noinline, and not a tail
-   call). */
+   names these five and nothing else, so a TSan report about OpenSSL's fetch caches is suppressed while a race in the
+   VM code around them (such as reading a list another task holds) is still reported. TSan unwinds by frame pointers,
+   which libcrypto does not keep, so a report skips the adapter function and shows its caller first: these must stay
+   real frames (noinline, and not a tail call). */
 static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
                                                        unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
   size_t len = agc_digest(kind, bytes, n, out);
@@ -396,6 +395,9 @@ static __attribute__((noinline)) void cipher_compute(agc_vm *vm, bool encrypt, c
   }
 }
 
+/* Writes the CMAC tag of the n bytes at data into out and returns its length (agc_cmac); the caller checked the key
+   size. A library failure stops the run. One of the libcrypto wrappers that vm/tools/tsan.supp names (see
+   digest_compute). */
 static __attribute__((noinline)) size_t cmac_compute(agc_vm *vm, agc_cmac_cipher cipher, const uint8_t *key,
                                                      size_t key_n, const uint8_t *data, size_t n,
                                                      unsigned char out[AGC_CMAC_MAX_BYTES], uint32_t span) {

@@ -3,7 +3,8 @@
  * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
  * hash (files.c), which streams a whole file in fixed chunks, secure random
  * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare, and
- * Triple DES CBC and CMAC for the Cipher and CMAC builtins (crypto.c). The OpenSSL code is in digest_openssl.c. Adapter header. Design:
+ * Triple DES CBC and CMAC for the Cipher and CMAC builtins (crypto.c). The
+ * OpenSSL code is in digest_openssl.c. Adapter header. Design:
  * docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
