@@ -489,6 +489,19 @@ static void find_json_field(reader *r, agc_program *p) {
       reject(r, "JsonField type without the JsonField enum");
 }
 
+/* The builtin Optional enum, by its name: None then Some(T). The name is reserved, but a .agcb file from before it
+   was may declare its own enum Optional; one of another shape is not the builtin and is no error. */
+static void find_optional(agc_program *p) {
+  p->optional = UINT32_MAX;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    const agc_enum_def *d = &p->enums[i];
+    if (!same_text(d->name, "Optional") || d->count != 2) continue;
+    const agc_variant_def *none = &p->variants[d->first], *some = &p->variants[d->first + 1];
+    if (same_text(none->name, "None") && none->arity == 0 && same_text(some->name, "Some") && some->arity == 1)
+      p->optional = d->first;
+  }
+}
+
 static void load_tables(reader *r, agc_program *p) {
   p->struct_count = read_count(r, 8, "struct");
   p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
@@ -531,6 +544,7 @@ static void load_tables(reader *r, agc_program *p) {
     }
   }
   find_json_field(r, p);
+  find_optional(p);
 }
 
 static void load_updates(reader *r, agc_program *p) {

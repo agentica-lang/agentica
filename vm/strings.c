@@ -488,12 +488,22 @@ static agc_value builtin_slice(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_small_string(vm, s->data + from, at - from, (size_t)length));
 }
 
+/* s.index_of(part) as a Result, under the old "String.index_of" key that front ends and .agcb files compiled before
+   #831 PR 4 import; the catalog's key is "String.index_of.optional". */
 static agc_value builtin_index_of(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]), *part = agc_as_string(vm, args[1]);
   size_t at = agc_text_find(s, part, 0);
   if (at == AGC_NOT_FOUND) return failure(agc_around("", part, " not found"));
   return agc_result_value(true, agc_int((int64_t)agc_utf8_count((const uint8_t *)s->data, at)));
+}
+
+static agc_value builtin_index_of_optional(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *s = agc_as_string(vm, args[0]), *part = agc_as_string(vm, args[1]);
+  size_t at = agc_text_find(s, part, 0);
+  if (at == AGC_NOT_FOUND) return agc_optional_value(vm, false, agc_void());
+  return agc_optional_value(vm, true, agc_int((int64_t)agc_utf8_count((const uint8_t *)s->data, at)));
 }
 
 static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -607,6 +617,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.index_of.optional", 2, builtin_index_of_optional, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},

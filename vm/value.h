@@ -417,6 +417,9 @@ typedef struct {
   /* The variant id of JsonField.Absent (Null and Value follow it), or UINT32_MAX when the program has no JsonField
      enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
   uint32_t json_field;
+  /* The variant id of the builtin Optional's None (Some follows it), or UINT32_MAX when the program has no enum named
+     Optional with that shape (vm/loader.c find_optional). The builtins that return an Optional build it from these. */
+  uint32_t optional;
   const agc_builtin **builtins;
   agc_function *functions;
   /* The index in builtins of the first native import (a name that starts with AGC_NATIVE_PREFIX), and of the first
@@ -471,6 +474,7 @@ void agc_gc_measure(void);
 void agc_gc_collect(void);
 
 agc_value agc_result_value(bool ok, agc_value value);
+agc_value agc_optional_value(agc_vm *vm, bool some, agc_value value);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);
