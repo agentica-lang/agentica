@@ -12,9 +12,8 @@ character, a table built on each call, a call for each token.
 
 ## Tables built once
 
-A table that does not depend on the arguments is a module constant: built once
-before `main`, read with one array access. A `Set` test also beats a chain of
-comparisons.
+A table that does not depend on the arguments is a module constant (the
+costs are in the programming skill's `references/performance.md`).
 
 ```ruby
 # bad

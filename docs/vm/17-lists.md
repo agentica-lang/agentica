@@ -253,7 +253,7 @@ must still pass its 250 ms limit.
 
 ### 17.10 Decisions
 
-Decided on 2026-10-14, when this design was merged:
+Decided on 2026-10-14:
 
 1. **Turn cost of `append`, `set` and small `concat`:** 0. Their work is bounded
    (§17.5), and the rule of §10.2.1 charges nothing for constant work.

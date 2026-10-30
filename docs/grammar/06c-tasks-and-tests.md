@@ -417,13 +417,13 @@ Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
   again; each retry is charged to the task's step budget, so a task under heavy
   contention yields and cannot spin forever.
 - **Lifetime.** A table lives while any value refers to it, and the garbage
-  collector frees it then. It is not an OS resource, so the owner rule of
-  handle ownership does not apply: the task that made it does not own it, its
-  end does not close it, and `Task.spawn_owning` is not needed. There is no
-  named global table: a task reaches a table only through a handle it was
-  given. A table belongs to the run that made it; a call from another run halts
-  with `RUNTIME-ATS-CONTEXT`. One run is one execution on the VM, so no handle
-  reaches another run today.
+  collector frees it then. It is not an OS resource, so the owner rule of handle
+  ownership does not apply: the task that made it does not own it, its end does
+  not close it, and `Task.spawn_owning` is not needed. There is no named global
+  table: a task reaches a table only through a handle it was given. A table
+  belongs to the run that made it; a call from another run halts with
+  `RUNTIME-ATS-CONTEXT`. One run is one execution on the VM, so no handle
+  reaches another run.
 - **In BDD.** Each scenario runs in its own child VM and runs the step
   program's `main` again, so a table made in `main` and captured by step blocks
   is shared by the steps of one scenario and starts fresh in the next. A table
@@ -437,7 +437,7 @@ Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
 - **Effects.** `put`, `put_new`, `delete` and `add` carry `concurrency`, which
   also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
 
-Not in this version: ordered tables, duplicate keys, a block-based `update`, a
+Not supported: ordered tables, duplicate keys, a block-based `update`, a
 compare-and-swap `replace`, and tables shared between OS processes.
 
 ### Unit tests (`Test`)
@@ -520,8 +520,7 @@ Not planned: an assertion that stops the test by itself (Agentica has no
 exceptions; `try` is the one way to stop early); running tests in the runner's
 own VM; a child VM per test (a task per test is enough); and `describe`, `setup`
 and tags (a helper function does what `setup` does). Doctests, running the
-fenced `agentica` examples of `std/` docs, are an option to evaluate later, with
-the doc-comment phase.
+fenced `agentica` examples of `std/` docs, are an option to evaluate later.
 
 [agentica-link-1]: ../../site/content/library/concurrency/channel.md
 [agentica-link-2]: ../../site/content/library/concurrency/ats.md

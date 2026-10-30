@@ -114,8 +114,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
   head SHA, started from the main checkout (run the query once in the
   foreground first).
-- A timing assertion of `vm/tests/loop_test.c` on macOS flaked before (#366,
-  closed): rerun once with `gh run rerun ID --failed` and say so. Read other
+- A timing assertion of `vm/tests/loop_test.c` can flake on macOS: rerun once
+  with `gh run rerun ID --failed` and say so. Read other
   failures with `gh run view ID --log-failed`; native Windows finds bugs Wine
   hides.
 

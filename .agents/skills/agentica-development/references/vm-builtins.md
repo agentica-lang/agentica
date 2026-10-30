@@ -31,7 +31,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    and `expired` run on the interpreter thread and return the value;
    `drop` frees a request whose timeout already fired; the optional
    `cancel` half (last field, external kinds only) says whether a
-   detached job (its task was cancelled) may end now through `drop`, at
+   detached job (its task was cancelled) may end through `drop`, at
    the cancel or at its deadline; leave it NULL unless the request can
    stop without closing the task's handle. It returns any
    value; `CALL_BUILTIN` then parks the task (`task->parking`) and the

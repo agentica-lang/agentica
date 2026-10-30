@@ -175,8 +175,8 @@ lines, may end with a comma, and may not be empty. `from` and `as` are not
 reserved words: the parser reads them by their text at those two places, so a
 parameter or a function called `from` or `as` still works, and `{as}` imports a
 function called `as`. One line does one thing: `import Util, {area} from "util"`
-is `PARSE-UNEXPECTED-TOKEN` at the comma. Writing the path first (the form of
-earlier versions) is `PARSE-UNEXPECTED-TOKEN` at the string, with the help
+is `PARSE-UNEXPECTED-TOKEN` at the comma. Writing the path first is
+`PARSE-UNEXPECTED-TOKEN` at the string, with the help
 `write import Alias from "path"`. What each form means is in section 5b.
 
 A function, struct, enum or type alias declaration, exported or not, needs a

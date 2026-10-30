@@ -4,7 +4,7 @@ weight: 7
 description: How Agentica runs your program, the bytecode VM called Aurora, and the libraries it is built on.
 ---
 
-Every program runs on Aurora, a bytecode VM written in C11 (the name appears only in the docs). The VM is part of the `agentica` binary; bytecode files end in `.agcb`. The reasons behind these choices are in [Design decisions](/design/).
+Every program runs on Aurora, a bytecode VM written in C11. The VM is part of the `agentica` binary; bytecode files end in `.agcb`. The reasons behind these choices are in [Design decisions](/design/).
 
 ## From source to bytecode
 
@@ -41,6 +41,8 @@ Pinned git submodules in `vm/third_party/`, all built into the release binary, w
 | libuv | Event loop, file and socket I/O, timers, processes and the thread pool | MIT, with BSD-2-Clause and ISC parts |
 | OpenSSL 3.5 | TLS for `TLS.connect`, `TLS.listen` and HTTPS | Apache-2.0 |
 | picohttpparser | Parses HTTP start lines and headers | MIT (dual MIT or Perl license) |
+| libffi | Calls C functions of `extern` blocks (Linux x86-64, Windows x64 and macOS) | MIT |
+| zlib | DEFLATE, zlib and gzip codec for `Zlib` | zlib license |
 
 The Unicode tables (case mapping, printing) are generated from the Unicode Character Database into the VM source, under the Unicode License v3.
 

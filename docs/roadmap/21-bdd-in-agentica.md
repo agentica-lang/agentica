@@ -4,11 +4,9 @@ Specified in [`docs/bdd.md`](../bdd.md): the user docs, the runner protocol
 under "How a run works", and the rejected alternatives under "Decided against".
 A catch-up item of 7h (order step 7.1).
 
-**Done (21a–21f):** `Process.spawn_captured`/`output`, `Task.pending_count`, the
-Gherkin parser, step matching, the report, and the switch: `std/bdd` plus a
-runner program, a child VM per scenario, `agentica test` on the VM. A handler
-that crashes, exits or loops fails only its scenario. Record:
-[`docs/bdd.md`](../bdd.md).
+**Done (21a–21f):** `std/bdd` and its runner program, a child VM per scenario,
+and `agentica test` on the VM. A handler that crashes, exits or loops fails only
+its scenario. Record: [`docs/bdd.md`](../bdd.md).
 
 **Later options (not scheduled):**
 
