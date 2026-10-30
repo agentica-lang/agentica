@@ -202,11 +202,11 @@ export def discard(path: String) -> Void
   end
 end
 
-# Removes the file or the link at `path` (a link is removed as a link, never followed). A folder in its place stays
-# (the rename then fails and the entry is not written): `Path.remove` would delete the whole folder.
+# Removes the file, link, FIFO, socket or device at `path` (a link is removed as a link, never followed). A folder in
+# its place stays (the rename then fails and the entry is not written): `Path.remove` would delete the whole folder.
 export def remove_file(path: String) -> Void
   info = File.lstat(path, IO_TIMEOUT_MS)
-  if info.ok? and (info.unwrap!.kind == "file" or info.unwrap!.kind == "link")
+  if info.ok? and info.unwrap!.kind != "directory"
     Path.remove(path, IO_TIMEOUT_MS)
   end
 end

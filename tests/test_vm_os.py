@@ -6,6 +6,7 @@ GitHub Actions runs them in per-job scratch after checking the runner boundary.
 """
 import os
 import signal
+import socket
 import stat
 
 import pytest
@@ -121,6 +122,12 @@ def test_create_private_never_follows_a_dangling_link(root, work):
     assert not (root / "dangling-target").exists()
     assert (root / "dangling").is_symlink()
 
+def ftype(mode):
+    """The kind File.stat reports for a mode: Ruby's File::Stat#ftype name, read here from Python's stat module."""
+    kinds = [(stat.S_ISREG, "file"), (stat.S_ISDIR, "directory"), (stat.S_ISLNK, "link"), (stat.S_ISFIFO, "fifo"),
+             (stat.S_ISSOCK, "socket"), (stat.S_ISCHR, "characterSpecial"), (stat.S_ISBLK, "blockSpecial")]
+    return next((kind for test, kind in kinds if test(mode)), "unknown")
+
 def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_python(root, work):
     # Mode, owner and group are POSIX facts: Windows compares the kind, the size and the time only
     # (test_windows_metadata_and_locks.py checks its read-only attribute and owner 0).
@@ -135,12 +142,24 @@ def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_py
         (root / "sticky").mkdir()
         os.chmod(root / "sticky", 0o1777)
         names.insert(2, "sticky")
+        # The kinds that only POSIX has: a FIFO, a Unix socket (bound by its relative name, as the full path can pass
+        # the 104-byte limit of macOS) and the null device through a link.
+        os.mkfifo(root / "fifo")
+        here = os.getcwd()
+        os.chdir(root)
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as unix:
+                unix.bind("socket")
+        finally:
+            os.chdir(here)
+        symlink("/dev/null", root / "null")
+        names += ["fifo", "socket", "null"]
     lines = run_program(root, work, LSTAT_PROGRAM, "lstat", root, *names)
 
     def expected(label, name, info):
         if info is None:
             return "%s error" % label
-        kind = "directory" if stat.S_ISDIR(info.st_mode) else "link" if stat.S_ISLNK(info.st_mode) else "file"
+        kind = ftype(info.st_mode)
         # The size of a link is the length of its text (Python's lstat says 0 for it on Windows).
         size = 0 if kind == "directory" else len(os.fsencode(os.readlink(root / name))) if kind == "link" else info.st_size
         return "%s %s %d %d %d %d %d" % (label, kind, size, stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid,
@@ -154,8 +173,11 @@ def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_py
 
     def shown(line):
         # "lstat name kind size mode uid gid time": the mode, the owner and the group go on Windows.
+        # A write to the null device may move its time, so its time is not compared.
         words = line.split()
-        return " ".join(words[:4] + words[7:]) if WINDOWS and len(words) > 3 else line
+        if words[:2] == ["stat", "null"]:
+            words = words[:-1]
+        return " ".join(words[:4] + words[7:]) if WINDOWS and len(words) > 3 else " ".join(words)
 
     want = []
     for name in names:
@@ -176,6 +198,8 @@ def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_py
     if not WINDOWS:
         assert by_label["lstat file"].startswith("lstat file file 5 416 ")
         assert by_label["lstat sticky"].startswith("lstat sticky directory 0 1023 ")
+        assert [by_label[label].split()[2] for label in ("stat fifo", "stat socket", "lstat null", "stat null")] == [
+            "fifo", "socket", "link", "characterSpecial"]
 
 def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
     lines = run_program(root, work, LOCK_PROGRAM, "lock", root / "lock")

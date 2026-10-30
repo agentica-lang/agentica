@@ -82,7 +82,9 @@ end
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 ```
 
-Gives a `FileInfo`: `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
+Gives a `FileInfo`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
+
+- `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"` and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
 
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
 - Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.

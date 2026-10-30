@@ -71,8 +71,11 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   directory sizes are zero; `mode` is the permission bits with setuid, setgid
   and sticky (384 is `rw-------`). On Windows `mode` is only the read-only
   attribute (438 = octal 666 writable, 292 = octal 444 read-only) and `user_id`
-  and `group_id` are always 0 (not the owner; nothing about the ACL).
-  `File.lstat` does not follow a final symlink: `kind` is `"link"`.
+  and `group_id` are always 0 (not the owner; nothing about the ACL). `kind`
+  is Ruby's `File::Stat#ftype` name: `"file"` (regular only), `"directory"`,
+  `"link"`, `"fifo"`, `"socket"`, `"characterSpecial"`, `"blockSpecial"` or
+  `"unknown"` (Windows: file, directory, link, and `"characterSpecial"` for
+  `NUL`). `File.lstat` does not follow a final symlink: `kind` is `"link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one
   directory only you can use and fails if the path exists or the parent is
