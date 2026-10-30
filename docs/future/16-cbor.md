@@ -317,9 +317,8 @@ the data.
 
 ### 16.7 Backends
 
-- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs `Bytes`
-  on the VM. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of
-  argument.
+- **VM:** an in-house C codec in `vm/`, with no new dependency. CBOR is small:
+  one head byte, then 0, 1, 2, 4 or 8 bytes of argument.
 - **Tests:** the RFC 8949 Appendix A vectors that fit the mapping, as fixed
   bytes (independent of our encoder); round trips in both directions; the depth
   and item-cap boundaries (one more level is `$: depth limit exceeded`, one more
@@ -339,18 +338,12 @@ the data.
     that many bytes, and only then calls `Term.decode`. Both reads may return
     fewer bytes than asked: `TCP.recv_bytes` returns what is available, and
     `Process.read_bytes` returns fewer at EOF. EOF before the end is an error;
-  - a small helper module (for example `std/frame`) can hold these two loops
-    once `Bytes` lands; it is not part of this plan. The 4-byte length itself
-    needs no new module: `std/binary` writes it and checks it against a
-    limit.
+  - a small helper module (for example `std/frame`) can hold these two loops;
+    it is not part of this plan. The 4-byte length itself needs no new module:
+    `std/binary` writes it and checks it against a limit.
 
 ### 16.8 Dependencies
 
-- **`Bytes` first.** Today binary data is `List[Int]` (`IO.read_bytes`,
-  `String.from_bytes`, `Process.send_bytes`). `Bytes` is in §12.5 "Later" and
-  has no plan yet; it must be planned there, and landed, before this section
-  starts. That plan must also say how the byte builtins take and return `Bytes`,
-  and give a slice and a concat, so the framing loops above are easy to write.
 - **Generic structs** (roadmap 10c; the grammar's "Generic structs"), since the
   type check substitutes the type arguments of generic instances (16.3).
 - **The JSON form of enums** (§15.4, roadmap 10d), for the shared tag and values
@@ -374,8 +367,8 @@ the data.
 
 - One PR on the VM: `Term.encode`/`Term.decode` per §16.4 with enums as
   `[tag, values]` (§16.5 for hostile input); the Term type check with
-  substituted type arguments; `Term` becomes a reserved name. Needs `Bytes` and
-  the JSON form of enums (10d) first.
+  substituted type arguments; `Term` becomes a reserved name. Needs the JSON
+  form of enums (10d) first.
 - Done when: an example writes a struct with an `Int`-keyed map, a Float NaN and
   an enum to bytes and reads it back, with the same bytes and output on the VM;
   every hostile-input case returns `error(...)`.

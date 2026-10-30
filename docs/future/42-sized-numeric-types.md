@@ -18,8 +18,8 @@ there.
 
 - Types: `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`, `UInt64`,
   `Float32`; `Int64` and `Float64` are aliases; `Int` and `Float` stay the
-  default spellings; no `Byte`, no `Bytes` (42.4, 42.10). Float16 and BFloat16
-  later (42.9).
+  default spellings; no `Byte`; `Bytes` is its own type (42.4, 42.10). Float16
+  and BFloat16 later (42.9).
 - Literals: typed by context, `Int` or `Float` with none; no suffixes; no hex
   yet; out of range is `CHECK-INT-RANGE`, and `CHECK-FLOAT-RANGE` is new (42.5).
 - Conversions: plain value when it cannot fail, `Result` when it can, `!`
@@ -458,11 +458,9 @@ conversion.
 - **Byte lists.** In step 3, `IO.read_bytes`, `File.read_bytes`,
   `TCP.recv_bytes`, `Process.read_bytes`, `String.from_bytes` and the `*_bytes`
   writers take and return `List[UInt8]`. This is breaking (§42.15).
-- **`Bytes` (§12.5): not added (recommended).** Reason: `List[UInt8]`, with the
-  typed storage of step 4, is the compact byte sequence that `Bytes` was meant
-  to be, and a second type would double every `*_bytes` builtin. The docs that
-  name `Bytes` as a prerequisite (§12.5, §16, §20, §18.4 and others; `rg -l
-  '\bBytes\b'`) are updated when step 3 lands.
+- **`Bytes`: added (0.17.0, #805).** It is its own type, not a `List[UInt8]`:
+  one byte per item, and the byte APIs take and return it. The owner decided
+  this on 2026-10-29.
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
   program converts the bounds: `for i in 0...b.to_int`.

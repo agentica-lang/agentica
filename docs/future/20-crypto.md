@@ -1,7 +1,7 @@
 ## 20. Crypto module
 
-**Status:** started (issue #757, one PR per item; see Landed and Plan). It needs
-`Bytes` (§12.5) to leave `List[Int]` and uses the same OpenSSL as TLS: the
+**Status:** started (issue #757, one PR per item; see Landed and Plan). It uses
+`Bytes` (0.17.0, #805) and the same OpenSSL as TLS: the
 vendored 3.5 LTS, linked statically, in the release, and the system OpenSSL 3
 (3.0 or newer) in a default source build
 (`docs/vm/10-dependencies-and-platforms.md` 10.0). So 3.5-only features
@@ -13,14 +13,13 @@ still returns `NULL` (an algorithm left out of the build), the call returns an
 error `Result` that names the missing feature.
 
 **Landed:** the `Digest` hashes `md5`, `sha1`, `sha256` and `sha512`, each
-with a `_hexdigest` form (`Digest.sha256(data: List[Int]) -> List[Int]`,
+with a `_hexdigest` form (`Digest.sha256(data: Bytes) -> Bytes`,
 `docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
 `vm/digest_openssl.c`, HMAC-SHA256 and HMAC-SHA512
-(`HMAC.sha256(key: List[Int], data: List[Int]) -> List[Int]`, each with a
+(`HMAC.sha256(key: Bytes, data: Bytes) -> Bytes`, each with a
 `_hexdigest` form, Ruby's `OpenSSL::HMAC.digest`), and
 `SecureRandom.random_bytes`, `hex` and `uuid` from `RAND_bytes`. They take and
-give `List[Int]` until `Bytes` exists, and move to `Bytes` with the other byte
-APIs.
+give `Bytes` (0.17.0, #805), as the other byte APIs do.
 
 **Plan** (issue #757, one PR each): PBKDF2 and AES-256-GCM. Their names
 follow Ruby's (`OpenSSL::PKCS5.pbkdf2_hmac`), flattened as `Digest` and `HMAC`

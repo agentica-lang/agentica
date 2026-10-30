@@ -253,8 +253,8 @@ Weighed later (no fixed order):
 
 - **Order:** 18
   - **Next work:** (On demand) Binary serialization (phase 11): typed
-    `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of
-    enums (10d); starts when a real program needs it
+    `Term.encode`/`Term.decode` in CBOR; needs the JSON form of enums (10d);
+    starts when a real program needs it
   - **Outcome:** Keep a disk cache or send values between Agentica processes
     without losing Int keys, Float bits or enums
 

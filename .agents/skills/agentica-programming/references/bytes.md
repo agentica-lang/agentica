@@ -39,7 +39,8 @@ for byte in b ... end
   `File.read_bytes`, `File.write_bytes`, `File.sha256`, `String.from_bytes`,
   `Zlib`, `File.chunks`, the Lazy byte steps, `TCP.send_bytes`,
   `TCP.recv_bytes`, `Process.send_bytes`, `Process.read_bytes` and `std/binary`
-  take and return `Bytes`. `Native` still takes and returns `List[Int]` for
-  now; `Bytes.from_list(list)` and `b.to_a` convert.
+  take and return `Bytes`. The `Native` integer arrays (`get_array_of_int32`
+  and its three siblings) take and return `List[Int]`: they hold 32- and 64-bit
+  numbers, not bytes.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
   `Set[Bytes]` or a `Map[Bytes, _]`. `List[Bytes]` has no `==`.
