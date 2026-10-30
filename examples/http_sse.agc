@@ -1,9 +1,9 @@
 import HTTP from "std/http"
 
 # Sends one event every 100 ms, then ends the stream. A failed send means the client left, so it stops.
-def produce(events: Channel[String]) -> Void
+def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: tick #{n}\n\n", 5000))
+    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
       break
     end
     Task.sleep(100)
@@ -13,12 +13,12 @@ end
 
 def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
   if request.method == "GET" and request.path == "/events"
-    events: Channel[String] = Channel.new(8)
+    events: Channel[Bytes] = Channel.new(8)
     Task.spawn(&produce, events)
     headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
     return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
   end
-  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n")))
+  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n".bytes)))
 end
 
 def main() -> Void

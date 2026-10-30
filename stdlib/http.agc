@@ -44,6 +44,11 @@ STREAM_POLL_MS = 60000
 # idle, and a timeout of a read closes the socket.
 WATCH_MS = 31536000000
 HEX_DIGITS = "0123456789abcdef"
+# The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
+CHUNK_BYTES = 524288
+SEND_BYTES = 1048576
+NO_BODY = "a 204 or 304 response cannot have a body"
+CRLF = "\r\n".bytes
 # The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
 # this value as a literal (a field default cannot name a constant), so the two must match.
@@ -76,14 +81,14 @@ end
 
 # The pieces a body channel holds right now, and whether the channel is closed with nothing more to come.
 struct Ready
-  pieces: List[String]
+  pieces: List[Bytes]
   ended: Bool
 end
 
 # What the watcher task of a streamed response needs: the connection, and the body to close when the client leaves.
 struct Watch
   socket: Socket
-  body: Channel[String]
+  body: Channel[Bytes]
 end
 
 struct Incoming
@@ -196,8 +201,8 @@ export struct StreamResponse
   status: Int
   ## The response headers. The server adds `Transfer-Encoding: chunked` or `Content-Length`: the handler sets neither.
   headers: List[Header]
-  ## The pieces of the body, each a non-empty `String` (an empty one is skipped).
-  body: Channel[String]
+  ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
+  body: Channel[Bytes]
 end
 
 struct Whole
@@ -433,12 +438,12 @@ export def listen_stream_tls(
   return ok(start(listener, Route.Streaming(handler), options))
 end
 
-## Returns a closed channel that holds `text` as its one piece: the body of a `StreamResponse` that is one whole text.
-## The server then answers with `Content-Length`, as `listen` does.
-export def whole(text: String) -> Channel[String]
-  body: Channel[String] = Channel.new(1)
-  if text != ""
-    body.send(text, 0)
+## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
+## text or file. The server then answers with `Content-Length`, as `listen` does.
+export def whole(data: Bytes) -> Channel[Bytes]
+  body: Channel[Bytes] = Channel.new(1)
+  if not data.empty?
+    body.send(data, 0)
   end
   body.close
   return body
@@ -829,28 +834,64 @@ def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, ti
   return false
 end
 
-# A streamed response. A body that is already closed holds the whole text, which goes out with Content-Length as for
+# A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for
 # listen. Otherwise the head goes now, with chunked framing, and each piece follows as it arrives.
 def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, options: HttpServerOptions) -> Sent
   request = incoming.request
   timeout = options.request_timeout_ms
   ready = take_ready(response.body)
-  if ready.ended
-    text = String.join(ready.pieces, "")
-    whole_response = HttpResponse(status: response.status, headers: response.headers, body: text)
-    return Sent(keep: reply_whole(socket, request, whole_response, timeout), rest: incoming.rest)
-  end
-  if response.status == 204 or response.status == 304
-    return invalid_stream(socket, request, response.body, "a 204 or 304 response cannot have a body", timeout)
-  end
   head_only = HttpResponse(status: response.status, headers: response.headers, body: "")
   case HttpWire.encode_response(request, head_only, Time.now_ms())
-    ok(reply) -> return stream_out(socket, incoming, response.body, ready.pieces, reply, options)
+    ok(reply) ->
+      bodyless = response.status == 204 or response.status == 304
+      if ready.ended
+        data = Bytes.concat(ready.pieces)
+        if bodyless and not data.empty?
+          return invalid_stream(socket, request, response.body, NO_BODY, timeout)
+        end
+        return send_whole(socket, incoming, reply, data, timeout)
+      end
+      if bodyless
+        return invalid_stream(socket, request, response.body, NO_BODY, timeout)
+      end
+      return stream_out(socket, incoming, response.body, ready.pieces, reply, options)
     error(reason) -> return invalid_stream(socket, request, response.body, reason, timeout)
   end
 end
 
-def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[String], reason: String, timeout: Int) -> Sent
+# A body that was complete when the handler returned, with its Content-Length (the encoded head says 0, as its body
+# there is empty; a 204 or 304 head has no length and no body). A HEAD request gets the head alone.
+def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: Bytes, timeout: Int) -> Sent
+  deadline = Time.monotonic_ms() + timeout
+  head = String.replace(reply.head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{data.size}\r\n")
+  sent = ok()
+  if incoming.request.method == "HEAD" or data.empty?
+    sent = TCP.send(socket, head, timeout)
+  else
+    sent = send_all(socket, head.bytes + data, timeout)
+  end
+  if not Result.ok?(sent)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  if reply.closes
+    linger(socket, "", deadline)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  return Sent(keep: true, rest: incoming.rest)
+end
+
+# Sends bytes in the pieces TCP.send_bytes takes, each with the whole timeout.
+def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
+  at = 0
+  while at < data.size
+    count = smaller(SEND_BYTES, data.size - at)
+    try TCP.send_bytes(socket, data.slice(at, count), timeout)
+    at = at + count
+  end
+  return ok()
+end
+
+def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[Bytes], reason: String, timeout: Int) -> Sent
   IO.warn("http: invalid response: #{reason}")
   body.close
   failed(socket, request, timeout)
@@ -858,8 +899,8 @@ def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[String], 
 end
 
 # What the body channel holds without waiting. A channel that is closed and now empty has ended.
-def take_ready(body: Channel[String]) -> Ready
-  pieces: List[String] = []
+def take_ready(body: Channel[Bytes]) -> Ready
+  pieces: List[Bytes] = []
   more = true
   while more
     case body.recv(0)
@@ -882,8 +923,8 @@ end
 def stream_out(
   socket: Socket,
   incoming: Incoming,
-  body: Channel[String],
-  first: List[String],
+  body: Channel[Bytes],
+  first: List[Bytes],
   reply: HttpWire.Reply,
   options: HttpServerOptions,
 ) -> Sent
@@ -949,7 +990,7 @@ end
 # is not an error, and the client leaving, the producer closing or the server closing all wake it. A send gets
 # `timeout`, so a client that stops reading cuts the stream. False when the body could not be sent whole; the channel
 # is then closed for the producer.
-def pump(socket: Socket, body: Channel[String], first: List[String], timeout: Int) -> Bool
+def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], timeout: Int) -> Bool
   for piece in first
     if not Result.ok?(send_piece(socket, piece, timeout))
       body.close
@@ -972,13 +1013,18 @@ def pump(socket: Socket, body: Channel[String], first: List[String], timeout: In
   return Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
 end
 
-# One chunk: its size in hex, the piece, and the CRLFs, in one send so a piece is one flush. An empty piece would read
-# as the last chunk, so it is skipped.
-def send_piece(socket: Socket, piece: String, timeout: Int) -> Result[Void]
-  if piece == ""
-    return ok()
+# The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
+# CHUNK_BYTES is several chunks. An empty piece would read as the last chunk, so it sends nothing. The bytes go as they
+# are: no UTF-8 check runs on a piece.
+def send_piece(socket: Socket, piece: Bytes, timeout: Int) -> Result[Void]
+  at = 0
+  while at < piece.size
+    count = smaller(CHUNK_BYTES, piece.size - at)
+    part = piece.slice(at, count)
+    try TCP.send_bytes(socket, Bytes.concat(["#{hex_of(count)}\r\n".bytes, part, CRLF]), timeout)
+    at = at + count
   end
-  return TCP.send(socket, "#{hex_of(piece.bytesize)}\r\n#{piece}\r\n", timeout)
+  return ok()
 end
 
 def hex_of(number: Int) -> String

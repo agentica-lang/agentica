@@ -354,10 +354,12 @@ Properties of the client that no test checks:
   The loop ends when the write returns anything but `ok(true)`.
 - A `listen_stream` server runs the same loop with a handler that returns a
   `StreamResponse`. A body channel that is already closed with its pieces
-  buffered is one text and goes through the whole-response write. Otherwise the
-  head is `encode_response` of the same status and headers with an empty body,
-  its `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
-  checks and the C code are the same), and the connection task sends the pieces
+  buffered is the whole body: it goes out with `Content-Length`, in the head of
+  the same encoding. Pieces are `Bytes` and go out with `TCP.send_bytes`, so no
+  UTF-8 check runs on them. Otherwise the head is `encode_response` of the same
+  status and headers with an empty body, its `Content-Length: 0` swapped for
+  `Transfer-Encoding: chunked` (so the head checks and the C code are the
+  same), and the connection task sends the pieces
   as it takes them from the channel. A watcher task, spawned in the group,
   holds one `TCP.recv_bytes` of a byte on the socket for the whole stream: the
   end of the client's input closes the body channel, which wakes the connection

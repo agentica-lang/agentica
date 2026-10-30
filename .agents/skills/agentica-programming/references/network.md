@@ -126,10 +126,10 @@ HTTP.close_server(server: HttpServer) -> Void
 
 HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
 HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.whole(text: String) -> Channel[String]
+HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: String)
-HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[String])
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
 HttpServerOptions(request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int)
 ```
 
@@ -186,14 +186,14 @@ end
 
 Use `listen_stream` only when a route's body is not ready at once; otherwise
 `listen`. The handler returns an `HTTP.StreamResponse` whose `body` is a
-`Channel[String]`, and a task it started sends the pieces and closes the channel
+`Channel[Bytes]`, and a task it started sends the pieces and closes the channel
 (`tasks.md`). Every route of a `listen_stream` server returns one, and a route
-with one text uses `body: HTTP.whole(text)`.
+with one text uses `body: HTTP.whole("text".bytes)`.
 
 ```ruby
-def produce(events: Channel[String]) -> Void
+def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: #{n}\n\n", 5000))
+    if not Result.ok?(events.send("data: #{n}\n\n".bytes, 5000))
       break
     end
     Task.sleep(100)
@@ -202,7 +202,7 @@ def produce(events: Channel[String]) -> Void
 end
 
 def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
-  events: Channel[String] = Channel.new(8)
+  events: Channel[Bytes] = Channel.new(8)
   Task.spawn(&produce, events)
   headers = [Header(name: "Content-Type", value: "text/event-stream")]
   return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
@@ -211,8 +211,9 @@ end
 
 - The head goes out at once, then each piece as one flushed chunk, and the
   channel closing ends the body. The server sets the framing: a handler that
-  sets `Content-Length` or `Transfer-Encoding` gets the 500 of `listen`. Empty
-  pieces are skipped. A body already closed when the handler returns goes out
+  sets `Content-Length` or `Transfer-Encoding` gets the 500 of `listen`. Pieces
+  are `Bytes` sent as they are (a file or binary data works); empty ones are
+  skipped. A body already closed when the handler returns goes out
   with `Content-Length`.
 - When the client leaves (its input ends or a send fails) the server closes the
   channel: the producer's next `send` is `error("channel: closed")`, and it

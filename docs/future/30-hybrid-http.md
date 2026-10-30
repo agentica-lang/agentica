@@ -25,9 +25,9 @@ parsing rules of [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6.
 
 At order step 7.4, after `Channel[T]` (§27.2, 17b), three items bring streaming
 back for the jobs a whole message cannot do. Each is built on channels with
-their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split
-only at character boundaries, at most 64 KiB each). Byte streams wait for
-binary bodies (#803).
+their timeouts, backpressure and close rules; the chunks of the client items
+are `String` (UTF-8, split only at character boundaries, at most 64 KiB each),
+and wait for binary bodies (#803). The server's (20g) are `Bytes`.
 
 **Channels are enough; `Lazy[T]` is not needed.** An HTTP body is pushed
 by I/O and read by another task, at its own speed: that is a bounded channel
@@ -68,8 +68,8 @@ closes the connection (never back to the pool) and ends with an error.
   `HTTP.listen_stream`, `HTTP.listen_stream_tls`, `HTTP.StreamResponse` and
   `HTTP.whole`
   (the [network page](../../site/content/library/io-and-system/network.md), and
-  [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.7.2). Chunks written
-  after the handler returns are not limited to 64 KiB.
+  [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.7.2). Its body
+  is a `Channel[Bytes]`; a piece over 512 KiB is split into chunks.
 
 **One way for each job** (the table the skill teaches):
 
@@ -87,7 +87,7 @@ closes the connection (never back to the pool) and ends with an error.
   - **The one form:** `HTTP.listen`
 
 - **Job:** A server with at least one route that streams (SSE, big downloads)
-  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(text)` for its
+  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(data)` for its
     other routes (built)
 
 The checker cannot stop `HTTP.open` on a small response, so these pass the

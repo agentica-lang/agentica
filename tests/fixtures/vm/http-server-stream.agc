@@ -11,7 +11,7 @@ end
 
 struct Feed
   hub: Hub
-  body: Channel[String]
+  body: Channel[Bytes]
 end
 
 def finish(feed: Feed) -> Void
@@ -20,7 +20,7 @@ end
 
 # Sends a piece, then waits for main to read it before the next one.
 def gated(feed: Feed) -> Void
-  for piece in ["one", "two"]
+  for piece in ["one".bytes, "two".bytes]
     feed.body.send(piece, 5000)
     feed.hub.gate.recv(5000)
   end
@@ -30,24 +30,32 @@ end
 # Waits a moment first, so the handler has returned with the channel still open.
 def short(feed: Feed) -> Void
   Task.sleep(20)
-  feed.body.send("a", 5000)
+  feed.body.send("a".bytes, 5000)
   finish(feed)
 end
 
 # Sends until a send fails, which is how the producer learns that the client left.
 def until_closed(feed: Feed) -> Void
-  while Result.ok?(feed.body.send("x", 5000))
+  while Result.ok?(feed.body.send("x".bytes, 5000))
     Task.sleep(5)
   end
-  case feed.body.send("x", 0)
+  case feed.body.send("x".bytes, 0)
     error(message) -> feed.hub.said.send("producer stopped: #{message}", 5000)
     ok(_) -> feed.hub.said.send("producer was not stopped", 5000)
   end
 end
 
+# Pieces that are not UTF-8, and one that is text.
+def binary(feed: Feed) -> Void
+  Task.sleep(20)
+  feed.body.send(Bytes.from_list([255, 0, 128]).unwrap!, 5000)
+  feed.body.send("ok".bytes, 5000)
+  finish(feed)
+end
+
 # Sends one piece and then nothing at all: it can only learn that the client left by looking at the channel.
 def quiet(feed: Feed) -> Void
-  feed.body.send("q", 5000)
+  feed.body.send("q".bytes, 5000)
   while not feed.body.closed?
     Task.sleep(5)
   end
@@ -56,7 +64,7 @@ end
 
 # Pauses longer than the server's timeouts between pieces: a live stream is not cut.
 def slow(feed: Feed) -> Void
-  for piece in ["a", "b", "c"]
+  for piece in ["a".bytes, "b".bytes, "c".bytes]
     Task.sleep(500)
     feed.body.send(piece, 5000)
   end
@@ -65,8 +73,8 @@ end
 
 # Fills the bounded channel behind a client that does not read, and says where the producer had to wait.
 def backed_up(feed: Feed) -> Void
-  piece = "y"
-  while String.length(piece) < 65536
+  piece = "y".bytes
+  while piece.size < 65536
     piece = piece + piece
   end
   sent = 0
@@ -78,7 +86,7 @@ def backed_up(feed: Feed) -> Void
 end
 
 def stream(hub: Hub, job: Fn[Feed, Void], status: Int) -> Result[HTTP.StreamResponse]
-  body: Channel[String] = Channel.new(2)
+  body: Channel[Bytes] = Channel.new(2)
   Task.spawn(job, Feed(hub: hub, body: body))
   return ok(HTTP.StreamResponse(status: status, headers: [Header(name: TYPE, value: "text/plain")], body: body))
 end
@@ -94,13 +102,15 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/gated" -> return stream(hub, &gated, 200)
       "/short" -> return stream(hub, &short, 200)
       "/leave" -> return stream(hub, &until_closed, 200)
+      "/binary" -> return stream(hub, &binary, 200)
+      "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
       "/quiet" -> return stream(hub, &quiet, 200)
       "/slow" -> return stream(hub, &slow, 200)
       "/back" -> return stream(hub, &backed_up, 200)
       "/nobody" -> return stream(hub, &gated, 204)
-      "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n")))
+      "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n".bytes)))
       "/fail" -> return error("the handler failed")
-      _ -> return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("")))
+      _ -> return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("".bytes)))
     end
   end
 end
@@ -136,6 +146,23 @@ def chunk_of(socket: Socket) -> String
   return "#{size} #{TCP.read_line(socket, 5000).unwrap!}"
 end
 
+# Exactly count bytes of the socket, as numbers.
+def bytes_of(socket: Socket, count: Int) -> List[Int]
+  got = "".bytes
+  while got.size < count
+    got = got + TCP.recv_bytes(socket, count - got.size, 5000).unwrap!
+  end
+  return got.to_a
+end
+
+# One chunk of binary data as "size [bytes]", and the CRLF after it.
+def binary_chunk_of(socket: Socket) -> String
+  size = TCP.read_line(socket, 5000).unwrap!
+  data = bytes_of(socket, String.to_int!(size))
+  TCP.read_line(socket, 5000).unwrap!
+  return "#{size} #{data}"
+end
+
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
   options = HttpServerOptions(request_timeout_ms: 200, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
@@ -154,6 +181,16 @@ def main() -> Void
   ask(socket, "GET", "/whole", "")
   puts(head_of(socket))
   puts(TCP.read_line(socket, 5000).unwrap!)
+
+  puts("-- bytes that are not UTF-8 arrive as they are, streamed or whole")
+  ask(socket, "GET", "/binary", "")
+  puts(head_of(socket))
+  puts(binary_chunk_of(socket))
+  puts(chunk_of(socket))
+  puts(chunk_of(socket))
+  ask(socket, "GET", "/binary-whole", "")
+  puts(head_of(socket))
+  puts(bytes_of(socket, 3))
 
   puts("-- HEAD gets the head, and the producer is stopped")
   ask(socket, "HEAD", "/leave", "")

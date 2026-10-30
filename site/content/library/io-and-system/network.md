@@ -329,15 +329,15 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 ```text
 HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
 HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.whole(text: String) -> Channel[String]
+HTTP.whole(data: Bytes) -> Channel[Bytes]
 
-HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[String])
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
 ```
 
 For a body that is not ready when the handler returns: events, tokens as a model makes them, a big file. The handler returns a `StreamResponse` whose `body` is a [channel](/library/concurrency/task/), and a task it started sends the pieces and closes the channel at the end.
 
-- The server sends the head at once, then each piece as it arrives, as one flushed chunk (`Transfer-Encoding: chunked`), and ends the body when the channel closes. The handler sets neither `Content-Length` nor `Transfer-Encoding`. An empty piece is skipped.
-- A route that answers with one text uses `body: HTTP.whole(text)`, a closed channel holding that text. The server then sends `Content-Length`, as `listen` does. It does the same for any body that is already closed when the handler returns.
+- The server sends the head at once, then each piece as it arrives, as one flushed chunk (`Transfer-Encoding: chunked`), and ends the body when the channel closes. The handler sets neither `Content-Length` nor `Transfer-Encoding`. The pieces are `Bytes`, sent as they are with no UTF-8 check, so a stream can carry a file or any binary data (a piece over 512 KiB is split into several chunks). An empty piece is skipped.
+- A route that answers with one text or file uses `body: HTTP.whole(data)`, a closed channel holding that `Bytes` (`"text".bytes` for a text). The server then sends `Content-Length`, as `listen` does. It does the same for any body that is already closed when the handler returns.
 - When the client leaves, the server closes the channel, so the producer's next `send` returns `error("channel: closed")` and it stops. A producer that sends rarely can look at `body.closed?` as well. A client that only half-closes its sending side counts as gone.
 - A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
 - A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds each piece's send: a client that stops reading for that long is cut off, and the channel closes.
@@ -349,9 +349,9 @@ Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pie
 ```agentica
 import HTTP from "std/http"
 
-def produce(events: Channel[String]) -> Void
+def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: tick #{n}\n\n", 5000))
+    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
       break
     end
     Task.sleep(100)
@@ -361,12 +361,12 @@ end
 
 def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
   if request.method == "GET" and request.path == "/events"
-    events: Channel[String] = Channel.new(8)
+    events: Channel[Bytes] = Channel.new(8)
     Task.spawn(&produce, events)
     headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
     return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
   end
-  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n")))
+  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n".bytes)))
 end
 
 def main() -> Void

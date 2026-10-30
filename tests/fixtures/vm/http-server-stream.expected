@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 14344,
+  "steps": 17723,
   "stdout": [
     "-- each piece arrives before the producer sends the next one, and the connection is kept",
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
@@ -10,6 +10,13 @@
     "end",
     "HTTP/1.1 200 OK | Content-Length: 11",
     "whole text",
+    "-- bytes that are not UTF-8 arrive as they are, streamed or whole",
+    "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
+    "3 [255, 0, 128]",
+    "2 ok",
+    "end",
+    "HTTP/1.1 200 OK | Content-Length: 3",
+    "[255, 0, 128]",
     "-- HEAD gets the head, and the producer is stopped",
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
     "producer stopped: channel: closed",

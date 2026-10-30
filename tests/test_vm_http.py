@@ -186,19 +186,27 @@ TICK_MS = 500
 
 struct Feed
   said: Channel[String]
-  body: Channel[String]
+  body: Channel[Bytes]
 end
 
 def ticks(feed: Feed) -> Void
   for n in 1..4
-    feed.body.send("data: #{n}\\n\\n", 5000)
+    feed.body.send("data: #{n}\\n\\n".bytes, 5000)
     Task.sleep(TICK_MS)
   end
   feed.body.close
 end
 
+# Four bytes that are not UTF-8, in two pieces, then text.
+def binary(feed: Feed) -> Void
+  feed.body.send(Bytes.from_list([255, 0]).unwrap!, 5000)
+  feed.body.send(Bytes.from_list([128, 254]).unwrap!, 5000)
+  feed.body.send("end".bytes, 5000)
+  feed.body.close
+end
+
 def endless(feed: Feed) -> Void
-  while Result.ok?(feed.body.send("data: again\\n\\n", 5000))
+  while Result.ok?(feed.body.send("data: again\\n\\n".bytes, 5000))
     Task.sleep(20)
   end
   feed.said.send("stopped", 5000)
@@ -216,7 +224,7 @@ end
 
 def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
   return handler_of() do |request|
-    body: Channel[String] = Channel.new(2)
+    body: Channel[Bytes] = Channel.new(2)
     feed = Feed(said: said, body: body)
     if request.path == "/ticks"
       return stream(feed, &ticks)
@@ -224,11 +232,17 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     if request.path == "/endless"
       return stream(feed, &endless)
     end
+    if request.path == "/binary"
+      return stream(feed, &binary)
+    end
+    if request.path == "/binary-whole"
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128, 254]).unwrap!)))
+    end
     text = "whole"
     if request.path == "/said"
       text = said.recv(10000).unwrap_or("nothing")
     end
-    return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(text)))
+    return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(text.bytes)))
   end
 end
 
@@ -256,6 +270,10 @@ STREAM_PYTHON_LINES = [
     "tls-timing apart",
     "tls-keep-alive 200 5 whole True",
     "head 200 chunked b'' whole True",
+    "binary 200 chunked b'\\xff\\x00\\x80\\xfeend' [b'\\xff\\x00', b'\\x80\\xfe', b'end']",
+    "binary-whole 200 4 b'\\xff\\x00\\x80\\xfe'",
+    "tls-binary 200 chunked b'\\xff\\x00\\x80\\xfeend' [b'\\xff\\x00', b'\\x80\\xfe', b'end']",
+    "tls-binary-whole 200 4 b'\\xff\\x00\\x80\\xfe'",
     "plain-leave-first 200 ['data: again\\n\\n']",
     "plain-leave stopped",
     "tls-leave-first 200 ['data: again\\n\\n']",

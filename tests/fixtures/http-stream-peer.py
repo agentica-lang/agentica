@@ -67,6 +67,19 @@ def head(conn):
           conn.sock is sock)
 
 
+def binary(label, conn):
+    """Bytes that are not UTF-8 arrive as they were sent, as chunks and as one body with a length."""
+    conn.request("GET", "/binary")
+    response = conn.getresponse()
+    pieces = []
+    while data := response.read1(65536):
+        pieces.append(data)
+    print(label, response.status, response.getheader("Transfer-Encoding"), b"".join(pieces), pieces)
+    conn.request("GET", "/binary-whole")
+    whole = conn.getresponse()
+    print(label + "-whole", whole.status, whole.getheader("Content-Length"), whole.read())
+
+
 def said(label):
     """What the server says about the producer of /endless: it learns that the client left, and stops."""
     conn = plain()
@@ -107,6 +120,8 @@ def main():
     ticks("plain", plain())
     ticks("tls", secure())
     head(plain())
+    binary("binary", plain())
+    binary("tls-binary", secure())
     leave("plain-leave", plain())
     leave("tls-leave", secure())
     silent_leave()
