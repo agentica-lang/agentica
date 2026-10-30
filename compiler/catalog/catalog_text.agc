@@ -152,6 +152,7 @@ def type_help(word: String) -> Ast.Maybe[String]
     "Map",
     "Set",
     "Result",
+    "Optional",
     "Json",
     "Fn",
     "Task",
@@ -258,6 +259,8 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.NativeStruct -> return "NativeStruct"
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
+    Model.Rule.OptionalNone -> return "OptionalNone"
+    Model.Rule.OptionalSome -> return "OptionalSome"
     Model.Rule.Prelude -> return "Prelude"
     Model.Rule.ProfileMeasure -> return "ProfileMeasure"
     Model.Rule.ResultDefault -> return "ResultDefault"

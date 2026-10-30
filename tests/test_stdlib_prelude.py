@@ -215,6 +215,49 @@ def test_methods_agree_with_python_peer_on_random_lists(tmp_path):
         assert result.stdout.splitlines() == peer_lines(numbers, words, floats, names), text
 
 
+def optional_peer_lines(values):
+    """Compute the output of optional_program() with Python, None standing for none."""
+    def text(value):
+        return "none" if value is None else "some(%d)" % value
+
+    lines = []
+    for value in values:
+        mapped = None if value is None else value * 3
+        result = 'error("missing")' if value is None else "ok(%d)" % value
+        parts = [text(value), str(-1 if value is None else value), text(mapped), str(value is not None).lower(),
+                 str(value is None).lower(), result, str(value == 4).lower()]
+        lines.append(" ".join(parts))
+    return lines
+
+
+def optional_program(values):
+    """Build one Agentica program of the Optional methods whose output is checked against optional_peer_lines()."""
+    items = ", ".join("none" if value is None else "some(%d)" % value for value in values)
+    return """\
+def main() -> Void
+  values: List[Optional[Int]] = [{items}]
+  for value in values
+    mapped = value.map do |n| n * 3 end
+    result = value.to_result("missing")
+    parts = [value.to_s, value.unwrap_or(-1).to_s, mapped.to_s, value.some?.to_s, value.none?.to_s, result.to_s]
+    puts(parts.push((value == some(4)).to_s).join(" "))
+  end
+end
+""".format(items=items)
+
+
+def test_optional_methods_agree_with_python_peer(tmp_path):
+    random.seed(831)
+    for case in range(4):
+        values = [random.choice([None, random.randint(-3, 9)]) for _ in range(random.choice([1, 5, 12]))]
+        path = tmp_path / ("optional%d.agc" % case)
+        text = optional_program(values)
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert result.code == 0, result.stderr + text
+        assert result.stdout.splitlines() == optional_peer_lines(values), text
+
+
 def slices(items, n):
     """Python peer of Lazy.each_slice: groups of n items, the last one shorter."""
     group = []

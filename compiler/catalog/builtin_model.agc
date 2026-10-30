@@ -53,6 +53,8 @@ export enum Rule
   NativeStruct
   Ok
   OkVoid
+  OptionalNone
+  OptionalSome
   Prelude
   ProfileMeasure
   ResultDefault

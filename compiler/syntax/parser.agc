@@ -1051,8 +1051,8 @@ def lambda_name?(lexeme: String) -> Bool
   return lexeme == "fn" or lexeme == "func" or lexeme == "function" or lexeme == "lambda" or lexeme == "proc"
 end
 
-# A name, a call name(args), or the bare calls gets and gets!. fn(x: Int), lambda(x: Int) and the like are an error
-# with help: there are no lambdas.
+# A name, a call name(args), or the bare calls gets, gets! and none. fn(x: Int), lambda(x: Int) and the like are an
+# error with help: there are no lambdas.
 def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   token = e.tokens[pos]
   paren = pos + 1
@@ -1078,7 +1078,7 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return call_node(e, pos, token.lexeme, args.nodes, true, args.ids, close)
   end
 
-  if token.lexeme == "gets" or token.lexeme == "gets!"
+  if token.lexeme == "gets" or token.lexeme == "gets!" or token.lexeme == "none"
     no_args: List[Ast.Expr] = []
     node = Ast.Expr.Call(
       Ast.Call(id: ids, name: token.lexeme, args: no_args, piped: false, parenthesized: false, span: token.span),

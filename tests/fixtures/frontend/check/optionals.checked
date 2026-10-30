@@ -1,0 +1,61 @@
+program #59 0:1:1-311:17:1
+  module "optionals.agc"
+    declaration: function-decl #18 0:1:1-107:7:1 name="first"
+      param: param #2 10:1:11-23:1:24 name="xs"
+        type: type-ref #1 14:1:15-23:1:24 name="List"
+          arg: type-ref #0 19:1:20-22:1:23 name="Int"
+      result: type-ref #4 28:1:29-41:1:42 name="Optional"
+        arg: type-ref #3 37:1:38-40:1:41 name="Int"
+      body: if-stmt #12 44:2:3-82:5:1
+        branch: if-branch #11 44:2:3-76:4:1
+          condition: binary #8 47:2:6-59:2:18 op=equal op-span=55:2:14-57:2:16 type=Bool
+            left: field-access #6 47:2:6-54:2:13 name="size" type=Int resolved=call("List.size", List(Int))
+              target: name-ref #5 47:2:6-49:2:8 name="xs" type=List(Int)
+            right: literal #7 58:2:17-59:2:18 value=int:0 type=Int
+          body: return-stmt #10 64:3:5-76:4:1
+            value: call #9 71:3:12-75:3:16 name="none" piped=false type=Optional(Int)
+      body: return-stmt #17 84:5:3-103:6:1
+        value: call #16 91:5:10-102:5:21 name="some" piped=false type=Optional(Int)
+          arg: index-access #15 96:5:15-101:5:20 type=Int
+            target: name-ref #13 96:5:15-98:5:17 name="xs" type=List(Int)
+            index: literal #14 99:5:18-100:5:19 value=int:0 type=Int
+    declaration: function-decl #58 108:8:1-311:17:1 name="main"
+      result: type-ref #19 122:8:15-126:8:19 name="Void"
+      body: binding #24 129:9:3-151:10:1 name="found"
+        value: call #23 137:9:11-150:9:24 name="first" piped=false type=Optional(Int)
+          arg: list-lit #22 143:9:17-149:9:23 type=List(Int)
+            element: literal #20 144:9:18-145:9:19 value=int:4 type=Int
+            element: literal #21 147:9:21-148:9:22 value=int:5 type=Int
+      body: case-stmt #36 153:10:3-218:14:1
+        value: name-ref #25 158:10:8-163:10:13 name="found" type=Optional(Int)
+        arm: case-arm #30 168:11:5-187:12:1
+          pattern: variant-pattern #26 168:11:5-175:11:12 enum="Optional" variant="Some" bindings=["n"]
+          body: expr-stmt #29 179:11:16-187:12:1
+            value: call #28 179:11:16-186:11:23 name="puts" piped=false type=Void
+              arg: name-ref #27 184:11:21-185:11:22 name="n" type=Int
+        arm: case-arm #35 191:12:5-212:13:1
+          pattern: variant-pattern #31 191:12:5-195:12:9 enum="Optional" variant="None" bindings=[]
+          body: expr-stmt #34 199:12:13-212:13:1
+            value: call #33 199:12:13-211:12:25 name="puts" piped=false type=Void
+              arg: literal #32 204:12:18-210:12:24 value=string:"none" type=String
+      body: expr-stmt #51 220:14:3-282:15:1
+        value: call #50 220:14:3-281:14:64 name="puts" piped=false type=Void
+          arg: binary #49 225:14:8-280:14:63 op=plus op-span=244:14:27-245:14:28 type=Int
+            left: method-call #39 225:14:8-243:14:26 name="unwrap_or" type=Int resolved=call("Optional.unwrap_or", Optional(Int))
+              target: name-ref #37 225:14:8-230:14:13 name="found" type=Optional(Int)
+              arg: literal #38 241:14:24-242:14:25 value=int:0 type=Int
+            right: field-access #48 246:14:29-280:14:63 name="unwrap!" type=Int resolved=call("Optional.unwrap!", Optional(Int))
+              target: method-call #47 246:14:29-272:14:55 name="map" type=Optional(Int) resolved=call("Optional.map", Optional(Int))
+                target: name-ref #40 246:14:29-251:14:34 name="found" type=Optional(Int)
+                arg: block-lit #46 256:14:39-272:14:55 type=Fn([Int], Int)
+                  param: block-param #41 260:14:43-261:14:44 name="n"
+                  body: expr-stmt #45 263:14:46-268:14:51
+                    value: binary #44 263:14:46-268:14:51 op=multiply op-span=265:14:48-266:14:49 type=Int
+                      left: name-ref #42 263:14:46-264:14:47 name="n" type=Int
+                      right: literal #43 267:14:50-268:14:51 value=int:2 type=Int
+      body: expr-stmt #57 284:15:3-307:16:1
+        value: call #56 284:15:3-306:15:25 name="puts" piped=false type=Void
+          arg: binary #55 289:15:8-305:15:24 op=equal op-span=295:15:14-297:15:16 type=Bool
+            left: name-ref #52 289:15:8-294:15:13 name="found" type=Optional(Int)
+            right: call #54 298:15:17-305:15:24 name="some" piped=false type=Optional(Int)
+              arg: literal #53 303:15:22-304:15:23 value=int:4 type=Int

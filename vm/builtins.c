@@ -410,6 +410,12 @@ static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t sp
   return r->value;
 }
 
+/* == and != on two Optional values (enum values of the builtin enum Optional): the deep equality of Test.eq, since
+   the interpreter's eq takes no enum. The checker allows it only when the item has equality. */
+static agc_value builtin_optional_equal(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_bool(agc_equal(vm, args[0], args[1], span));
+}
+
 static bool range_size(agc_vm *vm, agc_value v, uint64_t *size) {
   int64_t first, last;
   if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) {
@@ -535,6 +541,7 @@ const agc_builtin agc_core_builtins[] = {
   {"Result.unwrap!", 1, builtin_result_unwrap, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.unwrap_or", 2, builtin_result_unwrap_or, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.message", 1, builtin_result_message, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Optional.equal", 2, builtin_optional_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE, false, false, false},
   {"List.filter", 2, NULL, AGC_NATIVE_FILTER, AGC_COST_NONE, false, false, false},
   {"List.reduce", 3, NULL, AGC_NATIVE_REDUCE, AGC_COST_NONE, false, false, false},

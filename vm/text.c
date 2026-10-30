@@ -228,6 +228,11 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
   return &p->variants[e->variant];
 }
 
+/* The enum named Optional is the builtin one: no declaration may take that name (it is a reserved type name). */
+static bool optional_enum(const agc_string *name) {
+  return name->bytes == 8 && memcmp(name->data, "Optional", 8) == 0;
+}
+
 static size_t item_count(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LIST)) return agc_list_len(agc_as_list(vm, v));
   if (agc_is(v, AGC_T_MAP)) return agc_as_map(vm, v)->size;
@@ -275,7 +280,17 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   }
   const agc_enum *e = agc_as_enum(vm, v);
   const agc_variant_def *variant = variant_def(vm, e);
-  append_string(b, vm->rt->program->enums[variant->owner].name);
+  const agc_string *owner = vm->rt->program->enums[variant->owner].name;
+  if (optional_enum(owner)) {
+    /* The builtin enum Optional prints as its constructors are written: none and some(x). */
+    if (e->n == 0) {
+      append(b, "none", 4);
+      return false;
+    }
+    append(b, "some(", 5);
+    return true;
+  }
+  append_string(b, owner);
   append(b, ".", 1);
   append_string(b, variant->name);
   if (e->n == 0) return false;

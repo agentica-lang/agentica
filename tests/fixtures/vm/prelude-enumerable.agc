@@ -110,9 +110,9 @@ def main() -> Void
   show("filter", table.filter do |key, value| value != 2 end.to_s)
   show("filter none", table.filter do |key, value| value > 9 end.to_s)
   show("filter keys", table.filter do |key, value| key != "a" end.to_s)
-  none: Map[String, Int] = {}
-  show("filter empty", none.filter do |key, value| true end.to_s)
-  none.each do |key, value|
+  no_items: Map[String, Int] = {}
+  show("filter empty", no_items.filter do |key, value| true end.to_s)
+  no_items.each do |key, value|
     puts("never #{key}")
   end
 

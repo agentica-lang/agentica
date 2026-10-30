@@ -6,8 +6,8 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
-## the SecureRandom rows, the HMAC.secure_compare row and then the Bytes rows are appended last, in contract order, so
-## the positions of the existing rows never shift.
+## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows and then the Optional rows are appended last, in
+## contract order, so the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -20,7 +20,7 @@ BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(RO
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
-BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63))
+BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64)))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -273,6 +273,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "LogRegistry",
     "Map",
     "Nil",
+    "Optional",
     "Path",
     "Process",
     "ProcessOutput",
@@ -5854,6 +5855,99 @@ ROWS_63: List[Model.Builtin] = [
       implementation: "String.bytes",
       effects: [],
       description: "Give the UTF-8 bytes of the string.",
+      alternatives: [],
+    ),
+  ]
+
+## The Optional rows; appended last so the positions of the existing rows never shift.
+ROWS_64: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Optional.map",
+      parameters: [
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+      ],
+      result: Types.Type.Optional(Types.Type.Var("B")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "some(f(x)) for some(x), else none; f runs only for some.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Optional.none?",
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether the value is none.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Optional.some?",
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether the value is some(x).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Optional.to_result",
+      parameters: [
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
+        Model.Named(name: "message", type: Types.Type.String),
+      ],
+      result: Types.Type.Result(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "ok(x) for some(x), else error(message), to join try code.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Optional.unwrap!",
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
+      result: Types.Type.Var("A"),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Return x of some(x); halt on none.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Optional.unwrap_or",
+      parameters: [
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
+        Model.Named(name: "default", type: Types.Type.Var("A")),
+      ],
+      result: Types.Type.Var("A"),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Return x of some(x), else default; both arguments run eagerly.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "none",
+      parameters: [],
+      result: Types.Type.Optional(Types.Type.Var("T")),
+      rule: Model.Rule.OptionalNone,
+      implementation: "",
+      effects: [],
+      description: "The absent value; needs an expected Optional type.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "some",
+      parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],
+      result: Types.Type.Optional(Types.Type.Var("T")),
+      rule: Model.Rule.OptionalSome,
+      implementation: "",
+      effects: [],
+      description: "Construct a present Optional value.",
       alternatives: [],
     ),
   ]

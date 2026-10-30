@@ -43,6 +43,8 @@ NativeMemoryBlock
 NativeStruct
 Ok
 OkVoid
+OptionalNone
+OptionalSome
 Plain
 Prelude
 ProfileMeasure

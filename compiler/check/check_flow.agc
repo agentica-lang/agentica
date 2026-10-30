@@ -9,9 +9,9 @@ export def block_returns?(statements: List[Ast.Stmt]) -> Bool
   return statements.any? do |statement: Ast.Stmt| returns?(statement) end
 end
 
-## True when the statements give an error(...) call as the value of a return (also inside an if, a loop or a case arm)
-## or as the last expression. The call has no type of its own, so a block with such a value may need its result type
-## from another path (Stmt.check_block_in).
+## True when the statements give an error(...) call or none as the value of a return (also inside an if, a loop or a
+## case arm) or as the last expression. The call has no type of its own, so a block with such a value may need its
+## result type from another path (Stmt.check_block_in).
 export def gives_error?(statements: List[Ast.Stmt]) -> Bool
   if statements.size == 0
     return false
@@ -181,7 +181,7 @@ end
 
 def error_call?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Call(node) -> return node.name == "error"
+    Ast.Expr.Call(node) -> return node.name == "error" or node.name == "none"
     _ -> return false
   end
 end

@@ -81,7 +81,7 @@ export def check_block_in(
     case probed
       ok(out) ->
         learned = T.result(out.type)
-        if T.is?(learned, "Result") and !T.unknown?(T.item(learned))
+        if (T.is?(learned, "Result") or T.is?(learned, "Optional")) and !T.unknown?(T.item(learned))
           return check_block_run(cx, st, block, known_params, learned, each_receiver, step)
         end
 
@@ -126,9 +126,10 @@ def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> R
   return ok(State.leave(inner, here))
 end
 
-# A known_result of Result[Unknown]: the block must give a Result whose type the body decides.
+# A known_result of Result[Unknown] or Optional[Unknown]: the block must give a Result or an Optional whose type the
+# body decides.
 def settling?(known_result: T.Type) -> Bool
-  return T.is?(known_result, "Result") and T.unknown?(T.item(known_result))
+  return (T.is?(known_result, "Result") or T.is?(known_result, "Optional")) and T.unknown?(T.item(known_result))
 end
 
 def check_block_run(
@@ -630,12 +631,15 @@ def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm) -> Result[State.St]
   return ok(State.leave(inner, st))
 end
 
-# The payload types of a variant pattern: Ok and Err of a Result, or the variant of the enum the value has, with its
-# type arguments filled in. An error when the pattern names another enum or no such variant.
+# The payload types of a variant pattern: Ok and Err of a Result, Some and None of an Optional, or the variant of the
+# enum the value has, with its type arguments filled in. An error when the pattern names another enum or no such
+# variant.
 def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type) -> Result[List[T.Type]]
   case value_type
     T.Type.Result(item) if pattern.enum_name == "Result" and pattern.variant_name == "Ok" -> return ok([item])
     T.Type.Result(_) if pattern.enum_name == "Result" and pattern.variant_name == "Err" -> return ok([T.Type.String])
+    T.Type.Optional(item) if pattern.enum_name == "Optional" and pattern.variant_name == "Some" -> return ok([item])
+    T.Type.Optional(_) if pattern.enum_name == "Optional" and pattern.variant_name == "None" -> return ok([])
     T.Type.Enum(name, args) if pattern.enum_name == name ->
       definition = cx.enums.get(name)
       if definition.ok?
@@ -702,11 +706,13 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
   )
 end
 
-# The variant names a case on this type must cover: Ok and Err for a Result, the variants of an enum; an error for any
-# other type.
+# The variant names a case on this type must cover: Ok and Err for a Result, Some and None for an Optional, the
+# variants of an enum; an error for any other type.
 def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
   if T.is?(value_type, "Result")
     return ok(["Ok", "Err"])
+  elsif T.is?(value_type, "Optional")
+    return ok(["Some", "None"])
   elsif T.is?(value_type, "Enum")
     definition = cx.enums.get(T.name(value_type))
     if definition.ok?

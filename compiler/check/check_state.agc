@@ -314,16 +314,16 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
   return ok(st.with(vars: st.vars.put(name, Binding(type: type, immutable: immutable, level: st.depth))))
 end
 
-## CHECK-REDEFINED-NAME for ok and error, which are builtin constructors.
+## CHECK-REDEFINED-NAME for ok, error, some and none, which are builtin constructors.
 export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
-  if name == "ok" or name == "error"
+  if name == "ok" or name == "error" or name == "some" or name == "none"
     return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
 
   return ok(true)
 end
 
-## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, puts, print, gets and gets!.
+## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, some, none, puts, print, gets and gets!.
 export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   try reserve_constructor(cx, st, name, span)
   if name == "puts" or name == "print" or name == "gets" or name == "gets!"

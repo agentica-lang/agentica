@@ -95,7 +95,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   function_decls = functions.map do |entry: Located| entry.function end
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
-  watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys))
+  watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys).push("Optional"))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
   used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)).concat(Builtins.default_enums().to_a))
   tables = Program.build(decls, used, scanned.type_value)
@@ -366,6 +366,7 @@ def names_in(type: Types.Type, watched: Set[String]) -> List[String]
     Types.Type.List(item) -> return names_in(item, watched)
     Types.Type.Set(item) -> return names_in(item, watched)
     Types.Type.Result(item) -> return names_in(item, watched)
+    Types.Type.Optional(item) -> return only("Optional", watched).concat(names_in(item, watched))
     Types.Type.Task(item) -> return names_in(item, watched)
     Types.Type.Channel(item) -> return names_in(item, watched)
     Types.Type.Lazy(item) -> return names_in(item, watched)

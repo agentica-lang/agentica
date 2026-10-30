@@ -211,6 +211,7 @@ Native.put_struct
 Native.size_of
 Native.wait_readable
 Native.wait_writable
+Optional.equal
 Path.cwd
 Path.join
 Path.real

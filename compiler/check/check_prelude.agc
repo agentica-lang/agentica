@@ -144,6 +144,7 @@ def free_variables(type: T.Type) -> List[String]
   case type
     T.Type.Var(name) -> return [name]
     T.Type.Result(item) -> return free_variables(item)
+    T.Type.Optional(item) -> return free_variables(item)
     T.Type.Task(item) -> return free_variables(item)
     T.Type.Channel(item) -> return free_variables(item)
     T.Type.Lazy(item) -> return free_variables(item)

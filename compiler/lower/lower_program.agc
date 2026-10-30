@@ -13,6 +13,13 @@ import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 # HttpWire.Text.carry).
 UNDECODABLE = Set.new(["Enum", "Channel", "Bytes"])
 
+## The builtin enum of an Optional value: none, and some with its item. The VM prints a variant of the enum named
+## Optional as its name alone (none, some(1)).
+export OPTIONAL = Ir.EnumDef(
+  name: "Optional",
+  variants: [Ir.VariantDef(name: "None", size: 0), Ir.VariantDef(name: "Some", size: 1)],
+)
+
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, variants the id of "Enum.Variant", and json_structs the
 ## structs JSON.decode may build.
@@ -67,6 +74,10 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
     end
 
     enums = enums.push(Ir.EnumDef(name: decl.name, variants: variants))
+  end
+
+  if wanted.include?("Optional")
+    enums = enums.push(OPTIONAL)
   end
 
   for name in ENUMS.keys

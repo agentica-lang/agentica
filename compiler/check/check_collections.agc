@@ -153,11 +153,12 @@ def holds?(cx: State.Cx, type: T.Type, found: Fn[T.Type, Bool]) -> Bool
   return false
 end
 
-# The types inside a type that holds? walks next: the item of a Result or List, the key and value of a Map, the
-# type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
+# The types inside a type that holds? walks next: the item of a Result, Optional or List, the key and value of a Map,
+# the type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
 def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type
     T.Type.Result(item) -> return [item]
+    T.Type.Optional(item) -> return [item]
     T.Type.List(item) -> return [item]
     T.Type.Map(key, value) -> return [key, value]
     T.Type.Struct(name, args) ->

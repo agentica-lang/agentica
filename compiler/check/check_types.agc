@@ -192,6 +192,7 @@ export def has_variables?(type: ResolvedType) -> Bool
   case type
     Types.Type.Var(name) -> return true
     Types.Type.Result(item) -> return has_variables?(item)
+    Types.Type.Optional(item) -> return has_variables?(item)
     Types.Type.Task(item) -> return has_variables?(item)
     Types.Type.Channel(item) -> return has_variables?(item)
     Types.Type.Lazy(item) -> return has_variables?(item)
@@ -280,6 +281,7 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
   case type
     Types.Type.Var(name) -> return substitution(type, name, substitutions)
     Types.Type.Result(item) -> return Types.Type.Result(substitute(item, substitutions))
+    Types.Type.Optional(item) -> return Types.Type.Optional(substitute(item, substitutions))
     Types.Type.Task(item) -> return Types.Type.Task(substitute(item, substitutions))
     Types.Type.Channel(item) -> return Types.Type.Channel(substitute(item, substitutions))
     Types.Type.Lazy(item) -> return Types.Type.Lazy(substitute(item, substitutions))
@@ -628,6 +630,8 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
 
   if name == "Result" and args.size == 1
     return ok(Types.Type.Result(try resolve_expanded(cx, st, args[0], true)))
+  elsif name == "Optional" and args.size == 1
+    return ok(Types.Type.Optional(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Task" and args.size == 1
     return ok(Types.Type.Task(try resolve_expanded(cx, st, args[0], true)))
   elsif name == "Channel" and args.size == 1
@@ -840,6 +844,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Map",
     "Set",
     "Result",
+    "Optional",
     "Json",
     "Fn",
     "Task",
@@ -1030,6 +1035,8 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
       return passed(seen)
     end
 
+    return data_walk(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Optional")
     return data_walk(cx, Types.item(type), seen)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_walk(cx, type, seen)
@@ -1241,6 +1248,7 @@ end
 def parts(type: ResolvedType) -> List[ResolvedType]
   case type
     Types.Type.Result(item) -> return [item]
+    Types.Type.Optional(item) -> return [item]
     Types.Type.Task(item) -> return [item]
     Types.Type.Channel(item) -> return [item]
     Types.Type.Lazy(item) -> return [item]

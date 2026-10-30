@@ -111,6 +111,16 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Map.each", module: "map", limits: [], selector: "", bodies: {"": "each"}),
   Model.PreludeRow(name: "Map.empty?", module: "map", limits: [], selector: "", bodies: {"": "empty"}),
   Model.PreludeRow(name: "Map.filter", module: "map", limits: [], selector: "", bodies: {"": "filter"}),
+  Model.PreludeRow(name: "Optional.map", module: "optional", limits: [], selector: "", bodies: {"": "map"}),
+  Model.PreludeRow(name: "Optional.none?", module: "optional", limits: [], selector: "", bodies: {"": "is_none"}),
+  Model.PreludeRow(name: "Optional.some?", module: "optional", limits: [], selector: "", bodies: {"": "is_some"}),
+  Model.PreludeRow(
+    name: "Optional.to_result", module: "optional", limits: [], selector: "", bodies: {"": "to_result"},
+  ),
+  Model.PreludeRow(name: "Optional.unwrap!", module: "optional", limits: [], selector: "", bodies: {"": "unwrap"}),
+  Model.PreludeRow(
+    name: "Optional.unwrap_or", module: "optional", limits: [], selector: "", bodies: {"": "unwrap_or"},
+  ),
   Model.PreludeRow(name: "Range.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_range"}),
   Model.PreludeRow(name: "String.empty?", module: "string", limits: [], selector: "", bodies: {"": "empty"}),
 ]

@@ -93,14 +93,14 @@ def main() -> Void
     end
     puts(area(s))
   end
-  some = Option.Some("x")
+  present = Option.Some("x")
   nested = Option.Some(Option.Some([1, 2]))
-  none: Option[Int] = Option.None
-  puts(some)
+  absent: Option[Int] = Option.None
+  puts(present)
   puts(nested)
-  puts(none)
-  puts("#{some} #{none.inspect} #{nested.to_s}")
-  puts(describe(some))
+  puts(absent)
+  puts("#{present} #{absent.inspect} #{nested.to_s}")
+  puts(describe(present))
   puts(describe(Option.None()))
   puts(count(0))
   puts(count(-1))
@@ -121,7 +121,7 @@ def main() -> Void
     Shape.Rect(a, b) -> puts(a + b)
     _ -> puts("not a rect")
   end
-  case some
+  case present
     Option.Some(x) -> puts("inner #{x}")
     Option.None -> puts("none")
   end

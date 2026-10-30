@@ -1,0 +1,28 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 439,
+  "stdout": [
+    "ana: adult 31 some(31)",
+    "bo: unknown none",
+    "cy: minor 7 some(7)",
+    "[31, 0, 7]",
+    "[some(32), none, some(8)]",
+    "[[true, false], [false, true], [true, false]]",
+    "31",
+    "some(18) none",
+    "[none, some(\"x\")]",
+    "none",
+    "ok(4) error(\"no number\")",
+    "{\"ana\": some(31), \"bo\": none}",
+    "error(\"bo has no age\")",
+    "[\"some(\\\"hi\\\")\", \"none\"]",
+    "some some 1",
+    "some none",
+    "none",
+    "[true, false, true, false, true]",
+    "[true, true, true]",
+    ""
+  ],
+  "stderr": []
+}

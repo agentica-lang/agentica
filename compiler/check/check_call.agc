@@ -432,8 +432,8 @@ def block_literal?(node: Ast.Expr) -> Bool
   end
 end
 
-# An argument that has no type of its own, so it waits for the others: an empty list or map, error(...), Set.new of an
-# empty list, a variant of a generic enum with no payload, a list or map literal that holds one of those, and the
+# An argument that has no type of its own, so it waits for the others: an empty list or map, error(...), none, Set.new
+# of an empty list, a variant of a generic enum with no payload, a list or map literal that holds one of those, and the
 # reference of a generic function.
 def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
   case node
@@ -443,7 +443,7 @@ def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
       return map.entries.size == 0 or map.entries.any? do |entry: Ast.MapEntry| needs_expected?(cx, entry.value) end
     Ast.Expr.Call(call) ->
       set_of_empty = call.name == "Set.new" and call.args.size == 1 and needs_expected?(cx, call.args[0])
-      return call.name == "error" or set_of_empty
+      return call.name == "error" or call.name == "none" or set_of_empty
     Ast.Expr.EnumConstructor(variant) ->
       definition = cx.enums.get(variant.enum_name)
       return variant.args.size == 0 and definition.ok? and definition.unwrap!.parameters.size > 0
@@ -469,7 +469,8 @@ end
 
 # The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open must be
 # annotated in the block (CHECK-BLOCK-TYPE otherwise), and an annotation binds it. The block's result binds what the Fn
-# result leaves open: a Result type is asked for as such, so that ok(...) and error(...) are read as the block's value.
+# result leaves open: a Result or an Optional type is asked for as such, so that ok(...) and error(...), or some(...)
+# and none, are read as the block's value.
 def check_generic_block(
   cx: State.Cx,
   st: State.St,
@@ -481,6 +482,8 @@ def check_generic_block(
   result = known_part(T.result(template), found)
   if T.unknown?(result) and T.is?(T.result(template), "Result")
     result = T.Type.Result(T.Type.Unknown)
+  elsif T.unknown?(result) and T.is?(T.result(template), "Optional")
+    result = T.Type.Optional(T.Type.Unknown)
   end
 
   case node
@@ -580,6 +583,8 @@ end
 def unknown_enum_help(name: String) -> String
   if name == "Result"
     return "Result has only Ok and Err: Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
+  elsif name == "Optional"
+    return "an Optional is written some(value) or none"
   end
 
   return ""

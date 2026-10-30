@@ -167,11 +167,11 @@ export def identity(cx: Context, name: String) -> String
   return cx.me.prefix + name
 end
 
-# A reserved type, a builtin enum (and Result), or a bare builtin function keeps its name.
+# A reserved type, a builtin enum (and Result and Optional), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool
   case want
     Want.Type -> return RESERVED.include?(name)
-    Want.Enum -> return name == "Result" or ENUMS.has_key?(name)
+    Want.Enum -> return name == "Result" or name == "Optional" or ENUMS.has_key?(name)
     Want.Function -> return BARE_NAMES.include?(name)
   end
 end
@@ -244,6 +244,8 @@ def alias_help(alias: String, hint: Bool) -> String
     return "import HTTP from \"std/http\""
   elsif alias == "Result"
     return "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
+  elsif alias == "Optional"
+    return "an Optional is written some(value) or none"
   elsif hint
     return (
       "\"#{alias}\" is neither an import alias nor an enum of this file; " +

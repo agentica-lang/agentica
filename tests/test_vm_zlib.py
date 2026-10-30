@@ -389,11 +389,11 @@ def test_lazy_runs_the_same_in_every_jit_tier(lazy_peer, tmp_path):
 def test_lazy_steps_take_empty_items_and_match_python_bytes(tmp_path):
     body = (
         "def main() -> Void\n"
-        "  none = \"\".bytes\n"
-        "  items: List[Bytes] = [none, \"h\".bytes, none, none, \"i\".bytes, none]\n"
+        "  no_bytes = \"\".bytes\n"
+        "  items: List[Bytes] = [no_bytes, \"h\".bytes, no_bytes, no_bytes, \"i\".bytes, no_bytes]\n"
         "  packed = items.lazy.deflate.to_a.unwrap!\n"
         '  puts(Bytes.concat(packed).to_a.map do |x| x.to_s end.join(","))\n'
-        "  spaced = packed.flat_map do |c| [none, c, none] end\n"
+        "  spaced = packed.flat_map do |c| [no_bytes, c, no_bytes] end\n"
         "  puts(spaced.lazy.inflate.map do |c| c.to_a end.to_a)\n"
         "  puts(items.lazy.gzip.gunzip.map do |c| c.to_a end.to_a)\n"
         "end\n"

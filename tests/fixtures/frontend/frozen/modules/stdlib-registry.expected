@@ -15,6 +15,7 @@ std/prelude/bytes.agc
 std/prelude/lazy.agc
 std/prelude/list.agc
 std/prelude/map.agc
+std/prelude/optional.agc
 std/prelude/string.agc
 std/queue.agc
 std/test/child.agc

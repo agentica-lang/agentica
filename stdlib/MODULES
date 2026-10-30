@@ -14,6 +14,7 @@ prelude/bytes.agc
 prelude/lazy.agc
 prelude/list.agc
 prelude/map.agc
+prelude/optional.agc
 prelude/string.agc
 queue.agc
 test/child.agc
