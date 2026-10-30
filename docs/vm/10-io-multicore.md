@@ -19,27 +19,28 @@ that still apply.
   visible to the resumed scheduler. The park and wake protocol below handles
   races while a task is still parking.
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
-  atomics, checked only on the `STEP` slow path, when the "next stop" counter
-  runs out. The fast path still touches no atomic. A cancel or stop takes effect
-  within one turn budget. A task that a cancel finds on a turn is ended by its
-  own scheduler at the end of the turn, so no signal crosses schedulers (the
-  `vm->yield` of the canceller's scheduler is for the canceller's own task).
-- **Park and wake protocol.** Each task has an atomic state: RUNNING, PARKING,
-  PARKED or WOKEN. To park, the task sets PARKING before it registers its wait
-  (before it posts its start request, joins a waiter list, or registers on
-  another task's result). It then re-checks its wait condition and its cancel
-  flag. If either is satisfied, it unregisters and goes back to RUNNING with one
-  CAS that accepts PARKING or WOKEN. A posted request cannot be recalled, so for
-  a job "unregisters" means the task detaches it, and the job runs to its end
-  (§16.11). If the outcome (§16.5) is already set, the task consumes the job
-  instead. Otherwise it CASes PARKING to PARKED. Registering on another task's
-  result is done under that task's lock, and fails if the result is already
-  published. A waker acts only on PARKING or PARKED. On PARKING it CASes to
-  WOKEN and queues nothing, so the task sees WOKEN and re-checks at once. On
-  PARKED it CASes to WOKEN and pushes the task on the run queue. A waker that
-  finds PARKING undoes its pending-wake increment. A wake that finds RUNNING or
-  WOKEN is stale and dropped. The scheduler sets WOKEN to RUNNING when the turn
-  starts. A resumed task re-checks its condition, so a wake is only a hint. No
+  atomics. The scheduler reads them at the end of each turn, never on the `STEP`
+  paths (§10.2.1, One counter for both budgets), so the fast path touches no
+  atomic. A cancel or stop takes effect within one turn budget. A task that a
+  cancel finds on a turn is ended by its own scheduler at the end of the turn,
+  so no signal crosses schedulers (the `vm->yield` of the canceller's scheduler
+  is for the canceller's own task).
+- **Park and wake protocol.** Each task has an atomic state (`agc_task_state`):
+  READY (in the run queue), RUNNING, PARKING, PARKED, WOKEN or DONE. To park,
+  the task sets PARKING before it registers its wait (before it posts its start
+  request, joins a waiter list, or registers on another task's result). It then
+  re-checks its wait condition and its cancel flag. If either is satisfied, it
+  unregisters and goes back to RUNNING with one CAS that accepts PARKING or
+  WOKEN. A posted request cannot be recalled, so for a job "unregisters" means
+  the task detaches it, and the job runs to its end (§16.11). If the outcome
+  (§16.5) is already set, the task consumes the job instead. Otherwise it CASes
+  PARKING to PARKED. Registering on another task's result is done under that
+  task's lock, and fails if the result is already published. A waker acts only
+  on PARKING or PARKED. On PARKING it CASes to WOKEN and queues nothing, so the
+  task sees WOKEN and re-checks at once. On PARKED it CASes to READY and pushes
+  the task on the run queue. A wake that finds any other state is stale and
+  dropped. A scheduler that finds WOKEN at the end of the turn queues the task
+  itself. A resumed task re-checks its condition, so a wake is only a hint. No
   wake is lost, and a task is queued at most once. Which waker wins is in §16.5.
   As built (`vm/task.c`):
   - `agc_task_parking` marks the running task PARKING before the builtin
@@ -48,9 +49,8 @@ that still apply.
     exists). `agc_task_unpark` takes the task back to RUNNING, from PARKING or
     WOKEN, when the wait turns out to be unneeded. `agc_task_park` only says
     that the turn ends in a wait.
-  - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
-    run queue". The end of the turn (`agc_task_end_turn`,
-    `agc_task_commit_park`) is in §16.9, "Atomic task states".
+  - The end of the turn (`agc_task_end_turn`, `agc_task_commit_park`) is in
+    §16.9, "Atomic task states".
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
@@ -115,7 +115,7 @@ that still apply.
     and `parked`, the request the task waits on, which it sets while PARKING.
   - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2).
     That scheduler records the outcome once and wakes the I/O thread and the
-    idle schedulers. The others stop at their next `STEP` slow path or when they
+    idle schedulers. The others stop at the end of their turn or when they
     wake. The exit path (§14.4) runs on the I/O thread, after it has joined
     every scheduler thread (§16.9, "Threads").
 - **I/O ownership.** Handles stay on the I/O loop. Schedulers request

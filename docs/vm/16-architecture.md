@@ -498,12 +498,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **The task is recorded before the job starts.** `start_job` sets `r->task` and
   `t->parked` before it posts START, so a completion that follows at once finds
   the task.
-- **Atomic task states, and a different READY.** The states are READY, RUNNING,
-  PARKING, PARKED, WOKEN and DONE (`agc_task_state` in `vm/port.h`), in an
-  `_Atomic` field. READY means "in the run queue", so a waker CASes PARKED to
-  READY and pushes. The model's PARKED to WOKEN (§10.2.3) is not used. A waker
-  that finds PARKING CASes it to WOKEN and queues nothing, as in the model. The
-  task is marked PARKING before it registers its wait (`agc_task_parking`). The
+- **Atomic task states.** The states (`agc_task_state` in `vm/port.h`) are in an
+  `_Atomic` field, and the protocol is in §10.2.3, "Park and wake protocol". The
   end of the turn is in the scheduler. It decides the trace and the cancel flag
   first. The CAS from PARKING to PARKED is its last access to the task, apart
   from one more read of the cancel flag (a cancel can fall between the first
