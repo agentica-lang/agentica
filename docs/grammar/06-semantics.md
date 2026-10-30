@@ -245,12 +245,13 @@ default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
 allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
-`[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for a
-builtin enum, or `Models.Level.Info` through an import alias). Anything else (a
-call, a name, `&name`, a struct, a variant with a payload, a non-empty list or
-map, an interpolated string, an operation) is `CHECK-DEFAULT-VALUE`, located at
-the expression, with a help that says to make the parameter required. A default
-cannot read another parameter or a module constant.
+`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for
+a builtin enum, or `Models.Level.Info` through an import alias). Anything else
+(a call such as `some(1)`, a name, `&name`, a struct, a variant with a payload,
+a non-empty list or map, an interpolated string, an operation) is
+`CHECK-DEFAULT-VALUE`, located at the expression, with a help that says to make
+the parameter required. A default cannot read another parameter or a module
+constant.
 
 The type of a default is checked against the type of its parameter like an
 initializer: `[]` and `{}` take the parameter type as their expected type, and a
@@ -791,8 +792,10 @@ end
   the receiver. `o.map do |x| ... end` gives `some` of the block's value, or
   `none` without calling the block. `o.some?` and `o.none?` test the variant.
   `o.to_result(message)` gives `ok(item)` or `error(message)`, for `try`.
-- An Optional prints as `some(1)` or `none`. A struct with an `Optional` field
-  is not JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`).
+- An Optional prints as `some(1)` or `none`. `none` may be the default of a
+  parameter or field (`port: Optional[Int] = none`).
+- In JSON, `none` is `null` and `some(x)` is `x`; decode reads `null` or a
+  missing key as `none` (06b-builtins.md, "Optional values in JSON").
 
 ### Function values
 

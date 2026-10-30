@@ -181,8 +181,8 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
   or Int-keyed maps.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
-  not the direct type of a struct field (a list item, a map value, a nested
-  `JsonField`, or the whole `JSON.encode` argument).
+  not the direct type of a struct field (a list item, a map value, an
+  `Optional` item, a nested `JsonField`, or the whole `JSON.encode` argument).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method

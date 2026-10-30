@@ -472,21 +472,21 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   and empty arrays.
 - `JSON.schema(T)` takes a named struct, as `decode` does, and returns an object
   schema with `properties` and `required`. `required` lists every field that is
-  not a `JsonField` and is left out when no field is required (an empty struct
-  too). Int bounds are signed 64-bit; lists use `items`; String-keyed maps use
-  `additionalProperties`; nested and recursive structs use `$defs` and `$ref`.
-  Extra keys stay allowed.
+  not a `JsonField` or an `Optional` and is left out when no field is required
+  (an empty struct too). Int bounds are signed 64-bit; lists use `items`;
+  String-keyed maps use `additionalProperties`; nested and recursive structs use
+  `$defs` and `$ref`. Extra keys stay allowed.
 - `JSON.decode(source, T)` takes JSON text (a `String`) or a `Json` value, and a
   named struct type, not a value; bare type names are valid only for `decode`,
   `schema` and `codec`. A `Json` source is decoded as it is, without going
   through text, with the same rules and the same errors as its text. Fields may
   be Int, Float, Bool, String, lists, String-keyed maps, nested or recursive
-  structs, and `JsonField` of those; other nested types, a generic struct or
-  enum instance included, are `CHECK-NOT-DECODABLE`. Malformed JSON, missing
-  fields, wrong types, Int overflow and non-finite numbers give errors with a
-  field or index path. Extra keys are ignored. A JSON integer may decode as a
-  Float; a decimal or exponent never decodes as an Int. Decoded maps are in
-  sorted key order.
+  structs, and `Optional` and `JsonField` of those; other nested types, a
+  generic struct or enum instance included, are `CHECK-NOT-DECODABLE`. Malformed
+  JSON, missing fields, wrong types, Int overflow and non-finite numbers give
+  errors with a field or index path. Extra keys are ignored. A JSON integer may
+  decode as a Float; a decimal or exponent never decodes as an Int. Decoded maps
+  are in sorted key order.
 - `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
   returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
   cannot call `decode` or `encode` on its type parameter. `codec.decode(source)`
@@ -513,9 +513,9 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   without fraction or exponent, or built from an Int, is `"int"`, even outside
   64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists,
-  String-keyed maps and structs of those, whose fields may also be `JsonField`;
-  an instance of a generic struct counts by its fields after substitution
-  (`Box[List[Int]]`). Results, other enums and Int-keyed maps are
+  String-keyed maps, `Optional` and structs of those, whose fields may also be
+  `JsonField`; an instance of a generic struct counts by its fields after
+  substitution (`Box[List[Int]]`). Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation. A
   non-finite Float halts with `RUNTIME-JSON-ENCODE`; it is never written as
   null.
@@ -524,6 +524,48 @@ interpolation, `puts` and `JSON.encode` give its text. Signatures are in
   `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in
   whitespace, key order or repeated keys give the same text. `1` and `1.0` stay
   different.
+
+#### Optional values in JSON
+
+`Optional[T]` is JSON's `null` or a `T`, anywhere a type is: a struct field, a
+list item, a map value, an `Optional` item, or the whole value of
+`JSON.encode` and `JSON.from`.
+
+```agentica
+struct Server
+  host: String
+  port: Optional[Int] = none
+  tags: List[Optional[String]]
+end
+
+def main() -> Void
+  text = "{\"host\": \"a\", \"tags\": [\"x\", null]}"
+  server = JSON.decode(text, Server).unwrap!
+  puts(server.port)           # none
+  puts(server.tags)           # [some("x"), none]
+  puts(JSON.encode(server))   # {"host":"a","port":null,"tags":["x",null]}
+end
+```
+
+- **Encode:** `none` writes `null` and `some(x)` writes `x`. A `none` field
+  keeps its key.
+- **Decode:** `null` gives `none`, and so does a missing key of an `Optional`
+  struct field. Any other value is decoded as `T` and gives `some(...)`, with
+  the error texts of `JsonField` (below): `age: expected signed 64-bit Int or
+  null`, `tags[0]: expected String or null`.
+- **Schema:** an `Optional` field is not in `required`, and its type is
+  `{"anyOf": [<schema of T>, {"type": "null"}]}`.
+- **Round trip:** what decode returns encodes and decodes back to itself. A
+  missing key comes back as `null`. `Optional[Optional[T]]` is allowed, but
+  JSON has one `null`: `some(none)` writes `null`, which decodes as `none`.
+- `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since
+  `some(nil)` would be written as `null`. An `Optional` cannot hold a
+  `JsonField` (`Optional[JsonField[T]]` is `CHECK-JSON-FIELD-PLACE`), and a
+  `JsonField[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`:
+  use `Optional[T]` when a missing key and `null` mean the same, and
+  `JsonField[T]` when they differ.
+- `JSON.decode`, `JSON.schema` and `JSON.codec` take a struct name, so a
+  top-level `Optional` is decoded as a field of a struct.
 
 #### Optional and nullable fields (`JsonField`)
 
@@ -586,7 +628,7 @@ end
   dropped, and an integer in a Float field comes back as `1.0`.
 - **Where:** in the type of a `JSON.decode` or `JSON.schema` target or of a
   `JSON.encode` or `JSON.from` argument, `JsonField` may only be the direct type
-  of a struct field. A list item, a map value, a nested
+  of a struct field. A list item, a map value, an `Optional` item, a nested
   `JsonField[JsonField[T]]` or the whole argument of `JSON.encode` or
   `JSON.from` is `CHECK-JSON-FIELD-PLACE`, at the target or argument. A type
   argument counts after substitution: in `Box[JsonField[Int]]` (`struct Box[T]`

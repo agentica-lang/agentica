@@ -7,8 +7,8 @@
 
 #include <string.h>
 
-/* One open container of the decode: a List, a Map, a struct, or a JsonField.Value whose T is a container (n is 1 and
-   value holds the decoded T until the frame closes). */
+/* One open container of the decode: a List, a Map, a struct, or a JsonField.Value or an Optional some whose T is not
+   a scalar (n is 1 and value holds the decoded T until the frame closes). */
 typedef struct {
   const agc_json *node;
   const agc_list *items;
@@ -21,7 +21,8 @@ typedef struct {
   agc_value value;
 } decode_frame;
 
-/* Not a kind of the type table: a JsonField struct field whose key is missing, decoded as JsonField.Absent. */
+/* Not a kind of the type table: a JsonField or Optional struct field whose key is missing, decoded as JsonField.Absent
+   or none (arg is the kind of the field's type). */
 #define ABSENT_FIELD UINT32_MAX
 
 static agc_string *buffer_string(const agc_json_buffer *b) {
@@ -39,8 +40,8 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
       const agc_string *key = f->def->fields[f->next];
       if (b.len) agc_json_put(&b, ".", 1);
       agc_json_put(&b, key->data, key->bytes);
-    } else if (f->kind == AGC_TYPE_JSON_FIELD) {
-      continue; /* JsonField.Value adds no step to the path */
+    } else if (f->kind == AGC_TYPE_JSON_FIELD || f->kind == AGC_TYPE_OPTIONAL) {
+      continue; /* JsonField.Value and some add no step to the path */
     } else if (f->kind == AGC_TYPE_LIST) {
       char index[32];
       int n = snprintf(index, sizeof index, "[%zu]", f->next);
@@ -57,7 +58,7 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
 }
 
 /* The next child of a List, Map or struct frame and the kind and operand of its type. A missing key is false, except
-   for a JsonField field, whose kind is then ABSENT_FIELD. */
+   for a JsonField or Optional field, whose kind is then ABSENT_FIELD. */
 static bool next_child(const agc_program *p, const decode_frame *f, agc_value *item, uint32_t *kind, uint32_t *arg) {
   uint32_t index = f->arg;
   if (f->kind == AGC_TYPE_LIST) {
@@ -67,10 +68,11 @@ static bool next_child(const agc_program *p, const decode_frame *f, agc_value *i
   } else {
     index = f->def->field_types[f->next];
     const agc_json_member *member = agc_json_find(f->node, f->def->fields[f->next]);
-    if (!member && p->types[index].kind != AGC_TYPE_JSON_FIELD) return false;
+    uint32_t field = p->types[index].kind;
+    if (!member && field != AGC_TYPE_JSON_FIELD && field != AGC_TYPE_OPTIONAL) return false;
     if (!member) {
       *kind = ABSENT_FIELD;
-      *arg = 0;
+      *arg = field;
       return true;
     }
     *item = member->value;
@@ -88,12 +90,20 @@ static agc_value json_field_value(const agc_program *p, uint32_t which, agc_valu
   return agc_enum_value(e);
 }
 
+/* none, or some(v). */
+static agc_value optional_value(const agc_program *p, bool some, agc_value v) {
+  if (!some) return agc_enum_value(p->variants[p->optional].shared);
+  agc_enum *e = agc_new_enum(p->optional + 1, 1);
+  e->payload[0] = v;
+  return agc_enum_value(e);
+}
+
 static void store_child(agc_vm *vm, decode_frame *f, agc_value v) {
   if (f->kind == AGC_TYPE_LIST)
     agc_list_builder_push(&f->list, v);
   else if (f->kind == AGC_TYPE_MAP)
     f->map = agc_map_put(vm, f->map, agc_string_value(f->node->members[f->next].key), v);
-  else if (f->kind == AGC_TYPE_JSON_FIELD)
+  else if (f->kind == AGC_TYPE_JSON_FIELD || f->kind == AGC_TYPE_OPTIONAL)
     f->value = v;
   else
     f->record->fields[f->next] = v;
@@ -103,15 +113,17 @@ static agc_value frame_value(const agc_program *p, decode_frame *f) {
   if (f->kind == AGC_TYPE_LIST) return agc_list_value(agc_list_builder_finish(&f->list));
   if (f->kind == AGC_TYPE_MAP) return agc_map_value(f->map);
   if (f->kind == AGC_TYPE_JSON_FIELD) return json_field_value(p, AGC_JSON_FIELD_VALUE, f->value);
+  if (f->kind == AGC_TYPE_OPTIONAL) return optional_value(p, true, f->value);
   return agc_struct_value(f->record);
 }
 
-/* The top kind check that a JsonField field makes before it decodes its T (docs/vm/02-reference-behavior.md §2.7):
-   the text of the error, with "or null", or NULL when the JSON value has the kind T starts with. A failure deeper
-   inside T keeps its own path and text. */
-static const char *json_field_mismatch(const agc_json *j, uint32_t kind) {
+/* The top kind check that a JsonField or an Optional makes before it decodes its T
+   (docs/vm/02-reference-behavior.md §2.7): the text of the error, with "or null", or NULL when the JSON value has the
+   kind T starts with. A failure deeper inside T keeps its own path and text. An Optional T makes its own check. */
+static const char *nullable_mismatch(const agc_json *j, uint32_t kind) {
   bool number = j->kind == AGC_JSON_INT || j->kind == AGC_JSON_BIG || j->kind == AGC_JSON_FLOAT;
   switch (kind) {
+    case AGC_TYPE_OPTIONAL: return NULL;
     case AGC_TYPE_INT: return j->kind == AGC_JSON_INT ? NULL : "signed 64-bit Int or null";
     case AGC_TYPE_FLOAT: return number ? NULL : "finite Float or null";
     case AGC_TYPE_BOOL: return j->kind == AGC_JSON_BOOL ? NULL : "Bool or null";
@@ -132,7 +144,7 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   f->record = NULL;
   f->map = NULL;
   f->value = agc_void();
-  if (kind == AGC_TYPE_JSON_FIELD) {
+  if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
     f->n = 1;
   } else if (kind == AGC_TYPE_LIST) {
     f->items = agc_as_list(vm, node->scalar);
@@ -159,13 +171,17 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
     double x;
     agc_charge(vm, 1);
     const agc_json *j = kind == ABSENT_FIELD ? NULL : agc_as_json(vm, item);
-    if (kind == ABSENT_FIELD) {
+    if (kind == ABSENT_FIELD && arg == AGC_TYPE_OPTIONAL) {
+      v = optional_value(p, false, agc_void());
+    } else if (kind == ABSENT_FIELD) {
       v = json_field_value(p, AGC_JSON_FIELD_ABSENT, agc_void());
+    } else if (kind == AGC_TYPE_OPTIONAL && j->kind == AGC_JSON_NULL) {
+      v = optional_value(p, false, agc_void());
     } else if (kind == AGC_TYPE_JSON_FIELD && j->kind == AGC_JSON_NULL) {
       v = json_field_value(p, AGC_JSON_FIELD_NULL, agc_void());
-    } else if (kind == AGC_TYPE_JSON_FIELD) {
+    } else if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
       const agc_type *inner = &p->types[arg];
-      const char *mismatch = json_field_mismatch(j, inner->kind);
+      const char *mismatch = nullable_mismatch(j, inner->kind);
       if (mismatch) return decode_error(stack, depth, mismatch);
       stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       open_frame(vm, &stack[depth++], j, kind, arg);
@@ -261,7 +277,7 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
   if (t->kind == AGC_TYPE_BOOL) return typed("boolean");
   if (t->kind == AGC_TYPE_STRING) return typed("string");
   if (t->kind == AGC_TYPE_STRUCT) return reference(p->structs[t->arg].json_name);
-  if (t->kind == AGC_TYPE_JSON_FIELD) {
+  if (t->kind == AGC_TYPE_JSON_FIELD || t->kind == AGC_TYPE_OPTIONAL) {
     agc_list_builder choices;
     agc_list_builder_sized(&choices, 2);
     agc_list_builder_push(&choices, schemas[t->arg]);
@@ -280,8 +296,13 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
   return object_of(2, keys, values);
 }
 
-/* A JsonField field is not required. With no required field the "required" key is left out, since draft-04 wants a
-   non-empty list there. */
+static bool required_field(const agc_program *p, uint32_t type) {
+  uint32_t kind = p->types[type].kind;
+  return kind != AGC_TYPE_JSON_FIELD && kind != AGC_TYPE_OPTIONAL;
+}
+
+/* A JsonField or Optional field is not required. With no required field the "required" key is left out, since
+   draft-04 wants a non-empty list there. */
 static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, const agc_value *schemas,
                                agc_value defs) {
   agc_json_member *properties = agc_alloc(agc_size_mul(def->count, sizeof(agc_json_member)));
@@ -289,7 +310,7 @@ static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, 
   for (uint32_t k = 0; k < def->count; k++) {
     properties[k].key = def->fields[k];
     properties[k].value = schemas[def->field_types[k]];
-    if (p->types[def->field_types[k]].kind != AGC_TYPE_JSON_FIELD) needed++;
+    if (required_field(p, def->field_types[k])) needed++;
   }
   const char *keys[4] = {"type", "properties"};
   agc_value values[4] = {json_text("object"), agc_json_object(properties, def->count)};
@@ -298,7 +319,7 @@ static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, 
     agc_list_builder required;
     agc_list_builder_sized(&required, needed);
     for (uint32_t k = 0; k < def->count; k++)
-      if (p->types[def->field_types[k]].kind != AGC_TYPE_JSON_FIELD)
+      if (required_field(p, def->field_types[k]))
         agc_list_builder_push(&required, agc_json_leaf(AGC_JSON_STRING, agc_string_value(def->fields[k])));
     keys[n] = "required";
     values[n++] = agc_json_array(agc_list_builder_finish(&required));

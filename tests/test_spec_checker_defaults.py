@@ -27,6 +27,19 @@ def main_with(body, helpers=""):
 
 # (title, program, code, text the range covers): code None means the program checks clean.
 SINGLE_FILE = [
+    ("none is a default of an Optional field and parameter",
+     'struct Conf\n  port: Optional[Int] = none\nend\n\n'
+     'def f(x: Optional[Int] = none) -> Int\n  return x.unwrap_or(0)\nend\n\n'
+     + main_with("  puts(Conf().port)\n  puts(f())\n"), None, None),
+    ("some(...) is no default",
+     'struct Conf\n  port: Optional[Int] = some(1)\nend\n\n' + main_with("  puts(Conf())\n"),
+     "CHECK-DEFAULT-VALUE", "some(1)"),
+    ("none() is no default",
+     'struct Conf\n  port: Optional[Int] = none()\nend\n\n' + main_with("  puts(Conf())\n"),
+     "CHECK-DEFAULT-VALUE", "none()"),
+    ("a none default needs an Optional type",
+     'struct Conf\n  port: Int = none\nend\n\n' + main_with("  puts(Conf())\n"),
+     "CHECK-TYPE-MISMATCH", "none"),
     ("every constant form is a default",
      'enum Mode\n  Fast\n  Safe\nend\n\n'
      'def f(a: Int = 1, b: Int = -2, c: Float = 2.5, d: Float = -0.5, e: String = "x", g: Bool = true,'

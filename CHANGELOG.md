@@ -24,6 +24,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Optional[T]`, a builtin type for a value that may be missing: `some(x)` and
   `none`, `case` arms `some(n) ->` and `none ->`, `==`, and the methods
   `unwrap_or`, `unwrap!`, `map`, `some?`, `none?` and `to_result`.
+- JSON encodes and decodes `Optional[T]` (`none` is `null`; a missing key
+  decodes as `none`), and `none` may be a field or parameter default.
 
 ### Changed
 

@@ -18,16 +18,15 @@ CI does not run it; commit both files when the vectors change.
 """
 
 import json
-import math
 from pathlib import Path
+
+from json_typed_peer import EXPECTED, decode_scalar, encode_scalar, fail, scalar_kind_ok, write_vectors
 
 OUTPUT = Path(__file__).resolve().parent / "vm" / "json-field-vectors.stdin"
 HEADER = (
     "# json-field-vectors.stdin: made by python3 tests/fixtures/json-field-vectors.py "
     "(Python json module); do not edit by hand"
 )
-
-INT_MIN, INT_MAX = -(2**63), 2**63 - 1
 
 # The structs of json-field-vectors.agc: (field, type, optional). A type is a scalar name, ("list", item) or a
 # struct name.
@@ -42,13 +41,6 @@ STRUCTS = {
         ("tags", ("list", "String"), True),
         ("homes", ("list", "Address"), True),
     ],
-}
-
-EXPECTED = {
-    "Int": "signed 64-bit Int",
-    "Float": "finite Float",
-    "Bool": "Bool",
-    "String": "String",
 }
 
 DOCUMENTS = [
@@ -82,29 +74,13 @@ DOCUMENTS = [
 ]
 
 
-class DecodeError(Exception):
-    pass
-
-
 ABSENT = object()
-
-
-def fail(path, expected):
-    raise DecodeError(f"{path or '$'}: expected {expected}")
-
-
-def is_int(value):
-    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def top_kind_ok(value, kind):
     """The top kind check of a JsonField field, before its T is decoded."""
-    if kind == "Int":
-        return is_int(value) and INT_MIN <= value <= INT_MAX
-    if kind == "Float":
-        return is_int(value) or isinstance(value, float)
-    if kind == "String":
-        return isinstance(value, str)
+    if kind in EXPECTED:
+        return scalar_kind_ok(value, kind)
     if isinstance(kind, tuple):
         return isinstance(value, list)
     return isinstance(value, dict)
@@ -117,18 +93,8 @@ def top_kind_name(kind):
 
 
 def decode(value, kind, path):
-    if kind == "Int":
-        if not (is_int(value) and INT_MIN <= value <= INT_MAX):
-            fail(path, EXPECTED[kind])
-        return value
-    if kind == "Float":
-        if not (is_int(value) or isinstance(value, float)) or not math.isfinite(float(value)):
-            fail(path, EXPECTED[kind])
-        return float(value)
-    if kind == "String":
-        if not isinstance(value, str):
-            fail(path, EXPECTED[kind])
-        return value
+    if kind in EXPECTED:
+        return decode_scalar(value, kind, path)
     if isinstance(kind, tuple):
         if not isinstance(value, list):
             fail(path, "array")
@@ -164,29 +130,13 @@ def encode(value, kind):
             text = "null" if item is None else encode(item, field_kind)
             parts.append(json.dumps(name) + ":" + text)
         return "{" + ",".join(parts) + "}"
-    if kind == "Float":
-        return repr(value)
-    return json.dumps(value, ensure_ascii=False)
-
-
-def typed(text):
-    """The document with each number tagged as written, so 1 and 1.0 differ as they do in JSON text."""
-    return json.loads(text, parse_int=lambda digits: ("int", int(digits)), parse_float=lambda digits: ("float", digits))
+    return encode_scalar(value, kind)
 
 
 def main():
-    rows = []
-    for document in DOCUMENTS:
-        source = json.loads(document)
-        try:
-            text = encode(decode(source, "Patch", ""), "Patch")
-        except DecodeError as problem:
-            rows.append("\t".join([document, "error", str(problem), "-"]))
-            continue
-        same = "same" if typed(text) == typed(document) else "changed"
-        rows.append("\t".join([document, "ok", text, same]))
-    OUTPUT.write_text(HEADER + "\n" + "\n".join(rows) + "\n", encoding="utf-8")
-    print(f"wrote {len(rows)} vectors to {OUTPUT}")
+    write_vectors(
+        OUTPUT, HEADER, DOCUMENTS, lambda source: decode(source, "Patch", ""), lambda value: encode(value, "Patch")
+    )
 
 
 if __name__ == "__main__":

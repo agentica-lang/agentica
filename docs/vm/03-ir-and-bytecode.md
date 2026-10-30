@@ -510,13 +510,15 @@ header and the entry.
 
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
-    Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JsonField) and,
-    for 4 to 7, a `u32` operand: the item, value or `JsonField` payload type
-    index (smaller than the entry's own) or the struct index. A file with a kind
-    7 entry has the `JsonField` enum (Absent, Null, Value, with arities 0, 0 and
-    1) in its Enums section, at most once. Then a `u32` count of decodable
-    structs, each a `u32` struct index (increasing), the `str` linked name and
-    one `u32` type index per field.
+    Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JsonField, 8
+    Optional) and, for 4 to 8, a `u32` operand: the item, value, `JsonField` or
+    `Optional` payload type index (smaller than the entry's own) or the struct
+    index. A file with a kind 7 entry has the `JsonField` enum (Absent, Null,
+    Value, with arities 0, 0 and 1) in its Enums section, at most once; one with
+    a kind 8 entry has the `Optional` enum (None, Some, with arities 0 and 1),
+    at most once. Then a `u32` count of decodable structs, each a `u32` struct
+    index (increasing), the `str` linked name and one `u32` type index per
+    field.
 
 - **Section:** Enums
   - **Entry:** `str` display name, `u32` variant count, each `str` name and
@@ -566,11 +568,11 @@ header and the entry.
   change to the layout or to an opcode's meaning bumps the format version
   (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8 are
   reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not bump
-  it: an older VM rejects the file as an unknown opcode. Type kind 7
-  (`JsonField`) did not either: the layout of an entry is unchanged, and an
-  older VM rejects the file as an unknown type kind. A call `JSON.decode(<Json>,
-  T)` needs no new kind, so an older VM loads such a file and the call fails at
-  run time with a wrong value type.
+  it: an older VM rejects the file as an unknown opcode. Type kinds 7
+  (`JsonField`) and 8 (`Optional`) did not either: the layout of an entry is
+  unchanged, and an older VM rejects the file as an unknown type kind. A call
+  `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a file
+  and the call fails at run time with a wrong value type.
 - The C loader is the only reader of this format and has no compatibility
   shims, with one transitional exception: the loader still reads format 5,
   which has no prelude flag (`AGC_FORMAT_PREVIOUS`). It was kept while

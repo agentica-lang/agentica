@@ -28,12 +28,15 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   sorted. The source may be a String or a Json (two catalog forms, one rule and
   one VM builtin that skips the parse for a Json). JSON.schema uses the same
   eligibility check, emits 64-bit bounds and $defs/$ref for nested or recursive
-  types, and lists in required every field that is not a JsonField (no required
-  key when that list is empty). JsonField[T] is only the direct type of a struct
-  field (CHECK-JSON-FIELD-PLACE, checked before the decodable and encodable
-  walks). Builders construct opaque Json directly; JSON.from shares encode
-  eligibility and non-finite diagnostics. Builtin record declarations
-  participate in decoding and schemas.
+  types, and lists in required every field that is not a JsonField or an
+  Optional (no required key when that list is empty). JsonField[T] is only the
+  direct type of a struct field (CHECK-JSON-FIELD-PLACE, checked before the
+  decodable and encodable walks; the walk looks inside Optional). Optional[T] is
+  type kind 8, valid at any depth; the encoders unwrap Optional values anywhere
+  (program->optional, found by the loader), and JsonField[Optional[T]] and
+  Optional[Nil] are refused by the walks. Builders construct opaque Json
+  directly; JSON.from shares encode eligibility and non-finite diagnostics.
+  Builtin record declarations participate in decoding and schemas.
 
 - `Json` is opaque, not primitive for equality. `Json`, `JSON` and `JsonField`
   are reserved names.

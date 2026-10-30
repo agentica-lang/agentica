@@ -434,7 +434,7 @@ static void load_types(reader *r, agc_program *p) {
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
     t->arg = 0;
-    if (t->kind > AGC_TYPE_JSON_FIELD) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind > AGC_TYPE_OPTIONAL) reject(r, "unknown type kind %u", (unsigned)t->kind);
     if (t->kind < AGC_TYPE_LIST) continue;
     t->arg = read_u32(r);
     if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
@@ -489,6 +489,27 @@ static void find_json_field(reader *r, agc_program *p) {
       reject(r, "JsonField type without the JsonField enum");
 }
 
+/* The builtin Optional enum: named Optional, with None (no payload) and Some (one) in that order, at most once. No
+   declaration may take the name now, but a .agcb file from before could declare its own enum Optional, so one of
+   another shape is an ordinary enum, not an error. A type of kind Optional needs the enum, since typed JSON builds
+   its variants. */
+static void find_optional(reader *r, agc_program *p) {
+  p->optional = UINT32_MAX;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    const agc_enum_def *d = &p->enums[i];
+    if (!same_text(d->name, "Optional") || d->count != 2) continue;
+    const agc_variant_def *none = &p->variants[d->first];
+    const agc_variant_def *some = &p->variants[d->first + 1];
+    if (!same_text(none->name, "None") || none->arity != 0 || !same_text(some->name, "Some") || some->arity != 1)
+      continue;
+    if (p->optional != UINT32_MAX) reject(r, "duplicate Optional enum");
+    p->optional = d->first;
+  }
+  for (uint32_t i = 0; i < p->type_count; i++)
+    if (p->types[i].kind == AGC_TYPE_OPTIONAL && p->optional == UINT32_MAX)
+      reject(r, "Optional type without the Optional enum");
+}
+
 static void load_tables(reader *r, agc_program *p) {
   p->struct_count = read_count(r, 8, "struct");
   p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
@@ -531,6 +552,7 @@ static void load_tables(reader *r, agc_program *p) {
     }
   }
   find_json_field(r, p);
+  find_optional(r, p);
 }
 
 static void load_updates(reader *r, agc_program *p) {

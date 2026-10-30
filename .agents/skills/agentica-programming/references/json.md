@@ -46,8 +46,9 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
   an item of a parsed document, with the same errors; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
-  nested or recursive structs, and `JsonField` of those; other types, an
-  instance of a generic struct or enum included, are `CHECK-NOT-DECODABLE`.
+  nested or recursive structs, and `Optional` and `JsonField` of those; other
+  types, an instance of a generic struct or enum included, are
+  `CHECK-NOT-DECODABLE`.
 - `JSON.decode` returns errors, with field or index paths, for malformed JSON,
   missing fields, wrong types, Int overflow and non-finite Floats. Extra object
   keys are ignored. An integer may decode as Float; a decimal or exponent value
@@ -76,6 +77,34 @@ end
 def main() -> Void
   user = body_as("{\"name\": \"Ana\"}", JSON.codec(User)).unwrap!
   puts(JSON.codec(User).encode(user))
+end
+```
+
+## Optional values
+
+`Optional[T]` is `null` or a `T` anywhere a type is (field, list item, map
+value, the whole value of `JSON.encode`).
+
+- Encode: `none` writes `null` (the key stays), `some(x)` writes `x`.
+- Decode: `null` and a missing key of an `Optional` field are `none`; a wrong
+  kind reads `age: expected signed 64-bit Int or null`. Schema: not
+  `required`, allows `null` (`anyOf`).
+- Round trip: what decode gives encodes back the same (a missing key comes back
+  as `null`). `some(none)` writes `null` and reads back as `none`.
+- `Optional[Nil]` is not encodable or decodable; `Optional[JsonField[T]]` is
+  `CHECK-JSON-FIELD-PLACE`; `JsonField[Optional[T]]` is not encodable or
+  decodable. Use `JsonField` only to tell a missing key from `null`.
+
+```ruby
+struct Server
+  host: String
+  port: Optional[Int] = none
+end
+
+def main() -> Void
+  server = JSON.decode("{\"host\": \"a\"}", Server).unwrap!
+  puts(server.port)               # none
+  puts(JSON.encode(server))       # {"host":"a","port":null}
 end
 ```
 
@@ -141,8 +170,8 @@ end
 ## Encoding
 
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as null), Json, lists,
-  String-keyed maps and structs (`JsonField` fields too), recursively. Results,
-  other enums and Int-keyed maps are
+  String-keyed maps, Optionals and structs (`JsonField` fields too),
+  recursively. Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`, even when empty or nested. Empty literals still need a
   known type.
 - Output is compact. Structs follow declaration order; maps follow insertion

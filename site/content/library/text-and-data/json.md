@@ -17,7 +17,7 @@ Two ways to work with JSON:
 JSON.encode(value: T) -> String
 ```
 
-Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, and structs. Struct fields keep their order. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
+Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, structs and [Optionals](#optional-values) of those. Struct fields keep their order. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
 ```agentica
 struct User
@@ -95,7 +95,7 @@ error("y: expected required field")
 JSON.schema(type: T) -> Json
 ```
 
-Describes a struct as a JSON Schema. `required` lists the fields that are not `JsonField`, and is left out when there are none.
+Describes a struct as a JSON Schema. `required` lists the fields that are not `JsonField` or `Optional`, and is left out when there are none.
 
 ```agentica
 struct Point
@@ -150,6 +150,33 @@ end
 ```
 
 A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec, and `decode`, `encode` and `from` are written only as methods: `JSON.Codec.decode(c, text)` is `CHECK-UNKNOWN-NAME`.
+
+## Optional values
+
+An [`Optional[T]`](/library/data-structures/optional/) is JSON's `null` or a `T`: `none` writes `null` and `some(x)` writes `x`. `JSON.decode` reads `null` as `none`, and a missing key of an `Optional` field too. It works for a field, a list item, a map value and the whole value of `JSON.encode`. `JSON.schema` leaves an `Optional` field out of `required` and allows `null`.
+
+```agentica
+struct Server
+  host: String
+  port: Optional[Int] = none
+  tags: List[Optional[String]]
+end
+
+def main() -> Void
+  server = JSON.decode("{\"host\": \"a\", \"tags\": [\"x\", null]}", Server).unwrap!
+  puts(server)
+  puts(JSON.encode(server))
+  puts(JSON.encode(server.with(port: some(8080))))
+end
+```
+
+```output
+Server(host: "a", port: none, tags: [some("x"), none])
+{"host":"a","port":null,"tags":["x",null]}
+{"host":"a","port":8080,"tags":["x",null]}
+```
+
+What `JSON.decode` gives encodes back to the same JSON, except that a missing key comes back as `null`. JSON has one `null`, so in an `Optional[Optional[T]]` the value `some(none)` writes `null` and reads back as `none`. `Optional[Nil]` cannot be encoded or decoded. Use `JsonField` (below) when a missing key and `null` mean different things; a `JsonField` inside an `Optional`, or an `Optional` inside a `JsonField`, is refused.
 
 ## Optional and nullable fields
 

@@ -1,0 +1,24 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 174,
+  "stdout": [
+    "{\"name\":\"ann\",\"age\":30,\"home\":{\"city\":\"Bcn\",\"zip\":null},\"tags\":[\"a\",null],\"limits\":{\"cpu\":1.5,\"mem\":null},\"deep\":7}",
+    "User(name: \"ann\", age: some(30), home: some(Address(city: \"Bcn\", zip: none)), tags: [some(\"a\"), none], limits: {\"cpu\": some(1.5), \"mem\": none}, deep: some(some(7)))",
+    "{\"name\":\"ann\",\"age\":30,\"home\":{\"city\":\"Bcn\",\"zip\":null},\"tags\":[\"a\",null],\"limits\":{\"cpu\":1.5,\"mem\":null},\"deep\":7} true",
+    "User(name: \"bo\", age: none, home: none, tags: [], limits: {}, deep: none)",
+    "{\"name\":\"bo\",\"age\":null,\"home\":null,\"tags\":[],\"limits\":{},\"deep\":null} true",
+    "User(name: \"bo\", age: none, home: some(Address(city: \"x\", zip: some(\"1\"))), tags: [none], limits: {}, deep: none)",
+    "{\"name\":\"bo\",\"age\":null,\"home\":{\"city\":\"x\",\"zip\":\"1\"},\"tags\":[null],\"limits\":{},\"deep\":null} true",
+    "error age: expected signed 64-bit Int or null",
+    "error tags[0]: expected String or null",
+    "{\"name\":\"ann\",\"age\":30,\"home\":{\"city\":\"Bcn\",\"zip\":null},\"tags\":[\"a\",null],\"limits\":{\"cpu\":1.5,\"mem\":null},\"deep\":null}",
+    "none",
+    "4 null [4,null]",
+    "true",
+    "{\"properties\":{\"city\":{\"type\":\"string\"},\"zip\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]}},\"required\":[\"city\"],\"type\":\"object\"}",
+    "ok(Address(city: \"y\", zip: none))",
+    ""
+  ],
+  "stderr": []
+}

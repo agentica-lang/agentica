@@ -108,13 +108,13 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, remedy: String) -> 
       "CHECK-DEFAULT-VALUE",
       "a default value must be a constant",
       Ast.expr_span(value),
-      "write a literal, true, false, nil, [], {} or an enum variant without a payload, or #{remedy}",
+      "write a literal, true, false, nil, none, [], {} or an enum variant without a payload, or #{remedy}",
     ),
   )
 end
 
-# A literal (a minus sign allowed before a number), an empty list or map, or a variant with no payload: a value that
-# the call site can build with no code of its own.
+# A literal (a minus sign allowed before a number), an empty list or map, a variant with no payload, or none (the
+# parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool
   case value
     Ast.Expr.Literal(node) -> return true
@@ -122,6 +122,7 @@ def constant?(value: Ast.Expr) -> Bool
     Ast.Expr.ListLit(node) -> return node.elements.size == 0
     Ast.Expr.MapLit(node) -> return node.entries.size == 0
     Ast.Expr.EnumConstructor(node) -> return node.args.size == 0 and node.named.size == 0
+    Ast.Expr.Call(node) -> return node.name == "none" and !node.parenthesized and node.args.size == 0
     _ -> return false
   end
 end
