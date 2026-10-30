@@ -11,7 +11,7 @@ The language specification at /reference/: an index section and one page per fil
   "syntax" (dict "title" "Syntax" "description" "The grammar in EBNF, with the statements and the precedence of expressions.")
   "modules" (dict "title" "Modules" "description" "File modules, imports and re-exports, constants, and packages.")
   "semantics" (dict "title" "Semantics" "description" "Types, scope, functions, pattern matching, generics and the collections.")
-  "builtins" (dict "title" "Builtins" "description" "Methods and functions of the builtin types, JSON and the bytecode cache.")
+  "builtins" (dict "title" "Builtins" "description" "Method calls on builtin types, the rules for JSON, builtin discovery, the sandbox flags and the bytecode cache.")
   "tasks-and-tests" (dict "title" "Tasks and tests" "description" "Lightweight tasks, channels, shared tables, and unit tests.")
   "io-and-network" (dict "title" "I/O and network" "description" "TCP, TLS and HTTP, logging, files and paths, processes and native code.")
   "diagnostics" (dict "title" "Diagnostics" "description" "The format of each error, and the stable codes that agents rely on.")
@@ -62,7 +62,8 @@ The language specification at /reference/: an index section and one page per fil
       {{- $text = replace $text (printf "](#%s)" .) (printf "](/reference/%s/)" $t.slug) -}}
     {{- end -}}
   {{- end -}}
-  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2}/${3})` $text -}}
+  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/((?:[a-z0-9-]+/)*)_index\.md(#[^)\s]*)?\)` `](/library/${1}${2})` $text -}}
+  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/((?:[a-z0-9-]+/)*[a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2})` $text -}}
   {{- $min := 7 -}}
   {{- $fence := false -}}
   {{- range split $text "\n" -}}
