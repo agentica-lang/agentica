@@ -641,8 +641,8 @@ With the alias `Binary`:
   and the `Float` bit conversions are `Int` and `Float` builtins, because in
   Agentica each one is a 64-bit loop or an exact scaling by powers of two with
   special cases for `-0.0`, NaN and subnormals.
-- To join writer results, use `Bytes.concat(parts)` (§6b): one copy for any
-  number of parts. `Binary.frame(payload: Bytes) -> Result[Bytes]` puts the
+- To join writer results, use `Bytes.concat(parts)`
+  (`library/data-structures/bytes.md`): one copy for any number of parts. `Binary.frame(payload: Bytes) -> Result[Bytes]` puts the
   payload's 4-byte big-endian length in front of it (an error above
   `4294967295` bytes).
   `Binary.read_frame_length(data, offset, max) -> Result[Int]` reads that length
@@ -662,7 +662,7 @@ With the alias `Binary`:
 - Writers return new values and no buffer is ever changed. Offset writers into
   an existing `Bytes` are not part of the module. Half floats (f16) and varints
   (LEB128) are not supported; hex and Base64 are the `Digest` and `Base64`
-  builtins (§6b).
+  builtins (`library/text-and-data/crypto.md`, `base64.md`).
 
 #### TOML (`std/toml`)
 
