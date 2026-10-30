@@ -1,10 +1,11 @@
 /*
  * The Bytes value: equality, the Map key hash, the text forms, the JSON refusal,
  * the shared empty value, every builtin with good and bad arguments, bounds, the
- * size overflow guard, values that live through a collection, and the crypto
- * builtins (vm/crypto.c), String.from_bytes and FrontEnd.hand_off on Bytes.
+ * size overflow guard, values that live through a collection, the crypto builtins
+ * (vm/crypto.c) and GCM's wipe, String.from_bytes and FrontEnd.hand_off on Bytes.
  */
 #include "../core.h"
+#include "../digest.h"
 #include "../services.h"
 #include "builtin_test.h"
 
@@ -371,6 +372,103 @@ static void test_crypto_keys(void) {
   fails("CMAC.aes", 2, pair, "RUNTIME-INTERNAL");
   agc_value triple[3] = {key, list, datas[1]};
   fails("Cipher.des_ede3_cbc_decrypt", 3, triple, "RUNTIME-INTERNAL");
+  agc_value gcm_list[4] = {key, list, datas[1], datas[0]};
+  fails("Cipher.aes_256_gcm_encrypt", 4, gcm_list, "RUNTIME-INTERNAL");
+  agc_value kdf_list[4] = {list, datas[1], agc_int(1), agc_int(16)};
+  fails("KDF.pbkdf2_hmac_sha256", 4, kdf_list, "RUNTIME-INTERNAL");
+}
+
+/* AES-256-GCM and the KDFs on empty Bytes and on Bytes with a NUL and a 0xFF: empty data and auth_data are valid,
+   a key, IV or decrypt input of a wrong size and a bad iteration count or length are error Results. */
+static void test_gcm_and_kdf_keys(void) {
+  char key_text[32], iv_text[12];
+  memset(key_text, 0xff, sizeof key_text);
+  memset(iv_text, 0, sizeof iv_text);
+  agc_value key = raw(key_text, 32), iv = raw(iv_text, 12), empty = raw("", 0), odd = raw("hello\xff\x00", 7);
+  agc_value args[4] = {key, iv, empty, empty};
+  const agc_result *sealed = agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, args));
+  assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == AGC_GCM_TAG_BYTES);
+  args[2] = sealed->value;
+  const agc_result *opened = agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args));
+  assert(opened->ok && shared_empty(opened->value));
+  args[3] = odd;
+  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args))->ok);
+  args[2] = odd;
+  sealed = agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, args));
+  assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 7 + AGC_GCM_TAG_BYTES);
+  args[2] = sealed->value;
+  opened = agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args));
+  assert(opened->ok);
+  bytes_are(opened->value, "hello\xff\x00", 7);
+  /* 15 bytes cannot hold the tag; a key or IV of another size fails before any work. */
+  args[2] = raw(key_text, 15);
+  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args))->ok);
+  agc_value bad[4] = {raw(key_text, 31), iv, empty, empty};
+  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
+  bad[0] = key;
+  bad[1] = raw(iv_text, 11);
+  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
+
+  agc_value kdf[4] = {empty, empty, agc_int(1), agc_int(1)};
+  const agc_result *derived = agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf));
+  assert(derived->ok && agc_as_bytes(&vm, derived->value)->len == 1);
+  kdf[0] = odd;
+  kdf[1] = odd;
+  kdf[2] = agc_int(0);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  kdf[2] = agc_int(2);
+  kdf[3] = agc_int(0);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  kdf[3] = agc_int(AGC_MAX_LIST_COUNT + 1);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  /* The work cap: 25000001 iterations of two 32-byte blocks, and an iteration count whose product with the blocks
+     overflows 64 bits, are refused before any work. */
+  kdf[2] = agc_int(25000001);
+  kdf[3] = agc_int(64);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  kdf[2] = agc_int(INT64_MAX);
+  kdf[3] = agc_int(AGC_MAX_LIST_COUNT);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  /* Two iterations over two 32-byte blocks hash 2 * 2 * 128 bytes, charged in units of 64 bytes, besides the
+     AGC_COST_SIZE that the interpreter adds for the arguments. */
+  kdf[2] = agc_int(2);
+  kdf[3] = agc_int(64);
+  assert(cost_of("KDF.pbkdf2_hmac_sha256", 4, kdf) == 8);
+  agc_value scrypt[6] = {empty, empty, agc_int(16), agc_int(1), agc_int(1), agc_int(64)};
+  derived = agc_as_result(&vm, call("KDF.scrypt", 6, scrypt));
+  assert(derived->ok && agc_as_bytes(&vm, derived->value)->len == 64);
+  scrypt[2] = agc_int(15);
+  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  /* r = 1 needs n below 2^16, and r * p must stay below 2^30 (checked before the memory). */
+  scrypt[2] = agc_int(65536);
+  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  scrypt[2] = agc_int(2);
+  scrypt[3] = agc_int((int64_t)1 << 20);
+  scrypt[4] = agc_int(1024);
+  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  /* A small n with a large p is still bounded work: r * p * (n + 16) above 2^25. */
+  scrypt[3] = agc_int(1);
+  scrypt[4] = agc_int(((int64_t)1 << 25) / 18 + 1);
+  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+}
+
+/* A GCM decrypt writes the plaintext before it checks the tag: on a wrong tag the adapter wipes it, so no part of it
+   is left in the output buffer. */
+static void test_gcm_wipes_a_wrong_tag(void) {
+  unsigned char key[AGC_GCM_KEY_BYTES], iv[AGC_GCM_IV_BYTES], plain[40], sealed[40], out[40];
+  unsigned char tag[AGC_GCM_TAG_BYTES];
+  memset(key, 0x42, sizeof key);
+  memset(iv, 0x24, sizeof iv);
+  memset(plain, 0x5a, sizeof plain);
+  assert(agc_aes_256_gcm(true, key, iv, NULL, 0, plain, sizeof plain, sealed, tag) == AGC_AEAD_DONE);
+  assert(agc_aes_256_gcm(false, key, iv, NULL, 0, sealed, sizeof sealed, out, tag) == AGC_AEAD_DONE);
+  assert(memcmp(out, plain, sizeof plain) == 0);
+  tag[0] ^= 1;
+  memset(out, 0x5a, sizeof out);
+  assert(agc_aes_256_gcm(false, key, iv, NULL, 0, sealed, sizeof sealed, out, tag) == AGC_AEAD_BAD_TAG);
+  for (size_t k = 0; k < sizeof out; k++) assert(out[k] == 0);
+  /* The tag alone, with no data, is still checked. */
+  assert(agc_aes_256_gcm(false, key, iv, NULL, 0, NULL, 0, NULL, tag) == AGC_AEAD_BAD_TAG);
 }
 
 /* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a
@@ -582,6 +680,8 @@ int main(void) {
   test_builtins();
   test_wrong_tags();
   test_crypto_keys();
+  test_gcm_and_kdf_keys();
+  test_gcm_wipes_a_wrong_tag();
   test_hmac_long_keys();
   test_string_keys();
   test_hand_off_keys();

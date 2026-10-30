@@ -1,7 +1,7 @@
 """The Digest hashes against Python's hashlib, the HMACs and HMAC.secure_compare
 against Python's hmac, Base64 and hex against Python's base64 and binascii, the SecureRandom
-formats against Python's uuid and re, and Triple DES CBC and CMAC against a Node peer, on
-every system.
+formats against Python's uuid and re, PBKDF2 and scrypt against Python's hashlib, and Triple
+DES CBC, CMAC and AES-256-GCM against Node peers, on every system.
 
 The peer program (tests/fixtures/digest-peer.agc) hashes all of its stdin with
 MD5, SHA-1, SHA-256 and SHA-512; the inputs cover the padding boundaries of the
@@ -22,6 +22,10 @@ tests/fixtures/cipher-peer.agc runs Cipher.des_ede3_cbc_encrypt and _decrypt, CM
 CMAC.des_ede3 on generated keys and data; Python's standard library has neither DES nor CMAC, so
 tests/fixtures/cipher-peer.js (Node's crypto, with CMAC written from RFC 4493) is the peer. The
 known-answer vectors and the error Results are the VM fixtures triple-des-cbc and cmac.
+tests/fixtures/kdf-peer.agc derives keys with KDF.pbkdf2_hmac_sha256 and KDF.scrypt, checked
+against hashlib. tests/fixtures/gcm-peer.agc seals with Cipher.aes_256_gcm_encrypt and opens
+what tests/fixtures/gcm-peer.js (Node's crypto) sealed. Their vectors and errors are the VM
+fixtures kdf and aes-256-gcm.
 """
 import base64
 import binascii
@@ -330,3 +334,54 @@ def test_triple_des_and_cmac_match_a_node_peer(tmp_path, node):
     for case, got, want in zip(cases, json.loads(result.stdout), json.loads(expected.stdout), strict=True):
         sizes = (len(case["des_key"]) // 2, len(case["aes_key"]) // 2, len(case["blocks"]) // 2, len(case["data"]) // 2)
         assert got == want, sizes
+
+
+# PBKDF2 and scrypt on generated passwords and salts (empty, short, on both sides of the 64-byte HMAC block, long)
+# and lengths (one byte, on both sides of the 32-byte SHA-256 block, several blocks), with small costs so the run
+# stays fast; the RFC 7914 vectors and the error Results are the VM fixture kdf.
+KDF_SIZES = [0, 1, 16, 63, 64, 65, 200]
+KDF_LENGTHS = [1, 31, 32, 33, 64, 100]
+
+
+def test_kdf_matches_hashlib(tmp_path):
+    # The seed keeps a failure reproducible.
+    rng = random.Random(757)
+    cases = []
+    for size in KDF_SIZES:
+        for length in KDF_LENGTHS:
+            cases.append({"password": rng.randbytes(size).hex(), "salt": rng.randbytes(rng.choice(KDF_SIZES)).hex(),
+                          "iterations": rng.choice([1, 2, 3, 100, 1000]), "n": rng.choice([2, 4, 16, 256]),
+                          "r": rng.choice([1, 2, 8]), "p": rng.choice([1, 2, 3]), "length": length})
+    peer = compile_agc(FIXTURES / "kdf-peer.agc", tmp_path / "kdf-peer.agcb")
+    result = run_vm(peer, stdin=json.dumps({"cases": cases}))
+    assert result.code == 0, result.stderr
+    for case, got in zip(cases, json.loads(result.stdout), strict=True):
+        password, salt = bytes.fromhex(case["password"]), bytes.fromhex(case["salt"])
+        want = hashlib.pbkdf2_hmac("sha256", password, salt, case["iterations"], case["length"])
+        assert got["pbkdf2"] == want.hex(), case
+        want = hashlib.scrypt(password, salt=salt, n=case["n"], r=case["r"], p=case["p"], dklen=case["length"])
+        assert got["scrypt"] == want.hex(), case
+
+
+# AES-256-GCM on data and auth_data on both sides of the 16-byte block, empty and up to 64 KiB. Python's standard
+# library has no AES, so Node's crypto (tests/fixtures/gcm-peer.js) seals each case; the VM must seal it the same and
+# open the peer's bytes. The GCM specification vectors and the tampering and size errors are the VM fixture
+# aes-256-gcm.
+GCM_SIZES = [0, 1, 15, 16, 17, 31, 32, 33, 1000, 4096 + 7, 65536]
+
+
+def test_aes_256_gcm_matches_a_node_peer(tmp_path, node):
+    rng = random.Random(7577)
+    cases = [{"key": rng.randbytes(32).hex(), "iv": rng.randbytes(12).hex(),
+              "aad": rng.randbytes(rng.choice(GCM_SIZES[:8])).hex(), "data": rng.randbytes(size).hex()}
+             for size in GCM_SIZES for _ in range(4)]
+    expected = run([node, FIXTURES / "gcm-peer.js"], stdin=json.dumps({"cases": cases}))
+    assert expected.code == 0, expected.stderr
+    for case, want in zip(cases, json.loads(expected.stdout), strict=True):
+        case["sealed"] = want["sealed"]
+    peer = compile_agc(FIXTURES / "gcm-peer.agc", tmp_path / "gcm-peer.agcb")
+    result = run_vm(peer, stdin=json.dumps({"cases": cases}))
+    assert result.code == 0, result.stderr
+    for case, got in zip(cases, json.loads(result.stdout), strict=True):
+        sizes = (len(case["aad"]) // 2, len(case["data"]) // 2)
+        assert (got["sealed"], got["opened"]) == (case["sealed"], case["data"]), sizes

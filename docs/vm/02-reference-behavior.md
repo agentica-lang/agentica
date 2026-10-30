@@ -129,6 +129,20 @@ in a PR that rewrites the goldens.
   which expand a two-key key to K1 K2 K1 and wipe that copy. A library failure
   is `RUNTIME-INTERNAL` at the call. They charge `AGC_COST_SIZE` and run
   without the shared lock, as the digests do.
+- `Cipher.aes_256_gcm_encrypt` and `_decrypt` check the key, IV and input
+  sizes first and give an error `Result`; then they call `agc_aes_256_gcm`
+  (`EVP_CipherUpdate` in chunks of 1 GiB for the data and the authenticated
+  data). Encrypting writes the tag after the ciphertext in the result. A
+  decrypt writes the plaintext before the final step checks the tag, so on a
+  wrong tag the adapter wipes it and the builtin gives an error `Result`.
+  `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` check their parameters first,
+  their work included (`PBKDF2_MAX_WORK` and `SCRYPT_MAX_WORK` in
+  `vm/crypto.c`: one call cannot be stopped by `--max-steps` or a signal),
+  then call `EVP_KDF_derive` (`PBKDF2` with `pkcs5` set, so no SP 800-132
+  floors; `SCRYPT` with `maxmem` at the same 1025 MiB cap), and charge turn
+  cost for the iterations or the memory passes besides `AGC_COST_SIZE`. A
+  library failure is `RUNTIME-INTERNAL` at the call. All four run without the
+  shared lock.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;

@@ -17,12 +17,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `key_file`) for servers that require one (mTLS).
 - `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`
   and `CMAC.des_ede3`, for payment formats.
+- `Cipher.aes_256_gcm_encrypt` and `_decrypt` (AES-256-GCM, the tag appended
+  to the ciphertext, optional `auth_data`).
+- `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` for password hashing and key
+  derivation.
 
 ### Changed
 
 - **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
   `TLS.connect`.
 - **Breaking:** `Cipher` and `CMAC` are reserved type names.
+- **Breaking:** `KDF` is a reserved type name.
 - **Breaking:** `File.stat` and `File.lstat` give `kind` `"fifo"`, `"socket"`,
   `"characterSpecial"`, `"blockSpecial"` or `"unknown"` for what is not a
   regular file, a directory or a link, instead of `"file"`.

@@ -6,10 +6,10 @@
   19](../future/19-simd.md#19-simd-in-the-vm)), on demand (order row 19). Using
   libc `memcpy`/`memcmp`/`memchr` in place of hand loops needs no profiling and
   can land at any time.
-- [ ] `Crypto` module ([`docs/future/20-crypto.md` section
-  20](../future/20-crypto.md#20-crypto-module)), on demand: after TLS on the VM
-  (7h). `Bytes` is done (#805). Started: the `Digest` hashes on `Bytes` (#455,
-  #757), SHA-256 for the package hash, and `SecureRandom` (#757).
+- [x] `Crypto` module ([`docs/future/20-crypto.md` section
+  20](../future/20-crypto.md#20-crypto-module)), on `Bytes` (#805): the
+  `Digest` hashes, `HMAC`, `SecureRandom`, AES-256-GCM, PBKDF2 and scrypt
+  (#455, #757), and Triple DES CBC and CMAC (#825).
 
 ### Enums and pattern matching: implemented
 

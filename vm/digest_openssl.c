@@ -1,14 +1,17 @@
 /*
  * The digest adapter over OpenSSL's EVP interface (digests, HMAC, Triple DES
- * CBC and CMAC), RAND_bytes and CRYPTO_memcmp, the same library that
- * tls_openssl.c links (system OpenSSL 3 or the vendored one). Adapter layer,
- * behind digest.h. Design: docs/vm/15-layers.md §15.1.
+ * CBC, AES-256-GCM, CMAC, PBKDF2 and scrypt), RAND_bytes and CRYPTO_memcmp,
+ * the same library that tls_openssl.c links (system OpenSSL 3 or the vendored
+ * one). Adapter layer, behind digest.h. Design: docs/vm/15-layers.md §15.1.
  */
 #include "digest.h"
 
+#include <openssl/core_names.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/kdf.h>
+#include <openssl/params.h>
 #include <openssl/rand.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -159,6 +162,20 @@ static bool des_ede3_key(const unsigned char *key, size_t key_n, unsigned char o
 #define CIPHER_CHUNK ((size_t)1 << 30)
 _Static_assert(CIPHER_CHUNK % AGC_DES_BLOCK_BYTES == 0 && CIPHER_CHUNK <= INT_MAX, "CIPHER_CHUNK must be whole blocks");
 
+/* Feeds the n bytes at in to ctx in chunks of CIPHER_CHUNK, writing as many bytes at out, and returns true when every
+   update wrote what it read. A NULL out makes the bytes GCM's authenticated data, which writes nothing. */
+static bool cipher_update(EVP_CIPHER_CTX *ctx, unsigned char *out, const unsigned char *in, size_t n) {
+  bool done = true;
+  for (size_t at = 0; done && at < n;) {
+    size_t chunk = n - at < CIPHER_CHUNK ? n - at : CIPHER_CHUNK;
+    int got = 0;
+    done = EVP_CipherUpdate(ctx, out ? out + at : NULL, &got, in + at, (int)chunk) == 1 &&
+           (!out || (size_t)got == chunk);
+    at += chunk;
+  }
+  return done;
+}
+
 bool agc_des_ede3_cbc(bool encrypt, const unsigned char *key, size_t key_n, const unsigned char *iv,
                       const unsigned char *data, size_t n, unsigned char *out) {
   unsigned char full_key[24];
@@ -170,12 +187,7 @@ bool agc_des_ede3_cbc(bool encrypt, const unsigned char *key, size_t key_n, cons
   bool done = ctx && EVP_CipherInit_ex2(ctx, EVP_des_ede3_cbc(), full_key, iv, encrypt ? 1 : 0, NULL) == 1 &&
               EVP_CIPHER_CTX_set_padding(ctx, 0) == 1;
   OPENSSL_cleanse(full_key, sizeof full_key);
-  for (size_t at = 0; done && at < n;) {
-    size_t chunk = n - at < CIPHER_CHUNK ? n - at : CIPHER_CHUNK;
-    int got = 0;
-    done = EVP_CipherUpdate(ctx, out + at, &got, data + at, (int)chunk) == 1 && (size_t)got == chunk;
-    at += chunk;
-  }
+  done = done && cipher_update(ctx, out, data, n);
   unsigned char last[AGC_DES_BLOCK_BYTES];
   int tail = 0;
   done = done && EVP_CipherFinal_ex(ctx, last, &tail) == 1 && tail == 0;
@@ -214,4 +226,105 @@ size_t agc_cmac(agc_cmac_cipher cipher, const unsigned char *key, size_t key_n, 
   if (key == full_key) OPENSSL_cleanse(full_key, sizeof full_key);
   if (!done) ERR_clear_error();
   return done ? len : 0;
+}
+
+/* GCM is a stream mode: each update writes as many bytes as it reads, so any chunk size works (cipher_update). */
+agc_aead_status agc_aes_256_gcm(bool encrypt, const unsigned char *key, const unsigned char *iv,
+                                const unsigned char *aad, size_t aad_n, const unsigned char *data, size_t n,
+                                unsigned char *out, unsigned char tag[AGC_GCM_TAG_BYTES]) {
+  if ((uint64_t)n > AGC_GCM_MAX_BYTES) {
+    if (n) OPENSSL_cleanse(out, n);
+    return AGC_AEAD_FAILED;
+  }
+  EVP_CIPHER_CTX *ctx = digest_ready() ? EVP_CIPHER_CTX_new() : NULL;
+  /* The GCM IV length is 12 bytes unless set otherwise, the size the caller checked. */
+  bool done = ctx && EVP_CipherInit_ex2(ctx, EVP_aes_256_gcm(), key, iv, encrypt ? 1 : 0, NULL) == 1;
+  /* The authenticated data goes first, with a NULL output; GCM takes it in as many updates as it comes in. An empty
+     data runs no update, so its NULL out never reaches EVP_CipherUpdate. */
+  done = done && cipher_update(ctx, NULL, aad, aad_n) && cipher_update(ctx, out, data, n);
+  if (!encrypt) done = done && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, AGC_GCM_TAG_BYTES, tag) == 1;
+  agc_aead_status status = done ? AGC_AEAD_DONE : AGC_AEAD_FAILED;
+  unsigned char last[16];
+  int tail = 0;
+  /* GCM writes nothing at the end. A decrypt's final compares the tag, so its failure after every step before it
+     passed is a wrong tag (or key, IV, data or authenticated data), not a broken library. */
+  if (done && (EVP_CipherFinal_ex(ctx, last, &tail) != 1 || tail != 0))
+    status = encrypt ? AGC_AEAD_FAILED : AGC_AEAD_BAD_TAG;
+  if (status == AGC_AEAD_DONE && encrypt &&
+      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, AGC_GCM_TAG_BYTES, tag) != 1)
+    status = AGC_AEAD_FAILED;
+  /* EVP_CIPHER_CTX_free wipes the key schedule it holds. */
+  EVP_CIPHER_CTX_free(ctx);
+  if (status != AGC_AEAD_DONE) {
+    /* The plaintext of a decrypt is written before the tag is checked: it must not outlive a wrong tag. */
+    if (n) OPENSSL_cleanse(out, n);
+    ERR_clear_error();
+  }
+  return status;
+}
+
+/* Runs the KDF named name with params into the out_n bytes at out. The KDF context copies the password and wipes the
+   copy when it is freed. */
+static bool kdf_derive(const char *name, const OSSL_PARAM *params, unsigned char *out, size_t out_n) {
+  EVP_KDF *kdf = digest_ready() ? EVP_KDF_fetch(NULL, name, NULL) : NULL;
+  EVP_KDF_CTX *ctx = kdf ? EVP_KDF_CTX_new(kdf) : NULL;
+  bool done = ctx && EVP_KDF_derive(ctx, out, out_n, params) == 1;
+  EVP_KDF_CTX_free(ctx);
+  EVP_KDF_free(kdf);
+  if (!done) {
+    OPENSSL_cleanse(out, out_n);
+    ERR_clear_error();
+  }
+  return done;
+}
+
+/* An octet-string parameter of n bytes at data. A KDF reads a NULL buffer as no value, so an empty one points at a
+   byte it does not read. */
+static OSSL_PARAM octets(const char *key, const unsigned char *data, size_t n) {
+  static unsigned char none = 0;
+  return OSSL_PARAM_construct_octet_string(key, n ? (void *)data : &none, n);
+}
+
+bool agc_pbkdf2_hmac_sha256(const unsigned char *password, size_t password_n, const unsigned char *salt,
+                            size_t salt_n, uint64_t iterations, unsigned char *out, size_t out_n) {
+  /* The PBKDF2 provider hands the password to HMAC and the salt to its own loop as int lengths. */
+  if (out_n == 0) return false;
+  if (iterations == 0 || password_n > INT_MAX || salt_n > INT_MAX) {
+    OPENSSL_cleanse(out, out_n);
+    return false;
+  }
+  char digest[] = "SHA256";
+  /* pkcs5 = 1 turns off the SP 800-132 floors (a 16-byte salt, 1000 iterations, a 14-byte key) that a FIPS provider
+     applies by default: RFC 8018 has none, and its own test vectors use 1 iteration and a 4-byte salt. */
+  int pkcs5 = 1;
+  OSSL_PARAM params[] = {
+    octets(OSSL_KDF_PARAM_PASSWORD, password, password_n),
+    octets(OSSL_KDF_PARAM_SALT, salt, salt_n),
+    OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_ITER, &iterations),
+    OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, digest, 0),
+    OSSL_PARAM_construct_int(OSSL_KDF_PARAM_PKCS5, &pkcs5),
+    OSSL_PARAM_construct_end(),
+  };
+  return kdf_derive(OSSL_KDF_NAME_PBKDF2, params, out, out_n);
+}
+
+bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned char *salt, size_t salt_n, uint64_t n,
+                uint64_t r, uint64_t p, uint64_t max_memory, unsigned char *out, size_t out_n) {
+  /* scrypt runs PBKDF2-HMAC-SHA256 over the password and the salt with int lengths. It checks n, r, p and the memory
+     against max_memory itself. */
+  if (out_n == 0) return false;
+  if (password_n > INT_MAX || salt_n > INT_MAX) {
+    OPENSSL_cleanse(out, out_n);
+    return false;
+  }
+  OSSL_PARAM params[] = {
+    octets(OSSL_KDF_PARAM_PASSWORD, password, password_n),
+    octets(OSSL_KDF_PARAM_SALT, salt, salt_n),
+    OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_N, &n),
+    OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_R, &r),
+    OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_P, &p),
+    OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_MAXMEM, &max_memory),
+    OSSL_PARAM_construct_end(),
+  };
+  return kdf_derive(OSSL_KDF_NAME_SCRYPT, params, out, out_n);
 }

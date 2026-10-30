@@ -31,6 +31,8 @@ Channel.closed?
 Channel.new
 Channel.recv
 Channel.send
+Cipher.aes_256_gcm_decrypt
+Cipher.aes_256_gcm_encrypt
 Cipher.des_ede3_cbc_decrypt
 Cipher.des_ede3_cbc_encrypt
 Digest.hexdecode.bytes
@@ -136,6 +138,8 @@ JSON.object
 JSON.parse
 JSON.schema
 JSON.string
+KDF.pbkdf2_hmac_sha256
+KDF.scrypt
 List.all?
 List.any?
 List.append

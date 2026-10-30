@@ -11206,6 +11206,121 @@
       "start": [1, 1]
     }
   ],
+  "Cipher.aes_256_gcm_encrypt and _decrypt take a key, an iv, data and an optional auth_data, KDF.pbkdf2_hmac_sha256 a password, a salt, iterations and a length, KDF.scrypt a password, a salt, n, r, p and a length; each gives a Result[Bytes]; KDF is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  key = \"k\".bytes",
+        "  sealed: Result[Bytes] = Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes)",
+        "  framed = Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes, \"header\".bytes)",
+        "  opened: Result[Bytes] = Cipher.aes_256_gcm_decrypt(key, key, framed.unwrap!, \"header\".bytes)",
+        "  bare = Cipher.aes_256_gcm_decrypt(key, key, sealed.unwrap!)",
+        "  derived: Result[Bytes] = KDF.pbkdf2_hmac_sha256(\"pw\".bytes, \"salt\".bytes, 600000, 32)",
+        "  hard = KDF.scrypt(\"pw\".bytes, \"salt\".bytes, 16384, 8, 1, 32)",
+        "  puts(opened.ok? and bare.ok? and derived.ok? and hard.unwrap!.size == 32)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.aes_256_gcm_encrypt(k, k, k, \"aad\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 43],
+      "covers": "\"aad\"",
+      "expected": "Bytes",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.aes_256_gcm_decrypt(k, k)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [3, 7],
+      "covers": "Cipher.aes_256_gcm_decrypt(k, k)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.aes_256_gcm_encrypt(k, k, k, k, k)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [3, 7],
+      "covers": "Cipher.aes_256_gcm_encrypt(k, k, k, k, k)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  d = KDF.pbkdf2_hmac_sha256(\"pw\", k, 1, 32)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 30],
+      "covers": "\"pw\"",
+      "expected": "Bytes",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  d = KDF.pbkdf2_hmac_sha256(k, k, 1.5, 32)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 36],
+      "covers": "1.5",
+      "expected": "Int",
+      "actual": "Float"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  d = KDF.scrypt(k, k, 16, 1, 32)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [3, 7],
+      "covers": "KDF.scrypt(k, k, 16, 1, 32)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  d: Bytes = KDF.scrypt(k, k, 16, 1, 1, 32)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 14],
+      "covers": "KDF.scrypt(k, k, 16, 1, 1, 32)",
+      "expected": "Bytes",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "struct KDF",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Base64 and Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
     {
       "program": [

@@ -2,16 +2,17 @@
  * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
  * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
  * hash (files.c), which streams a whole file in fixed chunks, secure random
- * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare, and
- * Triple DES CBC and CMAC for the Cipher and CMAC builtins (crypto.c). The
- * OpenSSL code is in digest_openssl.c. Adapter header. Design:
- * docs/vm/15-layers.md §15.1.
+ * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare,
+ * Triple DES CBC, AES-256-GCM and CMAC for the Cipher and CMAC builtins, and
+ * PBKDF2 and scrypt for the KDF builtins (crypto.c). The OpenSSL code is in
+ * digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define AGC_SHA256_BYTES 32
 /* The longest digest of agc_digest_kind: SHA-512. */
@@ -79,5 +80,39 @@ typedef enum { AGC_CMAC_AES, AGC_CMAC_DES_EDE3 } agc_cmac_cipher;
    the library fails. The copies of the key it makes are wiped. data may be NULL when n is 0. */
 size_t agc_cmac(agc_cmac_cipher cipher, const unsigned char *key, size_t key_n, const unsigned char *data, size_t n,
                 unsigned char out[AGC_CMAC_MAX_BYTES]);
+
+/* AES-256-GCM (NIST SP 800-38D) takes a 32-byte key and a 12-byte IV (the nonce, never reused under one key), and
+   gives a 16-byte tag. One key and IV encrypt at most 2^36 - 32 bytes (2^39 - 256 bits, SP 800-38D §5.2.1.1). */
+#define AGC_GCM_KEY_BYTES 32
+#define AGC_GCM_IV_BYTES 12
+#define AGC_GCM_TAG_BYTES 16
+#define AGC_GCM_MAX_BYTES (((uint64_t)1 << 36) - 32)
+
+/* The end of an AES-256-GCM call: done, a decrypt whose tag does not match, or a library failure. */
+typedef enum { AGC_AEAD_DONE, AGC_AEAD_BAD_TAG, AGC_AEAD_FAILED } agc_aead_status;
+
+/* Encrypts (or decrypts) the n bytes at data with AES-256-GCM into the n bytes at out, after authenticating the
+   aad_n bytes at aad. key has AGC_GCM_KEY_BYTES bytes and iv AGC_GCM_IV_BYTES; n is at most AGC_GCM_MAX_BYTES (else
+   AGC_AEAD_FAILED), and both lengths may take any size_t (the call feeds OpenSSL in chunks). Encrypting writes the
+   tag into tag; decrypting checks the tag it reads there, and a mismatch is AGC_AEAD_BAD_TAG. On any status but
+   AGC_AEAD_DONE the n bytes at out are wiped, so a wrong tag never leaves plaintext behind. data, out and aad may be
+   NULL when their length is 0. */
+agc_aead_status agc_aes_256_gcm(bool encrypt, const unsigned char *key, const unsigned char *iv,
+                                const unsigned char *aad, size_t aad_n, const unsigned char *data, size_t n,
+                                unsigned char *out, unsigned char tag[AGC_GCM_TAG_BYTES]);
+
+/* Writes out_n bytes of PBKDF2-HMAC-SHA256 (RFC 8018 §5.2) of the password and salt with the given iterations into
+   out, and returns true. iterations is at least 1 and out_n at least 1; the password and the salt are at most
+   INT_MAX bytes (OpenSSL takes int lengths there). Returns false for another value or when the library fails; out is
+   then wiped. password and salt may be NULL when their length is 0. */
+bool agc_pbkdf2_hmac_sha256(const unsigned char *password, size_t password_n, const unsigned char *salt,
+                            size_t salt_n, uint64_t iterations, unsigned char *out, size_t out_n);
+
+/* Writes out_n bytes of scrypt (RFC 7914) of the password and salt with cost n (a power of 2 above 1), block size r
+   and parallelization p into out, and returns true, using at most max_memory bytes (128 * r * (n + p + 2)). The
+   password and the salt are at most INT_MAX bytes. Returns false for parameters RFC 7914 or the memory cap refuses,
+   or when the library fails; out is then wiped. password and salt may be NULL when their length is 0. */
+bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned char *salt, size_t salt_n, uint64_t n,
+                uint64_t r, uint64_t p, uint64_t max_memory, unsigned char *out, size_t out_n);
 
 #endif

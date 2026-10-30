@@ -136,11 +136,10 @@ Weighed later (no fixed order):
     `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
 
 - **Order:** 7.5
-  - **Next work:** UDP (leaves the core plan, item 12 above), then the rest of
-    the crypto module (`docs/future/20-crypto.md` §20: password hashing and
-    AEAD on OpenSSL 3). `Base64`, `Digest`, `HMAC` (with
-    `HMAC.secure_compare`), `SecureRandom`, and Triple DES CBC and CMAC
-    (`Cipher`, `CMAC`) have landed
+  - **Next work:** UDP (leaves the core plan, item 12 above). The crypto
+    module (`docs/future/20-crypto.md` §20) has landed: `Base64`, `Digest`,
+    `HMAC` (with `HMAC.secure_compare`), `SecureRandom`, AES-256-GCM and
+    Triple DES CBC (`Cipher`), `CMAC`, and PBKDF2 and scrypt (`KDF`)
   - **Outcome:** Programs send UDP and encrypt
 
 - **Order:** 7.6
