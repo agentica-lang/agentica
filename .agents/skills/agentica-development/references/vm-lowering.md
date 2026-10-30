@@ -21,8 +21,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    it.
 3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
    and to `agc_opcode` in `vm/value.h` at the same position (a test compares
-   them). An opcode lands with the lowering that emits it; if a PR adds it
-   earlier it names the PR that emits it. The loader and interpreter part
+   them). An opcode lands with the lowering that emits it, or its PR names
+   the lowering that will. The loader and interpreter part
    needs its own `vm-c-critic` review.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts

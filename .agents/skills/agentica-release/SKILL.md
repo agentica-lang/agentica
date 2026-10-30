@@ -23,9 +23,8 @@ check before it fails.
 - The version is SemVer with no `v` (`0.5.0`; `0.5.0-beta.1` for a
   pre-release).
 - **Beta policy:** a release is a beta (`X.Y.Z-beta.N`) while a system lacks
-  a feature that the others have (new VM features land on Linux first). From
-  0.8.1 to 0.9.0 every release was a beta until Windows matched (#568); 0.9.0
-  is the first stable one since. Ask the owner if unsure.
+  a feature that the others have (new VM features land on Linux first). Ask
+  the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
 - The previous version is in `VERSION`, and `git tag --sort=-creatordate`
