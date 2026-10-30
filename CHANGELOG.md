@@ -8,46 +8,36 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-30
+
 ### Added
 
-- `agentica check [PATH...]` checks several files and folders (none: the
-  current folder), prints the first problem of each failing file and a count,
-  and exits 1 if any failed; `--json` gives one entry per file.
-- `TLS.connect` takes an optional client certificate and key (`cert_file`,
-  `key_file`) for servers that require one (mTLS).
-- `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`
-  and `CMAC.des_ede3`, for payment formats.
-- `Cipher.aes_256_gcm_encrypt` and `_decrypt` (AES-256-GCM, the tag appended
-  to the ciphertext, optional `auth_data`).
-- `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` for password hashing and key
-  derivation.
-- `Optional[T]`, a builtin type for a value that may be missing: `some(x)` and
-  `none`, `case` arms `some(n) ->` and `none ->`, `==`, and the methods
-  `unwrap_or`, `unwrap!`, `map`, `some?`, `none?` and `to_result`.
-- JSON encodes and decodes `Optional[T]` (`none` is `null`; a missing key
-  decodes as `none`), and `none` may be a field or parameter default.
+- `agentica check [PATH...]` checks several files and folders and prints a
+  count; `--json` gives one entry per file.
+- `TLS.connect` takes an optional client certificate and key for mTLS.
+- `Cipher.des_ede3_cbc_encrypt` and `_decrypt`, and `CMAC.aes` and
+  `CMAC.des_ede3`.
+- `Cipher.aes_256_gcm_encrypt` and `_decrypt`.
+- `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt`.
+- `Optional[T]` for a value that may be missing: `some(x)`, `none`, `case`
+  arms, `==`, and the methods `unwrap_or`, `unwrap!`, `map`, `some?`, `none?`
+  and `to_result`.
+- JSON encodes and decodes `Optional[T]`, and `none` may be a field or
+  parameter default.
 
 ### Changed
 
 - **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
   `TLS.connect`.
-- **Breaking:** `Cipher` and `CMAC` are reserved type names.
-- **Breaking:** `KDF` is a reserved type name.
+- **Breaking:** `Cipher`, `CMAC` and `KDF` are reserved type names.
 - **Breaking:** `File.stat` and `File.lstat` give `kind` `"fifo"`, `"socket"`,
-  `"characterSpecial"`, `"blockSpecial"` or `"unknown"` for what is not a
-  regular file, a directory or a link, instead of `"file"`.
-- **Breaking:** `Optional` is a reserved type name, and `some` and `none` are
-  reserved names, as `ok` and `error` are: a variable, parameter, field or
-  function named `some` or `none` is now `CHECK-REDEFINED-NAME`, and a pattern
-  binding named `none` is `CHECK-PATTERN-TYPE`. Rebuild `.agcb` files compiled
-  by 0.17.x that declare their own `enum Optional`.
+  `"characterSpecial"`, `"blockSpecial"` or `"unknown"` instead of `"file"`
+  for special files.
+- **Breaking:** `Optional`, `some` and `none` are reserved names; rebuild
+  `.agcb` files compiled by 0.17.x that declare their own `enum Optional`.
 - **Breaking:** `map.get(key)` and `text.index_of(part)` give an `Optional`
-  (`some(x)` or `none`) instead of a `Result`: `try` on them is
-  `CHECK-TYPE-MISMATCH` (use `.to_result("message")`), an `ok(...)` or
-  `error(...)` arm is `CHECK-PATTERN-TYPE` (use `some(x)` and `none`), and
-  `.ok?`, `.error?` or `.message` is `CHECK-UNKNOWN-METHOD` (use `.some?` or
-  `.none?`). Rebuild `.agcb` files compiled by 0.17.x that call `m.get(k)` or
-  `s.index_of(part)`.
+  instead of a `Result` (use `.to_result("message")` for `try`); rebuild
+  `.agcb` files compiled by 0.17.x that call them.
 
 ## [0.17.0] - 2026-10-30
 
@@ -713,7 +703,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.17.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.18.0...HEAD
+[0.18.0]: https://github.com/agentica-lang/agentica/compare/0.17.0...0.18.0
 [0.17.0]: https://github.com/agentica-lang/agentica/compare/0.16.0...0.17.0
 [0.16.0]: https://github.com/agentica-lang/agentica/compare/0.15.0...0.16.0
 [0.15.0]: https://github.com/agentica-lang/agentica/compare/0.14.0...0.15.0
