@@ -36,8 +36,8 @@ CLOSE_MS = 5000
 INT_MAX = 9223372036854775807
 
 # The signatures of the central directory and a local header.
-CD_MAGIC = [80, 75, 1, 2]
-LOCAL_MAGIC = [80, 75, 3, 4]
+CD_MAGIC = Bytes.from_list([80, 75, 1, 2]).unwrap!
+LOCAL_MAGIC = Bytes.from_list([80, 75, 3, 4]).unwrap!
 
 # The general-purpose flag bits an entry may hold: 1 and 2 (deflate tuning), 3 (a data descriptor follows the data)
 # and 11 (the name is UTF-8). Anything else, including the encryption bits 0 and 6, is refused.
@@ -90,7 +90,7 @@ struct Entry
   crc: Int
   csize: Int
   usize: Int
-  name: List[Int]
+  name: Bytes
   canon: String
   regular: Bool
 end
@@ -112,7 +112,7 @@ end
 # The forward reader of one pass: the handle, the bytes read but not taken yet, and the physical accounting.
 struct Stream
   handle: FileHandle
-  buf: List[Int]
+  buf: Bytes
   raw: Int
   eof: Bool
 end
@@ -134,7 +134,7 @@ end
 # The moved stream with the bytes a take produced.
 struct TakeOut
   stream: Stream
-  bytes: List[Int]
+  bytes: Bytes
 end
 
 # A parsed local header: the moved stream and cursor, and whether a descriptor follows the data.
@@ -307,23 +307,11 @@ def make_dest(dest: String, deadline: Int) -> Result[Void]
   end
 end
 
-# The ZIP reader holds headers and records as a List[Int], which std/binary reads, until #805 PR 7; the data of a
-# deflated entry stays Bytes (read_raw).
-def read_chunk(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[List[Int]]
-  bytes = try read_raw(handle, n, deadline, src)
-  return ok(bytes.to_a)
-end
-
 def read_raw(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[Bytes]
   case File.read_bytes(handle, n, try time_left(deadline))
     ok(bytes) -> return ok(bytes)
     error(message) -> return error("archive: cannot read #{src}: #{message}")
   end
-end
-
-# The bytes as strict UTF-8. The ZIP headers are a List[Int] until #805 PR 7; its items are bytes.
-def utf8_of(data: List[Int]) -> Result[String]
-  return String.from_bytes(try Bytes.from_list(data))
 end
 
 def strip_slashes(path: String) -> String
@@ -348,7 +336,7 @@ def stream_fill(st: Stream, need: Int, cap: Int, deadline: Int, src: String) -> 
     end
     room = cap - st.raw
     if room <= 0
-      probe = try read_chunk(st.handle, 1, deadline, src)
+      probe = try read_raw(st.handle, 1, deadline, src)
       if probe.size == 0
         st = st.with(eof: true)
         break
@@ -356,12 +344,12 @@ def stream_fill(st: Stream, need: Int, cap: Int, deadline: Int, src: String) -> 
       return error("archive: source exceeds #{INPUT_BYTES} bytes")
     end
     want = smaller(smaller(room, CHUNK), need - st.buf.size)
-    chunk = try read_chunk(st.handle, want, deadline, src)
+    chunk = try read_raw(st.handle, want, deadline, src)
     if chunk.size == 0
       st = st.with(eof: true)
     else
       st = st.with(
-        buf: List.concat(st.buf, chunk),
+        buf: st.buf + chunk,
         raw: try add_cap(st.raw, chunk.size, cap, "archive: source exceeds #{INPUT_BYTES} bytes"),
       )
     end
@@ -382,9 +370,9 @@ def stream_take(
     return error("archive: negative read of #{n} bytes for #{what}")
   end
   if n == 0
-    return ok(TakeOut(stream: st, bytes: []))
+    return ok(TakeOut(stream: st, bytes: "".bytes))
   end
-  got: List[Int] = []
+  got = "".bytes
   rest = n
   while rest > 0
     st = try stream_fill(st, smaller(rest, CHUNK), cap, deadline, src)
@@ -392,8 +380,8 @@ def stream_take(
       return error("archive: truncated ZIP data, needed #{n} bytes for #{what}")
     end
     k = smaller(rest, st.buf.size)
-    got = List.concat(got, List.take(st.buf, k))
-    st = st.with(buf: List.drop(st.buf, k))
+    got = got + st.buf.take(k)
+    st = st.with(buf: st.buf.drop(k))
     rest -= k
   end
   return ok(TakeOut(stream: st, bytes: got))
@@ -410,36 +398,21 @@ def stream_skip(st: Stream, n: Int, cap: Int, deadline: Int, src: String, what: 
   return ok(st)
 end
 
-def bytes_equal(a: List[Int], b: List[Int]) -> Bool
-  if a.size != b.size
-    return false
-  end
-  if a.size == 0
-    return true
-  end
-  for i in 0..(a.size - 1)
-    if a[i] != b[i]
-      return false
-    end
-  end
-  return true
-end
-
-def read_u16(buf: List[Int], at: Int, what: String) -> Result[Int]
+def read_u16(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u16_le(buf, at)
     ok(value) -> return ok(value)
     error(_) -> return error("archive: truncated ZIP data, #{what}")
   end
 end
 
-def read_u32(buf: List[Int], at: Int, what: String) -> Result[Int]
+def read_u32(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u32_le(buf, at)
     ok(value) -> return ok(value)
     error(_) -> return error("archive: truncated ZIP data, #{what}")
   end
 end
 
-def le_bytes(value: Int, what: String) -> Result[List[Int]]
+def le_bytes(value: Int, what: String) -> Result[Bytes]
   case Binary.write_u32_le(value)
     ok(bytes) -> return ok(bytes)
     error(_) -> return error("archive: bad size for #{what}")
@@ -527,19 +500,19 @@ end
 
 def scan_tail(handle: FileHandle, src: String, deadline: Int) -> Result[Found]
   total = 0
-  tail: List[Int] = []
+  tail = "".bytes
   while true
     if Time.monotonic_ms() >= deadline
       return error("archive: operation timed out")
     end
-    chunk = try read_chunk(handle, CHUNK, deadline, src)
+    chunk = try read_raw(handle, CHUNK, deadline, src)
     if chunk.size == 0
       break
     end
     total = try add_cap(total, chunk.size, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
-    tail = List.concat(tail, chunk)
+    tail = tail + chunk
     if tail.size > TAIL_BYTES
-      tail = List.drop(tail, tail.size - TAIL_BYTES)
+      tail = tail.drop(tail.size - TAIL_BYTES)
     end
   end
   if total == 0
@@ -556,7 +529,7 @@ end
 # of the file, and any field error reports; otherwise only fully field-valid candidates count, marking a structurally
 # present end record that trailing junk pushed past the end. The earliest anchored candidate wins: a comment may
 # itself hold the magic, and the true record is the outer one.
-def parse_eocd_at(tail: List[Int], p: Int, size: Int, src: String, from_anchor: Bool) -> Result[Eocd]
+def parse_eocd_at(tail: Bytes, p: Int, size: Int, src: String, from_anchor: Bool) -> Result[Eocd]
   disk = try read_u16(tail, p + 4, "the end record is truncated")
   cd_disk = try read_u16(tail, p + 6, "the end record is truncated")
   this_count = try read_u16(tail, p + 8, "the end record is truncated")
@@ -583,7 +556,7 @@ def parse_eocd_at(tail: List[Int], p: Int, size: Int, src: String, from_anchor: 
   return ok(Eocd(start: start, count: total_count, cd_size: cd_size, cd_offset: cd_offset))
 end
 
-def find_eocd(tail: List[Int], size: Int, src: String) -> Result[Eocd]
+def find_eocd(tail: Bytes, size: Int, src: String) -> Result[Eocd]
   p = 0
   unanchored = false
   while p <= tail.size - 4
@@ -616,7 +589,7 @@ end
 
 # True when the candidate at tail offset `p` with this comment length ends exactly at the end of the file: only
 # then is it the end record, whose field errors report instead of scanning on.
-def starts_at_end(tail: List[Int], p: Int, size: Int, comment_len: Int) -> Bool
+def starts_at_end(tail: Bytes, p: Int, size: Int, comment_len: Int) -> Bool
   return size - tail.size + p + 22 + comment_len == size
 end
 
@@ -630,7 +603,7 @@ def pass2(src: String, found: Found, deadline: Int) -> Result[List[Entry]]
 end
 
 def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Result[List[Entry]]
-  st = Stream(handle: handle, buf: [], raw: 0, eof: false)
+  st = Stream(handle: handle, buf: "".bytes, raw: 0, eof: false)
   eocd = found.eocd
   st = try stream_skip(st, eocd.cd_offset, INPUT_BYTES, deadline, src, "the central directory offset")
   entries: List[Entry] = []
@@ -658,8 +631,8 @@ def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Res
   return ok(entries)
 end
 
-def parse_cd_head(head: List[Int], index: Int) -> Result[Head]
-  if !bytes_equal(List.take(head, 4), CD_MAGIC)
+def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
+  if head.take(4) != CD_MAGIC
     return error("archive: bad central directory entry at entry #{index}")
   end
   needed = try read_u16(head, 6, "a central directory entry")
@@ -710,7 +683,7 @@ def parse_cd_head(head: List[Int], index: Int) -> Result[Head]
 end
 
 # Refuses the ZIP64 extra field wherever it appears: its tag means 32-bit fields cannot hold the sizes.
-def scan_zip64_extra(extra: List[Int], index: Int) -> Result[Void]
+def scan_zip64_extra(extra: Bytes, index: Int) -> Result[Void]
   pos = 0
   while pos < extra.size
     if extra.size - pos < 4
@@ -732,7 +705,7 @@ end
 # Decodes a central-directory name for matching: one leading `./` and any trailing `/` characters are removed, and
 # anything undecodable, over-long or empty becomes `""`, which never matches a selector. Unmatched entries skip on
 # this alone; only a matched entry faces the strict `check_relative` of the third pass.
-def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
+def decode_canon(raw: Bytes, flags: Int, index: Int) -> Result[String]
   for b in raw
     if b == 0
       return ok("")
@@ -740,7 +713,7 @@ def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
   end
   path = ""
   if Int.bit_and(flags, FLAG_UTF8) == FLAG_UTF8
-    case utf8_of(raw)
+    case String.from_bytes(raw)
       ok(text) -> path = text
       error(_) -> return error("archive: entry name is not valid UTF-8 at entry #{index}")
     end
@@ -750,7 +723,7 @@ def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
         return error("archive: non-ASCII names need the UTF-8 flag at entry #{index}")
       end
     end
-    case utf8_of(raw)
+    case String.from_bytes(raw)
       ok(text) -> path = text
       error(_) -> return ok("")
     end
@@ -765,7 +738,7 @@ def decode_canon(raw: List[Int], flags: Int, index: Int) -> Result[String]
 end
 
 # True for a regular file: no trailing slash, a regular Unix mode or no type information with no DOS directory bit.
-def classify_regular(name: List[Int], attrs: Int) -> Bool
+def classify_regular(name: Bytes, attrs: Int) -> Bool
   if name.size > 0 and name[name.size - 1] == 47
     return false
   end
@@ -786,7 +759,7 @@ def classify_regular(name: List[Int], attrs: Int) -> Bool
   return true
 end
 
-def finish_entry(parsed: Head, name: List[Int], index: Int) -> Result[Entry]
+def finish_entry(parsed: Head, name: Bytes, index: Int) -> Result[Entry]
   if parsed.name_len > NAME_BYTES or name.size > NAME_BYTES
     return error("archive: entry name is too long at entry #{index}")
   end
@@ -822,7 +795,7 @@ def pass3(src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[
 end
 
 def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[List[Int]]
-  st = Stream(handle: handle, buf: [], raw: 0, eof: false)
+  st = Stream(handle: handle, buf: "".bytes, raw: 0, eof: false)
   cursor = 0
   first = true
   for i in 0..(ordered.size - 1)
@@ -904,7 +877,7 @@ def read_local(
   head = try stream_take(st, 30, INPUT_BYTES, deadline, src, "a local header")
   st = head.stream
   buf = head.bytes
-  if !bytes_equal(List.take(buf, 4), LOCAL_MAGIC)
+  if buf.take(4) != LOCAL_MAGIC
     return error("archive: bad local header at offset #{cursor}")
   end
   needed = try read_u16(buf, 4, "a local header")
@@ -937,7 +910,7 @@ def read_local(
   cursor = try add_cap(cursor, 30, size, "archive: a local header runs past the end")
   name = try stream_take(st, name_len, INPUT_BYTES, deadline, src, "a local name")
   st = name.stream
-  if !bytes_equal(name.bytes, entry.name)
+  if name.bytes != entry.name
     return error("archive: local and central names differ at entry #{entry.index}")
   end
   cursor = try add_cap(cursor, name_len, size, "archive: a local name runs past the end")
@@ -967,24 +940,24 @@ def read_descriptor(
   if sig and cursor + 16 == next_offset
     rest = try stream_take(st, 4, INPUT_BYTES, deadline, src, "a data descriptor")
     st = rest.stream
-    full = List.concat(twelve, rest.bytes)
-    if bytes_equal(List.drop(full, 4), expected)
+    full = twelve + rest.bytes
+    if full.drop(4) == expected
       cursor = try add_cap(cursor, 16, next_offset, "archive: bad data descriptor for #{entry.canon}")
       return ok(DescOut(stream: st, cursor: cursor))
     end
   end
-  if bytes_equal(twelve, expected) and cursor + 12 == next_offset
+  if twelve == expected and cursor + 12 == next_offset
     cursor = try add_cap(cursor, 12, next_offset, "archive: bad data descriptor for #{entry.canon}")
     return ok(DescOut(stream: st, cursor: cursor))
   end
   return error("archive: bad data descriptor for #{entry.canon}")
 end
 
-def expected_triple(entry: Entry) -> Result[List[Int]]
+def expected_triple(entry: Entry) -> Result[Bytes]
   crc = try le_bytes(entry.crc, "a data descriptor")
   csize = try le_bytes(entry.csize, "a data descriptor")
   usize = try le_bytes(entry.usize, "a data descriptor")
-  return ok(List.concat(List.concat(crc, csize), usize))
+  return ok(Bytes.concat([crc, csize, usize]))
 end
 
 def write_selected(
@@ -1054,8 +1027,7 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     end
     piece = try stream_take(st, smaller(rest, CHUNK), INPUT_BYTES, deadline, src, "file data of #{entry.canon}")
     st = piece.stream
-    # The stream holds a List[Int] until #805 PR 7; its items are bytes.
-    data = try Bytes.from_list(piece.bytes)
+    data = piece.bytes
     case write_piece(handle, data, try time_left(deadline))
       ok(_) -> rest -= data.size
       error(message) -> return error("archive: cannot write a selected file: #{message}")
@@ -1084,8 +1056,8 @@ end
 # the bytes the stream already read past the local header (at most csize of them, taken first) and goes on from the
 # stream's handle, csize bytes in all.
 def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src: String) -> Result[Stream]
-  held = List.take(st.buf, entry.csize)
-  start = Piece(bytes: try Bytes.from_list(held), left: entry.csize - held.size, done: false)
+  held = st.buf.take(entry.csize)
+  start = Piece(bytes: held, left: entry.csize - held.size, done: false)
   raw = try add_cap(st.raw, start.left, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
   cap = entry.usize
   if cap == 0
@@ -1105,7 +1077,7 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
       if pump.crc != entry.crc
         return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{pump.crc}")
       end
-      return ok(st.with(buf: List.drop(st.buf, held.size), raw: raw))
+      return ok(st.with(buf: st.buf.drop(held.size), raw: raw))
     error(message) -> return error(inflate_error(message, entry.canon))
   end
 end

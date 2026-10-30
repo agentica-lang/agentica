@@ -27,6 +27,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `gunzip`, `deflate`, `inflate`, `write_bytes`) use `Bytes`.
 - **Breaking:** `TCP.recv_bytes`, `TCP.send_bytes`, `Process.read_bytes` and
   `Process.send_bytes` use `Bytes`.
+- **Breaking:** `std/binary` reads from and writes `Bytes`; `Binary.concat` is
+  replaced by `Bytes.concat`.
 
 ### Fixed
 

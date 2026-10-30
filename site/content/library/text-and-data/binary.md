@@ -1,12 +1,12 @@
 ---
 title: Binary data (std)
 weight: 4
-description: The std/binary module, which reads and writes binary numbers in a list of bytes.
+description: The std/binary module, which reads and writes binary numbers in a Bytes.
 ---
 
 `std/binary` is written in Agentica, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it: `import Binary from "std/binary"`.
 
-Binary data is a `List[Int]` of bytes (0 to 255); `b.to_a` gives that list for the `Bytes` of `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes`. A reader takes the list and a zero-based `offset`.
+Binary data is a [`Bytes`](/library/data-structures/bytes/), such as the one `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. A reader takes the `Bytes` and a zero-based `offset`; its only error is an offset outside the data. A writer returns a new `Bytes`.
 
 ```agentica
 import Binary from "std/binary"
@@ -14,8 +14,8 @@ import Binary from "std/binary"
 def main() -> Void
   header = Binary.write_u16_be(513).unwrap!
   body = Binary.write_f64_le(1.5)
-  data = Binary.concat([header, body])
-  puts(data)
+  data = Bytes.concat([header, body])
+  puts(data.to_a)
   puts(Binary.read_u16_be(data, 0))
   puts(Binary.read_f64_le(data, 2))
 end
@@ -32,19 +32,19 @@ ok(1.5)
 ## Readers
 
 ```text
-Binary.read_<T>(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_<F>(data: List[Int], offset: Int) -> Result[Float]
+Binary.read_<T>(data: Bytes, offset: Int) -> Result[Int]
+Binary.read_<F>(data: Bytes, offset: Int) -> Result[Float]
 ```
 
 `<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64`, `i64` followed by `_be` or `_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`.
 
-A reader never halts the program: a bad offset or item is an `error(...)` (see Errors).
+A reader never halts the program: a bad offset is an `error(...)` (see Errors).
 
 ```agentica
 import Binary from "std/binary"
 
 def main() -> Void
-  data = [1, 2, 3, 4, 255, 254]
+  data = Bytes.from_list([1, 2, 3, 4, 255, 254]).unwrap!
   puts(Binary.read_u8(data, 4))       # one byte, unsigned
   puts(Binary.read_i8(data, 4))       # the same byte, signed
   puts(Binary.read_u16_be(data, 0))
@@ -66,34 +66,34 @@ ok(-257)
 ## Writers
 
 ```text
-Binary.write_<T>(value: Int) -> Result[List[Int]]
-Binary.write_<I64>(value: Int) -> List[Int]
-Binary.write_<F>(x: Float) -> List[Int]
+Binary.write_<T>(value: Int) -> Result[Bytes]
+Binary.write_<I64>(value: Int) -> Bytes
+Binary.write_<F>(x: Float) -> Bytes
 ```
 
-`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64` followed by `_be` or `_le`. `<I64>` is `i64_be` or `i64_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new list with exactly the bytes of its type, and never changes a list in place.
+`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64` followed by `_be` or `_le`. `<I64>` is `i64_be` or `i64_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new `Bytes` with exactly the bytes of its type; a `Bytes` never changes in place.
 
-- Only `<T>` writers return a `Result`, since the value may be outside the type. `write_i64_*` and the float writers cannot fail and return a plain list, so a `try` on them is a check error.
+- Only `<T>` writers return a `Result`, since the value may be outside the type. `write_i64_*` and the float writers cannot fail and return a plain `Bytes`, so a `try` on them is a check error.
 - Ranges: `u8` 0 to 255, `i8` -128 to 127, `u16` 0 to 65535, `i16` -32768 to 32767, `u32` 0 to 4294967295, `i32` -2147483648 to 2147483647, `u64` 0 to 9223372036854775807.
 
 ```agentica
 import Binary from "std/binary"
 
 def main() -> Void
-  puts(Binary.write_u16_be(513))
-  puts(Binary.write_u16_le(513))
-  puts(Binary.write_u32_be(305419896))
-  puts(Binary.write_i64_be(-1))        # a plain list, it cannot fail
-  puts(Binary.write_i32_le(-2))
+  puts(Binary.write_u16_be(513).unwrap!.to_a)
+  puts(Binary.write_u16_le(513).unwrap!.to_a)
+  puts(Binary.write_u32_be(305419896).unwrap!.to_a)
+  puts(Binary.write_i64_be(-1).to_a)   # a plain Bytes, it cannot fail
+  puts(Binary.write_i32_le(-2).unwrap!.to_a)
 end
 ```
 
 ```output
-ok([2, 1])
-ok([1, 2])
-ok([18, 52, 86, 120])
+[2, 1]
+[1, 2]
+[18, 52, 86, 120]
 [255, 255, 255, 255, 255, 255, 255, 255]
-ok([254, 255, 255, 255])
+[254, 255, 255, 255]
 ```
 
 ## Floats
@@ -104,12 +104,12 @@ ok([254, 255, 255, 255])
 import Binary from "std/binary"
 
 def main() -> Void
-  puts(Binary.write_f32_be(1.0))
-  puts(Binary.write_f64_be(1.0))
-  puts(Binary.write_f32_le(0.1))
+  puts(Binary.write_f32_be(1.0).to_a)
+  puts(Binary.write_f64_be(1.0).to_a)
+  puts(Binary.write_f32_le(0.1).to_a)
   puts(Binary.read_f32_le(Binary.write_f32_le(0.1), 0))
-  puts(Binary.read_f64_be([64, 9, 33, 251, 84, 68, 45, 24], 0))
-  puts(Binary.read_f32_be([127, 128, 0, 0], 0).unwrap! > 1.0)
+  puts(Binary.read_f64_be(Bytes.from_list([64, 9, 33, 251, 84, 68, 45, 24]).unwrap!, 0))
+  puts(Binary.read_f32_be(Bytes.from_list([127, 128, 0, 0]).unwrap!, 0).unwrap! > 1.0)
 end
 ```
 
@@ -130,11 +130,11 @@ A `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` gives an error
 import Binary from "std/binary"
 
 def main() -> Void
-  top = [128, 0, 0, 0, 0, 0, 0, 0]
+  top = Bytes.from_list([128, 0, 0, 0, 0, 0, 0, 0]).unwrap!
   puts(Binary.read_u64_be(top, 0))
   puts(Binary.read_i64_be(top, 0))
   puts(Binary.write_u64_be(-1))
-  puts(Binary.write_u64_be(9223372036854775807))
+  puts(Binary.write_u64_be(9223372036854775807).unwrap!.to_a)
 end
 ```
 
@@ -142,16 +142,12 @@ end
 error("u64 at offset 0 does not fit in Int")
 ok(-9223372036854775808)
 error("value -1 does not fit in u64")
-ok([127, 255, 255, 255, 255, 255, 255, 255])
+[127, 255, 255, 255, 255, 255, 255, 255]
 ```
 
-## Binary.concat
+## Joining
 
-```text
-Binary.concat(parts: List[List[Int]]) -> List[Int]
-```
-
-Joins the parts in order, O(n log k) for n bytes in k parts. Build `parts` with `map`: a loop of `List.concat(out, part)` copies the whole output each pass, O(n²).
+To join writer results, use `Bytes.concat(parts)`: one copy for any number of parts. Build `parts` with `map`; a loop of `+` copies the whole output each pass, O(n²).
 
 ```agentica
 import Binary from "std/binary"
@@ -159,21 +155,21 @@ import Binary from "std/binary"
 def main() -> Void
   ids = [1, 258, 65536]
   parts = ids.map do |id| Binary.write_i32_be(id).unwrap! end
-  puts(Binary.concat(parts))
-  puts(Binary.concat([[1], [], [2, 3]]))
+  puts(Bytes.concat(parts).to_a)
+  puts(Bytes.concat([]).to_a)
 end
 ```
 
 ```output
 [0, 0, 0, 1, 0, 0, 1, 2, 0, 1, 0, 0]
-[1, 2, 3]
+[]
 ```
 
 ## Framing
 
 ```text
-Binary.frame(payload: List[Int]) -> Result[List[Int]]
-Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
+Binary.frame(payload: Bytes) -> Result[Bytes]
+Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```
 
 `frame` puts the 4-byte big-endian length in front of the payload. `read_frame_length` rejects a length above `max` before the body is read. Read the body yourself in a loop: `TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked.
@@ -182,10 +178,10 @@ Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 import Binary from "std/binary"
 
 def main() -> Void
-  framed = Binary.frame([104, 105]).unwrap!
-  puts(framed)
+  framed = Binary.frame("hi".bytes).unwrap!
+  puts(framed.to_a)
   puts(Binary.read_frame_length(framed, 0, 65536))
-  puts(Binary.read_frame_length([0, 1, 17, 112], 0, 65536))
+  puts(Binary.read_frame_length(Bytes.from_list([0, 1, 17, 112]).unwrap!, 0, 65536))
   puts(Binary.read_frame_length(framed, 0, -1))
 end
 ```
@@ -204,11 +200,10 @@ Every problem is an `error(message)`. A function checks these in order and retur
 | Case | Message |
 |---|---|
 | `read_frame_length` with a negative `max` | `frame limit -1 is negative` |
-| `offset` below 0 or above `data.size - n` (any `Int`) | `u32 at offset 10 is outside a list of length 12` |
-| an item that is not in `0 .. 255`, the first one by index | `value 300 at index 2 is not a byte` |
+| `offset` below 0 or above `data.size - n` (any `Int`) | `u32 at offset 10 is outside bytes of length 12` |
 | `read_u64_*` with the top bit set | `u64 at offset 0 does not fit in Int` |
 | a writer's value outside its type | `value 70000 does not fit in u16` |
-| `frame` with more than `4294967295` items | `payload of 4294967296 bytes does not fit in a u32 length` |
+| `frame` with more than `4294967295` bytes | `payload of 4294967296 bytes does not fit in a u32 length` |
 | `read_frame_length` above `max` | `frame length 70000 is above the limit 65536` |
 
 The type in a message is the one in the function name.
@@ -217,21 +212,17 @@ The type in a message is the one in the function name.
 import Binary from "std/binary"
 
 def main() -> Void
-  data = [0, 0, 1, 44]
+  data = Bytes.from_list([0, 0, 1, 44]).unwrap!
   puts(Binary.read_u32_be(data, 1))
   puts(Binary.read_u16_be(data, -1))
-  puts(Binary.read_u16_be([1, 300], 0))
   puts(Binary.write_u8(256))
   puts(Binary.write_i16_le(-32769))
 end
 ```
 
 ```output
-error("u32 at offset 1 is outside a list of length 4")
-error("u16 at offset -1 is outside a list of length 4")
-error("value 300 at index 1 is not a byte")
+error("u32 at offset 1 is outside bytes of length 4")
+error("u16 at offset -1 is outside bytes of length 4")
 error("value 256 does not fit in u8")
 error("value -32769 does not fit in i16")
 ```
-
-There is no compact `Bytes` type yet: join parts with `Binary.concat`.

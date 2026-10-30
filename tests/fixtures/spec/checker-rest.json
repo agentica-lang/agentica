@@ -2540,6 +2540,62 @@
       "actual": "Result[Bytes]"
     }
   ],
+  "std/binary reads from and writes Bytes; Binary.concat is gone for Bytes.concat": [
+    {
+      "program": [
+        "import Binary from \"std/binary\"",
+        "",
+        "def main() -> Void",
+        "  data = \"ab\".bytes",
+        "  n: Result[Int] = Binary.read_u16_be(data, 0)",
+        "  w: Result[Bytes] = Binary.write_u32_le(7)",
+        "  f: Result[Bytes] = Binary.frame(data)",
+        "  both: Bytes = Bytes.concat([Binary.write_i64_be(1), Binary.write_f64_le(1.5)])",
+        "  puts(n.ok? and w.ok? and f.ok? and both.size == 16)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "import Binary from \"std/binary\"",
+        "",
+        "def main() -> Void",
+        "  Binary.read_u8([1, 2], 0)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [4, 18],
+      "covers": "[1, 2]"
+    },
+    {
+      "program": [
+        "import Binary from \"std/binary\"",
+        "",
+        "def main() -> Void",
+        "  w: Result[List[Int]] = Binary.write_u8(1)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [4, 26],
+      "covers": "Binary.write_u8(1)",
+      "expected": "Result[List[Int]]",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "import Binary from \"std/binary\"",
+        "",
+        "def main() -> Void",
+        "  parts: List[Bytes] = []",
+        "  Binary.concat(parts)",
+        "end"
+      ],
+      "code": "CHECK-IMPORT-NAME",
+      "start": [5, 3],
+      "covers": "Binary.concat(parts)"
+    }
+  ],
   "network handles are opaque and HTTP records are checked": [
     {
       "program": [

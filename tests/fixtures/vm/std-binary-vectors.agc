@@ -1,37 +1,37 @@
 import Binary from "std/binary"
 
 struct Tables
-  int_readers: Map[String, Fn[List[Int], Int, Result[Int]]]
-  int_writers: Map[String, Fn[Int, Result[List[Int]]]]
-  float_readers: Map[String, Fn[List[Int], Int, Result[Float]]]
-  float_writers: Map[String, Fn[Float, List[Int]]]
+  int_readers: Map[String, Fn[Bytes, Int, Result[Int]]]
+  int_writers: Map[String, Fn[Int, Result[Bytes]]]
+  float_readers: Map[String, Fn[Bytes, Int, Result[Float]]]
+  float_writers: Map[String, Fn[Float, Bytes]]
 end
 
-def write_i64_be(value: Int) -> Result[List[Int]]
+def write_i64_be(value: Int) -> Result[Bytes]
   return ok(Binary.write_i64_be(value))
 end
 
-def write_i64_le(value: Int) -> Result[List[Int]]
+def write_i64_le(value: Int) -> Result[Bytes]
   return ok(Binary.write_i64_le(value))
 end
 
 def tables() -> Tables
-  int_readers: Map[String, Fn[List[Int], Int, Result[Int]]] = {
+  int_readers: Map[String, Fn[Bytes, Int, Result[Int]]] = {
     "u8_be": &Binary.read_u8, "u8_le": &Binary.read_u8, "i8_be": &Binary.read_i8, "i8_le": &Binary.read_i8,
     "u16_be": &Binary.read_u16_be, "u16_le": &Binary.read_u16_le, "i16_be": &Binary.read_i16_be, "i16_le": &Binary.read_i16_le,
     "u32_be": &Binary.read_u32_be, "u32_le": &Binary.read_u32_le, "i32_be": &Binary.read_i32_be, "i32_le": &Binary.read_i32_le,
     "u64_be": &Binary.read_u64_be, "u64_le": &Binary.read_u64_le, "i64_be": &Binary.read_i64_be, "i64_le": &Binary.read_i64_le
   }
-  int_writers: Map[String, Fn[Int, Result[List[Int]]]] = {
+  int_writers: Map[String, Fn[Int, Result[Bytes]]] = {
     "u8_be": &Binary.write_u8, "u8_le": &Binary.write_u8, "i8_be": &Binary.write_i8, "i8_le": &Binary.write_i8,
     "u16_be": &Binary.write_u16_be, "u16_le": &Binary.write_u16_le, "i16_be": &Binary.write_i16_be, "i16_le": &Binary.write_i16_le,
     "u32_be": &Binary.write_u32_be, "u32_le": &Binary.write_u32_le, "i32_be": &Binary.write_i32_be, "i32_le": &Binary.write_i32_le,
     "u64_be": &Binary.write_u64_be, "u64_le": &Binary.write_u64_le, "i64_be": &write_i64_be, "i64_le": &write_i64_le
   }
-  float_readers: Map[String, Fn[List[Int], Int, Result[Float]]] = {
+  float_readers: Map[String, Fn[Bytes, Int, Result[Float]]] = {
     "f32_be": &Binary.read_f32_be, "f32_le": &Binary.read_f32_le, "f64_be": &Binary.read_f64_be, "f64_le": &Binary.read_f64_le
   }
-  float_writers: Map[String, Fn[Float, List[Int]]] = {
+  float_writers: Map[String, Fn[Float, Bytes]] = {
     "f32_be": &Binary.write_f32_be, "f32_le": &Binary.write_f32_le, "f64_be": &Binary.write_f64_be, "f64_le": &Binary.write_f64_le
   }
   return Tables(int_readers: int_readers, int_writers: int_writers, float_readers: float_readers, float_writers: float_writers)
@@ -88,15 +88,15 @@ def float_text(x: Float) -> String
   return x.to_s
 end
 
-def bytes_of(field: String) -> List[Int]
+def bytes_of(field: String) -> Bytes
   if field == "-"
-    return []
+    return "".bytes
   end
-  return field.split(",").map do |part| part.to_i! end
+  return Bytes.from_list(field.split(",").map do |part| part.to_i! end).unwrap!
 end
 
-def bytes_text(bytes: List[Int]) -> String
-  return bytes.map do |b| b.to_s end.join(",")
+def bytes_text(bytes: Bytes) -> String
+  return bytes.to_a.map do |b| b.to_s end.join(",")
 end
 
 def int_result_text(result: Result[Int]) -> String
@@ -113,7 +113,7 @@ def float_result_text(result: Result[Float]) -> String
   end
 end
 
-def bytes_result_text(result: Result[List[Int]]) -> String
+def bytes_result_text(result: Result[Bytes]) -> String
   case result
     ok(bytes) -> return bytes_text(bytes)
     error(message) -> return "error: #{message}"
@@ -128,8 +128,8 @@ def report(line: String, got: String, want: String) -> Int
   return 1
 end
 
-def padded(bytes: List[Int]) -> List[Int]
-  return Binary.concat([[170], bytes, [187]])
+def padded(bytes: Bytes) -> Bytes
+  return Bytes.concat([Bytes.from_list([170]).unwrap!, bytes, Bytes.from_list([187]).unwrap!])
 end
 
 def check_int(t: Tables, line: String, f: List[String]) -> Int

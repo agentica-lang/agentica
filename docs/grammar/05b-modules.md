@@ -619,34 +619,31 @@ current list operations; no constant-time FIFO is promised.
 
 #### Binary data (`std/binary`)
 
-`std/binary` reads and writes binary numbers in a `List[Int]` of bytes, each
-item in `0 .. 255` (`b.to_a` turns a `Bytes`, such as one from
-`File.read_bytes`, into that list). It is written in Agentica on the `Int` and
-`Float` bit builtins; its signatures are in
+`std/binary` reads and writes binary numbers in a `Bytes` (such as one from
+`File.read_bytes`). It is written in Agentica on the `Int` and `Float` bit
+builtins; its signatures are in
 [`library/text-and-data/binary.md`][agentica-link-2].
 With the alias `Binary`:
 
 - `Binary.read_u8`, `read_i8`, and `read_{u16,i16,u32,i32,u64,i64}_{be,le}` take
-  `(data: List[Int], offset: Int)` and return `Result[Int]`.
+  `(data: Bytes, offset: Int)` and return `Result[Int]`.
   `Binary.read_f32_{be,le}` and `read_f64_{be,le}` return `Result[Float]`. `_be`
   is big-endian (network order), `_le` is little-endian, and signed types use
-  two's complement. A reader never halts: a bad `offset`, a non-byte item, or a
-  `u64` with the top bit set is an `error(...)`. The `offset` is zero-based and
-  may be any `Int`.
+  two's complement. A reader never halts: a bad `offset` or a `u64` with the top
+  bit set is an `error(...)`. The `offset` is zero-based and may be any `Int`.
 - `Binary.write_u8`, `write_i8`, and `write_{u16,i16,u32,i32,u64}_{be,le}` take
-  a value and return `Result[List[Int]]`, an error when the value is outside the
+  a value and return `Result[Bytes]`, an error when the value is outside the
   type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and
-  `write_f64_{be,le}` cannot fail and return a plain `List[Int]`. `write_f32_*`
+  `write_f64_{be,le}` cannot fail and return a plain `Bytes`. `write_f32_*`
   rounds to binary32; every NaN is written as the canonical NaN
   (`Float.to_bits`, `Float.to_bits32`). Bit operations
   and the `Float` bit conversions are `Int` and `Float` builtins, because in
   Agentica each one is a 64-bit loop or an exact scaling by powers of two with
-  special cases for `-0.0`, NaN and subnormals. If a compact `Bytes` type ever
-  lands, the API moves to it in the same change as the `*_bytes` builtins.
-- `Binary.concat(parts: List[List[Int]]) -> List[Int]` joins any number of parts
-  in order, in O(n log k) for n bytes in k parts. `Binary.frame(payload:
-  List[Int]) -> Result[List[Int]]` puts the payload's 4-byte big-endian length
-  in front of it (an error above `4294967295` items).
+  special cases for `-0.0`, NaN and subnormals.
+- To join writer results, use `Bytes.concat(parts)` (§6b): one copy for any
+  number of parts. `Binary.frame(payload: Bytes) -> Result[Bytes]` puts the
+  payload's 4-byte big-endian length in front of it (an error above
+  `4294967295` bytes).
   `Binary.read_frame_length(data, offset, max) -> Result[Int]` reads that length
   and returns an error above `max`, so a reader can reject a hostile length
   before it reads the body.
@@ -657,15 +654,14 @@ With the alias `Binary`:
   that a NaN pattern other than the canonical one comes back canonical.
 - Errors are checked in this order and the first that applies is returned: a
   negative `max` (`read_frame_length` only), an `offset` below zero or above
-  `data.size - n`, the first item by index that is not a byte, the `u64` top
-  bit, a writer's value outside its type, a payload over `4294967295` items, a
-  frame length above `max`. Messages are lowercase with no final period; the
-  examples are in
+  `data.size - n`, the `u64` top bit, a writer's value outside its type, a
+  payload over `4294967295` bytes, a frame length above `max`. Messages are
+  lowercase with no final period; the examples are in
   [`binary.md`](../../site/content/library/text-and-data/binary.md).
-- Writers return new lists and no buffer is ever changed. Offset writers into an
-  existing list and the compact `Bytes` type are not part of the module. Half
-  floats (f16) and varints (LEB128) come later, each when a real program needs
-  it; hex and Base64 are the `Digest` and `Base64` builtins (§6b).
+- Writers return new values and no buffer is ever changed. Offset writers into
+  an existing `Bytes` are not part of the module. Half floats (f16) and varints
+  (LEB128) come later, each when a real program needs it; hex and Base64 are
+  the `Digest` and `Base64` builtins (§6b).
 
 #### TOML (`std/toml`)
 
