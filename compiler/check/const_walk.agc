@@ -121,10 +121,10 @@ def stmt_children(stmt: Ast.Stmt) -> List[Node]
   end
 end
 
-def optional_value(value: Ast.Maybe[Ast.Expr]) -> List[Node]
+def optional_value(value: Optional[Ast.Expr]) -> List[Node]
   case value
-    Ast.Maybe.Present(found) -> return [Node.Expr(found)]
-    Ast.Maybe.Absent -> return []
+    some(found) -> return [Node.Expr(found)]
+    none -> return []
   end
 end
 
@@ -135,8 +135,8 @@ def if_children(node: Ast.IfStmt) -> List[Node]
   end
 
   case node.else_body
-    Ast.Maybe.Present(body) -> return out.concat(stmts(body))
-    Ast.Maybe.Absent -> return out
+    some(body) -> return out.concat(stmts(body))
+    none -> return out
   end
 end
 

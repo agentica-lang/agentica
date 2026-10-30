@@ -99,10 +99,10 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
   help = JSON.null()
   signatures: List[String] = []
   case found.builtin
-    Ast.Maybe.Present(entry) ->
+    some(entry) ->
       help = CatalogJson.builtin(entry, &RubyForm.signature)
       signatures = Builtins.signature(entry).split("\n")
-    Ast.Maybe.Absent -> help = help
+    none -> help = help
   end
 
   return Model.TypeAt(
@@ -140,9 +140,9 @@ export def refs(
 ) -> Model.Refs
   definition: List[Model.Symbol] = []
   case found.definition
-    Ast.Maybe.Present(declared) ->
+    some(declared) ->
       definition = [symbol(declared.with(file: names.get(declared.file, declared.file)))]
-    Ast.Maybe.Absent -> definition = definition
+    none -> definition = definition
   end
 
   return Model.Refs(
@@ -165,12 +165,9 @@ export def refs(
 end
 
 ## The text of an optional one. The docs and defaults of an item have been through `DocModel.cleaned`, which turns a
-## blank one into Absent, and an alias is never empty, so absent and "" mean the same.
-export def text(value: Ast.Maybe[String]) -> String
-  case value
-    Ast.Maybe.Present(written) -> return written
-    Ast.Maybe.Absent -> return ""
-  end
+## blank one into `none`, and an alias is never empty, so absent and "" mean the same.
+export def text(value: Optional[String]) -> String
+  return value.unwrap_or("")
 end
 
 def skipped_of(left: SymbolLink.Skipped) -> Model.Skipped
@@ -222,10 +219,10 @@ def symbol(match: Symbol.Match) -> Model.Symbol
   )
 end
 
-def definition_of(definition: Ast.Maybe[Definitions.Definition], home: String) -> List[Model.Definition]
+def definition_of(definition: Optional[Definitions.Definition], home: String) -> List[Model.Definition]
   case definition
-    Ast.Maybe.Absent -> return []
-    Ast.Maybe.Present(found) ->
+    none -> return []
+    some(found) ->
       return [
         Model.Definition(
           kind: found.kind,

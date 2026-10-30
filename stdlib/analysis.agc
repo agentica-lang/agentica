@@ -171,8 +171,8 @@ end
 ## an error when the cache holds none: the file was not refreshed, could not be linked, or its entry left the cache.
 export def entry(session: Session, path: String) -> Result[Entry]
   case Sessions.entry(session.internal, path)
-    Ast.Maybe.Present(root) -> return ok(Entry(internal: root))
-    Ast.Maybe.Absent -> return error("the cache holds no entry for #{path}")
+    some(root) -> return ok(Entry(internal: root))
+    none -> return error("the cache holds no entry for #{path}")
   end
 end
 

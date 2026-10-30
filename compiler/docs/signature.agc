@@ -70,19 +70,19 @@ end
 ## `NAME: Type`, or `NAME` when the constant has no written type.
 export def constant_text(declaration: Ast.ConstDecl) -> String
   case declaration.type
-    Ast.Maybe.Present(type) -> return "#{declaration.name}: #{type_text(type)}"
-    Ast.Maybe.Absent -> return declaration.name
+    some(type) -> return "#{declaration.name}: #{type_text(type)}"
+    none -> return declaration.name
   end
 end
 
 ## The source text of the default value of a parameter or a struct field, or absent when it has none. A span ends
 ## after its last character, so the slice is the expression exactly as written.
-export def default_text(default: Ast.Maybe[Ast.Expr], text: String) -> Ast.Maybe[String]
+export def default_text(default: Optional[Ast.Expr], text: String) -> Optional[String]
   case default
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(value) ->
+    none -> return none
+    some(value) ->
       span = Ast.expr_span(value)
-      return Ast.Maybe.Present(text.slice(span.start.offset, span.stop.offset - span.start.offset))
+      return some(text.slice(span.start.offset, span.stop.offset - span.start.offset))
   end
 end
 
@@ -106,8 +106,8 @@ end
 def parameter_text(parameter: Ast.Param, text: String) -> String
   typed = "#{parameter.name}: #{type_text(parameter.type)}"
   case default_text(parameter.default, text)
-    Ast.Maybe.Present(written) -> return "#{typed} = #{written}"
-    Ast.Maybe.Absent -> return typed
+    some(written) -> return "#{typed} = #{written}"
+    none -> return typed
   end
 end
 

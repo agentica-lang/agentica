@@ -16,12 +16,6 @@
 import Source from "source"
 import Types from "types"
 
-## A value that may be absent.
-export enum Maybe[T]
-  Present(T)
-  Absent
-end
-
 ## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its digits, with a
 ## leading - when a pattern negates it.
 export enum LitValue
@@ -45,7 +39,7 @@ end
 export struct Program
   id: Int
   declarations: List[Decl]
-  module_doc: Maybe[String]
+  module_doc: Optional[String]
   span: Source.Span
 end
 
@@ -62,12 +56,12 @@ export enum Decl
   Constant(ConstDecl)
 end
 
-## An import: import Alias from "path" (alias is Present, names is empty), or import {A, B as C} from "path" (alias is
-## Absent, names has at least one entry).
+## An import: import Alias from "path" (alias is `some`, names is empty), or import {A, B as C} from "path" (alias is
+## `none`, names has at least one entry).
 export struct ImportDecl
   id: Int
   path: String
-  alias: Maybe[String]
+  alias: Optional[String]
   names: List[ImportName]
   span: Source.Span
 end
@@ -96,7 +90,7 @@ end
 export struct ExportDecl
   id: Int
   declaration: Decl
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -107,14 +101,14 @@ export struct ConstDecl
   id: Int
   name: String
   name_span: Source.Span
-  type: Maybe[TypeRef]
+  type: Optional[TypeRef]
   value: Expr
   exported: Bool
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
-## def name(params) -> Result with its body. A function of an `extern "library"` block has native Present and no body;
+## def name(params) -> Result with its body. A function of an `extern "library"` block has native `some` and no body;
 ## its parameter and result types are already the Agentica types of the C types it was written with.
 ## type_parameters are the names of a generic function (def first_or[T](...)) and type_parameter_spans their spans, in
 ## the same order; both are empty for any other function, and always for an extern one.
@@ -127,8 +121,8 @@ export struct FunctionDecl
   params: List[Param]
   result: TypeRef
   body: List[Stmt]
-  doc: Maybe[String]
-  native: Maybe[Native]
+  doc: Optional[String]
+  native: Optional[Native]
   span: Source.Span
 end
 
@@ -174,7 +168,7 @@ export struct Param
   name: String
   name_span: Source.Span
   type: TypeRef
-  default: Maybe[Expr]
+  default: Optional[Expr]
   span: Source.Span
 end
 
@@ -190,7 +184,7 @@ export struct StructDecl
   name_span: Source.Span
   type_parameters: List[String]
   fields: List[FieldDecl]
-  doc: Maybe[String]
+  doc: Optional[String]
   record_of: String
   layout: String
   span: Source.Span
@@ -204,8 +198,8 @@ export struct FieldDecl
   name: String
   name_span: Source.Span
   type: TypeRef
-  default: Maybe[Expr]
-  doc: Maybe[String]
+  default: Optional[Expr]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -216,7 +210,7 @@ export struct EnumDecl
   name_span: Source.Span
   type_parameters: List[String]
   variants: List[EnumVariant]
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -227,7 +221,7 @@ export struct TypeAliasDecl
   name_span: Source.Span
   type_parameters: List[String]
   target: TypeRef
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -241,7 +235,7 @@ export struct ResourceDecl
   name_span: Source.Span
   free: String
   by_ref: Bool
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -251,7 +245,7 @@ export struct EnumVariant
   name: String
   name_span: Source.Span
   payload_types: List[TypeRef]
-  doc: Maybe[String]
+  doc: Optional[String]
   span: Source.Span
 end
 
@@ -272,7 +266,7 @@ export struct Binding
   id: Int
   name: String
   name_span: Source.Span
-  type: Maybe[TypeRef]
+  type: Optional[TypeRef]
   value: Expr
   span: Source.Span
 end
@@ -280,7 +274,7 @@ end
 ## return with an optional value.
 export struct Return
   id: Int
-  value: Maybe[Expr]
+  value: Optional[Expr]
   span: Source.Span
 end
 
@@ -299,11 +293,11 @@ export struct IfBranch
   span: Source.Span
 end
 
-## if with its elsif branches. else_body is Present when the else keyword is written, even for an empty body.
+## if with its elsif branches. else_body is `some` when the else keyword is written, even for an empty body.
 export struct IfStmt
   id: Int
   branches: List[IfBranch]
-  else_body: Maybe[List[Stmt]]
+  else_body: Optional[List[Stmt]]
   span: Source.Span
 end
 
@@ -345,7 +339,7 @@ end
 export struct CaseArm
   id: Int
   pattern: Pattern
-  guard: Maybe[Expr]
+  guard: Optional[Expr]
   body: List[Stmt]
   span: Source.Span
 end
@@ -482,7 +476,7 @@ export struct Construct
 end
 
 ## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument.
-## visible is Absent from the parser. The linker sets it to the sorted linked names of the user structs that the file
+## visible is `none` from the parser. The linker sets it to the sorted linked names of the user structs that the file
 ## of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed,
 ## so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). It is data in the
 ## node, not a predicate.
@@ -490,7 +484,7 @@ export struct StructUpdate
   id: Int
   target: Expr
   args: List[NamedArg]
-  visible: Maybe[List[String]]
+  visible: Optional[List[String]]
   span: Source.Span
 end
 
@@ -561,7 +555,7 @@ export struct BlockParam
   id: Int
   name: String
   name_span: Source.Span
-  type: Maybe[TypeRef]
+  type: Optional[TypeRef]
   span: Source.Span
 end
 

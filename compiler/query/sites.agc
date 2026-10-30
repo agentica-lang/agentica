@@ -93,14 +93,14 @@ export def of_types(module: Linker.LinkedModule, checked: Checker.Checked, decla
 end
 
 ## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
-export def innermost(sites: List[Site], offset: Int) -> Ast.Maybe[Site]
-  best: Ast.Maybe[Site] = Ast.Maybe.Absent
+export def innermost(sites: List[Site], offset: Int) -> Optional[Site]
+  best: Optional[Site] = none
   best_size = -1
   for site in sites
     size = site.reach.stop.offset - site.reach.start.offset
     closer = best_size < 0 or size < best_size
     if closer and site.reach.start.offset <= offset and offset < site.reach.stop.offset
-      best = Ast.Maybe.Present(site)
+      best = some(site)
       best_size = size
     end
   end
@@ -122,8 +122,8 @@ end
 ## The target of the imported name that the character at `offset` is on in the import lists of `module`: `make` or
 ## `create` of `import {make as create} from "models"`; or of the name of a re-export (`parse` of `export Url.parse`),
 ## which is the original declaration. An import is not a reference, but it names a declaration, which a query can
-## select. Absent elsewhere, an alias import (`import Models from "models"`) included: it names a module.
-export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Maybe[Target]
+## select. `none` elsewhere, an alias import (`import Models from "models"`) included: it names a module.
+export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target]
   for declaration in module.parsed.declarations
     case declaration
       Ast.Decl.Import(node) ->
@@ -131,21 +131,21 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Maybe[Targe
           on_name = holds?(entry.span, offset) or holds?(entry.local_span, offset)
           linked = module.named.get(entry.local)
           if on_name and linked.ok?
-            return Ast.Maybe.Present(named(linked.unwrap!))
+            return some(named(linked.unwrap!))
           end
         end
 
       Ast.Decl.Reexport(node) ->
         linked = module.reexported.get(node.name)
         if holds?(node.name_span, offset) and linked.ok?
-          return Ast.Maybe.Present(named(linked.unwrap!))
+          return some(named(linked.unwrap!))
         end
 
       _ -> next
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 def scanned(
@@ -234,8 +234,8 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
   for param in node.params
     out = out.concat(type_sites(scan, param.type, node.type_parameters))
     case param.default
-      Ast.Maybe.Present(value) -> roots = roots.push(Walk.Node.Expr(value))
-      Ast.Maybe.Absent -> roots = roots
+      some(value) -> roots = roots.push(Walk.Node.Expr(value))
+      none -> roots = roots
     end
   end
 
@@ -255,8 +255,8 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
     out = out.concat(defined(scan, member("field", node.name, field.name), field.name_span))
     out = out.concat(type_sites(scan, field.type, node.type_parameters))
     case field.default
-      Ast.Maybe.Present(value) -> roots = roots.push(Walk.Node.Expr(value))
-      Ast.Maybe.Absent -> roots = roots
+      some(value) -> roots = roots.push(Walk.Node.Expr(value))
+      none -> roots = roots
     end
   end
 
@@ -267,8 +267,8 @@ end
 # capital (Ast.Native), whatever the type, so a new type code needs no change here.
 def record_result?(node: Ast.FunctionDecl) -> Bool
   case node.native
-    Ast.Maybe.Present(native) -> return native.codes.split("").any? do |code: String| code != code.downcase end
-    Ast.Maybe.Absent -> return false
+    some(native) -> return native.codes.split("").any? do |code: String| code != code.downcase end
+    none -> return false
   end
 end
 
@@ -502,10 +502,10 @@ def pattern_sites(scan: Scan, pattern: Ast.Pattern) -> List[Site]
   return out
 end
 
-def optional_type_sites(scan: Scan, type: Ast.Maybe[Ast.TypeRef], parameters: List[String]) -> List[Site]
+def optional_type_sites(scan: Scan, type: Optional[Ast.TypeRef], parameters: List[String]) -> List[Site]
   case type
-    Ast.Maybe.Present(found) -> return type_sites(scan, found, parameters)
-    Ast.Maybe.Absent -> return []
+    some(found) -> return type_sites(scan, found, parameters)
+    none -> return []
   end
 end
 

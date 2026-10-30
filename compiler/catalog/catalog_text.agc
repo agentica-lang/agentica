@@ -140,7 +140,7 @@ def probe_line(probe: String) -> String
   end
 end
 
-def type_help(word: String) -> Ast.Maybe[String]
+def type_help(word: String) -> Optional[String]
   shared = [
     "Int",
     "Float",
@@ -184,10 +184,10 @@ def ref_text(spec: String) -> String
   return "-"
 end
 
-def help_text(help: Ast.Maybe[String]) -> String
+def help_text(help: Optional[String]) -> String
   case help
-    Ast.Maybe.Present(text) -> return Text.quote(text)
-    Ast.Maybe.Absent -> return "-"
+    some(text) -> return Text.quote(text)
+    none -> return "-"
   end
 end
 

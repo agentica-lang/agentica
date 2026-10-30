@@ -41,14 +41,14 @@ end
 ## check, `good` keeps a whole older one (modules, linked program and result) beside it: up to MAX_ROOTS of them,
 ## outside the accounting of `pruned` and `crowded?`. `style` is the first style problem of the program when it
 ## checked (Front.style_problem): it depends on the texts and on which modules ask for a rule, and the fingerprint has
-## both, so a hit reuses it and does not lex the modules again. It is Absent when the program did not check.
+## both, so a hit reuses it and does not lex the modules again. It is `none` when the program did not check.
 export struct Root
   loaded: Modules.Loaded
   fingerprint: String
   linked: Linker.Linked
   checking: Checker.Checking
-  style: Ast.Maybe[Problems.Problem]
-  good: Ast.Maybe[Good]
+  style: Optional[Problems.Problem]
+  good: Optional[Good]
   used: Int
 end
 
@@ -97,18 +97,18 @@ export def solved(
   loaded: Modules.Loaded,
   linked: Linker.Linked,
   checking: Checker.Checking,
-  style: Ast.Maybe[Problems.Problem],
-  before: Ast.Maybe[Root],
+  style: Optional[Problems.Problem],
+  before: Optional[Root],
 ) -> Root
-  good: Ast.Maybe[Good] = Ast.Maybe.Absent
+  good: Optional[Good] = none
   case before
-    Ast.Maybe.Present(root) -> good = root.good
-    Ast.Maybe.Absent -> good = good
+    some(root) -> good = root.good
+    none -> good = good
   end
 
   case checking
     Checker.Checking.Done(checked) ->
-      good = Ast.Maybe.Present(
+      good = some(
         Good(loaded: loaded, shapes: shapes(loaded), earlier: Checker.Earlier(linked: linked, checked: checked)),
       )
     Checker.Checking.Failed(_) -> good = good
@@ -126,17 +126,17 @@ export def solved(
 end
 
 ## The root that the cache holds for the file that `loaded` starts from.
-export def held(cache: Cache, loaded: Modules.Loaded) -> Ast.Maybe[Root]
+export def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root]
   return root_of(cache, loaded.order[0])
 end
 
 ## The root that the cache holds for the file with the canonical key `key`.
-export def root_of(cache: Cache, key: String) -> Ast.Maybe[Root]
+export def root_of(cache: Cache, key: String) -> Optional[Root]
   if cache.roots.has_key?(key)
-    return Ast.Maybe.Present(cache.roots[key])
+    return some(cache.roots[key])
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 ## A cache that holds `root` and the files it was made from, and nothing else. Their ids do not overlap, since one
@@ -150,23 +150,23 @@ end
 
 ## What the checker may take from the last good program of the root of `loaded`, when some of its modules are
 ## unchanged since.
-export def reusing(cache: Cache, loaded: Modules.Loaded) -> Ast.Maybe[Checker.Reusing]
+export def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reusing]
   case held(cache, loaded)
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(root) ->
+    none -> return none
+    some(root) ->
       case root.good
-        Ast.Maybe.Absent -> return Ast.Maybe.Absent
-        Ast.Maybe.Present(good) ->
+        none -> return none
+        some(good) ->
           if good.loaded.root_dir != loaded.root_dir
-            return Ast.Maybe.Absent
+            return none
           end
 
           clean = unchanged(good, loaded)
           if clean.size == 0
-            return Ast.Maybe.Absent
+            return none
           end
 
-          return Ast.Maybe.Present(Checker.Reusing(earlier: good.earlier, clean: clean))
+          return some(Checker.Reusing(earlier: good.earlier, clean: clean))
       end
   end
 end
