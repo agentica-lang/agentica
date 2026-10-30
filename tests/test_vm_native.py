@@ -847,8 +847,8 @@ def test_a_resource_is_freed_once_and_null_is_an_error(tmp_path, peer):
   Native.close(res)
   puts(peer_res_frees())
   IO.inspect(peer_res_open(-1))
-  puts(peer_bytes_sum([1, 2, 255], 3))
-  puts(peer_bytes_sum([], 0))
+  puts(peer_bytes_sum(Bytes.from_list([1, 2, 255]).unwrap!, 3))
+  puts(peer_bytes_sum("".bytes, 0))
   puts(Native.null?(peer_ptr_echo(Native.null())))
   p = peer_ptr_static()
   puts(Native.null?(p))
@@ -979,18 +979,17 @@ def test_a_free_ref_function_gets_the_address_of_the_handle_once(tmp_path, peer)
     ]
 
 
-# A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
-# the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
-# RUNTIME-HANDLE-NOT-OWNED.
+# A call with a closed resource stops the run at the extern function, before the call, also with C.Bytes to copy.
+# Task.spawn_owning of a closed resource is RUNTIME-HANDLE-NOT-OWNED. (A C.Bytes item that is not a byte, from a
+# .agcb that passes a byte list, is in vm/tests/ffi_test.c.)
 @NATIVE_CALLS
 @pytest.mark.parametrize("case, code, line", [
     ("closed", "RUNTIME-NATIVE-CLOSED", 4),
     ("owned", "RUNTIME-NATIVE-CLOSED", 4),
     ("handed", "RUNTIME-HANDLE-NOT-OWNED", RESOURCE_EXTERN.count("\n") + 10),
-    ("byte", "RUNTIME-INVALID-NUMBER", 11),
     ("both", "RUNTIME-NATIVE-CLOSED", 15),
 ])
-def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, code, line):
+def test_a_closed_resource_stops_the_call(tmp_path, peer, case, code, line):
     main = """def main() -> Void
   res = peer_res_open(3).unwrap!
   arg = System.args()[0]
@@ -1001,11 +1000,9 @@ def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, co
   elsif arg == "handed"
     Native.close(res)
     Task.await(Task.spawn_owning(&get, res))
-  elsif arg == "both"
-    Native.close(res)
-    puts(peer_res_bytes(res, [1, 256], 2))
   else
-    puts(peer_bytes_sum([1, 256], 2))
+    Native.close(res)
+    puts(peer_res_bytes(res, Bytes.from_list([1, 255]).unwrap!, 2))
   end
   puts(peer_res_get(res))
 end
@@ -1038,9 +1035,9 @@ def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
   IO.inspect(Native.get_string(p, 0, 12))
   puts(Native.get_string(p, 0, 2))
   puts(Native.get_string(p, 3, 0).size)
-  puts(Native.get_bytes(p, 0, 12))
-  puts(Native.get_bytes(p, 7, 2))
-  puts(Native.get_bytes(Native.null(), 0, 0))
+  puts(Native.get_bytes(p, 0, 12).to_a)
+  puts(Native.get_bytes(p, 7, 2).to_a)
+  IO.inspect(Native.get_bytes(Native.null(), 0, 0))
   puts(Native.get_string(Native.null(), 0, 0).size)
   puts(peer_ptr_value(Native.pointer(-1)))
   puts(peer_ptr_value(Native.pointer(4096)))
@@ -1052,7 +1049,7 @@ end
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "héllo", "world", '"héllo\\u0000world"', "h\ufffd", "0",
-        "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]", "[119, 111]", "[]", "0", "-1", "4096", "true",
+        "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]", "[119, 111]", "<Bytes 0>", "0", "-1", "4096", "true",
         "42", "",
     ]
 
@@ -1187,7 +1184,7 @@ def test_c_fills_and_reads_an_owned_buffer(tmp_path, peer):
   puts(peer_strs_len(names, 2))
   puts(Native.get_string(Native.get_pointer(names, 8), 0))
   puts(Native.get_string(a, 0))
-  puts(Native.get_bytes(a, 0, 4))
+  puts(Native.get_bytes(a, 0, 4).to_a)
   puts(Native.get_string(b, 1, 2))
   IO.inspect(a)
   puts(Native.null?(a))
@@ -1234,10 +1231,11 @@ end
     ("Native.get_string(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
     ("Native.get_bytes(buf, 0, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
     ("Native.get_bytes(buf, 8, 9)", "RUNTIME-NATIVE-BOUNDS", "9"),
-    ("Native.put_bytes(buf, 14, [1, 2, 3])", "RUNTIME-NATIVE-BOUNDS", "[1"),
-    ("Native.put_bytes(buf, -1, [1])", "RUNTIME-NATIVE-BOUNDS", "-1"),
-    ("Native.put_bytes(buf, 0, [1, 256])", "RUNTIME-INTEGER-OVERFLOW", "[1"),
-    ("Native.put_bytes(buf, 0, [-1])", "RUNTIME-INTEGER-OVERFLOW", "[-1"),
+    ("Native.put_bytes(buf, 14, \"abc\".bytes)", "RUNTIME-NATIVE-BOUNDS", "\"abc"),
+    ("Native.put_bytes(buf, 17, \"\".bytes)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.put_bytes(buf, -1, \"a\".bytes)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.put_bytes(Native.null(), 0, \"a\".bytes)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.put_bytes(gone, 0, \"a\".bytes)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("Native.get_bytes(gone, 0, 1)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("Native.get_int32(Native.null(), 0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.put_float64(Native.null(), 8, 1.0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
@@ -1273,24 +1271,36 @@ def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, 
     assert diagnostic(result, 1) == (code, where)
 
 
-# Native.put_bytes writes a List of bytes that C reads (two little-endian int64s here: every target with native calls
-# is little-endian) and that Native.get_bytes gives back unchanged.
+# Native.put_bytes writes a Bytes that C reads (two little-endian int64s here: every target with native calls is
+# little-endian) and that Native.get_bytes gives back equal; an empty one writes nothing, also at the end, and a large
+# one (4 MiB, every byte value) goes through C (C.Bytes) and memory unchanged.
 @NATIVE_CALLS
 def test_put_bytes_writes_what_get_bytes_reads_back(tmp_path, peer):
     main = """def main() -> Void
   buf = Native.memory_pointer(16)
-  Native.put_bytes(buf, 0, [1, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0])
+  Native.put_bytes(buf, 0, Bytes.from_list([1, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0]).unwrap!)
   puts(peer_sum_int64s(buf, 2))
   copy = Native.memory_pointer(16)
   Native.put_bytes(copy, 0, Native.get_bytes(buf, 0, 16))
-  puts(Native.get_bytes(copy, 0, 16).inspect == Native.get_bytes(buf, 0, 16).inspect)
-  Native.put_bytes(copy, 15, [])
-  Native.put_bytes(copy, 16, [])
-  puts(Native.get_bytes(copy, 7, 3))
+  puts(Native.get_bytes(copy, 0, 16) == Native.get_bytes(buf, 0, 16))
+  Native.put_bytes(copy, 15, "".bytes)
+  Native.put_bytes(copy, 16, "".bytes)
+  puts(Native.get_bytes(copy, 7, 3).to_a)
+  IO.inspect(Native.get_bytes(copy, 16, 0))
+  part = Bytes.from_list((0..255).to_a).unwrap!
+  large = Bytes.concat((1..16_384).to_a.map do |i: Int| part end)
+  big = Native.memory_pointer(large.size)
+  Native.put_bytes(big, 0, large)
+  back = Native.get_bytes(big, 0, large.size)
+  puts(back == large)
+  puts([back.size, peer_bytes_sum(large, large.size), peer_bytes_sum(back, back.size)])
 end
 """
-    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
-    assert (result.code, result.stdout, result.stderr) == (0, "256\ntrue\n[0, 255, 0]\n", "")
+    summed = 'extern "%s"\n  def peer_bytes_sum(bytes: C.Bytes, n: C.Int32) -> C.Int32\nend\n\n' % literal(peer)
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + summed + main))
+    total = 16_384 * sum(range(256))
+    assert (result.code, result.stdout, result.stderr) == (
+        0, "256\ntrue\n[0, 255, 0]\n<Bytes 0>\ntrue\n[4194304, %d, %d]\n" % (total, total), "")
 
 
 # Native.offset of an owned buffer is a view of the same memory from that byte to the buffer's end: C fills and reads
@@ -1308,7 +1318,7 @@ def test_a_view_into_an_owned_buffer_and_the_address_of_a_pointer(tmp_path, peer
   puts(peer_sum_floats(ints, 2))
   tail = Native.offset(ints, 8)
   puts([Native.address(ints) - Native.address(buf), Native.address(tail) - Native.address(buf)])
-  puts(Native.get_bytes(tail, 0, 0))
+  puts(Native.get_bytes(tail, 0, 0).size)
   puts([Native.null?(ints), Native.closed?(ints)])
   IO.inspect(ints)
   puts(Native.get_int64(Native.offset(peer_static_int64s(), 8), 0))
@@ -1320,7 +1330,7 @@ end
 """
     result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr, result.stdout.splitlines()) == (0, "", [
-        "[0, 0, -3, -2]", "3.5", "[8, 16]", "[]", "[false, false]", "<C.Pointer>", "-9", "4000", "-1", "true",
+        "[0, 0, -3, -2]", "3.5", "[8, 16]", "0", "[false, false]", "<C.Pointer>", "-9", "4000", "-1", "true",
     ])
 
 
@@ -1335,7 +1345,7 @@ def test_from_string_gives_c_the_bytes_of_a_string_with_its_length(tmp_path, pee
   text = "é#{String.from_code(0)}😀 ok"
   buf = Native.from_string(text)
   puts(peer_text_sum(buf, text.bytesize))
-  puts(Native.get_bytes(buf, text.bytesize, 1))
+  puts(Native.get_bytes(buf, text.bytesize, 1).to_a)
   sql = "SELECT 'é'; SELECT 2"
   used = Native.from_string(sql) do |s|
     tail = peer_tail(s, sql.bytesize)
@@ -1997,7 +2007,7 @@ def test_a_variadic_function_gets_the_arguments_of_its_declared_shape(tmp_path, 
   puts(vmix_none(""))
   puts(
     vmix_wide(
-      "idlsypdddddddddli", 1, 0.5, 2, "four", [200, 0], Native.pointer(64), 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      "idlsypdddddddddli", 1, 0.5, 2, "four", Bytes.from_list([200, 0]).unwrap!, Native.pointer(64), 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
       1.0, 3_000_000_000, -7,
     ),
   )
@@ -2043,7 +2053,7 @@ def main() -> Void
   puts(fd >= 0)
   puts(close_file(fd))
   buffer = malloc(64)
-  puts(snprintf(buffer, 64, "%%d %%.2f %%s %%s", 42, 2.5, "hi", [121, 111, 0]))
+  puts(snprintf(buffer, 64, "%%d %%.2f %%s %%s", 42, 2.5, "hi", Bytes.from_list([121, 111, 0]).unwrap!))
   puts(Native.get_string(buffer, 0))
   free(buffer)
 end
@@ -3091,14 +3101,14 @@ def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tm
   db = sqlite3_open(":memory:").db
   puts(sqlite3_exec(db, "create table t (id integer, b blob, s text)", Native.null(), Native.null()).result)
   insert = sqlite3_prepare_v2(db, "insert into t values (1, ?, ?)", -1).stmt
-  blob = [0, 1, 127, 128, 255]
+  blob = Bytes.from_list([0, 1, 127, 128, 255]).unwrap!
   puts([sqlite3_bind_blob(insert, 1, blob, blob.size, transient), sqlite3_bind_text(insert, 2, "héllo", -1, transient)])
   puts(sqlite3_step(insert))
   Native.close(insert)
   puts(sqlite3_exec(db, "insert into t values (2, null, null)", Native.null(), Native.null()).result)
   query = sqlite3_prepare_v2(db, "select b, s from t order by id", -1).stmt
   puts(sqlite3_step(query))
-  puts(Native.get_bytes(sqlite3_column_blob(query, 0), 0, sqlite3_column_bytes(query, 0)))
+  puts(Native.get_bytes(sqlite3_column_blob(query, 0), 0, sqlite3_column_bytes(query, 0)).to_a)
   puts(Native.get_string(sqlite3_column_text(query, 1), 0, sqlite3_column_bytes(query, 1)))
   puts(Native.get_string(sqlite3_column_text(query, 1), 0))
   puts(sqlite3_step(query))
@@ -3108,7 +3118,7 @@ def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tm
   puts(sqlite3_step(empty))
   blob_at = sqlite3_column_blob(empty, 0)
   puts(Native.null?(blob_at))
-  puts(Native.get_bytes(blob_at, 0, sqlite3_column_bytes(empty, 0)))
+  puts(Native.get_bytes(blob_at, 0, sqlite3_column_bytes(empty, 0)).to_a)
   Native.close(empty)
   failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
   puts(failed.result)

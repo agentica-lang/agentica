@@ -41,7 +41,7 @@ def main() -> Void
   puts(peer(1, cos(0.0) > 0.5, "x"))
   puts(crunch(2))
   conn = peer_open("p").unwrap!
-  puts(Native.null?(send(conn, [1, 2], 2)))
+  puts(Native.null?(send(conn, "ab".bytes, 2)))
   Native.close(conn)
   accepted = peer_accept(80)
   puts(accepted.result + accepted.count)

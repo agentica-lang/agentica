@@ -155,13 +155,23 @@ static void test_resources(void) {
   native_close(held);
   fails("lr " USABLE_SIZE " " LIBC, &held, 1, "RUNTIME-NATIVE-CLOSED");
   fails("rl malloc no_free_function_here Mem " LIBC, &size, 1, "RUNTIME-NATIVE-LOAD");
-  /* C.Bytes: a copy of the bytes, here read by strlen up to the 0 item. */
+  /* C.Bytes: a copy of the bytes, here read by strlen up to the 0 byte. A Bytes; the empty one still gives C memory
+     to read. */
+  static const uint8_t raw[3] = {97, 255, 0};
+  agc_value bytes = agc_bytes_value(agc_make_bytes(raw, 3));
+  assert(agc_as_int(&vm, native_call("ly strlen " LIBC, &bytes, 1)) == 2);
+  agc_value none[3] = {agc_bytes_value(agc_empty_bytes()), agc_bytes_value(agc_empty_bytes()), agc_int(0)};
+  assert(agc_as_int(&vm, native_call("iyyl memcmp " LIBC, none, 3)) == 0);
+  /* The old form, a byte list, which only a .agcb compiled before Bytes passes: same code, told apart by the tag. */
   agc_value items[3] = {agc_int(97), agc_int(255), agc_int(0)};
-  agc_value bytes = agc_list_value(agc_list_from_array(items, 3));
+  bytes = agc_list_value(agc_list_from_array(items, 3));
   assert(agc_as_int(&vm, native_call("ly strlen " LIBC, &bytes, 1)) == 2);
   items[1] = agc_int(256);
   bytes = agc_list_value(agc_list_from_array(items, 3));
   fails("ly strlen " LIBC, &bytes, 1, "RUNTIME-INVALID-NUMBER");
+  /* Another tag is invalid bytecode. */
+  bytes = text("ab");
+  fails("ly strlen " LIBC, &bytes, 1, "RUNTIME-INTERNAL");
 #endif
 }
 
@@ -319,26 +329,32 @@ static void test_reads(void) {
   agc_value at[3] = {agc_c_pointer_value((void *)data), agc_int(0), agc_int(4)};
   assert(agc_as_string(&vm, row("Native.get_string", 2)(&vm, at, 0))->bytes == 2);
   assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, at, 0))->bytes == 4);
+  assert(agc_as_bytes(&vm, row("Native.get_bytes.bytes", 3)(&vm, at, 0))->len == 4);
   assert(agc_list_len(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, at, 0))) == 4);
   /* From an offset: "c" after the NUL, and the bytes from there. */
   agc_value from[3] = {at[0], agc_int(3), agc_int(1)};
   assert(agc_as_string(&vm, row("Native.get_string", 2)(&vm, from, 0))->bytes == 1);
   assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, from, 0))->data[0] == 'c');
+  assert(agc_as_bytes(&vm, row("Native.get_bytes.bytes", 3)(&vm, from, 0))->data[0] == 'c');
   assert(agc_as_int(&vm, agc_list_get(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, from, 0)), 0)) == 'c');
   /* The pointer first: NULL fails before a negative length, and only NULL with length 0 reads as empty. */
   agc_value null_at[3] = {agc_c_pointer_value(NULL), agc_int(0), agc_int(0)};
   assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, null_at, 0))->bytes == 0);
+  assert(agc_as_bytes(&vm, row("Native.get_bytes.bytes", 3)(&vm, null_at, 0))->len == 0);
   assert(agc_list_len(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, null_at, 0))) == 0);
   read_fails("Native.get_string", 2, null_at, "RUNTIME-NATIVE-NULL");
   null_at[2] = agc_int(-1);
+  read_fails("Native.get_bytes.bytes", 3, null_at, "RUNTIME-NATIVE-NULL");
   read_fails("Native.get_bytes", 3, null_at, "RUNTIME-NATIVE-NULL");
   at[2] = agc_int(-1);
   read_fails("Native.get_string", 3, at, "RUNTIME-INVALID-COUNT");
+  read_fails("Native.get_bytes.bytes", 3, at, "RUNTIME-INVALID-COUNT");
   read_fails("Native.get_bytes", 3, at, "RUNTIME-INVALID-COUNT");
   vm.rt->no_files = true;
   at[2] = agc_int(1);
   read_fails("Native.get_string", 2, at, "RUNTIME-NATIVE-DENIED");
   read_fails("Native.get_string", 3, at, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.get_bytes.bytes", 3, at, "RUNTIME-NATIVE-DENIED");
   read_fails("Native.get_bytes", 3, at, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
@@ -410,6 +426,21 @@ static void test_buffers(void) {
   put_bytes[2] = agc_list_value(agc_list_from_array(bytes, 2));
   (void)call_row("Native.put_bytes", 3, put_bytes);
   assert(agc_as_int(&vm, call_row("Native.get_uint16", 2, get)) == 9 + 255 * 256);
+  /* A Bytes needs no check of its items; past the end it fails before it writes. */
+  static const uint8_t pair[2] = {7, 8};
+  agc_value put_data[3] = {buf, agc_int(14), agc_bytes_value(agc_make_bytes(pair, 2))};
+  (void)call_row("Native.put_bytes.bytes", 3, put_data);
+  agc_value tail[3] = {buf, agc_int(14), agc_int(2)};
+  const agc_bytes *back = agc_as_bytes(&vm, call_row("Native.get_bytes.bytes", 3, tail));
+  assert(back->len == 2 && back->data[0] == 7 && back->data[1] == 8);
+  put_data[1] = agc_int(15);
+  read_fails("Native.put_bytes.bytes", 3, put_data, "RUNTIME-NATIVE-BOUNDS");
+  put_data[1] = agc_int(16);
+  put_data[2] = agc_bytes_value(agc_empty_bytes());
+  (void)call_row("Native.put_bytes.bytes", 3, put_data);
+  put_data[2] = put_bytes[2];
+  read_fails("Native.put_bytes.bytes", 3, put_data, "RUNTIME-INTERNAL");
+  assert(agc_as_int(&vm, call_row("Native.get_uint8", 2, tail)) == 7);
   /* A view (Native.offset) shows the bytes from its offset to the buffer's end, with those bounds; a view of a view
      keeps the buffer as its parent; neither is the program's to free. */
   agc_value at[2] = {buf, agc_int(4)};
@@ -423,6 +454,7 @@ static void test_buffers(void) {
   vget[1] = agc_int(0);
   vget[2] = agc_int(13);
   read_fails("Native.get_bytes", 3, vget, "RUNTIME-NATIVE-BOUNDS");
+  read_fails("Native.get_bytes.bytes", 3, vget, "RUNTIME-NATIVE-BOUNDS");
   at[1] = agc_int(17);
   read_fails("Native.offset", 2, at, "RUNTIME-NATIVE-BOUNDS");
   agc_value inner[2] = {view, agc_int(12)};
