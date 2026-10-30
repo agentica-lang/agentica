@@ -30,6 +30,9 @@ Change style only in code you touch. Restyle untouched code separately.
 - Separate top-level declarations with one blank line
   (`PARSE-MISSING-BLANK-LINE`); no double blank lines or blank lines right
   after `def` or before `end`.
+- Put a blank line after a block's `end` before the next statement
+  (`CHECK-BLANK-LINE-AFTER-END` with `blank_line_after_end = true` under
+  `[style]`; see `site/content/tour/modules.md`).
 - Break long calls/lists one item per line with a trailing comma; wrap long
   expressions in parentheses. Never continue an expression on a bare line.
 - Put spaces around operators and after commas, not inside brackets or

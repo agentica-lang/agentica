@@ -13,6 +13,7 @@ def main() -> Void
   doubled = [1, 2, 3].map do |x|
     x * 2
   end
+
   puts(doubled)
 end
 ```
@@ -103,8 +104,10 @@ def main() -> Void
     if n > 10
       return "big"
     end
+
     "small"
   end
+
   puts(labels)
 end
 ```
