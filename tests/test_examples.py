@@ -160,6 +160,8 @@ def test_file_task_process_and_http_examples_give_their_expected_output():
     assert cli_run(example("concurrency.agc")) == (0, "42\n14\n", "")
     assert cli_run(example("file-summary.agc"), example("hello.agc")) == (0, "39\n", "")
     assert cli_run(example("http_server.agc")) == (0, "200\nhello\n\n404\nok()\n", "")
+    assert cli_run(example("http_sse.agc")) == (
+        0, '200\n["chunked"]\ndata: tick 1\n\ndata: tick 2\n\ndata: tick 3\n\n\n404\nok()\n', "")
     tool = cli_run(example("process-tool.agc"))
     assert tool.code == 0, tool.stderr
     assert (tool.stdout, tool.stderr) == ("hello from sh\n", "")

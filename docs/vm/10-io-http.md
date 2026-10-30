@@ -60,7 +60,7 @@ after the limit check.
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
 answers are in the grammar (`docs/grammar/06d-io-and-network.md`, "HTTP client
-and server"). Streaming is planned in `docs/future/30-hybrid-http.md`.
+and server"). Client streaming is planned in `docs/future/30-hybrid-http.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
@@ -352,6 +352,21 @@ Properties of the client that no test checks:
 - `std/http` runs the accept loop in the group. For each socket it spawns the
   connection loop: read a request, run the handler, then write the response.
   The loop ends when the write returns anything but `ok(true)`.
+- A `listen_stream` server runs the same loop with a handler that returns a
+  `StreamResponse`. A body channel that is already closed with its pieces
+  buffered is one text and goes through the whole-response write. Otherwise the
+  head is `encode_response` of the same status and headers with an empty body,
+  its `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
+  checks and the C code are the same), and the connection task sends the pieces
+  as it takes them from the channel. A watcher task, spawned in the group,
+  holds one `TCP.recv_bytes` of a byte on the socket for the whole stream: the
+  end of the client's input closes the body channel, which wakes the connection
+  task and fails the producer's next `send`, with no write needed. When the
+  stream has ended, the same read is the wait for the next request: its byte
+  goes back as the start of the request, and the connection task waits for it
+  at most `idle_timeout_ms`. With a request already buffered there is no
+  watcher, and only a failed send shows that the client left. HTTP/1.0 never
+  gets here: the parser answers 505.
 
 #### 10.7.3 Errors and status codes
 

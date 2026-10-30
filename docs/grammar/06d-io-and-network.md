@@ -62,6 +62,19 @@ connection closes. Stderr gets `http: handler error: <message>` or `http:
 invalid response: <reason>`. A handler has no time limit. A runtime error in a
 handler crashes its connection task, and the run reports the crash.
 
+`listen_stream` (or `listen_stream_tls`) takes a handler that returns an
+`HTTP.StreamResponse(status, headers, body: Channel[String])`: the head goes out
+at once, then each piece the channel gives as one flushed chunk
+(`Transfer-Encoding: chunked`), and the body ends when the channel closes. A
+body that is already closed when the handler returns goes out with
+`Content-Length`; `HTTP.whole(text)` makes such a channel for a route that
+answers with one text. Empty pieces are skipped, and a handler-set
+`Content-Length` or `Transfer-Encoding`, or a 204 or 304 with a body that is
+still open, is the same 500 as above. `HEAD` gets the head and the channel
+closes. When the client leaves (the end of its input or a failed send) the
+server closes the channel, so the producer's next `send` fails. The wait for a
+piece has no time limit; `request_timeout_ms` bounds each piece's send.
+
 `server_options()` gives 30 s request and idle timeouts, 128 connections and 1
 MiB bodies. `request_timeout_ms` bounds the first byte of a connection's first
 request, then the rest of each request, then the response write;

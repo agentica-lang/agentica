@@ -18,6 +18,7 @@ from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_a
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
 SERVER_NODE_PEER = FIXTURES / "http-server-peer.js"
+STREAM_PEER = FIXTURES / "http-stream-peer.py"
 CERTS = FIXTURES / "tls"
 
 PRELUDE = """\
@@ -175,6 +176,93 @@ def main() -> Void
   IO.inspect(HTTP.wait(secure))
 end
 """
+
+# A streaming server: /ticks sends four pieces 500 ms apart, /endless sends until the client leaves and then tells /said,
+# and the timeouts are shorter than the pause, so a live stream that is only slow must not be cut.
+STREAM_SERVER_PROGRAM = """\
+import HTTP from "std/http"
+
+TICK_MS = 500
+
+struct Feed
+  said: Channel[String]
+  body: Channel[String]
+end
+
+def ticks(feed: Feed) -> Void
+  for n in 1..4
+    feed.body.send("data: #{n}\\n\\n", 5000)
+    Task.sleep(TICK_MS)
+  end
+  feed.body.close
+end
+
+def endless(feed: Feed) -> Void
+  while Result.ok?(feed.body.send("data: again\\n\\n", 5000))
+    Task.sleep(20)
+  end
+  feed.said.send("stopped", 5000)
+end
+
+def stream(feed: Feed, job: Fn[Feed, Void]) -> Result[HTTP.StreamResponse]
+  Task.spawn(job, feed)
+  headers = [Header(name: "Content-Type", value: "text/event-stream")]
+  return ok(HTTP.StreamResponse(status: 200, headers: headers, body: feed.body))
+end
+
+def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+  return f
+end
+
+def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+  return handler_of() do |request|
+    body: Channel[String] = Channel.new(2)
+    feed = Feed(said: said, body: body)
+    if request.path == "/ticks"
+      return stream(feed, &ticks)
+    end
+    if request.path == "/endless"
+      return stream(feed, &endless)
+    end
+    text = "whole"
+    if request.path == "/said"
+      text = said.recv(10000).unwrap_or("nothing")
+    end
+    return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(text)))
+  end
+end
+
+def main() -> Void
+  said: Channel[String] = Channel.new(8)
+  options = HttpServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
+  server = Result.unwrap!(HTTP.listen_stream("127.0.0.1", 0, routes(said), options))
+  certs = System.args()[0]
+  secure = Result.unwrap!(HTTP.listen_stream_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", routes(said), options))
+  puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
+  IO.flush()
+  IO.read()
+  HTTP.close_server(server)
+  HTTP.close_server(secure)
+  IO.inspect(HTTP.wait(server))
+  IO.inspect(HTTP.wait(secure))
+end
+"""
+
+STREAM_PYTHON_LINES = [
+    "plain 200 chunked None text/event-stream ['data: 1\\n\\n', 'data: 2\\n\\n', 'data: 3\\n\\n', 'data: 4\\n\\n']",
+    "plain-timing apart",
+    "plain-keep-alive 200 5 whole True",
+    "tls 200 chunked None text/event-stream ['data: 1\\n\\n', 'data: 2\\n\\n', 'data: 3\\n\\n', 'data: 4\\n\\n']",
+    "tls-timing apart",
+    "tls-keep-alive 200 5 whole True",
+    "head 200 chunked b'' whole True",
+    "plain-leave-first 200 ['data: again\\n\\n']",
+    "plain-leave stopped",
+    "tls-leave-first 200 ['data: again\\n\\n']",
+    "tls-leave stopped",
+    "silent-leave stopped",
+    "http-1.0 505 0",
+]
 
 SERVER_PYTHON_LINES = [
     "length-and-chunked 400 closed",
@@ -358,6 +446,23 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
         node_run = run([node, SERVER_NODE_PEER, port, "2"], timeout=scaled(120))
         assert node_run.code == 0, node_run.stderr
         assert output_lines(node_run.stdout) == SERVER_NODE_LINES
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+    assert vm.next_line() == "ok()"
+    assert vm.next_line() == "ok()"
+    assert vm.stderr_text() == ""
+
+
+def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_producer_of_a_client_that_left(tmp_path, adopt):
+    """http.client reads the chunks of /ticks as they arrive and times them, over plain TCP and TLS; HEAD, keep-alive
+    after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client."""
+    source = tmp_path / "stream-server.agc"
+    source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, stdin=True))
+    port, tls_port = vm.next_line().split()
+    peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS)], timeout=scaled(120))
+    assert peer.code == 0, peer.stderr
+    assert output_lines(peer.stdout) == STREAM_PYTHON_LINES
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
     assert vm.next_line() == "ok()"

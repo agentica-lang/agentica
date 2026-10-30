@@ -324,6 +324,78 @@ Bad requests never reach the handler: the server answers and closes the connecti
 
 Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
 
+### HTTP.listen_stream and Server-Sent Events
+
+```text
+HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.whole(text: String) -> Channel[String]
+
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[String])
+```
+
+For a body that is not ready when the handler returns: events, tokens as a model makes them, a big file. The handler returns a `StreamResponse` whose `body` is a [channel](/library/concurrency/task/), and a task it started sends the pieces and closes the channel at the end.
+
+- The server sends the head at once, then each piece as it arrives, as one flushed chunk (`Transfer-Encoding: chunked`), and ends the body when the channel closes. The handler sets neither `Content-Length` nor `Transfer-Encoding`. An empty piece is skipped.
+- A route that answers with one text uses `body: HTTP.whole(text)`, a closed channel holding that text. The server then sends `Content-Length`, as `listen` does. It does the same for any body that is already closed when the handler returns.
+- When the client leaves, the server closes the channel, so the producer's next `send` returns `error("channel: closed")` and it stops. A producer that sends rarely can look at `body.closed?` as well. A client that only half-closes its sending side counts as gone.
+- A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
+- A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds each piece's send: a client that stops reading for that long is cut off, and the channel closes.
+- `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for `listen`, and the channel closes.
+- Over HTTP/1.0 there is no chunked body: the server answers 505 to it (`HTTP/1.1` only), as `listen` does.
+
+Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pieces are `data: ...` lines ended by a blank line:
+
+```agentica
+import HTTP from "std/http"
+
+def produce(events: Channel[String]) -> Void
+  for n in 1..3
+    if not Result.ok?(events.send("data: tick #{n}\n\n", 5000))
+      break
+    end
+    Task.sleep(100)
+  end
+  events.close
+end
+
+def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
+  if request.method == "GET" and request.path == "/events"
+    events: Channel[String] = Channel.new(8)
+    Task.spawn(&produce, events)
+    headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
+    return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
+  end
+  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n")))
+end
+
+def main() -> Void
+  server = HTTP.listen_stream("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  client = HTTP.client(HTTP.client_options()).unwrap!
+  base = "http://127.0.0.1:#{HTTP.local_port(server)}"
+  response = HTTP.get(client, base + "/events").unwrap!
+  puts(HTTP.header_values(response.headers, "transfer-encoding"))
+  puts(response.body)
+  puts(HTTP.get(client, base + "/missing").unwrap!.status)
+  HTTP.close_client(client)
+  HTTP.close_server(server)
+end
+```
+
+```output
+["chunked"]
+data: tick 1
+
+data: tick 2
+
+data: tick 3
+
+
+404
+```
+
+`HTTP.get` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
+
 ### HTTP.wait and HTTP.close_server
 
 ```text

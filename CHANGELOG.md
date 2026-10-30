@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `HTTP.listen_stream` and `HTTP.listen_stream_tls`: a handler returns an
+  `HTTP.StreamResponse` whose body is a channel, sent as chunks as they arrive,
+  for Server-Sent Events or tokens; `HTTP.whole(text)` is the channel of a route
+  with one text.
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
