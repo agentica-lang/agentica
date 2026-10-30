@@ -356,6 +356,41 @@ static void test_crypto_keys(void) {
   fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
 }
 
+/* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a
+   131-byte key. A key exactly at the block size (64 for SHA-256, 128 for SHA-512) is used as it is; those answers come
+   from Python's hmac. */
+static void test_hmac_long_keys(void) {
+  static const char case6[] = "Test Using Larger Than Block-Size Key - Hash Key First";
+  static const char case7[] = "This is a test using a larger than block-size key and a larger than block-size data. "
+                              "The key needs to be hashed before being used by the HMAC algorithm.";
+  static const char hi[] = "Hi There";
+  static const struct {
+    size_t key_n;
+    const char *data;
+    const char *name;
+    const char *mac;
+  } cases[] = {
+    {131, case6, "HMAC.sha256_hexdigest.bytes", "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"},
+    {131, case6, "HMAC.sha512_hexdigest.bytes",
+     "80b24263c7c1a3ebb71493c1dd7be8b49b46d1f41b4aeec1121b013783f8f352"
+     "6b56d037e05f2598bd0fd2215d6a1e5295e64f73f63f0aec8b915a985d786598"},
+    {131, case7, "HMAC.sha256_hexdigest.bytes", "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"},
+    {131, case7, "HMAC.sha512_hexdigest.bytes",
+     "e37b6a775dc87dbaa4dfa9f96e5e3ffddebd71f8867289865df5a32d20cdc944"
+     "b6022cac3c4982b10d5eeb55c3e4de15134676fb6de0446065c97440fa8c6a58"},
+    {64, hi, "HMAC.sha256_hexdigest.bytes", "ebef34e13d0a0fe04593d043bc7a865106db0604211d404c18206d862e5d7852"},
+    {128, hi, "HMAC.sha512_hexdigest.bytes",
+     "17eb09b3d3c0f3ac497c608347e1d5b5df5e4b062bfd56c191c8499f24a3a9d1"
+     "c3dfb449d01f4c9ca316b6b8d6a6299bad883d0bffe11c88c60d7daed6feeb48"},
+  };
+  char key[131];
+  memset(key, 0xaa, sizeof key);
+  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+    agc_value args[2] = {raw(key, cases[k].key_n), raw(cases[k].data, strlen(cases[k].data))};
+    form_is(agc_as_string(&vm, call(cases[k].name, 2, args)), cases[k].mac);
+  }
+}
+
 /* String.from_bytes decodes strictly: valid UTF-8 (a NUL included) gives the String, a cut or a surrogate is an
    error, and a List there is a wrong tag. */
 static void test_string_keys(void) {
@@ -530,6 +565,7 @@ int main(void) {
   test_builtins();
   test_wrong_tags();
   test_crypto_keys();
+  test_hmac_long_keys();
   test_string_keys();
   test_hand_off_keys();
   test_hand_off_survives_collection();

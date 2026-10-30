@@ -62,15 +62,28 @@ size_t agc_hmac(agc_digest_kind kind, const unsigned char *key, size_t key_n, co
                 unsigned char out[AGC_DIGEST_MAX_BYTES]) {
   static const unsigned char none = 0;
   const EVP_MD *md = digest_method(kind);
+  bool done = md && digest_ready();
+  /* The HMAC provider hands the key length to HMAC_Init_ex as an int, and a Bytes key has no size cap, so a key of
+     2^31 bytes or more would fail or be cut. RFC 2104 hashes a key longer than the block first and MACs with the
+     digest, so doing that here gives the same MAC for every length and keeps the length OpenSSL sees small. */
+  unsigned char short_key[EVP_MAX_MD_SIZE];
+  bool hashed = false;
+  if (done && key_n > (size_t)EVP_MD_get_block_size(md)) {
+    unsigned int short_n = 0;
+    done = EVP_Digest(key, key_n, short_key, &short_n, md, NULL) == 1 && short_n > 0;
+    key = short_key;
+    key_n = short_n;
+    hashed = true;
+  }
   size_t len = 0;
-  /* EVP_Q_mac does the fetch, init and final in one call. The HMAC provider still hands the key length to HMAC_Init_ex
-     as an int, so a key of 2^31 bytes or more would be cut; no byte list of that size fits in memory here. Its key goes
-     to EVP_MAC_init, which reads a NULL key as "keep the key already set", so an empty key is passed as a pointer to no
-     bytes, never as NULL. */
-  bool done = md && digest_ready() &&
-              EVP_Q_mac(NULL, "HMAC", NULL, EVP_MD_get0_name(md), NULL, key_n ? key : &none, key_n, n ? data : &none,
-                        n, out, AGC_DIGEST_MAX_BYTES, &len) != NULL &&
-              len > 0;
+  /* EVP_Q_mac does the fetch, init and final in one call. Its key goes to EVP_MAC_init, which reads a NULL key as
+     "keep the key already set", so an empty key is passed as a pointer to no bytes, never as NULL. */
+  done = done &&
+         EVP_Q_mac(NULL, "HMAC", NULL, EVP_MD_get0_name(md), NULL, key_n ? key : &none, key_n, n ? data : &none, n,
+                   out, AGC_DIGEST_MAX_BYTES, &len) != NULL &&
+         len > 0;
+  /* The digest of the key is as secret as the key. */
+  if (hashed) OPENSSL_cleanse(short_key, sizeof short_key);
   if (!done) ERR_clear_error();
   return done ? len : 0;
 }
