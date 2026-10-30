@@ -195,6 +195,7 @@ EXCLUDED = {
     "tests/test_conformance.py": "checks this manifest itself, in make test on Linux",
     "tests/test_docker_tests.py": "the Docker launcher of the Linux developer container, not the product",
     "tests/test_release_tools.py": "tools/release.py packing; release.yml runs the packages on all four systems",
+    "tests/test_shard_tests.py": "tools/shard_tests.py, the split of the test modules over the CI runners",
     "tests/test_layout_check.py": "tools/layout_check.py, a binutils check of the Linux x86-64 build that ci.yml runs",
     "tests/test_site_examples.py": "the code blocks of the site, checked with the site build",
     "tests/test_frontend_bytecode.py": "frozen goldens of the front end stages; the spec and golden areas run it live",

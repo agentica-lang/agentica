@@ -50,13 +50,18 @@ test-multicore: dist/agentica$(EXE)
 test-multicore-modules: dist/agentica$(EXE)
 	@AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_MULTICORE_MODULES)"
 
+# SHARD=I/N runs shard I of N of these modules (tools/shard_tests.py, the tsan column of tests/shard_weights.txt: the CI
+# shards), the two runs below together being one list. The inner make gets SHARD= so that it does not split its list again.
+TSAN_RUN_ALONE := tests/test_vm_multicore.py
+TSAN_RUN_PICKED = $(if $(SHARD),$(shell $(PYTHON) tools/shard_tests.py --weights tsan $(SHARD) $(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES)),$(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES))
 vm-tsan-run: dist/agentica$(EXE)
+	@: $(SHARD_CHECK)
 	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
-	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
-	  $(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
-	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_TEST_EXECUTABLE=$(CURDIR)/build/vm/tsan/agentica$(EXE) \
+	$(if $(filter $(TSAN_RUN_ALONE),$(TSAN_RUN_PICKED)),AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
+	  $(MAKE) --no-print-directory test-py SHARD= TESTS="$(TSAN_RUN_ALONE)")
+	$(if $(filter-out $(TSAN_RUN_ALONE),$(TSAN_RUN_PICKED)),AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_TEST_EXECUTABLE=$(CURDIR)/build/vm/tsan/agentica$(EXE) \
 	  AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
-	  AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_MULTICORE_MODULES)"
+	  AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py SHARD= TESTS="$(filter-out $(TSAN_RUN_ALONE),$(TSAN_RUN_PICKED))")
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
@@ -203,8 +208,9 @@ vm-jit-self-compile: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 
 vm-sanitize-build: dist/agentica$(EXE)
 
+# SHARD=I/N runs shard I of N of the modules (the sanitize column of tests/shard_weights.txt, as the CI shards do).
 vm-sanitize-test: vm-sanitize-build
-	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
+	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS) SHARD_WEIGHTS=sanitize
 
 # The shared libraries a binary loads, one per line, for vendored-check: ELF NEEDED entries, Mach-O load commands, or
 # PE imports.

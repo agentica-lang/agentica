@@ -11,7 +11,8 @@ comments too.
 The steps of `ci.yml` and `sweep.yml`, and the test steps of `release.yml`, call
 `make` targets, so they run locally with the same command. Only setup stays in
 the YAML: checkout, toolchain and `apt` installs, caches and their keys, the
-`changes` step of `vm-sanitizers`, and the release's `zig` install and `strip`.
+`changes` job, the artifact steps of the shards, and the release's `zig`
+install and `strip`.
 A new check gets a target first (in `.PHONY`, with a one-line comment), then a
 step that calls it.
 
@@ -142,8 +143,8 @@ After the refresh, run `make fixed-point` and `make` as usual. A later PR
 removes the old keys once no stage0 imports them.
 
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>` in
-the `test` job: stage2 built from the base stage0 with the PR's `compiler/` must
-equal the PR's file. It checks the merge commit, so when another `compiler/`
+the `checks` job: stage2 built from the base stage0 with the PR's `compiler/`
+must equal the PR's file. It checks the merge commit, so when another `compiler/`
 change lands first, merge master and refresh again. Case (b) cannot pass it: say
 so in the PR, and the owner approves by hand. The loader also accepts format 5
 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`), kept for an older stage0; the
@@ -177,29 +178,96 @@ Runs on pull requests and `master` pushes, on GitHub-hosted Ubuntu.
 Markdown-only and site changes skip it, and a newer push cancels an older run.
 The job graph is in the YAML; these are the rules it does not show.
 
-- `test` ends with `dup-check`, which runs even when an earlier step fails. The
-  vendored check is the last build step: it rebuilds `build/vm/release/obj` with
-  other flags, so nothing that builds may run beside it. `stage0-check` runs
-  after the tests, so a hand bootstrap still runs them.
-- `test` runs `make layout-check BASE=HEAD^1` right after the first build
-  (locally `BASE` is a revision; default: the merge base with `origin/master`).
-  It covers one function, `plain_turn` (the `--jit off` loop), in the release
-  build on Linux x86-64. It builds the base in `build/layout-base` only when a
-  `vm/`, `Makefile` or `mk/` file changed. It fails with code 4 (kept in
-  `build/layout-check.rc`, since make exits 2) when `plain_turn` has other
-  instructions or sits elsewhere in `vm/interp.c`'s text: a 128-byte move with
-  the same instructions made `arithmetic` 13% slower. An intended change gets
-  the `layout-change` label, which accepts only code 4, and the pinned
+**One build, many runners.** `build` compiles `dist/agentica`, the first binary
+of the bootstrap and the C test programs once, and uploads `dist/` and
+`build/` as one `tar.gz` (`release-build`). Each job after it checks out,
+downloads that and runs its part, so no job compiles. When C changed,
+`sanitizer-build` does the same for the sanitizer binary (`SANITIZE=1`, its C
+tests, the fixed point), the ThreadSanitizer binary and C tests, and the GC
+stress binary and C tests (`sanitizer-build`).
+
+- `.github/actions/use-build` unpacks the artifact and dates every file of
+  `dist/` and `build/` with one time taken after the checkout. Without that
+  make would rebuild, because the checkout is newer than the files of the build
+  job. Then it runs the build's targets and fails when any file of `dist/` or
+  `build/` changed: the log line `no file of dist/ or build/ changed` is the
+  proof that nothing was rebuilt. The tar keeps the executable bits.
+  `.github/actions/setup` is the shared toolchain setup (Node, Python with
+  Poetry, the `-dev` packages, optionally clang-tidy 19 and ripgrep).
+- `build/vm/flags` is shared by all build modes, so after a job runs another
+  mode (`make vm-tsan-run`, `make vm-gc-stress`) make links that mode's
+  binaries again. It compiles nothing: the objects are in the artifact. The
+  sanitizer artifact is built with the sanitizer mode last, so `dist/agentica`
+  and its C tests need no relink.
+- The jobs and what they run:
+
+  - `changes`: which paths changed: `c` (the C half runs), `trace`
+  - `build`: `make dist/agentica build/vm/release/bootstrap/agentica
+    vm-test-binaries`, then the upload
+  - `tests-fast` 1/2, 2/2: `make test SHARD=i/2`; shard 1 also `vm-latency`;
+    shard 2 also `test-multicore-modules` and `test-remove-actions`
+  - `tests-slow` 1/2, 2/2: `make test-slow SHARD=i/2`; shard 2 also
+    `vm-jit-test`
+  - `tests-shared`: `test-shared`, then `vm-task-map` (alone on the CPU)
+  - `checks`: `vm-test`, `test-bdd`, `layout-check`, `fixed-point`, `smoke`, the
+    stage0 rebuild check, `vendored-test`, `dup-check`
+  - `test`: the aggregate of the five jobs above
+  - `sanitizer-build`: `vm-sanitize-build`, `vm-tsan`, the TSan and GC stress
+    binaries, `vm-test`, `fixed-point` (sanitizer mode), then the upload
+  - `lint-fuzz`: `vm-lint`, `vm-trace-off` (when asked), `vm-libfuzz-run` (it
+    builds its own objects)
+  - `sanitizer-tests` 1/2, 2/2: `vm-sanitize-test SHARD=i/2`; shard 2 also
+    `vm-gc-stress`
+  - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
+  - `vm-layers`: `vm-layers`
+  - `vm-sanitizers`: the aggregate of the C half
+  - `warm-third-party`, `dup-check`: `master` pushes only
+
+- **Check names.** `test` and `vm-sanitizers` are the checks to name in a
+  branch protection rule or a merge gate. Each `needs` its half and runs with
+  `always()`: it fails when a job failed, was cancelled or did not run.
+  `vm-sanitizers` passes when `changes` says C did not change (every job of the
+  half is then skipped). The other jobs are not names to require: a shard job
+  is `fast tests (1/2)` and so on.
+- **Shards.** `make test`, `make test-slow`, `make vm-sanitize-test` and
+  `make vm-tsan-run` take `SHARD=I/N`. `tools/shard_tests.py` splits the
+  modules longest first over the shards with the seconds of
+  `tests/shard_weights.txt` (columns `fast`, `slow`, `sanitize`, `tsan`; a
+  module that is not listed counts as 1 s), so the split is fixed and every
+  module runs exactly once. The weights come from a CI run: when a module gets
+  slow or a new one is big, copy its `... passed in Ns` time from the log into
+  the file. Changing `N` in `ci.yml` needs no other change.
+  `tests/test_vm_multicore.py` takes 190 s in the slow tier alone, so the slow
+  tier cannot go below that without splitting the module.
+- The vendored check is the last build step of `checks`: it rebuilds
+  `build/vm/release/obj` with other flags, so nothing that builds may run
+  after it. `stage0-check` runs after the tests of that job, so a hand
+  bootstrap still runs them, and `dup-check` runs even when an earlier step
+  fails.
+- `checks` runs `make layout-check BASE=HEAD^1` (locally `BASE` is a revision;
+  default: the merge base with `origin/master`). It covers one function,
+  `plain_turn` (the `--jit off` loop), in the release build on Linux x86-64.
+  It builds the base in `build/layout-base` only when a `vm/`, `Makefile` or
+  `mk/` file changed. It fails with code 4 (kept in `build/layout-check.rc`,
+  since make exits 2) when `plain_turn` has other instructions or sits
+  elsewhere in `vm/interp.c`'s text: a 128-byte move with the same
+  instructions made `arithmetic` 13% slower. An intended change gets the
+  `layout-change` label, which accepts only code 4, and the pinned
   `--jit off` numbers in the PR body. The label does not start CI: re-run the
   job.
-- `vm-sanitizers` runs after `test`, even if it fails. It builds only when the
+- The C half runs next to the tests, not after them. It runs only when the
   merge commit changes `vm/`, the Makefile, `mk/*.mk`, `.gitmodules`,
-  `.clang-tidy` or `ci.yml`; keep that list in step with new C folders. A manual
-  run always runs it. `vm-trace-off` runs only on a manual run, or a change to
-  `vm/trace.*` or `vm/tests/trace_test.c`.
-- Both jobs set `AGENTICA_SWEEP=sampled` (seed from `GITHUB_SHA`; a failure
-  prints `AGENTICA_SWEEP_SEED`). `RUNTIME-TEST-TIMEOUT` has coverage only in the
-  slow tier.
+  `.clang-tidy`, `ci.yml` or `.github/actions/` (the `changes` job); keep that
+  list in step with new C folders. A manual run always runs it. `vm-trace-off`
+  runs only on a manual run, or a change to `vm/trace.*` or
+  `vm/tests/trace_test.c`.
+- Every job that runs tests sets `AGENTICA_SWEEP=sampled` (seed from
+  `GITHUB_SHA`; a failure prints `AGENTICA_SWEEP_SEED`). `RUNTIME-TEST-TIMEOUT`
+  has coverage only in the slow tier. The shard jobs keep `timeout-minutes`
+  above the module limit times the scale.
+- A new CI job counts against the 20 runners the organization shares with
+  `platforms.yml`: a run is about 8 jobs, and 16 when C changed. Merge small
+  steps into an existing job before adding one.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need Python 3
   (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
 - Libraries: PR jobs use the system libgc (`GC_MIN` 8.2.0; older systems use
@@ -246,7 +314,7 @@ Skip rules, checked by the report:
 
 - The vendored release-mode OpenSSL is cached with `actions/cache` (key:
   `make -s vm-openssl-key AGENTICA_OPENSSL=vendored`). `warm-third-party` saves
-  it on `master`; the PR `test` job only restores it (a PR can restore only
+  it on `master`; the PR `checks` job only restores it (a PR can restore only
   caches of its merge ref or `master`). On a miss, the vendored check skips.
 - Compiles go through ccache when it is on `PATH`; the release sets `CCACHE=`,
   because PR jobs can write to a shared cache.
@@ -255,7 +323,7 @@ Skip rules, checked by the report:
 
 ## Other workflows
 
-- `vm-libfuzz-run` (in `vm-sanitizers`) runs each input in the interpreter, then
+- `vm-libfuzz-run` (in `lint-fuzz`) runs each input in the interpreter, then
   on Linux x86-64 with the JIT (`always`, and `on` at low thresholds), and
   compares the outputs. The link wraps `agc_jit_mem_reserve` so each input's
   code memory is unmapped (`vm/fuzz_libfuzzer.c`). Seeds: `tests/fixtures/vm/`

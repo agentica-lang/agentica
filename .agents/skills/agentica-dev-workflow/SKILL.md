@@ -98,7 +98,10 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 
 ## 4. CI
 
-- Code PRs need **CI** (`ci.yml`) green on the head commit, plus **Site
+- Code PRs need **CI** (`ci.yml`) green on the head commit. Its check names
+  are `test` (the Linux tests) and `vm-sanitizers` (the C half, which passes
+  when C did not change); the shard jobs behind them (`fast tests (1/2)`,
+  `build`, ...) are not names to require. Code PRs also need **Site
   examples** when the PR touches `site/content/` or its test. Docs-only PRs
   skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
 - **Platforms** (`platforms.yml`: Windows, macOS Intel and ARM) runs on a PR

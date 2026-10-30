@@ -11,6 +11,7 @@
 # Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
 # Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
+# One shard of the modules:    make test SHARD=2/3   (also make test-slow; CI runs the shards on separate runners)
 TESTS ?= tests/
 TESTS_EXPLICIT = $(if $(filter file,$(origin TESTS)),,1)
 # TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
@@ -21,11 +22,18 @@ PY_FILES = $(filter %.py,$(TESTS_NORM))
 PY_ALONE = tests/test_vm_latency.py tests/test_vm_task_map.py
 ISOLATED_PY_TESTS = tests/test_vm_os_remove.py tests/test_bdd_cleanup.py tests/test_windows_filesystem_safety.py
 PY_ISOLATED_SELECTED = $(filter $(ISOLATED_PY_TESTS),$(PY_FILES))
-PY_TESTS = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(PY_ALONE) $(ISOLATED_PY_TESTS),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
+PY_TESTS_ALL = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(PY_ALONE) $(ISOLATED_PY_TESTS),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
+# SHARD=I/N keeps the modules of shard I of N (tools/shard_tests.py: a fixed split balanced by the SHARD_WEIGHTS column of
+# tests/shard_weights.txt: fast, slow with AGENTICA_TEST_SLOW, or the one a target sets), so CI runs the modules of one make
+# test, make test-slow, make vm-sanitize-test or make vm-tsan-run on N runners.
+SHARD ?=
+SHARD_WEIGHTS ?= $(if $(filter-out 0,$(AGENTICA_TEST_SLOW)),slow,fast)
+PY_TESTS = $(if $(SHARD),$(shell $(PYTHON) tools/shard_tests.py --weights $(SHARD_WEIGHTS) $(SHARD) $(PY_TESTS_ALL)),$(PY_TESTS_ALL))
+SHARD_CHECK = $(if $(SHARD),$(if $(shell $(PYTHON) tools/shard_tests.py --valid $(SHARD) 2>/dev/null && echo ok),,$(error SHARD must be I/N with 1 <= I <= N, for example 2/3)))
 # A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
 PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
-PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
+PY_CHECK = $(SHARD_CHECK)$(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
 test: $(PRODUCT)
 	@: $(PY_CHECK)
