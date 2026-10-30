@@ -23,7 +23,7 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
-TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket]
+TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
 ```
 
@@ -43,7 +43,9 @@ TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Resu
   system trust; a missing or empty file fails the connect. An IP address host is
   checked against the certificate's IP addresses.
 - The server takes a PEM certificate chain and key; a bad file or mismatched key
-  fails the listen. A peer that closes without TLS's closing message ends the
+  fails the listen. `TLS.connect` sends a client certificate when `cert_file`
+  and `key_file` name the same PEM forms (both empty: none; only one: an error),
+  and a bad file or mismatched key fails the connect. A peer that closes without TLS's closing message ends the
   stream like EOF. TLS behaves the same on Linux, macOS and Windows.
 - Timeouts are positive milliseconds and cover the whole operation, lock waits
   included. Reads and writes have independent locks: coordinate which task
