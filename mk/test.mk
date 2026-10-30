@@ -55,6 +55,9 @@ MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v 
 # fallback when Poetry is unavailable, and tests skip only if both runners are missing.
 test-py:
 	@: $(PY_CHECK)
+	@if [ -n "$(SHARD)" ] && [ -z "$(strip $(PY_TESTS))" ] && [ -n "$(strip $(PY_TESTS_ALL))" ]; then \
+	  echo "SHARD=$(SHARD) selected no module (tools/shard_tests.py failed, or the shard is empty): nothing would run" >&2; exit 1; \
+	fi
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
 	  echo "$(PY_ISOLATED_SELECTED) is isolated: run make tests KIND=files (Docker) or make test-remove-actions in CI" >&2; exit 1; \
 	fi

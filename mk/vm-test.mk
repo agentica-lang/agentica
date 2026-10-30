@@ -56,6 +56,9 @@ TSAN_RUN_ALONE := tests/test_vm_multicore.py
 TSAN_RUN_PICKED = $(if $(SHARD),$(shell $(PYTHON) tools/shard_tests.py --weights tsan $(SHARD) $(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES)),$(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES))
 vm-tsan-run: dist/agentica$(EXE)
 	@: $(SHARD_CHECK)
+	@if [ -n "$(SHARD)" ] && [ -z "$(strip $(TSAN_RUN_PICKED))" ]; then \
+	  echo "SHARD=$(SHARD) selected no module (tools/shard_tests.py failed, or the shard is empty): nothing would run" >&2; exit 1; \
+	fi
 	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
 	$(if $(filter $(TSAN_RUN_ALONE),$(TSAN_RUN_PICKED)),AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
 	  $(MAKE) --no-print-directory test-py SHARD= TESTS="$(TSAN_RUN_ALONE)")

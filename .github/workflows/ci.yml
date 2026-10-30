@@ -439,6 +439,7 @@ jobs:
       - if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.trace == 'true' }}
         run: make vm-trace-off
       - name: vm-libfuzz-run, 60 s of libFuzzer (a crash, a JIT run that differs from the interpreter, a leak, RSS overrun or timeout fails it; the saved file reproduces it)
+        if: ${{ !cancelled() }}
         run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_TIMEOUT=30 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

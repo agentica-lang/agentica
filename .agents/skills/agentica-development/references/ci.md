@@ -144,8 +144,9 @@ removes the old keys once no stage0 imports them.
 
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>` in
 the `checks` job: stage2 built from the base stage0 with the PR's `compiler/`
-must equal the PR's file. It checks the merge commit, so when another `compiler/`
-change lands first, merge master and refresh again. Case (b) cannot pass it: say
+must equal the PR's file. It checks the merge commit, so when another
+`compiler/` change lands first, merge master and refresh again. Case (b)
+cannot pass it: say
 so in the PR, and the owner approves by hand. The loader also accepts format 5
 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`), kept for an older stage0; the
 checked-in stage0 is format 6, so it can go.
@@ -270,8 +271,11 @@ binary and C tests. The two run at once and a shard unpacks both.
   has coverage only in the slow tier. The shard jobs keep `timeout-minutes`
   above the module limit times the scale.
 - A new CI job counts against the 20 runners the organization shares with
-  `platforms.yml`: a run is about 8 jobs, and 16 when C changed. Merge small
-  steps into an existing job before adding one.
+  `platforms.yml`: a run is 9 jobs, and 19 when C changed (the two aggregates
+  included). Merge small steps into an existing job before adding one.
+- The artifacts live one day (`retention-days: 1`): after 24 hours, re-run all
+  jobs of a run, not only the failed ones, since a shard could not download
+  the build.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need Python 3
   (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
 - Libraries: PR jobs use the system libgc (`GC_MIN` 8.2.0; older systems use
