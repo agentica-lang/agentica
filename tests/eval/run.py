@@ -136,10 +136,14 @@ def prepare(work: Path, task: str, arm: str) -> None:
         (work / "docs").mkdir()
         parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
         text = "\n".join(part.read_text(encoding="utf-8") for part in parts)
+        # The grammar keeps the language rules and points to the library pages for every builtin, so the arm gets the
+        # pages too, next to grammar.md; the other links out of the grammar lead nowhere in the work folder.
+        text = re.sub(r"\]\((?:\.\./){2}site/content/library/", "](library/", text)
         text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
         text = re.sub(r"\[([^\]]*)\]\[agentica-link-\d+\]", r"\1", text)
         text = re.sub(r"^\[agentica-link-\d+\]: .*\n", "", text, flags=re.MULTILINE)
         (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
+        shutil.copytree(ROOT / "site" / "content" / "library", work / "docs" / "library")
         shutil.copytree(ROOT / "examples", work / "examples")
 
 
@@ -199,8 +203,8 @@ def prompt(work: Path, arm: str) -> str:
                          "`agentica file.agc` runs a program and `agentica check file.agc` checks it without running. "
                          "`agentica --help` lists the options.")
         else:
-            lines.append("The language is described in docs/grammar.md, and example programs are in examples/. "
-                         "Use `agentica help NAME` for builtin signatures.")
+            lines.append("The language is described in docs/grammar.md, the builtin library in docs/library/, "
+                         "and example programs are in examples/. Use `agentica help NAME` for builtin signatures.")
     elif arm in TYPED_ARMS:
         lines.append("Write a complete Python 3 program to solution.py, with type annotations on every function. "
                      "Run programs with `python3`. The type checker is `mypy --strict solution.py`, on your PATH: "

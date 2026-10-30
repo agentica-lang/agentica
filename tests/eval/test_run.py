@@ -110,6 +110,7 @@ class PrepareTests(unittest.TestCase):
             (root / "dist" / "runtime").mkdir(parents=True)
             (root / "examples").mkdir()
             shutil.copytree(run.ROOT / "docs" / "grammar", root / "docs" / "grammar")
+            shutil.copytree(run.ROOT / "site" / "content" / "library", root / "site" / "content" / "library")
             task = root / "tasks" / "sample"
             task.mkdir(parents=True)
             (task / "task.md").write_text("Sample task.\n", encoding="utf-8")
@@ -126,6 +127,8 @@ class PrepareTests(unittest.TestCase):
             self.assertNotIn("](../", grammar)
             self.assertNotIn("site/content", grammar)
             self.assertNotIn("[agentica-link-", grammar)
+            self.assertIn("](library/data-structures/list.md)", grammar)
+            self.assertTrue((work / "docs" / "library" / "data-structures" / "list.md").is_file())
 
     def test_grammar_arm_prompt_names_agentica_help(self) -> None:
         self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))
