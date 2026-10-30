@@ -82,11 +82,16 @@ rule that a site page shows.
 - The adapter rewrites the links between parts: `](NN-name.md#anchor)` (or
   `./NN-name.md`) becomes `](/reference/<slug>/#anchor)`, and
   `](../../site/content/library/TOPIC/NAME.md)` becomes
-  `](/library/TOPIC/NAME/)`. A link to a removed heading goes to the page top,
-  `/reference/<slug>/`. Other relative links stay as written.
+  `](/library/TOPIC/NAME/)` (also `TOPIC/_index.md`, `library/_index.md` and
+  nested folders). Write these links inline, not as `[text][ref]`
+  definitions, which the adapter does not rewrite. A link to a removed heading
+  goes to the page top, `/reference/<slug>/`. Other relative links stay as
+  written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
-- When the language or a builtin changes, update the matching site page too.
+- When the language changes, update the matching site page too. A builtin or
+  `std/` module is documented only in its `library/` page; `docs/grammar/`
+  keeps the rules the checker enforces and points to that page.
 - Do not hard-wrap prose in `site/content/`: one line per paragraph or list
   item. Hugo joins the lines anyway. Code blocks keep their own line breaks.
 

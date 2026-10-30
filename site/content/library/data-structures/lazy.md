@@ -21,9 +21,9 @@ ok([1, 9, 25])
 ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 ```
 
-Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. Other tasks keep running between items.
+Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. Other tasks keep running between items: a terminal can be switched out between items, so `--max-steps`, the turns of other tasks and a cancel reach a pipeline with no callback. Callbacks run on the task that called the terminal, and a recipe can be shared by tasks on any scheduler. A runtime error in a callback ends the run as anywhere else. A terminal over a file or a channel parks while it waits, as `File.each_line` and `recv` do, and a cancel reaches it there.
 
-A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
+A `Lazy` has no `==`, no `to_s` (`CHECK-TYPE-MISMATCH`) and no JSON form (`CHECK-NOT-ENCODABLE`); `IO.inspect` prints `<Lazy>`. `Lazy` is a reserved type name. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
 
 ## Sources
 
@@ -54,7 +54,7 @@ ok(["a", "aa", "aaa"])
 
 ### File.foreach
 
-The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and is closed before the terminal returns, whatever ended it (the end of the file, a `take` or `find` that had enough, an error, a failed `try`).
+The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and is closed before the terminal returns, whatever ended it (the end of the file, a `take` or `find` that had enough, an error, a failed `try`); a crash or cancel of the task closes it at the task's end. After a read timeout the handle is released at once, and the OS descriptor closes when the read that timed out ends.
 
 A read error (invalid UTF-8, a line over the buffer), a missing file or a bad timeout ends the terminal with that error. `File.foreach(...).each do ... end` with no step in between, written as one chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line` for that. A buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
 
@@ -68,6 +68,10 @@ def main() -> Void
   puts(head.ok? and errors.ok?)
 end
 ```
+
+### File.chunks
+
+The bytes of a regular file in chunks of `size` bytes (1 to 16777216), the last one shorter. It opens and closes as `File.foreach` does. A missing file, or one that is not regular (decided on the open descriptor), ends the terminal with `error("filesystem: path does not refer to a regular file")`. A size outside 1..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
 
 ### ch.lazy
 
@@ -127,7 +131,7 @@ Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]
 Lazy.drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
 ```
 
-A negative count is `RUNTIME-INVALID-COUNT` at the argument. `take_while` stops at the first item its block rejects; `drop_while` stops calling its block at the first item it rejects.
+A negative count is `RUNTIME-INVALID-COUNT` at the argument, when the step is built. `take_while` stops at the first item its block rejects; `drop_while` stops calling its block at the first item it rejects.
 
 ```agentica
 def main() -> Void
@@ -170,7 +174,7 @@ Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
 Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]
 ```
 
-`each_slice` gives slices of `size` items, the last one shorter. `each_cons` gives every window of `size` neighbours, and nothing when the source has fewer. `chunk_while` starts a new group where its block is false for two neighbours. A size below 1 is `RUNTIME-INVALID-COUNT` at the argument.
+`each_slice` gives slices of `size` items, the last one shorter. `each_cons` gives every window of `size` neighbours, and nothing when the source has fewer. `chunk_while` starts a new group where its block is false for two neighbours. A size below 1 is `RUNTIME-INVALID-COUNT` at the argument, when the step is built.
 
 ```agentica
 def main() -> Void
@@ -264,7 +268,7 @@ error("not found")
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
-Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled and is flushed and closed before the terminal returns, whatever ended it. What was written before an error stays in the file. `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
+Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled (a failed open pulls nothing) and is flushed and closed before the terminal returns, whatever ended it; a crash or cancel of the task closes it at the task's end. Lines are buffered and written 64 KiB at a time. What was written before an error stays in the file. `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
 
 ```agentica {mode="check"}
 def amount(line: String) -> Result[Int]
@@ -289,7 +293,7 @@ Lazy.gunzip(lazy: Lazy[Bytes], max_bytes: Int = 1073741824) -> Lazy[Bytes]
 Lazy.write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
-The steps compress or decompress a stream of [`Bytes`](/library/data-structures/bytes/) chunks, such as the chunks of `File.chunks`, which reads a regular file `size` bytes (1 to 16777216) at a time; `write_bytes` writes the chunks to a file, created or truncated, and gives the bytes written. A decoder error, output past `max_bytes` and a bad `level` end the terminal with that error; a run that stops early frees its zlib streams. [Zlib](/library/text-and-data/zlib/#streams) has the details.
+The steps compress or decompress a stream of [`Bytes`](/library/data-structures/bytes/) chunks, such as the chunks of `File.chunks`, which reads a regular file `size` bytes (1 to 16777216) at a time; `write_bytes` writes the chunks to a file, created or truncated, as `write_lines` writes lines (a chunk may have any size, empty included), and gives the bytes written. Truncation, a bad checksum, a trailing byte, output past `max_bytes`, a `level` outside 0..9 and a `max_bytes` below 1 end the terminal with an error that begins with `zlib: `. A decoder checks `max_bytes` while it streams, before a byte past it is handed on. A run frees its zlib streams before the terminal returns, whatever ended it; a crash or cancel frees them at the task's end. [Zlib](/library/text-and-data/zlib/#streams) has the details.
 
 ```agentica
 def main() -> Void
@@ -304,7 +308,7 @@ ok([[104, 105, 33]])
 
 ## try in the blocks
 
-A failed `try` in any block of a `Lazy` method (a step, `Lazy.produce`, a terminal) ends the pipeline: no later item is pulled, a file the run opened is closed, and the terminal returns the error. A `try` that succeeds gives its value, so the block still gives a plain item. A block nested in that block, such as the block of a `List.map`, follows the usual rule: `try` there needs a block that returns a `Result` (`CHECK-TRY-CONTEXT`).
+A failed `try` in any block of a `Lazy` method (a step, `Lazy.produce`, a terminal), whatever the block's result type, ends the pipeline: no later item is pulled, a file the run opened is closed, and the terminal returns the error. A `try` that succeeds gives its value, so the block still gives a plain item. A block nested in that block, such as the block of a `List.map`, follows the usual rule: `try` there needs a block that returns a `Result` (`CHECK-TRY-CONTEXT`).
 
 ```agentica
 def parse(text: String) -> Result[Int]

@@ -197,7 +197,7 @@ ica
 String.index_of(s: String, part: String) -> Optional[Int]
 ```
 
-Finds the first match as `some(index)`, counted in characters. Missing text gives `none`.
+Finds the first match as `some(index)`, counted in characters (`some(0)` for an empty part). Missing text gives `none`.
 
 ```agentica
 def main() -> Void
@@ -217,7 +217,7 @@ true
 String.at(s: String, index: Int) -> String
 ```
 
-Gives one character. Indexes start at 0. A bad index stops the program.
+Gives one character. Indexes start at 0. An index outside the string stops the program with `RUNTIME-INDEX-OUT-OF-RANGE`.
 
 ```agentica
 def main() -> Void
@@ -252,7 +252,7 @@ String.code(c: String) -> Int
 String.from_code(n: Int) -> String
 ```
 
-`code` gives the Unicode number of a one-character string. `from_code` goes the other way.
+`code` gives the Unicode number of a one-character string. `from_code` goes the other way, from a scalar value (0 to 0x10FFFF, no surrogates). Other input stops the program with `RUNTIME-INVALID-CHARACTER`.
 
 ```agentica
 def main() -> Void
@@ -345,7 +345,7 @@ String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
 
-Like `to_int` and `to_float`, but give the number itself and stop the program on bad text.
+Like `to_int` and `to_float`, but give the number itself and stop the program on bad text: `RUNTIME-INVALID-NUMBER` for text that is not a number (`1e`, `.5`, ` 1`, `1_000.0` and `Infinity` for `to_float!`), and `RUNTIME-INTEGER-OVERFLOW` for an integer outside `Int`.
 
 ```agentica
 def main() -> Void
@@ -365,7 +365,7 @@ end
 String.from_bytes(data: Bytes) -> Result[String]
 ```
 
-Decodes UTF-8 bytes. Invalid bytes give an error Result. It is the inverse of [`s.bytes`](#bytes).
+Decodes UTF-8 bytes strictly: invalid, overlong, surrogate and incomplete sequences give an error Result, never replacement characters. It is the inverse of [`s.bytes`](#bytes).
 
 ```agentica
 def main() -> Void
@@ -406,7 +406,7 @@ end
 String.bytesize(s: String) -> Int
 ```
 
-Counts the UTF-8 bytes of the text, as many as `s.bytes` gives, without building them. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).
+Counts the UTF-8 bytes of the text, a NUL included (`"é".bytesize` is 2), as many as `s.bytes` gives, without building them. A C function that takes text with its length gets this count, with the text in a buffer of [`Native.from_string`](/library/io-and-system/native/types/#owned-buffers-and-typed-memory).
 
 ```agentica
 def main() -> Void

@@ -137,7 +137,7 @@ false
 
 ## FrontEnd
 
-`FrontEnd.hand_off`, `FrontEnd.std_source` and `FrontEnd.stdin_bytes` belong to the front end of the `agentica` binary. That binary compiles a program and hands it to the VM. They are not for your programs: a program that calls them stops with `RUNTIME-FRONT-END-ONLY`.
+`FrontEnd.hand_off(program, options, arguments)`, `FrontEnd.std_source(path)` and `FrontEnd.stdin_bytes()` belong to the front end of the `agentica` binary. That binary compiles a program and hands it to the VM: `hand_off` takes the compiled program (a `Bytes`) and runs it in a new runtime with the given VM options and arguments, `std_source` reads an embedded `std/` source by its path in `stdlib/`, and `stdin_bytes` reads standard input to its end as a `Result[Bytes]` (an error over 16 MiB or when the read fails; a later call reads on from there). They are not for your programs: a program that calls them, and any front end run by `agentica run`, stops with `RUNTIME-FRONT-END-ONLY`. They need no flag.
 
 ## Time.now_ms
 
@@ -205,7 +205,7 @@ true
 Random.int(min: Int, max: Int) -> Int
 ```
 
-A random `Int` from `min` to `max`. Both are included.
+A random `Int` from `min` to `max`, uniform. Both are included. `min > max` stops the program with `RUNTIME-INVALID-RANGE`.
 
 ```agentica
 def main() -> Void
@@ -237,7 +237,7 @@ end
 true
 ```
 
-Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the same numbers every time.
+Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the same numbers every time (`N` is `0 .. 2147483647`, otherwise the exit status is 2). Without `--seed`, the generator is seeded from the operating system.
 
-- Each task has its own generator. It is split from its parent when the task is spawned, so each task repeats its own numbers.
+- Each task has its own generator. It is split from its parent when the task is spawned, so each task repeats its own numbers: the main task starts from the seed, and each spawn takes one draw from its parent. Timers, I/O and more than one scheduler can still change how tasks interleave, so a run of several tasks as a whole is not repeatable.
 - Do not use `Random` for secrets: it is seeded, and `--seed` repeats it. Use [SecureRandom](/library/text-and-data/crypto/#securerandom) for keys, tokens and IDs.

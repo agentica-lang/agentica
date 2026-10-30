@@ -82,7 +82,7 @@ end
 
 ### 15.2 `JSON.kind`
 
-Open: the built `JSON.kind(j) -> String` (`docs/grammar/06b-builtins.md`)
+Open: the built `JSON.kind(j) -> String` (`site/content/library/text-and-data/json.md`)
 already uses this name, so the enum form below needs another name, or replaces
 it.
 

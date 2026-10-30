@@ -19,9 +19,10 @@ shrink grown docs, use `documentation-pruning`.
 
 Ask what changed and who reads about it:
 
-- **User-visible behavior** (syntax, builtin, CLI): the grammar, the site page
-  and the programming skill together (the AGENTS.md rule), plus a CHANGELOG
-  entry.
+- **User-visible behavior** (syntax, builtin, CLI): for the language, the
+  grammar, the site page and the programming skill together; for a builtin or
+  a `std/` module, its `site/content/library/` page and the programming skill
+  (the AGENTS.md rule); plus a CHANGELOG entry.
 - **A design decision or contract:** the design doc (built: `docs/vm/`;
   planned: the roadmap phase file). Write the decision and its reason, not
   the recipe.

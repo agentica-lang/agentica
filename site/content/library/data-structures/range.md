@@ -25,7 +25,7 @@ end
 2
 ```
 
-Ranges bind looser than every other operator, so `0...n + 1` is `0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A range prints as `1..5` or `1...5`, and two ranges are equal when their start, end and kind match.
+Ranges bind looser than every other operator, so `0...n + 1` is `0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A range prints as `1..5` or `1...5`, and two ranges are equal when their start, end and kind match. `select`, `collect`, `detect` and `inject` on a range are `CHECK-UNKNOWN-METHOD`.
 
 ```agentica
 def main() -> Void

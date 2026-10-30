@@ -136,11 +136,41 @@ def prepare(work: Path, task: str, arm: str) -> None:
         (work / "docs").mkdir()
         parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
         text = "\n".join(part.read_text(encoding="utf-8") for part in parts)
+        # The grammar keeps the language rules and points to the library pages for every builtin, so the arm gets the
+        # pages too, next to grammar.md; the other links out of the grammar lead nowhere in the work folder.
+        text = re.sub(r"\]\((?:\.\./){2}site/content/library/", "](library/", text)
         text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
         text = re.sub(r"\[([^\]]*)\]\[agentica-link-\d+\]", r"\1", text)
         text = re.sub(r"^\[agentica-link-\d+\]: .*\n", "", text, flags=re.MULTILINE)
         (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
+        copy_library(ROOT / "site" / "content" / "library", work / "docs" / "library")
         shutil.copytree(ROOT / "examples", work / "examples")
+
+
+# The link text may hold one level of brackets (`[`Optional[T]`](/library/...)`).
+SITE_LINK = re.compile(r"\[((?:[^\[\]]|\[[^\]]*\])*)\]\(/([^)#\s]*?)/?(#[^)\s]*)?\)")
+
+
+def copy_library(source: Path, target: Path) -> None:
+    """Copy the library pages and turn their site links (`/library/list/#x`) into links between the copied files.
+
+    A link to a page outside the library (the tour, the command line) has no copy, so it becomes plain text.
+    """
+    shutil.copytree(source, target)
+
+    def relink(page: Path):
+        def replace(found: re.Match) -> str:
+            text, path, fragment = found.group(1), found.group(2), found.group(3) or ""
+            inside = path.removeprefix("library").strip("/")
+            for candidate in (f"{inside}.md", f"{inside}/_index.md" if inside else "_index.md"):
+                if path.startswith("library") and (target / candidate).is_file():
+                    return f"[{text}]({os.path.relpath(target / candidate, page.parent)}{fragment})"
+            return text
+
+        return replace
+
+    for page in sorted(target.rglob("*.md")):
+        page.write_text(SITE_LINK.sub(relink(page), page.read_text(encoding="utf-8")), encoding="utf-8")
 
 
 def strip_query_docs(skill: Path) -> None:
@@ -199,8 +229,8 @@ def prompt(work: Path, arm: str) -> str:
                          "`agentica file.agc` runs a program and `agentica check file.agc` checks it without running. "
                          "`agentica --help` lists the options.")
         else:
-            lines.append("The language is described in docs/grammar.md, and example programs are in examples/. "
-                         "Use `agentica help NAME` for builtin signatures.")
+            lines.append("The language is described in docs/grammar.md, the builtin library in docs/library/, "
+                         "and example programs are in examples/. Use `agentica help NAME` for builtin signatures.")
     elif arm in TYPED_ARMS:
         lines.append("Write a complete Python 3 program to solution.py, with type annotations on every function. "
                      "Run programs with `python3`. The type checker is `mypy --strict solution.py`, on your PATH: "

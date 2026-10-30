@@ -34,7 +34,7 @@ Map.get(map: Map[K, V], key: K) -> Optional[V]
 Map.get(map: Map[K, V], key: K, default: V) -> V
 ```
 
-With two arguments, `get` gives an [Optional](/library/data-structures/optional/): `some(value)`, or `none` when the key is missing. With a third argument, it gives the value or the default.
+With two arguments, `get` gives an [Optional](/library/data-structures/optional/): `some(value)`, or `none` when the key is missing. With a third argument, it gives the value or the default; the default is always evaluated, and `false` and `nil` are present values.
 
 ```agentica
 def main() -> Void
@@ -106,7 +106,7 @@ end
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]
 ```
 
-Removes a key. A missing key is fine.
+Removes a key and keeps the order of the rest. A missing key is fine, and a key put back later goes to the end. It is O(log32 n) amortized along one line of versions, with an O(n) rebuild of the key list after many deletes.
 
 ```agentica
 def main() -> Void

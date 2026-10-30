@@ -18,6 +18,9 @@ these files in order as one page.
 - **§7:** [Diagnostics for agents](grammar/07-diagnostics.md)
 - **§8:** [Examples](grammar/08-examples.md)
 
-When a user-facing language or builtin change is made, update the matching
-grammar file, the programming skill, and the corresponding site page together
-(see [`AGENTS.md`](../AGENTS.md)).
+The grammar keeps the language rules. The builtin functions and the `std/`
+modules are described only in the
+[library reference](../site/content/library/_index.md). When a language change
+is made, update the matching grammar file, the programming skill and the site
+page together; a builtin change updates its library page and the skill (see
+[`AGENTS.md`](../AGENTS.md)).
