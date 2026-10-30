@@ -6,6 +6,8 @@ description: Functions for List[T]. Each one is also a method on lists.
 
 Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`, `select` is `filter`.
 
+A callback is a block, `&name` or a function variable. It runs once per element, left to right, under the caller's budget. The parameter and return types must match exactly, and a `map` callback returns data, not `Void`. Annotated block parameters let an empty list or an empty `reduce` initial value infer its type. The costs on this page leave out the callback's own work.
+
 ## Build and read
 
 ```text
@@ -23,7 +25,9 @@ List.reverse(list: List[T]) -> List[T]
 
 - `at` is `list[index]`, and `set` replaces one element. A bad index stops the program. Both are O(log32 n): at most four steps for a million items. A new list shares all but the path to the element.
 - `first` and `last` give the first and the last element. On an empty list they stop the program with `RUNTIME-INDEX-OUT-OF-RANGE`, as `xs[0]` does; test with `empty?` first.
-- `append` is near constant time, so n appends cost O(n).
+- `append` is near constant time, so n appends cost O(n). `reverse` is O(n).
+- `repeat` takes a count from 0 to 1048576; zero gives an empty list of the element type, and any other count is `RUNTIME-INVALID-COUNT`.
+- A negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
 - `concat` takes time in the size of `b` when `b` has 32 items or fewer. A longer `b` copies both lists.
 
 ```agentica
@@ -62,7 +66,7 @@ List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 ```
 
-`take` keeps the first `count` elements, `drop` removes them. A larger count is fine. O(n).
+`take` keeps the first `count` elements, `drop` removes them. A larger count gives the whole list (`take`) or an empty list (`drop`), and a negative count is `RUNTIME-INVALID-COUNT`. O(n) in the size of the result.
 
 ```agentica
 def main() -> Void
@@ -85,7 +89,7 @@ end
 List.sort(list: List[T]) -> List[T]
 ```
 
-Sorts `Int`, `Float` or `String` values, smallest first. Strings sort by Unicode code, so `"B"` comes before `"a"`.
+Sorts `Int`, `Float` or `String` values, smallest first; any other element type is `CHECK-TYPE-MISMATCH`. The sort is stable and O(n log n). Strings sort by code point, so `"B"` comes before `"a"`, and a `NaN` goes last.
 
 ```agentica
 def main() -> Void
@@ -105,7 +109,7 @@ end
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
-Sorts by the key from the function (an `Int`, `Float` or `String`). Equal keys keep their order.
+Sorts ascending by the key from the function (an `Int`, `Float` or `String`; any other key type is `CHECK-TYPE-MISMATCH`). The function runs once per element, left to right. Equal keys keep their order, and the cost is O(n log n) plus the key calls.
 
 ```agentica
 def main() -> Void
@@ -149,7 +153,7 @@ List.each(list: List[A], f: Fn[A, Void]) -> Void
 List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
 ```
 
-Run the function for each element, in order. The index starts at 0.
+Run the function for each element, in order, and give nothing back. The index starts at 0.
 
 ```agentica
 def main() -> Void
@@ -296,7 +300,7 @@ end
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
-Groups by the key (an `Int` or a `String`). Keys and groups keep their first-appearance order.
+Groups by the key (an `Int` or a `String`; another key type is `CHECK-TYPE-MISMATCH` at the block). Keys and groups keep their first-appearance order.
 
 ```agentica
 def main() -> Void
@@ -337,7 +341,7 @@ end
 List.sum(list: List[N]) -> N
 ```
 
-Adds `Int` or `Float` values from the left. An empty list gives `0` or `0.0`. An `Int` sum past 64 bits is `RUNTIME-INTEGER-OVERFLOW`.
+Adds `Int` or `Float` values from the left. An empty list gives `0` or `0.0`. An `Int` sum past 64 bits is `RUNTIME-INTEGER-OVERFLOW` at the call, and any other item type is `CHECK-TYPE-MISMATCH`.
 
 ```agentica
 def main() -> Void
@@ -377,6 +381,6 @@ ok("pear")
 
 ## Costs and names
 
-These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function.
+These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function, and a runtime error in one is reported at the call in your program (at the argument it names), never in the prelude.
 
 `reject` is `CHECK-UNKNOWN-METHOD`. Write `xs.select do |x| !cond end`.

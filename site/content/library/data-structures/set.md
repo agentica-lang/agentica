@@ -77,7 +77,7 @@ Set[1, 2]
 Set.delete(set: Set[T], value: T) -> Set[T]
 ```
 
-Removes an element. A missing element is fine. An element added again later goes to the end.
+Removes an element. A missing element is fine. An element added again later goes to the end. It costs the same as `Map.delete`.
 
 ```agentica
 def main() -> Void
