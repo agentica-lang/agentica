@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 64,
+  "steps": 66,
   "stdout": [
     "ok(\"hñ!\")",
     ""
