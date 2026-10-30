@@ -64,6 +64,22 @@ def main() -> Void
       try Test.eq(HTTP.text("caf".bytes, latin).ok?, false)
       Test.eq(String.starts_with?(HTTP.text("caf".bytes, latin).message, "http: charset iso-8859-1 is not supported"), true)
     end,
+    Test.test("text reads the charset of the first Content-Type header") do
+      type = "content-type"
+      binary = Bytes.from_list([255, 0, 128]).unwrap!
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; charset=utf8")]).unwrap!, "é")
+      try Test.eq(HTTP.text("e".bytes, [Header(name: type, value: "text/plain; charset=US-ASCII")]).unwrap!, "e")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; charset=")]).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=utf-8")]).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain")]).unwrap!, "é")
+      mixed = [Header(name: type, value: "text/plain; charset=utf-8"), Header(name: type, value: "text/plain; charset=latin1")]
+      try Test.eq(HTTP.text("é".bytes, mixed).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, mixed.reverse).ok?, false)
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=latin1")]).ok?, false)
+      try Test.eq(HTTP.text(binary, [Header(name: type, value: "text/plain; charset=utf-8")]).ok?, false)
+      long = [Header(name: type, value: "text/plain; charset=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")]
+      Test.eq(HTTP.text("e".bytes, long).message.length < 150, true)
+    end,
     Test.test("bad URLs fail before any connection") do
       pool = try HTTP.client(HTTP.client_options())
       scheme = HTTP.get(pool, "ftp://example.com/")

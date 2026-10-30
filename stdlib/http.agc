@@ -30,6 +30,10 @@ CUT_SHORT = "http: connection closed before the response was complete"
 TRUNCATED = "http: truncated HTTP body"
 TOO_LARGE = "http: body exceeds max_body_bytes"
 BAD_BODY = "http: body is not valid UTF-8"
+# The charsets that text reads as UTF-8 (us-ascii is a strict subset of it), and the most characters of a refused
+# charset that its error repeats.
+UTF8_CHARSETS = Set.new(["utf-8", "utf8", "us-ascii"])
+MAX_SHOWN = 64
 # Texts of the C builtins that std/http matches on (vm/channel.c, vm/tcp.c); each is marked there.
 CHANNEL_CLOSED = "channel: closed"
 END_OF_INPUT = "network: end of input"
@@ -362,13 +366,18 @@ export def header_values(headers: List[Header], name: String) -> List[String]
 end
 
 ## Returns `body` as a `String`, decoding it as UTF-8 and nothing else. `headers` are those of the same message
-## (`response.headers`): when its `Content-Type` has a `charset`, it must be `utf-8`; without one the body is read as
-## UTF-8. A body that is not valid UTF-8, or any other charset, is an `error` result; the charset error names the
-## charset. Other charsets (Latin-1, Windows-1252, Shift_JIS, UTF-16) are for the `agentica-lang/charset` package.
+## (`response.headers`): when its `Content-Type` has a `charset`, it must be `utf-8` (or `us-ascii`, which UTF-8
+## contains); without one the body is read as UTF-8. A body that is not valid UTF-8, or any other charset, is an
+## `error` result; the charset error names the charset. Other charsets (Latin-1, Windows-1252, Shift_JIS, UTF-16) are
+## for the `agentica-lang/charset` package.
 export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
   charset = charset_of(headers)
-  if charset != "" and charset != "utf-8" and charset != "utf8"
-    return error("http: charset #{charset} is not supported, decode the body with agentica-lang/charset")
+  if charset != "" and not UTF8_CHARSETS.include?(charset)
+    shown = charset
+    if shown.length > MAX_SHOWN
+      shown = shown.slice(0, MAX_SHOWN)
+    end
+    return error("http: charset #{shown} is not supported, decode the body with agentica-lang/charset")
   end
   case String.from_bytes(body)
     ok(decoded) -> return ok(decoded)
@@ -1594,16 +1603,11 @@ def read_body(answer: Answer, head: HttpWire.Response) -> Received
   end
 end
 
-# The next bytes of a body, at most most of them; no bytes means the end of input.
-def more_body(answer: Answer, most: Int) -> Result[Bytes]
-  return recv_body(answer.socket, most, answer.job.deadline)
-end
-
 def read_length_body(answer: Answer, length: Int) -> Result[Whole]
   pieces: List[Bytes] = []
   left = length
   while left > 0
-    data = try more_body(answer, smaller(left, BODY_READ_BYTES))
+    data = try recv_body(answer.socket, smaller(left, BODY_READ_BYTES), answer.job.deadline)
     if data.empty?
       return error(TRUNCATED)
     end
@@ -1616,30 +1620,31 @@ end
 # Bytes read past the end of the body, or still in the input after it, stop the connection from being kept. Framing
 # goes through the decoder, whose runs say which bytes of each framing read are body.
 def read_chunked_body(answer: Answer) -> Result[Whole]
-  data = NO_BYTES
+  deadline = answer.job.deadline
+  framing = NO_BYTES
   state = HttpWire.chunked(answer.max_body_bytes)
   pieces: List[Bytes] = []
   while not state.done
     if state.remaining > 0
-      data = try more_body(answer, smaller(state.remaining, BODY_READ_BYTES))
+      data = try recv_body(answer.socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
       if data.empty?
         return error(TRUNCATED)
       end
       pieces = List.append(pieces, data)
       state = HttpWire.chunk_read(state, data.size)
     else
-      data = try more_body(answer, FRAME_BYTES)
-      if data.empty?
+      framing = try recv_body(answer.socket, FRAME_BYTES, deadline)
+      if framing.empty?
         return error(TRUNCATED)
       end
-      case HttpWire.chunk(state, data, 0)
+      case HttpWire.chunk(state, framing, 0)
         ok(next) -> state = next
         error(problem) -> return error("http: #{rest_of(problem, 4)}")
       end
-      pieces = add_runs(pieces, data, state.runs)
+      pieces = add_runs(pieces, framing, state.runs)
     end
   end
-  return ok(Whole(body: Bytes.concat(pieces), kept: state.next == data.size and nothing_buffered(answer)))
+  return ok(Whole(body: Bytes.concat(pieces), kept: state.next == framing.size and nothing_buffered(answer)))
 end
 
 # The pieces with the runs of data (start, length pairs) added.
@@ -1669,7 +1674,7 @@ def read_until_close(answer: Answer) -> Result[Whole]
   pieces: List[Bytes] = []
   total = 0
   while true
-    data = try more_body(answer, BODY_READ_BYTES)
+    data = try recv_body(answer.socket, BODY_READ_BYTES, answer.job.deadline)
     if data.empty?
       if not HttpWire.clean_eof?(answer.socket)
         return error(TRUNCATED)

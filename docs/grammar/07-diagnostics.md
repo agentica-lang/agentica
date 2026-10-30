@@ -344,7 +344,7 @@ is a rule:
 - **Written:** `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`,
   `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`)
   - **Help:** a handler that returns its whole response: `return
-    ok(HttpResponse(status: 200, headers: [], body: text))`
+    ok(HttpResponse(status: 200, headers: [], body: text.bytes))`
 
 - **Written:** `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`)
   - **Help:** `def handle(request: HttpRequest) -> Result[HttpResponse]`

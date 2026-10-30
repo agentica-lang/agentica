@@ -113,11 +113,13 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
 - A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
   it with `HTTP.text(response.body, response.headers)`, which decodes UTF-8
   only: a `charset` in `Content-Type` other than `utf-8`, or a body that is not
-  valid UTF-8, is an error (other charsets: the planned `agentica-lang/charset`
-  package). `HttpResponse` is not JSON encodable.
+  valid UTF-8, is an error (`us-ascii` counts as `utf-8`; other charsets: the
+  planned `agentica-lang/charset` package). `HttpResponse` is not JSON
+  encodable.
 - Names that do not exist: `HTTP.client()` (write
-  `HTTP.client(HTTP.client_options())`), `response.text`, `header_timeout_ms` (`request_timeout_ms`), and `read`,
-  `trailers`, `close_body`, `request_stream` (one whole `HTTP.request`).
+  `HTTP.client(HTTP.client_options())`), `response.text`, `header_timeout_ms`
+  (`request_timeout_ms`), and `read`, `trailers`, `close_body`,
+  `request_stream` (one whole `HTTP.request`).
 
 ## HTTP server (`std/http`)
 

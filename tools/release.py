@@ -301,9 +301,9 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [], body: "hola ñandú"))
+    return ok(HttpResponse(status: 200, headers: [], body: "hola ñandú".bytes))
   end
-  return ok(HttpResponse(status: 404, headers: [], body: "no"))
+  return ok(HttpResponse(status: 404, headers: [], body: "no".bytes))
 end
 
 def main() -> Void
@@ -311,7 +311,7 @@ def main() -> Void
   client = HTTP.client(HTTP.client_options()).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
-  puts("#{response.status} #{response.body}")
+  puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
   puts(HTTP.get(client, base + "/missing").unwrap!.status)
   HTTP.close_client(client)
   HTTP.close_server(server)

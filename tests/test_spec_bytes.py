@@ -65,6 +65,13 @@ REFUSED = [
         "CHECK-NOT-DECODABLE",
         "Frame",
     ),
+    # An HttpResponse has a Bytes body, so JSON neither writes nor builds it.
+    (
+        MAIN + '  r = HttpResponse(status: 200, headers: [], body: "a".bytes)\n  puts(JSON.encode(r))\nend\n',
+        "CHECK-NOT-ENCODABLE",
+        "r",
+    ),
+    (MAIN + '  puts(JSON.decode("{}", HttpResponse).ok?)\nend\n', "CHECK-NOT-DECODABLE", "HttpResponse"),
     # The help walk for a type with no Bytes ends: the code is the same as for a type that has one.
     (MAIN + "  puts(JSON.encode(1..2))\nend\n", "CHECK-NOT-ENCODABLE", "1..2"),
     (MAIN + '  puts(JSON.decode("{}", Int).ok?)\nend\n', "CHECK-NOT-DECODABLE", "Int"),

@@ -1,1 +1,105 @@
-ERROR CHECK-TYPE-MISMATCH 161:3:60-173:3:72 "expected Bytes, found String" - expected="Bytes" actual="String" signature="handle(request: HttpRequest) -> HttpResponse" file="builtin-structs.agc"
+program 0:1:1-17:1 entry=1 globals=0
+source 0 "builtin-structs.agc" chars=512
+struct s0 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
+struct s1 "Header" ["name","value"] types=[String, String]
+struct s2 "HttpRequest" ["method","target","path","headers","body"] types=[String, String, String, List(Struct(Header)), String]
+struct s3 "HttpResponse" ["status","headers","body"]
+struct s4 "ProcessOutput" ["stdout","stderr","truncated"] types=[String, String, Bool]
+fn0 "handle" params=1 captures=0 slots=7 @ 0:1:1-5:1
+    step @ 0:2:3-3:1
+    step @ 0:2:13-2:53
+    step @ 0:2:14-2:52
+    step @ 0:2:27-2:30
+    const r3 "a" @ 0:2:27-2:30
+    step @ 0:2:39-2:51
+    step @ 0:2:39-2:46
+    field r4 r0 2 @ 0:2:39-2:51
+    struct r2 r3 s1 @ 0:2:14-2:52
+    list r1 r2 1 @ 0:2:13-2:53
+    step @ 0:3:3-4:1
+    step @ 0:3:10-3:79
+    step @ 0:3:31-3:34
+    const r3 int:200 @ 0:3:31-3:34
+    step @ 0:3:45-3:52
+    move r4 r1 @ 0:3:45-3:52
+    step @ 0:3:60-3:78
+    step @ 0:3:60-3:72
+    step @ 0:3:60-3:67
+    field r6 r0 4 @ 0:3:60-3:72
+    call-builtin r6 "String.bytes" 1 @ 0:3:60-3:78 0:3:60-3:72
+    move r5 r6 @ 0:3:60-3:78
+    struct r2 r3 s3 @ 0:3:10-3:79
+    return r2 @ 0:3:3-4:1
+    const r2 void @ 0:1:1-5:1
+    return r2 @ 0:1:1-5:1
+fn1 "main" params=0 captures=0 slots=7 entry @ 0:6:1-17:1
+    step @ 0:7:3-8:1
+    step @ 0:7:14-7:96
+    step @ 0:7:21-7:95
+    step @ 0:7:41-7:46
+    const r2 "GET" @ 0:7:41-7:46
+    step @ 0:7:56-7:59
+    const r3 "/" @ 0:7:56-7:59
+    step @ 0:7:67-7:70
+    const r4 "/" @ 0:7:67-7:70
+    step @ 0:7:81-7:83
+    list r5 r5 0 @ 0:7:81-7:83
+    step @ 0:7:91-7:94
+    const r6 "x" @ 0:7:91-7:94
+    struct r1 r2 s2 @ 0:7:21-7:95
+    call r1 fn0 @ 0:7:14-7:96
+    move r0 r1 @ 0:7:14-7:96
+    step @ 0:8:3-9:1
+    step @ 0:8:3-8:24
+    step @ 0:8:8-8:23
+    step @ 0:8:8-8:16
+    field r1 r0 0 @ 0:8:8-8:23
+    call-builtin r1 "puts" 1 @ 0:8:3-8:24 0:8:8-8:23
+    step @ 0:9:3-10:1
+    step @ 0:9:10-9:33
+    step @ 0:9:20-9:26
+    const r2 "/tmp" @ 0:9:20-9:26
+    step @ 0:9:28-9:32
+    const r3 int:1000 @ 0:9:28-9:32
+    call-builtin r2 "File.stat" 2 @ 0:9:10-9:33 0:9:20-9:26 0:9:28-9:32
+    move r1 r2 @ 0:9:10-9:33
+    step @ 0:10:3-14:1
+    step @ 0:10:8-10:12
+    is-ok r2 r1 @ 0:11:5-11:10
+    jump-if-false r2 L1 @ 0:11:5-11:10
+    result-value r2 r1 @ 0:11:5-11:10
+    step @ 0:11:14-12:1
+    step @ 0:11:14-11:26
+    step @ 0:11:19-11:25
+    step @ 0:11:19-11:20
+    field r3 r2 0 @ 0:11:19-11:25
+    call-builtin r3 "puts" 1 @ 0:11:14-11:26 0:11:19-11:25
+    jump L0 @ 0:10:3-14:1
+  L1:
+    is-ok r2 r1 @ 0:12:5-12:13
+    jump-if-true r2 L2 @ 0:12:5-12:13
+    result-value r2 r1 @ 0:12:5-12:13
+    step @ 0:12:17-13:1
+    step @ 0:12:17-12:24
+    step @ 0:12:22-12:23
+    move r3 r2 @ 0:12:22-12:23
+    call-builtin r3 "puts" 1 @ 0:12:17-12:24 0:12:22-12:23
+  L2:
+  L0:
+    step @ 0:14:3-15:1
+    step @ 0:14:7-14:62
+    step @ 0:14:29-14:31
+    const r3 "" @ 0:14:29-14:31
+    step @ 0:14:41-14:43
+    const r4 "" @ 0:14:41-14:43
+    step @ 0:14:56-14:61
+    const r5 false @ 0:14:56-14:61
+    struct r2 r3 s4 @ 0:14:7-14:62
+    step @ 0:15:3-16:1
+    step @ 0:15:3-15:20
+    step @ 0:15:8-15:19
+    step @ 0:15:8-15:9
+    field r3 r2 2 @ 0:15:8-15:19
+    call-builtin r3 "puts" 1 @ 0:15:3-15:20 0:15:8-15:19
+    const r3 void @ 0:6:1-17:1
+    return r3 @ 0:6:1-17:1

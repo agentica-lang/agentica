@@ -84,6 +84,9 @@ def main() -> Void
   show(HTTP.get(pool, plain + "/chunked"))
   binary = Result.unwrap!(HTTP.get(pool, plain + "/binary"))
   puts("#{binary.status} #{binary.body.size} #{binary.body[0]} #{binary.body[2]} #{HTTP.text(binary.body, binary.headers).ok?}")
+  chunked = Result.unwrap!(HTTP.get(pool, plain + "/binary-chunked"))
+  puts("#{chunked.body.size} #{chunked.body.to_a}")
+  show(HTTP.post(pool, plain + "/echo", Bytes.from_list([255, 0, 128, 13, 10]).unwrap!))
   latin = Result.unwrap!(HTTP.get(pool, plain + "/latin1"))
   puts("#{latin.body.size} #{latin.body[3]} #{HTTP.text(latin.body, latin.headers).ok?}")
   first = Result.unwrap!(HTTP.get(pool, plain + "/port")).body
@@ -388,6 +391,8 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         '200 hello 127.0.0.1 ["a", "b"]',
         "200 ñandú chunks 12",
         "200 3 255 128 false",
+        "5 [255, 0, 128, 13, 10]",
+        "200 5 ff00800d0a 12",
         "4 233 false",
         "200 form 8 a=1&b=ñ 14",
         "true",
