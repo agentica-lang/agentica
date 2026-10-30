@@ -295,7 +295,7 @@ def main() -> Void
 end
 
 def write(s: Stream) -> Int
-  return frexp_into(1.0, Native.null(), s).exponent + fprintf(s, "%d %f", 1, 2.0, [0])
+  return frexp_into(1.0, Native.null(), s).exponent + fprintf(s, "%d %f", 1, 2.0, "x".bytes)
 end
 """
 
@@ -406,7 +406,7 @@ end
 def main() -> Void
   db = db_open("x.db").unwrap!
   pool = Pool(db: db)
-  puts(db_exec(pool.db, "select 1", [0, 255], 2))
+  puts(db_exec(pool.db, "select 1", Bytes.from_list([0, 255]).unwrap!, 2))
   raw: C.Pointer = db_handle(db)
   puts(Native.null?(raw) or Native.null?(Native.null()))
   puts(Native.closed?(db) or Native.closed?(raw))
@@ -419,10 +419,22 @@ end
 
 
 # A resource is a type of its own: a function declared -> Db gives Result[Db], a parameter takes the resource, C.Bytes
-# is a List[Int], and C.Pointer is a type any code may name. Task.spawn_owning takes a resource.
+# is a Bytes, and C.Pointer is a type any code may name. Task.spawn_owning takes a resource.
 def test_resources_pointers_and_bytes_check(tmp_path):
     result = check(source(tmp_path, RESOURCES))
     assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+
+
+# A C.Bytes parameter takes a Bytes only: a List[Int], a list literal or a String is CHECK-TYPE-MISMATCH at the
+# argument.
+@pytest.mark.parametrize("argument", ["[0, 255]", "list", '"ab"'])
+def test_a_c_bytes_parameter_takes_bytes_not_a_list(tmp_path, argument):
+    line = "  puts(blob_sum(%s, 2))" % argument
+    text = 'extern "/opt/libblob.so"\n  def blob_sum(blob: C.Bytes, n: C.Int32) -> C.Int32\nend\n\n' \
+        "def main() -> Void\n  list: List[Int] = [0, 255]\n%s\nend\n" % line
+    start = line.index(argument) + 1
+    assert at(problem_of(check(source(tmp_path, text)))) == (
+        "CHECK-TYPE-MISMATCH", (7, start), (7, start + len(argument)))
 
 
 def test_an_exported_resource_is_imported_like_a_type(tmp_path):
@@ -457,13 +469,13 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
     assert at(problem_of(check(source(tmp_path, OPENER % body)))) == (code, start, stop)
 
 
-# Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, put_bytes
-# writes a List[Int], and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
+# Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, get_bytes
+# gives and put_bytes writes a Bytes (a List[Int] is CHECK-TYPE-MISMATCH), and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
 # and a wrong count CHECK-ARITY. The old names string_at and bytes_at are CHECK-UNKNOWN-NAME, with a help that gives
 # the call with offset 0.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  s: String = Native.get_string(db_handle(db_open().unwrap!), 1, 3)\n"
-     "  b: List[Int] = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
+     "  b: Bytes = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
      "  Native.put_bytes(Native.pointer(1), 0, b)\n"
      "  puts(s + Native.get_string(Native.null(), 0) + b.size.to_s)", None, None, None),
     ("  puts(Native.string_at(Native.null(), 3))", "CHECK-UNKNOWN-NAME", (8, 8), (8, 42)),
@@ -474,7 +486,8 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
     ("  puts(Native.get_string(Native.null()))", "CHECK-ARITY", (8, 8), (8, 40)),
     ("  puts(Native.get_bytes(Native.pointer(1), 0, [3]))", "CHECK-TYPE-MISMATCH", (8, 47), (8, 50)),
     ("  puts(Native.get_bytes(Native.null(), 0))", "CHECK-ARITY", (8, 8), (8, 42)),
-    ("  Native.put_bytes(Native.null(), 0, [1.5])", "CHECK-TYPE-MISMATCH", (8, 39), (8, 42)),
+    ("  Native.put_bytes(Native.null(), 0, [1, 2])", "CHECK-TYPE-MISMATCH", (8, 38), (8, 44)),
+    ("  b: List[Int] = Native.get_bytes(Native.null(), 0, 0)", "CHECK-TYPE-MISMATCH", (8, 18), (8, 55)),
     ('  Native.put_bytes(Native.null(), 0, "ab")', "CHECK-TYPE-MISMATCH", (8, 38), (8, 42)),
     ("  puts(Native.pointer(1.5))", "CHECK-TYPE-MISMATCH", (8, 23), (8, 26)),
     ("  n: Int = Native.pointer(1)", "CHECK-TYPE-MISMATCH", (8, 12), (8, 29)),

@@ -1,5 +1,5 @@
 program 0:1:1-63:1 entry=16 globals=0
-source 0 "extern.agc" chars=2129
+source 0 "extern.agc" chars=2133
 struct s0 "PeerNarrow" ["result","c"]
 struct s1 "PeerAccept" ["result","conn","count"]
 struct s2 "PeerSplit" ["whole"]
@@ -195,24 +195,23 @@ fn16 "main" params=0 captures=0 slots=13 entry @ 0:37:1-63:1
     call-builtin r2 "Result.unwrap!" 1 @ 0:43:10-43:32 0:43:10-43:24
     move r1 r2 @ 0:43:10-43:32
     step @ 0:44:3-45:1
-    step @ 0:44:3-44:44
-    step @ 0:44:8-44:43
-    step @ 0:44:21-44:42
+    step @ 0:44:3-44:48
+    step @ 0:44:8-44:47
+    step @ 0:44:21-44:46
     step @ 0:44:26-44:30
     move r4 r1 @ 0:44:26-44:30
-    step @ 0:44:32-44:38
-    step @ 0:44:33-44:34
-    const r6 int:1 @ 0:44:33-44:34
-    step @ 0:44:36-44:37
-    const r7 int:2 @ 0:44:36-44:37
-    list r5 r6 2 @ 0:44:32-44:38
-    step @ 0:44:40-44:41
-    const r6 int:2 @ 0:44:40-44:41
-    call r4 fn2 @ 0:44:21-44:42
-    move r3 r4 @ 0:44:21-44:42
-    call-builtin r3 "Native.null?" 1 @ 0:44:8-44:43 0:44:21-44:42
-    move r2 r3 @ 0:44:8-44:43
-    call-builtin r2 "puts" 1 @ 0:44:3-44:44 0:44:8-44:43
+    step @ 0:44:32-44:42
+    step @ 0:44:32-44:36
+    const r6 "ab" @ 0:44:32-44:36
+    call-builtin r6 "String.bytes" 1 @ 0:44:32-44:42 0:44:32-44:36
+    move r5 r6 @ 0:44:32-44:42
+    step @ 0:44:44-44:45
+    const r6 int:2 @ 0:44:44-44:45
+    call r4 fn2 @ 0:44:21-44:46
+    move r3 r4 @ 0:44:21-44:46
+    call-builtin r3 "Native.null?" 1 @ 0:44:8-44:47 0:44:21-44:46
+    move r2 r3 @ 0:44:8-44:47
+    call-builtin r2 "puts" 1 @ 0:44:3-44:48 0:44:8-44:47
     step @ 0:45:3-46:1
     step @ 0:45:3-45:21
     step @ 0:45:16-45:20

@@ -467,14 +467,13 @@ end
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
 - `C.Bytes` is a parameter only (as a result it is `PARSE-EXTERN-TYPE`): a
-  `List[Int]` whose items are bytes (an item outside 0 to 255 is
-  `RUNTIME-INVALID-NUMBER`). C gets a `const uint8_t *` to a copy, valid only
-  during the call; pass the length as a parameter of its own.
+  `Bytes`. C gets a `const uint8_t *` to a copy, valid only during the call;
+  pass the length as a parameter of its own.
 - Memory that C returns is read through its `C.Pointer`, from a byte offset
   past it: `Native.get_string(p, offset)` copies the NUL-terminated text,
   `Native.get_string(p, offset, length)` exactly `length` bytes (NUL bytes
   included), and `Native.get_bytes(p, offset, length)` gives the bytes as a
-  `List[Int]` (Ruby ffi's `get_string` and `get_bytes`). Bytes that are not
+  `Bytes` (Ruby ffi's `get_string` and `get_bytes`). Bytes that are not
   UTF-8 become U+FFFD. A NULL `p` with length 0 reads as empty (C's way
   to say empty: SQLite gives NULL for an empty blob); any other NULL `p` is
   `RUNTIME-NATIVE-NULL` at the pointer, checked first, and then a negative
@@ -532,8 +531,7 @@ end
   `RUNTIME-INTEGER-OVERFLOW` at the value. `Native.put_string(p, offset, text)`
   writes the bytes of `text` and a NUL, a C string (a NUL in `text` is
   `RUNTIME-INVALID-CHARACTER`), and `Native.put_bytes(p, offset, bytes)` writes
-  a `List[Int]` of bytes (one outside 0 to 255 is `RUNTIME-INTEGER-OVERFLOW`,
-  every item checked first). In bulk, `Native.get_array_of_int32`,
+  a `Bytes`. In bulk, `Native.get_array_of_int32`,
   `get_array_of_int64`, `get_array_of_float32` and `get_array_of_float64` take
   `(p, offset, count)` and give a `List[Int]` or `List[Float]`; the
   `put_array_of_*` forms take `(p, offset, values)` and check every item before
