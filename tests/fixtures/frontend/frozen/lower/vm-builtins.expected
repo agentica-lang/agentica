@@ -175,7 +175,7 @@ Native.get_array_of_float32
 Native.get_array_of_float64
 Native.get_array_of_int32
 Native.get_array_of_int64
-Native.get_bytes
+Native.get_bytes.bytes
 Native.get_float32
 Native.get_float64
 Native.get_int16
@@ -198,7 +198,7 @@ Native.put_array_of_float32
 Native.put_array_of_float64
 Native.put_array_of_int32
 Native.put_array_of_int64
-Native.put_bytes
+Native.put_bytes.bytes
 Native.put_float32
 Native.put_float64
 Native.put_int16

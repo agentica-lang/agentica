@@ -48,7 +48,8 @@ EXTERN_CODES = {
 }
 EXTERN_TYPES = {
   "g": "Int", "h": "Int", "i": "Int", "l": "Int", "u": "Int", "w": "Int", "j": "Int", "n": "Int", "d": "Float",
-  "f": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void", "c": "C.Pointer", "e": "C.Pointer",
+  "f": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "y": "Bytes", "v": "Void", "c": "C.Pointer",
+  "e": "C.Pointer",
 }
 # The integer types named in the help texts.
 INT_NAMES = "C.Int8, C.Int16, C.Int32, C.Int64, C.UInt8, C.UInt16, C.UInt32, C.Long"
@@ -2968,7 +2969,7 @@ def record_name(name: String) -> String
 end
 
 # The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only,
-# and C.Bytes (a List[Int] of bytes) a parameter only. A resource of the block is the resource as a parameter, and a
+# and C.Bytes (a Bytes) a parameter only. A resource of the block is the resource as a parameter, and a
 # Result of it as a result (NULL is an error). ids is the first free node id, for the types this adds.
 def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) -> Result[ExternType]
   code = ""
@@ -3010,10 +3011,6 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     return ok(ExternType(code: code, type: wrapped, ids: ids + 1))
   elsif code == "r"
     return ok(ExternType(code: code, type: ref, ids: ids))
-  elsif code == "y"
-    item = Ast.TypeRef(id: ids, name: "Int", args: [], span: ref.span)
-    list = Ast.TypeRef(id: ids + 1, name: "List", args: [item], span: ref.span)
-    return ok(ExternType(code: code, type: list, ids: ids + 2))
   end
 
   return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))

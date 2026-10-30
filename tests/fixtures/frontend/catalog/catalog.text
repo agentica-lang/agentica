@@ -377,7 +377,7 @@ builtin Native.get_array_of_int32 forms=1
 builtin Native.get_array_of_int64 forms=1
   Native.get_array_of_int64(pointer: C.Pointer, offset: Int, count: Int) -> List[Int] shape=(Opaque(C.Pointer), Int, Int) -> List(Int) rule=Plain impl="Native.get_array_of_int64" effects=["native"] desc="Read count signed 64-bit integers from offset bytes past the C.Pointer into a list; a negative count is RUNTIME-INVALID-COUNT."
 builtin Native.get_bytes forms=1
-  Native.get_bytes(pointer: C.Pointer, offset: Int, length: Int) -> List[Int] shape=(Opaque(C.Pointer), Int, Int) -> List(Int) rule=Plain impl="Native.get_bytes" effects=["native"] desc="Copy length bytes from offset bytes past the C.Pointer into a list; NULL with length 0 is [], other NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT; a length past C memory is undefined."
+  Native.get_bytes(pointer: C.Pointer, offset: Int, length: Int) -> Bytes shape=(Opaque(C.Pointer), Int, Int) -> Bytes rule=Plain impl="Native.get_bytes.bytes" effects=["native"] desc="Copy length bytes from offset bytes past the C.Pointer into a Bytes; NULL with length 0 is empty, other NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT; a length past C memory is undefined."
 builtin Native.get_float32 forms=1
   Native.get_float32(pointer: C.Pointer, offset: Int) -> Float shape=(Opaque(C.Pointer), Int) -> Float rule=Plain impl="Native.get_float32" effects=["native"] desc="Read a 32-bit float at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds of an owned buffer."
 builtin Native.get_float64 forms=1
@@ -425,7 +425,7 @@ builtin Native.put_array_of_int32 forms=1
 builtin Native.put_array_of_int64 forms=1
   Native.put_array_of_int64(pointer: C.Pointer, offset: Int, values: List[Int]) -> Void shape=(Opaque(C.Pointer), Int, List(Int)) -> Void rule=Plain impl="Native.put_array_of_int64" effects=["native"] desc="Write the values as signed 64-bit integers from offset bytes past the C.Pointer; every value is checked before the first write."
 builtin Native.put_bytes forms=1
-  Native.put_bytes(pointer: C.Pointer, offset: Int, bytes: List[Int]) -> Void shape=(Opaque(C.Pointer), Int, List(Int)) -> Void rule=Plain impl="Native.put_bytes" effects=["native"] desc="Write the bytes from offset bytes past the C.Pointer; every byte is checked before the first write, and one outside 0 to 255 is RUNTIME-INTEGER-OVERFLOW."
+  Native.put_bytes(pointer: C.Pointer, offset: Int, bytes: Bytes) -> Void shape=(Opaque(C.Pointer), Int, Bytes) -> Void rule=Plain impl="Native.put_bytes.bytes" effects=["native"] desc="Write the bytes from offset bytes past the C.Pointer."
 builtin Native.put_float32 forms=1
   Native.put_float32(pointer: C.Pointer, offset: Int, value: Float) -> Void shape=(Opaque(C.Pointer), Int, Float) -> Void rule=Plain impl="Native.put_float32" effects=["native"] desc="Write value as a 32-bit float at offset bytes past the C.Pointer."
 builtin Native.put_float64 forms=1

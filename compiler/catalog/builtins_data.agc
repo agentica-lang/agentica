@@ -2818,13 +2818,13 @@ ROWS_28: List[Model.Builtin] = [
         Model.Named(name: "offset", type: Types.Type.Int),
         Model.Named(name: "length", type: Types.Type.Int),
       ],
-      result: Types.Type.List(Types.Type.Int),
+      result: Types.Type.Bytes,
       rule: Model.Rule.Plain,
-      implementation: "Native.get_bytes",
+      implementation: "Native.get_bytes.bytes",
       effects: ["native"],
       description: (
-        "Copy length bytes from offset bytes past the C.Pointer into a list; NULL with length 0 is [], other NULL " +
-        "is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT; a length past C memory is undefined."
+        "Copy length bytes from offset bytes past the C.Pointer into a Bytes; NULL with length 0 is empty, other " +
+        "NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT; a length past C memory is undefined."
       ),
       alternatives: [],
     ),
@@ -3203,16 +3203,13 @@ ROWS_28: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
         Model.Named(name: "offset", type: Types.Type.Int),
-        Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
       ],
       result: Types.Type.Void,
       rule: Model.Rule.Plain,
-      implementation: "Native.put_bytes",
+      implementation: "Native.put_bytes.bytes",
       effects: ["native"],
-      description: (
-        "Write the bytes from offset bytes past the C.Pointer; every byte is checked before the first write, and " +
-        "one outside 0 to 255 is RUNTIME-INTEGER-OVERFLOW."
-      ),
+      description: "Write the bytes from offset bytes past the C.Pointer.",
       alternatives: [],
     ),
     Model.Builtin(
