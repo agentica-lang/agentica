@@ -6,8 +6,10 @@ def produce(events: Channel[Bytes]) -> Void
     if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
       break
     end
+
     Task.sleep(100)
   end
+
   events.close
 end
 
@@ -18,6 +20,7 @@ def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
     headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
     return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
   end
+
   return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n".bytes)))
 end
 
@@ -29,6 +32,7 @@ def main() -> Void
     HTTP.wait(server).unwrap!
     return
   end
+
   client = HTTP.client(HTTP.client_options()).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/events").unwrap!
