@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--ai|--json]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -303,9 +303,9 @@ then no scenario runs.
   under test; the runner closes each child with `Process.close`, which sends
   `SIGTERM`, then `SIGKILL` after one second. An interrupted run (Ctrl-C,
   `SIGTERM`) stops its children, but its temporary directory may stay until the
-  next `agentica test` removes it, because the VM does not unwind (the Racket
-  driver always removed it; `docs/future/18-front-end-language.md` §18.4, until
-  signals, §46). On Linux the runner also ends, and stops its children, when
+  next `agentica test` removes it, because the VM does not unwind (until
+  signals, §46; `docs/future/18-front-end-language.md` §18.4). On Linux the
+  runner also ends, and stops its children, when
   the driver is killed with `SIGKILL` (see
   [`vm/10-io-processes.md`](vm/10-io-processes.md) §10.4).
 - **Temporary directory.** Each run holds an exclusive lock on a `lock` file
