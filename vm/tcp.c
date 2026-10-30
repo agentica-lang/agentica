@@ -66,11 +66,9 @@ struct request {
      where the look for an LF stopped. HttpWire.read_response: the body limit,
      where the look stopped, and whether the request was HEAD. Their cut goes
      in `cut` (the carry first), with `bytes`, `buffered` and `ended` (the input
-     had already ended or failed at the cut). `list`: the byte values (the
-     read of TCP.recv_bytes, the carry of read_text, the rest of read_head) are
-     byte lists, for the old List[Int] keys; else Bytes. */
+     had already ended or failed at the cut). */
   uint8_t carry[3], kept;
-  bool head_only, ended, list;
+  bool head_only, ended;
   uint64_t limit;
   uint8_t *rest;
   size_t rest_len, scanned, bytes, buffered;
@@ -290,7 +288,7 @@ static agc_value text_value(agc_vm *vm, const request *q) {
   if (q->bytes == 0 && q->count && q->cut.error)
     return agc_system_error(vm, "error reading from stream port", q->cut.error);
   return agc_result_value(
-      true, agc_http_text_value(vm, q->cut.data, q->cut.len, q->bytes, q->buffered, q->ended, q->list));
+      true, agc_http_text_value(vm, q->cut.data, q->cut.len, q->bytes, q->buffered, q->ended));
 }
 
 static agc_value head_value(agc_vm *vm, const request *q) {
@@ -1148,7 +1146,7 @@ static agc_value take(agc_vm *vm, net *n, request *q) {
     agc_inbuf_cut_free(&q->cut);
     return result;
   }
-  if (q->kind == REQ_BYTES) return agc_inbuf_bytes(vm, &n->in, q->count, q->list);
+  if (q->kind == REQ_BYTES) return agc_inbuf_bytes(vm, &n->in, q->count);
   bool over;
   agc_value line = agc_inbuf_line(vm, &n->in, "network: line exceeds 1048576 bytes", "network: end of input", &over);
   if (over) shut(n, "line");
@@ -1214,7 +1212,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     else if (heads(q->kind))
       result = head_value(vm, q);
     else if (q->kind == REQ_BYTES)
-      result = agc_inbuf_cut_bytes_value(vm, &q->cut, q->list);
+      result = agc_inbuf_cut_bytes_value(vm, &q->cut);
     else
       result = agc_inbuf_cut_line_value(vm, &q->cut, "network: line exceeds 1048576 bytes", "network: end of input");
     agc_charge(vm, agc_value_units(result));
@@ -1507,8 +1505,7 @@ static bool begin_read(void *data, agc_io_job *job) {
 /* A read as read_op takes it: the kind, the count, the carry of
    HttpWire.read_text (copied, as the request holds no GC value) and the body
    limit of HttpWire.read_head, whose rest goes back in front of the input on
-   the I/O thread (here at N = 1, else in begin_read). want->list is the byte
-   form of the key that was called. */
+   the I/O thread (here at N = 1, else in begin_read). */
 static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint32_t span) {
   req_kind kind = want->kind;
   if (kind == REQ_BYTES || kind == REQ_TEXT) {
@@ -1521,7 +1518,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   }
   if (kind == REQ_TEXT) {
     size_t kept_len = 0;
-    const uint8_t *kept = agc_stream_bytes(vm, args[2], want->list, sizeof want->carry, &kept_len);
+    const uint8_t *kept = agc_stream_bytes(vm, args[2], sizeof want->carry, &kept_len);
     if (!kept) agc_fail(vm, "RUNTIME-INTERNAL", "HttpWire.read_text: the carry must be at most 3 bytes", span);
     want->kept = (uint8_t)kept_len;
     if (kept_len) memcpy(want->carry, kept, kept_len);
@@ -1529,7 +1526,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   const uint8_t *rest = NULL;
   size_t rest_len = 0;
   if (kind == REQ_HEAD) {
-    rest = agc_stream_bytes(vm, args[1], want->list, LIMIT, &rest_len);
+    rest = agc_stream_bytes(vm, args[1], LIMIT, &rest_len);
     if (!rest) agc_fail(vm, "RUNTIME-INTERNAL", "HttpWire.read_head: rest must be at most 1048576 bytes", span);
     want->limit = (uint64_t)agc_http_max_body(vm, args[2], span);
   }
@@ -1556,7 +1553,6 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   q->limit = want->limit;
   q->head_only = want->head_only;
   q->scanned = want->scanned;
-  q->list = want->list;
   if (rest_len) {
     q->rest = malloc(rest_len);
     if (!q->rest) agc_out_of_memory();
@@ -1571,25 +1567,14 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args, &(request){.kind = REQ_LINE}, span);
 }
 
-/* TCP.recv_bytes, HttpWire.read_text and HttpWire.read_head have two thin
-   entries each: "<name>.bytes" on Bytes and the old "<name>" on byte lists,
-   which stays for front ends and .agcb files compiled before #805 PR 6; PR 9
-   removes it. */
+/* TCP.recv_bytes: up to count bytes, as a Bytes. */
 static agc_value builtin_recv_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_BYTES, .list = true}, span);
-}
-
-static agc_value builtin_recv_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args, &(request){.kind = REQ_BYTES}, span);
 }
 
 /* HttpWire.read_text (std-only): like recv_bytes, but the bytes come back as
    UTF-8 text after carry, so a body is never a byte value. */
 static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_TEXT, .list = true}, span);
-}
-
-static agc_value builtin_read_text_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args, &(request){.kind = REQ_TEXT}, span);
 }
 
@@ -1598,10 +1583,6 @@ static agc_value builtin_read_text_bytes(agc_vm *vm, agc_value *args, uint32_t s
    there for the body or the next request. rest (the bytes a chunked body's
    last read took past its end) is put back first. */
 static agc_value builtin_read_head(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_HEAD, .list = true}, span);
-}
-
-static agc_value builtin_read_head_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args, &(request){.kind = REQ_HEAD}, span);
 }
 
@@ -1721,20 +1702,11 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   return write_op(vm, args, (const uint8_t *)text->data, text->bytes);
 }
 
-/* TCP.send_bytes: a Bytes under "TCP.send_bytes.bytes" (only its size is checked), a byte list under the old key
-   (list), which stays for front ends and .agcb files compiled before #805 PR 6; PR 9 removes it. */
+/* TCP.send_bytes: a Bytes, of which only the size is checked. */
 static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   size_t len = 0;
-  const uint8_t *data = agc_stream_bytes(vm, args[1], true, LIMIT, &len);
-  if (!data) return agc_error_value("network: bytes must be 0..255 and at most 1048576 per call");
-  return write_op(vm, args, data, len);
-}
-
-static agc_value builtin_send_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  size_t len = 0;
-  const uint8_t *data = agc_stream_bytes(vm, args[1], false, LIMIT, &len);
+  const uint8_t *data = agc_stream_bytes(vm, args[1], LIMIT, &len);
   if (!data) return agc_error_value("network: bytes exceed 1048576 per call");
   return write_op(vm, args, data, len);
 }
@@ -1815,18 +1787,14 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TCP.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TCP.recv_bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TCP.send_bytes.bytes", 3, builtin_send_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"HttpWire.read_text", 4, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"HttpWire.read_head", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"HttpWire.read_text.bytes", 4, builtin_read_text_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"HttpWire.read_head.bytes", 4, builtin_read_head_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.read_text.bytes", 4, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_response", 4, builtin_read_response, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.clean_eof?", 1, builtin_clean_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.connect_tls", 4, builtin_connect_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

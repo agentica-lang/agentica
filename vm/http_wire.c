@@ -80,19 +80,6 @@ static bool range_ok(int64_t from, int64_t count, size_t len) {
   return from >= 0 && count >= 0 && (uint64_t)from <= len && (uint64_t)count <= len - (size_t)from;
 }
 
-/* Copies data[from, from + n) into out; false when an item is not a byte. */
-static bool copy_bytes(agc_vm *vm, const agc_list *data, size_t from, size_t n, uint8_t *out) {
-  agc_list_cursor cursor;
-  agc_value item;
-  agc_list_cursor_begin(&cursor, data, from);
-  for (size_t k = 0; k < n && agc_list_cursor_next(&cursor, &item); k++) {
-    int64_t b = agc_as_int(vm, item);
-    if (b < 0 || b > 255) return false;
-    out[k] = (uint8_t)b;
-  }
-  return true;
-}
-
 static agc_value empty_list(void) {
   agc_list_builder out;
   agc_list_builder_sized(&out, 0);
@@ -288,38 +275,17 @@ static void load_body(agc_vm *vm, agc_value v, agc_http_body *b, uint32_t span) 
   if (b->state == AGC_HTTP_BODY_DATA) misuse(vm, "HttpWire.chunk: invalid state", span);
 }
 
-/* The byte count of a byte argument: a Bytes, or a List[Int] for the old keys
-   (list). */
-static size_t byte_count(agc_vm *vm, agc_value v, bool list) {
-  return list ? agc_list_len(agc_as_list(vm, v)) : agc_as_bytes(vm, v)->len;
-}
-
-/* Copies v[from, from + n) of a byte argument into out (the caller checked the
-   range); false when an item of a byte list is not a byte. */
-static bool copy_arg(agc_vm *vm, agc_value v, bool list, size_t from, size_t n, uint8_t *out) {
-  if (list) return copy_bytes(vm, agc_as_list(vm, v), from, n, out);
-  if (n) memcpy(out, agc_as_bytes(vm, v)->data + from, n);
-  return true;
-}
-
 /* HttpWire.chunk(state, data, from): decodes data[from..] until the body ends
    or the bytes run out. runs lists each piece of body as start, length. data
-   is a Bytes under "HttpWire.chunk.bytes", read where it is, and a byte list
-   under the old key, which stays for front ends and .agcb files compiled
-   before #805 PR 6 (PR 9 removes it). */
-static agc_value chunk_of(agc_vm *vm, const agc_value *args, bool list, uint32_t span) {
+   is a Bytes, read where it is. */
+static agc_value builtin_chunk(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_http_body b;
   load_body(vm, args[0], &b, span);
   int64_t from = agc_as_int(vm, args[2]);
-  size_t len = byte_count(vm, args[1], list);
-  if (!range_ok(from, 0, len)) misuse(vm, "HttpWire.chunk: from is out of range", span);
-  size_t n = len - (size_t)from;
-  const uint8_t *buf = list ? NULL : agc_as_bytes(vm, args[1])->data + from;
-  if (list) {
-    uint8_t *copy = agc_alloc_atomic(n ? n : 1);
-    if (!copy_arg(vm, args[1], true, (size_t)from, n, copy)) misuse(vm, "HttpWire.chunk: data must be bytes", span);
-    buf = copy;
-  }
+  const agc_bytes *data = agc_as_bytes(vm, args[1]);
+  if (!range_ok(from, 0, data->len)) misuse(vm, "HttpWire.chunk: from is out of range", span);
+  size_t n = data->len - (size_t)from;
+  const uint8_t *buf = data->data + from;
   /* Each run takes at least one byte of chunk data plus its framing, so n
      runs is a bound; the list builder needs its exact size up front. */
   int64_t *runs = agc_alloc_atomic(agc_size_mul(n ? n : 1, 2 * sizeof *runs));
@@ -345,12 +311,6 @@ static agc_value chunk_of(agc_vm *vm, const agc_value *args, bool list, uint32_t
   c->fields[2] = agc_list_value(agc_list_builder_finish(&pieces));
   store_body(c, &b);
   return agc_result_value(true, agc_struct_value(c));
-}
-
-static agc_value builtin_chunk(agc_vm *vm, agc_value *args, uint32_t span) { return chunk_of(vm, args, true, span); }
-
-static agc_value builtin_chunk_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return chunk_of(vm, args, false, span);
 }
 
 /* HttpWire.chunk_read(state, bytes): the state after std read bytes of chunk
@@ -381,18 +341,15 @@ static size_t whole_prefix(const uint8_t *s, size_t len) {
 /* The HttpWire.Text of buf: valid is false, with empty text, when buf is not
    UTF-8 up to an unfinished last character. buffered is the count of input
    bytes still unread after the cut and ended whether the input had ended or
-   failed (0 and false for HttpWire.text). The carry is a Bytes, or a byte list
-   for the old keys (list). */
-agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes, size_t buffered, bool ended,
-                              bool list) {
+   failed (0 and false for HttpWire.text). The carry is a Bytes. */
+agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes, size_t buffered, bool ended) {
   size_t whole = whole_prefix(buf, len), chars;
   bool valid = agc_utf8_chars(buf, whole, &chars);
   agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 6), 6);
   t->fields[0] = valid ? agc_string_value(agc_make_string((const char *)buf, whole, chars))
                        : agc_string_value(agc_make_string("", 0, 0));
   size_t carried = valid ? len - whole : 0;
-  t->fields[1] = list ? agc_list_value(agc_list_of_bytes(buf + whole, carried))
-                      : agc_bytes_value(agc_make_bytes(buf + whole, carried));
+  t->fields[1] = agc_bytes_value(agc_make_bytes(buf + whole, carried));
   t->fields[2] = agc_int((int64_t)bytes);
   t->fields[3] = agc_bool(valid);
   t->fields[4] = agc_int((int64_t)buffered);
@@ -401,12 +358,11 @@ agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t
 }
 
 /* HttpWire.text(carry, data, runs): the text of carry followed by the runs of
-   data (start, length pairs). carry and data are Bytes under
-   "HttpWire.text.bytes" and byte lists under the old key (list); runs is a
-   List[Int] under both. */
-static agc_value text_of(agc_vm *vm, const agc_value *args, bool list, uint32_t span) {
+   data (start, length pairs). carry and data are Bytes; runs is a List[Int]. */
+static agc_value builtin_text(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_bytes *carry = agc_as_bytes(vm, args[0]), *data = agc_as_bytes(vm, args[1]);
   const agc_list *runs = agc_as_list(vm, args[2]);
-  size_t pairs = agc_list_len(runs), kept = byte_count(vm, args[0], list), len = byte_count(vm, args[1], list);
+  size_t pairs = agc_list_len(runs), kept = carry->len, len = data->len;
   if (pairs % 2 || kept > 3) misuse(vm, "HttpWire.text: invalid runs", span);
   size_t total = kept;
   for (size_t k = 0; k < pairs; k += 2) {
@@ -415,22 +371,16 @@ static agc_value text_of(agc_vm *vm, const agc_value *args, bool list, uint32_t 
     total = agc_size_add(total, (size_t)count);
   }
   uint8_t *buf = agc_alloc_atomic(total ? total : 1);
-  if (!copy_arg(vm, args[0], list, 0, kept, buf)) misuse(vm, "HttpWire.text: data must be bytes", span);
+  if (kept) memcpy(buf, carry->data, kept);
   size_t at = kept;
   for (size_t k = 0; k < pairs; k += 2) {
     size_t from = (size_t)agc_as_int(vm, agc_list_get(runs, k));
     size_t count = (size_t)agc_as_int(vm, agc_list_get(runs, k + 1));
-    if (!copy_arg(vm, args[1], list, from, count, buf + at)) misuse(vm, "HttpWire.text: data must be bytes", span);
+    if (count) memcpy(buf + at, data->data + from, count);
     at += count;
   }
   agc_charge(vm, total / AGC_COST_BYTES);
-  return agc_http_text_value(vm, buf, total, total - kept, 0, false, list);
-}
-
-static agc_value builtin_text(agc_vm *vm, agc_value *args, uint32_t span) { return text_of(vm, args, true, span); }
-
-static agc_value builtin_text_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return text_of(vm, args, false, span);
+  return agc_http_text_value(vm, buf, total, total - kept, 0, false);
 }
 
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
@@ -602,11 +552,9 @@ static agc_value builtin_error_answer(agc_vm *vm, agc_value *args, uint32_t span
 
 const agc_builtin agc_http_wire_builtins[] = {
   {"HttpWire.chunked", 1, builtin_chunked, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"HttpWire.chunk", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"HttpWire.text", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"HttpWire.chunk.bytes", 3, builtin_chunk_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"HttpWire.text.bytes", 3, builtin_text_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.chunk.bytes", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"HttpWire.text.bytes", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.encode_request", 8, builtin_encode_request, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

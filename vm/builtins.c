@@ -81,28 +81,16 @@ static agc_value text_error(const char *text) {
   return agc_result_value(false, agc_string_value(agc_make_string(text, n, n)));
 }
 
-/* IO.read_bytes(count): up to count bytes of stdin, as a Bytes under the catalog's "IO.read_bytes.bytes" key, or as a
-   byte list under the old "IO.read_bytes" key, which front ends and .agcb files compiled before #805 PR 4 import (PR 9
-   removes it). */
-static agc_value read_bytes(agc_vm *vm, agc_value *args, bool list) {
+/* IO.read_bytes(count): up to count bytes of stdin, as a Bytes. */
+static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
   int64_t count = agc_as_int(vm, args[0]);
   if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error("byte count must be between 0 and 1048576");
   const agc_bytes *bytes = NULL;
   agc_input_status status = agc_input_bytes(vm, (size_t)count, &bytes);
   if (status == AGC_INPUT_WAIT) return agc_void();
   if (status == AGC_INPUT_FAILED) return text_error("input read failed");
-  if (list) return agc_result_value(true, agc_list_value(agc_list_of_bytes(bytes->data, bytes->len)));
   return agc_result_value(true, agc_bytes_value(bytes));
-}
-
-static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return read_bytes(vm, args, true);
-}
-
-static agc_value builtin_read_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return read_bytes(vm, args, false);
 }
 
 static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -504,8 +492,7 @@ const agc_builtin agc_core_builtins[] = {
   {"IO.gets", 0, builtin_gets, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"IO.gets!", 0, builtin_gets_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"IO.read", 0, builtin_read, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"IO.read_bytes", 1, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"IO.read_bytes.bytes", 1, builtin_read_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"IO.read_bytes.bytes", 1, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"IO.flush", 0, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"IO.eof?", 0, builtin_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"System.args", 0, builtin_args, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

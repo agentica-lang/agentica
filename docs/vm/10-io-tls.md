@@ -178,10 +178,8 @@ texts.
   return it too. Bytes that arrived before the error are still returned.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
   the grammar says. `send_bytes` checks the 1 MiB limit first. `send_bytes`,
-  `recv_bytes` and the HttpWire byte rows have their catalog key `<name>.bytes`
-  on `Bytes` and their old key `<name>` on byte lists (which also refuses an
-  item outside 0 to 255): front ends and `.agcb` files compiled before #805 PR 6
-  import the old keys.
+  `recv_bytes` and the HttpWire byte rows take and give `Bytes`, under the
+  catalog key `<name>.bytes`.
   The bytes go out with `uv_try_write`, the rest with one `uv_write`, and the
   task parks until the callback. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `error writing to

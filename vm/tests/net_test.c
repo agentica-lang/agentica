@@ -178,25 +178,14 @@ static void test_bytes_before_the_deadline(void) {
   close_pair(fd);
 }
 
-/* n bytes at data as a Bytes, or as a byte list for the old keys (list). */
-static agc_value byte_arg(const char *data, size_t n, bool list) {
-  if (!list) return agc_bytes_value(agc_make_bytes((const uint8_t *)data, n));
-  agc_list_builder out;
-  agc_list_builder_sized(&out, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int((uint8_t)data[k]));
-  return agc_list_value(agc_list_builder_finish(&out));
+/* n bytes at data as a Bytes. */
+static agc_value byte_arg(const char *data, size_t n) {
+  return agc_bytes_value(agc_make_bytes((const uint8_t *)data, n));
 }
 
-/* A read's bytes are the n bytes at data, in the form of its key: a byte list (list) or a Bytes. */
-static void read_is(agc_value v, const char *data, size_t n, bool list) {
-  if (list) {
-    const agc_list *l = agc_as_list(&vm, v);
-    assert(agc_list_len(l) == n);
-    for (size_t k = 0; k < n; k++) assert(agc_as_int(&vm, agc_list_get(l, k)) == (uint8_t)data[k]);
-    return;
-  }
-  const agc_bytes *b = agc_as_bytes(&vm, v);
-  assert(b->len == n && (n == 0 || memcmp(b->data, data, n) == 0));
+/* A read's bytes are the n bytes at data. */
+static void read_is(agc_value v, const char *data, size_t n) {
+  assert(v.tag == AGC_T_BYTES && agc_equal(&vm, v, byte_arg(data, n), 0));
 }
 
 static void peer_reads(int fd, const char *data, size_t n) {
@@ -213,10 +202,8 @@ static void peer_reads(int fd, const char *data, size_t n) {
 
 static const char *const text_fields[] = {"text", "carry", "bytes", "valid", "buffered", "ended"};
 
-/* TCP.send_bytes, TCP.recv_bytes and HttpWire.read_text have the catalog's "<name>.bytes" key on Bytes and the old
-   "<name>" key on byte lists, which front ends and .agcb files compiled before #805 PR 6 import: both give the same
-   answer on the posted path (the I/O thread cuts the read, the done half builds its value in the form of the key).
-   Only the old send refuses an item that is not a byte; both refuse more than 1 MiB. */
+/* TCP.send_bytes, TCP.recv_bytes and HttpWire.read_text on Bytes, on the posted path (the I/O thread cuts the read,
+   the done half builds its value). A send of more than 1 MiB is refused. */
 static void test_byte_keys(void) {
   agc_string *names[6];
   for (size_t k = 0; k < 6; k++) names[k] = agc_make_string(text_fields[k], strlen(text_fields[k]), strlen(text_fields[k]));
@@ -229,34 +216,25 @@ static void test_byte_keys(void) {
   vm.rt->program = &program;
   int fd = open_pair();
   static const char sent[] = "\x00\xff" "a\n";
-  for (int list = 1; list >= 0; list--) {
-    const char *send_key = list ? "TCP.send_bytes" : "TCP.send_bytes.bytes";
-    ok_of(step(call(send_key, 3, socket_v, byte_arg(sent, 4, list), agc_int(5000), agc_void())));
-    peer_reads(fd, sent, 4);
-    assert(send(fd, sent, 4, 0) == 4);
-    const char *recv_key = list ? "TCP.recv_bytes" : "TCP.recv_bytes.bytes";
-    read_is(ok_of(step(call(recv_key, 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), sent, 4, list);
-    /* The end of a character waits in the carry, which comes back in the form of the key. */
-    assert(send(fd, "\xB1" "a\xC3", 3, 0) == 3);
-    const char *text_key = list ? "HttpWire.read_text" : "HttpWire.read_text.bytes";
-    agc_value got = ok_of(step(call(text_key, 4, socket_v, agc_int(3), byte_arg("\xC3", 1, list), agc_int(5000))));
-    const agc_struct *t = agc_as_struct(&vm, got);
-    const agc_string *s = agc_as_string(&vm, t->fields[0]);
-    assert(s->bytes == 3 && memcmp(s->data, "\xC3\xB1" "a", 3) == 0 && agc_as_int(&vm, t->fields[2]) == 3);
-    read_is(t->fields[1], "\xC3", 1, list);
-  }
-  agc_value bad[] = {agc_int(256)};
-  agc_value list = agc_list_value(agc_list_from_array(bad, 1));
-  assert(error_is(step(call("TCP.send_bytes", 3, socket_v, list, agc_int(5000), agc_void())),
-                  "network: bytes must be 0..255 and at most 1048576 per call"));
+  ok_of(step(call("TCP.send_bytes.bytes", 3, socket_v, byte_arg(sent, 4), agc_int(5000), agc_void())));
+  peer_reads(fd, sent, 4);
+  assert(send(fd, sent, 4, 0) == 4);
+  read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), sent, 4);
+  /* The end of a character waits in the carry. */
+  assert(send(fd, "\xB1" "a\xC3", 3, 0) == 3);
+  agc_value got =
+    ok_of(step(call("HttpWire.read_text.bytes", 4, socket_v, agc_int(3), byte_arg("\xC3", 1), agc_int(5000))));
+  const agc_struct *t = agc_as_struct(&vm, got);
+  const agc_string *s = agc_as_string(&vm, t->fields[0]);
+  assert(s->bytes == 3 && memcmp(s->data, "\xC3\xB1" "a", 3) == 0 && agc_as_int(&vm, t->fields[2]) == 3);
+  read_is(t->fields[1], "\xC3", 1);
   agc_bytes *big = agc_new_bytes(1048577);
   memset(big->data, 0, big->len);
   assert(error_is(step(call("TCP.send_bytes.bytes", 3, socket_v, agc_bytes_value(big), agc_int(5000), agc_void())),
                   "network: bytes exceed 1048576 per call"));
-  /* The end of input: no bytes, in the form of each key. */
+  /* The end of input: no bytes. */
   assert(shutdown(fd, SHUT_WR) == 0);
-  read_is(ok_of(step(call("TCP.recv_bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), "", 0, true);
-  read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), "", 0, false);
+  read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), "", 0);
   close_pair(fd);
   vm.rt->program = was;
 }

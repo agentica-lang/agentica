@@ -41,27 +41,18 @@ static char **copy_words(agc_vm *vm, const agc_list *list, const char *what, agc
 /* The program must not be larger than a file the loader would take (AGC_MAX_FILE_BYTES), and the words are capped
  * (AGC_FRONT_END_MAX_OPTIONS, AGC_FRONT_END_MAX_ARGUMENTS), so the hand-off cannot make the driver allocate more than a
  * compiled file and a process's arguments ever do, and the driver can count the words in an int. The program is a
- * Bytes under the catalog's "FrontEnd.hand_off.bytes" key and a byte list under the old "FrontEnd.hand_off" key, which
- * a front end compiled before #805 PR 4 (an older stage0) imports; PR 9 removes it. fe->program points into GC memory:
- * into the Bytes block (an interior pointer, not a copy) or at the block the list is copied into. After this runtime
+ * Bytes. fe->program points into GC memory: into the Bytes block (an interior pointer, not a copy). After this runtime
  * is gone only fe keeps that block alive, so fe must stay where the collector scans it: the driver keeps it on main()'s
  * stack (vm/agentica.c), and agc_init turns interior pointers on, so a pointer into the block holds the whole block. */
-static agc_value hand_off(agc_vm *vm, agc_value *args, uint32_t span, bool list) {
+static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_front_end *fe = guarded(vm, span);
-  const agc_list *program = list ? agc_as_list(vm, args[0]) : NULL;
   size_t len = 0;
-  const uint8_t *bytes = list ? NULL : agc_bytes_data(vm, args[0], &len);
+  const uint8_t *bytes = agc_bytes_data(vm, args[0], &len);
   const agc_list *options = agc_as_list(vm, args[1]);
   const agc_list *arguments = agc_as_list(vm, args[2]);
   if (agc_list_len(options) > AGC_FRONT_END_MAX_OPTIONS) return agc_error_value("too many options");
   if (agc_list_len(arguments) > AGC_FRONT_END_MAX_ARGUMENTS) return agc_error_value("too many arguments");
-  if (list) {
-    len = agc_list_len(program);
-    bytes = agc_byte_list(vm, program, AGC_MAX_FILE_BYTES);
-    if (!bytes) return agc_error_value("the program is not a list of bytes, or it is too large");
-  } else if (len > AGC_MAX_FILE_BYTES) {
-    return agc_error_value("the program is too large");
-  }
+  if (len > AGC_MAX_FILE_BYTES) return agc_error_value("the program is too large");
   agc_value refused = agc_void();
   char **option_words = copy_words(vm, options, "option", &refused);
   if (!option_words) return refused;
@@ -75,14 +66,6 @@ static agc_value hand_off(agc_vm *vm, agc_value *args, uint32_t span, bool list)
   fe->arguments = argument_words;
   fe->argument_count = agc_list_len(arguments);
   agc_exit(vm, 0);
-}
-
-static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hand_off(vm, args, span, true);
-}
-
-static agc_value builtin_hand_off_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return hand_off(vm, args, span, false);
 }
 
 /* The text of the std/ source at PATH (relative to stdlib/). rt->std is constant after the start, so this takes no
@@ -116,7 +99,8 @@ static agc_value builtin_source(agc_vm *vm, agc_value *args, uint32_t span) {
  * builtin runs again when it ends, so the loop never blocks and a stop signal ends the run as usual. stdin is
  * in binary mode (agc_launch_init_streams), so no byte changes on Windows. A later call reads on from where this one
  * stopped: nothing, after the end of a pipe or a file. */
-static agc_value stdin_bytes(agc_vm *vm, uint32_t span, bool list) {
+static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
   guarded(vm, span);
   const agc_bytes *bytes = NULL;
   agc_input_status status = agc_input_whole(vm, AGC_FRONT_END_MAX_STDIN, &bytes);
@@ -127,28 +111,13 @@ static agc_value stdin_bytes(agc_vm *vm, uint32_t span, bool list) {
     snprintf(message, sizeof message, "standard input is larger than %zu bytes", AGC_FRONT_END_MAX_STDIN);
     return agc_error_value(message);
   }
-  if (list) return agc_result_value(true, agc_list_value(agc_list_of_bytes(bytes->data, bytes->len)));
   return agc_result_value(true, agc_bytes_value(bytes));
 }
 
-/* The catalog's "FrontEnd.stdin_bytes.bytes" gives a Bytes; the old key a byte list, for a front end compiled before
- * #805 PR 4 (an older stage0). PR 9 removes the old key. */
-static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  return stdin_bytes(vm, span, true);
-}
-
-static agc_value builtin_stdin_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  return stdin_bytes(vm, span, false);
-}
-
 const agc_builtin agc_front_end_builtins[] = {
-  {"FrontEnd.hand_off", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"FrontEnd.std_source", 1, builtin_std_source, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"FrontEnd.stdin_bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"FrontEnd.hand_off.bytes", 3, builtin_hand_off_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"FrontEnd.stdin_bytes.bytes", 0, builtin_stdin_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"FrontEnd.hand_off.bytes", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"FrontEnd.stdin_bytes.bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
 const size_t agc_front_end_builtin_count = sizeof agc_front_end_builtins / sizeof agc_front_end_builtins[0];

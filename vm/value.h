@@ -687,7 +687,6 @@ static inline agc_json *agc_as_json(agc_vm *vm, agc_value v) {
 static inline bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
 
 char *agc_cstr(const agc_string *s);
-uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
@@ -735,7 +734,7 @@ void agc_list_builder_sized(agc_list_builder *b, size_t n);
 void agc_list_builder_more(agc_list_builder *b, agc_value v);
 agc_list *agc_list_builder_finish(agc_list_builder *b);
 agc_list *agc_list_from_array(const agc_value *items, size_t n);
-/* A List of Int with one item per byte (0 to 255): the one copy of bytes into a list (stdin, streams, HTTP). */
+/* A List of Int with one item per byte (0 to 255): the one copy of bytes into a list (Bytes.to_a). */
 agc_list *agc_list_of_bytes(const uint8_t *data, size_t n);
 void agc_list_to_array(const agc_list *l, agc_value *out);
 void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at);

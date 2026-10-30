@@ -152,6 +152,32 @@ case per process on a list of 1,000,000 items:
 / 0.147 / 0.446 (40% less peak memory), `list-build` 0.106 / 0.087 / 0.043,
 `lists` 0.076 / 0.069 / 0.056; `maps` and `arithmetic` unchanged.
 
+## Bytes (#805)
+
+`Bytes` keeps one byte per byte; a `List[Int]` keeps 8 in its leaves, plus the
+trie. 2026-10-30, the same AMD Ryzen 5 3550H, load average below 1.0 before
+each set; the 0.16.0 release binary runs each case written with `List[Int]`,
+the branch of #805 PR 9 the same case with `Bytes`, alternately, the median of
+3 runs. Wall time and max RSS are from `/usr/bin/time -v` and include building
+the data; "op" is the operation alone (`Time.monotonic_ms`).
+
+| Case | List[Int] wall / op / RSS | Bytes wall / op / RSS |
+|---|---|---|
+| `Digest.sha256_hexdigest` of 64 MiB | 0.94 s / 366 ms / 644 MB | 0.14 s / 65 ms / 93 MB |
+| 32 `Zlib.gzip` and `gunzip` of 512 KiB | 1.07 s / 1006 ms / 60 MB | 0.81 s / 757 ms / 29 MB |
+| 64 MiB through `File.write_bytes`, `read_bytes` | 1.13 s / 1023 ms / 188 MB | 0.28 s / 196 ms / 46 MB |
+| TCP echo of 16 MiB in 64 KiB sends | 0.69 s / 634 ms / 44 MB | 0.13 s / 70 ms / 29 MB |
+| `compile compiler/front_end.agc` | 14.1 s / 670 MB | 11.6 s / 361 MB |
+
+The last row compiles each binary's own front end (8.5 MB of bytecode either
+way), so the sources differ; the bytecode writer and the hand-off hold the
+program as a `Bytes` instead of a list.
+
+`benchmarks/programs/bytes.agc` (SHA-256 of 4 MiB, a gzip round trip in 512 KiB
+parts, 262,144 `std/binary` reads, a 4 MiB file write and read; `make bench
+BENCH_ARGS="--only bytes"`): 0.442 s from source and 0.428 s on bytecode with
+30 MB, against 0.381 s and 28 MB in CPython.
+
 ## Sets (8b)
 
 `Set[T]` is a map with nil values (`vm/map.c`), so it shares the HAMT, and a

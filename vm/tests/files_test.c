@@ -150,21 +150,16 @@ static void write_test_file(const char *path, const uint8_t *data, size_t len) {
   assert(fclose(out) == 0);
 }
 
-/* Both keys of File.sha256: the catalog's "File.sha256.bytes" gives a Bytes, the old "File.sha256" (front ends and
-   .agcb files compiled before #805 PR 4) a byte list of the same digest. */
+/* File.sha256 gives the digest as a Bytes. */
 static void check_sha256(agc_value path, const unsigned char expected[32]) {
   agc_value args[] = {path, agc_int(5000)};
-  const agc_list *digest = agc_as_list(&vm, ok(call("File.sha256", args)));
-  assert(agc_list_len(digest) == 32);
-  for (size_t k = 0; k < 32; k++) assert(agc_as_int(&vm, agc_list_get(digest, k)) == expected[k]);
   size_t len;
   const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.sha256.bytes", args)), &len);
   assert(len == 32 && memcmp(bytes, expected, 32) == 0);
 }
 
-/* The Bytes keys of File.write_bytes and File.read_bytes against the old byte-list keys: a file written with the new
-   key reads back the same through both, chunk by chunk, and a write over 1 MiB is refused before anything is
-   buffered. */
+/* File.write_bytes and File.read_bytes on Bytes: a file reads back the same, chunk by chunk, and a write over 1 MiB
+   is refused before anything is buffered. */
 static void test_byte_keys(const char *directory) {
   char path[4300];
   assert(snprintf(path, sizeof path, "%s/byte-keys.bin", directory) > 0);
@@ -182,21 +177,15 @@ static void test_byte_keys(const char *directory) {
   agc_value done[] = {handle, agc_int(5000)};
   ok(call("File.close", done));
   args[1] = string("read");
-  agc_value old_handle = ok(call("File.open", args)), new_handle = ok(call("File.open", args));
+  agc_value read_handle = ok(call("File.open", args));
   for (size_t at = 0; at <= sizeof data; at += 128) {
-    agc_value old_read[] = {old_handle, agc_int(128), agc_int(5000)};
-    agc_value new_read[] = {new_handle, agc_int(128), agc_int(5000)};
-    const agc_list *list = agc_as_list(&vm, ok(call("File.read_bytes", old_read)));
+    agc_value read[] = {read_handle, agc_int(128), agc_int(5000)};
     size_t len;
-    const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.read_bytes.bytes", new_read)), &len);
+    const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.read_bytes.bytes", read)), &len);
     size_t want = sizeof data - at < 128 ? sizeof data - at : 128;
-    assert(agc_list_len(list) == want && len == want);
-    for (size_t k = 0; k < want; k++)
-      assert(agc_as_int(&vm, agc_list_get(list, k)) == data[at + k] && bytes[k] == data[at + k]);
+    assert(len == want && (want == 0 || memcmp(bytes, data + at, want) == 0));
   }
-  done[0] = old_handle;
-  ok(call("File.close", done));
-  done[0] = new_handle;
+  done[0] = read_handle;
   ok(call("File.close", done));
   assert(agc_fs_unlink(path) == 0);
 }
@@ -262,21 +251,21 @@ static void test_sha256(const char *directory) {
   assert(snprintf(path, sizeof path, "%s/sha256-fifo", directory) > 0);
   assert(mkfifo(path, 0600) == 0);
   agc_value fifo[] = {string(path), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", fifo))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", fifo))->ok);
   assert(agc_fs_unlink(path) == 0);
   agc_value device[] = {string("/dev/null"), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", device))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", device))->ok);
 #endif
   agc_value missing[] = {string("missing.bin"), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", missing))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", missing))->ok);
   agc_value is_dir[] = {string(directory), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", is_dir))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", is_dir))->ok);
   agc_value no_path[] = {string(""), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", no_path))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", no_path))->ok);
   agc_value nul[] = {agc_string_value(agc_make_string(other, strlen(other) + 1, 0)), agc_int(5000)};
-  assert(!agc_as_result(&vm, call("File.sha256", nul))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", nul))->ok);
   agc_value bad_timeout[] = {string(other), agc_int(0)};
-  assert(!agc_as_result(&vm, call("File.sha256", bad_timeout))->ok);
+  assert(!agc_as_result(&vm, call("File.sha256.bytes", bad_timeout))->ok);
   assert(agc_fs_unlink(other) == 0);
 }
 
@@ -357,12 +346,11 @@ int main(void) {
   check_text(file, text);
   args[1] = string("write");
   agc_value handle = ok(call("File.open", args));
-  agc_list_builder bytes;
-  agc_list_builder_sized(&bytes, 256);
-  for (int k = 0; k < 256; k++) agc_list_builder_push(&bytes, agc_int(k));
+  uint8_t all[256];
+  for (int k = 0; k < 256; k++) all[k] = (uint8_t)k;
   args[0] = handle;
-  args[1] = agc_list_value(agc_list_builder_finish(&bytes));
-  ok(call("File.write_bytes", args));
+  args[1] = agc_bytes_value(agc_make_bytes(all, sizeof all));
+  ok(call("File.write_bytes.bytes", args));
   args[1] = agc_int(5000);
   ok(call("File.flush", args));
   ok(call("File.close", args));
@@ -372,23 +360,19 @@ int main(void) {
   args[0] = handle;
   args[1] = string("must not write");
   assert(!agc_as_result(&vm, call("File.write", args))->ok);
-  agc_list_builder read_bytes;
-  agc_list_builder_sized(&read_bytes, 256);
+  uint8_t back[256];
   for (size_t at = 0; at < 256;) {
     size_t count = 256 - at < 17 ? 256 - at : 17;
     args[1] = agc_int((int64_t)count);
-    const agc_list *read = agc_as_list(&vm, ok(call("File.read_bytes", args)));
-    assert(agc_list_len(read) == count);
-    for (size_t k = 0; k < count; k++) {
-      agc_value byte = agc_list_get(read, k);
-      assert(agc_as_int(&vm, byte) == (int64_t)(at + k));
-      agc_list_builder_push(&read_bytes, byte);
-    }
+    size_t len;
+    const uint8_t *read = agc_bytes_data(&vm, ok(call("File.read_bytes.bytes", args)), &len);
+    assert(len == count && memcmp(read, all + at, count) == 0);
+    memcpy(back + at, read, count);
     at += count;
   }
   args[1] = agc_int(1);
-  assert(agc_list_len(agc_as_list(&vm, ok(call("File.read_bytes", args)))) == 0);
-  agc_value original = agc_list_value(agc_list_builder_finish(&read_bytes));
+  assert(agc_as_bytes(&vm, ok(call("File.read_bytes.bytes", args)))->len == 0);
+  agc_value original = agc_bytes_value(agc_make_bytes(back, sizeof back));
   args[1] = agc_int(5000);
   ok(call("File.close", args));
   args[0] = file;
@@ -396,7 +380,7 @@ int main(void) {
   handle = ok(call("File.open", args));
   args[0] = handle;
   args[1] = original;
-  ok(call("File.write_bytes", args));
+  ok(call("File.write_bytes.bytes", args));
   args[1] = agc_int(5000);
   ok(call("File.close", args));
   agc_fs_info info;

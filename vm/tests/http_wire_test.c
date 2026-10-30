@@ -1,7 +1,7 @@
 /* HttpWire.chunk checks every field of its record first: one std/http did
    not make (hand-made bytecode) fails with RUNTIME-INTERNAL. Also the input
-   buffer's unread (read_head's rest) and the old List[Int] keys of the byte
-   rows beside their ".bytes" keys. */
+   buffer's unread (read_head's rest), the answers of HttpWire.chunk and
+   HttpWire.text on Bytes, and a List given to a byte row. */
 #include "builtin_test.h"
 #include "../http_fields.h"
 #include "../services.h"
@@ -20,7 +20,12 @@ static const agc_builtin *find(const char *name) {
   return NULL;
 }
 
-static agc_value bytes(const char *text) {
+static agc_value as_bytes(const char *data) {
+  return agc_bytes_value(agc_make_bytes((const uint8_t *)data, strlen(data)));
+}
+
+/* The bytes of text as a List[Int], which no byte row takes. */
+static agc_value byte_list(const char *text) {
   size_t n = strlen(text);
   agc_list_builder out;
   agc_list_builder_sized(&out, n);
@@ -45,8 +50,8 @@ static agc_value with(uint32_t field, agc_value v) {
 }
 
 static agc_value chunk(agc_value state, const char *data) {
-  agc_value args[3] = {state, bytes(data), agc_int(0)};
-  return find("HttpWire.chunk")->fn(&vm, args, 0);
+  agc_value args[3] = {state, as_bytes(data), agc_int(0)};
+  return find("HttpWire.chunk.bytes")->fn(&vm, args, 0);
 }
 
 static void refused(agc_value state) {
@@ -89,17 +94,6 @@ static void test_unread(void) {
   agc_inbuf_free(&b);
 }
 
-static agc_value as_bytes(const char *data) {
-  return agc_bytes_value(agc_make_bytes((const uint8_t *)data, strlen(data)));
-}
-
-/* The items of a byte list are the n bytes at data. */
-static void list_is(agc_value v, const char *data, size_t n) {
-  const agc_list *l = agc_as_list(&vm, v);
-  assert(agc_list_len(l) == n);
-  for (size_t k = 0; k < n; k++) assert(agc_as_int(&vm, agc_list_get(l, k)) == (uint8_t)data[k]);
-}
-
 static void bytes_is(agc_value v, const char *data, size_t n) {
   const agc_bytes *b = agc_as_bytes(&vm, v);
   assert(b->len == n && (n == 0 || memcmp(b->data, data, n) == 0));
@@ -115,54 +109,41 @@ static void fails(const char *name, uint32_t arity, agc_value *args) {
 
 static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
 
-/* The text records of the old and the new key: the same text, count and validity; the carry is a byte list for the
-   old key and a Bytes for the new one, with the same bytes. */
-static void same_text(agc_value old, agc_value now, const char *text_, const char *carry) {
-  const agc_struct *a = agc_as_struct(&vm, old), *b = agc_as_struct(&vm, now);
-  const agc_string *t = agc_as_string(&vm, b->fields[0]);
-  assert(agc_equal(&vm, a->fields[0], b->fields[0], 0));
-  assert(t->bytes == strlen(text_) && memcmp(t->data, text_, t->bytes) == 0);
-  for (uint32_t k = 2; k < 6; k++) assert(agc_equal(&vm, a->fields[k], b->fields[k], 0));
-  list_is(a->fields[1], carry, strlen(carry));
-  bytes_is(b->fields[1], carry, strlen(carry));
+/* The text record: its text, the carry and validity. */
+static void text_is(agc_value record, const char *text_, const char *carry, bool valid) {
+  const agc_struct *t = agc_as_struct(&vm, record);
+  const agc_string *got = agc_as_string(&vm, t->fields[0]);
+  assert(got->bytes == strlen(text_) && memcmp(got->data, text_, got->bytes) == 0);
+  bytes_is(t->fields[1], carry, strlen(carry));
+  assert(agc_as_bool(&vm, t->fields[3]) == valid);
 }
 
-/* HttpWire.chunk and HttpWire.text have the catalog's "<name>.bytes" key on Bytes and the old "<name>" key on byte
-   lists, which front ends and .agcb files compiled before #805 PR 6 import: both give the same answer. The old key
-   still refuses an item that is not a byte; the new key cannot see one, and a list there is a wrong tag. So is a
-   list given to the ".bytes" keys of the TCP, HttpWire and Process byte rows, which check it before the handle. */
-static void test_old_keys(void) {
+/* HttpWire.chunk and HttpWire.text read Bytes where they are: two chunks whose text splits a character, then the
+   text with the carry. A List given to a byte row is a wrong tag; the TCP, HttpWire and Process rows check it before
+   the handle. */
+static void test_byte_keys(void) {
   const char *framed = "3\r\nab\xC3\r\n2\r\n\xB1z\r\n0\r\n\r\n";
-  agc_value old_args[3] = {fresh(), bytes(framed), agc_int(0)};
-  agc_value new_args[3] = {fresh(), as_bytes(framed), agc_int(0)};
-  agc_value old = call("HttpWire.chunk", 3, old_args), now = call("HttpWire.chunk.bytes", 3, new_args);
-  assert(agc_equal(&vm, old, now, 0));
-  const agc_struct *state = agc_as_struct(&vm, agc_as_result(&vm, now)->value);
+  agc_value args[3] = {fresh(), as_bytes(framed), agc_int(0)};
+  const agc_result *r = agc_as_result(&vm, call("HttpWire.chunk.bytes", 3, args));
+  assert(r->ok);
+  const agc_struct *state = agc_as_struct(&vm, r->value);
   assert(agc_as_bool(&vm, state->fields[0]));
-  old_args[2] = new_args[2] = agc_int(1);
-  assert(agc_equal(&vm, call("HttpWire.chunk", 3, old_args), call("HttpWire.chunk.bytes", 3, new_args), 0));
+  const agc_list *found = agc_as_list(&vm, state->fields[2]);
+  assert(agc_list_len(found) == 4 && agc_as_int(&vm, agc_list_get(found, 0)) == 3 &&
+         agc_as_int(&vm, agc_list_get(found, 2)) == 11);
   /* The runs of the first chunk, then of the second one with the end of its first character still unread. */
   agc_value runs[2] = {agc_int(3), agc_int(3)};
-  agc_value old_text[3] = {bytes(""), bytes(framed), agc_list_value(agc_list_from_array(runs, 2))};
-  agc_value new_text[3] = {as_bytes(""), as_bytes(framed), old_text[2]};
-  same_text(call("HttpWire.text", 3, old_text), call("HttpWire.text.bytes", 3, new_text), "ab", "\xC3");
+  agc_value text_args[3] = {as_bytes(""), as_bytes(framed), agc_list_value(agc_list_from_array(runs, 2))};
+  text_is(call("HttpWire.text.bytes", 3, text_args), "ab", "\xC3", true);
   runs[0] = agc_int(11);
   runs[1] = agc_int(2);
-  old_text[0] = bytes("\xC3");
-  new_text[0] = as_bytes("\xC3");
-  old_text[2] = new_text[2] = agc_list_value(agc_list_from_array(runs, 2));
-  same_text(call("HttpWire.text", 3, old_text), call("HttpWire.text.bytes", 3, new_text), "\xC3\xB1z", "");
-  /* Not UTF-8: no text and no carry, in the form of each key. */
-  old_text[0] = bytes("\xFF");
-  new_text[0] = as_bytes("\xFF");
-  same_text(call("HttpWire.text", 3, old_text), call("HttpWire.text.bytes", 3, new_text), "", "");
-  agc_value bad[] = {agc_int(97), agc_int(256)};
-  old_args[1] = agc_list_value(agc_list_from_array(bad, 2));
-  old_args[2] = agc_int(0);
-  fails("HttpWire.chunk", 3, old_args);
-  old_text[0] = old_args[1];
-  fails("HttpWire.text", 3, old_text);
-  agc_value list = bytes("ab");
+  text_args[0] = as_bytes("\xC3");
+  text_args[2] = agc_list_value(agc_list_from_array(runs, 2));
+  text_is(call("HttpWire.text.bytes", 3, text_args), "\xC3\xB1z", "", true);
+  /* Not UTF-8: no text and no carry. */
+  text_args[0] = as_bytes("\xFF");
+  text_is(call("HttpWire.text.bytes", 3, text_args), "", "", false);
+  agc_value list = byte_list("ab");
   agc_value chunk_list[3] = {fresh(), list, agc_int(0)};
   fails("HttpWire.chunk.bytes", 3, chunk_list);
   agc_value text_list[3] = {list, as_bytes(""), agc_list_value(agc_list_from_array(NULL, 0))};
@@ -205,7 +186,7 @@ int main(void) {
   refused(with(11, agc_int(2000)));
   refused(with(12, agc_int(0)));
   test_unread();
-  test_old_keys();
+  test_byte_keys();
   return 0;
 }
 #else

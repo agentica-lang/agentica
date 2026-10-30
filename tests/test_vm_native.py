@@ -980,8 +980,7 @@ def test_a_free_ref_function_gets_the_address_of_the_handle_once(tmp_path, peer)
 
 
 # A call with a closed resource stops the run at the extern function, before the call, also with C.Bytes to copy.
-# Task.spawn_owning of a closed resource is RUNTIME-HANDLE-NOT-OWNED. (A C.Bytes item that is not a byte, from a
-# .agcb that passes a byte list, is in vm/tests/ffi_test.c.)
+# Task.spawn_owning of a closed resource is RUNTIME-HANDLE-NOT-OWNED.
 @NATIVE_CALLS
 @pytest.mark.parametrize("case, code, line", [
     ("closed", "RUNTIME-NATIVE-CLOSED", 4),
