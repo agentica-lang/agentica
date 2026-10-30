@@ -20,6 +20,7 @@
 #else
 #include <dirent.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -835,3 +836,87 @@ const char *peer_rows_text(const peer_row *rows, int32_t n) {
   }
   return rows_text;
 }
+
+/* For callbacks (Native.callback): C calls the program back with every by-value type of a callback signature, reads
+   each narrow result as its own type, takes a pointer that may be NULL, calls twice in a row, and calls from a thread
+   of its own, where the VM runs nothing and the callback gives zero. */
+typedef double (*peer_mix_fn)(int8_t, uint8_t, int16_t, uint16_t, uint32_t, int64_t, long, double, float, bool,
+                              const char *, void *);
+typedef int32_t (*peer_int_fn)(int32_t);
+
+double peer_call_mix(peer_mix_fn fn, int32_t n) {
+  double total = 0;
+  for (int32_t i = 0; i < n; i++)
+    total += fn((int8_t)-i, (uint8_t)(250 + i), (int16_t)-30000, (uint16_t)65000, UINT32_MAX - (uint32_t)i,
+                (int64_t)1 << 40, -7L, 0.5 * i, 0.25f, i % 2 == 1, i % 2 ? "odd" : NULL, (void *)(intptr_t)(i + 1));
+  return total;
+}
+
+/* -5 + 65535 + 1000000 (true) + 10 (2.5 * 4) + 4294967295 when each result keeps its type. */
+int64_t peer_call_narrow(int8_t (*s)(void), uint16_t (*u)(void), bool (*b)(void), float (*f)(void),
+                         uint32_t (*w)(void)) {
+  return (int64_t)s() + (int64_t)u() + (b() ? 1000000 : 0) + (int64_t)(f() * 4) + (int64_t)w();
+}
+
+int32_t peer_call_maybe(peer_int_fn fn, int32_t x) { return fn ? fn(x) : -1; }
+
+/* The second call shows what C got after the first: zero once that one failed. */
+int32_t peer_call_twice(peer_int_fn fn, int32_t x) { return fn(x) * 1000 + fn(x + 1); }
+
+/* For a free inside a callback: a resource whose free function calls a stored callback, as sqlite3_close_v2 calls a
+   collation's xDestroy, and keeps what it gave (zero when the VM ran nothing). */
+static peer_int_fn stored_fn;
+static int32_t hook_result = -1;
+
+void peer_store_fn(peer_int_fn fn) { stored_fn = fn; }
+void *peer_hook_open(void) { return malloc(1); }
+void peer_hook_free(void *p) {
+  hook_result = stored_fn ? stored_fn(7) : -2;
+  free(p);
+}
+int32_t peer_hook_result(void) { return hook_result; }
+
+/* For a close by another task while a callback runs: RES is read after both callbacks. */
+int32_t peer_res_after(void *res, peer_int_fn fn) {
+  int32_t a = fn(1);
+  int32_t b = fn(2);
+  return peer_res_get(res) * 100 + a * 10 + b;
+}
+
+int32_t peer_flag(void) { return atomic_load(&flag); }
+
+typedef struct {
+  peer_int_fn fn;
+  int32_t x, got;
+} peer_thread_call;
+
+#ifdef _WIN32
+static DWORD WINAPI thread_call(LPVOID arg) {
+  peer_thread_call *c = arg;
+  c->got = c->fn(c->x);
+  return 0;
+}
+
+int32_t peer_call_on_thread(peer_int_fn fn, int32_t x) {
+  peer_thread_call c = {fn, x, -1};
+  HANDLE thread = CreateThread(NULL, 0, thread_call, &c, 0, NULL);
+  if (!thread) return -2;
+  WaitForSingleObject(thread, INFINITE);
+  CloseHandle(thread);
+  return c.got;
+}
+#else
+static void *thread_call(void *arg) {
+  peer_thread_call *c = arg;
+  c->got = c->fn(c->x);
+  return NULL;
+}
+
+int32_t peer_call_on_thread(peer_int_fn fn, int32_t x) {
+  peer_thread_call c = {fn, x, -1};
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, thread_call, &c) != 0) return -2;
+  pthread_join(thread, NULL);
+  return c.got;
+}
+#endif

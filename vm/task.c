@@ -127,6 +127,17 @@ void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t) {
   }
 }
 
+/* The span of the instruction that the top frame of T runs, a builtin's call when the frame is a function's; 0 for a
+   native frame. */
+static uint32_t running_span(const agc_vm *vm, const agc_task *t) {
+  const agc_program *p = vm->rt->program;
+  if (!t->frame_count) return 0;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  if (frame->native || frame->function >= p->function_count) return 0;
+  const agc_function *fn = &p->functions[frame->function];
+  return frame->pc > 0 && frame->pc <= fn->count ? fn->spans[frame->pc - 1] : 0;
+}
+
 /* Starts a wait (§10.2.3): the running task becomes PARKING. It is called BEFORE the wait is registered (before the
    task joins a waiter list, posts a request or starts a job), then the code registers, looks at its condition and
    either parks (agc_task_park) or gives up (agc_task_unpark). From the mark on, a wake finds PARKING and sets WOKEN
@@ -137,6 +148,10 @@ void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t) {
    that a waker's acquire load reads. */
 void agc_task_parking(agc_vm *vm) {
   agc_task *t = vm->task;
+  /* Before anything is registered, so the failure leaves no wait behind. */
+  if (t->callbacks)
+    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait: C waits for it to return",
+             running_span(vm, t));
   if (atomic_load_explicit(&t->state, memory_order_relaxed) == AGC_TASK_RUNNING)
     atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
 }

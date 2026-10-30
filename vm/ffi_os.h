@@ -100,4 +100,25 @@ void agc_ffi_discard(agc_ffi_call *call);
    A call prepared without a symbol always gets an FN, which must not be NULL. */
 void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result);
 
+/* A C function made at run time that calls HANDLER (a libffi closure): C calls it at agc_ffi_closure_code with the
+   signature RESULT (PARAMS[0..COUNT)), each an integer type, AGC_C_DOUBLE, AGC_C_FLOAT, AGC_C_BOOL, AGC_C_STRING
+   or AGC_C_POINTER (and AGC_C_VOID for the result), and HANDLER gets DATA, the arguments as C values (a C.String is
+   C's pointer, which may be NULL) and the result to fill, which starts zeroed. No page of its memory is ever
+   writable and executable at once: the code is written on a page mapped read-write, which is then sealed
+   read-execute (on Apple arm64, libffi's trampoline table, whose code pages are mapped from libffi's image). In
+   malloc and mapped memory, never GC memory: DATA must be kept alive by the caller. */
+typedef struct agc_ffi_closure agc_ffi_closure;
+typedef void (*agc_ffi_handler)(void *data, const agc_c_value *args, agc_c_value *result);
+
+/* A closure, or NULL with a message in ERROR (SIZE bytes) when COUNT is above AGC_FFI_MAX_PARAMS, the system gives
+   no memory for its code or the build cannot call native code. */
+agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params, uint32_t count,
+                                     agc_ffi_handler handler, void *data, char *error, size_t size);
+
+/* The address that C calls. */
+void *agc_ffi_closure_code(const agc_ffi_closure *closure);
+
+/* Frees the closure and the memory of its code: C must not call it any more. Any thread may call it. */
+void agc_ffi_closure_free(agc_ffi_closure *closure);
+
 #endif

@@ -45,4 +45,22 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
   (void)args;
   (void)result;
 }
+
+agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params, uint32_t count,
+                                     agc_ffi_handler handler, void *data, char *error, size_t size) {
+  (void)result;
+  (void)params;
+  (void)count;
+  (void)handler;
+  (void)data;
+  snprintf(error, size, "native calls are not supported on this system yet");
+  return NULL;
+}
+
+void *agc_ffi_closure_code(const agc_ffi_closure *closure) {
+  (void)closure;
+  return NULL;
+}
+
+void agc_ffi_closure_free(agc_ffi_closure *closure) { (void)closure; }
 #endif

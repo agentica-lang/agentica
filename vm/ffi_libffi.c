@@ -2,13 +2,17 @@
  * The native calls of a build with libffi (AGC_FFI: Linux and macOS on x86_64 and arm64, Windows x64): the loader
  * (dlopen and dlsym, or LoadLibraryExW and GetProcAddress) finds the function, ffi_prep_cif (ffi_prep_cif_var for a
  * variadic one) describes its signature once and ffi_call calls it, or the function at the address of a C function
- * pointer. Adapter layer; ffi.c converts the values and ffi_none.c is the other half. Design:
+ * pointer, and the closures that C calls back (agc_ffi_closure_new). Adapter layer; ffi.c converts the values and
+ * ffi_none.c is the other half. Design:
  * docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
 #ifdef __APPLE__
-/* RTLD_NOLOAD is outside POSIX. */
+/* RTLD_NOLOAD and MAP_ANON are outside POSIX. */
 #define _DARWIN_C_SOURCE
+#elif !defined(_WIN32)
+/* MAP_ANON is outside POSIX. */
+#define _DEFAULT_SOURCE
 #endif
 #include "ffi_os.h"
 #include "value.h"
@@ -24,6 +28,8 @@
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 /* The paths that the POSIX half builds: PATH_MAX on macOS. */
 #define PATH_BUF 1024
@@ -47,6 +53,22 @@ typedef struct {
   ffi_type *nodes;
   ffi_type **elements;
 } aggregate_space;
+
+/* A closure: its signature, the handler and its data, and the code that C calls. `closure` is libffi's record, at the
+   start of the code page (`mapped` bytes) that the code reads it from, or with the trampoline table in memory of
+   libffi's (mapped 0). */
+struct agc_ffi_closure {
+  ffi_cif cif;
+  ffi_type *types[AGC_FFI_MAX_PARAMS];
+  agc_c_type result;
+  agc_c_type params[AGC_FFI_MAX_PARAMS];
+  uint32_t count;
+  agc_ffi_handler handler;
+  void *data;
+  ffi_closure *closure;
+  void *code;
+  size_t mapped;
+};
 
 static ffi_type *ffi_type_of(agc_c_type type) {
   switch (type) {
@@ -405,5 +427,176 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
   }
+}
+
+/* What libffi runs when C calls the closure: the arguments, each behind a pointer, become C values, and the handler's
+   result goes back as the C ABI wants it. A closure returns an integer narrower than a register as a whole ffi_arg,
+   sign- or zero-extended by its type (libffi's manual, "Closure API"). */
+static void closure_entry(ffi_cif *cif, void *ret, void **args, void *user) {
+  (void)cif;
+  agc_ffi_closure *c = user;
+  agc_c_value values[AGC_FFI_MAX_PARAMS];
+  for (uint32_t k = 0; k < c->count; k++) {
+    agc_c_value *v = &values[k];
+    memset(v, 0, sizeof *v);
+    switch (c->params[k]) {
+      case AGC_C_INT: memcpy(&v->i, args[k], sizeof v->i); break;
+      case AGC_C_INT64: memcpy(&v->l, args[k], sizeof v->l); break;
+      case AGC_C_INT8: memcpy(&v->i8, args[k], sizeof v->i8); break;
+      case AGC_C_INT16: memcpy(&v->i16, args[k], sizeof v->i16); break;
+      case AGC_C_UINT8: memcpy(&v->u8, args[k], sizeof v->u8); break;
+      case AGC_C_UINT16: memcpy(&v->u16, args[k], sizeof v->u16); break;
+      case AGC_C_UINT32: memcpy(&v->u32, args[k], sizeof v->u32); break;
+      case AGC_C_LONG: memcpy(&v->n, args[k], sizeof v->n); break;
+      case AGC_C_DOUBLE: memcpy(&v->d, args[k], sizeof v->d); break;
+      case AGC_C_FLOAT: memcpy(&v->f, args[k], sizeof v->f); break;
+      /* Read as the byte C passed (ffi_type_uint8), so a byte other than 0 or 1 is never read as a _Bool. */
+      case AGC_C_BOOL: {
+        uint8_t byte;
+        memcpy(&byte, args[k], 1);
+        v->b = byte != 0;
+        break;
+      }
+      case AGC_C_STRING:
+      case AGC_C_POINTER:
+      default: memcpy(&v->p, args[k], sizeof v->p); break;
+    }
+  }
+  agc_c_value out;
+  memset(&out, 0, sizeof out);
+  c->handler(c->data, values, &out);
+  switch (c->result) {
+    case AGC_C_INT: *(ffi_sarg *)ret = out.i; break;
+    case AGC_C_INT8: *(ffi_sarg *)ret = (ffi_sarg)out.i8; break;
+    case AGC_C_INT16: *(ffi_sarg *)ret = out.i16; break;
+    case AGC_C_LONG: *(ffi_sarg *)ret = out.n; break;
+    case AGC_C_UINT8: *(ffi_arg *)ret = out.u8; break;
+    case AGC_C_UINT16: *(ffi_arg *)ret = out.u16; break;
+    case AGC_C_UINT32: *(ffi_arg *)ret = out.u32; break;
+    case AGC_C_BOOL: *(ffi_arg *)ret = out.b ? 1 : 0; break;
+    case AGC_C_INT64: memcpy(ret, &out.l, sizeof out.l); break;
+    case AGC_C_DOUBLE: memcpy(ret, &out.d, sizeof out.d); break;
+    case AGC_C_FLOAT: memcpy(ret, &out.f, sizeof out.f); break;
+    case AGC_C_STRING:
+    case AGC_C_POINTER: memcpy(ret, &out.p, sizeof out.p); break;
+    default: break;
+  }
+}
+
+/* The build turns libffi's trampoline table on for Apple arm64 alone (FFI_TRAMPOLINE_TABLE in mk/vm.mk), in its
+   fficonfig.h, which this file does not see. */
+#if defined(__APPLE__) && defined(__aarch64__)
+/* Apple arm64 refuses a page that was writable to become executable without MAP_JIT, and libffi's answer is the
+   trampoline table (closures.c): the code is a page of trampolines remapped from libffi's own image, and each
+   trampoline reads its closure from the data page beside it. No page is writable and executable. */
+static bool code_make(agc_ffi_closure *c) {
+  void *code = NULL;
+  c->closure = ffi_closure_alloc(sizeof(ffi_closure), &code);
+  if (!c->closure) return false;
+  c->mapped = 0;
+  c->code = code;
+  if (ffi_prep_closure_loc(c->closure, &c->cif, closure_entry, c, code) == FFI_OK) return true;
+  ffi_closure_free(c->closure);
+  return false;
+}
+
+static void code_free(agc_ffi_closure *c) { ffi_closure_free(c->closure); }
+#else
+/* Elsewhere the closure is laid out on a page of its own, mapped read-write, where ffi_prep_closure_loc writes the
+   trampoline (which finds the closure at its own address), then sealed read-execute before C can call it: never
+   writable and executable at once, and never the writable and executable pages of libffi's closures.c, which the VM
+   does not call. One page per callback: a program makes few of them. */
+static size_t code_page(void) {
+#ifdef _WIN32
+  SYSTEM_INFO info;
+  GetSystemInfo(&info);
+  return info.dwPageSize;
+#else
+  long page = sysconf(_SC_PAGESIZE);
+  return page > 0 ? (size_t)page : 4096;
+#endif
+}
+
+static void *page_map(size_t size) {
+#ifdef _WIN32
+  return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else
+  void *page = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  return page == MAP_FAILED ? NULL : page;
+#endif
+}
+
+static bool page_seal(void *page, size_t size) {
+#ifdef _WIN32
+  DWORD old;
+  if (!VirtualProtect(page, size, PAGE_EXECUTE_READ, &old)) return false;
+  return FlushInstructionCache(GetCurrentProcess(), page, size) != 0;
+#else
+  if (mprotect(page, size, PROT_READ | PROT_EXEC) != 0) return false;
+  /* A no-op on x86-64; arm64 needs the caches made coherent before the first call. */
+  __builtin___clear_cache((char *)page, (char *)page + size);
+  return true;
+#endif
+}
+
+static void page_unmap(void *page, size_t size) {
+#ifdef _WIN32
+  (void)size;
+  VirtualFree(page, 0, MEM_RELEASE);
+#else
+  munmap(page, size);
+#endif
+}
+
+static bool code_make(agc_ffi_closure *c) {
+  size_t size = code_page();
+  if (sizeof(ffi_closure) > size) return false;
+  void *page = page_map(size);
+  if (!page) return false;
+  c->closure = page;
+  c->code = page;
+  c->mapped = size;
+  if (ffi_prep_closure_loc(c->closure, &c->cif, closure_entry, c, page) == FFI_OK && page_seal(page, size)) return true;
+  page_unmap(page, size);
+  return false;
+}
+
+static void code_free(agc_ffi_closure *c) { page_unmap(c->closure, c->mapped); }
+#endif
+
+agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params, uint32_t count,
+                                     agc_ffi_handler handler, void *data, char *error, size_t size) {
+  if (count > AGC_FFI_MAX_PARAMS) {
+    snprintf(error, size, "a callback has more than %d parameters", AGC_FFI_MAX_PARAMS);
+    return NULL;
+  }
+  agc_ffi_closure *c = malloc(sizeof *c);
+  if (!c) agc_out_of_memory();
+  c->result = result;
+  c->count = count;
+  c->handler = handler;
+  c->data = data;
+  for (uint32_t k = 0; k < count; k++) {
+    c->params[k] = params[k];
+    c->types[k] = ffi_type_of(params[k]);
+  }
+  if (ffi_prep_cif(&c->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), c->types) != FFI_OK) {
+    free(c);
+    snprintf(error, size, "cannot describe the signature of a callback");
+    return NULL;
+  }
+  if (!code_make(c)) {
+    free(c);
+    snprintf(error, size, "the system gives no memory for the code of a callback");
+    return NULL;
+  }
+  return c;
+}
+
+void *agc_ffi_closure_code(const agc_ffi_closure *closure) { return closure->code; }
+
+void agc_ffi_closure_free(agc_ffi_closure *closure) {
+  code_free(closure);
+  free(closure);
 }
 #endif

@@ -125,9 +125,18 @@ rules those comments do not carry.
   through a pointer, `{N:CODES}` a C struct by value (N is its struct-table
   index).
 - `Native.callback` gets `"CODES NAME"` (`callback_signature` in
-  `lower_native.agc`) and the function; `agc_ffi_refusal` refuses a program
-  that imports it until the VM makes closures (#851). A callback parameter of
-  an extern function is code `r`, passed as its resource.
+  `lower_native.agc`) and the function, and makes an `agc_ffi_closure`
+  (`ffi_libffi.c`: a page mapped read-write, then sealed read-execute; libffi's
+  trampoline table on Apple arm64). A callback parameter of an extern function
+  is code `r`, passed as its resource; `Optional[Name]` is code `o`, `none` for
+  NULL. A fast call sets the thread's `native_site`; the closure runs the
+  function with `agc_task_run_nested` (`interp.c`: the frame and register
+  arrays of its level, reused, over a barrier native frame; the outer frames
+  linked for stack traces by `agc_frame_segment`; rt->sync let go;
+  `t->callbacks` counted, which makes `agc_task_parking` fail; timers and the
+  runnext slot handed on at each turn boundary) and keeps a failure for
+  `agc_raise` once C has returned. A free function gets a refusing site. The
+  nested run is `cold`, so `plain_turn` keeps its place (`make layout-check`).
 - A signature that starts with `compute ` runs on the compute pool
   (`vm/compute.c`, `agc_io_compute` in `vm/loop.c`), and the task parks.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a

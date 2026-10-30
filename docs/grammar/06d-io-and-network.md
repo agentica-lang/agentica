@@ -98,9 +98,19 @@ end
   function is a declared function named with `&`: an `Fn` value or a function of
   an extern block is `CHECK-NATIVE-CALLBACK` at it. It takes and returns the
   Agentica types of the callback's C types; anything else is
-  `CHECK-TYPE-MISMATCH` at it. The VM does not make callbacks: a program that
-  calls `Native.callback` is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`,
-  exit 2.
+  `CHECK-TYPE-MISMATCH` at it. When C calls the callback during a native call,
+  the function runs in the task of that call and C waits for its value; a NULL
+  `C.String` argument is `""`, and a result outside its C type is
+  `RUNTIME-INTEGER-OVERFLOW`. A wait in the callback (a `compute def` call
+  included) is `RUNTIME-NATIVE-CALLBACK` at it. A failure or an exit in the
+  callback gives C zero, and zero from every later callback of that call
+  without running it; the native call then fails or exits the same way once C
+  returns. A callback that C calls from a thread of its own, or from the free
+  function of a resource, runs nothing and gives zero; one from a `compute def`
+  on the pool does too, and that call is then `RUNTIME-NATIVE-CALLBACK`. A
+  callback stops, giving zero, when its task is cancelled or the run ends, and
+  callbacks nest at most 128 deep (`RUNTIME-STACK-OVERFLOW`). C must not call a
+  callback after its close.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses a program that declares any extern

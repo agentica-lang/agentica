@@ -102,7 +102,7 @@ export EXTERN_LIBRARY_HELP = (
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
 # The types that C's default argument promotions leave as they are, which the variadic part of an extern function
 # takes: C.Bool, C.Int8, C.Int16, C.UInt8 and C.UInt16 (promoted to int) and C.Float (promoted to double) are not.
-VARIADIC_CODES = Set.new(["i", "l", "j", "n", "d", "s", "p", "y", "r"])
+VARIADIC_CODES = Set.new(["i", "l", "j", "n", "d", "s", "p", "y", "r", "o"])
 # The code that marks where the variadic part starts in Ast.Native.codes.
 VARIADIC_MARK = "."
 DIGITS = Set.new("0123456789".split(""))
@@ -2766,11 +2766,16 @@ def parse_extern_function(
       )
     end
 
-    if params.outs[index] and block.callbacks.include?(param.type.name)
+    if params.outs[index] and (block.callbacks.include?(param.type.name) or taken.code == "o")
+      callback = param.type.name
+      if taken.code == "o"
+        callback = param.type.args[0].name
+      end
+
       return error(
         Base.bail_span(
           "PARSE-EXTERN-OUT",
-          "the callback #{param.type.name} cannot be an out parameter",
+          "the callback #{callback} cannot be an out parameter",
           param.type.span,
           Base.hint(EXTERN_OUT_HELP),
         ),
@@ -3125,7 +3130,8 @@ end
 
 # The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only,
 # and C.Bytes (a Bytes) a parameter only. A resource of the block is the resource as a parameter, and a
-# Result of it as a result (NULL is an error). ids is the first free node id, for the types this adds.
+# Result of it as a result (NULL is an error). A callback of the block, or an Optional of one (none is NULL), is a
+# parameter only. ids is the first free node id, for the types this adds.
 def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) -> Result[ExternType]
   code = ""
   if ref.args.size == 0
@@ -3142,6 +3148,9 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     elsif block.structs.has_key?(ref.name)
       code = block.structs[ref.name]
     end
+  elsif optional_callback?(ref, block) and not result
+    # A callback that C takes as NULL or a function pointer: none passes NULL.
+    code = "o"
   end
 
   if code == ""
@@ -3169,11 +3178,20 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
   elsif code == "r" and result
     wrapped = Ast.TypeRef(id: ids, name: "Result", args: [ref], span: ref.span)
     return ok(ExternType(code: code, type: wrapped, ids: ids + 1))
-  elsif code == "r"
+  elsif code == "r" or code == "o"
     return ok(ExternType(code: code, type: ref, ids: ids))
   end
 
   return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
+end
+
+def optional_callback?(ref: Ast.TypeRef, block: ExternBlock) -> Bool
+  if ref.name != "Optional" or ref.args.size != 1
+    return false
+  end
+
+  inner = ref.args[0]
+  return inner.args.size == 0 and block.callbacks.include?(inner.name)
 end
 
 def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[FieldAt]
