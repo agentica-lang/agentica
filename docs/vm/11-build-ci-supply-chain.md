@@ -253,9 +253,10 @@
   untracked files, or a checksum when it is not a git checkout. They rebuild
   only when the key changes, and CI does not cache them, since ccache rebuilds
   them in under a second.
-- The release workflow (`release.yml`) builds four packages, each on a runner of
+- The release workflow (`release.yml`) builds five packages, each on a runner of
   its own system, with vendored OpenSSL and libgc: `linux-x86_64` on
-  `ubuntu-latest` (the zig build below), `windows-x86_64` on `windows-2025`
+  `ubuntu-latest` and `linux-arm64` on `ubuntu-24.04-arm` (the zig build below,
+  each with the zig of its machine), `windows-x86_64` on `windows-2025`
   (MSYS2 UCRT64 GCC), `macos-x86_64` on `macos-15-intel` and `macos-arm64` on
   `macos-latest` (Apple clang, `MACOSX_DEPLOYMENT_TARGET=12.0`). After the
   build, `make release-check` (`tools/release-check.sh`) checks the binary in
@@ -275,9 +276,9 @@
   only: version, help, `check`, `compile`, `run`, `std/` imports, `agentica
   test` for unit tests and BDD, files, processes, loopback TCP and loopback
   HTTP (`std/http` client and server), on every platform.
-  The `collect` job checks that exactly the four archives of `VERSION` exist
+  The `collect` job checks that exactly the five archives of `VERSION` exist
   and writes `SHA256SUMS`; the `publish` job runs only for a tag that is the
-  `VERSION` file and only after all four builds pass. A manual run uploads the
+  `VERSION` file and only after all five builds pass. A manual run uploads the
   archives and the checksums as artifacts and publishes nothing.
 - The Linux release caches only the zig toolchain (keyed by `ZIG_SHA256`), no
   build objects. It sets `AGENTICA_OPENSSL: vendored` and

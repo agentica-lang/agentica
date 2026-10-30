@@ -1,4 +1,4 @@
-"""The release archives: tools/release.py packs, verifies and collects exactly the four expected packages.
+"""The release archives: tools/release.py packs, verifies and collects exactly the five expected packages.
 
 The real binaries and the extracted-package smoke run in release.yml (they need each system's tools). This test covers
 what runs anywhere: a package holds the expected files once each, and `collect` refuses a missing, an extra or a
@@ -37,7 +37,7 @@ def archives(tmp_path):
 
 def test_each_package_holds_the_expected_files_once(archives):
     _, packed = archives
-    assert sorted(release.PLATFORMS) == ["linux-x86_64", "macos-arm64", "macos-x86_64", "windows-x86_64"]
+    assert sorted(release.PLATFORMS) == ["linux-arm64", "linux-x86_64", "macos-arm64", "macos-x86_64", "windows-x86_64"]
     for platform, path in packed.items():
         assert path.name == f"agentica-{release.version()}-{platform}." + ("zip" if "windows" in platform else "tar.gz")
         top = release.package_name(platform)
@@ -93,7 +93,7 @@ def test_the_same_binary_packs_to_the_same_bytes(tmp_path, monkeypatch):
         assert first.read_bytes() == second.read_bytes()
 
 
-def test_collect_needs_exactly_the_four_archives(archives):
+def test_collect_needs_exactly_the_five_archives(archives):
     tmp_path, packed = archives
     gathered = tmp_path / "gathered"
     for platform, path in packed.items():

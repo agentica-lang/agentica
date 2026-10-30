@@ -3,10 +3,10 @@
 
     release.py package --platform P --binary FILE --out DIR   write DIR/agentica-VERSION-P.(tar.gz|zip)
     release.py smoke ARCHIVE --platform P [--binary FILE]     extract and use the package away from the checkout
-    release.py collect --in DIR --out DIR                     check the four archives, copy them, write SHA256SUMS
+    release.py collect --in DIR --out DIR                     check the five archives, copy them, write SHA256SUMS
     release.py name --platform P                              print the archive name
 
-The four archive names are fixed here: the workflow, the checksums and the documentation use the same four. Python's
+The five archive names are fixed here: the workflow, the checksums and the documentation use the same five. Python's
 standard library only. Run `smoke` and `collect` as `python -I tools/release.py ...`.
 """
 from __future__ import annotations
@@ -29,9 +29,10 @@ from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# platform -> (archive extension, executable name). Four packages, no more: collect fails on anything else.
+# platform -> (archive extension, executable name). Five packages, no more: collect fails on anything else.
 PLATFORMS = {
     "linux-x86_64": ("tar.gz", "agentica"),
+    "linux-arm64": ("tar.gz", "agentica"),
     "windows-x86_64": ("zip", "agentica.exe"),
     "macos-x86_64": ("tar.gz", "agentica"),
     "macos-arm64": ("tar.gz", "agentica"),
@@ -455,10 +456,10 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# collect: the four archives, exactly once each
+# collect: the five archives, exactly once each
 
 def collect(source: Path, out: Path) -> None:
-    """Check that `source` (searched recursively) holds the four archives of this version once each, copy them to
+    """Check that `source` (searched recursively) holds the five archives of this version once each, copy them to
     `out` and write SHA256SUMS there."""
     ver = version()
     wanted = {archive_name(p, ver): p for p in PLATFORMS}
