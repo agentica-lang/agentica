@@ -37,6 +37,7 @@ MapKeys
 MapPut
 MapSize
 MapValues
+NativeCallback
 NativeClose
 NativeClosed
 NativeMemoryBlock

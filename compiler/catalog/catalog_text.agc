@@ -253,6 +253,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.MapPut -> return "MapPut"
     Model.Rule.MapSize -> return "MapSize"
     Model.Rule.MapValues -> return "MapValues"
+    Model.Rule.NativeCallback -> return "NativeCallback"
     Model.Rule.NativeClose -> return "NativeClose"
     Model.Rule.NativeClosed -> return "NativeClosed"
     Model.Rule.NativeMemoryBlock -> return "NativeMemoryBlock"

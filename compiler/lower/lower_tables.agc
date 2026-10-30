@@ -67,7 +67,7 @@ export VM_BUILTINS = Set.new([
   "SecureRandom.random_bytes.bytes", "HMAC.secure_compare.bytes", "Cipher.des_ede3_cbc_encrypt",
   "Cipher.des_ede3_cbc_decrypt", "CMAC.aes", "CMAC.des_ede3", "Cipher.aes_256_gcm_encrypt",
   "Cipher.aes_256_gcm_decrypt", "KDF.pbkdf2_hmac_sha256", "KDF.scrypt",
-  "Native.wait_readable", "Native.wait_writable", "Native.load",
+  "Native.wait_readable", "Native.wait_writable", "Native.load", "Native.callback",
   "Native.close", "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.address",
   "Native.offset", "Native.memory_pointer", "Native.from_string", "Native.size_of", "Native.get_struct",
   "Native.put_struct",
@@ -103,9 +103,10 @@ export FLOAT_OPS: Map[String, String] = {
   "less": "lt-f", "less-equal": "le-f", "greater": "lt-f", "greater-equal": "le-f"
 }
 
-## The builtins that take the layout code of a C struct of an extern block: a type name argument lowers to it, and
-## Native.put_struct gets the layout of its value's struct as one more argument (lower_expr.agc).
-export NATIVE_STRUCTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct"])
+## The builtins that take a type of an extern block as a string: a type name argument lowers to the layout code of its
+## C struct, or to the signature of its callback (Native.callback), and Native.put_struct gets the layout of its
+## value's struct as one more argument (lower_expr.agc).
+export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.put_struct", "Native.callback"])
 
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [

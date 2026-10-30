@@ -2092,6 +2092,21 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_result_value(false, agc_string_value(loader_text(error)));
 }
 
+/* Native.callback(signature, function): the front end lowers it ("CODES NAME", compiler/lower/lower_native.agc), but
+   the VM cannot make the closure yet, so a program that calls it is refused at load (agc_ffi_refusal) and this row only
+   lets the loader resolve the key. */
+static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  agc_fail(vm, "RUNTIME-NATIVE-UNSUPPORTED", "Native.callback is not supported yet", span);
+}
+
+/* Whether the program imports Native.callback, which agc_ffi_refusal refuses until the VM makes callbacks. */
+static bool imports_callback(const agc_program *program) {
+  for (uint32_t i = 0; i < program->builtin_count; i++)
+    if (program->builtins[i]->fn == builtin_native_callback) return true;
+  return false;
+}
+
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {
   if (program->native_import == UINT32_MAX) return NULL;
   *span = program->native_function == UINT32_MAX ? 0 : program->functions[program->native_function].span;
@@ -2104,6 +2119,10 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
     *message = "this program uses native code (extern functions or Native.* builtins), and --deny-native (or any "
                "--deny-* flag) refuses it";
     return "RUNTIME-NATIVE-DENIED";
+  }
+  if (imports_callback(program)) {
+    *message = "this program calls Native.callback, which is not supported yet";
+    return "RUNTIME-NATIVE-UNSUPPORTED";
   }
   return NULL;
 }
@@ -2158,6 +2177,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.callback", 2, builtin_native_callback, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

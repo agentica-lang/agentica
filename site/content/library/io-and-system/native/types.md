@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, and C structs passed by value or through a pointer.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, callbacks that C calls, and C structs passed by value or through a pointer.
 ---
 
 ## Types
@@ -273,6 +273,37 @@ end
 - A `C.Function` is the first parameter (the function to call) or the last (the free function). Anywhere else it is `PARSE-EXTERN-FUNCTION`. It is never a result, an out parameter or a variadic parameter. The program sees it as a `C.Pointer`. The parameter names are free: `fn` and `free` are a convention.
 - A NULL address fails the call with `RUNTIME-NATIVE-NULL` before C runs, and an owned buffer with `RUNTIME-NATIVE-BOUNDS`. Any other address is trusted: one that is not a function of the declared signature is undefined behavior, like a wrong signature.
 - An extern block whose functions are all called through a pointer never opens its library, so a wrong library path is not reported.
+
+## Callbacks
+
+Some C functions take a function of yours that they call back: `qsort` a comparison, SQLite a collation or an update hook. `callback Name(params) -> result` in the block declares the C type of that function pointer (Ruby ffi's `callback`), and `Native.callback(Name, &function)` makes one from a function of your program:
+
+```agentica {mode="check"}
+extern "libsqlite3.so.0"
+  resource Db, free: sqlite3_close_v2
+  callback Compare(arg: C.Pointer, a_len: C.Int32, a: C.Pointer, b_len: C.Int32, b: C.Pointer) -> C.Int32
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
+  def sqlite3_create_collation(db: Db, name: C.String, enc: C.Int32, arg: C.Pointer, cmp: Compare) -> C.Int32
+end
+
+def by_length(arg: C.Pointer, a_len: Int, a: C.Pointer, b_len: Int, b: C.Pointer) -> Int
+  return a_len - b_len
+end
+
+def main() -> Void
+  db = sqlite3_open(":memory:").db
+  cmp = Native.callback(Compare, &by_length)
+  puts(sqlite3_create_collation(db, "by_length", 1, Native.null(), cmp))
+  Native.close(db)
+  Native.close(cmp)
+end
+```
+
+- A callback takes an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.String` or `C.Pointer`, and returns one of them but `C.String`, or `Void`. Anything else is `PARSE-EXTERN-TYPE`: take a struct, an array or bytes as a `C.Pointer` and read it with `Native.get_*`. It has no default, no `out` parameter and no `...`.
+- The function is named with `&` and takes and returns the Agentica types of the callback (`C.Int32` is `Int`); anything else is `CHECK-TYPE-MISMATCH`. An `Fn` value is `CHECK-NATIVE-CALLBACK`, and a block is refused too, because they may hold values of their scope; so is a function of an extern block, since a callback may not wait. Pass the context through the `void *` user data argument that C libraries give for it.
+- The callback is a resource of its type: `Native.close`, `Native.closed?` and `Task.spawn_owning` take it, and it does not convert to or from a `C.Pointer`.
+- A `def` of the block takes the callback as a parameter of its type, also in the variadic part. It is not a result or an `out` parameter. For a function pointer that may be NULL, such as the step function of a scalar SQLite function, declare the C function a second time under another name with a `C.Pointer` parameter there, and pass `Native.null()`.
+- The VM does not make callbacks yet: a program that calls `Native.callback` is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2, on every system. `check` and `compile` accept it.
 
 ## C structs
 

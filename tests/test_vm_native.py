@@ -2912,6 +2912,29 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
         assert diagnostic(result, 2) == ("RUNTIME-NATIVE-UNSUPPORTED", (7, 3))
 
 
+# The VM cannot make a callback yet: a program that calls Native.callback is refused at load on every system, before
+# anything runs (with --deny-native, by that flag first).
+def test_native_callback_is_refused_at_load(tmp_path):
+    text = """extern "%s"
+  callback Compare(a: C.Pointer, b: C.Pointer) -> C.Int32
+end
+
+def by_address(a: C.Pointer, b: C.Pointer) -> Int
+  return Native.address(a) - Native.address(b)
+end
+
+def main() -> Void
+  puts("started")
+  Native.close(Native.callback(Compare, &by_address))
+end
+""" % LIBC
+    result = agentica("--json", program(tmp_path, text))
+    assert result.stdout == ""
+    assert diagnostic(result, 2)[0] == "RUNTIME-NATIVE-UNSUPPORTED"
+    result = agentica("--json", "--deny-native", program(tmp_path, text))
+    assert diagnostic(result, 2)[0] == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED")
+
+
 EXTERN_TEST = """extern "%s"
   def abs(n: C.Int32) -> C.Int32
 end

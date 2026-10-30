@@ -124,6 +124,10 @@ rules those comments do not carry.
   `.` variadic, `c` a call through a C function pointer, `e` a resource freed
   through a pointer, `{N:CODES}` a C struct by value (N is its struct-table
   index).
+- `Native.callback` gets `"CODES NAME"` (`callback_signature` in
+  `lower_native.agc`) and the function; `agc_ffi_refusal` refuses a program
+  that imports it until the VM makes closures (#851). A callback parameter of
+  an extern function is code `r`, passed as its resource.
 - A signature that starts with `compute ` runs on the compute pool
   (`vm/compute.c`, `agc_io_compute` in `vm/loop.c`), and the task parks.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
