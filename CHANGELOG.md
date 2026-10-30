@@ -8,9 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0-beta.1] - 2026-10-30
+
 ### Added
 
-- Linux ARM64 builds and CI, with native calls; the JIT stays x86-64 only.
+- Linux ARM64 builds and CI, with native calls (no release archive yet); the
+  JIT stays x86-64 only.
 - `HTTP.listen_stream` and `HTTP.listen_stream_tls`: a handler returns an
   `HTTP.StreamResponse` whose body is a `Channel[Bytes]`, sent as chunks as they
   arrive, for Server-Sent Events, tokens or files; `HTTP.whole(data)` is the
@@ -711,7 +714,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.18.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...HEAD
+[0.19.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.18.0...0.19.0-beta.1
 [0.18.0]: https://github.com/agentica-lang/agentica/compare/0.17.0...0.18.0
 [0.17.0]: https://github.com/agentica-lang/agentica/compare/0.16.0...0.17.0
 [0.16.0]: https://github.com/agentica-lang/agentica/compare/0.15.0...0.16.0
