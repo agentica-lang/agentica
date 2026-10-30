@@ -37,6 +37,22 @@ READ_FAILED = "error reading from stream port"
 FAILED = "http: connection failed"
 # No bytes: the empty rest and carry.
 NO_BYTES = "".bytes
+# The longest a streamed response may wait for its body channel before it looks again. A close of the channel wakes the
+# wait at once, so this only bounds a task that is never woken.
+STREAM_POLL_MS = 60000
+# How long the watcher of a streamed response waits for the client to send or close (a year): a live stream is not
+# idle, and a timeout of a read closes the socket.
+WATCH_MS = 31536000000
+HEX_DIGITS = "0123456789abcdef"
+# How a stream's pump ended.
+STREAM_CUT = 0
+STREAM_DONE = 1
+STREAM_EARLY = 2
+# The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
+CHUNK_BYTES = 524288
+SEND_BYTES = 1048576
+NO_BODY = "a 204 or 304 response cannot have a body"
+CRLF = "\r\n".bytes
 # The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
 # this value as a literal (a field default cannot name a constant), so the two must match.
@@ -49,10 +65,38 @@ struct Target
   target: String
 end
 
+# What a server's handler returns: a whole response, or one whose body is a channel (listen_stream).
+enum Route
+  Whole(Fn[HttpRequest, Result[HttpResponse]])
+  Streaming(Fn[HttpRequest, Result[StreamResponse]])
+end
+
 struct Service
   server: HttpServer
-  handler: Fn[HttpRequest, Result[HttpResponse]]
+  route: Route
   options: HttpServerOptions
+end
+
+# How a request was answered: whether the connection stays, and the bytes already read of its next request.
+struct Sent
+  keep: Bool
+  rest: Bytes
+end
+
+# The pieces a body channel holds right now, and whether the channel is closed with nothing more to come.
+struct Ready
+  pieces: List[Bytes]
+  ended: Bool
+end
+
+# What the watcher task of a streamed response needs: the connection, the body to close when the client leaves, and two
+# one-slot channels that tell the stream what the watcher saw: left (the client's input ended, so the body was cut, not
+# finished) and sent (the client sent bytes while the stream ran).
+struct Watch
+  socket: Socket
+  body: Channel[Bytes]
+  left: Channel[Bool]
+  sent: Channel[Bool]
 end
 
 struct Incoming
@@ -154,6 +198,19 @@ export struct Download
   headers: List[Header]
   ## How many body bytes went to the file.
   bytes_written: Int
+end
+
+## A response whose body is sent as it is produced: the `status` and `headers` of the head, and a `body` channel of
+## pieces. The handler returns it at once and a task it spawned sends the pieces and closes the channel at the end. The
+## server sends each piece as soon as it arrives and ends the body when the channel closes. When the client leaves, the
+## server closes the channel, so the producer's next `send` returns an error and it stops.
+export struct StreamResponse
+  ## The status, 200 to 599, and not 204 or 304 unless the body is already closed and empty.
+  status: Int
+  ## The response headers. The server adds `Transfer-Encoding: chunked` or `Content-Length`: the handler sets neither.
+  headers: List[Header]
+  ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
+  body: Channel[Bytes]
 end
 
 struct Whole
@@ -329,7 +386,7 @@ export def listen(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start(listener, handler, options))
+  return ok(start(listener, Route.Whole(handler), options))
 end
 
 ## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
@@ -348,7 +405,56 @@ export def listen_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, cert_file, key_file)
-  return ok(start(listener, handler, options))
+  return ok(start(listener, Route.Whole(handler), options))
+end
+
+## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
+## (chunked, each piece flushed), for Server-Sent Events or any body that is not ready when the handler returns. Answer
+## the routes that are one text with `HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(text))`.
+export def listen_stream(
+  host: String,
+  port: Int,
+  handler: Fn[HttpRequest, Result[StreamResponse]],
+  options: HttpServerOptions,
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
+  listener = try TCP.listen(host, port)
+  return ok(start(listener, Route.Streaming(handler), options))
+end
+
+## Like `listen_stream`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
+export def listen_stream_tls(
+  host: String,
+  port: Int,
+  cert_file: String,
+  key_file: String,
+  handler: Fn[HttpRequest, Result[StreamResponse]],
+  options: HttpServerOptions,
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
+  listener = try TLS.listen(host, port, cert_file, key_file)
+  return ok(start(listener, Route.Streaming(handler), options))
+end
+
+## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
+## text or file. The server then answers with `Content-Length`, as `listen` does.
+export def whole(data: Bytes) -> Channel[Bytes]
+  body: Channel[Bytes] = Channel.new(1)
+  if not data.empty?
+    body.send(data, 0)
+  end
+  body.close
+  return body
 end
 
 ## Returns the port the server listens on.
@@ -477,9 +583,9 @@ def parse_url(url: String) -> Result[Target]
   return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
-def start(listener: Listener, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> HttpServer
+def start(listener: Listener, route: Route, options: HttpServerOptions) -> HttpServer
   return HttpWire.server(listener, options.max_connections) do |server|
-    accept_all(Service(server: server, handler: handler, options: options))
+    accept_all(Service(server: server, route: route, options: options))
   end
 end
 
@@ -499,10 +605,11 @@ def serve(socket: Socket, service: Service) -> Void
   while true
     case read_request(socket, rest, wait_ms, options)
       ok(incoming) ->
-        if not answer(socket, incoming.request, service)
+        sent = answer(socket, incoming, service)
+        if not sent.keep
           return
         end
-        rest = incoming.rest
+        rest = sent.rest
       error(_) -> return
     end
     wait_ms = options.idle_timeout_ms
@@ -699,23 +806,300 @@ def drain(socket: Socket, deadline: Int) -> Void
   end
 end
 
-def answer(socket: Socket, request: HttpRequest, service: Service) -> Bool
-  timeout = service.options.request_timeout_ms
-  case service.handler.call(request)
-    ok(response) ->
-      case write_response(socket, request, response, timeout)
-        ok(keep) -> return keep
+def answer(socket: Socket, incoming: Incoming, service: Service) -> Sent
+  options = service.options
+  case service.route
+    Route.Whole(handler) ->
+      keep = false
+      case handler.call(incoming.request)
+        ok(response) -> keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
         error(message) ->
-          if String.starts_with?(message, "http: invalid response: ")
-            IO.warn(message)
-            failed(socket, request, timeout)
-          end
+          IO.warn("http: handler error: #{message}")
+          failed(socket, incoming.request, options.request_timeout_ms)
       end
+      return Sent(keep: keep, rest: incoming.rest)
+    Route.Streaming(handler) ->
+      case handler.call(incoming.request)
+        ok(response) -> return answer_stream(socket, incoming, response, options)
+        error(message) ->
+          IO.warn("http: handler error: #{message}")
+          failed(socket, incoming.request, options.request_timeout_ms)
+      end
+      return Sent(keep: false, rest: NO_BYTES)
+  end
+end
+
+# Sends a whole response; true when the connection stays. A response that cannot be sent gets a 500 and a close.
+def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, timeout: Int) -> Bool
+  case write_response(socket, request, response, timeout)
+    ok(keep) -> return keep
     error(message) ->
-      IO.warn("http: handler error: #{message}")
-      failed(socket, request, timeout)
+      if String.starts_with?(message, "http: invalid response: ")
+        IO.warn(message)
+        failed(socket, request, timeout)
+      end
   end
   return false
+end
+
+# A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for
+# listen. Otherwise the head goes now, with chunked framing, and each piece follows as it arrives.
+def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, options: HttpServerOptions) -> Sent
+  request = incoming.request
+  timeout = options.request_timeout_ms
+  ready = take_ready(response.body)
+  head_only = HttpResponse(status: response.status, headers: response.headers, body: "")
+  case HttpWire.encode_response(request, head_only, Time.now_ms())
+    ok(reply) ->
+      bodyless = response.status == 204 or response.status == 304
+      if ready.ended
+        data = Bytes.concat(ready.pieces)
+        if bodyless and not data.empty?
+          return invalid_stream(socket, request, response.body, NO_BODY, timeout)
+        end
+        return send_whole(socket, incoming, reply, data, timeout)
+      end
+      if bodyless
+        return invalid_stream(socket, request, response.body, NO_BODY, timeout)
+      end
+      return stream_out(socket, incoming, response.body, ready.pieces, reply, options)
+    error(reason) -> return invalid_stream(socket, request, response.body, reason, timeout)
+  end
+end
+
+# A body that was complete when the handler returned, with its Content-Length (the encoded head says 0, as its body
+# there is empty; a 204 or 304 head has no length and no body). A HEAD request gets the head alone.
+def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: Bytes, timeout: Int) -> Sent
+  deadline = Time.monotonic_ms() + timeout
+  head = String.replace(reply.head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{data.size}\r\n")
+  sent = ok()
+  if incoming.request.method == "HEAD" or data.empty?
+    sent = TCP.send(socket, head, timeout)
+  else
+    sent = send_all(socket, head.bytes + data, timeout)
+  end
+  if not Result.ok?(sent)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  if reply.closes
+    linger(socket, "", deadline)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  return Sent(keep: true, rest: incoming.rest)
+end
+
+# Sends bytes in the pieces TCP.send_bytes takes. The whole send has `timeout`, not each piece.
+def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
+  deadline = Time.monotonic_ms() + timeout
+  at = 0
+  while at < data.size
+    count = smaller(SEND_BYTES, data.size - at)
+    try TCP.send_bytes(socket, data.slice(at, count), try time_left(socket, deadline))
+    at = at + count
+  end
+  return ok()
+end
+
+def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[Bytes], reason: String, timeout: Int) -> Sent
+  IO.warn("http: invalid response: #{reason}")
+  body.close
+  failed(socket, request, timeout)
+  return Sent(keep: false, rest: NO_BYTES)
+end
+
+# What the body channel holds without waiting. It has ended when the receive fails because the channel is closed and
+# empty, which the receive itself says, so a producer that sends and closes meanwhile loses nothing.
+def take_ready(body: Channel[Bytes]) -> Ready
+  pieces: List[Bytes] = []
+  ended = false
+  more = true
+  while more
+    case body.recv(0)
+      ok(piece) -> pieces = List.append(pieces, piece)
+      error(message) ->
+        ended = message == CHANNEL_CLOSED
+        more = false
+    end
+  end
+  return Ready(pieces: pieces, ended: ended)
+end
+
+# The encoded head says Content-Length: 0 (the body there is empty); a stream has no length, so it says chunked.
+def chunked_head(head: String) -> String
+  return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nTransfer-Encoding: chunked\r\n")
+end
+
+# Sends the head and then the body as chunks. A HEAD request gets the head and the channel closes, so the producer
+# stops. A task watches the socket for the whole stream, so a client that leaves is noticed even when the producer is
+# idle: the end of its input closes the body, and the body is then cut, without the last chunk, so the client sees an
+# incomplete body. Bytes the client sends during the stream (a pipelined request) are dropped, and the connection
+# closes when the stream ends. Otherwise the watcher's read is the wait for the next request.
+def stream_out(
+  socket: Socket,
+  incoming: Incoming,
+  body: Channel[Bytes],
+  first: List[Bytes],
+  reply: HttpWire.Reply,
+  options: HttpServerOptions,
+) -> Sent
+  timeout = options.request_timeout_ms
+  if not Result.ok?(TCP.send(socket, chunked_head(reply.head), timeout))
+    body.close
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  if incoming.request.method == "HEAD"
+    body.close
+    return Sent(keep: end_head(socket, reply, timeout), rest: incoming.rest)
+  end
+  left: Channel[Bool] = Channel.new(1)
+  sent: Channel[Bool] = Channel.new(1)
+  watcher = Task.spawn(&watch, Watch(socket: socket, body: body, left: left, sent: sent))
+  ended = pump(socket, body, first, left, sent, timeout)
+  if ended == STREAM_CUT
+    TCP.close(socket)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
+  if reply.closes or not incoming.rest.empty? or ended == STREAM_EARLY
+    return end_stream(socket, watcher, timeout)
+  end
+  return next_request(socket, watcher, options.idle_timeout_ms)
+end
+
+# The connection closes after the stream, as linger does: the write side first, then the peer gets the rest of the time
+# to close its side, so a reset cannot lose the last chunk.
+def end_stream(socket: Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Sent
+  HttpWire.close_write(socket)
+  case Task.await(watcher, timeout)
+    Await.Done(_) -> drain(socket, Time.monotonic_ms() + timeout)
+    Await.TimedOut -> TCP.close(socket)
+  end
+  TCP.close(socket)
+  return Sent(keep: false, rest: NO_BYTES)
+end
+
+# After a HEAD response: false when the connection closes.
+def end_head(socket: Socket, reply: HttpWire.Reply, timeout: Int) -> Bool
+  if reply.closes
+    linger(socket, "", Time.monotonic_ms() + timeout)
+    return false
+  end
+  return true
+end
+
+# The stream ended and the client is still there: the watcher's read is the first byte of its next request.
+def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> Sent
+  case Task.await(watcher, idle_ms)
+    Await.Done(read) ->
+      case read
+        ok(data) ->
+          if not data.empty?
+            return Sent(keep: true, rest: data)
+          end
+        error(_) -> TCP.close(socket)
+      end
+    Await.TimedOut -> TCP.close(socket)
+  end
+  return Sent(keep: false, rest: NO_BYTES)
+end
+
+# Sends the pieces as they come, then the last chunk. The wait for a piece has no deadline of its own: a slow producer
+# is not an error, and the client leaving, the producer closing or the server closing all wake it. A piece gets
+# `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT when the body was cut: a send failed
+# (the channel is closed for the producer) or the watcher saw the client leave (left has a value). Only a producer's
+# close sends the last chunk. STREAM_EARLY when the client sent bytes during the stream (sent has a value, read before
+# the last chunk goes out: after it the client may send its next request), STREAM_DONE otherwise.
+def pump(
+  socket: Socket,
+  body: Channel[Bytes],
+  first: List[Bytes],
+  left: Channel[Bool],
+  sent: Channel[Bool],
+  timeout: Int,
+) -> Int
+  for piece in first
+    if not Result.ok?(send_piece(socket, piece, timeout))
+      body.close
+      return STREAM_CUT
+    end
+  end
+  while true
+    case body.recv(STREAM_POLL_MS)
+      ok(piece) ->
+        if not Result.ok?(send_piece(socket, piece, timeout))
+          body.close
+          return STREAM_CUT
+        end
+      error(message) ->
+        if message == CHANNEL_CLOSED
+          break
+        end
+    end
+  end
+  if Result.ok?(left.recv(0))
+    return STREAM_CUT
+  end
+  early = Result.ok?(sent.recv(0))
+  if not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
+    return STREAM_CUT
+  end
+  if early
+    return STREAM_EARLY
+  end
+  return STREAM_DONE
+end
+
+# The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
+# CHUNK_BYTES is several chunks, all within `timeout`. An empty piece would read as the last chunk, so it sends
+# nothing. The bytes go as they are: no UTF-8 check runs on a piece.
+def send_piece(socket: Socket, piece: Bytes, timeout: Int) -> Result[Void]
+  deadline = Time.monotonic_ms() + timeout
+  at = 0
+  while at < piece.size
+    count = smaller(CHUNK_BYTES, piece.size - at)
+    part = piece.slice(at, count)
+    chunk = Bytes.concat(["#{hex_of(count)}\r\n".bytes, part, CRLF])
+    try TCP.send_bytes(socket, chunk, try time_left(socket, deadline))
+    at = at + count
+  end
+  return ok()
+end
+
+def hex_of(number: Int) -> String
+  digits = ""
+  rest = number
+  while rest > 0
+    digits = String.slice(HEX_DIGITS, rest % 16, 1) + digits
+    rest = rest / 16
+  end
+  return digits
+end
+
+# Reads the socket for the whole stream. The end of the client's input, or a read error, means it left: left is set and
+# the body closes, which stops the producer and the sending. Bytes while the stream runs are dropped and set sent (so
+# the connection closes at the end), before the body is looked at, since the pump reads sent as the body ends. The read
+# goes on, so a client that leaves later is still noticed. Once the body has ended, the first bytes are the start of
+# the client's next request and go back as the result.
+def watch(watching: Watch) -> Result[Bytes]
+  while true
+    case TCP.recv_bytes(watching.socket, READ_BYTES, WATCH_MS)
+      ok(data) ->
+        if data.empty?
+          watching.left.send(true, 0)
+          watching.body.close
+          return ok(data)
+        end
+        # Set before the test: a pump that ends the stream in between must see these bytes as early, not as a request.
+        watching.sent.send(true, 0)
+        if watching.body.closed?
+          return ok(data)
+        end
+      error(message) ->
+        watching.left.send(true, 0)
+        watching.body.close
+        return error(message)
+    end
+  end
+  return ok(NO_BYTES)
 end
 
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the

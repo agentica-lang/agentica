@@ -124,7 +124,12 @@ HTTP.local_port(server: HttpServer) -> Int
 HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 
+HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.whole(data: Bytes) -> Channel[Bytes]
+
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: String)
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
 HttpServerOptions(request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int)
 ```
 
@@ -177,3 +182,51 @@ end
   run. A server belongs to the task that called `HTTP.listen`: when that task
   ends the server closes and its port is freed, so call `listen` in the task
   that keeps the server, such as `main`.
+
+### Streaming a response (SSE, tokens, big bodies)
+
+Use `listen_stream` only when a route's body is not ready at once; otherwise
+`listen`. The handler returns an `HTTP.StreamResponse` whose `body` is a
+`Channel[Bytes]`, and a task it started sends the pieces and closes the channel
+(`tasks.md`). Every route of a `listen_stream` server returns one, and a route
+with one text uses `body: HTTP.whole("text".bytes)`.
+
+```ruby
+def produce(events: Channel[Bytes]) -> Void
+  for n in 1..3
+    if not Result.ok?(events.send("data: #{n}\n\n".bytes, 5000))
+      break
+    end
+    Task.sleep(100)
+  end
+  events.close
+end
+
+def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
+  events: Channel[Bytes] = Channel.new(8)
+  Task.spawn(&produce, events)
+  headers = [Header(name: "Content-Type", value: "text/event-stream")]
+  return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
+end
+```
+
+- The head goes out at once, then each piece as one flushed chunk, and the
+  channel closing ends the body. The server sets the framing: a handler that
+  sets `Content-Length` or `Transfer-Encoding` gets the 500 of `listen`. Pieces
+  are `Bytes` sent as they are (a file or binary data works); empty ones are
+  skipped. A body already closed when the handler returns goes out
+  with `Content-Length`.
+- The server reads the connection for the whole stream. When the client's input
+  ends (it left, or half-closed) or a send fails, it closes the channel: the
+  producer's next `send` is `error("channel: closed")`, and it must stop.
+  `closed?` is `true` for a silent producer once the pieces already sent were
+  taken. The body is then cut without its last chunk, so the client sees it as
+  incomplete. The producer must close the channel on every path: one that never
+  does holds the stream until the client leaves. A bounded channel is the
+  backpressure. Bytes the client sends during the stream (a pipelined request)
+  are dropped, and the connection closes after the stream.
+- A slow producer is fine: no timeout runs while the server waits for a piece
+  (`idle_timeout_ms` counts between requests). `request_timeout_ms` bounds each
+  piece's send, so a client that stops reading is cut off. `HEAD` gets the head
+  and closes the channel. HTTP/1.0 is the 505 of `listen`.
+- The client side does not stream: `HTTP.get` waits for the whole body.

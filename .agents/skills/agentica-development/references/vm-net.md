@@ -323,3 +323,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   timing. `http-server-owner-crash` crashes the task that owns a live server
   (`Task.spawn_owning`); `http-server-owner-cancel` cancels it, which frees the
   port.
+- HTTP streamed responses (`listen_stream`): `http-server-stream` is a golden
+  whose client is a raw socket in the program, and a gate channel makes the
+  producer wait until main has read a piece, so no sleep decides the order of
+  the output. `tests/test_vm_http.py` also starts a streaming VM server (plain
+  and TLS) for `tests/fixtures/http-stream-peer.py`, where `http.client` reads
+  the chunks as they arrive and times them, leaves mid-stream and sends
+  HTTP/1.0.

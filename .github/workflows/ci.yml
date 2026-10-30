@@ -442,7 +442,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_TIMEOUT=30 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
       - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: libfuzz-crashes
           path: build/vm/libfuzz/crashes/

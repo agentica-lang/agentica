@@ -59,8 +59,8 @@ after the limit check.
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
-answers are in `site/content/library/io-and-system/network.md`. Streaming is
-planned in `docs/future/30-hybrid-http.md`.
+answers are in `site/content/library/io-and-system/network.md`. Client
+streaming is planned in `docs/future/30-hybrid-http.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
@@ -352,6 +352,30 @@ Properties of the client that no test checks:
 - `std/http` runs the accept loop in the group. For each socket it spawns the
   connection loop: read a request, run the handler, then write the response.
   The loop ends when the write returns anything but `ok(true)`.
+- A `listen_stream` server runs the same loop with a handler that returns a
+  `StreamResponse`. A body channel that is already closed with its pieces
+  buffered is the whole body: it goes out with `Content-Length`, in the head of
+  the same encoding. Pieces are `Bytes` and go out with `TCP.send_bytes`, so no
+  UTF-8 check runs on them. Otherwise the head is `encode_response` of the same
+  status and headers with an empty body, its `Content-Length: 0` swapped for
+  `Transfer-Encoding: chunked` (so the head checks and the C code are the
+  same), and the connection task sends the pieces
+  as it takes them from the channel. A watcher task, spawned in the group,
+  loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
+  (or a read error) sets a one-slot `left` channel and closes the body channel,
+  which wakes the connection task and fails the producer's next `send`, with no
+  write needed; the pump then sees `left` and does not send the last chunk, so
+  the client sees a cut body. Bytes read while the stream runs are dropped and
+  set a `sent` channel: a socket read cannot be stopped without losing bytes
+  (the cancel of a read that has completed drops its result), so the bytes of a
+  pipelined request are not kept and the connection closes at the end of the
+  stream, after `close_write` and a drain (as does `Connection: close`, or a
+  request already in the buffer). When the stream has ended with nothing read,
+  the watcher's pending read is the wait for the next request: its bytes go
+  back as the start of the request, and the connection task waits for them at
+  most `idle_timeout_ms`. `take_ready` and the pump read the end of the body
+  from the receive's own error (`channel: closed`), not from a later `closed?`.
+  HTTP/1.0 never gets here: the parser answers 505.
 
 #### 10.7.3 Errors and status codes
 
