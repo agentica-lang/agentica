@@ -3227,7 +3227,8 @@ def test_the_folded_profile_of_a_callback_holds_the_frames_below(tmp_path, peer)
     if "trace off" in agentica("--version").stdout:
         pytest.skip("the VM was built with TRACE=0")
     trace = tmp_path / "folded.trace"
-    result = agentica(program(tmp_path, CALLBACK_PROFILE % literal(peer)),
+    # The profile trace needs one scheduler; the multicore runs of this module set more by default.
+    result = agentica("--schedulers", "1", program(tmp_path, CALLBACK_PROFILE % literal(peer)),
                       env={"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": str(trace),
                            "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1"})
     assert (result.code, result.stdout, result.stderr) == (0, "6008\n", "")
