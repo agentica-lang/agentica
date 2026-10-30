@@ -83,17 +83,25 @@ def slow(feed: Feed) -> Void
   finish(feed)
 end
 
-# Fills the bounded channel behind a client that does not read, and says where the producer had to wait.
+# Fills the bounded channel behind a client that does not read. Its send waits longer than the server's timeout for a
+# piece to be sent, so the error it ends with is the server cutting the client off, not its own timeout.
 def backed_up(feed: Feed) -> Void
   piece = "y".bytes
   while piece.size < 65536
     piece = piece + piece
   end
   sent = 0
-  while Result.ok?(feed.body.send(piece, 300))
-    sent += 1
+  failure = ""
+  more = true
+  while more
+    case feed.body.send(piece, 5000)
+      ok(_) -> sent += 1
+      error(message) ->
+        failure = message
+        more = false
+    end
   end
-  feed.hub.said.send("producer waited: #{sent < 2000}", 5000)
+  feed.hub.said.send("producer was held back: #{sent < 2000}, then: #{failure}", 5000)
   finish(feed)
 end
 

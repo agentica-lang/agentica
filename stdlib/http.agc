@@ -44,6 +44,10 @@ STREAM_POLL_MS = 60000
 # idle, and a timeout of a read closes the socket.
 WATCH_MS = 31536000000
 HEX_DIGITS = "0123456789abcdef"
+# How a stream's pump ended.
+STREAM_CUT = 0
+STREAM_DONE = 1
+STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
@@ -950,11 +954,12 @@ def stream_out(
   left: Channel[Bool] = Channel.new(1)
   sent: Channel[Bool] = Channel.new(1)
   watcher = Task.spawn(&watch, Watch(socket: socket, body: body, left: left, sent: sent))
-  if not pump(socket, body, first, left, timeout)
+  ended = pump(socket, body, first, left, sent, timeout)
+  if ended == STREAM_CUT
     TCP.close(socket)
     return Sent(keep: false, rest: NO_BYTES)
   end
-  if reply.closes or not incoming.rest.empty? or Result.ok?(sent.recv(0))
+  if reply.closes or not incoming.rest.empty? or ended == STREAM_EARLY
     return end_stream(socket, watcher, timeout)
   end
   return next_request(socket, watcher, options.idle_timeout_ms)
@@ -999,14 +1004,22 @@ end
 
 # Sends the pieces as they come, then the last chunk. The wait for a piece has no deadline of its own: a slow producer
 # is not an error, and the client leaving, the producer closing or the server closing all wake it. A piece gets
-# `timeout` to be sent, so a client that stops reading cuts the stream. False when the body was cut: a send failed
+# `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT when the body was cut: a send failed
 # (the channel is closed for the producer) or the watcher saw the client leave (left has a value). Only a producer's
-# close sends the last chunk.
-def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], left: Channel[Bool], timeout: Int) -> Bool
+# close sends the last chunk. STREAM_EARLY when the client sent bytes during the stream (sent has a value, read before
+# the last chunk goes out: after it the client may send its next request), STREAM_DONE otherwise.
+def pump(
+  socket: Socket,
+  body: Channel[Bytes],
+  first: List[Bytes],
+  left: Channel[Bool],
+  sent: Channel[Bool],
+  timeout: Int,
+) -> Int
   for piece in first
     if not Result.ok?(send_piece(socket, piece, timeout))
       body.close
-      return false
+      return STREAM_CUT
     end
   end
   while true
@@ -1014,7 +1027,7 @@ def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], left: Channel
       ok(piece) ->
         if not Result.ok?(send_piece(socket, piece, timeout))
           body.close
-          return false
+          return STREAM_CUT
         end
       error(message) ->
         if message == CHANNEL_CLOSED
@@ -1023,9 +1036,16 @@ def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], left: Channel
     end
   end
   if Result.ok?(left.recv(0))
-    return false
+    return STREAM_CUT
   end
-  return Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
+  early = Result.ok?(sent.recv(0))
+  if not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
+    return STREAM_CUT
+  end
+  if early
+    return STREAM_EARLY
+  end
+  return STREAM_DONE
 end
 
 # The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
@@ -1055,9 +1075,10 @@ def hex_of(number: Int) -> String
 end
 
 # Reads the socket for the whole stream. The end of the client's input, or a read error, means it left: left is set and
-# the body closes, which stops the producer and the sending. Bytes while the stream runs are dropped (sent is set, so
-# the connection closes at the end); the read goes on, so a client that leaves later is still noticed. Once the body
-# has ended, the first bytes are the start of the client's next request and go back as the result.
+# the body closes, which stops the producer and the sending. Bytes while the stream runs are dropped and set sent (so
+# the connection closes at the end), before the body is looked at, since the pump reads sent as the body ends. The read
+# goes on, so a client that leaves later is still noticed. Once the body has ended, the first bytes are the start of
+# the client's next request and go back as the result.
 def watch(watching: Watch) -> Result[Bytes]
   while true
     case TCP.recv_bytes(watching.socket, READ_BYTES, WATCH_MS)
@@ -1067,10 +1088,11 @@ def watch(watching: Watch) -> Result[Bytes]
           watching.body.close
           return ok(data)
         end
+        # Set before the test: a pump that ends the stream in between must see these bytes as early, not as a request.
+        watching.sent.send(true, 0)
         if watching.body.closed?
           return ok(data)
         end
-        watching.sent.send(true, 0)
       error(message) ->
         watching.left.send(true, 0)
         watching.body.close
