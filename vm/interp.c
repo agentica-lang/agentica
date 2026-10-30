@@ -59,7 +59,8 @@ typedef struct {
 
 /* The stack of one level of callbacks of a task (agc_task.nested): the frame and register arrays, which keep the size
    the callbacks grew them to, and the barrier and its native frame, all made at the level's first callback and reused
-   by the next ones. The registers keep the values of the last callback until the next one writes over them. */
+   by the next ones. The arrays keep the values of the last callback until the native call that ran it returns
+   (agc_task_clear_nested). */
 struct agc_nested_stack {
   agc_frame *frames;
   uint32_t frame_capacity;
@@ -301,17 +302,16 @@ bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper) 
   return st && st->kind == AGC_NATIVE_STEPPER && st->stepper == stepper;
 }
 
-/* The name of frame K of T in a folded stack: a function, the builtin of a native frame, or the label of a
-   Profile.measure. A native frame always sits on the function frame whose CALL_BUILTIN started it, and that frame's
-   pc is just past the call, so the builtin's index is read there and the native frame need not keep it. */
-static uint64_t frame_code(const agc_vm *vm, const agc_task *t, uint32_t k) {
-  const agc_frame *frame = &t->frames[k];
+/* The name of FRAME in a folded stack: a function, the builtin of a native frame, or the label of a Profile.measure.
+   A native frame always sits on the function frame CALLER whose CALL_BUILTIN started it, and that frame's pc is just
+   past the call, so the builtin's index is read there and the native frame need not keep it. The barrier of a callback
+   of native code sits on the frame that called Native.call, so it reads as that builtin. */
+static uint64_t frame_code(const agc_vm *vm, const agc_frame *frame, const agc_frame *caller) {
   const agc_native *st = frame->native;
   if (!st) return AGC_PROFILE_CODE(AGC_PROFILE_FUNCTION, frame->function);
   if (st->kind == AGC_NATIVE_STEPPER && st->stepper->step == agc_profile_measure_step)
     return AGC_PROFILE_CODE(AGC_PROFILE_LABEL, agc_profile_measure_label(st->stepper));
   const agc_program *p = vm->rt->program;
-  const agc_frame *caller = k > 0 ? &t->frames[k - 1] : NULL;
   if (!caller || caller->native || caller->function >= p->function_count || caller->pc == 0 ||
       caller->pc > p->functions[caller->function].count)
     return AGC_PROFILE_CODE(AGC_PROFILE_BUILTIN, UINT32_MAX);
@@ -320,18 +320,36 @@ static uint64_t frame_code(const agc_vm *vm, const agc_task *t, uint32_t k) {
   return AGC_PROFILE_CODE(AGC_PROFILE_BUILTIN, (uint32_t)in->b | ((uint32_t)in->c << 16));
 }
 
+/* Frame K, counted from the outermost, of the N frames of T: its own and, under callbacks of native code that run now,
+   those of the segments below (agc_frame_segment). *CALLER is set to the frame under it, or NULL. */
+static const agc_frame *stack_frame(const agc_task *t, uint32_t n, uint32_t k, const agc_frame **caller) {
+  agc_frame_segment level = {t->frames, t->frame_count, t->below};
+  uint32_t first = n - level.count;
+  while (k < first) {
+    level = *level.below;
+    first -= level.count;
+  }
+  uint32_t at = k - first;
+  const agc_frame_segment *under = level.below;
+  *caller = at > 0 ? &level.frames[at - 1] : under && under->count ? &under->frames[under->count - 1] : NULL;
+  return &level.frames[at];
+}
+
 /* One sample of the folded output: the frames of the running task, outermost first, with WEIGHT steps. A stack deeper
    than AGC_PROFILE_FRAMES keeps its outer and inner halves around one "..." frame. */
 static void profile_sample(agc_vm *vm, uint64_t weight) {
   const agc_task *t = vm->task;
   uint64_t *codes = vm->profile->frames;
   uint32_t n = t->frame_count, kept = 0, half = AGC_PROFILE_FRAMES / 2;
+  for (const agc_frame_segment *s = t->below; s; s = s->below) n += s->count;
   for (uint32_t k = 0; k < n; k++) {
     if (n > AGC_PROFILE_FRAMES && k == half) {
       codes[kept++] = AGC_PROFILE_CODE(AGC_PROFILE_CUT, 0);
       k = n - (AGC_PROFILE_FRAMES - half - 1);
     }
-    codes[kept++] = frame_code(vm, t, k);
+    const agc_frame *caller;
+    const agc_frame *frame = stack_frame(t, n, k, &caller);
+    codes[kept++] = frame_code(vm, frame, caller);
   }
   agc_profile_add_stack(vm->profile, codes, kept, weight);
 }
@@ -2006,7 +2024,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
     agc_lock_take_shared(vm->rt->sync);
     vm->sync_depth = sync_depth;
   }
-  /* The arrays may have grown: the level keeps them. */
+  /* The arrays may have grown: the level keeps them, with no values of this run that would stay alive with the task. */
   ns->frames = t->frames;
   ns->frame_capacity = t->frame_capacity;
   ns->regs = t->regs;
@@ -2032,6 +2050,16 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   set_counter(vm);
   if (nested_stops(vm, t)) end_turn_now(vm);
   return ok;
+}
+
+/* The level that the native call used is the one at t->callbacks; a deeper one was cleared when the native call that
+   used it returned. Past MAX_NESTED_CALLBACKS no callback ran (too_deep). */
+NESTED void agc_task_clear_nested(agc_task *t) {
+  agc_nested_stack *ns = t->callbacks < MAX_NESTED_CALLBACKS && t->nested ? t->nested[t->callbacks] : NULL;
+  if (!ns) return;
+  if (ns->regs) memset(ns->regs, 0, ns->reg_capacity * sizeof *ns->regs);
+  memset(ns->frames, 0, ns->frame_capacity * sizeof *ns->frames);
+  ns->barrier.value = agc_void();
 }
 
 NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
