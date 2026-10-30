@@ -182,9 +182,9 @@ The job graph is in the YAML; these are the rules it does not show.
 of the bootstrap and the C test programs once, and uploads `dist/` and
 `build/` as one `tar.gz` (`release-build`). Each job after it checks out,
 downloads that and runs its part, so no job compiles. When C changed,
-`sanitizer-build` does the same for the sanitizer binary (`SANITIZE=1`, its C
-tests, the fixed point), the ThreadSanitizer binary and C tests, and the GC
-stress binary and C tests (`sanitizer-build`).
+`sanitizer-build` does the same for the sanitizer binary (`SANITIZE=1`), and
+`tsan-build` for the ThreadSanitizer binary and C tests and the GC stress
+binary and C tests. The two run at once and a shard unpacks both.
 
 - `.github/actions/use-build` unpacks the artifact and dates every file of
   `dist/` and `build/` with one time taken after the checkout. Without that
@@ -196,9 +196,10 @@ stress binary and C tests (`sanitizer-build`).
   Poetry, the `-dev` packages, optionally clang-tidy 19 and ripgrep).
 - `build/vm/flags` is shared by all build modes, so after a job runs another
   mode (`make vm-tsan-run`, `make vm-gc-stress`) make links that mode's
-  binaries again. It compiles nothing: the objects are in the artifact. The
-  sanitizer artifact is built with the sanitizer mode last, so `dist/agentica`
-  and its C tests need no relink.
+  binaries again. It compiles nothing: the objects are in the artifact. A job
+  must not build two modes in a row and then use the first: its binaries would
+  be relinked, and through the first binary of the bootstrap the stages would
+  run again (about 45 s in sanitizer mode).
 - The jobs and what they run:
 
   - `changes`: which paths changed: `c` (the C half runs), `trace`
@@ -207,17 +208,20 @@ stress binary and C tests (`sanitizer-build`).
   - `tests-fast` 1/2, 2/2: `make test SHARD=i/2`; shard 1 also `vm-latency`;
     shard 2 also `test-multicore-modules` and `test-remove-actions`
   - `tests-slow` 1/2, 2/2: `make test-slow SHARD=i/2`; shard 2 also
-    `vm-jit-test`
-  - `tests-shared`: `test-shared`, then `vm-task-map` (alone on the CPU)
-  - `checks`: `vm-test`, `test-bdd`, `layout-check`, `fixed-point`, `smoke`, the
-    stage0 rebuild check, `vendored-test`, `dup-check`
+    `vm-task-map` (alone on the CPU)
+  - `tests-shared`: `test-shared`
+  - `checks`: `vm-test`, `test-bdd`, `layout-check`, `fixed-point`,
+    `vm-jit-test`, `smoke`, the stage0 rebuild check, `vendored-test`,
+    `dup-check`
   - `test`: the aggregate of the five jobs above
-  - `sanitizer-build`: `vm-sanitize-build`, `vm-tsan`, the TSan and GC stress
-    binaries, `vm-test`, `fixed-point` (sanitizer mode), then the upload
+  - `sanitizer-build`: `vm-sanitize-build` (the sanitizer `dist/agentica` and
+    its stages), then the upload
+  - `tsan-build`: `vm-tsan`, the TSan binary, the GC stress binary and C tests,
+    then the upload
   - `lint-fuzz`: `vm-lint`, `vm-trace-off` (when asked), `vm-libfuzz-run` (it
     builds its own objects)
-  - `sanitizer-tests` 1/2, 2/2: `vm-sanitize-test SHARD=i/2`; shard 2 also
-    `vm-gc-stress`
+  - `sanitizer-tests` 1/2, 2/2: `vm-sanitize-test SHARD=i/2`; shard 1 also the
+    sanitizer `vm-test` and `fixed-point`; shard 2 also `vm-gc-stress`
   - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
   - `vm-layers`: `vm-layers`
   - `vm-sanitizers`: the aggregate of the C half

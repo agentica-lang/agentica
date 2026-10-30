@@ -183,7 +183,8 @@ jobs:
         run: make vm-latency
 
   # The slow tier (make test-slow), the modules split in two: the first shard holds tests/test_vm_multicore.py, which takes
-  # the longest by far. The second shard also runs the JIT goldens.
+  # the longest by far. The second shard also runs the timing cases of Task.map, which need the CPU alone (so they come
+  # after the tests, not beside them).
   tests-slow:
     name: slow tests (${{ matrix.shard }}/2)
     needs: build
@@ -207,13 +208,11 @@ jobs:
           targets: dist/agentica build/vm/release/bootstrap/agentica vm-test-binaries
       - name: Slow tests
         run: make test-slow SHARD=${{ matrix.shard }}/2
-      - name: The goldens and their --max-steps sweeps with the JIT compiling every function it can, then half the golden shards with the JIT off
+      - run: make vm-task-map
         if: matrix.shard == 2
-        run: make vm-jit-test
 
-  # The shared-state locks run and the timing cases of Task.map, which need the CPU alone, so they follow each other.
   tests-shared:
-    name: shared-state locks and Task.map timing
+    name: shared-state locks
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -231,12 +230,11 @@ jobs:
           targets: dist/agentica build/vm/release/bootstrap/agentica vm-test-binaries
       - name: The binary tests again with the shared-state locks on
         run: make test-shared
-      - run: make vm-task-map
 
   # The checks of the binary and the sources that are short each. The vendored check is the last build step: it rebuilds
   # build/vm/release/obj with other flags, so nothing that builds may run after it (here: only dup-check, which builds nothing).
   checks:
-    name: C tests, BDD, layout, fixed point, smoke, stage0, vendored libraries, copy-paste
+    name: C tests, BDD, layout, fixed point, JIT goldens, smoke, stage0, vendored libraries, copy-paste
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -285,6 +283,8 @@ jobs:
           exit "$rc"
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point
+      - name: The goldens and their --max-steps sweeps with the JIT compiling every function it can, then half the golden shards with the JIT off
+        run: make vm-jit-test
       - name: Example smoke runs
         run: make smoke
       # A PR that changes bootstrap/stage0.agcb must carry the stage2 that the base branch's stage0 builds from the PR's
@@ -347,7 +347,7 @@ jobs:
           printf '%s\n' "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
 
   # The sanitizer half, only when C changed (the `changes` job). It builds in two jobs at once, so the shards below compile
-  # nothing. `sanitizer-build` makes the sanitizer binary (dist/agentica with SANITIZE=1, its C tests, the fixed point);
+  # nothing. `sanitizer-build` makes the sanitizer binary (dist/agentica with SANITIZE=1 and the stages it needs);
   # `tsan-build` makes the ThreadSanitizer and GC stress binaries and C tests. Their folders do not overlap, so a shard unpacks
   # both. Neither job switches mode after its first build: build/vm/flags (shared by the modes) then keeps the content that
   # its binaries were linked with, and make takes them as current (a switch would relink them and, through the first binary of
@@ -370,9 +370,6 @@ jobs:
           sanitizers: 'true'
       - name: make vm-sanitize-build, the sanitizer binary and the front end stages it needs
         run: make -j"$(nproc)" vm-sanitize-build
-      - run: make -j"$(nproc)" vm-test
-      - name: Fixed point of the front end on the sanitizer binary (builds the dist/agentica that the next step tests)
-        run: make fixed-point
       - run: GZIP=-1 tar -czf "$RUNNER_TEMP/sanitizer-build.tar.gz" dist build
       - uses: actions/upload-artifact@v7
         with:
@@ -450,8 +447,8 @@ jobs:
           path: build/vm/libfuzz/crashes/
           if-no-files-found: ignore
 
-  # vm-sanitize-test, the modules split in two; the second shard also runs the GC stress goldens (the stress binary is in the
-  # artifact).
+  # vm-sanitize-test, the modules split in two. The first shard also builds and runs the C tests and the fixed point of the
+  # sanitizer binary; the second runs the GC stress goldens (the stress binary is in the tsan-build artifact).
   sanitizer-tests:
     name: vm-sanitize-test (${{ matrix.shard }}/2)
     needs: [changes, sanitizer-build, tsan-build]
@@ -477,7 +474,12 @@ jobs:
         with:
           artifact: sanitizer-build
           extra: tsan-build
-          targets: dist/agentica vm-test-binaries
+          targets: dist/agentica
+      - if: matrix.shard == 1
+        run: make -j"$(nproc)" vm-test
+      - name: Fixed point of the front end on the sanitizer binary (builds the dist/agentica that the next step tests)
+        if: matrix.shard == 1
+        run: make fixed-point
       - name: vm-sanitize-test, with tests/test_single_binary.py (the hand-off and run) on the sanitizer binary
         run: make vm-sanitize-test SHARD=${{ matrix.shard }}/2
       - if: matrix.shard == 2
@@ -510,7 +512,7 @@ jobs:
         with:
           artifact: sanitizer-build
           extra: tsan-build
-          targets: dist/agentica vm-test-binaries
+          targets: dist/agentica
       - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP, TLS, HTTP, process and BDD modules on four schedulers under ThreadSanitizer
         run: make vm-tsan-run SHARD=${{ matrix.shard }}/3
 
@@ -533,7 +535,7 @@ jobs:
       - uses: ./.github/actions/use-build
         with:
           artifact: sanitizer-build
-          targets: dist/agentica vm-test-binaries
+          targets: dist/agentica
       - run: make vm-layers
 
   # The check that branch protection names for the C half. It passes when C did not change (every job above is skipped then)
