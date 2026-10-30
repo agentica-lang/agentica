@@ -5,12 +5,12 @@ The multicore model (threads, queues and ownership) is in §16
 that still apply.
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
-  affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
-  capped at 1024, and the flag wins over a valid variable. Invalid values exit
-  2, also a bad variable next to a valid flag (§16.9). `--schedulers 1`
-  gives the N=1 order, which still depends on timer and pool timing. `--seed`
-  does not imply one scheduler; at N>1 only per-task random values repeat
-  (7.4). The thread split and shared queue are in §16.2–16.3.
+  affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it (the
+  flag rules are in `08-loader-and-cli.md`, the cases that force one scheduler
+  in §16.9, "`--schedulers N`"). `--schedulers 1` gives the N=1 order, which
+  still depends on timer and pool timing. `--seed` does not imply one scheduler;
+  at N>1 only per-task random values repeat (7.4). The thread split and shared
+  queue are in §16.2–16.3.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
   specified in §16.3.
 - **Waking.** State/results are published before enqueueing (§16.3–16.4):
@@ -19,28 +19,30 @@ that still apply.
   visible to the resumed scheduler. The park and wake protocol below handles
   races while a task is still parking.
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
-  atomics, checked only on the `STEP` slow path, when the "next stop" counter
-  runs out. The fast path still touches no atomic. A cancel or stop takes effect
-  within one turn budget. A task that a cancel finds on a turn is ended by its
-  own scheduler at the end of the turn, so no signal crosses schedulers (the
-  `vm->yield` of the canceller's scheduler is for the canceller's own task).
-- **Park and wake protocol.** Each task has an atomic state: RUNNING, PARKING,
-  PARKED or WOKEN. To park, the task sets PARKING before it registers its wait
-  (before it posts its start request, joins a waiter list, or registers on
-  another task's result). It then re-checks its wait condition and its cancel
-  flag. If either is satisfied, it unregisters and goes back to RUNNING with one
-  CAS that accepts PARKING or WOKEN. A posted request cannot be recalled, so for
-  a job "unregisters" means the task detaches it, and the job runs to its end
-  (§16.11). If the outcome (§16.5) is already set, the task consumes the job
-  instead. Otherwise it CASes PARKING to PARKED. Registering on another task's
-  result is done under that task's lock, and fails if the result is already
-  published. A waker acts only on PARKING or PARKED. On PARKING it CASes to
-  WOKEN and queues nothing, so the task sees WOKEN and re-checks at once. On
-  PARKED it CASes to WOKEN and pushes the task on the run queue. A waker that
-  finds PARKING undoes its pending-wake increment. A wake that finds RUNNING or
-  WOKEN is stale and dropped. The scheduler sets WOKEN to RUNNING when the turn
-  starts. A resumed task re-checks its condition, so a wake is only a hint. No
-  wake is lost, and a task is queued at most once. Which waker wins is in §16.5.
+  atomics. The scheduler reads them at the end of each turn, never on the `STEP`
+  paths (§10.2.1, One counter for both budgets), so the fast path touches no
+  atomic. A cancel or stop takes effect within one turn budget. A task that a
+  cancel finds on a turn is ended by its own scheduler at the end of the turn,
+  so no signal crosses schedulers (the `vm->yield` of the canceller's scheduler
+  is for the canceller's own task).
+- **Park and wake protocol.** Each task has an atomic state (`agc_task_state`):
+  READY (in the run queue), RUNNING, PARKING, PARKED, WOKEN or DONE. To park,
+  the task sets PARKING before it registers its wait (before it posts its start
+  request, joins a waiter list, or registers on another task's result). It then
+  re-checks its wait condition and its cancel flag. If either is satisfied, it
+  unregisters and goes back to RUNNING with one CAS that accepts PARKING or
+  WOKEN. A posted request cannot be recalled, so for a job "unregisters" means
+  the task detaches it, and the job runs to its end (§16.11). If the outcome
+  (§16.5) is already set, the task consumes the job instead. Otherwise it CASes
+  PARKING to PARKED. Registering on another task's result is done under that
+  task's lock, and fails if the result is already published. A waker acts only
+  on PARKING or PARKED. On PARKING it CASes to WOKEN and queues nothing, so the
+  task sees WOKEN and re-checks at once. On PARKED it CASes to READY and pushes
+  the task on the run queue. A wake that finds any other state is stale and
+  dropped. A scheduler that finds WOKEN at the end of the turn queues the task
+  itself, and `run_task` sets RUNNING when a turn starts. A resumed task
+  re-checks its condition, so a wake is only a hint. No wake is lost, and a task
+  is queued at most once. Which waker wins is in §16.5.
   As built (`vm/task.c`):
   - `agc_task_parking` marks the running task PARKING before the builtin
     registers anything: before it joins a waiter list or the FIFO of a stream,
@@ -48,9 +50,8 @@ that still apply.
     exists). `agc_task_unpark` takes the task back to RUNNING, from PARKING or
     WOKEN, when the wait turns out to be unneeded. `agc_task_park` only says
     that the turn ends in a wait.
-  - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
-    run queue". The end of the turn (`agc_task_end_turn`,
-    `agc_task_commit_park`) is in §16.9, "Atomic task states".
+  - The end of the turn (`agc_task_end_turn`, `agc_task_commit_park`) is in
+    §16.9, "Atomic task states".
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
@@ -65,26 +66,18 @@ that still apply.
   coarse lock (§16.9), never held across a park. Ring growth copies the slots
   under the lock: an accepted exception, bounded by the capacity and charged as
   turn cost. The lock orders the write of a value before its read on another
-  scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"): a
-  wake or a hand-on and the fire of the timer are two wakers, the state CAS lets
-  one win, so the retry of the woken waiter sees either its reservation or the
-  passed deadline, and a value or slot it does not take is passed to the next
-  waiter, so nothing is lost. Each task also writes its `awaiting` field before
-  it parks, under the lock (Park and wake protocol), so two tasks that close a
-  cycle at the same time cannot both miss it: the second to take the lock sees
-  the first's field.
-- **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
-  `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
-  current `task`, the turn counters and the `fail` jmp_buf), and `agc_task`.
-  The loop, the registry, the main task and the crash lists are fields of the
-  runtime (§16.9, "The context split"). The run queue is a field of the runtime
-  (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
-  runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
-  `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
-  and the stream locks and `rt->sync` are solo (they take nothing) until
-  `agc_share`, since one thread runs the VM (§16.9). The task state is an
-  atomic enum with PARKING and WOKEN (see "Park and wake protocol"). With N>1
-  the fields go as follows (§16):
+  scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"), a
+  second waker beside the wake or hand-on: the state CAS lets one win, and what
+  the loser leaves is passed on (§10.2.2, Channel waits). Each task also writes
+  its `awaiting` field before it parks, under the lock (Park and wake protocol),
+  so two tasks that close a cycle at the same time cannot both miss it: the
+  second to take the lock sees the first's field.
+- **State split.** `agc_runtime` (shared), `struct agc_vm` (the scheduler) and
+  `agc_task` hold what §16.9, "The context split", lists. With N=1 there are
+  these deviations: the `fail` jmp_buf is per scheduler (the only `setjmp` is
+  the scheduler's own), and the stream locks and `rt->sync` are solo (they take
+  nothing) until `agc_share`, since one thread runs the VM (§16.9). With N>1 the
+  fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants, except
     the Globals table, which the entry writes before `main`, see "The Globals
     table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
@@ -101,7 +94,7 @@ that still apply.
     rank and an array of (name, rank, handler) in the GC heap, reached only by
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
-    needs a lock; as built it is `rt->sync`, the one coarse lock (§16.9), taken
+    needs a lock: `rt->sync`, the one coarse lock (§16.9), taken
     around each `LogRegistry` builtin (its rows are marked `shared`).
     `install_default` is one native call, so the check for level -1 and the
     writes cannot interleave with another task.
@@ -113,11 +106,9 @@ that still apply.
   - Per task: the registers and frames, `random` (7.4), the `fail` jmp_buf
     target (armed on the thread that runs the turn), the string cursor cache,
     and `parked`, the request the task waits on, which it sets while PARKING.
-  - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2).
-    That scheduler records the outcome once and wakes the I/O thread and the
-    idle schedulers. The others stop at their next `STEP` slow path or when they
-    wake. The exit path (§14.4) runs on the I/O thread, after it has joined
-    every scheduler thread (§16.9, "Threads").
+  - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2):
+    the schedulers stop and the exit path (§14.4) runs on the I/O thread after
+    it has joined them (§16.9, "Threads").
 - **I/O ownership.** Handles stay on the I/O loop. Schedulers request
   operations through its inbox and tasks resume via the global queue, not a
   handle-owning scheduler (§16.2, §16.4). The I/O thread also owns the state
@@ -139,37 +130,34 @@ that still apply.
   `uv_async_send` on it. At the end of the run it is unref'd, so an in-process
   harness can close the loop. The real binary ends with `_exit` and closes no
   loop (Shutdown). With N=1 there is no inbox handle, and the "no active
-  handles" check of 10.2.1 still holds. As built, `agc_io_share` makes the
-  inbox (`vm/inbox.c`) and gives the loop to the thread that calls it; until it
-  runs, every request executes on the thread that posts it.
+  handles" check of 10.2.1 still holds. `agc_io_share` makes the inbox (§16.9,
+  "The inbox").
 - **Stall check.** At N>1 the I/O thread runs it when it has nothing to do
   (§16.9, "Stall"); it never uses `uv_run`'s return value.
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
   or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
-  `THREAD_LOCAL_ALLOC`; as built, this holds for the vendored `gc.o` and the
+  `THREAD_LOCAL_ALLOC`; this holds for the vendored `gc.o` and the
   distro's libgc, and `vm/value.c` defines `GC_THREADS` before it includes
   `gc.h`. The threads libuv starts (the schedulers) register with
   `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with
-  `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once
-  after `agc_init`, which also starts the mark threads. The libuv pool threads
-  stay unregistered on purpose, since they never touch GC memory; so does the
-  Windows stdin reader thread, which touches only `malloc` memory. With N=1 no
-  one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime
-  struct is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm`
-  that stays on the main thread's stack for the whole run. The run queue lives
-  in GC memory, so a head in `malloc` memory never hides a task from the
-  collector. Jobs and the inbox are `malloc` memory with no GC pointer, and a GC
-  resource owns each job (§16.5). Collections stop the world.
-  That cost is accepted. Boehm stops
-  threads with signals installed with `SA_RESTART`. The VM's syscall paths retry
-  on `EINTR`, and libuv signal handling (`uv_signal_t`) must never take Boehm's
-  suspend and restart signals. On Windows Boehm stops threads with
-  `SuspendThread`, so a stopped thread may hold the `malloc` heap lock, and the
-  collecting thread must not `malloc` until the world restarts. Its mark phase
-  calls `signal(SIGSEGV, ...)`, and the UCRT allocates a thread's signal table
-  at that thread's first `signal` call, so every thread calls `signal` once
-  before it registers (`own_signal_table` in `vm/value.c`, #528).
+  `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once after
+  `agc_init`, which also starts the mark threads. The libuv pool threads stay
+  unregistered on purpose, since they never touch GC memory; so does the Windows
+  stdin reader thread, which touches only `malloc` memory. With N=1 no one calls
+  `agc_gc_allow_threads`, so no mark thread exists. The runtime struct is GC
+  memory (`agc_vm_init` allocates it), reached from the `agc_vm` that stays on
+  the main thread's stack for the whole run. Where GC pointers may live (the run
+  queue, jobs, the inbox) is in §16.5, "GC rule". Collections stop the world.
+  That cost is accepted. Boehm stops threads with signals installed with
+  `SA_RESTART`. The VM's syscall paths retry on `EINTR`, and libuv signal
+  handling (`uv_signal_t`) must never take Boehm's suspend and restart signals.
+  On Windows Boehm stops threads with `SuspendThread`, so a stopped thread may
+  hold the `malloc` heap lock, and the collecting thread must not `malloc` until
+  the world restarts. Its mark phase calls `signal(SIGSEGV, ...)`, and the UCRT
+  allocates a thread's signal table at that thread's first `signal` call, so
+  every thread calls `signal` once before it registers (`own_signal_table` in
+  `vm/value.c`).
 - **No mutable global state in `vm/`.** Every mutable `static` or global
   variable goes into the runtime, scheduler or task struct. Lazy one-time init
   uses `pthread_once` or happens at start-up. `make vm-lint` enforces this with
@@ -209,19 +197,16 @@ that still apply.
   `main`, and then the table is only read: it needs no lock and no atomic once
   the other schedulers start. The entry of a front-end file runs only pure
   builtins, so it spawns no task. A hand-made entry could spawn a task before
-  its last write, so the multicore build must not run a second task on another
-  scheduler until the entry has handed over to `main` (its first `TAIL_CALL` or
-  `RETURN`), or publish the table with one release store of a flag that
-  `GLOBAL` reads with acquire (a slot is a 16-byte value, so per-slot ordering
-  would not stop a torn read). At N=1 tasks interleave on one thread and
+  its last write, so a run with N>1 starts no second scheduler until the entry
+  has handed over to `main` (its first `TAIL_CALL` or `RETURN`; §16.9,
+  "Threads"). A slot is a 16-byte value, so per-slot ordering would not stop a
+  torn read. At N=1 tasks interleave on one thread and
   nothing is racy.
-- **Order of work.** The task fixtures run as a stress test with
-  `--schedulers 4`, under TSan when available (`make vm-tsan` runs the C tests
-  of the shared code, §16.9). TSan does not work with Boehm's stop-the-world,
-  so that run uses an `AGC_NO_GC`-style build with `-fsanitize=thread` that
-  never calls `agc_set_alloc_limit`. ASan and TSan, both without GC, cover
-  memory errors and races in the scheduler code. The GC-threaded build is
-  covered only by a GC-stress run with `--schedulers 4`. The parity rule stays
-  black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
-  codes match the goldens. The differential, bytecode and golden tests, the
-  `--max-steps` sweep and the seeded runs all run with `--schedulers 1`.
+- **Order of work.** The task fixtures run as a stress test with `--schedulers
+  4`, under TSan when available (§16.9, "TSan covers the shared code"). ASan and
+  TSan, both without GC, cover memory errors and races in the scheduler code.
+  The GC-threaded build is covered only by a GC-stress run with `--schedulers
+  4`. The parity rule stays black-box (1): with N=1, exit code, stdout, program
+  stderr and diagnostic codes match the goldens. The differential, bytecode and
+  golden tests, the `--max-steps` sweep and the seeded runs all run with
+  `--schedulers 1`.
