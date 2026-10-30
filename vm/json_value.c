@@ -257,9 +257,10 @@ static bool field_value(agc_vm *vm, agc_value *item) {
 /* A value as JSON writes it when it is an Optional, which may be anywhere a type is: none is nil (null) and some(x)
    is x, so some(none) is null too. Any other value is unchanged. */
 static void optional_value(agc_vm *vm, agc_value *item) {
-  uint32_t first = vm->rt->program->optional;
-  while (first != UINT32_MAX && agc_is(*item, AGC_T_ENUM)) {
+  while (agc_is(*item, AGC_T_ENUM)) {
+    uint32_t first = vm->rt->program->optional;
     const agc_enum *e = agc_as_enum(vm, *item);
+    if (first == UINT32_MAX) return;
     if (e->variant - first > 1) return;
     if (e->n != (e->variant - first)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid Optional value", 0);
     *item = e->n ? e->payload[0] : agc_nil();
