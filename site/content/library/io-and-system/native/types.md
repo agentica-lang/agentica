@@ -16,7 +16,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.Bool` | `bool` | `Bool` |
 | `C.String` | `const char *` | `String` |
 | `C.Pointer` | `void *` | `C.Pointer` |
-| `C.Bytes` | `const uint8_t *` (parameters only) | `List[Int]` |
+| `C.Bytes` | `const uint8_t *` (parameters only) | `Bytes` |
 | `C.Function` | a function pointer (the first or the last parameter only, [below](#function-pointers)) | `C.Pointer` |
 | a `struct` of the block | a struct passed by value ([below](#c-structs)) | that struct |
 
@@ -26,7 +26,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 - A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`. The same bits cross, and a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
 - A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
-- A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
+- A `C.Bytes` argument is a `Bytes`: C gets a copy, valid only during the call. Pass the length (`b.size`) as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
 
 ## Variadic functions and C names
@@ -59,7 +59,7 @@ end
 A function that returns a pointer and a length, or text that may be NULL, is declared `-> C.Pointer`, and your program copies the memory:
 
 - `Native.get_string(p, offset)` copies the NUL-terminated text that starts `offset` bytes past `p`, and `Native.get_string(p, offset, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
-- `Native.get_bytes(p, offset, length)` copies `length` bytes into a `List[Int]`.
+- `Native.get_bytes(p, offset, length)` copies `length` bytes into a `Bytes`.
 - A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
 - `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
 - `Native.address(p)` is the other way: the integer value of `p`. Pointers have no `==`, so compare addresses, or subtract two pointers into one block for the bytes between them: SQLite's `pzTail` minus the SQL text is how much it read. The address of a freed buffer fails with `RUNTIME-NATIVE-CLOSED`.
@@ -143,9 +143,9 @@ Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one 
 | `Native.get_pointer(p, offset)` | `Native.put_pointer(p, offset, value)` | `void *`, `C.Pointer` |
 | `Native.get_array_of_int32(p, offset, count)`, `_int64`, `_float32`, `_float64` | `Native.put_array_of_int32(p, offset, values)`, `_int64`, `_float32`, `_float64` | a `List[Int]` or `List[Float]` |
 | `Native.get_string(p, offset)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
-| `Native.get_bytes(p, offset, length)` (above) | `Native.put_bytes(p, offset, bytes)` | bytes, a `List[Int]` |
+| `Native.get_bytes(p, offset, length)` (above) | `Native.put_bytes(p, offset, bytes)` | a `Bytes` |
 
-- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255, and `put_bytes` 0 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` and `put_bytes` check every item before they write the first.
+- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
 - `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too. `put_pointer` stores an address that nothing tracks: keep the buffer it points to unfreed while C uses it.
 
 ```agentica {mode="check"}

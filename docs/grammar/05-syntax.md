@@ -101,8 +101,8 @@ before): a parameter takes the resource, and a result of the resource is
 `Result[Name]` for the checker. A `def` of the block whose C name is the free
 function is `PARSE-EXTERN-FREE` at that name; the check is per block, so another
 block of the same library may still declare it. `C.Pointer` is the type of a C
-pointer anywhere in a program; `C.Bytes` is a parameter only, a `List[Int]` for
-the checker. `resource` is a keyword only at the start of a member of an extern
+pointer anywhere in a program; `C.Bytes` is a parameter only, a `Bytes` for the
+checker. `resource` is a keyword only at the start of a member of an extern
 block.
 
 `out NAME: type` in an extern function is an out parameter: C gets a pointer to

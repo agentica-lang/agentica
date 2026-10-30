@@ -53,12 +53,12 @@ end
   `""`: when NULL matters, declare `-> C.Pointer` and use `Native.get_string`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
-  `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an
-  item outside 0..255 is `RUNTIME-INVALID-NUMBER`) that C gets as a
-  `const uint8_t *` copy valid during the call; pass the length separately.
+  `<C.Pointer>`. `C.Bytes` is a parameter only: a `Bytes` that C gets as a
+  `const uint8_t *` copy valid during the call; pass the length separately
+  (`b.size`).
 - Memory C returns, from a byte offset: `Native.get_string(p, off) -> String`
   (up to the NUL), `Native.get_string(p, off, length)` (exactly `length` bytes,
-  NULs included) and `Native.get_bytes(p, off, length) -> List[Int]` copy it;
+  NULs included) and `Native.get_bytes(p, off, length) -> Bytes` copy it;
   bytes that are not UTF-8 become U+FFFD. NULL with length 0 reads as empty (an
   empty SQLite blob); other NULL is `RUNTIME-NATIVE-NULL` (test with
   `Native.null?` first), checked before a negative length
@@ -98,8 +98,8 @@ end
   `Native.get_int8/16/32/64(p, off)`, `get_uint8/16/32`, `get_float32/64`,
   `get_pointer`; `Native.put_int8/16/32/64(p, off, v)` (signed or unsigned
   range, else `RUNTIME-INTEGER-OVERFLOW`), `put_float32/64`, `put_pointer`,
-  `put_string(p, off, s)` (adds the NUL), `put_bytes(p, off, bytes)` (0..255,
-  else `RUNTIME-INTEGER-OVERFLOW`); bulk
+  `put_string(p, off, s)` (adds the NUL), `put_bytes(p, off, bytes)` (a
+  `Bytes`); bulk
   `Native.get_array_of_int32/int64/float32/float64(p, off, count) -> List` and
   `put_array_of_*(p, off, list)`. In a buffer, past its end or a negative offset
   is `RUNTIME-NATIVE-BOUNDS`; at C's pointer only NULL (`RUNTIME-NATIVE-NULL`)
