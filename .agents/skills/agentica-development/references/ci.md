@@ -292,6 +292,11 @@ sweep, `test-distribution` and the examples.
   architecture, hardening flags, the glibc or macOS floor, and the allowed
   libraries or DLLs (no libgc, OpenSSL or MSYS runtime). A change of a floor or
   of the allowed DLLs goes in that script.
+- A `zig cc` link takes a helper it lacks from zig's `compiler_rt`, one object
+  that also defines a stack protector with a constant canary, which then
+  replaces glibc's. On Linux arm64 `__clear_cache` was such a helper, so
+  `vm/jit/mem_posix.c` defines it; release-check fails when `__stack_chk_fail`
+  is not glibc's.
 - `tools/release.py package` writes `agentica-VERSION-PLATFORM.(tar.gz|zip)`
   with `bin/agentica`, `LICENSE`, `NOTICE` and `licenses/` (`LICENSE_FILES`; a
   new third-party library adds its license there). The archive is reproducible;
