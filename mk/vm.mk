@@ -37,7 +37,7 @@
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
 # make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, build (AGENTICA_ZLIB=vendored) or check (system) zlib,
-#                         and build yyjson, picohttpparser, libuv and (Linux x86_64, Windows x64, macOS) libffi for this mode (no libgc with SANITIZE=1)
+#                         and build yyjson, picohttpparser, libuv and (Linux and macOS x86_64 and arm64, Windows x64) libffi for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -175,9 +175,9 @@ OSSL_CFLAGS := -fstack-protector-strong -D_FORTIFY_SOURCE=2
 endif
 # libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
 # configure script would write made by the rules below. The source list is the one libffi's configure.host gives for
-# the compiler's target: Linux and macOS x86_64 (X86_64), Windows x64 (MinGW gcc, X86_WIN64: ffiw64.c and win64.S) and
-# macOS arm64 (AARCH64: aarch64/ffi.c and sysv.S, with the trampoline table that configure.ac turns on for Apple arm64).
-# Elsewhere (Linux arm64, Windows arm64) vm/ffi_none.c refuses a program with extern functions.
+# the compiler's target: Linux and macOS x86_64 (X86_64), Windows x64 (MinGW gcc, X86_WIN64: ffiw64.c and win64.S),
+# Linux arm64 and macOS arm64 (AARCH64: aarch64/ffi.c and sysv.S; on Apple arm64 with the trampoline table that
+# configure.ac turns on there). Elsewhere (Windows arm64) vm/ffi_none.c refuses a program with extern functions.
 FFI_MACHINE := $(shell $(VM_CC) -dumpmachine 2>/dev/null)
 FFI_APPLE := $(findstring -apple-darwin,$(FFI_MACHINE))
 FFI_NAMES :=
@@ -195,9 +195,20 @@ endif
 else ifneq ($(filter arm64-% aarch64-%,$(FFI_MACHINE)),)
 ifneq ($(FFI_APPLE),)
 FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv
+else ifneq ($(findstring -linux,$(FFI_MACHINE)),)
+# Without the trampoline table, the closure setup of aarch64/ffi.c calls ffi_data_to_code_pointer (closures.c), which
+# calls the trampoline functions of tramp.c (stubs without FFI_EXEC_STATIC_TRAMP). The VM makes no closure, but the
+# static link of aarch64/ffi.o needs the symbols. closures.c is linked only for that: its closure memory is not chosen
+# yet (as built, a first ffi_closure_alloc would map writable and executable pages); FFI callbacks (#851) choose static
+# trampolines or a W^X mapping on purpose.
+FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv closures tramp
+endif
+ifneq ($(FFI_NAMES),)
 FFI_TARGET := AARCH64
 FFI_DIR_TARGET := aarch64
-# long double is double on Apple arm64, so configure leaves HAVE_LONG_DOUBLE at 0.
+endif
+ifneq ($(FFI_APPLE),)
+# long double is double on Apple arm64, so configure leaves HAVE_LONG_DOUBLE at 0 (Linux arm64 has a 128-bit one).
 FFI_LONG_DOUBLE := 0
 FFI_TRAMPOLINE_TABLE := 1
 endif
@@ -424,7 +435,7 @@ $(VM_BUILD)/libuv.a: $(UV_OBJS) | $(UV_DIR)/src/uv-common.c
 $(FFI_DIR)/include/ffi.h.in:
 	@echo "missing $(FFI_DIR): run git submodule update --init" >&2; exit 1
 
-# What libffi's configure would find on Linux x86_64 with gcc or clang, on Windows x64 with MinGW gcc (no hidden
+# What libffi's configure would find on Linux x86_64 and arm64 with gcc or clang, on Windows x64 with MinGW gcc (no hidden
 # symbols in PE objects) and on macOS with Apple clang (.private_extern in Mach-O assembly; clang's
 # __USER_LABEL_PREFIX__ gives the leading underscore of C names): the version comes from configure.ac, so a submodule
 # bump follows it.
@@ -451,11 +462,14 @@ else ifneq ($(FFI_APPLE),)
 	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define SYMBOL_UNDERSCORE 1' '#define FFI_NO_RAW_API 1' \
 	  $(if $(filter X86_64,$(FFI_TARGET)),'#define HAVE_LONG_DOUBLE 1' '#define HAVE_AS_X86_PCREL 1') \
 	  $(if $(filter 1,$(FFI_TRAMPOLINE_TABLE)),'#define FFI_EXEC_TRAMPOLINE_TABLE 1') \
+	  $(if $(filter AARCH64,$(FFI_TARGET)),'#define HAVE_AS_CFI_PSEUDO_OP 1') \
 	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .private_extern name' '#else' \
 	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@
 else
 	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define HAVE_LONG_DOUBLE 1' \
-	  '#define HAVE_AS_X86_PCREL 1' '#define HAVE_RO_EH_FRAME 1' '#define EH_FRAME_FLAGS "a"' '#define FFI_NO_RAW_API 1' \
+	  $(if $(filter X86_64,$(FFI_TARGET)),'#define HAVE_AS_X86_PCREL 1') \
+	  $(if $(filter AARCH64,$(FFI_TARGET)),'#define HAVE_AS_CFI_PSEUDO_OP 1') \
+	  '#define HAVE_RO_EH_FRAME 1' '#define EH_FRAME_FLAGS "a"' '#define FFI_NO_RAW_API 1' \
 	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .hidden name' '#else' \
 	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@
 endif

@@ -2,17 +2,19 @@
 """Stage the pinned DuckDB shared library for examples/ffi/duckdb.
 
 Downloads (or takes with --asset) exactly one pinned v2.0.0 archive for this
-system, checks its SHA-256 before unpacking anything, extracts only the shared
-library to OUT/native/<os>/<name> (the layout agentica.toml points at), and
-prints the absolute path of the staged library. Python's standard library
-only; used by the README and by CI, never by the ordinary test run (tests read
-DUCKDB_LIB and never fetch anything themselves).
+system (and, on Linux, this architecture), checks its SHA-256 before unpacking
+anything, extracts only the shared library to OUT/native/<os>/<name> (the
+layout agentica.toml points at), and prints the absolute path of the staged
+library. Python's standard library only; used by the README and by CI, never by
+the ordinary test run (tests read DUCKDB_LIB and never fetch anything
+themselves).
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import io
+import platform
 import sys
 import tarfile
 import time
@@ -22,12 +24,19 @@ from pathlib import Path
 VERSION = "v2.0.0"
 BASE = f"https://github.com/duckdb/duckdb/releases/download/{VERSION}"
 
-# os-key -> (asset name, archive sha256, shared library: the member in the
-# archive and the name staged under native/<os>/, one and the same).
+# asset key -> (asset name, archive sha256, shared library: the member in the
+# archive and the name staged under native/<os>/, one and the same). The key is
+# the os-key, with "-arm64" for Linux on ARM64; both Linux keys stage under
+# native/linux/.
 ASSETS = {
     "linux": (
         "duckdb-shared-libs-linux-amd64.tar.gz",
         "993ad89e7dfca66cd6da994c2cad090c2fc160ddf9f550498a098ab4bb13cfb1",
+        "libduckdb.so",
+    ),
+    "linux-arm64": (
+        "duckdb-shared-libs-linux-arm64.tar.gz",
+        "c60eecf91143ca6bbac55c4f4d40dc22520488b0ac257c86e0fe9a2b451cf2b7",
         "libduckdb.so",
     ),
     "macos": (
@@ -49,9 +58,9 @@ DEADLINE = 600
 
 
 def this_system() -> str:
-    """The os-key of this machine (the macOS asset is universal)."""
+    """The asset key of this machine (the macOS asset is universal)."""
     if sys.platform.startswith("linux"):
-        return "linux"
+        return "linux-arm64" if platform.machine().lower() in ("aarch64", "arm64") else "linux"
     if sys.platform == "darwin":
         return "macos"
     if sys.platform in ("win32", "cygwin", "msys"):
@@ -140,7 +149,7 @@ def main(argv: list[str]) -> int:
     system = args.os or this_system()
     name, digest, member = ASSETS[system]
     data = read_asset(args.asset, name)
-    target = stage(data, digest, member, Path(args.out) / "native" / system)
+    target = stage(data, digest, member, Path(args.out) / "native" / system.split("-")[0])
     print(str(target.resolve()))
     return 0
 

@@ -216,8 +216,8 @@ end
   back), one wait per socket handle at a time (a second gives an error starting
   `native: `; a closed socket's value may stay busy until its wait ends); any
   other value is an error starting `native: `, and a closed socket usually is.
-- Linux x86_64, Windows x64 and macOS: elsewhere a program with an extern
-  function or a `Native.*` call is refused at load with
+- Linux and macOS (x86_64, arm64), Windows x64: elsewhere a program with an
+  extern function or a `Native.*` call is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
