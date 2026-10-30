@@ -9,7 +9,7 @@ Network functions return a `Result` and take timeouts in milliseconds.
 - With `--deny-net` (or `--sandbox`), every connect and listen returns an error that begins with `denied: --deny-net`, before any DNS lookup. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
 - Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
-- A timeout covers the whole call, including the wait for another task using the same socket. After a read or write timeout the socket is closed, and later calls fail at once with `network: socket is closed`.
+- Timeouts are positive milliseconds. A timeout covers the whole call, including the wait for another task using the same socket. After a timeout during active I/O the socket is closed, and later calls fail at once with `network: socket is closed`; a timeout while only waiting for a lock keeps it open.
 
 ## TCP
 
@@ -20,7 +20,7 @@ TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.local_port(listener: Listener) -> Int
 ```
 
-Port `0` picks a free port, and `local_port` tells which (ports are 0 to 65535 here, 1 to 65535 in `connect`). The listener takes every address the host name stands for: `"localhost"` accepts `127.0.0.1` and `::1`.
+Port `0` picks a free port, and `local_port` tells which (ports are 0 to 65535 here, 1 to 65535 in `connect`). A host that holds a NUL is an error. The listener takes every address the host name stands for: `"localhost"` accepts `127.0.0.1` and `::1`.
 
 ```agentica
 def main() -> Void
@@ -50,7 +50,7 @@ TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 ```
 
-`send` writes text. `read_line` reads one line without its line ending (LF or CRLF).
+`send` writes UTF-8 text and flushes. `read_line` reads one line without its line ending (LF or CRLF).
 
 - A last line without a line ending counts when the other side closes.
 - `read_line` errors at the end of input, when the connection breaks (even mid-line), and for a line over 1 MiB (which also closes the socket).
@@ -91,7 +91,7 @@ TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
 ```
 
-Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at most 1 MiB per call. `recv_bytes` gives what has arrived, up to `max_bytes`, and empty `Bytes` when the other side has closed.
+Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at most 1 MiB per call. `recv_bytes` takes a `max_bytes` from 1 to 1048576 and gives what has arrived, up to `max_bytes`, and empty `Bytes` when the other side has closed.
 
 ### TCP.close and TCP.close_listener
 
@@ -112,7 +112,7 @@ TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Resu
 TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
 - `TLS.connect` uses TLS 1.2 or later and always checks the certificate and the host name (an IP address host against the certificate's IP addresses).
-- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them.
+- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails the connect.
 
   | System | Store |
   |---|---|
@@ -138,7 +138,7 @@ end
 HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 - Every call is whole: it returns after the whole response arrived. The body is a `String` and must be valid UTF-8; it is not decompressed.
-- Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit.
+- Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
 
@@ -342,7 +342,7 @@ For a body that is not ready when the handler returns: events, tokens as a model
 - A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
 - A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds each piece's send: a client that stops reading for that long is cut off, and the channel closes.
 - `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for `listen`, and the channel closes.
-- Over HTTP/1.0 there is no chunked body: the server answers 505 to it (`HTTP/1.1` only), as `listen` does.
+- The server speaks HTTP/1.1 only: an HTTP/1.0 request gets a 505 before any handler runs, streaming or not.
 
 Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pieces are `data: ...` lines ended by a blank line:
 

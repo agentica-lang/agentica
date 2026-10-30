@@ -14,7 +14,7 @@ with `RUNTIME-INTERNAL`, as any failed library call does.
 
 **Landed:** the `Digest` hashes `md5`, `sha1`, `sha256` and `sha512`, each
 with a `_hexdigest` form (`Digest.sha256(data: Bytes) -> Bytes`,
-`docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
+`site/content/library/text-and-data/crypto.md`), on OpenSSL 3.0 or newer through
 `vm/digest_openssl.c`, HMAC-SHA256 and HMAC-SHA512
 (`HMAC.sha256(key: Bytes, data: Bytes) -> Bytes`, each with a
 `_hexdigest` form, Ruby's `OpenSSL::HMAC.digest`), and
@@ -28,10 +28,10 @@ APIs do. Their names follow Ruby's (`OpenSSL::Cipher.new("aes-256-gcm")`,
 reserved type name only.
 
 - Hex and Base64 are the `Digest.hexencode`/`hexdecode` and `Base64` builtins
-  (`docs/grammar/06b-builtins.md`).
+  (`site/content/library/text-and-data/base64.md`).
 - No low-level primitives: no raw block ciphers, no ECB, no unauthenticated
   modes. The one exception is Triple DES CBC with CMAC (#825), for payment
-  formats (`docs/grammar/06b-builtins.md`).
+  formats (`site/content/library/text-and-data/crypto.md`).
 - Errors are `Result` values. Hashes and HMAC have no effect label; the
   calls that draw random bytes use the existing `random` label.
 

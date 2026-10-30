@@ -633,7 +633,7 @@ end
   f)`) return `Void`. A negative literal receiver needs parentheses: `(-5).times
   do ... end`; `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE`.
 - `Range` functions are in
-  [`library/data-structures/range.md`][agentica-link-1].
+  [`library/data-structures/range.md`](../../site/content/library/data-structures/range.md).
   `Range.size` is `RUNTIME-INTEGER-OVERFLOW` when the count does not fit in
   `Int`, and `Range.to_a` above 1048576 values is `RUNTIME-INVALID-COUNT`.
   `first` and `last` of an empty range are `error("the range is empty")`; unlike
@@ -738,7 +738,7 @@ puts(seen)
   any order. A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
   `Map` key, but it may be a field, a list item or a map value.
 - Functions are in
-  [`library/data-structures/set.md`][agentica-link-2].
+  [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).
   `Set.include?` and `Set.add` take effectively constant time; `Set.to_a` and
   the set operations are O(n).
 
@@ -850,6 +850,3 @@ total = xs.reduce(0) do |sum, x| sum + x end
 - **Values.** A block has type `Fn[A, ..., R]` and works wherever a function
   value does, including as a BDD step. It shares the caller's step budget and
   call-depth limit. Blocks have no equality or JSON form.
-
-[agentica-link-1]: ../../site/content/library/data-structures/range.md
-[agentica-link-2]: ../../site/content/library/data-structures/set.md

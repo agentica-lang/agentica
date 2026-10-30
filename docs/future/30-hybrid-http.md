@@ -67,7 +67,7 @@ closes the connection (never back to the pool) and ends with an error.
 - **20g Streamed responses** (server, SSE included) is built:
   `HTTP.listen_stream`, `HTTP.listen_stream_tls`, `HTTP.StreamResponse` and
   `HTTP.whole`
-  ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md), and
+  (the [network page](../../site/content/library/io-and-system/network.md), and
   [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.7.2). Chunks written
   after the handler returns are not limited to 64 KiB.
 

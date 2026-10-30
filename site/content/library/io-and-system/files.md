@@ -10,6 +10,7 @@ Every file function takes a timeout in milliseconds and returns a `Result`. It d
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines` and `Lazy.write_bytes`, returns an error that begins with `denied: --deny-fs`.
 - Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
+- File calls accept regular files and symbolic links to them, and also FIFOs, pipes and devices that can wait. They reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself. `FileHandle` and `FileInfo` are reserved names, and a file handle is opaque.
 
 ## File.write_text
 
@@ -73,7 +74,7 @@ end
 ```
 
 - Only regular files are hashed; symbolic links are followed. A missing path, a directory, a FIFO, pipe or device give `error("filesystem: path does not refer to a regular file")`, as `File.read_text` does.
-- `timeout_ms` covers the whole call. When it runs out the call returns `error("filesystem: operation timed out")` and a running hash is dropped. A cancelled task detaches the same way.
+- `timeout_ms` covers the whole call and must be positive, otherwise `error("filesystem: timeout must be positive milliseconds")`. When it runs out the call returns `error("filesystem: operation timed out")` and a running hash is dropped. A cancelled task detaches the same way.
 - There is no snapshot: a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
 
 ## File.stat
@@ -84,7 +85,7 @@ File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 
 Gives a `FileInfo`: `kind`, `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
 
-- `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"` and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
+- `kind` is Ruby's `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`, `"fifo"`, `"socket"`, `"characterSpecial"` (such as `/dev/null`), `"blockSpecial"` or `"unknown"`. Windows gives `"file"`, `"directory"`, `"link"` (`File.lstat` of a reparse point) and `"characterSpecial"` for `NUL`. Check `kind == "file"` before reading a path you did not make: a read of a FIFO can wait for a writer.
 
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
 - Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
@@ -122,7 +123,7 @@ Opens a file for streaming.
 
 `"create_private"` fails when the path exists (a dangling link too) and never follows a link, so another user cannot redirect the write. Unix: mode 0600, less where the umask clears bits. Windows: a protected DACL that grants only the current user; creation fails unless the opened object has that owner and DACL.
 
-`close` writes pending data. Closing twice is fine.
+`close` writes pending data. Closing twice is fine. Timeouts are positive milliseconds and include the wait for the handle's lock: a timeout during active I/O closes the handle, and a timeout while waiting for the lock keeps it open.
 
 - A file belongs to the task that opened it and closes, with its data written, when that task ends. `Task.await` of that task returns after a regular file's data is written (not a flush to a FIFO or a pipe), so a parent that awaits a helper reads everything it wrote. A `close` on a file already closing waits for that close.
 - At program end the run waits for open files to be written and for `puts` and `IO.warn` output to reach its pipe or file, at most 30 seconds (`--flush-timeout MS` or `AGENTICA_FLUSH_TIMEOUT_MS`; the flag wins). When time runs out the exit code stays and stderr gets one line saying file data may not be written.
@@ -193,7 +194,7 @@ end
 File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
 ```
 
-Reads one line without its line ending. At the end of the file it gives an error result. Loop with `while line.ok?`, or use `File.each_line`.
+Reads one line without its line ending (LF or CRLF; a final line without one counts). The text is strict UTF-8. At the end of the file, or on invalid UTF-8, it gives an error result. Loop with `while line.ok?`, or use `File.each_line`.
 
 ## File.each_line
 
@@ -205,7 +206,7 @@ Calls the block with each line, without its line ending (LF and CRLF; a last lin
 
 - The block returns a `Result[Void]`: `ok()` goes on, an `error(...)` stops and is the result. `try` and `return error(...)` work in the block.
 - `buffer_bytes` is the longest line, counting its ending: 1024 to 16777216, else `RUNTIME-INVALID-COUNT` before the file opens. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`.
-- `timeout_ms` (positive) limits each read, the open and the close, not the whole call. A silent pipe ends the call with an error.
+- `timeout_ms` limits each read, the open and the close, not the whole call. It must be positive, otherwise `error("filesystem: timeout must be positive milliseconds")`. A silent pipe ends the call with an error.
 - The text is strict UTF-8: invalid bytes end the call with an error.
 - For a chain of steps over the lines (`select`, `map`, `first(n)` ...), use [`File.foreach`](/library/data-structures/lazy/#fileforeach), a `Lazy[String]` with the same reads. To write the lines of a `Lazy[String]` to a file, use [`write_lines`](/library/data-structures/lazy/#write_lines).
 
@@ -319,12 +320,12 @@ Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
 ```
 
-Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
+Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). A relative path starts at the working directory, and `..` after a link follows the link's target. An empty path or one with NUL is the same contract error as `File.stat`. The VM puts no buffer limit on the path; the system's own limit applies to its absolute form. Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
 
 The system's own rules show through:
 
 - macOS fails a path of 1024 bytes or more, and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
-- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. The result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). A path of 260 characters or more works only when the machine sets `LongPathsEnabled` to 1; otherwise it is an error, as is `Dir.mkdir` of one.
+- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. A name under a file gives ENOENT (Linux and macOS: ENOTDIR). The result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). The binary opts in to long paths in its manifest. A path of 260 characters or more works only when the machine sets `LongPathsEnabled` to 1; otherwise it is an error, as is `Dir.mkdir` of one.
 
 ```agentica
 def main() -> Void
@@ -349,6 +350,7 @@ Deletes a file, a symbolic link, or a directory with everything in it. A missing
 - It never follows a link: a link is deleted itself, and what it names is left alone.
 - It refuses a filesystem root, a trailing separator, `.` and `..` (also as the end of `dir/..`), and a tree more than 128 levels deep (left partly deleted).
 - A failed call keeps what it already deleted; the error names the failing entry with the system error. A timeout gives an error but the started removal runs to its end.
+- A path under a file (`file/child`) is an error (`Not a directory`), and so is a trailing separator on a symbolic link: `link/` must never report `ok()`. A failure inside the tree names the entry that failed.
 - Unix crosses mount points, as `rm -rf` does. Windows removes junctions and other reparse points themselves without traversing them, refuses drive or share roots, alternate-data-stream syntax and components ending in a dot or space.
 
 ```agentica {mode="check"}
@@ -368,7 +370,7 @@ Renames a file, a symbolic link or a directory to a path that does not exist yet
 
 - It never replaces anything: when `to` exists (even an empty directory) the call fails and nothing changes, so two programs racing for a name have exactly one winner.
 - A symbolic link moves as a link.
-- Both paths must be on one file system; there is no copy fallback. It uses native no-replace operations on Linux, macOS and Windows.
+- Both paths must be on one file system; there is no copy fallback. Linux uses `renameat2` with `RENAME_NOREPLACE`, macOS `renameatx_np` with `RENAME_EXCL`, and Windows `MoveFileExW` with no flags, so it neither replaces a target nor copies across volumes.
 
 ```agentica {mode="check"}
 def main() -> Void

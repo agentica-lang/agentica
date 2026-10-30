@@ -62,6 +62,7 @@ waits. Channels are built
 ([§27.2](../future/27-iteration-and-concurrency.md#272-channels));
 `Process.poll_line` remains proposed in
 [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions). A UUID
-is `SecureRandom.uuid` (§6b). A Ruby-style `Regex` is designed in
+is `SecureRandom.uuid` (`site/content/library/text-and-data/crypto.md`). A
+Ruby-style `Regex` is designed in
 [§48](../future/48-regex.md#48-regular-expressions), and it waits until after
 the bootstrap (roadmap row 7.10, phase 29).

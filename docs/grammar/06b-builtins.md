@@ -38,523 +38,68 @@ negative literal receiver needs parentheses: `(-5).to_s`.
 
 ### Minimal builtin functions
 
+The [library reference](../../site/content/library/_index.md) describes every
+builtin: signatures, behaviour, costs, limits and runtime errors. `agentica help
+NAME` prints one signature. This section keeps what the language fixes.
+
 `puts(value)` writes the value's `to_s` and a newline; `print` writes without
 one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and may drop their
 parentheses (`line = gets!.strip`). `Map`, `Set` and `List` are builtin modules
-whose generic functions the checker treats specially. Signatures are in
-[`library/data-structures/list.md`][agentica-link-1],
-[`library/data-structures/map.md`][agentica-link-2]
-and
-[`library/data-structures/set.md`][agentica-link-3].
+whose generic functions the checker treats specially: see
+[`List`](../../site/content/library/data-structures/list.md),
+[`Map`](../../site/content/library/data-structures/map.md) and
+[`Set`](../../site/content/library/data-structures/set.md).
 
-Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`,
-and the Enumerable methods below) take a block, `&name` or a function variable.
-Each runs once per element, left to right, under the caller's budget. Parameter
-and return types must match exactly, and a `map` callback returns data, not
-Void. Annotated block parameters let an empty list or an empty `reduce` initial
-value infer its type. `List.any?` and `List.all?` stop at the first deciding
-element.
-
-Collection operations preserve their inputs. Costs exclude callback work.
-
-- `List.map` and `List.select` are O(n). `List.reduce` folds left, calling
-  `f(accumulator, item)`; an empty list gives the initial value.
-- `xs.push` (`List.append`) takes near constant time, so building a list with
-  n pushes is O(n). `List.concat` joins lists of one element type: O(b) when the
-  right list has at most 32 items, otherwise O(a + b). `List.reverse` is O(n).
-- `List.set` and `List.at` are zero-based and take O(log32 n) time (at most four
-  steps for a million items). A negative or out-of-range index is
-  `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
-- `List.repeat` takes a count from 0 to 1048576; zero gives an empty list of the
-  element type. Other counts are `RUNTIME-INVALID-COUNT`.
-- `List.take` and `List.drop` need a nonnegative count
-  (`RUNTIME-INVALID-COUNT`). A larger count gives the whole list or an empty
-  list. They are O(n) in the size of the result.
-- `List.sort` and `List.sort_by` sort ascending. Elements, or the keys from
-  `sort_by` (computed once per element, left to right), must be `Int`, `Float`
-  or `String`; otherwise `CHECK-TYPE-MISMATCH`. The sort is stable. Strings
-  compare by code point, so `"B"` is before `"a"`. NaN goes last. O(n log n),
-  plus key calls.
-- `List.find` gives `ok(element)` for the first element the block accepts, or
-  `error("not found")`, and stops calling the block there.
-  `List.each_with_index` calls `f(element, index)` with the index from 0 and
-  gives nothing back. `List.flat_map` joins the lists the block returns, in
-  order. `List.partition` gives `[accepted, rejected]`. `List.take_while` and
-  `List.drop_while` call the block until it first returns false, and not after.
-  All are O(n).
-- `List.each_slice(n)` gives the slices of `n` elements as a `List[List[T]]`,
-  the last one shorter. It has no block form: a block after it is
-  `CHECK-BLOCK-TARGET`, and `xs.each_slice(2).each do |pair| ... end` walks the
-  slices. An `n` below 1 is `RUNTIME-INVALID-COUNT` at the argument.
-- `List.group_by` (the key is an `Int` or a `String`; other types are
-  `CHECK-TYPE-MISMATCH` at the block) gives a `Map[K, List[T]]` whose keys and
-  elements keep the order of first appearance. `List.tally` counts equal `Int`
-  or `String` items in a `Map[K, Int]` in the same order. `List.uniq` keeps the
-  first of each `Int` or `String` item. O(n).
-- `List.sum` adds a `List[Int]` or `List[Float]` from the left; an empty list
-  gives `0` or `0.0`, and an `Int` overflow is `RUNTIME-INTEGER-OVERFLOW` at the
-  call. Other item types are `CHECK-TYPE-MISMATCH`.
-- `List.min_by` and `List.max_by` call the key block once for each element, from
-  the first to the last, and give `ok(element)` for the least or greatest key,
-  or `error("the list is empty")`. The key is an `Int`, a `Float` or a `String`.
-  The first element wins a tie. A NaN key never wins unless every key is NaN,
-  and then the first element wins. `String` keys compare with `String.compare`.
-- `Map.each` calls `f(key, value)` for each entry in insertion order and gives
-  nothing back. `Map.select` keeps the entries `f(key, value)` accepts, in
-  insertion order. Both are O(n).
-- `List.first` and `List.last` give the first and the last element; on an empty
-  list they are `RUNTIME-INDEX-OUT-OF-RANGE` at the call, as `xs[0]` is.
-  `empty?` on a `List`, `Map`, `Set` or `String` tells whether it has no
-  elements, entries or characters.
-- `String.compare(a, b)` (also `a.compare(b)`) gives `-1`, `0` or `1` in the
-  order of `sort`: code point order, which is the byte order of UTF-8.
-- These methods are written in Agentica in `stdlib/prelude/` and run in the
-  program: they use its step budget, and a runtime error in one is reported at
-  the call in the program (at the argument it names), never in the prelude.
-  `reject` is `CHECK-UNKNOWN-METHOD`, and so are `select`, `collect`, `detect`
-  and `inject` on a `Range`.
-- `Map.get` with two arguments gives `some(value)`, or `none` when the key is
-  missing. With three, the default is always evaluated; `false` and `nil` are
-  present values.
-- `Map.delete` ignores absent keys and keeps the order of the rest; a key put
-  back later goes to the end. It is O(log32 n) amortized along one line of
-  versions, with an O(n) rebuild of the key list after many deletes.
-  `Map.values` follows the `Map.keys` order.
-- `Set.delete` costs the same as `Map.delete`.
+Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`
+and the other methods that take a function) take a block, `&name` or a function
+variable. Parameter and return types must match exactly, and a `map` callback
+returns data, not Void. Annotated block parameters let an empty list or an empty
+`reduce` initial value infer its type.
 
 `Lazy[T]` is a lazy pipeline: an immutable recipe of a source and steps, not a
-cursor. Building one runs nothing; a terminal runs it, pulling one item at a
-time through every step, so no step builds a list of all the items. Each
-terminal runs the source again from the start, except a channel, which cannot
-be read twice. The library page is
-[`library/data-structures/lazy.md`][agentica-link-5].
-
-- Sources: `xs.lazy` (`List[T]` to `Lazy[T]`), `(a..b).lazy` and
-  `(a...b).lazy` (`Lazy[Int]`), and `Lazy.produce(seed) do |x| ... end`, the
-  endless `seed`, `f(seed)`, `f(f(seed))`, ...
-- `File.foreach(path, buffer_bytes = 65536, timeout_ms = 30000)`
-  (`Lazy[String]`): the lines of a file, read as `File.each_line` reads them. The file opens when a
-  terminal starts and is closed before the terminal returns, whatever ended it
-  (the end, a step that had enough, an error from a block, a failed `try`, a
-  read error); a crash or cancel of the task closes it at the task's end. After
-  a read timeout the handle is released at once and the OS descriptor closes
-  when the read that timed out ends. A
-  read error, a bad timeout or path ends the terminal with that error; a
-  buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
-  `File.foreach(...).each do ... end`, with no step in between, written as one
-  chain, is `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
-- `File.chunks(path, size = 65536, timeout_ms = 30000)`
-  (`Lazy[Bytes]`): the bytes of a regular file in chunks of `size` bytes,
-  the last one shorter. It opens and closes as `File.foreach` does; a missing
-  file or one that is not regular (decided on the open descriptor) ends the
-  terminal with `error("filesystem: path does not refer to a regular
-  file")`. A size outside 1..16777216 is `RUNTIME-INVALID-COUNT` at the
-  argument.
-- `ch.lazy(timeout_ms)` (`Channel[T]` to `Lazy[T]`): the values of a channel
-  until it is closed and drained. Each wait for a value obeys the timeout; a
-  timeout ends the terminal with `error("channel: timed out")`. A negative
-  timeout is `RUNTIME-INVALID-DURATION` at the argument; `ch.lazy(0)` takes only
-  what is already there. A second terminal on the same channel goes on with the
-  values the first did not take (`ok([])` once it is drained); a value a
-  terminal took is gone even if a later step dropped it, and `take_while`
-  consumes the first value its block rejects.
-- Steps give a new `Lazy`: `map`, `select`, `take(n)`, `take_while`, `drop(n)`,
-  `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index do |x, i|
-  ... end` (maps each item with its index from 0), `each_slice(n)`,
-  `each_cons(n)` (windows of `n` items; none when the source has fewer) and
-  `chunk_while do |a, b| ... end` (a new group where the block is false for
-  two neighbours); the last three give `Lazy[List[T]]`. A negative count, or a
-  size below 1, is `RUNTIME-INVALID-COUNT` at the argument, when the step is
-  built.
-- Terminals always give a `Result`: `to_a` and `first(n)` give
-  `Result[List[T]]`, `reduce(init) do |acc, x| ... end` gives `Result[B]`,
-  `find` gives `ok(item)` or `error("not found")` (as `List.find`), and `each`
-  takes a block that returns `Result[Void]` (as `File.each_line`), stops at its
-  first `error` and gives it back. `take`, `take_while`, `first` and `find`
-  stop the source: an endless source then ends, and `Lazy.produce` does not
-  call its block for an item that no step needs. `to_a`, `reduce` and `each` on
-  an endless source never end.
-- `lz.write_lines(path, timeout_ms = 30000)` (on a `Lazy[String]`,
-  `Result[Void]`) is
-  the terminal that writes each item and a line feed to a file, created or
-  truncated. The file opens before the first item is pulled (a failed open
-  pulls nothing) and is flushed and closed before the terminal returns,
-  whatever ended it; a crash or cancel of the task closes it at the task's
-  end. Lines are buffered and written 64 KiB at a time; `timeout_ms` bounds the
-  open, each write and the close. A bad timeout or path, a failed open, write
-  or close, and a line over 1 MiB end the terminal with that error. What was
-  written before an error stays in the file. A line holding a line feed reads
-  back as two lines.
-- `lz.write_bytes(path, timeout_ms = 30000)` (on a `Lazy[Bytes]`,
-  `Result[Int]`) writes each chunk of bytes to a file as `write_lines` writes
-  lines and gives the bytes written. A chunk may have any size, empty
-  included.
-- The zlib steps, on a `Lazy[Bytes]` of byte chunks, give one:
-  `lz.deflate(level = 6, raw = false)`, `lz.inflate(raw = false, max_bytes =
-  1073741824)`, `lz.gzip(level = 6)` and `lz.gunzip(max_bytes = 1073741824)`.
-  `raw` is raw deflate (RFC 1951); otherwise the formats are those of the
-  `Zlib` calls (§6d). A chunk may have any size, empty included; an output
-  chunk is at most 65536 bytes. A decoder is strict and checks `max_bytes`
-  (at least 1) while it streams, before a byte past it is handed on.
-  Truncation, a checksum, a trailing byte, output past `max_bytes`, a level
-  outside 0..9 and `max_bytes` below 1 end the terminal with an error that
-  begins with `zlib: `. A run frees its zlib streams before the terminal
-  returns, whatever ended it; a crash or cancel frees them at the task's end.
-- `try` works in every block of a `Lazy` method, whatever the block's result
-  type: a failed `try` ends the pipeline at once, no later item is pulled, and
-  the terminal returns its error. A file the run opened is closed first.
-- Each item pulled from the source costs one step, and each callback a step
-  plus its body, as in `Range.each`. A terminal can be switched out between
-  items, so `--max-steps` (`RUNTIME-STEP-LIMIT`), the turns of other tasks and
-  a cancel reach a pipeline with no callback. Callbacks run on the task that
-  called the terminal; a recipe can be shared by tasks on any scheduler. A
-  runtime error in a callback ends the run as anywhere else. A terminal over a
-  file or a channel parks while it waits, as `File.each_line` and `recv` do,
-  and a cancel reaches it there.
-- A `Lazy` has no `==`, no `to_s` and no JSON form (`CHECK-TYPE-MISMATCH`,
-  `CHECK-NOT-ENCODABLE`); `IO.inspect` prints `<Lazy>`. `Lazy` is a reserved
-  type name. A `List` method on a `Lazy` (`lz.size`) and a step that only
-  `Lazy` has on a `List` or `Range` (`xs.each_cons(2)`) are
-  `CHECK-UNKNOWN-METHOD`, with a help that shows `to_a` or `.lazy`.
-
-- `String.length` and `String.slice` count characters, not bytes. An
-  out-of-range `slice` is a runtime error. `s.bytesize` (`String.bytesize`) is
-  the number of UTF-8 bytes of `s`, a NUL included (`"é".bytesize` is 2): the
-  length that a C function taking `(pointer, length)` wants.
-- `String.split(s, sep)` keeps empty parts, so `String.join(String.split(s,
-  sep), sep)` gives `s`. `String.split("", sep)` is `[""]`; `String.split(s,
-  "")` gives one character per element.
-- `s.to_i!` (`String.to_int!`) accepts a signed decimal:
-  `RUNTIME-INVALID-NUMBER` for other text, `RUNTIME-INTEGER-OVERFLOW` outside
-  `Int`. `s.to_f!` (`String.to_float!`) accepts a signed decimal with an
-  optional fraction and exponent (`1.5E-3`, `1e+20`) and the forms `x.to_s`
-  writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f`
-  gives `x` back (a NaN reads back as NaN). It rounds to the nearest Float; a
-  value past the range becomes an infinity or zero. Other text (`1e`, `.5`,
-  ` 1`, `1_000.0`, `Infinity`) is `RUNTIME-INVALID-NUMBER`.
-- `String.index_of` gives the character index of the first match as `some(i)`
-  (`some(0)` for an empty part), or `none` when absent. `String.at` halts with
-  `RUNTIME-INDEX-OUT-OF-RANGE` outside the string.
-- `String.code` and `String.from_code` halt with `RUNTIME-INVALID-CHARACTER` on
-  other input: a one-character string, or a scalar value (0 to 0x10FFFF, no
-  surrogates).
-- `x.to_i` (`Float.to_int`) truncates toward zero; NaN, infinity and results
-  outside `Int` are errors. `x.to_i!` halts instead, with
-  `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
-- `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right` and
-  `shift_right_unsigned` work on the 64-bit two's complement form of their
-  arguments and read the result back the same way. They are methods on `Int`
-  (`flags.bit_and(4)`, `x.shift_left(8)`) with no effects. The core has no hex
-  literals, so masks are written in decimal. `bit_and`, `bit_or`, `bit_xor`
-  and `bit_not` never fail; `bit_not(a)` is `-1 - a`.
-- `Int.shift_left(a, n)` is the low 64 bits of `a * 2^n`: bits that leave the
-  top are dropped and bit 63 becomes the sign, so `1.shift_left(63)` is
-  `-9223372036854775808` and the shift wraps where `*` halts with
-  `RUNTIME-INTEGER-OVERFLOW`. `shift_right` is arithmetic (copies of the sign
-  bit come in) and rounds toward minus infinity, so `(-7).shift_right(1)` is
-  `-4`. `shift_right_unsigned` is logical (zeros come in), so
-  `(-1).shift_right_unsigned(60)` is `15`. A count of 64 or more shifts every
-  bit out: `shift_left` and `shift_right_unsigned` give `0`, and `shift_right`
-  gives `0` for `a >= 0` and `-1` for `a < 0`. A negative count is
-  `RUNTIME-INVALID-COUNT` at the count argument.
-- `Float.to_bits(x)` gives the IEEE 754 binary64 bits of `x` as a two's
-  complement `Int` (`1.0` is `4607182418800017408`, `-0.0` is
-  `-9223372036854775808`). Every NaN gives the quiet NaN `9221120237041090560`.
-  `Float.from_bits(n)` reads the 64 bits of any `Int` as a binary64; subnormals,
-  infinities and `-0.0` come back exactly and any NaN pattern gives NaN, so
-  `Float.to_bits(Float.from_bits(n)) == n` except for NaN patterns other than
-  the quiet NaN.
-- `Float.to_bits32(x)` rounds `x` to binary32 (to nearest, ties to even) and
-  gives its 32 bits as an `Int` from `0` to `4294967295`. A magnitude of `2^128
-  - 2^103` or more becomes infinity with the same sign, small magnitudes round
-  to a subnormal or to zero and keep their sign, and every NaN gives
-  `2143289344`. `Float.from_bits32(n)` widens a binary32 to a `Float` exactly;
-  an `n` outside `0 .. 4294967295` is `RUNTIME-INVALID-NUMBER` at the argument.
-  `Float.to_bits32(Float.from_bits32(n)) == n` except for NaN patterns other
-  than `2143289344`.
-
-- `IO.gets` gives `ok(line)` without its terminator (LF, CR or CRLF), or an
-  error at EOF; a blank line is `ok("")`. `IO.gets!` halts with
-  `RUNTIME-END-OF-INPUT` at EOF. `IO.read()` drains stdin to EOF, so it cannot
-  read one message from a peer that keeps stdin open.
-- `IO.read_bytes(count)` waits for exactly `count` bytes or EOF, and gives
-  them as a `Bytes` with no decoding. Counts are 0 to 1048576; zero gives empty
-  bytes without consuming input. `String.from_bytes(data)` decodes a `Bytes`
-  strictly as UTF-8: invalid, overlong, surrogate and incomplete sequences are
-  errors, never replacement characters. `s.bytes` is its inverse: the UTF-8
-  bytes of `s` as a `Bytes` (`docs/grammar/06-semantics.md`, "Bytes"); it
-  cannot fail, so `String.from_bytes(s.bytes)` is `ok(s)`.
-- `Digest.md5(data)`, `Digest.sha1(data)`, `Digest.sha256(data)` and
-  `Digest.sha512(data)` give the digest of the `Bytes` in `data` as a `Bytes`
-  of 16, 20, 32 or 64 bytes, as Ruby's `Digest::SHA256.digest` does. Each has
-  a `_hexdigest` form (`Digest.sha256_hexdigest(data)`) that gives the same
-  digest as lowercase hex, as Ruby's `hexdigest` does. MD5 and SHA-1 are for
-  formats that need them (ETags, git, old APIs), not for security. They are
-  built on OpenSSL, take time in proportion to the data and have no effect
-  label. A system OpenSSL in FIPS-only mode has no MD5 or SHA-1; the call then
-  stops with `RUNTIME-INTERNAL`. `Crypto` is a reserved type name.
-- `HMAC.sha256(key, data)` and `HMAC.sha512(key, data)` give the HMAC
-  (RFC 2104) of the `Bytes` in `data` under the `Bytes` in `key`, with SHA-256
-  or SHA-512, as a `Bytes` of 32 or 64 bytes, as Ruby's
-  `OpenSSL::HMAC.digest("SHA256", key, data)` does. Each has a `_hexdigest`
-  form (`HMAC.sha256_hexdigest(key, data)`) that gives the same MAC as
-  lowercase hex. A key of any length is taken, empty included; one longer than
-  the hash's block (64 or 128 bytes) is hashed first. They are built on
-  OpenSSL, take time in proportion to both inputs and have no effect label. A
-  received MAC is to be compared in constant time, which `==` on `Bytes` is
-  not: use `HMAC.secure_compare`. `HMAC` is a reserved type name.
-- `HMAC.secure_compare(a, b)` gives `true` when the `Bytes` `a` and `b` are the
-  same, in a time that never depends on the bytes or on where they differ, as
-  Ruby's `OpenSSL.secure_compare(a, b)` does: it compares the SHA-256 digests of
-  both with OpenSSL's `CRYPTO_memcmp`, then the bytes themselves when the
-  digests match. Values of other lengths give `false`; the time grows with both
-  lengths, which it does not hide. It is for checking a received MAC, signature
-  or token against the expected one, and it has no effect label.
-- `Cipher.des_ede3_cbc_encrypt(key, iv, data)` and
-  `Cipher.des_ede3_cbc_decrypt(key, iv, data)` encrypt and decrypt the `Bytes`
-  in `data` with Triple DES in CBC mode and no padding, as Ruby's
-  `OpenSSL::Cipher.new("des-ede3-cbc")` with `padding = 0` does, and give
-  `ok(bytes)` of the same size. The key has 24 bytes, or 16 for a two-key
-  key (K1 K2, run as K1 K2 K1); the IV has 8 bytes; `data` is whole blocks of
-  8 bytes (none included). Anything else gives an `error(...)` before any
-  work, never partial output; a caller pads the data as its format says.
-  Triple DES is for payment formats that need it (PIN blocks, key check
-  values), not for new designs.
-- `CMAC.aes(key, data)` and `CMAC.des_ede3(key, data)` give `ok(tag)`: the full
-  CMAC (NIST SP 800-38B; RFC 4493 for AES) of the `Bytes` in `data`, 16 bytes
-  with AES and 8 with Triple DES. The AES key has 16, 24 or 32 bytes (AES-128,
-  -192 or -256), the Triple DES key 24 or 16 (two-key); another size gives an
-  `error(...)`. A shorter MAC is the first bytes of the tag
-  (`tag.take(4)`); check a received one with `HMAC.secure_compare`.
-- `Cipher.aes_256_gcm_encrypt(key, iv, data, auth_data = "".bytes)` encrypts
-  the `Bytes` in `data` with AES-256-GCM, as Ruby's
-  `OpenSSL::Cipher.new("aes-256-gcm")` does, and gives `ok(bytes)`: the
-  ciphertext, of the size of `data`, with the 16-byte tag appended. The key
-  has 32 bytes and the IV 12; an IV must never be used twice with one key.
-  `auth_data` is authenticated but not encrypted (a header, a record id).
-  `Cipher.aes_256_gcm_decrypt(key, iv, data, auth_data = "".bytes)` takes
-  that form back and gives `ok(plaintext)` only when the tag matches the key,
-  IV, ciphertext and `auth_data`; else it gives an `error(...)`, never partial
-  plaintext. A key or IV of another size, a `data` to decrypt shorter than
-  16 bytes, or more than 2^36 - 32 bytes to encrypt gives an `error(...)`
-  before any work.
-- The `Cipher` and `CMAC` calls are built on OpenSSL, take time in proportion
-  to their data and have no effect label. `Cipher` and `CMAC` are reserved
-  type names.
-- `KDF.pbkdf2_hmac_sha256(password, salt, iterations, length)` gives
-  `ok(key)`: `length` bytes of PBKDF2 (RFC 8018) with HMAC-SHA256 of the
-  `Bytes` `password` and `salt`, as Ruby's `OpenSSL::KDF.pbkdf2_hmac` with
-  `hash: "SHA256"` does. `KDF.scrypt(password, salt, n, r, p, length)` gives
-  `ok(key)` of scrypt (RFC 7914), as Ruby's `OpenSSL::KDF.scrypt` does: `n` is
-  the cost, a power of 2 above 1 (and below 2^(16 * r)), `r` the block size
-  and `p` the parallelization, both at least 1 with `r * p` below 2^30, and
-  the native memory it takes outside the GC, 128 * r * (n + p + 2) bytes, is
-  at most 1025 MiB. `iterations` is at least 1, `length` is 1 to 1048576, and
-  the password and the salt have at most 1048576 bytes each. The work is
-  capped, since a call runs to its end on its scheduler (`--max-steps` and a
-  signal wait for it): `iterations * ceil(length / 32)` is at most 50000000,
-  and scrypt's `r * p * (n + 16)` at most 2^25 (33554432), so a call takes
-  tens of seconds at most. Anything else gives an `error(...)` before any
-  work. Both are built on OpenSSL, take time in proportion to that work, and
-  have no effect label. `KDF` is a reserved type name.
-- `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
-  `strict_encode64(data)` gives padded base64 of a `Bytes` on one line,
-  `encode64(data)` the same in lines of 60 characters that each end in a
-  newline (`""` for no bytes), and `urlsafe_encode64(data, padding = true)`
-  the `-_` alphabet, without `=` when `padding` is false.
-  `strict_decode64(text)` gives `ok(bytes)` only for padded base64 with zero
-  spare bits and nothing else, else `error("invalid base64")`;
-  `urlsafe_decode64(text)` first adds the missing `=` when the text does not
-  end in one, then decodes the same way in either alphabet. `decode64(text)`
-  gives a `Bytes` and never fails: it skips other characters, stops at a `=`
-  in the third or fourth place of a group and drops a lone last character.
-- `Digest.hexencode(data)` gives two lowercase hex digits per byte of a
-  `Bytes`, as Ruby's does. `Digest.hexdecode(text)`, Agentica's own name for
-  its inverse, gives `ok(bytes)` for an even number of hex digits in either
-  case, else `error("invalid hex")`. The time of every `Base64` and `Digest`
-  call grows with its input, and none has an effect label. `Base64` and
-  `Digest` are reserved type names.
-- `SecureRandom.random_bytes(n = 16)` gives `n` bytes (a `Bytes`) from
-  OpenSSL's secure random generator (`RAND_bytes`), as Ruby's `SecureRandom`
-  does; `SecureRandom.hex(n = 16)` gives `n` such bytes as `2n` lowercase hex
-  digits, and `SecureRandom.uuid` a version 4 UUID (RFC 9562): 36 lowercase
-  characters in the `8-4-4-4-12` form. Unlike `Random`, it is never seeded and
-  `--seed` does not change it, so it is the one for keys, salts, tokens and
-  IDs. `n` outside 0 to 1048576 is `RUNTIME-INVALID-COUNT` at the argument; a
-  failed draw stops with `RUNTIME-INTERNAL` and never gives weak bytes. The
-  calls have the `random` effect label, and the time of `random_bytes` and
-  `hex` grows with `n`. `SecureRandom` is a reserved type name.
-- `IO.eof?()` peeks without consuming and can block until data or EOF arrives.
-  Reads have no timeout, and the step budget cannot interrupt blocking I/O.
-- `IO.flush()` flushes stdout only. On Linux, macOS and Windows, a print copies
-  its text into a 64 KiB buffer of the stream and waits in order for room when
-  the buffer is full, without stopping other tasks; a print has no timeout. The
-  loop writes the buffer as the reader takes it, so a print reaches a pipe or
-  file without `IO.flush()`; `IO.flush()` returns when the buffer is empty, that
-  is, when the data is in the pipe or file, and it can wait for a slow reader.
-  When stdout and stderr are the same terminal or file, their output keeps the
-  order of the calls (on Windows, when both descriptors are one handle object,
-  as with a pipe given to both); otherwise there is no order between them. On
-  other systems, output functions do not flush by themselves. A stdio protocol
-  writes one compact JSON message per line, flushes after each reply, and sends
-  logs to `IO.warn` (stderr).
-- `Time.now_ms()` is wall-clock milliseconds since the Unix epoch, and can jump;
-  `Time.monotonic_ms()` never goes backward; `Time.monotonic_ns()` is the same
-  clock in nanoseconds, for short durations. `Random.int(min, max)` is uniform
-  over `min .. max`, both included; `min > max` halts with
-  `RUNTIME-INVALID-RANGE`. `Random.float()` is in `0.0` up to, not including,
-  `1.0`. `Random` is seeded and not for secrets: use `SecureRandom`.
-- `Profile.measure(label) do ... end` runs the block (no parameters) once and
-  gives what it gives, a `Result` included; a function value of no parameters
-  works too. With `AGENTICA_VM_TRACE=profile` it adds a `section` row for
-  `label` to the profile: calls, steps, microseconds and GC milliseconds.
-  Sections are inclusive (a section holds the measures nested in it), and a
-  label inside itself in one task counts each call but its numbers once.
-  `Profile.steps()` is the step count of the running task (the entries that
-  `--max-steps` counts): the same on every run of the same work, with or
-  without the profile. `Profile` is a reserved type name.
-- `System.env(name)` reads one environment variable of the process: `ok(value)`,
-  with `ok("")` for a variable set to the empty string, and `error(message)` for
-  one that is not set. A name that is empty or contains `=` or NUL is an error
-  too, not a halt. A value that is not valid UTF-8 is not an error: each byte
-  that is not part of a valid UTF-8 sequence becomes U+FFFD, as in `Dir.list`
-  names. The VM hides the variables it keeps for itself, `AGENTICA_CHANNEL` and
-  a `UV_USE_IO_URING` that it set itself; a child started with `Process.spawn`
-  does not get them either. The home directory is `System.env("HOME")`. There is
-  no call that lists the variables. A child started with `Process.spawn` also
-  does not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE` (reserved for
-  the VM's own metrics), though `System.env` shows them to the program.
-- `System.os()` is the operating system of the running program, a `String`:
-  `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase
-  name `uname` gives (`"unknown"` when the system cannot say or the name is not
-  printable ASCII). It needs no flag.
-- `System.pid()` is the process id of the running program, an `Int`. It needs no
-  flag. A program that starts a VM with `--driver-pid` passes it, because the
-  child VM checks it against its parent.
-- `Std.source(path)` is the text of a `std/` source that the binary carries, a
-  `Result[String]`, by its exact path in `stdlib/`: `"queue.agc"`,
-  `"bdd/gherkin.agc"`, `"prelude/list.agc"`, or `"internal/compiler/..."` for
-  the private core of the front end that `std/analysis` uses. Any other path,
-  `"std/queue.agc"` and `"queue"` included, is an error. It needs no flag and
-  has no effects: it reads constant data of the binary. `Std` is a reserved
-  type name.
-- `FrontEnd.hand_off(program, options, arguments)`,
-  `FrontEnd.std_source(path)` and `FrontEnd.stdin_bytes()` belong to the front
-  end of the single `agentica` binary: the first hands a compiled program (a
-  `Bytes`) to the VM, which runs it in a new runtime with the given VM options
-  and arguments, the second reads an embedded `std/` source by its path in
-  `stdlib/`, and the third reads standard input to its end as a
-  `Result[Bytes]` (an error over 16 MiB or when the read fails; a later
-  call reads on from there). They are not for programs: they need no flag, but
-  any program that calls them, and any front end run by `agentica run`, halts
-  with `RUNTIME-FRONT-END-ONLY`.
-- Each run has one generator, seeded from the operating system unless `agentica
-  --seed N program.agc` is given (N in `0 .. 2147483647`, otherwise exit 2).
-  Each task has its own generator: the main task starts from the seed, and each
-  spawn takes one draw from its parent. Timers, I/O and more than one
-  scheduler can still change how tasks interleave, so a multi-task run as a
-  whole is not repeatable. The
-  generator is not for secrets.
+cursor. A `Lazy` has no `==`, no `to_s` and no JSON form (`CHECK-TYPE-MISMATCH`,
+`CHECK-NOT-ENCODABLE`); `IO.inspect` prints `<Lazy>`. A `List` method on a
+`Lazy` and a step that only `Lazy` has on a `List` or `Range` are
+`CHECK-UNKNOWN-METHOD`. A block after `each_slice` on a `List` is
+`CHECK-BLOCK-TARGET`, and `File.foreach(...).each do ... end` as one chain is
+`CHECK-LAZY-NO-STEP`. A failed `try` in a block of a `Lazy` method ends the
+pipeline, whatever the block's result type. Sources, steps and terminals are in
+the [`Lazy` page](../../site/content/library/data-structures/lazy.md).
 
 ### JSON
 
 `Json`, `JSON` and `JsonField` are reserved. A `Json` value has no constructor,
-equality, fields or indexing. `IO.inspect` prints `<Json>`; `to_s`,
-interpolation, `puts` and `JSON.encode` give its text. Signatures are in
-[`library/text-and-data/json.md`][agentica-link-4].
+equality, fields or indexing. The functions, their errors, the schema and the
+text they read and write are in the
+[`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
+the checker enforces:
 
-- `JSON.object` takes `Map[String, Json]`, `JSON.array` takes `List[Json]`, and
-  `JSON.from` takes any encodable value. A non-finite Float halts with
-  `RUNTIME-JSON-ENCODE`. Null and `false` stay distinct, and so do empty objects
-  and empty arrays.
-- `JSON.schema(T)` takes a named struct, as `decode` does, and returns an object
-  schema with `properties` and `required`. `required` lists every field that is
-  not a `JsonField` or an `Optional` and is left out when no field is required
-  (an empty struct too). Int bounds are signed 64-bit; lists use `items`;
-  String-keyed maps use `additionalProperties`; nested and recursive structs use
-  `$defs` and `$ref`. Extra keys stay allowed.
-- `JSON.decode(source, T)` takes JSON text (a `String`) or a `Json` value, and a
-  named struct type, not a value; bare type names are valid only for `decode`,
-  `schema` and `codec`. A `Json` source is decoded as it is, without going
-  through text, with the same rules and the same errors as its text. Fields may
-  be Int, Float, Bool, String, lists, String-keyed maps, nested or recursive
-  structs, and `Optional` and `JsonField` of those; other nested types, a
-  generic struct or enum instance included, are `CHECK-NOT-DECODABLE`. Malformed
-  JSON, missing fields, wrong types, Int overflow and non-finite numbers give
-  errors with a field or index path. Extra keys are ignored. A JSON integer may
-  decode as a Float; a decimal or exponent never decodes as an Int. Decoded maps
-  are in sorted key order.
+- `JSON.decode(source, T)`, `JSON.schema(T)` and `JSON.codec(T)` take a named
+  struct type, not a value; bare type names are valid only for these three.
+  Fields may be Int, Float, Bool, String, lists, String-keyed maps, nested or
+  recursive structs, and `Optional` and `JsonField` of those; any other nested
+  type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`.
+- `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
+  `null`), Json, lists, String-keyed maps, `Optional` and structs of those,
+  whose fields may also be `JsonField`. An instance of a generic struct counts
+  by its fields after substitution (`Box[List[Int]]`). Results, other enums and
+  Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
+  annotation.
 - `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
   returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
-  cannot call `decode` or `encode` on its type parameter. `codec.decode(source)`
-  is `JSON.decode(source, T)`, and `codec.encode(x)` and `codec.from(x)` are
-  `JSON.encode(x)` and `JSON.from(x)` for an `x` of type `T`. A codec follows
-  the rules of an `Fn` value: it may be a parameter, a struct field or a list
-  item, and it has no `to_s`, `inspect` or equality and is no constant or `ATS`
-  value. `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`; in
-  a generic body, `IO.inspect(x)` of a `T` that is a codec prints the struct's
-  name as a String.
-- `JSON.parse` reads exactly one value, with optional surrounding whitespace
-  (space, tab, CR, LF). Empty input, trailing content, invalid escapes, raw
-  control characters and non-finite numbers are errors. A repeated object key
-  keeps its last value.
-- `JSON.get` needs an object and a present key; `JSON.at` needs an array and an
-  index in range. Missing keys, bad indexes and wrong kinds are errors. JSON
-  `false` and `null` are present values.
-- The extractors (`JSON.string`, `bool`, `int`, `float`, `list`) need the exact
-  kind. `JSON.int` needs an integer within 64-bit bounds, so `1.0` is not an
-  Int. `JSON.float` rounds to a finite binary64, and overflow is an error.
-  Parsed integers may exceed `Int` until extracted. JSON `null` stays a `Json`.
-- `JSON.kind` names the kind of any `Json` and never fails: `"null"`, `"bool"`,
-  `"int"`, `"float"`, `"string"`, `"array"` or `"object"`. A number written
-  without fraction or exponent, or built from an Int, is `"int"`, even outside
-  64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
-- `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists,
-  String-keyed maps, `Optional` and structs of those, whose fields may also be
-  `JsonField`; an instance of a generic struct counts by its fields after
-  substitution (`Box[List[Int]]`). Results, other enums and Int-keyed maps are
-  `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation. A
-  non-finite Float halts with `RUNTIME-JSON-ENCODE`; it is never written as
-  null.
-- Encoding is compact: struct fields in declaration order, map entries in
-  insertion order. A parsed object encodes its keys sorted by UTF-8 bytes, so
-  `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in
-  whitespace, key order or repeated keys give the same text. `1` and `1.0` stay
-  different.
+  cannot call `decode` or `encode` on its type parameter. A codec follows the
+  rules of an `Fn` value: it may be a parameter, a struct field or a list item,
+  and it has no `to_s`, `inspect` or equality and is no constant or `ATS` value.
+  `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`.
 
 #### Optional values in JSON
 
 `Optional[T]` is JSON's `null` or a `T`, anywhere a type is: a struct field, a
-list item, a map value, an `Optional` item, or the whole value of
-`JSON.encode` and `JSON.from`.
+list item, a map value, an `Optional` item, or the whole value of `JSON.encode`
+and `JSON.from`. `none` is `null`, `some(x)` is `x`, and a missing key of an
+`Optional` struct field decodes as `none`; the rest (schema, error texts, round
+trip) is in the library page.
 
-```agentica
-struct Server
-  host: String
-  port: Optional[Int] = none
-  tags: List[Optional[String]]
-end
-
-def main() -> Void
-  text = "{\"host\": \"a\", \"tags\": [\"x\", null]}"
-  server = JSON.decode(text, Server).unwrap!
-  puts(server.port)           # none
-  puts(server.tags)           # [some("x"), none]
-  puts(JSON.encode(server))   # {"host":"a","port":null,"tags":["x",null]}
-end
-```
-
-- **Encode:** `none` writes `null` and `some(x)` writes `x`. A `none` field
-  keeps its key.
-- **Decode:** `null` gives `none`, and so does a missing key of an `Optional`
-  struct field. Any other value is decoded as `T` and gives `some(...)`, with
-  the error texts of `JsonField` (below): `age: expected signed 64-bit Int or
-  null`, `tags[0]: expected String or null`.
-- **Schema:** an `Optional` field is not in `required`, and its type is
-  `{"anyOf": [<schema of T>, {"type": "null"}]}`.
-- **Round trip:** what decode returns encodes and decodes back to itself. A
-  missing key comes back as `null`. `Optional[Optional[T]]` is allowed, but
-  JSON has one `null`: `some(none)` writes `null`, which decodes as `none`.
 - `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since
   `some(nil)` would be written as `null`. An `Optional` cannot hold a
   `JsonField` (`Optional[JsonField[T]]` is `CHECK-JSON-FIELD-PLACE`), and a
@@ -566,9 +111,8 @@ end
 
 #### Optional and nullable fields (`JsonField`)
 
-Some JSON APIs (tool calls, PATCH bodies, config files) tell three states of a
-key apart: absent, `null`, or a value. A struct field of type `JsonField[T]`
-keeps the three apart in typed JSON. `JsonField` is a builtin generic enum:
+A struct field of type `JsonField[T]` keeps the three states of a key apart in
+typed JSON: absent, `null`, or a value. `JsonField` is a builtin generic enum:
 
 ```agentica
 enum JsonField[T]
@@ -578,51 +122,11 @@ enum JsonField[T]
 end
 ```
 
-```agentica
-struct UpdateUser
-  name: JsonField[String]
-  age: JsonField[Int]
-end
-
-def describe_age(age: JsonField[Int]) -> String
-  case age
-    JsonField.Absent -> return "age: keep"
-    JsonField.Null -> return "age: clear"
-    JsonField.Value(n) -> return "age: set to #{n}"
-  end
-end
-
-def main() -> Void
-  update = Result.unwrap!(JSON.decode("{\"age\": null}", UpdateUser))
-  puts(describe_age(update.age))          # age: clear
-  puts(JSON.encode(update))               # {"age":null}
-  reply = UpdateUser(name: JsonField.Value("Bo"), age: JsonField.Absent)
-  puts(JSON.encode(reply))                # {"name":"Bo"}
-end
-```
-
 - The variants are always qualified (`JsonField.Value(x)`). `Absent` and `Null`
   need an expected type, like any nullary variant of a generic enum
   (`CHECK-ENUM-TYPE-INFERENCE` otherwise); a struct field gives one. A `case`
   needs the three arms or a `_` arm, which is how a program treats absent and
   null alike.
-- **Decode:** a missing key gives `Absent`, JSON `null` gives `Null`, and any
-  other value is decoded as `T` and gives `Value(...)`. `Value` adds no step to
-  an error path, so an error inside the value keeps its path and text
-  (`address.zip: expected String`, `tags[0]: expected String`). Only when the
-  value itself has the wrong kind does the message add "or null": `age:
-  expected signed 64-bit Int or null`, `address: expected object or null`. A
-  missing field that is not a `JsonField` is still "required field".
-- **Encode** (`JSON.encode`, `JSON.from`): `Absent` leaves the key out, `Null`
-  writes `null`, and `Value(x)` writes `x`. The other keys keep declaration
-  order.
-- **Schema:** a `JsonField[T]` field is not in `required`, and its property is
-  `{"anyOf": [<schema of T>, {"type": "null"}]}`, with no `$defs` entry of its
-  own.
-- **Round trip:** an object with only the struct's declared keys, its values in
-  the form encode writes, decodes and encodes back to the same object, up to key
-  order: an absent key stays absent and a `null` stays `null`. Extra keys are
-  dropped, and an integer in a Float field comes back as `1.0`.
 - **Where:** in the type of a `JSON.decode` or `JSON.schema` target or of a
   `JSON.encode` or `JSON.from` argument, `JsonField` may only be the direct type
   of a struct field. A list item, a map value, an `Optional` item, a nested
@@ -640,6 +144,9 @@ end
   lists and maps may hold it, it prints when `T` does (`JsonField.Value(30)`),
   and it has no `==`. A user `struct JsonField`, `enum JsonField` or `import ...
   as JsonField` is `CHECK-REDEFINED-NAME`.
+
+The decode, encode and schema forms, the error texts and the round trip are in
+the library page.
 
 ### Builtin discovery and execution budget
 
@@ -762,7 +269,9 @@ the limit can trip a little late; `--schedulers 1` keeps the exact count.
 
 At the end of a run the VM waits for the buffered writes of every open file, for
 the output of stdout and stderr that a pipe has not taken yet, and then for the
-frees of what native code still owns (section 6d). The wait is always bounded:
+frees of what native code still owns (see
+[How a run ends](../../site/content/library/concurrency/task.md#how-a-run-ends)).
+The wait is always bounded:
 30000 milliseconds by default. `agentica --flush-timeout MS program.agc` or the
 environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it (an integer from 0 to
 86400000; the flag wins, a bad value exits 2, and there is no way to turn the
@@ -846,9 +355,3 @@ before anything runs; a source file also gets the hint to run it as `agentica
 FILE.agc`. The exit status is the program's own: `System.exit(n)`, 1 for a
 diagnostic, and 2 for a command line or a start that fails (a bad option, an
 unreadable file, bad bytecode), with a message that starts `agentica run:`.
-
-[agentica-link-1]: ../../site/content/library/data-structures/list.md
-[agentica-link-2]: ../../site/content/library/data-structures/map.md
-[agentica-link-3]: ../../site/content/library/data-structures/set.md
-[agentica-link-4]: ../../site/content/library/text-and-data/json.md
-[agentica-link-5]: ../../site/content/library/data-structures/lazy.md

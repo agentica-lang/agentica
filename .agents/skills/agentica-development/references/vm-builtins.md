@@ -89,8 +89,9 @@ Rules for the C code:
   and arity; the loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
-- Fail with the documented diagnostic code (`docs/grammar/`), at the call
-  span or `span + 1 + i` for argument `i`, with a clear message.
+- Fail with the documented diagnostic code (its `site/content/library/`
+  page), at the call span or `span + 1 + i` for argument `i`, with a clear
+  message.
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d copy,

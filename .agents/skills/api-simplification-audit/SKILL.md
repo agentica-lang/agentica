@@ -101,7 +101,7 @@ Usage:    M calls; 30000 in most, a few 5000, test values apart
 Rule:     Plain, no alternatives: default allowed as is
 Risk:     not breaking; programs that pass it keep working
 Ruby:     File.read(path) has no timeout; the default keeps the call Ruby-like
-Cost:     S: catalog rows + goldens + docs (grammar, site, skill, CHANGELOG)
+Cost:     S: catalog rows + goldens + docs (library page, skill, CHANGELOG)
 ```
 
 ## Report
@@ -112,7 +112,7 @@ Write the report as one GitHub tracking issue on agentica-lang/agentica:
   pass 1, then one checklist item per PR, smallest and safest first (plain
   rows before checker rule changes, non-breaking before breaking);
 - each item links its pass 3 entry and names the docs it must update
-  (AGENTS.md: grammar, site page, programming skill, CHANGELOG);
+  (AGENTS.md: library page, programming skill, CHANGELOG);
 - check for an existing issue first (`gh issue list --search "API
   simplification"`) and update it rather than open a second one.
 

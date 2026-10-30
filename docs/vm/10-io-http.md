@@ -59,8 +59,8 @@ after the limit check.
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
-answers are in the grammar (`docs/grammar/06d-io-and-network.md`, "HTTP client
-and server"). Client streaming is planned in `docs/future/30-hybrid-http.md`.
+answers are in `site/content/library/io-and-system/network.md`. Client
+streaming is planned in `docs/future/30-hybrid-http.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
@@ -200,8 +200,8 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   owner cannot hand a job to a worker that has left: the send fails, and another
   worker takes the job. When the caller gave up on the reply channel
   (`HttpWire.awaited?`), the worker closes the connection instead of keeping it,
-  as the grammar says of a timed-out call
-  (`docs/grammar/06c-tasks-and-tests.md`).
+  as the library page says of a timed-out call
+  (`site/content/library/concurrency/task.md`, "Task.map").
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
@@ -468,4 +468,4 @@ and a body that is not UTF-8. A connection that fails is never pooled.
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
   `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md`.
 
-[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
+[task-rules]: ../../site/content/library/concurrency/task.md

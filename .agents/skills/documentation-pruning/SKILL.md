@@ -77,7 +77,8 @@ implementation. Keep the contract; cut the recipe. Never drop an owner
 decision.
 
 **Agentica map (verify before use):** `docs/grammar/` is the current language
-contract (the site renders it; one line per paragraph). `docs/vm/` is the VM
+contract (the site renders it; one line per paragraph); the builtin library
+reference lives only in `site/content/library/`. `docs/vm/` is the VM
 design. `docs/future/` is an index of language proposals; when a phase lands,
 its syntax moves to the grammar and the file is deleted with its section
 number preserved as a gap. `docs/roadmap/README.md` holds the order table and

@@ -105,7 +105,7 @@ gets() -> Result[String]
 IO.gets() -> Result[String]
 ```
 
-Reads one line, without its line ending. At the end of input it gives an error result. An empty line is `ok("")`.
+Reads one line, without its terminator (LF, CR or CRLF). At the end of input it gives an error result. An empty line is `ok("")`.
 
 ```agentica
 def main() -> Void
@@ -132,7 +132,7 @@ gets!() -> String
 IO.gets!() -> String
 ```
 
-Reads one line. It stops the program at the end of input. It can drop its parentheses.
+Reads one line. It stops the program with `RUNTIME-END-OF-INPUT` at the end of input. It can drop its parentheses.
 
 ```agentica
 def main() -> Void
@@ -155,7 +155,7 @@ Hello, Ana!
 IO.eof?() -> Bool
 ```
 
-Tells whether input has ended. It may wait for the next byte.
+Tells whether input has ended. It peeks without consuming, and it can block until data or the end of input arrives. Reads have no timeout, and the step budget cannot interrupt blocking I/O.
 
 ```agentica
 def main() -> Void
@@ -184,7 +184,7 @@ c
 IO.read() -> String
 ```
 
-Reads all the rest of the input.
+Reads all the rest of the input, to the end. It cannot read one message from a peer that keeps standard input open.
 
 ```agentica
 def main() -> Void
@@ -210,7 +210,7 @@ The last line ends with `\n`, so `split` gives an empty last part.
 IO.read_bytes(count: Int) -> Result[Bytes]
 ```
 
-Reads up to `count` bytes, from 0 to 1048576, as a [`Bytes`](/library/data-structures/bytes/). At the end of input the bytes are empty.
+Waits for exactly `count` bytes or the end of input, and gives them as a [`Bytes`](/library/data-structures/bytes/) with no decoding. `count` is from 0 to 1048576; zero gives empty bytes without consuming input. At the end of input the bytes are empty.
 
 Text reads and byte reads share one input. Bytes that one of them takes are not seen by the other.
 
@@ -237,7 +237,9 @@ ok("hi")
 IO.flush() -> Void
 ```
 
-Sends buffered standard output now. On Linux, macOS and Windows, the task waits until the output has reached the pipe or file. So it can wait when the reader is slow. It fails if the reader has gone away.
+Sends buffered standard output now (standard error is not flushed). On Linux, macOS and Windows, the task waits until the output has reached the pipe or file. So it can wait when the reader is slow. It fails if the reader has gone away.
+
+A program that speaks a protocol over standard input and output writes one compact JSON message per line, flushes after each reply, and sends its logs to `IO.warn` (standard error).
 
 ```agentica
 def main() -> Void
