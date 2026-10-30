@@ -297,9 +297,9 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
   checks), never drawn numbers.
 - Float text is not `printf("%.17g")` or the first `%.*e` that round-trips: it
   breaks exact ties upward and uses the asymmetric interval at powers of two.
-  Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes it,
-  and add any new tricky value to `vm/tests/float_text_test.c`. Float text goes
-  to `strtod` only after the pattern check.
+  Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes
+  it, and add any new tricky value to `vm/tests/float_text_test.c`. Float text
+  goes to `strtod` only after the pattern check.
 - Callback builtins are native frames, not C calls into the loop: `CALL_BUILTIN`
   copies the arguments into an `agc_native` GC object and pushes a frame with
   `native` set at `R[a]`. Callbacks run at `R[a+1]` with result register `R[a]`,

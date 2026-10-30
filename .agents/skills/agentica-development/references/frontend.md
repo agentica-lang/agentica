@@ -36,27 +36,27 @@ diagnostic: `Lexer.lex` returns `Diag.Outcome`, and other stages may use
   `model.agc` (no enum; `""` and empty lists for absent values), which `query/`
   prints. `stdlib/analysis.agc` compiles `stdlib/CORE` as
   `std/internal/compiler/`, so anything the library needs must be there.
-                - Session cache (`cache.agc`): node ids have gaps and are not in
-          walk order, so nothing reads a node id except through a node it holds
-          (`Linker.parser_ids` is the highest `next_free_id`). A cached root is
-          used only when `Cache.find` sees the same fingerprint and texts
-          (`test_std_analysis.py` compares cached and uncached answers).
-          `Analysis.entry` and `adopt` move a root between sessions with
-          `Cache.alone`, never merged, since two caches' ids can overlap.
-          `check_reuse.agc` copies the entries of an unchanged module from the
-          root's last checked program (`Cache.Good`).
-                - Check cache (`modules/check_cache.agc`, `io/check_cache.agc`;
-          `check` and `type-at` only): one file per imported source in
-          `_build/check/`, holding the text digest, the tree digest at which it
-          passed, a same-length stub (bodies and private functions blanked) and
-          the constant types. A module whose tree digest the entry vouches for
-          is `clean`: its bodies are not checked, and it is parsed from the
-          stub. A walk with a stubbed module that is not clean is redone without
-          stubs, and a problem in a stubbed file falls back to `query_cached`,
-          so the answer is always the cold one. Anything the core or the CLI
-          adds to `Modules` or `Checker` that new entries depend on must be in
-          the tree digest (`Modules.shape_of`). `test_check_cache.py` compares
-          cold, warm and `--no-cache` runs.
+  - Session cache (`cache.agc`): node ids have gaps and are not in
+    walk order, so nothing reads a node id except through a node it holds
+    (`Linker.parser_ids` is the highest `next_free_id`). A cached root is
+    used only when `Cache.find` sees the same fingerprint and texts
+    (`test_std_analysis.py` compares cached and uncached answers).
+    `Analysis.entry` and `adopt` move a root between sessions with
+    `Cache.alone`, never merged, since two caches' ids can overlap.
+    `check_reuse.agc` copies the entries of an unchanged module from the
+    root's last checked program (`Cache.Good`).
+  - Check cache (`modules/check_cache.agc`, `io/check_cache.agc`;
+    `check` and `type-at` only): one file per imported source in
+    `_build/check/`, holding the text digest, the tree digest at which it
+    passed, a same-length stub (bodies and private functions blanked) and
+    the constant types. A module whose tree digest the entry vouches for
+    is `clean`: its bodies are not checked, and it is parsed from the
+    stub. A walk with a stubbed module that is not clean is redone without
+    stubs, and a problem in a stubbed file falls back to `query_cached`,
+    so the answer is always the cold one. Anything the core or the CLI
+    adds to `Modules` or `Checker` that new entries depend on must be in
+    the tree digest (`Modules.shape_of`). `test_check_cache.py` compares
+    cold, warm and `--no-cache` runs.
 
 ### Pure core, one port
 
@@ -237,7 +237,12 @@ covered text, never message text. Many small cases go in
 Keep every token, span, diagnostic and byte. Compare master's stage with the
 branch's on the same binary:
 
-```sh mkdir -p /tmp/master-src && git archive origin/master compiler | tar -x -C /tmp/master-src dist/agentica compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/new.out dist/agentica /tmp/master-src/compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/old.out cmp /tmp/old.out /tmp/new.out ```
+```sh
+mkdir -p /tmp/master-src && git archive origin/master compiler | tar -x -C /tmp/master-src
+dist/agentica compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/new.out
+dist/agentica /tmp/master-src/compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/old.out
+cmp /tmp/old.out /tmp/new.out
+```
 
 Add generated inputs (CRLF, bare CR, non-ASCII, bad escapes, unclosed brackets,
 interpolation), and every prefix of one construct-rich text, which covers each
@@ -246,51 +251,59 @@ must leave `git status` clean. Record the result in `docs/vm-benchmarks.md`.
 
 ## Refreeze: `tools/refreeze.py`
 
-`poetry run python tools/refreeze.py` reruns the pytest modules `tests.test_frontend_<stage>`
-with `AGENTICA_REFREEZE=1`: a golden mismatch rewrites the golden and logs the change. Run it
-in the Poetry test environment. Flags: `--fast-only` (skip the slow tier), `--stage lower` or
-`--stage lexer,parser`, `--jobs N`. It prints what changed (manifest entries, or a unified
-diff for a text golden) and freezes whatever the stage prints, so read `git diff` and judge
-each change. Other assertions still fail. A manifest keeps only hashes; to see an output, run
-the stage by hand.
+`poetry run python tools/refreeze.py` reruns the pytest modules
+`tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1`: a golden mismatch
+rewrites the golden and logs the change. Run it in the Poetry test environment.
+Flags: `--fast-only` (skip the slow tier), `--stage lower` or `--stage
+lexer,parser`, `--jobs N`. It prints what changed (manifest entries, or a
+unified diff for a text golden) and freezes whatever the stage prints, so read
+`git diff` and judge each change. Other assertions still fail. A manifest keeps
+only hashes; to see an output, run the stage by hand.
 
-- Default stage order: lexer, parser, modules, check, lower, catalog, bytecode. With a new
-  opcode, run refreeze twice, or run `bytecode` first (`--stage bytecode`); `lower` reads the
-  frozen opcode table. Use `--jobs 1` so stages run in dependency order. The second run must
-  print `nothing changed` for every stage.
-- A stage whose tests are all skipped (a missing tool) freezes nothing: the tool exits 1.
-- Two goldens have no Agentica source, so refreeze never changes them. Edit them by hand in
-  the same PR as the code or builtin that adds a line: `frozen/check/codes.expected` and
-  `frozen/check/builtin-rules.expected`.
+- Default stage order: lexer, parser, modules, check, lower, catalog, bytecode.
+  With a new opcode, run refreeze twice, or run `bytecode` first (`--stage
+  bytecode`); `lower` reads the frozen opcode table. Use `--jobs 1` so stages
+  run in dependency order. The second run must print `nothing changed` for every
+  stage.
+- A stage whose tests are all skipped (a missing tool) freezes nothing: the tool
+  exits 1.
+- Two goldens have no Agentica source, so refreeze never changes them. Edit them
+  by hand in the same PR as the code or builtin that adds a line:
+  `frozen/check/codes.expected` and `frozen/check/builtin-rules.expected`.
 
 ### Frozen comparisons
 
 The slow tiers compare the stages with the frozen outputs in
-`tests/fixtures/frontend/frozen/` (`tests/test_frontend_<stage>.py`, run through the product
-CLI). Fast cases: the bytes of examples, id ranges, invalid UTF-8, limit scenarios and id
-numbering; the rest are `@slow`. Helpers: `tests/frontend_support.py`, and
-`tests/frontend_cases.py` for inputs built from formulas.
+`tests/fixtures/frontend/frozen/` (`tests/test_frontend_<stage>.py`, run through
+the product CLI). Fast cases: the bytes of examples, id ranges, invalid UTF-8,
+limit scenarios and id numbering; the rest are `@slow`. Helpers:
+`tests/frontend_support.py`, and `tests/frontend_cases.py` for inputs built from
+formulas.
 
-- `frozen/corpus/*.json` is a fixed snapshot of inputs (examples, stdlib, fixtures,
-  `compiler/`, old checker programs, site code blocks). A new `stdlib/` file is not in it.
+- `frozen/corpus/*.json` is a fixed snapshot of inputs (examples, stdlib,
+  fixtures, `compiler/`, old checker programs, site code blocks). A new
+  `stdlib/` file is not in it.
 - Seeded inputs are checked in (`lexer/generated.json`, `parser/generated.json`,
-  `check/mutated.json`, `modules/mutated.json`). Formula inputs (nesting shapes, chains of
-  3,000 files, files over 1 MiB, programs of 300 and 1,000 functions) are rebuilt by
-  Python; the SHA-256 in the manifest must match, or the test fails as a test bug.
-- Manifests `frozen/<stage>/<set>.sha256` hold, per input, the output's and the input's
-  SHA-256 and size, and the key. Small outputs are text (`*.expected`). `.agcb` files hash
-  without the length and the version text, so a release does not change the freeze. Other
-  lists: `frozen/modules/stdlib-registry.expected` (a new `stdlib/` file is one line),
-  `frozen/check/tables.expected` (a copy of `check_tables.agc`).
+  `check/mutated.json`, `modules/mutated.json`). Formula inputs (nesting shapes,
+  chains of 3,000 files, files over 1 MiB, programs of 300 and 1,000 functions)
+  are rebuilt by Python; the SHA-256 in the manifest must match, or the test
+  fails as a test bug.
+- Manifests `frozen/<stage>/<set>.sha256` hold, per input, the output's and the
+  input's SHA-256 and size, and the key. Small outputs are text (`*.expected`).
+  `.agcb` files hash without the length and the version text, so a release does
+  not change the freeze. Other lists: `frozen/modules/stdlib-registry.expected`
+  (a new `stdlib/` file is one line), `frozen/check/tables.expected` (a copy of
+  `check_tables.agc`).
 - Every input has a golden next to its fixture, and no golden is left over.
-  `builtins_data.agc` is not compared with a fresh generation (it is hand-edited). Section
-  and opcode coverage read the lowering goldens, which cannot tell the `types` and
-  `decodable` sections apart.
-- Fixtures that Python reads live are frozen with derived results: `modules/<name>/`
-  (hashes in `modules/ids.sha256`), `limits/limits.agc` (it imports the live `compiler/`),
-  `parser/synthetic.input`, `hello.input`, and `bytecode/*.agc` (`bytecode/fast.sha256`).
-  Editing one, or a `compiler/` file that `limits.agc` imports, changes a frozen hash:
-  refreeze and inspect the diff.
+  `builtins_data.agc` is not compared with a fresh generation (it is
+  hand-edited). Section and opcode coverage read the lowering goldens, which
+  cannot tell the `types` and `decodable` sections apart.
+- Fixtures that Python reads live are frozen with derived results:
+  `modules/<name>/` (hashes in `modules/ids.sha256`), `limits/limits.agc` (it
+  imports the live `compiler/`), `parser/synthetic.input`, `hello.input`, and
+  `bytecode/*.agc` (`bytecode/fast.sha256`). Editing one, or a `compiler/` file
+  that `limits.agc` imports, changes a frozen hash: refreeze and inspect the
+  diff.
 
 ## Agentica gotchas
 

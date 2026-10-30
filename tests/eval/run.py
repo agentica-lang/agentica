@@ -146,8 +146,8 @@ def prepare(work: Path, task: str, arm: str) -> None:
 def strip_query_docs(skill: Path) -> None:
     """Remove the query commands from the copy of the skill the agent gets (never from the repository's skill).
 
-    Drops queries.md and analysis.md, the lines of SKILL.md that point to them, and the QUERY- codes of
-    diagnostics.md. It stops the run when a mention is left, so a skill edit cannot leak the commands unnoticed.
+    Drops queries.md and analysis.md, the lines of SKILL.md that point to them, the QUERY- codes of
+    diagnostics.md and the `type-at` cache note of language-running.md. It stops the run when a mention is left, so a skill edit cannot leak the commands unnoticed.
     """
     for name in ("queries.md", "analysis.md"):
         (skill / "references" / name).unlink()
@@ -160,6 +160,9 @@ def strip_query_docs(skill: Path) -> None:
     text = re.sub(r"^- `QUERY-.*\n(?:  .*\n)*", "", text, flags=re.MULTILINE)
     text = re.sub(r"\s*`QUERY-` is a\s+bad\s+question\s+to.*?`refs`\.", "", text, flags=re.DOTALL)
     codes.write_text(text, encoding="utf-8")
+    running = skill / "references" / "language-running.md"
+    text = running.read_text(encoding="utf-8")
+    running.write_text(text.replace("`check` and `type-at` keep", "`check` keeps"), encoding="utf-8")
     for path in sorted(skill.rglob("*.md")):
         found = QUERY_MENTION.search(path.read_text(encoding="utf-8"))
         if found:

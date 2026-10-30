@@ -16,16 +16,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the call starts, so a crash or a harness's `agc_io_close` closes it. The end
   of the run closes no socket one by one (`_exit` does); it calls only the
   `goodbye` hook, which sends TLS `close_notify`.
-        - Connect tries each resolved address with a fresh link. Listen binds
-      every address on one port (`bind_all` retries a port-0 listen when a later
-      address finds the port taken). Accept is one FIFO for all links; a failed
-      `uv_accept` closes the listener, since libuv stops watching that link.
-      `shut` is the one close and finishes every waiting request. The fuzzer's
-      `no_files` makes connect and listen fail with `RUNTIME-INTERNAL`.
-        - Errors reaching `agc_system_error` go through `agc_net_errno`
-      (`vm/net_os.h`), never a bare `-rc`: Windows libuv codes are not negated
-      errno values. A listener link counts reported connections (`backlog`),
-      since Windows reports several before the first `uv_accept`.
+  - Connect tries each resolved address with a fresh link. Listen binds
+    every address on one port (`bind_all` retries a port-0 listen when a later
+    address finds the port taken). Accept is one FIFO for all links; a failed
+    `uv_accept` closes the listener, since libuv stops watching that link.
+    `shut` is the one close and finishes every waiting request. The fuzzer's
+    `no_files` makes connect and listen fail with `RUNTIME-INTERNAL`.
+  - Errors reaching `agc_system_error` go through `agc_net_errno`
+    (`vm/net_os.h`), never a bare `-rc`: Windows libuv codes are not negated
+    errno values. A listener link counts reported connections (`backlog`),
+    since Windows reports several before the first `uv_accept`.
 - Threads: every `net` belongs to the I/O thread (§16.9, "Services"). A builtin
   parks with its `begin_*` step as the START's `more` step. A close or release
   posts `release_step` through `agc_loop_call`. `finish` copies what the `done`
@@ -63,109 +63,109 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `references/vm-io.md`), with an `agc_inbuf` (lines, 1 MiB), at most one reader
   and one writer request, and a reference count (owner, each request, the pipe
   handle, the shutdown request).
-        - Jobs are `external` with the call's timeout. A read parks until a line
-      is buffered; a send parks only when the pipe is full. `request_expired`
-      closes the whole channel (`agc_duplex_shut`): a timeout ends the channel
-      and nothing else. `ECONNRESET` on a read is end of input.
-        - With more than one scheduler, every read, send and shut runs as a
-      request whose steps run on the I/O thread (`posted`); the scheduler reads
-      only the result.
-        - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is
-      cut) stores the output-exceeds error and readies a pending reader. Lines
-      already buffered still come first.
-        - Parent side: `agc_duplex_new` over the parent's socket end.
-      `agc_duplex_close_write` ignores a `uv_shutdown` that fails on the spot
-      (`ENOTCONN` when the peer is gone).
-        - Child side: `agc_parent_take` (called by `agc_launch_vm`) takes the
-      descriptors only when `AGENTICA_CHANNEL` is exactly `agc_chan_value()`
-      (`3`, or `3,4` on Windows) and `agc_chan_take` accepts them. On POSIX fd 3
-      must be a socket or a FIFO opened `O_RDWR`: a one-way FIFO fails the read
-      start and parks `Test.run` forever. On Windows fd 3 must grant reading and
-      fd 4 writing. The variable is removed, and the duplex becomes
-      `vm->parent`.
-        - `Process.parent_read_line` and `Process.parent_send` take a positive
-      timeout and the `vm->parent_locks` pair. With no channel they fail with
-      `process: no parent channel`. `process: the channel is in use` comes only
-      when a request in that direction is already pending, so a test's call
-      never shares a buffer with `Test.run`'s retry request (those park with
-      `task->retry` and no timeout).
+  - Jobs are `external` with the call's timeout. A read parks until a line
+    is buffered; a send parks only when the pipe is full. `request_expired`
+    closes the whole channel (`agc_duplex_shut`): a timeout ends the channel
+    and nothing else. `ECONNRESET` on a read is end of input.
+  - With more than one scheduler, every read, send and shut runs as a
+    request whose steps run on the I/O thread (`posted`); the scheduler reads
+    only the result.
+  - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is
+    cut) stores the output-exceeds error and readies a pending reader. Lines
+    already buffered still come first.
+  - Parent side: `agc_duplex_new` over the parent's socket end.
+    `agc_duplex_close_write` ignores a `uv_shutdown` that fails on the spot
+    (`ENOTCONN` when the peer is gone).
+  - Child side: `agc_parent_take` (called by `agc_launch_vm`) takes the
+    descriptors only when `AGENTICA_CHANNEL` is exactly `agc_chan_value()`
+    (`3`, or `3,4` on Windows) and `agc_chan_take` accepts them. On POSIX fd 3
+    must be a socket or a FIFO opened `O_RDWR`: a one-way FIFO fails the read
+    start and parks `Test.run` forever. On Windows fd 3 must grant reading and
+    fd 4 writing. The variable is removed, and the duplex becomes
+    `vm->parent`.
+  - `Process.parent_read_line` and `Process.parent_send` take a positive
+    timeout and the `vm->parent_locks` pair. With no channel they fail with
+    `process: no parent channel`. `process: the channel is in use` comes only
+    when a request in that direction is already pending, so a test's call
+    never shares a buffer with `Test.run`'s retry request (those park with
+    `task->retry` and no timeout).
 
 ## Processes
 
 - `vm/process.c` (`agc_process_builtins`; §10.4), on libuv. `--deny-run` turns
   it off.
-        - `own_env` filters `AGENTICA_CHANNEL` and `UV_USE_IO_URING` (the latter
-      only with `drop_uring_env`); `metrics_env` also filters the metrics
-      variables. Windows comparisons are case-insensitive. The first spawn marks
-      descriptors above 2 close-on-exec (`agc_each_fd`).
-        - Executable lookup: `PATH` only for a bare name, never the working
-      directory; a name with `/` is relative to the working directory.
-      `uv_spawn` gets the absolute path and never verbatim arguments. All three
-      stdio are piped.
-        - Lifetime: a GC `agc_process` holds the `state` resource and the lock
-      records for `agc_handle_wait`. A `malloc`'d `proc` holds the libuv handles
-      and buffers and is freed when its user count (resource and requests) and
-      handle count (close callbacks) both reach zero.
-        - Threads: the I/O thread owns `proc`. With more than one scheduler
-      every call (spawn, read, write, close, wait) parks on a request whose
-      steps post to the I/O thread, and the result is copied into the request
-      (`finish`) before it is readied. One scheduler keeps the inline fast
-      paths.
-        - stdout is read only while a reader waits, 4 KiB at a time. stderr is
-      forwarded in its read callback (`agc_output_forward`), and reading stops
-      while its queue is full (`resume_err` restarts it).
-        - One close path, `shut`: `SIGKILL`, with no `waitpid` and no sleep
-      anywhere in the file. libuv's exit callback `exited` reaps the child;
-      `retire` closes its handle. A failed kill in `Process.close` is
-      `RUNTIME-PROCESS-CLOSE`.
-        - `Process.close` of a plain child that still runs parks its task on a
-      `REQ_CLOSE` request (an `external` job with a 1 s timer, readied by
-      `exited`). `expired` returns `Void`, so a child in uninterruptible sleep
-      is never waited for. Other closes only signal (§10.4, Close). The park is
-      skipped when the kill failed.
-        - The per-run guard (`vm->process_guard`) lists the running children.
-      `agc_processes_stop`, the first step of the exit path, calls
-      `close_children` once per run: it signals, then `await_exits` runs
-      `uv_run` ONCE under a 1 s stack timer until the awaited children exit.
-      `unlink_child` clears `proc.g`, so a release after the guard is freed
-      never reaches it.
-        - Captured children (`Process.spawn_captured`, `Process.output`) read
-      both pipes into `out_buf` and `err_kept`, held to 1 MiB (`out_cut`,
-      `err_cut`). A close sends `SIGTERM` and starts a 1 s `grace` timer for
-      `SIGKILL`.
-        - Channel children (`Process.spawn_channel`): `agc_chan_pair` (a
-      `uv_socketpair`, or on Windows two `uv_pipe` pairs with blocking child
-      ends) on stdio slots 3 and
-                4. `child_env` rebuilds the environment on every spawn and adds
-           `AGENTICA_CHANNEL=` for channel spawns only. The parent end is an
-           `agc_duplex` in `proc.channel`, which `shut` closes with the pipes.
-           `read_available` drains stdout with non-blocking reads under the same
-           cut rules (the held-back UTF-8 tail included, §10.4). The spawn trace
-           line has `channel=`.
-        - Pool threads start with `SIGINT`, `SIGTERM` and `SIGHUP` blocked
-      (`agc_io_start` does it around `uv_queue_work`). Keep that for any new
-      work in the libuv pool. Boehm's marker threads do not block them, so the
-      stop handler may run on any thread: it uses only lock-free atomics and
-      async-signal-safe calls.
+  - `own_env` filters `AGENTICA_CHANNEL` and `UV_USE_IO_URING` (the latter
+    only with `drop_uring_env`); `metrics_env` also filters the metrics
+    variables. Windows comparisons are case-insensitive. The first spawn marks
+    descriptors above 2 close-on-exec (`agc_each_fd`).
+  - Executable lookup: `PATH` only for a bare name, never the working
+    directory; a name with `/` is relative to the working directory.
+    `uv_spawn` gets the absolute path and never verbatim arguments. All three
+    stdio are piped.
+  - Lifetime: a GC `agc_process` holds the `state` resource and the lock
+    records for `agc_handle_wait`. A `malloc`'d `proc` holds the libuv handles
+    and buffers and is freed when its user count (resource and requests) and
+    handle count (close callbacks) both reach zero.
+  - Threads: the I/O thread owns `proc`. With more than one scheduler
+    every call (spawn, read, write, close, wait) parks on a request whose
+    steps post to the I/O thread, and the result is copied into the request
+    (`finish`) before it is readied. One scheduler keeps the inline fast
+    paths.
+  - stdout is read only while a reader waits, 4 KiB at a time. stderr is
+    forwarded in its read callback (`agc_output_forward`), and reading stops
+    while its queue is full (`resume_err` restarts it).
+  - One close path, `shut`: `SIGKILL`, with no `waitpid` and no sleep
+    anywhere in the file. libuv's exit callback `exited` reaps the child;
+    `retire` closes its handle. A failed kill in `Process.close` is
+    `RUNTIME-PROCESS-CLOSE`.
+  - `Process.close` of a plain child that still runs parks its task on a
+    `REQ_CLOSE` request (an `external` job with a 1 s timer, readied by
+    `exited`). `expired` returns `Void`, so a child in uninterruptible sleep
+    is never waited for. Other closes only signal (§10.4, Close). The park is
+    skipped when the kill failed.
+  - The per-run guard (`vm->process_guard`) lists the running children.
+    `agc_processes_stop`, the first step of the exit path, calls
+    `close_children` once per run: it signals, then `await_exits` runs
+    `uv_run` ONCE under a 1 s stack timer until the awaited children exit.
+    `unlink_child` clears `proc.g`, so a release after the guard is freed
+    never reaches it.
+  - Captured children (`Process.spawn_captured`, `Process.output`) read
+    both pipes into `out_buf` and `err_kept`, held to 1 MiB (`out_cut`,
+    `err_cut`). A close sends `SIGTERM` and starts a 1 s `grace` timer for
+    `SIGKILL`.
+  - Channel children (`Process.spawn_channel`): `agc_chan_pair` (a
+    `uv_socketpair`, or on Windows two `uv_pipe` pairs with blocking child
+    ends) on stdio slots 3 and
+    4. `child_env` rebuilds the environment on every spawn and adds
+    `AGENTICA_CHANNEL=` for channel spawns only. The parent end is an
+    `agc_duplex` in `proc.channel`, which `shut` closes with the pipes.
+    `read_available` drains stdout with non-blocking reads under the same
+    cut rules (the held-back UTF-8 tail included, §10.4). The spawn trace
+    line has `channel=`.
+  - Pool threads start with `SIGINT`, `SIGTERM` and `SIGHUP` blocked
+    (`agc_io_start` does it around `uv_queue_work`). Keep that for any new
+    work in the libuv pool. Boehm's marker threads do not block them, so the
+    stop handler may run on any thread: it uses only lock-free atomics and
+    async-signal-safe calls.
 
 ## HTTP
 
 - The head adapter and body decoder (`vm/http_parse.h`, `vm/http_pico.c`,
   `vm/http_body.c`; §10.6, §10.6.1). The rules of §10.6 apply. Tests check
   codes, not messages.
-        - Head parsing runs our pre-scan and start-line checks, then
-      picohttpparser (`vm/third_party/picohttpparser`, tag v1.4, built at the
-      baseline without `-msse4.2`), then our token, value, obs-fold, Host and
-      status checks. Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
-      without `last_len` and only when new bytes complete a line. The head is
-      limited to an 8192-byte start line plus 64 KiB of headers. A -1 becomes a
-      400 or a client error `Result`.
-        - The pre-scan skips one leading CRLF and stops at the end of the start
-      line.
-        - Bodies (Content-Length, chunked with saturating sizes and checked
-      trailers, close-delimited) go through our incremental decoder: `feed`
-      returns bytes consumed, body slices, and NEED_MORE, DONE or ERROR. There
-      is no `phr_decode_chunked`, so bodies stream and are never buffered whole.
+  - Head parsing runs our pre-scan and start-line checks, then
+    picohttpparser (`vm/third_party/picohttpparser`, tag v1.4, built at the
+    baseline without `-msse4.2`), then our token, value, obs-fold, Host and
+    status checks. Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
+    without `last_len` and only when new bytes complete a line. The head is
+    limited to an 8192-byte start line plus 64 KiB of headers. A -1 becomes a
+    400 or a client error `Result`.
+  - The pre-scan skips one leading CRLF and stops at the end of the start
+    line.
+  - Bodies (Content-Length, chunked with saturating sizes and checked
+    trailers, close-delimited) go through our incremental decoder: `feed`
+    returns bytes consumed, body slices, and NEED_MORE, DONE or ERROR. There
+    is no `phr_decode_chunked`, so bodies stream and are never buffered whole.
 - `vm/http_wire.c`: the `HttpWire` helpers std/http uses. They have no I/O and
   no state: each takes bytes or a record and returns a string or a std-only
   record. `chunk` checks every field of a `Chunk` before it rebuilds the decoder
@@ -185,8 +185,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the open count and the queue of `accept` and `wait` jobs. Builtins change them
   only by posted steps; `closed` is atomic (§10.7.2). It runs at N > 1
   (`make test-multicore-modules`).
-        - The `HttpServer` holds a `server` and a group node (`agc_task_group`)
-      that runs std/http's accept loop.
+  - The `HttpServer` holds a `server` and a group node (`agc_task_group`)
+    that runs std/http's accept loop.
     - `spawn` starts the connection task under the group with
     `agc_task_spawn_owning` (the socket goes to the task), marks it `hidden`,
     and sets an `end` hook that only frees the slot. `finish_task` closes the
@@ -196,23 +196,23 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     takes the head of its own task's list. Every wait is an `external` job with
     a `cancel` half.
 - `stdlib/http.agc` reads requests and writes responses (§10.7.2):
-        - The first byte comes through a 1-byte `TCP.recv_bytes`, then the head
-      through `HttpWire.read_head`. The order of §10.7.3 (parse errors,
-      `Upgrade` 501, `Expect` 417, the `Content-Length` limit 413,
-      `100 Continue`, then the body with its UTF-8 check as bytes arrive) is in
-      `agc_http_head_value`.
-        - Every error answer is `HttpWire.error_answer`, then a lingering close:
-      drop input until the peer closes, the deadline, or `DRAIN_BYTES` (256
-      KiB), so no reset loses the answer.
-        - Bytes past one request stay in the input for the next; a chunked
-      body's last read gives them back as `rest`. TCP reads only while a reader
-      waits, so pipelined bytes cannot pile up.
-        - `HttpWire.encode_response` builds the head first: status 200..599, no
-      body on 204, 304 or `HEAD`, `Content-Length` and `Transfer-Encoding`
-      managed, a `Date` header. When the request or the response says
-      `Connection: close`, the handler's `Connection` headers are dropped for
-      one `Connection: close`. It returns whether the connection closes, or the
-      reason it does not write.
+  - The first byte comes through a 1-byte `TCP.recv_bytes`, then the head
+    through `HttpWire.read_head`. The order of §10.7.3 (parse errors,
+    `Upgrade` 501, `Expect` 417, the `Content-Length` limit 413,
+    `100 Continue`, then the body with its UTF-8 check as bytes arrive) is in
+    `agc_http_head_value`.
+  - Every error answer is `HttpWire.error_answer`, then a lingering close:
+    drop input until the peer closes, the deadline, or `DRAIN_BYTES` (256
+    KiB), so no reset loses the answer.
+  - Bytes past one request stay in the input for the next; a chunked
+    body's last read gives them back as `rest`. TCP reads only while a reader
+    waits, so pipelined bytes cannot pile up.
+  - `HttpWire.encode_response` builds the head first: status 200..599, no
+    body on 204, 304 or `HEAD`, `Content-Length` and `Transfer-Encoding`
+    managed, a `Date` header. When the request or the response says
+    `Connection: close`, the handler's `Connection` headers are dropped for
+    one `Connection: close`. It returns whether the connection closes, or the
+    reason it does not write.
 - Client connections: a connection is kept only with nothing left after the
   response (the `buffered` and `ended` fields, and a 0-byte `read_text` after a
   chunked body). An idempotent call that fails on a reused connection before any

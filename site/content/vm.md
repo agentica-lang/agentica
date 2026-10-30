@@ -41,7 +41,7 @@ Pinned git submodules in `vm/third_party/`, all built into the release binary, w
 | libuv | Event loop, file and socket I/O, timers, processes and the thread pool | MIT, with BSD-2-Clause and ISC parts |
 | OpenSSL 3.5 | TLS for `TLS.connect`, `TLS.listen` and HTTPS | Apache-2.0 |
 | picohttpparser | Parses HTTP start lines and headers | MIT (dual MIT or Perl license) |
-| libffi | Calls C functions of `extern` blocks (Linux x86-64 build) | MIT |
+| libffi | Calls C functions of `extern` blocks (Linux x86-64, Windows x64 and macOS) | MIT |
 | zlib | DEFLATE, zlib and gzip codec for `Zlib` | zlib license |
 
 The Unicode tables (case mapping, printing) are generated from the Unicode Character Database into the VM source, under the Unicode License v3.

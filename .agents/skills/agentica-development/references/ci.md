@@ -82,8 +82,8 @@ step that calls it.
 - `vm-lint` includes the clang-tidy 19 version check. `vm-trace-off` builds with
   `TRACE=0` and checks `--version`.
 - `vm-layers` (Linux; needs `rg` and `nm`) compiles each `vm/*.h` alone and runs
-  `vm/tools/check-layers.sh` (`docs/vm/15-layers.md` §15.5). A new `vm/*.c` file
-  goes in one list of that script.
+  `vm/tools/check-layers.sh` (`docs/vm/15-layers.md` §15.5). A new `vm/*.c`
+  file goes in one list of that script.
 - `vm-sanitize-build`, `vm-sanitize-test` and `vm-diff-test` do not depend on
   `dist/agentica` on purpose: they test the binary an earlier step built
   (`SANITIZE=1` makes `dist/agentica` the sanitizer build).
@@ -208,13 +208,6 @@ The job graph is in the YAML; these are the rules it does not show.
   `sweep.yml` and the release use the vendored libgc and zlib, and the release
   also the vendored OpenSSL. Both modes share `build/vm/release/obj`; a mode
   change forces a full rebuild.
-- Caches: the vendored OpenSSL is cached with `actions/cache` (key:
-  `make -s vm-openssl-key AGENTICA_OPENSSL=vendored`). `warm-third-party` saves
-  it on `master`; a PR restores only caches of its merge ref or `master`, and on
-  a miss the vendored check skips. Compiles use ccache when it is on `PATH`; the
-  release sets `CCACHE=`, since PR jobs can write to a shared cache. A `master`
-  push runs only `dup-check` (it saves the jscpd npm cache) and
-  `warm-third-party`.
 
 ## Conformance matrix (`platforms.yml`)
 
