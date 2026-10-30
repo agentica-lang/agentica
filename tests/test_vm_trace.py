@@ -247,6 +247,23 @@ def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_eac
         assert any(re.match(pattern, line) for line in jit_lines), "%r in %r" % (pattern, jit_lines)
 
 
+def test_the_profile_names_a_byte_builtin_by_its_catalog_name(tmp_path, traced_vm):
+    """Digest.sha256 runs under the key Digest.sha256.bytes; the report shows the catalog name. String.bytes is a
+    name of its own and keeps it."""
+    vm = traced_vm[0]
+    source = tmp_path / "digest.agc"
+    source.write_text('def main() -> Void\n  puts(Digest.sha256("abc".bytes).length)\nend\n')
+    bytecode = compile_fixture(source, tmp_path)
+    path = tmp_path / "digest.trace"
+    plain = run_vm(vm, bytecode)
+    assert run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path}) == plain
+    rows = (re.match(rb"^agc-trace \+[0-9.]+ profile builtin calls=1 us=[0-9]+ name=(\S+)$", line)
+            for line in trace_lines(path))
+    names = {row.group(1) for row in rows if row}
+    assert {b"Digest.sha256", b"String.bytes"} <= names, names
+    assert not any(name.endswith(b".bytes") and name != b"String.bytes" for name in names), names
+
+
 def test_the_profile_counts_each_opcode_the_pairs_and_the_paths_of_builtin_calls(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "ops.agc"

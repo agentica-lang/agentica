@@ -450,6 +450,17 @@ static void out_name(out_buffer *out, const char *s, size_t n) {
   }
 }
 
+/* The length of the name that the report shows for builtin key KEY: its catalog name. A byte row that moved to Bytes
+   (#805) kept its catalog name under the key "<name>.bytes" (Digest.sha256.bytes, __lazy_zlib.bytes), so the suffix
+   is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its own. */
+static size_t shown_name_len(const char *key) {
+  static const char suffix[] = ".bytes";
+  size_t n = strlen(key), cut = sizeof suffix - 1;
+  if (n <= cut || memcmp(key + n - cut, suffix, cut) != 0) return n;
+  bool prelude = n - cut >= 2 && key[0] == '_' && key[1] == '_';
+  return prelude || memchr(key, '.', n - cut) ? n - cut : n;
+}
+
 static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *profile, uint64_t code) {
   uint32_t id = (uint32_t)code;
   switch (code >> 32) {
@@ -468,7 +479,7 @@ static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *
     }
     case AGC_PROFILE_BUILTIN: {
       const char *name = id < profile->builtins && p->builtins[id] ? p->builtins[id]->name : "<native>";
-      out_name(out, name, strlen(name));
+      out_name(out, name, shown_name_len(name));
       return;
     }
     case AGC_PROFILE_LABEL: {
@@ -573,8 +584,8 @@ void agc_profile_report(agc_vm *vm) {
   for (size_t k = 0; k < found; k++) {
     uint32_t id = top[k];
     const char *name = id < profile->builtins ? p->builtins[id]->name : "";
-    AGC_TRACE(tr, AGC_TRACE_PROFILE, "builtin calls=%" PRIu64 " us=%" PRIu64 " name=%s", profile->builtin_calls[id],
-              profile->builtin_ns[id] / 1000u, name);
+    AGC_TRACE(tr, AGC_TRACE_PROFILE, "builtin calls=%" PRIu64 " us=%" PRIu64 " name=%.*s", profile->builtin_calls[id],
+              profile->builtin_ns[id] / 1000u, agc_trace_len(shown_name_len(name)), name);
   }
   report_sections(tr, profile->sections);
   report_loop(tr, profile);
