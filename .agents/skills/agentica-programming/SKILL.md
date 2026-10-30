@@ -15,11 +15,11 @@ does not exist; `agentica help NAME` prints a builtin's signature.
 ## Run and check
 
 `agentica F.agc ARGS` checks, then runs (`def main() -> Void`); `agentica check
-F.agc` only checks (use the path you are given if `agentica` is not on PATH).
-Exit 0 and the output the request asks for mean done. Exit 1 prints the first
-diagnostic (stable code, span, a `help` line): fix it and rerun. Exit 2 is bad
-usage. A check does not test behavior: run all cases in one command, `for f in
-cases/*.txt; do agentica p.agc < "$f" || break; done`.
+[PATH...]` only checks a file or a folder (use the path you are given if
+`agentica` is not on PATH). Exit 0 and the output the request asks for mean
+done. Exit 1 prints the first diagnostic (stable code, span, a `help` line): fix
+it and rerun. Exit 2 is bad usage. A check does not test behavior: run all cases
+in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 
 ## Rules agents break
 
