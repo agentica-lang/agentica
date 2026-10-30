@@ -73,11 +73,6 @@ there is a good result. Start-up on precompiled bytecode: the VM takes about 1
 ms and 2 MB, CPython 19 ms and 8 MB; the VM uses about a fifth of CPython's
 memory.
 
-Conclusions: maps are the slow spot (a `put` copies a HAMT path). Lists were
-slow because `List.append` copied the whole array; the persistent vector of 8d
-fixed it (below). Dispatch and Int arithmetic were the next candidates (7g),
-which the third speed pass took.
-
 ## Lists (roadmap 8d)
 
 The persistent vector of 8d (`docs/vm/17-lists.md`) against the flat array
@@ -98,21 +93,19 @@ Pushes in a loop are linear: doubling n multiplies the time by 1.7 to 2.0 (gate
 
 A list built at once (`List.repeat`, `Range.to_a`, `reverse`, `take`, `drop`,
 `concat`, `String.split`, `sort`) allocates its trie in a handful of blocks, and
-`List.repeat` shares one leaf. The first trie attached one leaf per 32 pushes:
-it took six times as long as the flat array to build a million items, spent 45%
-more memory (every 512-byte leaf and 256-byte branch a separate allocation),
-and made the GC-stress run of `process-channel-close.agc` miss its 100 ms
-window. With the leaves of one build as slices of one array, the cost over the
-flat array is the branches, 1.6% (about 264 KB for a million items), and
-`List.repeat(7, 1000000)` peaks at 5.6 MB (the VM start-up) against 21.4 MB.
+`List.repeat` shares one leaf. The leaves of one build are slices of one array,
+so the cost over the flat array is the branches, 1.6% (about 264 KB for a
+million items), and `List.repeat(7, 1000000)` peaks at 5.6 MB (the VM start-up)
+against 21.4 MB. One leaf allocation per 32 pushes was six times slower to build
+and used 45% more memory, so bulk builds must not work that way.
 Indexing and `for` cost about 1.3 and 1.06 times the flat array, the price of
 the two to four loads per item.
 
 ### Bulk operations after the trie
 
-The list performance PR (`docs/vm/17-lists.md` §17.11), one operation per loop
-next to the same live data, the empty loop subtracted, 1,000,000 items,
-milliseconds per operation, collections included:
+Operations after the list performance work (`docs/vm/17-lists.md` §17.11), one
+operation per loop next to the same live data, the empty loop subtracted,
+1,000,000 items, milliseconds per operation, collections included:
 
 | Operation | Flat | Trie | After the PR | Python |
 |---|---:|---:|---:|---:|
@@ -314,12 +307,9 @@ bytes. The `always` ratio of the self-compile is 0.79.
 
 - **Coverage.** §6.4 says what compiles, which builtins run inside compiled
   code and which exits go back to the interpreter.
-- **What changed.** On `b04d44f9`, `on` was 1.18 to 1.22 on
-  `channel-pingpong`: its loops park at each send and receive, and each park
-  costs about three plain exits. `on` now keeps them out, so nothing compiles.
-  `logger-disabled` went from 1.02 to 1.00: nothing compiles there, and fewer
-  turns run the slower jit copy of the turn loop. The self-compile did not move
-  (0.84 before and after).
+- **Parking loops.** `on` keeps the loops that park at each send and receive out
+  of compiled code: each park costs about three plain exits, which made
+  `channel-pingpong` 1.18 to 1.22 times slower when they were compiled.
 - **Slower rows.** Under `on`, `channel-pingpong` and `maps` are within the
   noise. Under `always`, `logger-disabled` (1.35) leaves compiled code four
   times per `Logger.debug` call; this row also moves by 9% with the address of
