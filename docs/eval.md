@@ -271,8 +271,8 @@ that run and of every run in flight; if the sum passes the cap, it stops
 starting new runs (the runs in flight finish) and `summary.md` and `run.json`
 get `stopped_for_budget` (true) and `runs_skipped`. Runs already going and
 outlier runs can go past the cap by up to `--jobs` times the costliest run. The
-6c commands use `--jobs 2`, which keeps that overshoot to about $0.06 at the
-costs of rounds 10 and 12 (the costliest run was about $0.03).
+6c commands use `--jobs 2`, which keeps that overshoot near $0.06 (the costliest
+run of round 12 was about $0.03).
 
 The estimate is the highest cost seen so far (never below the mean), and never
 below `--run-cost-estimate` (default $0.01). A run that reports no cost (no
@@ -284,9 +284,6 @@ model. The runner prints `cost so far: $X of the $Y cap` after every run, and
 models, give each its share of the total (one command each, as in the example
 above); a shared total across commands would need a way to read earlier run
 folders, which the runner does not have.
-
-For round 13 the owner's hard limit was $2 for both models, so the soft caps
-were $1.1 and $0.75: at `--jobs 2` a command can pass its cap by about $0.06.
 
 ### Hidden cases
 
