@@ -175,10 +175,9 @@ The rules below are invariants (§16.11 lists what is open).
   registry (§16.9), and links the task into the run queue.
 - **A handle belongs to the I/O loop** for its whole life, as a `malloc`'d libuv
   handle that lives until its `uv_close` callback (§10.2.2). The task that
-  opened it owns it (§14.5). Ownership decides who closes the handle, not who
-  may use it: any task reaches it through a request, and the handle's lock FIFO
-  (§10.2.2) keeps the operations in order. A regular file is no handle: its
-  state is used by pool jobs, and its close is a pool job.
+  opened it owns it (§14.5). Any task reaches it through a request, and the
+  handle's lock FIFO (§10.2.2) keeps the operations in order. A regular file is
+  no handle: its state is used by pool jobs, and its close is a pool job.
 - **GC rule.** A queue that links GC objects lives in GC memory or is a
   registered root, as the run queue does for tasks. `malloc`'d structures (jobs,
   requests, handle state) hold ids and raw bytes, never a GC pointer. No GC
@@ -361,9 +360,10 @@ one exit path are as in §16.1 to §16.6. What differs:
   at N = 1 too and keeps the loop alive only while items run, and ends the job
   as libuv's `after_work` does. So a compute job is a pool job: no deadline, no
   cancel half, and a cancel detaches it. A detached item still in the queue
-  skips its `work`; a running one drops the result once the call returns. The
-  end of the run does not wait for it; `agc_io_close` (harnesses, the front
-  end) joins the idle threads and leaves a busy one to end by itself.
+  skips its `work`; a running one drops the result once the call returns. What
+  the end of the run waits for is in §14.4 (steps 0 and 3). `agc_io_close`
+  (harnesses, the front end) joins the idle threads and leaves a busy one to end
+  by itself.
 - **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
   The libuv part of its `done`, `expired`, cancel and `drop` halves, and the
   poller calls of builtins, run where the half runs. At N > 1 the steps of the

@@ -238,11 +238,11 @@ section says how the scheduler and the loop keep them.
   is the job's timer (a negative timeout starts none). `CALL_BUILTIN` ends the
   turn.
 - **Waking and parking.** The work and timer callbacks only set flags and put
-  the job on the loop's ready list. After each `uv_run` the scheduler drains
-  that list and queues the tasks. On completion the `done` half runs on the
-  interpreter thread and builds GC values from the `malloc`'d result. On timeout
-  the `expired` half gives the timeout error (`filesystem: operation timed out`
-  for a file) and, for a handle operation, closes the handle.
+  the job on the loop's ready list, which the scheduler drains after each
+  `uv_run` (§16.9). On completion the `done` half runs on the interpreter thread
+  and builds GC values from the `malloc`'d result. On timeout the `expired` half
+  gives the timeout error (`filesystem: operation timed out` for a file) and,
+  for a handle operation, closes the handle.
 - **Thread-pool threads** run only the `work` half, on `malloc` memory.
   `UV_USE_IO_URING` is set to `0` (unless already set) before the loop is made,
   so libuv uses its thread pool and epoll. `SIGINT`, `SIGTERM` and `SIGHUP` are
