@@ -72,3 +72,15 @@ printf 'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign
 openssl x509 -req -in "$work/chain-root-cross.csr" -CA "$dir/chain-cross-signer.pem" \
   -CAkey "$work/chain-cross-signer-key.pem" -set_serial "0x$(openssl rand -hex 16)" -extfile "$work/chain-root-cross.ext" \
   -days "$days" -out "$dir/chain-root-cross.pem"
+
+# A client CA and a client certificate it signs, for TLS.connect with a client certificate (mTLS); the client CA's key
+# stays in the temporary directory.
+key "$work/client-ca-key.pem"
+openssl req -x509 -new -key "$work/client-ca-key.pem" -subj "/CN=Agentica Test Client CA" -days "$days" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" -out "$dir/client-ca.pem"
+key "$dir/client-key.pem"
+openssl req -new -key "$dir/client-key.pem" -subj "/CN=Agentica Test Client" -out "$work/client.csr"
+printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\n' \
+  > "$work/client.ext"
+openssl x509 -req -in "$work/client.csr" -CA "$dir/client-ca.pem" -CAkey "$work/client-ca-key.pem" \
+  -set_serial "0x$(openssl rand -hex 16)" -extfile "$work/client.ext" -days "$days" -out "$dir/client.pem"

@@ -74,7 +74,7 @@ static pair pair_on(agc_tls_config *client, agc_tls_config *server, const char *
 
 static pair connect_pair(const char *ca, const char *host, const char *cert, const char *key, size_t step) {
   agc_tls_failure f;
-  return pair_on(agc_tls_client_config(ca, &f), agc_tls_server_config(cert, key, &f), host, step);
+  return pair_on(agc_tls_client_config(ca, NULL, NULL, &f), agc_tls_server_config(cert, key, &f), host, step);
 }
 
 static void free_pair(pair *p) {
@@ -150,7 +150,7 @@ static void test_verify_errors(void) {
 
 static void test_eof_in_handshake(void) {
   agc_tls_failure f;
-  agc_tls_config *client = agc_tls_client_config(CERTS "ca.pem", &f);
+  agc_tls_config *client = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &f);
   assert(client);
   agc_tls *t = agc_tls_client(client, "localhost", &f);
   assert(agc_tls_handshake(t, &f) == AGC_TLS_WANT_READ);
@@ -190,9 +190,12 @@ static void test_config_errors(void) {
   expect_config(agc_tls_server_config(CERTS "server.pem", CERTS "server.pem", &f), &f, AGC_TLS_ERR_BAD_KEY, 0);
   expect_config(agc_tls_server_config(CERTS "server.pem", CERTS "wrong-host-key.pem", &f), &f, AGC_TLS_ERR_KEY_MISMATCH,
                 0);
-  expect_config(agc_tls_client_config(CERTS "missing.pem", &f), &f, AGC_TLS_ERR_BAD_CA, ENOENT);
-  expect_config(agc_tls_client_config(CERTS "make-certs.sh", &f), &f, AGC_TLS_ERR_BAD_CA, 0);
-  agc_tls_config *system = agc_tls_client_config("", &f);
+  expect_config(agc_tls_client_config(CERTS "missing.pem", NULL, NULL, &f), &f, AGC_TLS_ERR_BAD_CA, ENOENT);
+  expect_config(agc_tls_client_config(CERTS "make-certs.sh", NULL, NULL, &f), &f, AGC_TLS_ERR_BAD_CA, 0);
+  /* A client certificate fails as the server's does. */
+  expect_config(agc_tls_client_config(CERTS "ca.pem", CERTS "client.pem", CERTS "server-key.pem", &f), &f,
+                AGC_TLS_ERR_KEY_MISMATCH, 0);
+  agc_tls_config *system = agc_tls_client_config("", NULL, NULL, &f);
   assert(system);
   agc_tls_config_free(system);
 }
@@ -341,7 +344,7 @@ static void test_intermediates(void) {
 static void test_system_store(void) {
   set_cert_file(NULL);
   agc_tls_failure f;
-  agc_tls_config *config = agc_tls_client_config("", &f);
+  agc_tls_config *config = agc_tls_client_config("", NULL, NULL, &f);
   assert(config);
   X509_STORE *store = agc_tls_config_store(config);
   STACK_OF(X509) *certs = X509_STORE_get1_all_certs(store);
@@ -365,7 +368,7 @@ static void test_system_store(void) {
  * store fails the client with VERIFY_UNTRUSTED, so the config uses the verify callback. */
 static void test_rejected_handshake(void) {
   agc_tls_failure f;
-  agc_tls_config *client = agc_tls_client_config(CERTS "ca.pem", &f);
+  agc_tls_config *client = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &f);
   assert(client && add_pem(agc_tls_config_store(client), CERTS "server.pem", true));
   pair p = pair_on(client, agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f), "localhost", 4096);
   assert(p.client_status == AGC_TLS_ERROR && p.client_failure.code == AGC_TLS_ERR_VERIFY_UNTRUSTED);

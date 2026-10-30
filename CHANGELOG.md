@@ -10,11 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `TLS.connect` takes an optional client certificate and key (`cert_file`,
+  `key_file`) for servers that require one (mTLS).
 - `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`
   and `CMAC.des_ede3`, for payment formats.
 
 ### Changed
 
+- **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
+  `TLS.connect`.
 - **Breaking:** `Cipher` and `CMAC` are reserved type names.
 
 ## [0.17.0] - 2026-10-30

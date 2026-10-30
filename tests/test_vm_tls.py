@@ -1,9 +1,9 @@
 """The TLS builtins of the VM against Node and Python peers.
 
 fixtures/tls-peer.js (Node) serves the client cases and connects to the VM
-server; fixtures/tls-peer.py (Python ssl) is a TLS 1.2 server, an HTTPS server
-and a client. The certificates are the ones in fixtures/tls. Everything is on
-127.0.0.1 or localhost with port 0.
+server; fixtures/tls-peer.py (Python ssl) is a TLS 1.2 server, an HTTPS server,
+a server that requires a client certificate and a client. The certificates are
+the ones in fixtures/tls. Everything is on 127.0.0.1 or localhost with port 0.
 """
 import json
 import os
@@ -59,6 +59,26 @@ def main() -> Void
   puts(Result.unwrap!(TCP.read_line(socket, 5000)))
   IO.inspect(TCP.read_line(socket, 5000))
   TCP.close(socket)
+end
+"""
+
+MTLS_CLIENT_PROGRAM = """\
+def talk(opened: Result[Socket]) -> Result[String]
+  socket = try opened
+  try TCP.send(socket, "hi\\n", 5000)
+  line = try TCP.read_line(socket, 5000)
+  TCP.close(socket)
+  return ok(line)
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  port = String.to_int!(Result.unwrap!(IO.gets()))
+  ca = "#{dir}/ca.pem"
+  puts(Result.unwrap!(talk(TLS.connect("localhost", port, ca, 5000, "#{dir}/client.pem", "#{dir}/client-key.pem"))))
+  # Under TLS 1.3 the server's refusal comes after the client's side of the handshake: the connect or the first
+  # read fails.
+  puts(Result.ok?(talk(TLS.connect("localhost", port, ca, 5000))))
 end
 """
 
@@ -524,6 +544,14 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
     result = run_text(tmp_path, "python-client", PYTHON_CLIENT_PROGRAM, stdin=port + "\n")
     assert (result.code, result.stdout) == (0, 'python TLSv1.2 FROM AGENTICA\nerror("network: end of input")\n'), \
         result.stderr
+    assert server.wait() == 0
+
+
+def test_client_certificate_to_a_python_server_that_requires_one_and_refused_without(tmp_path, adopt):
+    server, port = python_server(adopt, "mtls")
+    result = run_text(tmp_path, "mtls-client", MTLS_CLIENT_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, "hello Agentica Test Client\nfalse\n"), result.stderr
+    assert [server.next_line(), server.next_line()] == ["client Agentica Test Client", "refused"]
     assert server.wait() == 0
 
 
