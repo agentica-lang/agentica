@@ -2059,7 +2059,7 @@ NESTED void agc_task_clear_nested(agc_task *t) {
   if (!ns) return;
   if (ns->regs) memset(ns->regs, 0, ns->reg_capacity * sizeof *ns->regs);
   memset(ns->frames, 0, ns->frame_capacity * sizeof *ns->frames);
-  ns->barrier.value = agc_void();
+  memset(&ns->barrier.value, 0, sizeof ns->barrier.value);
 }
 
 NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
