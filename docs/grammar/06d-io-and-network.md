@@ -229,9 +229,13 @@ to `"read"`, and `File.each_line` and `File.foreach` default `buffer_bytes` to
   read-only attribute (0666 for an object that is writable, 0444 when the
   attribute is set, and no `setuid`, `setgid` or sticky bit either way), and
   `user_id` and `group_id` are always 0. A 0 there is not the owner, and `mode`
-  says nothing about the object's ACL or DACL. `File.lstat` gives the same
-  record without following a final symlink: `kind` is `"link"` and the other
-  fields describe the link itself. `Dir.list` gives immediate entry
+  says nothing about the object's ACL or DACL. `kind` is Ruby's
+  `File::Stat#ftype` name: `"file"` (a regular file only), `"directory"`,
+  `"link"`, `"fifo"`, `"socket"`, `"characterSpecial"`, `"blockSpecial"` or
+  `"unknown"`. Windows gives `"file"`, `"directory"`, `"link"` (`File.lstat` of
+  a reparse point) and `"characterSpecial"` for `NUL`. `File.lstat` gives the
+  same record without following a final symlink: `kind` is `"link"` and the
+  other fields describe the link itself. `Dir.list` gives immediate entry
   names, sorted. `Dir.mkdir` creates parents.
   `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory for the
   host user alone and fails when the path exists or the parent is missing: mode

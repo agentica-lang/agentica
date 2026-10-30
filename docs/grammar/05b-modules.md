@@ -526,7 +526,8 @@ import Sqlite from "pkg/sqlite/db"
   time a build loads a package, it hashes the folder of `deps/` and compares
   the result with the lock (`PKG-HASH-MISMATCH`); a symbolic link named
   `*.agc`, a link named `native` at the root, or any link in `native/`, is
-  `PKG-SYMLINK`. A package that no import reaches is not hashed. A build
+  `PKG-SYMLINK`, and a FIFO, socket or device named `*.agc` or in `native/`
+  is `CHECK-IMPORT-IO`. A package that no import reaches is not hashed. A build
   changes nothing in `deps/`. The bytecode cache of `agentica FILE.agc` hashes
   only the files a program reads, so a new unused file in a `deps/` folder is
   caught by `check` or `--no-cache`, not by a cached run. A committed `deps/`

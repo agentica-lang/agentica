@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 74,
+  "stdout": [
+    "dir directory",
+    "file file",
+    "device characterSpecial",
+    "device lstat characterSpecial",
+    ""
+  ],
+  "stderr": []
+}
