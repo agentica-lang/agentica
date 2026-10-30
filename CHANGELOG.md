@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-30
+
 ### Added
 
 - `Bytes`, a compact immutable byte string: `s.bytes`, `Bytes.from_list`,
@@ -670,7 +672,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.16.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.17.0...HEAD
+[0.17.0]: https://github.com/agentica-lang/agentica/compare/0.16.0...0.17.0
 [0.16.0]: https://github.com/agentica-lang/agentica/compare/0.15.0...0.16.0
 [0.15.0]: https://github.com/agentica-lang/agentica/compare/0.14.0...0.15.0
 [0.14.0]: https://github.com/agentica-lang/agentica/compare/0.13.0...0.14.0
