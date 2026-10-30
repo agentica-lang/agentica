@@ -245,11 +245,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   run the script: run it by hand and commit both files when the vectors change.
   `std-binary-vectors` works the same way with `std-binary-vectors.py`.
 - `std/binary` (`stdlib/binary.agc`) is Agentica on the bit builtins, with no
-  C. A reader checks `window` (offset range, no overflow for any offset), ORs
-  the items with `bit_or` and tests the result once (`bytes_ok`); the walk
-  that names the first bad byte (`first_bad_byte`) runs only on the error path.
-  `concat` splits in halves (`join_parts`), so it recurses about log2 k deep.
-  Goldens: `std-binary` and `std-binary-vectors`.
+  C. A reader takes a `Bytes`, checks `window` (offset range, no overflow for
+  any offset) and reads the items with `b[i]`; its only error is the offset.
+  A writer packs a masked `List[Int]` with one `Bytes.from_list` (`pack`);
+  joining is `Bytes.concat`. Goldens: `std-binary` and `std-binary-vectors`.
 
 ## std/toml
 

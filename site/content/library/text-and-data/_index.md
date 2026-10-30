@@ -7,7 +7,7 @@ description: Work with text and numbers, read and write JSON and TOML, encode UR
 - Use [String](/library/text-and-data/string/) to cut, search, change and convert text, and to turn text into numbers.
 - Use [Int and Float](/library/text-and-data/numbers/) to convert between `Int`, `Float` and `String`.
 - Use [JSON](/library/text-and-data/json/) to move data in and out of programs, for a known shape (structs) or not.
-- Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a list of bytes, and to frame messages.
+- Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a `Bytes`, and to frame messages.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.
 - Use [HTML](/library/text-and-data/html/) (`std/html`) to escape and unescape HTML text.
 - Use [Cookie](/library/text-and-data/cookie/) (`std/cookie`) to read a `Cookie` header and to write a `Set-Cookie` header.
