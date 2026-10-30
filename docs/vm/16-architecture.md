@@ -66,9 +66,7 @@ enforces it.
 
 ### 16.2 Threads
 
-- **One scheduler per logical core.** The default is
-  `uv_available_parallelism()`, which respects CPU affinity; `--schedulers N`
-  sets it (the flag rules are in §10.2.3).
+- **One scheduler per logical core.** The default and the flag are in §10.2.3.
 - **The main thread starts the VM, then becomes the I/O thread.** Start-up (the
   GC, the environment, the hash keys, the locale, the program load) and the
   start of the scheduler threads come first. Then the main thread runs the only
@@ -305,8 +303,8 @@ talking to each other.
 
 - **Boehm stops all threads at once.** Every collection stops every scheduler
   and the I/O thread. This is the main cost of threads against BEAM's
-  per-process heaps. Parallel marking helps. Boehm stops threads with signals
-  installed with `SA_RESTART`, and the syscall paths retry on `EINTR` (§10.2.3).
+  per-process heaps. Parallel marking helps. The signals it stops threads with
+  are in §10.2.3, GC.
 - **stdout and stderr are locked per stream when N > 1** (§10.2.3, Output). A
   print is a copy into the stream's buffer, or a wait in its FIFO, and the loop
   writes it (§10.2.2). So only the blocking fallbacks (§14.1) can block a
@@ -327,22 +325,20 @@ talking to each other.
 
 ### 16.9 As built
 
-With `--schedulers 1` there is one scheduler and the loop on the same thread. By
-default there is one scheduler per logical core ("Threads" below). At N = 1 the
-model is almost what exists: tasks, turns, jobs with their `agc_io_kind` halves,
-detached jobs, the handle lock FIFO, the owners and the one exit path are as in
-§16.1 to §16.6. What differs:
+At N = 1 the model is almost what exists: tasks, turns, jobs with their
+`agc_io_kind` halves, detached jobs, the handle lock FIFO, the owners and the
+one exit path are as in §16.1 to §16.6. What differs:
 
 - **One thread plays both roles at N = 1.** The scheduler calls
   `uv_run(UV_RUN_NOWAIT)` after each turn and `uv_run(UV_RUN_ONCE)` when the run
   queue is empty (§10.2.1, §10.2.2). A separate I/O thread beside one scheduler
-  thread at N = 1 was built as a prototype and not taken. The libuv code of the
-  services would also run beside the interpreter, which §16.11 leaves open.
-  Every deadline wait (a channel wait, a timed await, `Task.sleep`) would have
-  paid a timer job, and the task-switch benchmark ran several times slower. The
-  request code is the same at any N. What differs is where the loop runs: a
-  request posted on the loop's thread runs at once, and one posted from another
-  thread is queued and wakes the loop.
+  thread at N = 1 is not used: the libuv code of the services would also run
+  beside the interpreter, which §16.11 leaves open, and every deadline wait (a
+  channel wait, a timed await, `Task.sleep`) would pay a timer job. A prototype
+  ran the task-switch benchmark several times slower. The request code is the
+  same at any N. What differs is where the loop runs: a request posted on the
+  loop's thread runs at once, and one posted from another thread is queued and
+  wakes the loop.
 - **The inbox** (`vm/inbox.c`) is a locked queue of `malloc`'d `agc_request`
   entries, taken whole by the loop's thread and woken by a `uv_async_t`. The
   poster sends after it unlocks (§16.3). It does not exist at N = 1: no handle,
@@ -458,7 +454,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   scheduler starts its clock at the end of its next turn, at its next such
   park, or before it sleeps. A task woken before then drops the entry, so a
   wait that the peer ends in its next turn never reads the clock (a system
-  call on a host with an HPET clock source, #629). Its timeout can then be late
+  call on a host with an HPET clock source). Its timeout can then be late
   by at most one more turn than that of another timer, which also waits for a
   turn boundary to fire.
   The scheduler fires its due timers at its turn boundary and when its run queue
@@ -506,12 +502,11 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   read and the CAS). If the CAS finds WOKEN, the scheduler queues the task, so
   the task is queued once and its next turn takes up the wait again.
 - **`--schedulers N`.** `vm/launch.c` reads the flag and `AGENTICA_SCHEDULERS`
-  (1 to 1024; the flag wins). The default is `uv_available_parallelism()`, at
-  most 1024. The profile trace and `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one
-  scheduler. The default count then drops to 1, and a count above 1 chosen by
-  the flag or the variable exits 2 with a message before the program loads. The
-  front end always runs on one scheduler, so its output does not depend on the
-  machine.
+  (§10.2.3). The default is at most 1024. The profile trace and
+  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one scheduler. The default count
+  then drops to 1, and a count above 1 chosen by the flag or the variable exits
+  2 with a message before the program loads. The front end always runs on one
+  scheduler, so its output does not depend on the machine.
 - **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares the
   locks and the loop, lets threads register with the GC, makes one scheduler
   context (`agc_vm`) per thread, and starts scheduler 0. The calling thread
@@ -575,7 +570,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     no signal and does not set `work`: the task is the first one its scheduler
     pops, so it stays on that core. A queue that holds tasks signals as usual.
     With a plain push, one CPU-bound task would wake an idle scheduler at
-    every turn and move between cores (#627). A timer or a service end at
+    every turn and move between cores. A timer or a service end at
     that turn boundary may fill the slot after the push, and the slot's task
     may hold the thread for long (a long builtin, a native call). So the
     scheduler marks the push (`agc_vm.own_pending`), and when its next pick
@@ -648,10 +643,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     modules do not reach. Not yet under the lock: the profiling counters. A
     socket or a child needs no lock, since the I/O thread owns it. The owner of
     a stream's lock is the calling thread's context, not the stream's own `vm`.
-- **GC threads.** Boehm is built with thread support (§10.2.3).
-  `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
-  (`vm/value.c`) are the helpers, and each scheduler thread registers at its
-  start.
+- **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
+  registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread.** `agc_launch_end` (`vm/launch.c`)
   calls `agc_launch_settle`, then the output end, then `agc_launch_exit`.
 

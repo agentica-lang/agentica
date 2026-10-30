@@ -23,8 +23,8 @@ awaiters, the stdin waiters `rt->in.waiters`, the output waiters
 Nothing else blocks. The loop thread never blocks on a descriptor. Every wait
 has an exit that `agc_task_cancel` knows (§14.3).
 
-A blocked `read()` on a pool thread once hung the VM at exit: the exit path
-joined the pool, and the pool waited for a FIFO that never wrote.
+A blocked `read()` on a pool thread would hang the VM at exit: the exit path
+joins the pool, and the pool would wait for a FIFO that never writes.
 
 - **Regular files** (and directories) use the libuv thread pool, since a read or
   write on them ends in bounded time. The other bounded pool work is DNS

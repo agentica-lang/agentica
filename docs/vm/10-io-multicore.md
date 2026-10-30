@@ -5,12 +5,12 @@ The multicore model (threads, queues and ownership) is in §16
 that still apply.
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
-  affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
-  capped at 1024, and the flag wins over a valid variable. Invalid values exit
-  2, also a bad variable next to a valid flag (§16.9). `--schedulers 1`
-  gives the N=1 order, which still depends on timer and pool timing. `--seed`
-  does not imply one scheduler; at N>1 only per-task random values repeat
-  (7.4). The thread split and shared queue are in §16.2–16.3.
+  affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it (the
+  flag rules are in `08-loader-and-cli.md`, the cases that force one scheduler
+  in §16.9, "`--schedulers N`"). `--schedulers 1` gives the N=1 order, which
+  still depends on timer and pool timing. `--seed` does not imply one scheduler;
+  at N>1 only per-task random values repeat (7.4). The thread split and shared
+  queue are in §16.2–16.3.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
   specified in §16.3.
 - **Waking.** State/results are published before enqueueing (§16.3–16.4):
@@ -65,26 +65,18 @@ that still apply.
   coarse lock (§16.9), never held across a park. Ring growth copies the slots
   under the lock: an accepted exception, bounded by the capacity and charged as
   turn cost. The lock orders the write of a value before its read on another
-  scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"): a
-  wake or a hand-on and the fire of the timer are two wakers, the state CAS lets
-  one win, so the retry of the woken waiter sees either its reservation or the
-  passed deadline, and a value or slot it does not take is passed to the next
-  waiter, so nothing is lost. Each task also writes its `awaiting` field before
-  it parks, under the lock (Park and wake protocol), so two tasks that close a
-  cycle at the same time cannot both miss it: the second to take the lock sees
-  the first's field.
-- **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
-  `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
-  current `task`, the turn counters and the `fail` jmp_buf), and `agc_task`.
-  The loop, the registry, the main task and the crash lists are fields of the
-  runtime (§16.9, "The context split"). The run queue is a field of the runtime
-  (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
-  runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
-  `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
-  and the stream locks and `rt->sync` are solo (they take nothing) until
-  `agc_share`, since one thread runs the VM (§16.9). The task state is an
-  atomic enum with PARKING and WOKEN (see "Park and wake protocol"). With N>1
-  the fields go as follows (§16):
+  scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"), a
+  second waker beside the wake or hand-on: the state CAS lets one win, and what
+  the loser leaves is passed on (§10.2.2, Channel waits). Each task also writes
+  its `awaiting` field before it parks, under the lock (Park and wake protocol),
+  so two tasks that close a cycle at the same time cannot both miss it: the
+  second to take the lock sees the first's field.
+- **State split.** `agc_runtime` (shared), `struct agc_vm` (the scheduler) and
+  `agc_task` hold what §16.9, "The context split", lists. With N=1 there are
+  these deviations: the `fail` jmp_buf is per scheduler (the only `setjmp` is
+  the scheduler's own), and the stream locks and `rt->sync` are solo (they take
+  nothing) until `agc_share`, since one thread runs the VM (§16.9). With N>1 the
+  fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants, except
     the Globals table, which the entry writes before `main`, see "The Globals
     table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
@@ -113,11 +105,9 @@ that still apply.
   - Per task: the registers and frames, `random` (7.4), the `fail` jmp_buf
     target (armed on the thread that runs the turn), the string cursor cache,
     and `parked`, the request the task waits on, which it sets while PARKING.
-  - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2).
-    That scheduler records the outcome once and wakes the I/O thread and the
-    idle schedulers. The others stop at the end of their turn or when they
-    wake. The exit path (§14.4) runs on the I/O thread, after it has joined
-    every scheduler thread (§16.9, "Threads").
+  - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2):
+    the schedulers stop and the exit path (§14.4) runs on the I/O thread after
+    it has joined them (§16.9, "Threads").
 - **I/O ownership.** Handles stay on the I/O loop. Schedulers request
   operations through its inbox and tasks resume via the global queue, not a
   handle-owning scheduler (§16.2, §16.4). The I/O thread also owns the state
@@ -139,9 +129,8 @@ that still apply.
   `uv_async_send` on it. At the end of the run it is unref'd, so an in-process
   harness can close the loop. The real binary ends with `_exit` and closes no
   loop (Shutdown). With N=1 there is no inbox handle, and the "no active
-  handles" check of 10.2.1 still holds. As built, `agc_io_share` makes the
-  inbox (`vm/inbox.c`) and gives the loop to the thread that calls it; until it
-  runs, every request executes on the thread that posts it.
+  handles" check of 10.2.1 still holds. `agc_io_share` makes the inbox (§16.9,
+  "The inbox").
 - **Stall check.** At N>1 the I/O thread runs it when it has nothing to do
   (§16.9, "Stall"); it never uses `uv_run`'s return value.
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
@@ -151,25 +140,23 @@ that still apply.
   distro's libgc, and `vm/value.c` defines `GC_THREADS` before it includes
   `gc.h`. The threads libuv starts (the schedulers) register with
   `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with
-  `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once
-  after `agc_init`, which also starts the mark threads. The libuv pool threads
-  stay unregistered on purpose, since they never touch GC memory; so does the
-  Windows stdin reader thread, which touches only `malloc` memory. With N=1 no
-  one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime
-  struct is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm`
-  that stays on the main thread's stack for the whole run. The run queue lives
-  in GC memory, so a head in `malloc` memory never hides a task from the
-  collector. Jobs and the inbox are `malloc` memory with no GC pointer, and a GC
-  resource owns each job (§16.5). Collections stop the world.
-  That cost is accepted. Boehm stops
-  threads with signals installed with `SA_RESTART`. The VM's syscall paths retry
-  on `EINTR`, and libuv signal handling (`uv_signal_t`) must never take Boehm's
-  suspend and restart signals. On Windows Boehm stops threads with
-  `SuspendThread`, so a stopped thread may hold the `malloc` heap lock, and the
-  collecting thread must not `malloc` until the world restarts. Its mark phase
-  calls `signal(SIGSEGV, ...)`, and the UCRT allocates a thread's signal table
-  at that thread's first `signal` call, so every thread calls `signal` once
-  before it registers (`own_signal_table` in `vm/value.c`, #528).
+  `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once after
+  `agc_init`, which also starts the mark threads. The libuv pool threads stay
+  unregistered on purpose, since they never touch GC memory; so does the Windows
+  stdin reader thread, which touches only `malloc` memory. With N=1 no one calls
+  `agc_gc_allow_threads`, so no mark thread exists. The runtime struct is GC
+  memory (`agc_vm_init` allocates it), reached from the `agc_vm` that stays on
+  the main thread's stack for the whole run. Where GC pointers may live (the run
+  queue, jobs, the inbox) is in §16.5, "GC rule". Collections stop the world.
+  That cost is accepted. Boehm stops threads with signals installed with
+  `SA_RESTART`. The VM's syscall paths retry on `EINTR`, and libuv signal
+  handling (`uv_signal_t`) must never take Boehm's suspend and restart signals.
+  On Windows Boehm stops threads with `SuspendThread`, so a stopped thread may
+  hold the `malloc` heap lock, and the collecting thread must not `malloc` until
+  the world restarts. Its mark phase calls `signal(SIGSEGV, ...)`, and the UCRT
+  allocates a thread's signal table at that thread's first `signal` call, so
+  every thread calls `signal` once before it registers (`own_signal_table` in
+  `vm/value.c`).
 - **No mutable global state in `vm/`.** Every mutable `static` or global
   variable goes into the runtime, scheduler or task struct. Lazy one-time init
   uses `pthread_once` or happens at start-up. `make vm-lint` enforces this with
