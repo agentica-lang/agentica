@@ -129,6 +129,10 @@ class PrepareTests(unittest.TestCase):
             self.assertNotIn("[agentica-link-", grammar)
             self.assertIn("](library/data-structures/list.md)", grammar)
             self.assertTrue((work / "docs" / "library" / "data-structures" / "list.md").is_file())
+            library = work / "docs" / "library"
+            self.assertIn("[List](list.md)", (library / "data-structures" / "lazy.md").read_text(encoding="utf-8"))
+            for page in library.rglob("*.md"):
+                self.assertNotIn("](/", page.read_text(encoding="utf-8"), page)
 
     def test_grammar_arm_prompt_names_agentica_help(self) -> None:
         self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))

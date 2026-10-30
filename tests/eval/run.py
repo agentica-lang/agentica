@@ -141,8 +141,34 @@ def prepare(work: Path, task: str, arm: str) -> None:
         text = re.sub(r"\]\((?:\.\./){2}site/content/library/", "](library/", text)
         text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
         (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
-        shutil.copytree(ROOT / "site" / "content" / "library", work / "docs" / "library")
+        copy_library(ROOT / "site" / "content" / "library", work / "docs" / "library")
         shutil.copytree(ROOT / "examples", work / "examples")
+
+
+# The link text may hold one level of brackets (`[`Optional[T]`](/library/...)`).
+SITE_LINK = re.compile(r"\[((?:[^\[\]]|\[[^\]]*\])*)\]\(/([^)#\s]*?)/?(#[^)\s]*)?\)")
+
+
+def copy_library(source: Path, target: Path) -> None:
+    """Copy the library pages and turn their site links (`/library/list/#x`) into links between the copied files.
+
+    A link to a page outside the library (the tour, the command line) has no copy, so it becomes plain text.
+    """
+    shutil.copytree(source, target)
+
+    def relink(page: Path):
+        def replace(found: re.Match) -> str:
+            text, path, fragment = found.group(1), found.group(2), found.group(3) or ""
+            inside = path.removeprefix("library").strip("/")
+            for candidate in (f"{inside}.md", f"{inside}/_index.md" if inside else "_index.md"):
+                if path.startswith("library") and (target / candidate).is_file():
+                    return f"[{text}]({os.path.relpath(target / candidate, page.parent)}{fragment})"
+            return text
+
+        return replace
+
+    for page in sorted(target.rglob("*.md")):
+        page.write_text(SITE_LINK.sub(relink(page), page.read_text(encoding="utf-8")), encoding="utf-8")
 
 
 def strip_query_docs(skill: Path) -> None:
