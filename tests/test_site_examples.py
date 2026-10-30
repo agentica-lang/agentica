@@ -1,6 +1,7 @@
 """The agentica code blocks of site/content.
 
-Each block is checked or run with the product CLI, in a folder of its own. A fenced block may carry attributes:
+Each block is checked or run with the product CLI, in a folder of its own, where an agentica.toml turns on the style
+rule `blank_line_after_end` for both modes. A fenced block may carry attributes:
 `mode="check"` only checks the program, `expect="CODE"` says the program is rejected or fails with that diagnostic code,
 `file="name.agc"` makes the block a module file that the programs of the page import. An `input` block after a program
 is its standard input, and an `output` block is the exact standard output of its run. The fast tier covers the start
@@ -25,6 +26,8 @@ SMOKE_PAGES = ["getting-started.md", "cli.md", "tour/modules.md", "tour/results-
 JOBS = 4
 # The codes of the stages before the run: a program that fails with one of them was rejected, not run.
 STATIC_PREFIXES = ("LEX-", "PARSE-", "CHECK-")
+# The style the site examples follow; the `check` and the `run` of the CLI both report a break of it.
+MANIFEST = "[style]\nblank_line_after_end = true\n"
 
 
 @dataclass
@@ -174,6 +177,7 @@ def check_page(path, counts, tmp_path):
         elif is_program(block):
             directory = scratch / ("block-%d" % block.line)
             directory.mkdir()
+            (directory / "agentica.toml").write_text(MANIFEST, encoding="utf-8")
             for name, text in modules.items():
                 (directory / name).parent.mkdir(parents=True, exist_ok=True)
                 (directory / name).write_text(text, encoding="utf-8")

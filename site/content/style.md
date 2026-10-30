@@ -62,6 +62,8 @@ def main() -> Void
 end
 ```
 
+Put a blank line after the `end` of a block before the next statement. The examples on this site follow it, and `blank_line_after_end = true` under `[style]` in `agentica.toml` makes `agentica check` enforce it (see [packages](/tour/modules/#packages)).
+
 ## Naming
 
 | What | Style | Example |
@@ -119,6 +121,7 @@ def describe(visible: Bool) -> String
   if visible
     return "shown"
   end
+
   return "hidden"
 end
 
@@ -155,6 +158,7 @@ def total(prices: List[Int]) -> Int
   for price in prices
     sum += price
   end
+
   return sum
 end
 
@@ -171,6 +175,7 @@ export def total(prices: List[Int]) -> Int
   for price in prices
     sum += price
   end
+
   return sum
 end
 
@@ -200,6 +205,7 @@ def ship(weight: Int, width: Int, height: Int, depth: Int, rush: Bool) -> Int
       end
     end
   end
+
   return cost
 end
 
@@ -222,9 +228,11 @@ def ship(parcel: Parcel) -> Int
   if parcel.weight <= 0 or parcel.width <= 0
     return 0
   end
+
   if parcel.rush
     return parcel.weight * 3
   end
+
   return parcel.weight * 2
 end
 
@@ -270,6 +278,7 @@ def main() -> Void
   for x in [1, 2]
     sum += x
   end
+
   puts(sum)
   puts([1, 2].map do |x| x * 2 end)
 end
@@ -334,6 +343,7 @@ def color_name(code: Int) -> String
   elsif code == 1
     return "green"
   end
+
   return "unknown"
 end
 
@@ -460,7 +470,7 @@ end
 
 ## Errors
 
-A function that can fail returns a `Result` and passes errors up with `try`. Use a halting form such as `to_i!` only when a failure is a bug, and say why in a comment:
+A function that can fail returns a `Result` and passes errors up with `try`. Use a halting form such as `to_i!` only when a failure is a bug, and say why in a comment. A value that may be missing, with no error to report, is an [Optional](/library/data-structures/optional/#optional-or-result) (`some(x)` or `none`), not a `Result`:
 
 ```agentica {mode="check"}
 # bad
@@ -497,6 +507,7 @@ def parse_port(text: String) -> Result[Int]
   if n < 1 or n > 65535
     return error("port out of range: #{n}")
   end
+
   return ok(n)
 end
 

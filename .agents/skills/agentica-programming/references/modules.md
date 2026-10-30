@@ -24,8 +24,8 @@ cannot name or build them.
 
 - Through the alias: `Models.User` in annotations and JSON type arguments,
   `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call,
-  `&Models.greet` for a callback; imported enums: `Models.Option[T]`,
-  `Models.Option.Some(value)`, and `Models.Option.Some(item)` in a pattern.
+  `&Models.greet` for a callback; imported enums: `Models.Change[T]`,
+  `Models.Change.Added(value)`, and `Models.Change.Added(item)` in a pattern.
   Local names stay unqualified inside their own file.
 - Re-export: `export Url.parse` or `export Url.Address` (after the imports,
   `Url` an alias of this file) passes on a name of an imported module, so a
@@ -43,9 +43,9 @@ cannot name or build them.
 
 `import {User, greet} from "models"` brings exported names in, used bare:
 `User` as a type, `User(name: "Ana")`, `greet(user)`, `user |> greet()`,
-`&greet`, and for an enum `Option` the type `Option[T]`, `Option.None`,
-`Option.Some(value)` and `Option.Some(item)` in a pattern. Variants are not
-imported alone: import the enum. A bare function still needs parentheses.
+`&greet`, and for an enum `Change` the type `Change[T]`, `Change.Added(value)`
+and `Change.Added(item)` in a pattern. Variants are not imported alone: import
+the enum. A bare function still needs parentheses.
 
 - An entry may rename: `import {greet as hello, User as Account} from
   "models"`. The new name keeps the case rule of what it names (a struct or enum

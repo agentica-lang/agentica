@@ -97,6 +97,7 @@ def main() -> Void
   for n in [1, 2]
     puts(n)
   end
+
   ["x", "y"].each do |s|
     puts(s)
   end

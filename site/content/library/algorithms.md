@@ -26,6 +26,7 @@ def main() -> Void
   for p in best_first
     puts("#{p.name}: #{p.score}")
   end
+
   puts(["pear", "fig", "banana"].sort_by do |w| w.length end)
 end
 ```
@@ -53,6 +54,7 @@ def shortest_path(graph: Map[String, List[String]], start: String, goal: String)
     if node == goal
       return ok(steps)
     end
+
     for next in graph.get(node, [])
       if not distance.key?(next)
         distance = distance.put(next, steps + 1)
@@ -60,6 +62,7 @@ def shortest_path(graph: Map[String, List[String]], start: String, goal: String)
       end
     end
   end
+
   return error("no path from #{start} to #{goal}")
 end
 
@@ -97,9 +100,11 @@ def fib(n: Int, cache: Map[Int, Int]) -> Memo
   if n < 2
     return Memo(value: n, cache: cache)
   end
+
   if cache.key?(n)
     return Memo(value: cache[n], cache: cache)
   end
+
   left = fib(n - 1, cache)
   right = fib(n - 2, left.cache)
   total = left.value + right.value
@@ -131,6 +136,7 @@ def factorial(n: Int) -> Int
   if n <= 1
     return 1                                   # base case
   end
+
   return n * factorial(n - 1)
 end
 
@@ -148,6 +154,7 @@ def hanoi(n: Int, from: String, to: String, via: String) -> Int
   if n == 0
     return 0
   end
+
   return hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
 end
 

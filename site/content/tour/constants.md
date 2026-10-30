@@ -46,6 +46,7 @@ def kind(name: String) -> String
   if FRUITS.include?(name)
     return "fruit"
   end
+
   return "drink"
 end
 

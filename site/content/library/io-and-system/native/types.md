@@ -79,6 +79,7 @@ def main() -> Void
     puts(Native.get_string(failed.errmsg, 0))   # near "from": syntax error
     sqlite3_free(failed.errmsg)
   end
+
   Native.close(db)
 end
 ```
@@ -127,6 +128,7 @@ def main() -> Void
     puts(Native.address(prepared.tail) - Native.address(buf))
     Native.close(prepared.stmt)
   end
+
   Native.close(db)
 end
 ```
@@ -260,6 +262,7 @@ def main() -> Void
     Native.memory_pointer(64) do |buf|
       puts(read(slot(api, READ), opened.handle, buf, 64))
     end
+
     Native.close(opened.handle)   # calls the close slot once
   end
 end
@@ -281,6 +284,7 @@ extern "/opt/geo/libgeo.so"
     x: C.Double
     y: C.Double
   end
+
   struct Shape
     origin: Point
     sides: C.Int32
@@ -288,6 +292,7 @@ extern "/opt/geo/libgeo.so"
     filled: C.Bool
     tag: C.Pointer
   end
+
   def geo_default_shape() -> Shape
   def geo_area(shape: Shape) -> C.Double
   compute def geo_grow(shape: Shape, by: C.Double) -> Shape
@@ -326,6 +331,7 @@ extern "/opt/db/libdb.so"
     length: C.Long
     is_null: C.Bool
   end
+
   def db_bind_params(binds: C.Pointer, count: C.Int32) -> C.Int32
 end
 

@@ -13,6 +13,7 @@ def main() -> Void
   for i in 0...3
     puts(i)
   end
+
   for i in 3..1
     puts("never")
   end
@@ -77,6 +78,7 @@ def main() -> Void
   evens = (0..10).to_a.select do |n|
     n % 2 == 0
   end
+
   puts(evens)
 end
 ```
@@ -163,14 +165,17 @@ def main() -> Void
   3.times do |i|
     print(i)
   end
+
   puts("")
   1.upto(3) do |i|
     print(i)
   end
+
   puts("")
   3.downto(1) do |i|
     print(i)
   end
+
   puts("")
 end
 ```

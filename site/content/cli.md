@@ -108,7 +108,7 @@ agentica symbol Models.User.email src/    # PATH is a file or a folder, default 
 src/models.agc:4:3 field User.email: String
 ```
 
-NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Models.User` through the import alias of a file under PATH, `std/queue.pop` or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. The files under PATH are linked together; one that does not link is listed under `skipped` and the others still answer. `--json` adds `kind`, `module`, `exported`, `signature`, `doc` and the spans to each match.
+NAME is written as the code writes it: `total`, `User.email`, `Level.Info`, `Models.User` through the import alias of a file under PATH, `std/queue.pop` or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. The files under PATH are linked together; one that does not link is listed under `skipped` and the others still answer. `--json` adds `kind`, `module`, `exported`, `signature`, `doc` and the spans to each match.
 
 ## Find references
 

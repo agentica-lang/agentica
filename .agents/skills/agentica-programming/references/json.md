@@ -141,6 +141,7 @@ def main() -> Void
     JsonField.Null -> puts("clear the name")
     JsonField.Absent -> puts("keep the name")
   end
+
   puts(JSON.encode(Patch(name: JsonField.Absent)))   # {}
 end
 ```

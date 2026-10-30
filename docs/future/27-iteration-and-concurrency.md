@@ -323,9 +323,9 @@ program needs it.
 - **Steps.** `with_index do |x, i| ... end` maps each item with its index from
   0, since the language has no tuples to pair them (`List.each_with_index`
   passes the index to its block the same way); a program that needs both
-  returns a struct. `filter_map` is left out: the language has no optional
-  type, and a `Result` from the block would mix "skip this item" with "this
-  failed"; it is `filter` then `map`.
+  returns a struct. `filter_map` is left out: a `Result` from the block would
+  mix "skip this item" with "this failed", and an `Optional` from the block
+  (a builtin type) is not decided; it is `filter` then `map`.
 - **Terminals return a `Result`, always.** One rule, since the I/O sources can
   fail in the middle. `to_list(max)` of the old plan is not taken: `first(n)`
   bounds the items, and `to_a` is Ruby's name.
