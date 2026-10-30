@@ -182,7 +182,8 @@ Text-form notes:
   refresh in `references/ci.md`).
 - Builtin defaults: a parameter of a catalog row may have
   `default: Model.Default.Whole(0)` (`Model.Named`; `Real`, `Text`, `Flag`,
-  `Nothing`, `EmptyList`, `EmptyMap`, `Variant("LogLevel.Info")`). The shape is
+  `Nothing`, `EmptyList`, `EmptyMap`, `EmptyBytes` (lowered as `"".bytes`),
+  `Variant("LogLevel.Info")`). The shape is
   `Defaults.builtin_shape`, and `Builtins.form_for` picks the form for every
   count from the required parameters to all of them. `check_plain` maps the
   arguments to parameters with `Defaults.param_of`; `lower_call` fills the

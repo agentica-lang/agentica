@@ -1,10 +1,10 @@
 ---
 title: Digest, HMAC and SecureRandom
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, Triple DES CBC and CMAC for payment formats, and SecureRandom, which draws secure random bytes, hex and UUIDs.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, AES-256-GCM encryption, PBKDF2 and scrypt password hashing, Triple DES CBC and CMAC for payment formats, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, Triple DES CBC (`Cipher`, named after Ruby's `OpenSSL::Cipher.new("des-ede3-cbc")`) and `CMAC` for payment formats, and the secure random draws of `SecureRandom`, as Ruby names them.
+The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, AES-256-GCM (`Cipher`, named after Ruby's `OpenSSL::Cipher.new("aes-256-gcm")`), the password hashes of `KDF`, as Ruby's `OpenSSL::KDF` names them, Triple DES CBC and `CMAC` for payment formats, and the secure random draws of `SecureRandom`, as Ruby names them.
 
 ## Digests
 
@@ -112,6 +112,82 @@ false
 - Values of other lengths give `false`. The time grows with both lengths, so it shows how long the values are, never what they hold.
 - To check a hex MAC, such as the one in a webhook header, decode it first with [`Digest.hexdecode`](/library/text-and-data/base64/#hex); an `error` there means a bad MAC.
 - It needs no effect label.
+
+## AES-256-GCM
+
+```text
+Cipher.aes_256_gcm_encrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
+Cipher.aes_256_gcm_decrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
+```
+
+`Cipher.aes_256_gcm_encrypt` encrypts `data` with AES-256-GCM, as Ruby's `OpenSSL::Cipher.new("aes-256-gcm")` does, and gives the ciphertext with the 16-byte tag appended: 16 bytes more than `data`. `Cipher.aes_256_gcm_decrypt` takes that form back. It gives the plaintext only when the tag matches the key, the IV, the ciphertext and `auth_data`; anything changed gives an `error`, and no part of the plaintext. `auth_data` is authenticated but not encrypted: a header, a record id or a version that the receiver reads in the clear and must not be swapped.
+
+```agentica
+def main() -> Void
+  key = Digest.hexdecode("feffe9928665731c6d6a8f9467308308feffe9928665731c6d6a8f9467308308").unwrap!
+  iv = Digest.hexdecode("cafebabefacedbaddecaf888").unwrap!
+  header = "record 7".bytes
+  sealed = Cipher.aes_256_gcm_encrypt(key, iv, "attack at dawn".bytes, header).unwrap!
+  puts(sealed.size)
+  puts(Digest.hexencode(sealed))
+  opened = Cipher.aes_256_gcm_decrypt(key, iv, sealed, header).unwrap!
+  puts(String.from_bytes(opened).unwrap!)
+  puts(Cipher.aes_256_gcm_decrypt(key, iv, sealed, "record 8".bytes).ok?)
+  puts(Cipher.aes_256_gcm_decrypt(key, iv, sealed).ok?)
+end
+```
+
+```output
+30
+ea6887b402b95b8325065a07f21f0e754294b29d6398414d4a28a9fb3317
+attack at dawn
+false
+false
+```
+
+- The key has 32 bytes; draw it with [`SecureRandom.random_bytes(32)`](#securerandom) or derive it with [`KDF`](#password-hashing).
+- The IV (the nonce) has 12 bytes and must never be used twice with the same key: two messages under one key and IV leak the XOR of their plaintexts and let anyone forge tags. Draw a new one for each message with `SecureRandom.random_bytes(12)` and send it beside the sealed bytes; it need not be secret.
+- A key or IV of another size, sealed bytes shorter than the tag, or more than 2^36 - 32 bytes to encrypt gives an `error`, before any work.
+- The time grows with the data and `auth_data`, and they need no effect label.
+
+## Password hashing
+
+```text
+KDF.pbkdf2_hmac_sha256(password: Bytes, salt: Bytes, iterations: Int, length: Int) -> Result[Bytes]
+KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes]
+```
+
+A password hash is slow on purpose, so that guessing passwords from a stolen hash is slow too. `KDF.pbkdf2_hmac_sha256` gives `length` bytes of PBKDF2 (RFC 8018) with HMAC-SHA256, as Ruby's `OpenSSL::KDF.pbkdf2_hmac` with `hash: "SHA256"` does; its cost is `iterations`. `KDF.scrypt` gives `length` bytes of scrypt (RFC 7914), as Ruby's `OpenSSL::KDF.scrypt` does, which also needs memory: `n` is the cost, a power of 2, `r` the block size and `p` the parallelization. Store the salt (16 random bytes per password) and the parameters beside the hash, derive again from the password given, and compare with [`HMAC.secure_compare`](#checking-a-mac). The same calls derive an encryption key from a passphrase.
+
+```agentica
+def main() -> Void
+  salt = Digest.hexdecode("8d2f1e0a9c6b5a4f3e2d1c0b9a8f7e6d").unwrap!
+  stored = KDF.pbkdf2_hmac_sha256("correct horse".bytes, salt, 600000, 32).unwrap!
+  puts(Digest.hexencode(stored))
+  attempt = KDF.pbkdf2_hmac_sha256("correct horse".bytes, salt, 600000, 32).unwrap!
+  puts(HMAC.secure_compare(attempt, stored))
+  wrong = KDF.pbkdf2_hmac_sha256("Correct horse".bytes, salt, 600000, 32).unwrap!
+  puts(HMAC.secure_compare(wrong, stored))
+  key = KDF.scrypt("correct horse".bytes, salt, 16384, 8, 1, 32).unwrap!
+  puts(Digest.hexencode(key))
+  puts(KDF.pbkdf2_hmac_sha256("pw".bytes, salt, 0, 32).ok?)
+end
+```
+
+```output
+685d9f0664089a1dceb6bfec27db35482562804c30a3669a9224cea9240f6609
+true
+false
+8840f2f4d9d646327d081885af746152d33cef9cb0e22384713790a75b136ce2
+false
+```
+
+- `iterations` is at least 1 and `length` from 1 to 1048576; the password and the salt have at most 1048576 bytes each.
+- scrypt's `n` is above 1 and below 2^(16 * r), `r` and `p` are at least 1 with `r * p` below 2^30, and the memory, 128 * r * (n + p + 2) bytes, is at most 1025 MiB. With `n = 16384` and `r = 8` it is about 16 MiB.
+- Any other value gives an `error`, before any work.
+- OWASP's password storage cheat sheet advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with `n = 131072`, `r = 8` and `p = 1`.
+- The time grows with `iterations`, or with `n * r * p`, and the call holds its scheduler for that time; they need no effect label.
+- `KDF` is a reserved type name.
 
 ## Triple DES and CMAC
 

@@ -106,6 +106,27 @@ CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes]  # 8-byte tag
   says. The AES key of `CMAC.aes` is 16, 24 or 32 bytes. A shorter MAC is
   `tag.take(n)`; check it with `HMAC.secure_compare`. `Cipher` and `CMAC` are
   reserved type names.
+- AES-256-GCM encrypts and authenticates; PBKDF2 and scrypt derive a key from
+  a password (store the salt and the parameters beside the result):
+
+```text
+Cipher.aes_256_gcm_encrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
+Cipher.aes_256_gcm_decrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
+KDF.pbkdf2_hmac_sha256(password: Bytes, salt: Bytes, iterations: Int, length: Int) -> Result[Bytes]
+KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes]
+```
+
+- GCM: a 32-byte key and a 12-byte IV, never reused with one key
+  (`SecureRandom.random_bytes(12)`). Encrypting gives the ciphertext with the
+  16-byte tag appended; decrypting takes that form and gives an `error(...)`
+  when the key, IV, data or `auth_data` do not match the tag, never partial
+  plaintext. `auth_data` is authenticated, not encrypted.
+- KDF: `iterations` at least 1, `length` 1 to 1048576; scrypt's `n` is a
+  power of 2 and its memory, 128 * r * (n + p + 2) bytes, at most 1025 MiB.
+  Other values give an `error(...)`. OWASP's password storage cheat sheet
+  advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
+  `n = 131072, r = 8, p = 1`. Compare a derived key with
+  `HMAC.secure_compare`. `KDF` is a reserved type name.
 
 ```text
 Base64.strict_encode64(data: Bytes) -> String     # padded, one line

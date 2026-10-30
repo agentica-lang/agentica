@@ -35,11 +35,12 @@ for byte in b ... end
 - `slice`, `take` and `drop` copy. `+` in a loop is quadratic: collect the parts
   in a list and call `Bytes.concat` once. To build bytes one at a time, build a
   `List[Int]` and call `Bytes.from_list` once.
-- `Digest`, `HMAC`, `Cipher`, `CMAC`, `Base64`, `SecureRandom.random_bytes`,
-  `IO.read_bytes`, `File.read_bytes`, `File.write_bytes`, `File.sha256`,
-  `String.from_bytes`, `Zlib`, `File.chunks`, the Lazy byte steps,
-  `TCP.send_bytes`, `TCP.recv_bytes`, `Process.send_bytes`, `Process.read_bytes`
-  and `std/binary` take and return `Bytes`. The `Native` array builtins
+- `Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `Base64`,
+  `SecureRandom.random_bytes`, `IO.read_bytes`, `File.read_bytes`,
+  `File.write_bytes`, `File.sha256`, `String.from_bytes`, `Zlib`,
+  `File.chunks`, the Lazy byte steps, `TCP.send_bytes`, `TCP.recv_bytes`,
+  `Process.send_bytes`, `Process.read_bytes` and `std/binary` take and return
+  `Bytes`. The `Native` array builtins
   (`get_array_of_*`, `put_array_of_*`) use `List[Int]` or `List[Float]`: they
   hold 32- and 64-bit numbers, not bytes.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a

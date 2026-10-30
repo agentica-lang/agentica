@@ -327,9 +327,34 @@ Expected types flow into these operations for empty collections and Results.
   -192 or -256), the Triple DES key 24 or 16 (two-key); another size gives an
   `error(...)`. A shorter MAC is the first bytes of the tag
   (`tag.take(4)`); check a received one with `HMAC.secure_compare`.
+- `Cipher.aes_256_gcm_encrypt(key, iv, data, auth_data = "".bytes)` encrypts
+  the `Bytes` in `data` with AES-256-GCM, as Ruby's
+  `OpenSSL::Cipher.new("aes-256-gcm")` does, and gives `ok(bytes)`: the
+  ciphertext, of the size of `data`, with the 16-byte tag appended. The key
+  has 32 bytes and the IV 12; an IV must never be used twice with one key.
+  `auth_data` is authenticated but not encrypted (a header, a record id).
+  `Cipher.aes_256_gcm_decrypt(key, iv, data, auth_data = "".bytes)` takes
+  that form back and gives `ok(plaintext)` only when the tag matches the key,
+  IV, ciphertext and `auth_data`; else it gives an `error(...)`, never partial
+  plaintext. A key or IV of another size, a `data` to decrypt shorter than
+  16 bytes, or more than 2^36 - 32 bytes to encrypt gives an `error(...)`
+  before any work.
 - The `Cipher` and `CMAC` calls are built on OpenSSL, take time in proportion
   to their data and have no effect label. `Cipher` and `CMAC` are reserved
   type names.
+- `KDF.pbkdf2_hmac_sha256(password, salt, iterations, length)` gives
+  `ok(key)`: `length` bytes of PBKDF2 (RFC 8018) with HMAC-SHA256 of the
+  `Bytes` `password` and `salt`, as Ruby's `OpenSSL::KDF.pbkdf2_hmac` with
+  `hash: "SHA256"` does. `KDF.scrypt(password, salt, n, r, p, length)` gives
+  `ok(key)` of scrypt (RFC 7914), as Ruby's `OpenSSL::KDF.scrypt` does: `n` is
+  the cost, a power of 2 above 1 (and below 2^(16 * r)), `r` the block size
+  and `p` the parallelization, both at least 1 with `r * p` below 2^30, and
+  the memory it takes, 128 * r * (n + p + 2) bytes, is at most 1025 MiB.
+  `iterations` is at least 1, `length` is 1 to 1048576, and the password and
+  the salt have at most 1048576 bytes each; anything else gives an
+  `error(...)` before any work. Both are built on OpenSSL, take time in
+  proportion to `iterations` or to `n * r * p`, and have no effect label.
+  `KDF` is a reserved type name.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 of a `Bytes` on one line,
   `encode64(data)` the same in lines of 60 characters that each end in a
