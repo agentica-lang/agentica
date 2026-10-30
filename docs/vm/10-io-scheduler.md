@@ -253,31 +253,28 @@ section says how the scheduler and the loop keep them.
 - **Pool size.** The VM never sets the pool size. The libuv variable
   `UV_THREADPOOL_SIZE` does (there is no `AGENTICA_*` variable). libuv reads it
   once, when the pool is created, so it must be set before the VM starts. The
-  default is 4, and the cap 1024. The pool runs regular-file I/O, opens and path
-  calls, DNS (`getaddrinfo`), and the TLS setup jobs. Blocking stdin is the
-  exception: a failed Unix poller setup can keep one pool thread until input
-  arrives (Stdin below). Windows stdin never uses the pool. All other work must
-  finish without waiting indefinitely for input.
+  default is 4, and the cap 1024. The pool runs the bounded work of §14.1, with
+  opens and path calls. Blocking stdin is the exception: a failed Unix poller
+  setup can keep one pool thread until input arrives (Stdin below). Windows
+  stdin never uses the pool.
 - **We only wait where the loop can cancel** (§14.1). Files open with
   `O_CLOEXEC` and `O_NONBLOCK`, so opening a FIFO never waits for a peer. The
-  pool job then picks the path by `fstat` and an `epoll_ctl` probe, never by
-  name. A regular file, a block device, or a device that epoll refuses with
-  `EPERM` (`/dev/null`, `/dev/zero`) is blocking and runs in the pool. Any other
-  probe error is the call's error, never a fall back to blocking. A pipe, FIFO,
-  terminal or other waiting character device is non-blocking on the loop through
-  a poller (`uv_poll_t`). A handle call tries its step on the loop thread. When
-  it would wait, it parks on an `external` job, and the poller's callback
-  repeats the step. A whole-file call opens in the pool. If the path is
-  pollable, its `more` step keeps the same job and task waiting on the loop (a
-  pool kind with a `cancel` half must have a `more` step, which `start_job`
-  checks). A poller error is reported by repeating the step, so the call gets
-  the real error (`EPIPE` for a reader that left). `read_text` of a pipe, or of
-  a regular file that reports size 0 (`/proc`, `/sys`), reads to EOF, at most 1
-  MiB. `File.each_line` reads one job per read, of at most `buffer_bytes` into a
-  buffer made once. A timed-out read closes the handle. Between reads the task
-  runs the block for every complete line already buffered. On Windows no `File`
-  call waits on the loop: `probe` refuses a named pipe or a device with
-  `ENOTSUP`, and the call closes it (§14.1).
+  pool job then sorts the path by what it is, never by name (`fstat` and an
+  `epoll_ctl` probe, §14.1). A pipe, FIFO, terminal or other waiting character
+  device is non-blocking on the loop through a poller (`uv_poll_t`). A handle
+  call tries its step on the loop thread. When it would wait, it parks on an
+  `external` job, and the poller's callback repeats the step. A whole-file call
+  opens in the pool. If the path is pollable, its `more` step keeps the same job
+  and task waiting on the loop (a pool kind with a `cancel` half must have a
+  `more` step, which `start_job` checks). A poller error is reported by
+  repeating the step, so the call gets the real error (`EPIPE` for a reader that
+  left). `read_text` of a pipe, or of a regular file that reports size 0
+  (`/proc`, `/sys`), reads to EOF, at most 1 MiB. `File.each_line` reads one job
+  per read, of at most `buffer_bytes` into a buffer made once. A timed-out read
+  closes the handle. Between reads the task runs the block for every complete
+  line already buffered. On Windows no `File` call waits on the loop: `probe`
+  refuses a named pipe or a device with `ENOTSUP`, and the call closes it
+  (§14.1).
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else

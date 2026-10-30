@@ -46,9 +46,8 @@ joined the pool, and the pool waited for a FIFO that never wrote.
   devices and directories go to the pool) and an `epoll_ctl` probe. Only `EPERM`
   from the probe means "never waits" (`/dev/null`, `/dev/zero`), and those go to
   the pool and are set blocking. Any other probe error, or a poll handle that
-  cannot be made, is the call's error, never a silent fall back to the pool. A
-  whole-file call (`read_text`, `write_text`) opens in the pool, then waits on
-  the loop (`agc_io_start_then`).
+  cannot be made, is the call's error, never a silent fall back to the pool.
+  Whole-file calls (`read_text`, `write_text`) are in §10.2.2.
 - **Native compute calls** (`compute def`) run on the compute pool, VM threads
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
