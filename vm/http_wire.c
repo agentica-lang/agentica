@@ -1,10 +1,10 @@
 /*
  * The pure HttpWire builtins std/http's client and server use: chunked
- * framing, body text, request and response heads and error answers. No I/O
+ * framing, request and response heads and error answers. No I/O
  * and no state: std/http owns the socket and the deadlines. Heads and body
- * data come through HttpWire.read_head, read_response and read_text in
- * vm/tcp.c, which build their records with agc_http_head_value,
- * agc_http_response_value and agc_http_text_value here. Built wherever TCP
+ * data come through HttpWire.read_head and read_response in
+ * vm/tcp.c, which build their records with agc_http_head_value and
+ * agc_http_response_value here. Built wherever TCP
  * is (Linux, macOS, Windows); a stub table elsewhere. Service layer. Design:
  * docs/vm/10-io-http.md §10.7.
  */
@@ -30,7 +30,6 @@ static const char *const head_fields[] = {"method",          "target",   "path",
                                           "expect_continue", "buffered", "status", "reason"};
 static const char *const chunk_fields[] = {"done", "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
-static const char *const text_fields[] = {"text", "carry", "bytes", "valid", "buffered", "ended"};
 static const char *const reply_fields[] = {"head", "closes"};
 static const char *const response_fields[] = {"status", "headers",  "length", "chunked",
                                               "until_close", "closes", "buffered", "ended"};
@@ -327,62 +326,6 @@ static agc_value builtin_chunk_read(agc_vm *vm, agc_value *args, uint32_t span) 
 
 /* The length of the longest prefix of s that does not end inside a UTF-8
    sequence. Bytes that can never be valid stay in it, so the decoding fails. */
-static size_t whole_prefix(const uint8_t *s, size_t len) {
-  for (size_t back = 1; back <= 3 && back <= len; back++) {
-    uint8_t c = s[len - back];
-    if ((c & 0xC0) == 0x80) continue;
-    /* 0xC0, 0xC1 and 0xF5..0xFF never start a valid sequence: kept in the
-       prefix, they fail the decoding at once. */
-    return c >= 0xC2 && c <= 0xF4 && agc_utf8_width(c) > back ? len - back : len;
-  }
-  return len;
-}
-
-/* The HttpWire.Text of buf: valid is false, with empty text, when buf is not
-   UTF-8 up to an unfinished last character. buffered is the count of input
-   bytes still unread after the cut and ended whether the input had ended or
-   failed (0 and false for HttpWire.text). The carry is a Bytes. */
-agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes, size_t buffered, bool ended) {
-  size_t whole = whole_prefix(buf, len), chars;
-  bool valid = agc_utf8_chars(buf, whole, &chars);
-  agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 6), 6);
-  t->fields[0] = valid ? agc_string_value(agc_make_string((const char *)buf, whole, chars))
-                       : agc_string_value(agc_make_string("", 0, 0));
-  size_t carried = valid ? len - whole : 0;
-  t->fields[1] = agc_bytes_value(agc_make_bytes(buf + whole, carried));
-  t->fields[2] = agc_int((int64_t)bytes);
-  t->fields[3] = agc_bool(valid);
-  t->fields[4] = agc_int((int64_t)buffered);
-  t->fields[5] = agc_bool(ended);
-  return agc_struct_value(t);
-}
-
-/* HttpWire.text(carry, data, runs): the text of carry followed by the runs of
-   data (start, length pairs). carry and data are Bytes; runs is a List[Int]. */
-static agc_value builtin_text(agc_vm *vm, agc_value *args, uint32_t span) {
-  const agc_bytes *carry = agc_as_bytes(vm, args[0]), *data = agc_as_bytes(vm, args[1]);
-  const agc_list *runs = agc_as_list(vm, args[2]);
-  size_t pairs = agc_list_len(runs), kept = carry->len, len = data->len;
-  if (pairs % 2 || kept > 3) misuse(vm, "HttpWire.text: invalid runs", span);
-  size_t total = kept;
-  for (size_t k = 0; k < pairs; k += 2) {
-    int64_t from = agc_as_int(vm, agc_list_get(runs, k)), count = agc_as_int(vm, agc_list_get(runs, k + 1));
-    if (!range_ok(from, count, len)) misuse(vm, "HttpWire.text: invalid runs", span);
-    total = agc_size_add(total, (size_t)count);
-  }
-  uint8_t *buf = agc_alloc_atomic(total ? total : 1);
-  if (kept) memcpy(buf, carry->data, kept);
-  size_t at = kept;
-  for (size_t k = 0; k < pairs; k += 2) {
-    size_t from = (size_t)agc_as_int(vm, agc_list_get(runs, k));
-    size_t count = (size_t)agc_as_int(vm, agc_list_get(runs, k + 1));
-    if (count) memcpy(buf + at, data->data + from, count);
-    at += count;
-  }
-  agc_charge(vm, total / AGC_COST_BYTES);
-  return agc_http_text_value(vm, buf, total, total - kept, 0, false);
-}
-
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
   agc_list_cursor cursor;
   agc_value item;
@@ -554,7 +497,6 @@ const agc_builtin agc_http_wire_builtins[] = {
   {"HttpWire.chunked", 1, builtin_chunked, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.chunk.bytes", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"HttpWire.text.bytes", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.encode_request", 8, builtin_encode_request, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

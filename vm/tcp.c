@@ -27,7 +27,7 @@
 #define NET(ptr, field) ((net *)(void *)((char *)(ptr) - offsetof(net, field)))
 #define TCP_LINK(ptr, field) ((tcp_link *)(void *)((char *)(ptr) - offsetof(tcp_link, field)))
 
-typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_TEXT, REQ_HEAD, REQ_RESPONSE, REQ_SEND } req_kind;
+typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_IDLE, REQ_HEAD, REQ_RESPONSE, REQ_SEND } req_kind;
 
 typedef agc_conn net;
 typedef struct tcp_link tcp_link;
@@ -61,17 +61,14 @@ struct request {
   int64_t port;
   int write_status, open_error;
   agc_inbuf_cut cut;
-  /* HttpWire.read_text: the carry before the bytes. HttpWire.read_head: the
-     body limit, the rest to put back first (a malloc'd copy, or NULL), and
-     where the look for an LF stopped. HttpWire.read_response: the body limit,
-     where the look stopped, and whether the request was HEAD. Their cut goes
-     in `cut` (the carry first), with `bytes`, `buffered` and `ended` (the input
-     had already ended or failed at the cut). */
-  uint8_t carry[3], kept;
+  /* HttpWire.read_head: the body limit, the rest to put back first (a malloc'd copy, or NULL), and where the look for
+     an LF stopped. HttpWire.read_response: the body limit, where the look stopped, and whether the request was HEAD.
+     Their cut goes in `cut`, with `buffered` and `ended` (the input had already ended or failed at the cut), which
+     HttpWire.idle? reads alone. */
   bool head_only, ended;
   uint64_t limit;
   uint8_t *rest;
-  size_t rest_len, scanned, bytes, buffered;
+  size_t rest_len, scanned, buffered;
 };
 
 typedef struct tls_shared tls_shared;
@@ -207,7 +204,7 @@ static void remove_request(request **head, request **tail, const request *q) {
 }
 
 static bool reads(req_kind kind) {
-  return kind == REQ_LINE || kind == REQ_BYTES || kind == REQ_TEXT || kind == REQ_HEAD || kind == REQ_RESPONSE;
+  return kind == REQ_LINE || kind == REQ_BYTES || kind == REQ_IDLE || kind == REQ_HEAD || kind == REQ_RESPONSE;
 }
 
 static bool heads(req_kind kind) { return kind == REQ_HEAD || kind == REQ_RESPONSE; }
@@ -240,7 +237,7 @@ static bool head_ready(const agc_inbuf *in, request *q) {
 static bool read_ready(net *n, request *q) {
   if (n->closed) return true;
   if (heads(q->kind)) return head_ready(&n->in, q);
-  if (q->kind == REQ_TEXT && q->count == 0) return true;
+  if (q->kind == REQ_IDLE) return true;
   return agc_inbuf_ready(&n->in, q->kind == REQ_LINE, 1);
 }
 
@@ -248,19 +245,13 @@ static bool read_ready(net *n, request *q) {
    does not keep such a connection. I/O thread only. */
 static bool input_ended(const net *n) { return n->in.eof || n->in.error || n->raw_eof; }
 
-/* The cut of HttpWire.read_text: the carry, then up to q->count read bytes,
-   and the count of bytes left in the input. I/O thread only. */
-static void cut_text(net *n, request *q) {
-  size_t have = agc_inbuf_pending(&n->in);
-  q->bytes = have < q->count ? have : q->count;
+/* The cut of HttpWire.idle?: no bytes are taken, only the count left in the input and whether it has ended. I/O thread
+   only. */
+static void cut_idle(net *n, request *q) {
   q->cut.error = n->in.error;
   q->cut.status = AGC_CUT_DATA;
-  q->cut.len = q->kept + q->bytes;
-  q->cut.data = malloc(q->cut.len ? q->cut.len : 1);
-  if (!q->cut.data) agc_out_of_memory();
-  memcpy(q->cut.data, q->carry, q->kept);
-  if (q->bytes) memcpy(q->cut.data + q->kept, n->in.data + n->in.start, q->bytes);
-  agc_inbuf_take(&n->in, q->bytes);
+  q->cut.len = 0;
+  q->cut.data = NULL;
   q->buffered = agc_inbuf_pending(&n->in);
   q->ended = input_ended(n);
 }
@@ -284,11 +275,8 @@ static void cut_head(net *n, request *q) {
 
 /* The values of the two cuts, built on a scheduler from the request alone. std/http matches on "error reading from
    stream port" (a prefix) and "network: end of input" of both (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
-static agc_value text_value(agc_vm *vm, const request *q) {
-  if (q->bytes == 0 && q->count && q->cut.error)
-    return agc_system_error(vm, "error reading from stream port", q->cut.error);
-  return agc_result_value(
-      true, agc_http_text_value(vm, q->cut.data, q->cut.len, q->bytes, q->buffered, q->ended));
+static agc_value idle_value(const request *q) {
+  return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
 static agc_value head_value(agc_vm *vm, const request *q) {
@@ -350,8 +338,8 @@ static void finish(request *q) {
     case REQ_BYTES:
       if (!n->closed) agc_inbuf_cut_bytes(&n->in, q->count, &q->cut);
       break;
-    case REQ_TEXT:
-      if (!n->closed) cut_text(n, q);
+    case REQ_IDLE:
+      if (!n->closed) cut_idle(n, q);
       break;
     case REQ_HEAD:
     case REQ_RESPONSE:
@@ -741,7 +729,7 @@ static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
     return;
   }
   const request *q = n->reader;
-  bool counted = q && (q->kind == REQ_BYTES || q->kind == REQ_TEXT);
+  bool counted = q && q->kind == REQ_BYTES;
   size_t size = agc_inbuf_want(&n->in, !counted, counted ? q->count : 0);
   uint8_t *room = agc_inbuf_room(&n->in, size);
   *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
@@ -1139,10 +1127,10 @@ static int shared_open(net *n) {
 /* A read at N = 1 whose input is ready: the cut and the value in one step. */
 static agc_value take(agc_vm *vm, net *n, request *q) {
   if (n->closed) return agc_error_value(socket_closed);
-  if (q->kind == REQ_TEXT || heads(q->kind)) {
-    if (q->kind == REQ_TEXT) cut_text(n, q);
+  if (q->kind == REQ_IDLE || heads(q->kind)) {
+    if (q->kind == REQ_IDLE) cut_idle(n, q);
     else cut_head(n, q);
-    agc_value result = q->kind == REQ_TEXT ? text_value(vm, q) : head_value(vm, q);
+    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, q);
     agc_inbuf_cut_free(&q->cut);
     return result;
   }
@@ -1207,8 +1195,8 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (reads(q->kind)) {
     if (q->closed)
       result = agc_error_value(socket_closed);
-    else if (q->kind == REQ_TEXT)
-      result = text_value(vm, q);
+    else if (q->kind == REQ_IDLE)
+      result = idle_value(q);
     else if (heads(q->kind))
       result = head_value(vm, q);
     else if (q->kind == REQ_BYTES)
@@ -1515,26 +1503,14 @@ static bool begin_read(void *data, agc_io_job *job) {
   return true;
 }
 
-/* A read as read_op takes it: the kind, the count, the carry of
-   HttpWire.read_text (copied, as the request holds no GC value) and the body
-   limit of HttpWire.read_head, whose rest goes back in front of the input on
-   the I/O thread (here at N = 1, else in begin_read). */
+/* A read as read_op takes it: the kind, the count and the body limit of HttpWire.read_head, whose rest goes back in
+   front of the input on the I/O thread (here at N = 1, else in begin_read). */
 static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint32_t span) {
   req_kind kind = want->kind;
-  if (kind == REQ_BYTES || kind == REQ_TEXT) {
+  if (kind == REQ_BYTES) {
     int64_t wanted = agc_as_int(vm, args[1]);
-    /* read_text of 0 bytes does not wait: std/http asks it how many bytes are still buffered after a body. */
-    int64_t least = kind == REQ_TEXT ? 0 : 1;
-    if (wanted < least || (uint64_t)wanted > LIMIT)
-      return agc_error_value(least ? "network: read size must be 1..1048576" : "network: read size must be 0..1048576");
+    if (wanted < 1 || (uint64_t)wanted > LIMIT) return agc_error_value("network: read size must be 1..1048576");
     want->count = (size_t)wanted;
-  }
-  if (kind == REQ_TEXT) {
-    size_t kept_len = 0;
-    const uint8_t *kept = agc_stream_bytes(vm, args[2], sizeof want->carry, &kept_len);
-    if (!kept) agc_fail(vm, "RUNTIME-INTERNAL", "HttpWire.read_text: the carry must be at most 3 bytes", span);
-    want->kept = (uint8_t)kept_len;
-    if (kept_len) memcpy(want->carry, kept, kept_len);
   }
   const uint8_t *rest = NULL;
   size_t rest_len = 0;
@@ -1547,7 +1523,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
     want->head_only = agc_as_bool(vm, args[1]);
     want->limit = (uint64_t)agc_http_max_body(vm, args[2], span);
   }
-  int64_t timeout = agc_as_int(vm, args[kind == REQ_LINE ? 1 : kind == REQ_BYTES ? 2 : 3]);
+  int64_t timeout = agc_as_int(vm, args[kind == REQ_LINE || kind == REQ_IDLE ? 1 : kind == REQ_BYTES ? 2 : 3]);
   agc_socket *sk = agc_as_socket(vm, args[0]);
   agc_value result;
   if (!agc_stream_lock(vm, sk->reader, &timeout, &result)) return result;
@@ -1561,8 +1537,6 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   }
   request *q = new_request(n, kind);
   q->count = want->count;
-  q->kept = want->kept;
-  memcpy(q->carry, want->carry, sizeof q->carry);
   q->limit = want->limit;
   q->head_only = want->head_only;
   q->scanned = want->scanned;
@@ -1585,10 +1559,11 @@ static agc_value builtin_recv_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return read_op(vm, args, &(request){.kind = REQ_BYTES}, span);
 }
 
-/* HttpWire.read_text (std-only): like recv_bytes, but the bytes come back as
-   UTF-8 text after carry, so a body is never a byte value. */
-static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_TEXT}, span);
+/* HttpWire.idle? (std-only): whether the socket's input holds no byte now and has not ended or failed, which std/http
+   asks after a body, since a connection with anything more in its input is not kept. It takes no input and does not
+   wait for any; the timeout is for the read lock. */
+static agc_value builtin_idle(agc_vm *vm, agc_value *args, uint32_t span) {
+  return read_op(vm, args, &(request){.kind = REQ_IDLE}, span);
 }
 
 /* HttpWire.read_head (std-only): the next request head, parsed from the
@@ -1806,7 +1781,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TLS.connect", 6, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"HttpWire.read_text.bytes", 4, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"HttpWire.idle?", 2, builtin_idle, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_response", 4, builtin_read_response, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.clean_eof?", 1, builtin_clean_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

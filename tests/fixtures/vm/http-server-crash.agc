@@ -2,7 +2,7 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.path == "/crash"
-    zero = request.body.length
+    zero = request.body.size
     return ok(HttpResponse(status: 200, headers: [], body: "#{10 / zero}".bytes))
   end
   return ok(HttpResponse(status: 200, headers: [], body: "fine".bytes))

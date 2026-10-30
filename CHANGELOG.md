@@ -22,6 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   JSON encodable. `HTTP.post` and `HTTP.request` take a `Bytes` body before
   `headers`, which is `[]` by default and no longer comes first. Rebuild `.agcb`
   files that call them.
+- **Breaking:** the `body` of an `HttpRequest` in a `listen` handler is `Bytes`,
+  as the client sent it (read text with `HTTP.text(request.body,
+  request.headers)`); the server no longer answers 400 for a request body that
+  is not UTF-8. Rebuild `.agcb` files with such a handler.
 
 ## [0.19.0-beta.1] - 2026-10-30
 

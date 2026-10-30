@@ -200,43 +200,26 @@ static void peer_reads(int fd, const char *data, size_t n) {
   assert(memcmp(got, data, n) == 0);
 }
 
-static const char *const text_fields[] = {"text", "carry", "bytes", "valid", "buffered", "ended"};
-
-/* TCP.send_bytes, TCP.recv_bytes and HttpWire.read_text on Bytes, on the posted path (the I/O thread cuts the read,
-   the done half builds its value). A send of more than 1 MiB is refused. */
+/* TCP.send_bytes and TCP.recv_bytes on Bytes, on the posted path (the I/O thread cuts the read, the done half builds
+   its value), and HttpWire.idle?, which takes no byte. A send of more than 1 MiB is refused. */
 static void test_byte_keys(void) {
-  agc_string *names[6];
-  for (size_t k = 0; k < 6; k++) names[k] = agc_make_string(text_fields[k], strlen(text_fields[k]), strlen(text_fields[k]));
-  agc_struct_def structs[] = {{agc_make_string("HttpWire.Text", 13, 13), 6, names, NULL, NULL}};
-  agc_program program;
-  memset(&program, 0, sizeof program);
-  program.struct_count = 1;
-  program.structs = structs;
-  const agc_program *was = vm.rt->program;
-  vm.rt->program = &program;
   int fd = open_pair();
   static const char sent[] = "\x00\xff" "a\n";
   ok_of(step(call("TCP.send_bytes.bytes", 3, socket_v, byte_arg(sent, 4), agc_int(5000), agc_void())));
   peer_reads(fd, sent, 4);
+  /* Nothing is buffered yet and the input has not ended. */
+  assert(agc_as_bool(&vm, ok_of(step(call("HttpWire.idle?", 2, socket_v, agc_int(5000), agc_void(), agc_void())))));
   assert(send(fd, sent, 4, 0) == 4);
   read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), sent, 4);
-  /* The end of a character waits in the carry. */
-  assert(send(fd, "\xB1" "a\xC3", 3, 0) == 3);
-  agc_value got =
-    ok_of(step(call("HttpWire.read_text.bytes", 4, socket_v, agc_int(3), byte_arg("\xC3", 1), agc_int(5000))));
-  const agc_struct *t = agc_as_struct(&vm, got);
-  const agc_string *s = agc_as_string(&vm, t->fields[0]);
-  assert(s->bytes == 3 && memcmp(s->data, "\xC3\xB1" "a", 3) == 0 && agc_as_int(&vm, t->fields[2]) == 3);
-  read_is(t->fields[1], "\xC3", 1);
   agc_bytes *big = agc_new_bytes(1048577);
   memset(big->data, 0, big->len);
   assert(error_is(step(call("TCP.send_bytes.bytes", 3, socket_v, agc_bytes_value(big), agc_int(5000), agc_void())),
                   "network: bytes exceed 1048576 per call"));
-  /* The end of input: no bytes. */
+  /* The end of input: no bytes, and the socket is no longer idle. */
   assert(shutdown(fd, SHUT_WR) == 0);
   read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), "", 0);
+  assert(!agc_as_bool(&vm, ok_of(step(call("HttpWire.idle?", 2, socket_v, agc_int(5000), agc_void(), agc_void())))));
   close_pair(fd);
-  vm.rt->program = was;
 }
 
 static void service_on_thread(void *arg) {

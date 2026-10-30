@@ -172,7 +172,9 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     end
     return ok(HttpResponse(status: 200, headers: [], body: big.bytes))
   end
-  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{request.body}".bytes))
+  # The body is Bytes: its text when it is UTF-8, else its byte values.
+  shown = Result.unwrap_or(HTTP.text(request.body, request.headers), "bytes #{request.body.to_a}")
+  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{shown}".bytes))
 end
 
 def main() -> Void
@@ -335,7 +337,6 @@ SERVER_PYTHON_LINES = [
     "expect-other 417 closed",
     "over-limit 413 closed",
     "chunked-over-limit 413 closed",
-    "non-utf8 400 closed",
     "no-host 400 closed",
     "two-hosts 400 closed",
     "short-505 505 closed quick",
@@ -344,6 +345,8 @@ SERVER_PYTHON_LINES = [
     "expect-over-limit HTTP/1.1 413 Content Too Large False closed",
     "expect-continue HTTP/1.1 100 Continue 200 POST /expect hello closed",
     "pipelined ['GET /one ', 'POST /two abc', 'POST /four abc', 'GET /three '] closed",
+    "binary-length 200 POST /binary bytes [255, 254] closed",
+    "binary-chunked 200 POST /binary bytes [255, 0, 128] closed",
     "client-chunked 200 POST /chunked abñcd",
     "client-head 200 11 b''",
     "client-again 200 GET /again  True",
@@ -357,6 +360,7 @@ SERVER_PYTHON_LINES = [
 
 SERVER_NODE_LINES = [
     "node-chunked 200 true POST /chunked abñcd",
+    "node-binary 200 true POST /binary bytes [255, 0, 128]",
     "node-expect true 200 POST /expect hello",
     "node-keep-alive GET /first  GET /again  true true",
     "node-head 200 11 \"\"",
@@ -535,7 +539,8 @@ def send_in_pieces(port, pieces):
 
 def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     """A head or body split across reads gets the same answer as one sent whole: a UTF-8 character split across
-    reads and chunks, a forbidden trailer split mid-name, and heads too large however slowly they arrive."""
+    reads and chunks (and an unfinished one, which is just bytes), a forbidden trailer split mid-name, and heads too
+    large however slowly they arrive."""
     vm, port = start_server(tmp_path, adopt)
     length = b"POST /length HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
     chunked = b"POST /chunked HTTP/1.1\r\nHost: x\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n"
@@ -544,8 +549,9 @@ def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
         "200", "POST /chunked ab\u00f1cd")
     assert send_in_pieces(port, [chunked + b"3\r\nab\xc3\r\n", b"2\r\n\xb1c\r\n0\r\n\r\n"]) == (
         "200", "POST /chunked ab\u00f1c")
-    assert send_in_pieces(port, [length % 3 + b"ab", b"\xc3"])[0] == "400"
-    assert send_in_pieces(port, [chunked + b"3\r\nab", b"\xc3\r\n0\r\n\r\n"])[0] == "400"
+    assert send_in_pieces(port, [length % 3 + b"ab", b"\xc3"]) == ("200", "POST /length bytes [97, 98, 195]")
+    assert send_in_pieces(port, [chunked + b"3\r\nab", b"\xc3\r\n0\r\n\r\n"]) == (
+        "200", "POST /chunked bytes [97, 98, 195]")
     assert send_in_pieces(port, [chunked + b"0\r\nConte", b"nt-Length: 2\r\n\r\n"])[0] == "400"
     many = b"GET / HTTP/1.1\r\nHost: x\r\n" + b"".join(b"X-%d: v\r\n" % k for k in range(101)) + b"\r\n"
     assert send_in_pieces(port, [many[:300], many[300:900], many[900:]])[0] == "431"

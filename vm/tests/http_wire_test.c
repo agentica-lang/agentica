@@ -1,7 +1,7 @@
 /* HttpWire.chunk checks every field of its record first: one std/http did
    not make (hand-made bytecode) fails with RUNTIME-INTERNAL. Also the input
-   buffer's unread (read_head's rest), the answers of HttpWire.chunk and
-   HttpWire.text on Bytes, and a List given to a byte row. */
+   buffer's unread (read_head's rest), the answers of HttpWire.chunk on Bytes,
+   and a List given to a byte row. */
 #include "builtin_test.h"
 #include "../http_fields.h"
 #include "../services.h"
@@ -94,11 +94,6 @@ static void test_unread(void) {
   agc_inbuf_free(&b);
 }
 
-static void bytes_is(agc_value v, const char *data, size_t n) {
-  const agc_bytes *b = agc_as_bytes(&vm, v);
-  assert(b->len == n && (n == 0 || memcmp(b->data, data, n) == 0));
-}
-
 static const agc_builtin *row(const char *name, uint32_t arity) {
   return agc_find_builtin((const uint8_t *)name, strlen(name), arity);
 }
@@ -109,18 +104,8 @@ static void fails(const char *name, uint32_t arity, agc_value *args) {
 
 static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
 
-/* The text record: its text, the carry and validity. */
-static void text_is(agc_value record, const char *text_, const char *carry, bool valid) {
-  const agc_struct *t = agc_as_struct(&vm, record);
-  const agc_string *got = agc_as_string(&vm, t->fields[0]);
-  assert(got->bytes == strlen(text_) && memcmp(got->data, text_, got->bytes) == 0);
-  bytes_is(t->fields[1], carry, strlen(carry));
-  assert(agc_as_bool(&vm, t->fields[3]) == valid);
-}
-
-/* HttpWire.chunk and HttpWire.text read Bytes where they are: two chunks whose text splits a character, then the
-   text with the carry. A List given to a byte row is a wrong tag; the TCP, HttpWire and Process rows check it before
-   the handle. */
+/* HttpWire.chunk reads Bytes where they are: two chunks whose body splits a character. A List given to a byte row is a
+   wrong tag; the TCP, HttpWire and Process rows check it before the handle. */
 static void test_byte_keys(void) {
   const char *framed = "3\r\nab\xC3\r\n2\r\n\xB1z\r\n0\r\n\r\n";
   agc_value args[3] = {fresh(), as_bytes(framed), agc_int(0)};
@@ -131,36 +116,19 @@ static void test_byte_keys(void) {
   const agc_list *found = agc_as_list(&vm, state->fields[2]);
   assert(agc_list_len(found) == 4 && agc_as_int(&vm, agc_list_get(found, 0)) == 3 &&
          agc_as_int(&vm, agc_list_get(found, 2)) == 11);
-  /* The runs of the first chunk, then of the second one with the end of its first character still unread. */
-  agc_value runs[2] = {agc_int(3), agc_int(3)};
-  agc_value text_args[3] = {as_bytes(""), as_bytes(framed), agc_list_value(agc_list_from_array(runs, 2))};
-  text_is(call("HttpWire.text.bytes", 3, text_args), "ab", "\xC3", true);
-  runs[0] = agc_int(11);
-  runs[1] = agc_int(2);
-  text_args[0] = as_bytes("\xC3");
-  text_args[2] = agc_list_value(agc_list_from_array(runs, 2));
-  text_is(call("HttpWire.text.bytes", 3, text_args), "\xC3\xB1z", "", true);
-  /* Not UTF-8: no text and no carry. */
-  text_args[0] = as_bytes("\xFF");
-  text_is(call("HttpWire.text.bytes", 3, text_args), "", "", false);
   agc_value list = byte_list("ab");
   agc_value chunk_list[3] = {fresh(), list, agc_int(0)};
   fails("HttpWire.chunk.bytes", 3, chunk_list);
-  agc_value text_list[3] = {list, as_bytes(""), agc_list_value(agc_list_from_array(NULL, 0))};
-  fails("HttpWire.text.bytes", 3, text_list);
   agc_value sends[3] = {agc_void(), list, agc_int(1000)};
   fails("TCP.send_bytes.bytes", 3, sends);
   fails("Process.send_bytes.bytes", 3, sends);
   agc_value head[4] = {agc_void(), list, agc_int(1024), agc_int(1000)};
   fails("HttpWire.read_head.bytes", 4, head);
-  agc_value reads[4] = {agc_void(), agc_int(10), list, agc_int(1000)};
-  fails("HttpWire.read_text.bytes", 4, reads);
 }
 
-/* The structs the calls need, as a program that uses HttpWire.chunk and HttpWire.text lists them. */
+/* The structs the calls need, as a program that uses HttpWire.chunk lists them. */
 static const char *const chunk_fields[] = {"done",  "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
-static const char *const text_fields[] = {"text", "carry", "bytes", "valid", "buffered", "ended"};
 
 static agc_string **field_names(const char *const *fields, size_t n) {
   agc_string **names = agc_alloc(n * sizeof *names);
@@ -171,11 +139,10 @@ static agc_string **field_names(const char *const *fields, size_t n) {
 int main(void) {
   agc_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  agc_struct_def structs[] = {{agc_make_string("HttpWire.Chunk", 14, 14), 13, field_names(chunk_fields, 13), NULL, NULL},
-                              {agc_make_string("HttpWire.Text", 13, 13), 6, field_names(text_fields, 6), NULL, NULL}};
+  agc_struct_def structs[] = {{agc_make_string("HttpWire.Chunk", 14, 14), 13, field_names(chunk_fields, 13), NULL, NULL}};
   agc_program program;
   memset(&program, 0, sizeof program);
-  program.struct_count = 2;
+  program.struct_count = 1;
   program.structs = structs;
   vm.rt->program = &program;
   const agc_result *r = agc_as_result(&vm, chunk(fresh(), "1\r\na\r\n0\r\n\r\n"));

@@ -46,8 +46,8 @@ export VM_BUILTINS = Set.new([
   "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen",
   "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs", "HttpWire.options", "HttpWire.clean_eof?",
   "HttpWire.connect_tls",
-  "HttpWire.drop_tls", "HttpWire.chunked", "HttpWire.chunk.bytes", "HttpWire.chunk_read", "HttpWire.text.bytes",
-  "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.read_text.bytes", "HttpWire.encode_request",
+  "HttpWire.drop_tls", "HttpWire.chunked", "HttpWire.chunk.bytes", "HttpWire.chunk_read", "HttpWire.idle?",
+  "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.encode_request",
   "HttpWire.encode_response", "HttpWire.error_answer", "HttpWire.close_write", "HttpWire.server", "HttpWire.accept",
   "HttpWire.spawn", "HttpWire.close_server", "HttpWire.wait", "HttpWire.local_port",
   "LogRegistry.level", "LogRegistry.floor", "LogRegistry.set_level", "LogRegistry.lowest",
@@ -111,7 +111,7 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
-  "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply", "HttpWire.Job",
+  "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job",
   "HttpWire.Response", "StructMember"
 ]
 

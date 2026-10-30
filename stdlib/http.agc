@@ -11,7 +11,6 @@ FRAME_BYTES = 512
 SMALL_BODY = 16384
 # The most bytes of one read of a body (TCP.recv_bytes takes at most 1 MiB).
 BODY_READ_BYTES = 1048576
-BAD_TEXT = "400 request body is not valid UTF-8"
 # The least time an error answer gets to be sent, even past the request deadline.
 ANSWER_MS = 100
 # The most input the lingering close reads and drops (as Go's net/http does). It is enough for a peer that sent a
@@ -40,7 +39,7 @@ END_OF_INPUT = "network: end of input"
 READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
-# No bytes: the empty rest and carry.
+# No bytes: the empty rest of a read and the empty body.
 NO_BYTES = "".bytes
 # The longest a streamed response may wait for its body channel before it looks again. A close of the channel wakes the
 # wait at once, so this only bounds a task that is never woken.
@@ -107,11 +106,6 @@ end
 struct Incoming
   request: HttpRequest
   rest: Bytes
-end
-
-struct Body
-  pieces: List[String]
-  carry: Bytes
 end
 
 struct Reading
@@ -701,34 +695,34 @@ def read_head(socket: Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -
 end
 
 def read_length(reading: Reading) -> Result[Incoming]
-  body = Body(pieces: [], carry: NO_BYTES)
+  pieces: List[Bytes] = []
   left = reading.head.length
   while left > 0
-    piece = try more_text(reading, body.carry, smaller(left, BODY_READ_BYTES))
-    body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
-    left = left - piece.bytes
+    data = try more_request(reading.socket, smaller(left, BODY_READ_BYTES), reading.deadline)
+    pieces = List.append(pieces, data)
+    left = left - data.size
   end
-  return finish(reading, body, NO_BYTES)
+  return finish(reading, Bytes.concat(pieces), NO_BYTES)
 end
 
 def read_chunked(reading: Reading) -> Result[Incoming]
   data = NO_BYTES
   state = HttpWire.chunked(reading.max_body_bytes)
-  body = Body(pieces: [], carry: NO_BYTES)
+  pieces: List[Bytes] = []
   while not state.done
     if state.remaining > 0
-      # The rest of a chunk goes straight into text; only framing goes through the decoder.
-      piece = try more_text(reading, body.carry, smaller(state.remaining, BODY_READ_BYTES))
-      body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
-      state = HttpWire.chunk_read(state, piece.bytes)
+      # The rest of a chunk is body as it is; only framing goes through the decoder.
+      data = try more_request(reading.socket, smaller(state.remaining, BODY_READ_BYTES), reading.deadline)
+      pieces = List.append(pieces, data)
+      state = HttpWire.chunk_read(state, data.size)
     else
-      # A small read: chunk data past the framing is read as text above.
+      # A small read: chunk data past the framing is read whole above.
       data = try more_request(reading.socket, FRAME_BYTES, reading.deadline)
       state = try next_chunk(reading, state, data)
-      body = try add_text(reading, body, data, state.runs)
+      pieces = add_runs(pieces, data, state.runs)
     end
   end
-  return finish(reading, body, data.drop(state.next))
+  return finish(reading, Bytes.concat(pieces), data.drop(state.next))
 end
 
 def next_chunk(reading: Reading, state: HttpWire.Chunk, data: Bytes) -> Result[HttpWire.Chunk]
@@ -738,40 +732,14 @@ def next_chunk(reading: Reading, state: HttpWire.Chunk, data: Bytes) -> Result[H
   end
 end
 
-# Adds the runs of data to the body text; an unfinished character waits in carry for the next bytes.
-def add_text(reading: Reading, body: Body, data: Bytes, runs: List[Int]) -> Result[Body]
-  piece = HttpWire.text(body.carry, data, runs)
-  if not piece.valid
-    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
-  end
-  return ok(Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry))
-end
-
-# The next bytes of a body, read straight into text.
-def more_text(reading: Reading, carry: Bytes, most: Int) -> Result[HttpWire.Text]
-  left = try time_left(reading.socket, reading.deadline)
-  piece = try HttpWire.read_text(reading.socket, most, carry, left)
-  if not piece.valid
-    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
-  end
-  if piece.bytes == 0
-    TCP.close(reading.socket)
-    return error("http: connection closed before the request was complete")
-  end
-  return ok(piece)
-end
-
-def finish(reading: Reading, body: Body, rest: Bytes) -> Result[Incoming]
-  if not body.carry.empty?
-    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
-  end
+def finish(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
   head = reading.head
   request = HttpRequest(
     method: head.method,
     target: head.target,
     path: head.path,
     headers: head.headers,
-    body: String.join(body.pieces, ""),
+    body: body,
   )
   return ok(Incoming(request: request, rest: rest))
 end
@@ -809,7 +777,7 @@ def refuse(socket: Socket, status: Int, reason: String, deadline: Int) -> String
   return "http: #{reason}"
 end
 
-# refuse for a problem written "NNN reason" (HttpWire.chunk, BAD_TEXT): NNN is the answer's status.
+# refuse for a problem written "NNN reason" (HttpWire.chunk): NNN is the answer's status.
 def refuse_problem(socket: Socket, problem: String, deadline: Int) -> String
   return refuse(socket, String.to_int!(String.slice(problem, 0, 3)), rest_of(problem, 4), deadline)
 end
@@ -1657,14 +1625,10 @@ def add_runs(pieces: List[Bytes], data: Bytes, runs: List[Int]) -> List[Bytes]
   return pieces
 end
 
-# Whether the socket's input holds no byte now and has not ended: a read of 0 bytes does not wait.
+# Whether the socket's input holds no byte now and has not ended (HttpWire.idle? does not wait for input).
 def nothing_buffered(answer: Answer) -> Bool
   case time_left(answer.socket, answer.job.deadline)
-    ok(left) ->
-      case HttpWire.read_text(answer.socket, 0, NO_BYTES, left)
-        ok(piece) -> return piece.buffered == 0 and not piece.ended
-        error(_) -> return false
-      end
+    ok(left) -> return Result.unwrap_or(HttpWire.idle?(answer.socket, left), false)
     error(_) -> return false
   end
 end

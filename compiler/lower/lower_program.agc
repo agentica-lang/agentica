@@ -10,7 +10,7 @@ import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 
 # The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
-# HttpWire.Text.carry).
+# HttpRequest.body).
 UNDECODABLE = Set.new(["Enum", "Channel", "Bytes"])
 
 ## The builtin enum of an Optional value: none, and some with its item. The VM prints a variant of the enum named
