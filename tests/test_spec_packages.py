@@ -366,6 +366,13 @@ def test_a_symbolic_link_among_the_agc_files_of_a_package_is_refused(ws):
     assert_at_import(check(ws), "PKG-SYMLINK")
 
 
+@host_only(WINDOWS, "a FIFO file exists on POSIX only; Windows has no FIFO files")
+def test_a_fifo_among_the_agc_files_of_a_package_is_an_import_error(ws):
+    # The hash refuses it at once: a read of it could wait for a writer or hash bytes that are not the package's.
+    os.mkfifo(ws.deps / "greeter" / "piped.agc")
+    assert_at_import(check(ws), "CHECK-IMPORT-IO")
+
+
 def test_a_declared_package_missing_from_deps_says_so_and_the_cache_is_not_needed(ws, tmp_path):
     # A build reads only deps/: it needs no package cache, and a package that deps/ lacks is CHECK-IMPORT-PACKAGE.
     shutil.rmtree(ws.cache, ignore_errors=True)

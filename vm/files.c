@@ -777,6 +777,20 @@ static void work_sha256(op *o) {
   o->out_cap = AGC_SHA256_BYTES;
 }
 
+/* The `kind` of a FileInfo: Ruby's File::Stat#ftype names. A path stat on Windows (libuv) gives only a directory, a
+   link (a reparse point, lstat only), a regular file and the NUL device (as a character device), so the other kinds
+   come from POSIX systems only. */
+static const char *file_kind(uint64_t mode) {
+  if (AGC_FS_ISREG(mode)) return "file";
+  if (AGC_FS_ISDIR(mode)) return "directory";
+  if (AGC_FS_ISLNK(mode)) return "link";
+  if (AGC_FS_ISFIFO(mode)) return "fifo";
+  if (AGC_FS_ISSOCK(mode)) return "socket";
+  if (AGC_FS_ISCHR(mode)) return "characterSpecial";
+  if (AGC_FS_ISBLK(mode)) return "blockSpecial";
+  return "unknown";
+}
+
 static void work_stat(op *o) {
   agc_fs_info info;
   if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
@@ -784,7 +798,7 @@ static void work_stat(op *o) {
     return;
   }
   bool dir = AGC_FS_ISDIR(info.mode);
-  o->file_type = dir ? "directory" : AGC_FS_ISLNK(info.mode) ? "link" : "file";
+  o->file_type = file_kind(info.mode);
   o->size = dir ? 0 : (int64_t)info.size;
   o->mtime = info.mtime;
   o->mode = (int64_t)(info.mode & 07777);

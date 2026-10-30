@@ -5,8 +5,8 @@
 ## file that is not .agc or the manifest has a [native] table, because the manifest then decides which file is opened;
 ## for any other package it is not hashed, so those hashes did not change. The hash is `sha256:` and the SHA-256 of
 ## that stream in hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named
-## *.agc, named native at the root or inside native/ is refused, as the fetch refuses it; other links, and other
-## files that are not .agc, are ignored.
+## *.agc, named native at the root or inside native/ is refused, as the fetch refuses it, and so is a FIFO, a socket
+## or a device under a name the hash covers; other links, and other files that are not .agc, are ignored.
 ##
 ## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
 ## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
@@ -122,11 +122,16 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
           end
 
         Workspace.EntryKind.File ->
-          if source_file?(entry.name) or (native_path?(path) and !native_junk?(entry.name))
+          if covered?(entry.name, path)
             files = files.push(path)
           end
 
-        _ -> next
+        # A FIFO, a socket or a device under a name the hash covers: reading it could wait or give bytes that are not
+        # the package's.
+        Workspace.EntryKind.Other ->
+          if covered?(entry.name, path)
+            return Listing.Stopped(Hashed.Unreadable("#{path} is not a regular file"))
+          end
       end
     end
   end
@@ -177,6 +182,11 @@ end
 ## lowercase form of its own (such as the long s, which a case-insensitive file system folds to S) is folded too.
 export def fold(name: String) -> String
   return name.upcase.downcase
+end
+
+# Whether the hash covers the regular file `path` (named `name`): a source file, or a file of native/ that is not junk.
+def covered?(name: String, path: String) -> Bool
+  return source_file?(name) or (native_path?(path) and !native_junk?(name))
 end
 
 def regular?(kind: Workspace.EntryKind) -> Bool

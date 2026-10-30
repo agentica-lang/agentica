@@ -28,6 +28,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `TLS.connect`.
 - **Breaking:** `Cipher` and `CMAC` are reserved type names.
 - **Breaking:** `KDF` is a reserved type name.
+- **Breaking:** `File.stat` and `File.lstat` give `kind` `"fifo"`, `"socket"`,
+  `"characterSpecial"`, `"blockSpecial"` or `"unknown"` for what is not a
+  regular file, a directory or a link, instead of `"file"`.
 
 ## [0.17.0] - 2026-10-30
 
