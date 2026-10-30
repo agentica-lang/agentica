@@ -56,10 +56,10 @@ rule that a site page shows.
 
 ## Content
 
-- The user docs live in `site/content`: Getting started, the Language tour
-  in `tour/`, the Library in `library/`, `vm.md` (the Aurora VM and its
-  libraries) and `design.md` (the main design decisions and why each was
-  taken).
+- The user docs live in `site/content`: Getting started, the command line in
+  `cli.md`, the Language tour in `tour/`, the Library in `library/`, `vm.md`
+  (the Aurora VM and its libraries) and `design.md` (the main design decisions
+  and why each was taken).
 - The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
   that says which form fits which job) and one page per builtin module in
   `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
