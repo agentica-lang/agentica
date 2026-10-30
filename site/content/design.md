@@ -38,7 +38,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 ## Results and try, not exceptions
 
-**Decision.** Errors are `Result[T]` values and `try` returns the error from the current function. There is no `raise` or `rescue`. Only user structs, enums, type aliases and functions take type parameters, besides the builtin `List`, `Map` and `Result`.
+**Decision.** Errors are `Result[T]` values and `try` returns the error from the current function. There is no `raise` or `rescue`. User code takes type parameters on structs, enums, type aliases and functions; the builtin collections and wrappers (`List`, `Map`, `Set`, `Optional`, `Result`) take them as well.
 
 **Why.** Every `try` shows where a function can leave, and agents do best with one obvious form per job.
 
@@ -46,11 +46,11 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** The loader checks the whole `.agcb` file before anything runs. Every loop and call charges a step, so `--max-steps` stops a runaway program. The end-of-run file flush is limited to 30 seconds by default.
 
-**Why.** A bad file must not cause memory errors and must still stop at the step limit. A blocked read once hung the VM at exit, and a FIFO with no reader must not keep the run open. Step limits bound instructions, not memory: a heap cap is still open.
+**Why.** A bad file must not cause memory errors and must still stop at the step limit. A FIFO with no reader must not keep the run open. Step limits bound instructions, not memory: a heap cap is still open.
 
-## Third-party libraries: few, pinned and permissive
+## Few third-party libraries, pinned and permissive
 
-**Decision.** Five libraries, each a submodule pinned to a release tag: Boehm GC, yyjson, libuv, OpenSSL, picohttpparser. Each must be permissive, with no copyleft.
+**Decision.** Each library is a submodule of `vm/third_party/` pinned to a release, and each must be permissive, with no copyleft. The list and the licenses are in [The Aurora VM](/vm/#what-it-is-built-on).
 
 **Why.** The release links them into one binary per system, so they must be permissive, and each license ships with it.
 
