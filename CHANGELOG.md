@@ -23,6 +23,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
   `TLS.connect`.
 - **Breaking:** `Cipher` and `CMAC` are reserved type names.
+- **Breaking:** `File.stat` and `File.lstat` give `kind` `"fifo"`, `"socket"`,
+  `"characterSpecial"`, `"blockSpecial"` or `"unknown"` for what is not a
+  regular file, a directory or a link, instead of `"file"`.
 
 ## [0.17.0] - 2026-10-30
 

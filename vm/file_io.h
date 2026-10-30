@@ -24,6 +24,7 @@ typedef struct {
 #define AGC_FS_ISFIFO(mode) (((mode) & 0170000) == 0010000)
 #define AGC_FS_ISCHR(mode) (((mode) & 0170000) == 0020000)
 #define AGC_FS_ISBLK(mode) (((mode) & 0170000) == 0060000)
+#define AGC_FS_ISSOCK(mode) (((mode) & 0170000) == 0140000)
 
 enum {
   AGC_FS_READ = 0, AGC_FS_WRITE = 1, AGC_FS_CREATE = 2, AGC_FS_EXCLUSIVE = 4,
