@@ -24,7 +24,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`; `agentica check src tests/util.agc` checks several files and folders at once (see [Options](#options)). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`. `agentica check src tests/util.agc` checks several files and folders at once (see [Options](#options)). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -64,7 +64,7 @@ Split text; an empty separator gives characters.
 agentica doc std/queue    # a file path works too; --json prints one JSON object
 ```
 
-It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file: the module's imports need not exist. Declarations without `export` are left out.
+It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Declarations without `export` are left out.
 
 ## Query the code
 
@@ -83,7 +83,7 @@ src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int
 ```
 
-`outline` parses its file, so the imports need not exist; a file that re-exports a name (`export Url.parse`) is also linked, to list the original declaration with its doc. It prints each declaration with `file:line:column` first, like `rg`, and private ones too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants.
+`outline` parses its file, so the imports need not exist. A file that re-exports a name (`export Url.parse`) is also linked, so the original declaration is listed with its doc. Each line starts with `file:line:column`, like `rg`, and private declarations are listed too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants.
 
 ## Type at a position
 
@@ -96,7 +96,7 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-Line and column count from 1, in code points (an emoji is one column). The first line is the type of the expression and its span; the next is its definition (for a builtin, its signature). `type-at` checks the file and what it imports, but needs no `main`. A type of another file is written through the import alias (`Models.User`). A local, a parameter or a loop variable has a type and a definition at its binding. A type name in an annotation or a type argument (`Models.User`) has `kind` `type` and the struct, enum or alias it names as definition; a builtin type (`Int`, `List`) has none. A builtin (`split` in `xs.split(",")`) has no definition; with `--json` it has `kind` `builtin` and the object of `agentica help NAME --json` under `help`.
+Line and column count from 1, in code points (an emoji is one column). The first line is the type of the expression and its span; the next is its definition (for a builtin, its signature). `type-at` checks the file and what it imports, but needs no `main`. A type of another file is written through the import alias (`Models.User`). A local, a parameter or a loop variable has a type and a definition at its binding. A type name in an annotation or a type argument (`Models.User`) has `kind` `type` and the struct, enum or alias it names as its definition; a builtin type (`Int`, `List`) has none. A builtin (`split` in `xs.split(",")`) has no definition; with `--json` it has `kind` `builtin` and the object of `agentica help NAME --json` under `help`.
 
 ## Find a name
 
@@ -122,7 +122,7 @@ src/orders.agc:22:14 read in total
 src/report.agc:31:5 construct in sample
 ```
 
-The first line is the declaration. Each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in. The position can be on a use or on the declaration. Two fields with one name in two structs are never mixed. A name that several declarations answer to is `QUERY-AMBIGUOUS-NAME`, and its help lists each one as `FILE:LINE:COL` for the position form. With `--json` the answer is one object, `{version, command, query, definition, builtin, references, skipped}`.
+The first line is the declaration. Each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in. The position can be on a use or on the declaration. Two fields with one name in two structs are never mixed. A name that several declarations answer to is `QUERY-AMBIGUOUS-NAME`; its help lists each one as `FILE:LINE:COL` for the position form. With `--json` the answer is one object, `{version, command, query, definition, builtin, references, skipped}`.
 
 ## Options
 
@@ -144,7 +144,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
-| `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH. One file path prints `check ok`, or its first diagnostic, and with `--json` `{"ok":true}` or the diagnostic. A folder, no path or several paths end with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1), and each failing file prints its first diagnostic (with `--ai`, under the file name). With `--json` the output is one object on stdout, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file. A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and symbolic links to files, as `symbol` does; `build/` is not skipped. A path that does not exist, or a folder with no `.agc` file, is `QUERY-USAGE` and exit 2, and no file is checked. A file that cannot be read is `QUERY-USAGE` in its entry and makes the exit code 2, and the other files are still checked |
+| `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH. One file path prints `check ok`, or its first diagnostic; with `--json`, `{"ok":true}` or the diagnostic. A folder, no path or several paths end with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1), and each failing file prints its first diagnostic (with `--ai`, under the file name). With `--json` the output is one object on stdout, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file. A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and symbolic links to files, as `symbol` does; `build/` is not skipped. A path that does not exist, or a folder with no `.agc` file, is `QUERY-USAGE` and exit 2, and no file is checked. A file that cannot be read is `QUERY-USAGE` in its entry and makes the exit code 2; the other files are still checked |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `install` | fetches the packages of `agentica.lock` with the system `git` into the download cache and writes them to `deps/NAME/` next to `agentica.toml`, where a build reads them (see the modules tour); never changes the lock |
@@ -168,10 +168,10 @@ A flag wins over its environment variable.
 
 ## Check cache
 
-`agentica check` and `agentica type-at` keep what they learn about each imported file in `_build/check/`, so an editor that runs them on every keystroke does not check the same imports again. A file whose entry matches (its text, and everything it imports, are unchanged) is not checked again; any other change is a miss and the file is checked in full. The answer, diagnostics and spans included, is the one a run without the cache gives.
+`agentica check` and `agentica type-at` keep what they learn about each imported file in `_build/check/`, so an editor that runs them on every keystroke does not check the same imports again. A file whose entry matches (its text and everything it imports are unchanged) is not checked again; any other change is a miss and the file is checked in full. The answer, diagnostics and spans included, is the one a run without the cache gives.
 
 - The root file and the text of `--stdin` are always checked in full. Entries are written only after a program checks.
-- It follows the rules of the bytecode cache: the same folder choice, the same ownership checks, `--no-cache` turns it off, and a damaged entry is ignored. `outline`, `refs` and `symbol` do not use it.
+- It follows the rules of the bytecode cache: the same folder choice, the same ownership checks, and `--no-cache` turns it off. A damaged entry is ignored. `outline`, `refs` and `symbol` do not use it.
 - The first run after a change writes the entries and is a little slower; the next ones are several times faster.
 
 ## Test

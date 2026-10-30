@@ -48,30 +48,7 @@ end
 
 ## Many items, a few at a time
 
-`Task.map(items, limit, timeout_ms)` runs a block for each item, at most `limit` at a time. It gives one `Result` per item, in order.
-
-- The block returns a `Result`, so `try` works in it.
-- An item running longer than `timeout_ms` is cancelled and gets `error("task: timed out")`. The other items go on.
-
-```agentica
-def fetch(n: Int) -> Result[String]
-  if n == 2
-    Task.sleep(10000)
-  end
-  return ok("page #{n}")
-end
-
-def main() -> Void
-  pages = Task.map([1, 2, 3], 3, 200, &fetch)
-  puts(pages)
-end
-```
-
-```output
-[ok("page 1"), error("task: timed out"), ok("page 3")]
-```
-
-Use it for work that waits, such as HTTP requests. For CPU work, a `limit` above the number of cores does not help. See [Task.map](/library/concurrency/task/#taskmap) for the rules.
+`Task.map(items, limit, timeout_ms, f)` runs a function for each item, at most `limit` at a time. It gives one `Result` per item, in order. An item that runs longer than `timeout_ms` gets `error("task: timed out")`, and the other items go on. Use it for work that waits, such as HTTP requests. See [Task.map](/library/concurrency/task/#taskmap) for the rules and an example.
 
 ## More than one argument
 
@@ -115,7 +92,7 @@ true
 
 ## Wait with a timeout
 
-`Task.await(task, timeout_ms)` waits at most that many milliseconds. It gives `Await.Done(value)` if the task ended in time, else `Await.TimedOut`. The task keeps running; you can await it again. See [Task.await with a timeout](/library/concurrency/task/#taskawait-with-a-timeout) for an example.
+`Task.await(task, timeout_ms)` waits at most that many milliseconds, and gives `Await.Done(value)` or `Await.TimedOut`. The task keeps running. See [Task.await with a timeout](/library/concurrency/task/#taskawait-with-a-timeout).
 
 ## Rules
 

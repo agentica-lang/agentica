@@ -13,20 +13,20 @@ reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/
 
 ## Install
 
-Each release has an archive per system with the one program `bin/agentica` and
-the licenses: `linux-x86_64` (glibc 2.28 or newer), `macos-x86_64` and
-`macos-arm64` (macOS 12 or newer), and `windows-x86_64` (Windows 10 or newer),
-with a `SHA256SUMS` file. Unpack one and put its `bin` folder on your `PATH`.
-The archives are not signed or notarized: the install guide says what macOS and
-Windows show for that. See the [install
-guide](https://agentica-lang.github.io/agentica/getting-started/).
+Each release has an archive per system, with `bin/agentica` and the licenses:
+`linux-x86_64` (glibc 2.28 or newer), `macos-x86_64` and `macos-arm64` (macOS 12
+or newer), and `windows-x86_64` (Windows 10 or newer), with one `SHA256SUMS`
+file. Unpack one and put its `bin` folder on your `PATH`. The
+archives are not signed or notarized; the [install
+guide](https://agentica-lang.github.io/agentica/getting-started/) says what
+macOS and Windows show for that.
 
 ## Requirements to build
 
-A C11 compiler, `make`, OpenSSL 3, and libgc 8.2 or newer with `pkg-config` on
-Linux (or `AGENTICA_GC=vendored` to build libgc from the submodule). macOS needs
-the Xcode command line tools; Windows needs MSYS2 UCRT64 with GCC. See the
-install guide.
+A C11 compiler and `make`. On Linux also OpenSSL 3 and libgc 8.2 or newer with
+`pkg-config` (or `AGENTICA_GC=vendored` to build libgc from the submodule).
+macOS needs the Xcode command line tools; Windows needs MSYS2 UCRT64 with GCC.
+See the install guide.
 
 ## Build
 
@@ -36,10 +36,9 @@ make
 ```
 
 This writes `dist/agentica`, the only program: the VM with the front end and the
-standard modules inside. It is built from the compiled front end checked in as
-`bootstrap/stage0.agcb`, so the build needs only a C toolchain. `agentica run --
-FILE.agcb`
-runs a compiled program.
+standard modules inside. The build starts from the compiled front end checked in
+as `bootstrap/stage0.agcb`, so it needs only a C toolchain. To run compiled
+bytecode, use `dist/agentica run -- FILE.agcb`.
 
 ## Hello world
 

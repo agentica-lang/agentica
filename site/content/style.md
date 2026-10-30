@@ -1,7 +1,7 @@
 ---
 title: Style guide
 weight: 6
-description: How to write Agentica code that is simple and easy to read, with a bad and a good example for each rule.
+description: How to write Agentica code that is simple and easy to read, with an example for each rule.
 ---
 
 Code is read far more often than it is written. This guide keeps Agentica code simple and easy to read, in the spirit of the Ruby and Elixir style guides. When a rule gets in the way of clear code, clear code wins. Restyle only the code you touch.
@@ -84,17 +84,6 @@ end
 A function that returns a `Bool` ends in `?` and reads as a question. Do not use an `is_` prefix:
 
 ```agentica {mode="check"}
-# bad
-def is_blank(text: String) -> Bool
-  return text.length == 0
-end
-
-def main() -> Void
-  puts(is_blank(""))
-end
-```
-
-```agentica {mode="check"}
 # good
 def blank?(text: String) -> Bool
   return text.length == 0
@@ -110,17 +99,6 @@ A name that ends in `!` stops the program instead of returning a `Result`. Give 
 Name things by what they mean, not by their type: `price`, not `int_value`. Name a number that has a meaning, and use `_` in big numbers:
 
 ```agentica {mode="check"}
-# bad
-def too_big?(bytes: Int) -> Bool
-  return bytes > 1048576
-end
-
-def main() -> Void
-  puts(too_big?(2048))
-end
-```
-
-```agentica {mode="check"}
 # good
 MAX_BYTES = 1_048_576
 
@@ -134,21 +112,6 @@ end
 ```
 
 Say it positively. Put the positive case first and do not pair a negated test with `else`:
-
-```agentica {mode="check"}
-# bad
-def describe(hidden: Bool) -> String
-  if !hidden
-    return "shown"
-  else
-    return "hidden"
-  end
-end
-
-def main() -> Void
-  puts(describe(false))
-end
-```
 
 ```agentica {mode="check"}
 # good
@@ -273,17 +236,6 @@ end
 A record with known fields is a struct, not a map:
 
 ```agentica {mode="check"}
-# bad
-def greet(user: Map[String, String]) -> String
-  return "hello #{user.get("name").unwrap_or("?")}"
-end
-
-def main() -> Void
-  puts(greet({"name": "Ana"}))
-end
-```
-
-```agentica {mode="check"}
 # good
 struct User
   name: String
@@ -323,21 +275,7 @@ def main() -> Void
 end
 ```
 
-Use a `Bool` as it is, with `and`, `or` and `not`:
-
-```agentica {mode="check"}
-# bad
-def allowed(admin: Bool, banned: Bool) -> Bool
-  if admin == true && banned == false
-    return true
-  end
-  return false
-end
-
-def main() -> Void
-  puts(allowed(true, false))
-end
-```
+Use a `Bool` as it is, with `and`, `or` and `not`, never compared with `true` or `false`:
 
 ```agentica {mode="check"}
 # good
@@ -488,28 +426,6 @@ end
 Use a pipe for three or more steps on one value. Start with the value, and put one step per line inside parentheses:
 
 ```agentica {mode="check"}
-# bad
-def shout(text: String) -> String
-  return text.upcase
-end
-
-def wrap(text: String, mark: String) -> String
-  return "#{mark}#{text}#{mark}"
-end
-
-def banner(text: String) -> String
-  out = shout(text)
-  out = wrap(out, "*")
-  out = wrap(out, " ")
-  return out
-end
-
-def main() -> Void
-  puts(banner("hi"))
-end
-```
-
-```agentica {mode="check"}
 # good
 def shout(text: String) -> String
   return text.upcase
@@ -572,22 +488,7 @@ def main() -> Void
 end
 ```
 
-Write error text in lowercase, without a final period, and include the bad value. Handle errors at the edge of the program, such as `main` or a request handler:
-
-```agentica {mode="check"}
-# bad
-def parse_port(text: String) -> Result[Int]
-  n = try text.to_i
-  if n < 1 or n > 65535
-    return error("Invalid port.")
-  end
-  return ok(n)
-end
-
-def main() -> Void
-  puts(parse_port("70000").unwrap!)
-end
-```
+Write error text in lowercase, without a final period, and include the bad value (`error("port out of range: 70000")`). Handle errors at the edge of the program, such as `main` or a request handler:
 
 ```agentica {mode="check"}
 # good
