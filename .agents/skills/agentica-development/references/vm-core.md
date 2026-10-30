@@ -99,9 +99,10 @@ rules those comments do not carry.
 - `vm/numbers.c` (`Float`, `Time` and `Random` builtins) and `vm/random.c`
   (xoshiro256** seeded with splitmix64;
   `docs/vm/05-values-execution-builtins.md` §7.4).
-- `vm/crypto.c`, `vm/digest.h`, `vm/digest_openssl.c`: the `Digest`, `HMAC` and
-  `Base64` builtins; `digest.h` is the adapter interface (also an incremental
-  SHA-256 for the `File` hash), the OpenSSL code is only in `digest_openssl.c`.
+- `vm/crypto.c`, `vm/digest.h`, `vm/digest_openssl.c`: the `Digest`, `HMAC`,
+  `Cipher`, `CMAC`, `KDF`, `SecureRandom` and `Base64` builtins; `digest.h` is
+  the adapter interface (also an incremental SHA-256 for the `File` hash), the
+  OpenSSL code is only in `digest_openssl.c`.
 - `vm/json.c`: the `JSON` builtins and `agc_json_parse` (the control-character
   pass, top-level numbers and literals by hand, strings, arrays and objects
   through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC

@@ -6,8 +6,9 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
-## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows and then the Optional
-## rows are appended last, in contract order, so the positions of the existing rows never shift.
+## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM and KDF
+## rows and then the Optional rows are appended last, in contract order, so the positions of the existing rows never
+## shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -21,12 +22,14 @@ BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(R
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
+BUILTIN_GROUP_14 = ROWS_66
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
-BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12.concat(BUILTIN_GROUP_13)))
+BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12))
+BUILTIN_GROUPS_5 = BUILTIN_GROUP_13.concat(BUILTIN_GROUP_14)
 export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
-  BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4),
+  BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4.concat(BUILTIN_GROUPS_5)),
 )
 
 ## The builtin record types, sorted by name.
@@ -267,6 +270,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "JSON",
     "Json",
     "JsonField",
+    "KDF",
     "Lazy",
     "List",
     "Listener",
@@ -5931,8 +5935,88 @@ ROWS_64: List[Model.Builtin] = [
     ),
   ]
 
-## The Optional rows; appended last so the positions of the existing rows never shift.
+## The AES-GCM and KDF rows; appended last so the positions of the existing rows never shift.
 ROWS_65: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Cipher.aes_256_gcm_encrypt",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "iv", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
+        Model.Named(name: "auth_data", type: Types.Type.Bytes, default: Model.Default.EmptyBytes),
+      ],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "Cipher.aes_256_gcm_encrypt",
+      effects: [],
+      description: (
+        "Encrypt data (bytes) with AES-256-GCM: a 32-byte key, a 12-byte iv never reused under the key and " +
+        "optional auth_data, authenticated but not encrypted; the ciphertext with the 16-byte tag appended; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Cipher.aes_256_gcm_decrypt",
+      parameters: [
+        Model.Named(name: "key", type: Types.Type.Bytes),
+        Model.Named(name: "iv", type: Types.Type.Bytes),
+        Model.Named(name: "data", type: Types.Type.Bytes),
+        Model.Named(name: "auth_data", type: Types.Type.Bytes, default: Model.Default.EmptyBytes),
+      ],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "Cipher.aes_256_gcm_decrypt",
+      effects: [],
+      description: (
+        "Decrypt AES-256-GCM data (the ciphertext with its 16-byte tag appended) under the same key, iv and " +
+        "auth_data; a tag that does not match is an error, never partial plaintext; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "KDF.pbkdf2_hmac_sha256",
+      parameters: [
+        Model.Named(name: "password", type: Types.Type.Bytes),
+        Model.Named(name: "salt", type: Types.Type.Bytes),
+        Model.Named(name: "iterations", type: Types.Type.Int),
+        Model.Named(name: "length", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "KDF.pbkdf2_hmac_sha256",
+      effects: [],
+      description: (
+        "Derive length bytes (1 to 1048576) from a password and a salt with PBKDF2-HMAC-SHA256 (RFC 8018) and at " +
+        "least 1 iteration, iterations * ceil(length / 32) at most 50000000; a password or salt over 1048576 " +
+        "bytes is an error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "KDF.scrypt",
+      parameters: [
+        Model.Named(name: "password", type: Types.Type.Bytes),
+        Model.Named(name: "salt", type: Types.Type.Bytes),
+        Model.Named(name: "n", type: Types.Type.Int),
+        Model.Named(name: "r", type: Types.Type.Int),
+        Model.Named(name: "p", type: Types.Type.Int),
+        Model.Named(name: "length", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "KDF.scrypt",
+      effects: [],
+      description: (
+        "Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power " +
+        "of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes) and with " +
+        "r * p * (n + 16) at most 2^25, or an error; VM only."
+      ),
+      alternatives: [],
+    ),
+  ]
+
+## The Optional rows; appended last so the positions of the existing rows never shift.
+ROWS_66: List[Model.Builtin] = [
     Model.Builtin(
       name: "Optional.map",
       parameters: [

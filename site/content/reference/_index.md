@@ -1,6 +1,6 @@
 ---
 title: Language specification
-weight: 4
+weight: 5
 description: The formal grammar and rules of the Agentica language.
 ---
 

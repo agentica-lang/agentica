@@ -2,9 +2,9 @@
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
  * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
  * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
- * CBC (Cipher) and CMAC, and the Base64 and Digest.hexencode/hexdecode text
- * forms of bytes in plain C. The hashes, HMACs, random bytes, compare, cipher
- * and CMAC come from the OpenSSL adapter (digest.h). Service layer. Design:
+ * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF), and the Base64
+ * and Digest.hexencode/hexdecode text forms of bytes in plain C. All but the
+ * text forms come from the OpenSSL adapter (digest.h). Service layer. Design:
  * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
  * Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
@@ -21,6 +21,13 @@
 static const char b64_standard[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static const char b64_urlsafe[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 static const char hex_digits[] = "0123456789abcdef";
+
+/* The algorithm of a key derivation, for kdf_compute. */
+typedef struct {
+  bool scrypt;
+  uint64_t iterations; /* PBKDF2 */
+  uint64_t n, r, p;    /* scrypt */
+} kdf_params;
 
 /* The message of a failed hash, by agc_digest_kind. */
 static const char *const digest_missing[] = {
@@ -262,12 +269,12 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, byte_value(out, n));
 }
 
-/* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute and cmac_compute below) each
-   have their own out-of-line function whose only callees are the adapter, memset and agc_fail. vm/tools/tsan.supp
-   names these five and nothing else, so a TSan report about OpenSSL's fetch caches is suppressed while a race in the
-   VM code around them (such as reading a list another task holds) is still reported. TSan unwinds by frame pointers,
-   which libcrypto does not keep, so a report skips the adapter function and shows its caller first: these must stay
-   real frames (noinline, and not a tail call). */
+/* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute, cmac_compute, gcm_compute and
+   kdf_compute below) each have their own out-of-line function whose only callees are the adapter, memset and
+   agc_fail. vm/tools/tsan.supp names these seven and nothing else, so a TSan report about OpenSSL's fetch caches is
+   suppressed while a race in the VM code around them (such as reading a list another task holds) is still reported.
+   TSan unwinds by frame pointers, which libcrypto does not keep, so a report skips the adapter function and shows its
+   caller first: these must stay real frames (noinline, and not a tail call). */
 static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
                                                        unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
   size_t len = agc_digest(kind, bytes, n, out);
@@ -457,6 +464,149 @@ static agc_value builtin_cmac_des_ede3(agc_vm *vm, agc_value *args, uint32_t spa
   return cmac_value(vm, args, span, AGC_CMAC_DES_EDE3);
 }
 
+/* Runs AES-256-GCM over the n bytes at data into out (agc_aes_256_gcm), whose sizes the caller checked, and returns
+   false for a decrypt whose tag does not match; the adapter has then wiped out. A library failure stops the run. One
+   of the libcrypto wrappers that vm/tools/tsan.supp names (see digest_compute). */
+static __attribute__((noinline)) bool gcm_compute(agc_vm *vm, bool encrypt, const uint8_t *key, const uint8_t *iv,
+                                                  const uint8_t *aad, size_t aad_n, const uint8_t *data, size_t n,
+                                                  uint8_t *out, unsigned char tag[AGC_GCM_TAG_BYTES], uint32_t span) {
+  agc_aead_status status = agc_aes_256_gcm(encrypt, key, iv, aad, aad_n, data, n, out, tag);
+  if (status == AGC_AEAD_FAILED) agc_fail(vm, "RUNTIME-INTERNAL", "AES-256-GCM is not available", span);
+  return status == AGC_AEAD_DONE;
+}
+
+/* Cipher.aes_256_gcm_encrypt(key, iv, data, auth_data) and _decrypt: AES-256-GCM (OpenSSL's aes-256-gcm), the
+   authenticated cipher. Encrypting gives the ciphertext with the 16-byte tag appended, the form Python's AESGCM, Go's
+   Seal and WebCrypto give, so a caller cannot drop the tag; decrypting takes that form back and gives the plaintext
+   only when the tag matches the key, IV, data and auth_data, else an error Result and never partial plaintext. A key
+   that is not 32 bytes, an IV that is not 12 bytes, a decrypt input shorter than the tag or more than 2^36 - 32 bytes
+   to encrypt is an error Result, checked before any work. Cost and lock as digest_value. */
+static agc_value aes_256_gcm_value(agc_vm *vm, agc_value *args, uint32_t span, bool encrypt) {
+  size_t key_n, iv_n, n, aad_n;
+  const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
+  const uint8_t *iv = agc_bytes_data(vm, args[1], &iv_n);
+  const uint8_t *data = agc_bytes_data(vm, args[2], &n);
+  const uint8_t *aad = agc_bytes_data(vm, args[3], &aad_n);
+  if (key_n != AGC_GCM_KEY_BYTES) return agc_error_value("AES-256-GCM needs a key of 32 bytes");
+  if (iv_n != AGC_GCM_IV_BYTES) return agc_error_value("AES-256-GCM needs an iv of 12 bytes");
+  if (!encrypt && n < AGC_GCM_TAG_BYTES)
+    return agc_error_value("AES-256-GCM needs the ciphertext with its 16-byte tag at the end");
+  size_t body = encrypt ? n : n - AGC_GCM_TAG_BYTES;
+  if ((uint64_t)body > AGC_GCM_MAX_BYTES) return agc_error_value("AES-256-GCM takes at most 2^36 - 32 bytes per iv");
+  if (encrypt) {
+    /* The ciphertext and then the tag, written in place. */
+    agc_bytes *out = agc_new_bytes(n + AGC_GCM_TAG_BYTES);
+    (void)gcm_compute(vm, true, key, iv, aad, aad_n, data, n, out->data, out->data + n, span);
+    return agc_result_value(true, agc_bytes_value(out));
+  }
+  unsigned char tag[AGC_GCM_TAG_BYTES];
+  memcpy(tag, data + body, sizeof tag);
+  agc_bytes *out = body ? agc_new_bytes(body) : NULL;
+  if (!gcm_compute(vm, false, key, iv, aad, aad_n, data, body, out ? out->data : NULL, tag, span))
+    return agc_error_value("AES-256-GCM: the tag does not match the key, iv, data and auth_data");
+  return agc_result_value(true, agc_bytes_value(out ? out : agc_empty_bytes()));
+}
+
+static agc_value builtin_aes_256_gcm_encrypt(agc_vm *vm, agc_value *args, uint32_t span) {
+  return aes_256_gcm_value(vm, args, span, true);
+}
+
+static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32_t span) {
+  return aes_256_gcm_value(vm, args, span, false);
+}
+
+/* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the SecureRandom counts. Real ones are tens of
+   bytes, and it keeps the int lengths OpenSSL takes for the password and the salt far away. */
+#define KDF_MAX_BYTES ((size_t)AGC_MAX_LIST_COUNT)
+/* The most memory scrypt may take, 128 * r * (n + p + 2) bytes of native memory outside the GC: the default cap of
+   OpenSSL 3's scrypt provider (1025 MiB), which n = 2^20 with r = 8 (RFC 7914 §12, the last vector) fits. */
+#define SCRYPT_MAX_MEMORY ((uint64_t)1025 * 1024 * 1024)
+/* A KDF runs inside one builtin call on its scheduler, where neither --max-steps nor a signal can stop it, so its work
+   is capped before the call, so the worst valid call takes tens of seconds at most on one core: about 80 and 32
+   times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block; scrypt
+   with n = 2^17, r = 8, p = 1).
+   PBKDF2's work is iterations * ceil(length / 32). scrypt's is r * p * (n + 16): each of the p lanes mixes n blocks of
+   128 * r bytes, and PBKDF2 makes and reads each lane's block too, which costs about as much as 16 more blocks (a
+   call with n = 2 and a large p measured about 9 block-times per lane). */
+#define PBKDF2_MAX_WORK ((uint64_t)50000000)
+#define SCRYPT_MAX_WORK ((uint64_t)1 << 25)
+
+/* Derives out_n bytes into out (agc_pbkdf2_hmac_sha256 or agc_scrypt), whose parameters the caller checked. A library
+   failure stops the run; the adapter has then wiped out. One of the libcrypto wrappers that vm/tools/tsan.supp names
+   (see digest_compute). */
+static __attribute__((noinline)) void kdf_compute(agc_vm *vm, const kdf_params *kdf, const uint8_t *password,
+                                                  size_t password_n, const uint8_t *salt, size_t salt_n, uint8_t *out,
+                                                  size_t out_n, uint32_t span) {
+  bool done = kdf->scrypt ? agc_scrypt(password, password_n, salt, salt_n, kdf->n, kdf->r, kdf->p, SCRYPT_MAX_MEMORY,
+                                       out, out_n)
+                          : agc_pbkdf2_hmac_sha256(password, password_n, salt, salt_n, kdf->iterations, out, out_n);
+  if (!done)
+    agc_fail(vm, "RUNTIME-INTERNAL", kdf->scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
+}
+
+/* The shared end of the KDF builtins: checks the password, salt and length (args 0, 1 and the last, at length_at),
+   derives the key and charges the work, which grows with the iterations or the memory, not with the arguments that
+   AGC_COST_SIZE counts. work is that work in bytes hashed, saturated. */
+static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const kdf_params *kdf, uint64_t work,
+                           uint32_t span) {
+  size_t password_n, salt_n;
+  const uint8_t *password = agc_bytes_data(vm, args[0], &password_n);
+  const uint8_t *salt = agc_bytes_data(vm, args[1], &salt_n);
+  int64_t length = agc_as_int(vm, args[length_at]);
+  if (password_n > KDF_MAX_BYTES || salt_n > KDF_MAX_BYTES)
+    return agc_error_value("a KDF password and salt have at most 1048576 bytes each");
+  if (length < 1 || (uint64_t)length > KDF_MAX_BYTES) return agc_error_value("a KDF length is 1 to 1048576 bytes");
+  uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES, rounds;
+  if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
+    return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
+  agc_bytes *out = agc_new_bytes((size_t)length);
+  kdf_compute(vm, kdf, password, password_n, salt, salt_n, out->data, (size_t)length, span);
+  uint64_t total;
+  if (__builtin_mul_overflow(work, kdf->scrypt ? 1 : blocks, &total)) total = UINT64_MAX;
+  agc_charge(vm, total / AGC_COST_BYTES);
+  return agc_result_value(true, agc_bytes_value(out));
+}
+
+/* KDF.pbkdf2_hmac_sha256(password, salt, iterations, length): PBKDF2 (RFC 8018 §5.2) with HMAC-SHA256, Ruby's
+   OpenSSL::KDF.pbkdf2_hmac with hash "SHA256". iterations below 1, a length outside 1..1048576 or more work than
+   PBKDF2_MAX_WORK is an error Result.
+   Each iteration of each 32-byte block hashes two 64-byte blocks. No shared lock, as digest_value. */
+static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t iterations = agc_as_int(vm, args[2]);
+  if (iterations < 1) return agc_error_value("KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
+  kdf_params kdf = {.iterations = (uint64_t)iterations};
+  uint64_t work;
+  if (__builtin_mul_overflow((uint64_t)iterations, (uint64_t)128, &work)) work = UINT64_MAX;
+  return kdf_value(vm, args, 3, &kdf, work, span);
+}
+
+/* KDF.scrypt(password, salt, n, r, p, length): scrypt (RFC 7914), Ruby's OpenSSL::KDF.scrypt. n is a power of 2
+   above 1 and below 2^(16 * r), r and p are at least 1 with r * p below 2^30, r * p * (n + 16) is at most
+   SCRYPT_MAX_WORK,
+   and the memory 128 * r * (n + p + 2) is at most SCRYPT_MAX_MEMORY; anything else is an error Result, checked
+   before any work. The work is about two passes over the n blocks of 128 * r bytes for each of the p lanes. No shared
+   lock, as digest_value. */
+static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t n = agc_as_int(vm, args[2]), r = agc_as_int(vm, args[3]), p = agc_as_int(vm, args[4]);
+  if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("KDF.scrypt needs n to be a power of 2 above 1");
+  if (r < 1 || p < 1) return agc_error_value("KDF.scrypt needs r and p of at least 1");
+  if (p > ((1 << 30) - 1) / r) return agc_error_value("KDF.scrypt needs r * p below 2^30");
+  /* RFC 7914 §2: n < 2^(128 * r / 8). Only r <= 3 can meet it, since n fits in 63 bits. */
+  if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r)) return agc_error_value("KDF.scrypt needs n below 2^(16 * r)");
+  uint64_t lanes, memory, work, rounds;
+  /* r * p is below 2^30, so only the product with n + 16 can overflow. */
+  if (__builtin_add_overflow((uint64_t)n, (uint64_t)16, &rounds) ||
+      __builtin_mul_overflow(rounds, (uint64_t)r * (uint64_t)p, &rounds) || rounds > SCRYPT_MAX_WORK)
+    return agc_error_value("KDF.scrypt needs r * p * (n + 16) of at most 2^25");
+  bool big = __builtin_add_overflow((uint64_t)n, (uint64_t)p + 2, &lanes) ||
+             __builtin_mul_overflow(lanes, (uint64_t)r * 128, &memory) || memory > SCRYPT_MAX_MEMORY;
+  if (big) return agc_error_value("KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
+  /* rounds is at most 2^25, so the work fits in 64 bits. */
+  work = rounds * 256;
+  kdf_params kdf = {.scrypt = true, .n = (uint64_t)n, .r = (uint64_t)r, .p = (uint64_t)p};
+  return kdf_value(vm, args, 5, &kdf, work, span);
+}
+
 /* The Digest and HMAC entries: one thin function per kind and output (bytes or hex) over digest_value and
    hmac_value. */
 static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -536,6 +686,10 @@ const agc_builtin agc_crypto_builtins[] = {
   {"Cipher.des_ede3_cbc_decrypt", 3, builtin_des_ede3_cbc_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"CMAC.aes", 2, builtin_cmac_aes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"CMAC.des_ede3", 2, builtin_cmac_des_ede3, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Cipher.aes_256_gcm_encrypt", 4, builtin_aes_256_gcm_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Cipher.aes_256_gcm_decrypt", 4, builtin_aes_256_gcm_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"KDF.pbkdf2_hmac_sha256", 4, builtin_pbkdf2_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"KDF.scrypt", 6, builtin_scrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

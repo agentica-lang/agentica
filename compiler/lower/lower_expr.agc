@@ -315,7 +315,7 @@ def builtin_spans(node: Ast.Call, shape: Defaults.Shape) -> List[Source.Span]
   return spans
 end
 
-# The default of a builtin parameter, a constant built the way its literal is.
+# The default of a builtin parameter, a constant built the way its literal is (an empty Bytes as `"".bytes`).
 def lower_builtin_default(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, value: Model.Default
 ) -> Result[Lowering.Out]
@@ -330,6 +330,10 @@ def lower_builtin_default(
     Model.Default.Nothing -> literal = Ast.LitValue.Nothing
     Model.Default.EmptyList -> return Data.lower_list(cx, fx, Ast.ListLit(id: node.id, elements: [], span: span), want)
     Model.Default.EmptyMap -> return Data.lower_map(cx, fx, Ast.MapLit(id: node.id, entries: [], span: span), want)
+    Model.Default.EmptyBytes ->
+      # `"".bytes`: the empty String, then String.bytes in the same register.
+      text = try lower_literal(cx, fx, Ast.Literal(id: node.id, value: Ast.LitValue.Text(""), span: span), want)
+      return ok(text.with(fx: Lowering.emit_builtin(text.fx, text.slot, "String.bytes", 1, [span, span])))
     Model.Default.Variant(name) ->
       parts = name.split(".")
       return Data.lower_enum(cx, fx, parts[0], parts[1], [], span, want)

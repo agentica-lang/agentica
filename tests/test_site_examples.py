@@ -4,7 +4,7 @@ Each block is checked or run with the product CLI, in a folder of its own. A fen
 `mode="check"` only checks the program, `expect="CODE"` says the program is rejected or fails with that diagnostic code,
 `file="name.agc"` makes the block a module file that the programs of the page import. An `input` block after a program
 is its standard input, and an `output` block is the exact standard output of its run. The fast tier covers the start
-page, two tour pages and the BDD page; the slow tier covers the whole site (the site-examples workflow runs it).
+pages, two tour pages and the BDD page; the slow tier covers the whole site (the site-examples workflow runs it).
 """
 import json
 import re
@@ -21,7 +21,7 @@ CONTENT = ROOT / "site" / "content"
 FENCE_OPEN = re.compile(r"^```([A-Za-z0-9_-]+)[ \t]*(?:\{([^}]*)\})?[ \t]*$")
 FENCE_CLOSE = re.compile(r"^```[ \t]*$")
 KNOWN_ATTRIBUTES = ("mode", "file", "expect")
-SMOKE_PAGES = ["getting-started.md", "tour/modules.md", "tour/results-and-try.md", "library/testing/bdd.md"]
+SMOKE_PAGES = ["getting-started.md", "cli.md", "tour/modules.md", "tour/results-and-try.md", "library/testing/bdd.md"]
 JOBS = 4
 # The codes of the stages before the run: a program that fails with one of them was rejected, not run.
 STATIC_PREFIXES = ("LEX-", "PARSE-", "CHECK-")

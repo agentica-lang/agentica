@@ -38,8 +38,9 @@ total: 1631 cents
 
 ## Read next
 
-- [Getting started](/getting-started/): install Agentica, run a program and read its errors.
+- [Getting started](/getting-started/): install Agentica, run your first program and check it.
 - [Language tour](/tour/): the language in short pages, one idea at a time.
+- [Command line](/cli/): every command, option and cache of the `agentica` program.
 - [Library](/library/): every builtin module, with one example per function.
 - [Language specification](/reference/): the formal grammar and rules.
 - [Style guide](/style/): how to write simple code that is easy to read.

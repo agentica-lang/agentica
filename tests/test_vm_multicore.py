@@ -205,6 +205,37 @@ def test_cipher_and_cmac_in_eight_tasks_on_four_schedulers_match_one_task(tmp_pa
     assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
 
 
+# AES-256-GCM and the KDFs run without the shared lock too (vm/crypto.c), so eight tasks seal, open and derive at
+# once, which fills OpenSSL's cipher and KDF fetch caches from several schedulers (vm/tools/tsan.supp names their
+# wrappers). Each task's answer must equal the same work done again in one task after the parallel run.
+GCM_KDF_TASKS = """\
+def work(seed: Int) -> Result[String]
+  bytes = (0..65535).to_a.map do |i|
+    (i * 7 + seed * 3) % 256
+  end
+  data = try Bytes.from_list(bytes)
+  key = try KDF.pbkdf2_hmac_sha256(data.take(16), data.drop(16).take(16), 200, 32)
+  iv = data.take(12)
+  sealed = try Cipher.aes_256_gcm_encrypt(key, iv, data, data.take(seed))
+  opened = try Cipher.aes_256_gcm_decrypt(key, iv, sealed, data.take(seed))
+  scrypt = try KDF.scrypt(data.take(8), key, 256, 4, 2, 32)
+  return ok("#{Digest.sha256_hexdigest(sealed)} #{opened == data} #{Digest.hexencode(scrypt)}")
+end
+
+def main() -> Void
+  results = Task.map((1..8).to_a, 8, 30000, &work)
+  for seed in 1..8
+    puts(results[seed - 1].unwrap! == work(seed).unwrap!)
+  end
+end
+"""
+
+
+def test_gcm_and_kdf_in_eight_tasks_on_four_schedulers_match_one_task(tmp_path):
+    result = vm(program(tmp_path, "gcm-kdf", GCM_KDF_TASKS))
+    assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
+
+
 # SecureRandom runs without the shared lock (vm/crypto.c; OpenSSL 3 keeps one generator per thread), so eight tasks
 # draw at once. 64 KiB of bytes and a uuid from each task repeat with negligible chance (2 ** -122 per uuid pair).
 SECURE_RANDOM_TASKS = """\

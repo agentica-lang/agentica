@@ -146,7 +146,7 @@ export def parameter_text(parameter: Model.Named) -> String
   return "#{typed} = #{default_text(parameter.default)}"
 end
 
-## A default as the source writes it: 6, 0.5, "x", true, nil, [], {} or Enum.Variant; "" for no default.
+## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes or Enum.Variant; "" for no default.
 export def default_text(value: Model.Default) -> String
   case value
     Model.Default.Absent -> return ""
@@ -157,6 +157,7 @@ export def default_text(value: Model.Default) -> String
     Model.Default.Nothing -> return "nil"
     Model.Default.EmptyList -> return "[]"
     Model.Default.EmptyMap -> return "{}"
+    Model.Default.EmptyBytes -> return "\"\".bytes"
     Model.Default.Variant(name) -> return name
   end
 end
@@ -255,6 +256,7 @@ def default_fits?(parameter: Model.Named) -> Bool
     Model.Default.Nothing -> return Types.is?(type, "Nil")
     Model.Default.EmptyList -> return Types.is?(type, "List")
     Model.Default.EmptyMap -> return Types.is?(type, "Map")
+    Model.Default.EmptyBytes -> return Types.is?(type, "Bytes")
     Model.Default.Variant(name) -> return variant_fits?(type, name)
   end
 end
