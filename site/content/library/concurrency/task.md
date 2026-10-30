@@ -106,6 +106,7 @@ def main() -> Void
     ok(n) -> puts(n)
     error(e) -> puts(e.starts_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
   end
+
   puts("still running")
 end
 ```
@@ -146,6 +147,7 @@ def main() -> Void
     Await.Done(n) -> puts("done #{n}")
     Await.TimedOut -> puts("still working")
   end
+
   inbox.send(21, 1000)
   case Task.await(task, 10000)
     Await.Done(n) -> puts("done #{n}")
@@ -174,8 +176,10 @@ def main() -> Void
         ok(n) -> puts("parsed #{n}")
         error(e) -> puts(e)
       end
+
     Await.TimedOut -> puts("timed out")
   end
+
   IO.inspect(Task.await(task, 1))
 end
 ```
@@ -208,6 +212,7 @@ def main() -> Void
   results = Task.map([1, 2, 3, 4], 2, 1000) do |n|
     slow_double(n)
   end
+
   puts(results)
 end
 ```
@@ -229,6 +234,7 @@ def main() -> Void
     Task.sleep(40 - n)
     ok(n * 2)
   end
+
   for result in results
     case result
       ok(n) -> puts("value #{n}")
@@ -253,6 +259,7 @@ def fetch(n: Int) -> Result[String]
   if n == 2
     Task.sleep(10000)
   end
+
   return ok("page #{n}")
 end
 
@@ -350,6 +357,7 @@ def keep(inbox: Channel[Int]) -> Result[Int]
   while true
     total += try inbox.recv(60000)
   end
+
   return ok(total)
 end
 
@@ -423,6 +431,7 @@ def main() -> Void
   while !Task.unobserved_crash().ok?
     Task.sleep(1)
   end
+
   puts(Task.unobserved_crash().ok?)
   System.exit(0)
 end

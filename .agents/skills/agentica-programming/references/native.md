@@ -180,6 +180,7 @@ end
       Native.close(opened.db)   # a failed open still gives a live handle
       return error("sqlite open failed: #{opened.result}")
     end
+
     return ok(opened.db)
   end
   ~~~
@@ -285,6 +286,7 @@ end
       embeddings: C.Bool
       callback_data: C.Pointer
     end
+
     def infer_context_default_params() -> ContextParams
     def infer_context_size(params: ContextParams) -> C.Int32
   end

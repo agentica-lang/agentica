@@ -137,8 +137,10 @@ def find(names: List[String], wanted: String) -> Optional[Int]
     if name == wanted
       return some(index)
     end
+
     index += 1
   end
+
   return none
 end
 
@@ -248,6 +250,7 @@ def first_even(numbers: List[Int]) -> Optional[Int]
       return some(n)
     end
   end
+
   return none
 end
 

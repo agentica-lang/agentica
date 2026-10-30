@@ -32,6 +32,7 @@ def open(path: String) -> Result[Db]
     Native.close(opened.db)
     return error("sqlite: #{sqlite3_errstr(opened.result)}")
   end
+
   return ok(opened.db)
 end
 
@@ -41,6 +42,7 @@ def prepare(db: Db, sql: String) -> Result[Stmt]
   if prepared.result != SQLITE_OK
     return error("sqlite: #{sqlite3_errmsg(db)}")
   end
+
   return ok(prepared.stmt)
 end
 
@@ -52,6 +54,7 @@ def run(db: Db, sql: String) -> Result[Void]
     Native.close(stmt)
     return error("sqlite: #{message}")
   end
+
   Native.close(stmt)
   return ok()
 end
@@ -64,6 +67,7 @@ def main() -> Void
   while sqlite3_step(query) == SQLITE_ROW
     puts("#{sqlite3_column_int(query, 0)} #{sqlite3_column_text(query, 1)}")
   end
+
   Native.close(query)
   IO.inspect(prepare(db, "select from nowhere"))   # error("sqlite: near \"from\": syntax error")
   IO.inspect(open("/no/such/dir/x.db"))            # error("sqlite: unable to open database file")

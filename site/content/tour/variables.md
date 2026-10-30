@@ -78,9 +78,11 @@ def main() -> Void
   for _ in 1..2        # the body does not need the number
     puts("tick")
   end
+
   {"a": 1, "b": 2}.each do |_, v|   # drop the key
     puts(v)
   end
+
   case Result.Ok(3)
     ok(_) -> puts("fine")           # drop the payload
     error(_) -> puts("failed")
@@ -117,6 +119,7 @@ def main() -> Void
   if n > 10
     message = "big"
   end
+
   puts(message)
 end
 ```

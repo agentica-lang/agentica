@@ -137,6 +137,7 @@ def send_all(jobs: Channel[Int]) -> Result[Void]
   for n in 1..5
     try jobs.send(n, 1000)
   end
+
   return ok()
 end
 
@@ -159,6 +160,7 @@ def main() -> Void
         end
     end
   end
+
   puts(total)
   puts(Task.await(producer).ok?)
 end
@@ -195,6 +197,7 @@ def main() -> Void
         break
     end
   end
+
   puts(Task.await(producer).ok?)
 end
 ```
@@ -239,6 +242,7 @@ def emit(source: Source) -> Void
     source.events.send(Event.Item(source.name, i * 10), 1000)
     i += 1
   end
+
   if source.count == 0
     source.events.send(Event.Failed("#{source.name} has nothing"), 1000)
   end
@@ -248,6 +252,7 @@ def coordinate(c: Coordinator) -> Void
   c.sources.each do |source|
     Task.await(source)
   end
+
   c.events.close
 end
 
@@ -267,12 +272,14 @@ def main() -> Void
           Event.Item(name, value) -> totals = totals.put(name, totals.get(name, 0) + value)
           Event.Failed(text) -> puts(text)
         end
+
       error(_) ->
         if events.closed?
           break
         end
     end
   end
+
   Task.await(coordinator)
   totals.keys.sort.each do |name|
     puts("#{name}: #{totals.get(name, 0)}")
@@ -302,6 +309,7 @@ def count(inbox: Channel[Int]) -> Int
         end
     end
   end
+
   return total
 end
 

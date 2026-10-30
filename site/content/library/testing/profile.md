@@ -22,6 +22,7 @@ def total(n: Int) -> Int
   for k in 0...n
     sum += k
   end
+
   return sum
 end
 
@@ -49,6 +50,7 @@ def main() -> Void
     b = try parse("30")
     ok(a + b)
   end
+
   puts(r.unwrap_or(0))
 end
 ```
@@ -72,6 +74,7 @@ def work(n: Int) -> Int
     sum += i
     i += 1
   end
+
   return sum
 end
 
@@ -81,6 +84,7 @@ def main() -> Void
     b = Profile.measure("inner") do work(200) end
     a + b
   end
+
   puts(both)
 end
 ```
@@ -103,6 +107,7 @@ def work(n: Int) -> Int
   for k in 0...n
     sum += k
   end
+
   return sum
 end
 

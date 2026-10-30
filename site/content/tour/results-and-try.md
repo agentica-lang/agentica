@@ -13,6 +13,7 @@ def divide(a: Int, b: Int) -> Result[Int]
   if b == 0
     return error("division by zero")
   end
+
   return ok(a / b)
 end
 
@@ -105,6 +106,7 @@ def check_age(age: Int) -> Result[Void]
   if age < 0
     return error("age must not be negative")
   end
+
   return ok()
 end
 

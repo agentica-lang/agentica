@@ -164,6 +164,7 @@ def main() -> Void
     line = IO.gets!
     count += 1
   end
+
   puts("#{count} lines")
 end
 ```

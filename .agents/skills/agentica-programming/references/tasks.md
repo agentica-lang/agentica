@@ -143,6 +143,7 @@ def fetch(n: Int) -> Result[String]
   if n == 2
     Task.sleep(10000)
   end
+
   return ok("page #{n}")
 end
 
@@ -235,6 +236,7 @@ def send_all(jobs: Channel[Int]) -> Result[Void]
   for n in 1..5
     try jobs.send(n, 1000)
   end
+
   return ok()
 end
 
@@ -257,6 +259,7 @@ def main() -> Void
         end
     end
   end
+
   puts(total)
   puts(Task.await(producer))
 end
