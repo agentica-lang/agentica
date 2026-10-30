@@ -217,8 +217,6 @@ be read twice. The library page is
   `Lazy` has on a `List` or `Range` (`xs.each_cons(2)`) are
   `CHECK-UNKNOWN-METHOD`, with a help that shows `to_a` or `.lazy`.
 
-Expected types flow into these operations for empty collections and Results.
-
 - `String.length` and `String.slice` count characters, not bytes. An
   out-of-range `slice` is a runtime error. `s.bytesize` (`String.bytesize`) is
   the number of UTF-8 bytes of `s`, a NUL included (`"é".bytesize` is 2): the
@@ -422,12 +420,10 @@ Expected types flow into these operations for empty collections and Results.
   that is not part of a valid UTF-8 sequence becomes U+FFFD, as in `Dir.list`
   names. The VM hides the variables it keeps for itself, `AGENTICA_CHANNEL` and
   a `UV_USE_IO_URING` that it set itself; a child started with `Process.spawn`
-  does not get them either. With `--deny-env` it returns an error that begins
-  with `denied: --deny-env`. The home directory is `System.env("HOME")`. There
-  is no call that lists the variables. A child started with `Process.spawn` also
+  does not get them either. The home directory is `System.env("HOME")`. There is
+  no call that lists the variables. A child started with `Process.spawn` also
   does not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE` (reserved for
-  the VM's own metrics, a later phase), though `System.env` shows them to the
-  program.
+  the VM's own metrics), though `System.env` shows them to the program.
 - `System.os()` is the operating system of the running program, a `String`:
   `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase
   name `uname` gives (`"unknown"` when the system cannot say or the name is not
@@ -675,13 +671,12 @@ out. A lex or parse error exits 1, an unreadable path exits 2.
 of one file in source order, private ones too: imports, functions, structs with
 their fields, enums with their variants, type aliases, resources and constants,
 each with `exported`, its signature, its `##` doc and summary, and its span and
-the span of its name. FILE is a source file or a `std/` module name. It only
-lexes and parses the file, so its imports need not exist; only a file that
-re-exports a name (`export Url.parse`) is linked, to list the original
-declaration with its doc, and one that does not link lists no re-export.
-`--stdin FILE` takes the text of FILE from standard input. A lex or parse error
-exits 1; a mistake in the arguments or an unreadable path is `QUERY-USAGE`
-(section 7) and exits 2.
+the span of its name. FILE is a source file or a `std/` module name. It lexes
+and parses the file only, as `doc` does; a file that re-exports a name, such as
+`export Url.parse`, is linked to list the original declaration with its doc, and
+a re-export whose module does not link is left out. `--stdin FILE` takes the
+text of FILE from standard input. A lex or parse error exits 1; a mistake in the
+arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 
 `agentica type-at FILE:LINE:COL [--json]` gives the checked type of the
 innermost expression at a position (line and column from 1, in code points as
