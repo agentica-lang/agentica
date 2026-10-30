@@ -37,4 +37,32 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
+
+#if defined(__aarch64__) && defined(__linux__)
+/* The cache maintenance that libgcc and compiler-rt call __clear_cache, defined here on Linux arm64, where the seal
+   above and libffi's closure setup call it. The release links with zig cc against glibc 2.28, and zig's compiler_rt,
+   the only other definition, is one object that also brings zig's stack protector, whose canary is a constant: with
+   this definition the binary keeps glibc's __stack_chk_fail and its random canary (tools/release-check.sh checks).
+   The sequence is the architecture's: clean each data cache line to the point of unification, then invalidate each
+   instruction cache line, leaving out a step that CTR_EL0 says the hardware does itself (IDC, bit 28; DIC, bit 29). */
+void __clear_cache(void *begin, void *end);
+void __clear_cache(void *begin, void *end) {
+  uint64_t ctr;
+  __asm__ __volatile__("mrs %0, ctr_el0" : "=r"(ctr));
+  uintptr_t start = (uintptr_t)begin, stop = (uintptr_t)end;
+  if (!(ctr & (UINT64_C(1) << 28))) {
+    uintptr_t line = (uintptr_t)4 << ((ctr >> 16) & 15);
+    for (uintptr_t at = start & ~(line - 1); at < stop; at += line)
+      __asm__ __volatile__("dc cvau, %0" : : "r"(at) : "memory");
+  }
+  __asm__ __volatile__("dsb ish" : : : "memory");
+  if (!(ctr & (UINT64_C(1) << 29))) {
+    uintptr_t line = (uintptr_t)4 << (ctr & 15);
+    for (uintptr_t at = start & ~(line - 1); at < stop; at += line)
+      __asm__ __volatile__("ic ivau, %0" : : "r"(at) : "memory");
+    __asm__ __volatile__("dsb ish" : : : "memory");
+  }
+  __asm__ __volatile__("isb" : : : "memory");
+}
+#endif
 #endif

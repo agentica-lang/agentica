@@ -1,11 +1,12 @@
 name: Release
 
-# Four native packages (docs: references/ci.md of the development skill):
-#   linux-x86_64    ubuntu-latest   pinned zig cc against glibc 2.28           .tar.gz
-#   windows-x86_64  windows-2025    MSYS2 UCRT64 GCC                           .zip
-#   macos-x86_64    macos-15-intel  Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
-#   macos-arm64     macos-latest    Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
-# A tag push publishes them with SHA256SUMS once all four build and pass the tests of their extracted package; a manual
+# Five native packages (docs: references/ci.md of the development skill):
+#   linux-x86_64    ubuntu-latest     pinned zig cc against glibc 2.28           .tar.gz
+#   linux-arm64     ubuntu-24.04-arm  pinned zig cc against glibc 2.28           .tar.gz  (no JIT: the interpreter)
+#   windows-x86_64  windows-2025      MSYS2 UCRT64 GCC                           .zip
+#   macos-x86_64    macos-15-intel    Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
+#   macos-arm64     macos-latest      Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
+# A tag push publishes them with SHA256SUMS once all five build and pass the tests of their extracted package; a manual
 # run (workflow_dispatch) only uploads the same files as artifacts.
 on:
   push:
@@ -37,18 +38,33 @@ jobs:
           fi
 
   linux:
+    name: linux (${{ matrix.platform }})
     needs: version
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x86_64
+            arch: x86_64
+            zig_sha256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+            arch: aarch64
+            zig_sha256: 958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     env:
       ZIG_VERSION: 0.15.2
-      ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+      # The zig of the runner's machine, which also targets it: each package is built and tested on its own hardware.
+      ZIG_ARCH: ${{ matrix.arch }}
+      ZIG_SHA256: ${{ matrix.zig_sha256 }}
       VM_GLIBC: '2.28'
       AGENTICA_OPENSSL: vendored
       AGENTICA_GC: vendored
       AGENTICA_ZLIB: vendored
       CCACHE: ''
-      RELEASE_PLATFORM: linux-x86_64
+      RELEASE_PLATFORM: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,7 +79,7 @@ jobs:
           dir="$RUNNER_TOOL_CACHE/zig-$ZIG_VERSION"
           if [ ! -x "$dir/zig" ] || [ "$(cat "$dir.sha256" 2>/dev/null)" != "$ZIG_SHA256" ]; then
             archive="$RUNNER_TEMP/zig.tar.xz"
-            curl -sSfL "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" -o "$archive"
+            curl -sSfL "https://ziglang.org/download/$ZIG_VERSION/zig-$ZIG_ARCH-linux-$ZIG_VERSION.tar.xz" -o "$archive"
             echo "$ZIG_SHA256  $archive" | sha256sum -c
             rm -rf "$dir.tmp" "$dir" "$dir.sha256"
             mkdir -p "$dir.tmp"
@@ -72,7 +88,7 @@ jobs:
             echo "$ZIG_SHA256" > "$dir.sha256"
             rm "$archive"
           fi
-          echo "CC=$dir/zig cc -target x86_64-linux-gnu.$VM_GLIBC" >> "$GITHUB_ENV"
+          echo "CC=$dir/zig cc -target $ZIG_ARCH-linux-gnu.$VM_GLIBC" >> "$GITHUB_ENV"
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - name: Build the binary against glibc ${{ env.VM_GLIBC }}
         run: |
@@ -103,7 +119,7 @@ jobs:
         run: make release-smoke
       - uses: actions/upload-artifact@v7
         with:
-          name: agentica-linux-x86_64
+          name: agentica-${{ matrix.platform }}
           path: dist/*.tar.gz
           if-no-files-found: error
 
@@ -223,7 +239,7 @@ jobs:
         with:
           pattern: agentica-*
           path: artifacts
-      - name: Check that the four archives are there, once each, and write SHA256SUMS
+      - name: Check that the five archives are there, once each, and write SHA256SUMS
         run: python3 -I tools/release.py collect --in artifacts --out release
       - uses: actions/upload-artifact@v7
         with:
