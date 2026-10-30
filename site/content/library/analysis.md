@@ -4,7 +4,7 @@ weight: 8
 description: The std/analysis module, which answers the questions of check, outline, type-at, symbol and refs from a program.
 ---
 
-`std/analysis` answers, inside a program, the questions that the command line answers: `import Analysis from "std/analysis"`. The answers are plain structs. The `*_json` functions give the same bytes as the `--json` output of `agentica outline`, `type-at`, `symbol` and `refs` ([Getting started](/getting-started/#query-the-code)), and `Analysis.diagnostic_json` gives what `--json check` prints on stderr.
+`std/analysis` answers, inside a program, the questions that the command line answers: `import Analysis from "std/analysis"`. The answers are plain structs. The `*_json` functions give the same bytes as the `--json` output of `agentica outline`, `type-at`, `symbol` and `refs` ([Command line](/cli/#query-the-code)), and `Analysis.diagnostic_json` gives what `--json check` prints on stderr.
 
 ```ruby
 Analysis.workspace() -> Analysis.Workspace

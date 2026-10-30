@@ -1,6 +1,6 @@
 ---
 title: The Aurora VM
-weight: 6
+weight: 7
 description: How Agentica runs your program, the bytecode VM called Aurora, and the libraries it is built on.
 ---
 
@@ -8,7 +8,7 @@ Every program runs on Aurora, a bytecode VM written in C11 (the name appears onl
 
 ## From source to bytecode
 
-The `agentica` binary has two parts. The front end (lexer, parser, module linker, checker, lowering), written in Agentica and compiled to bytecode itself, passes the checked program as bytecode in memory to the VM, which runs it in a new runtime of the same process. You can run the steps yourself (flags: [Getting started](/getting-started/)):
+The `agentica` binary has two parts. The front end (lexer, parser, module linker, checker, lowering), written in Agentica and compiled to bytecode itself, passes the checked program as bytecode in memory to the VM, which runs it in a new runtime of the same process. You can run the steps yourself (flags: [Command line](/cli/#options)):
 
 ```sh
 agentica compile file.agc -o file.agcb   # write bytecode
