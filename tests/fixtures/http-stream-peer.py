@@ -106,6 +106,20 @@ def silent_leave():
     said("silent-leave")
 
 
+def half_close():
+    """A client that closes only its sending side counts as gone: the body is cut, and the last chunk is not sent, so
+    the client sees an incomplete body, not a finished one."""
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s.sendall(b"GET /endless HTTP/1.1\r\nHost: x\r\n\r\n")
+    s.shutdown(socket.SHUT_WR)
+    got = b""
+    while chunk := s.recv(65536):
+        got += chunk
+    s.close()
+    print("half-close", got.startswith(b"HTTP/1.1 200"), b"0\r\n\r\n" in got[-7:])
+    said("half-close")
+
+
 def http10():
     s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
     s.sendall(b"GET /ticks HTTP/1.0\r\n\r\n")
@@ -125,6 +139,7 @@ def main():
     leave("plain-leave", plain())
     leave("tls-leave", secure())
     silent_leave()
+    half_close()
     http10()
 
 

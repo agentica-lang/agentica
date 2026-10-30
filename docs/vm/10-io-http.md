@@ -361,14 +361,21 @@ Properties of the client that no test checks:
   `Transfer-Encoding: chunked` (so the head checks and the C code are the
   same), and the connection task sends the pieces
   as it takes them from the channel. A watcher task, spawned in the group,
-  holds one `TCP.recv_bytes` of a byte on the socket for the whole stream: the
-  end of the client's input closes the body channel, which wakes the connection
-  task and fails the producer's next `send`, with no write needed. When the
-  stream has ended, the same read is the wait for the next request: its byte
-  goes back as the start of the request, and the connection task waits for it
-  at most `idle_timeout_ms`. With a request already buffered there is no
-  watcher, and only a failed send shows that the client left. HTTP/1.0 never
-  gets here: the parser answers 505.
+  loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
+  (or a read error) sets a one-slot `left` channel and closes the body channel,
+  which wakes the connection task and fails the producer's next `send`, with no
+  write needed; the pump then sees `left` and does not send the last chunk, so
+  the client sees a cut body. Bytes read while the stream runs are dropped and
+  set a `sent` channel: a socket read cannot be stopped without losing bytes
+  (the cancel of a read that has completed drops its result), so the bytes of a
+  pipelined request are not kept and the connection closes at the end of the
+  stream, after `close_write` and a drain (as does `Connection: close`, or a
+  request already in the buffer). When the stream has ended with nothing read,
+  the watcher's pending read is the wait for the next request: its bytes go
+  back as the start of the request, and the connection task waits for them at
+  most `idle_timeout_ms`. `take_ready` and the pump read the end of the body
+  from the receive's own error (`channel: closed`), not from a later `closed?`.
+  HTTP/1.0 never gets here: the parser answers 505.
 
 #### 10.7.3 Errors and status codes
 

@@ -85,10 +85,14 @@ struct Ready
   ended: Bool
 end
 
-# What the watcher task of a streamed response needs: the connection, and the body to close when the client leaves.
+# What the watcher task of a streamed response needs: the connection, the body to close when the client leaves, and two
+# one-slot channels that tell the stream what the watcher saw: left (the client's input ended, so the body was cut, not
+# finished) and sent (the client sent bytes while the stream ran).
 struct Watch
   socket: Socket
   body: Channel[Bytes]
+  left: Channel[Bool]
+  sent: Channel[Bool]
 end
 
 struct Incoming
@@ -880,12 +884,13 @@ def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: 
   return Sent(keep: true, rest: incoming.rest)
 end
 
-# Sends bytes in the pieces TCP.send_bytes takes, each with the whole timeout.
+# Sends bytes in the pieces TCP.send_bytes takes. The whole send has `timeout`, not each piece.
 def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
+  deadline = Time.monotonic_ms() + timeout
   at = 0
   while at < data.size
     count = smaller(SEND_BYTES, data.size - at)
-    try TCP.send_bytes(socket, data.slice(at, count), timeout)
+    try TCP.send_bytes(socket, data.slice(at, count), try time_left(socket, deadline))
     at = at + count
   end
   return ok()
@@ -898,17 +903,21 @@ def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[Bytes], r
   return Sent(keep: false, rest: NO_BYTES)
 end
 
-# What the body channel holds without waiting. A channel that is closed and now empty has ended.
+# What the body channel holds without waiting. It has ended when the receive fails because the channel is closed and
+# empty, which the receive itself says, so a producer that sends and closes meanwhile loses nothing.
 def take_ready(body: Channel[Bytes]) -> Ready
   pieces: List[Bytes] = []
+  ended = false
   more = true
   while more
     case body.recv(0)
       ok(piece) -> pieces = List.append(pieces, piece)
-      error(_) -> more = false
+      error(message) ->
+        ended = message == CHANNEL_CLOSED
+        more = false
     end
   end
-  return Ready(pieces: pieces, ended: body.closed?)
+  return Ready(pieces: pieces, ended: ended)
 end
 
 # The encoded head says Content-Length: 0 (the body there is empty); a stream has no length, so it says chunked.
@@ -917,9 +926,10 @@ def chunked_head(head: String) -> String
 end
 
 # Sends the head and then the body as chunks. A HEAD request gets the head and the channel closes, so the producer
-# stops. A task watches the socket while the body is sent, so a client that leaves is noticed even when the producer is
-# idle; the same read, when the stream ended, is the wait for the next request. A request already in the buffer (a
-# pipelining client) leaves no read for the watcher, so then only a failed send tells that the client left.
+# stops. A task watches the socket for the whole stream, so a client that leaves is noticed even when the producer is
+# idle: the end of its input closes the body, and the body is then cut, without the last chunk, so the client sees an
+# incomplete body. Bytes the client sends during the stream (a pipelined request) are dropped, and the connection
+# closes when the stream ends. Otherwise the watcher's read is the wait for the next request.
 def stream_out(
   socket: Socket,
   incoming: Incoming,
@@ -937,28 +947,29 @@ def stream_out(
     body.close
     return Sent(keep: end_head(socket, reply, timeout), rest: incoming.rest)
   end
-  if not incoming.rest.empty?
-    if pump(socket, body, first, timeout) and not reply.closes
-      return Sent(keep: true, rest: incoming.rest)
-    end
-    return Sent(keep: false, rest: NO_BYTES)
-  end
-  watcher = Task.spawn(&watch, Watch(socket: socket, body: body))
-  if not pump(socket, body, first, timeout)
+  left: Channel[Bool] = Channel.new(1)
+  sent: Channel[Bool] = Channel.new(1)
+  watcher = Task.spawn(&watch, Watch(socket: socket, body: body, left: left, sent: sent))
+  if not pump(socket, body, first, left, timeout)
     TCP.close(socket)
     return Sent(keep: false, rest: NO_BYTES)
   end
-  if reply.closes
-    # As linger does: the peer gets the rest of the time to close its side, so a reset cannot lose the last chunk.
-    HttpWire.close_write(socket)
-    case Task.await(watcher, timeout)
-      Await.Done(_) -> drain(socket, Time.monotonic_ms() + timeout)
-      Await.TimedOut -> TCP.close(socket)
-    end
-    TCP.close(socket)
-    return Sent(keep: false, rest: NO_BYTES)
+  if reply.closes or not incoming.rest.empty? or Result.ok?(sent.recv(0))
+    return end_stream(socket, watcher, timeout)
   end
   return next_request(socket, watcher, options.idle_timeout_ms)
+end
+
+# The connection closes after the stream, as linger does: the write side first, then the peer gets the rest of the time
+# to close its side, so a reset cannot lose the last chunk.
+def end_stream(socket: Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Sent
+  HttpWire.close_write(socket)
+  case Task.await(watcher, timeout)
+    Await.Done(_) -> drain(socket, Time.monotonic_ms() + timeout)
+    Await.TimedOut -> TCP.close(socket)
+  end
+  TCP.close(socket)
+  return Sent(keep: false, rest: NO_BYTES)
 end
 
 # After a HEAD response: false when the connection closes.
@@ -987,10 +998,11 @@ def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> 
 end
 
 # Sends the pieces as they come, then the last chunk. The wait for a piece has no deadline of its own: a slow producer
-# is not an error, and the client leaving, the producer closing or the server closing all wake it. A send gets
-# `timeout`, so a client that stops reading cuts the stream. False when the body could not be sent whole; the channel
-# is then closed for the producer.
-def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], timeout: Int) -> Bool
+# is not an error, and the client leaving, the producer closing or the server closing all wake it. A piece gets
+# `timeout` to be sent, so a client that stops reading cuts the stream. False when the body was cut: a send failed
+# (the channel is closed for the producer) or the watcher saw the client leave (left has a value). Only a producer's
+# close sends the last chunk.
+def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], left: Channel[Bool], timeout: Int) -> Bool
   for piece in first
     if not Result.ok?(send_piece(socket, piece, timeout))
       body.close
@@ -1004,24 +1016,29 @@ def pump(socket: Socket, body: Channel[Bytes], first: List[Bytes], timeout: Int)
           body.close
           return false
         end
-      error(_) ->
-        if body.closed?
+      error(message) ->
+        if message == CHANNEL_CLOSED
           break
         end
     end
+  end
+  if Result.ok?(left.recv(0))
+    return false
   end
   return Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
 end
 
 # The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
-# CHUNK_BYTES is several chunks. An empty piece would read as the last chunk, so it sends nothing. The bytes go as they
-# are: no UTF-8 check runs on a piece.
+# CHUNK_BYTES is several chunks, all within `timeout`. An empty piece would read as the last chunk, so it sends
+# nothing. The bytes go as they are: no UTF-8 check runs on a piece.
 def send_piece(socket: Socket, piece: Bytes, timeout: Int) -> Result[Void]
+  deadline = Time.monotonic_ms() + timeout
   at = 0
   while at < piece.size
     count = smaller(CHUNK_BYTES, piece.size - at)
     part = piece.slice(at, count)
-    try TCP.send_bytes(socket, Bytes.concat(["#{hex_of(count)}\r\n".bytes, part, CRLF]), timeout)
+    chunk = Bytes.concat(["#{hex_of(count)}\r\n".bytes, part, CRLF])
+    try TCP.send_bytes(socket, chunk, try time_left(socket, deadline))
     at = at + count
   end
   return ok()
@@ -1037,19 +1054,30 @@ def hex_of(number: Int) -> String
   return digits
 end
 
-# Waits for the client to send or close. The end of its input, or a read error, means it left: the body closes, which
-# stops the producer and the sending. Bytes mean the client sent its next request early; they go back as the result.
+# Reads the socket for the whole stream. The end of the client's input, or a read error, means it left: left is set and
+# the body closes, which stops the producer and the sending. Bytes while the stream runs are dropped (sent is set, so
+# the connection closes at the end); the read goes on, so a client that leaves later is still noticed. Once the body
+# has ended, the first bytes are the start of the client's next request and go back as the result.
 def watch(watching: Watch) -> Result[Bytes]
-  case TCP.recv_bytes(watching.socket, 1, WATCH_MS)
-    ok(data) ->
-      if data.empty?
+  while true
+    case TCP.recv_bytes(watching.socket, READ_BYTES, WATCH_MS)
+      ok(data) ->
+        if data.empty?
+          watching.left.send(true, 0)
+          watching.body.close
+          return ok(data)
+        end
+        if watching.body.closed?
+          return ok(data)
+        end
+        watching.sent.send(true, 0)
+      error(message) ->
+        watching.left.send(true, 0)
         watching.body.close
-      end
-      return ok(data)
-    error(message) ->
-      watching.body.close
-      return error(message)
+        return error(message)
+    end
   end
+  return ok(NO_BYTES)
 end
 
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the

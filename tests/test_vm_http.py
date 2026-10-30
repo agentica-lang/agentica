@@ -279,6 +279,8 @@ STREAM_PYTHON_LINES = [
     "tls-leave-first 200 ['data: again\\n\\n']",
     "tls-leave stopped",
     "silent-leave stopped",
+    "half-close True False",
+    "half-close stopped",
     "http-1.0 505 0",
 ]
 
@@ -471,12 +473,14 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
     assert vm.stderr_text() == ""
 
 
-def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_producer_of_a_client_that_left(tmp_path, adopt):
+@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
+def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_producer_of_a_client_that_left(
+        tmp_path, adopt, flags):
     """http.client reads the chunks of /ticks as they arrive and times them, over plain TCP and TLS; HEAD, keep-alive
     after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client."""
     source = tmp_path / "stream-server.agc"
     source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, stdin=True))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, flags=flags, stdin=True))
     port, tls_port = vm.next_line().split()
     peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS)], timeout=scaled(120))
     assert peer.code == 0, peer.stderr

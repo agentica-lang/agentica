@@ -49,7 +49,19 @@ end
 def binary(feed: Feed) -> Void
   Task.sleep(20)
   feed.body.send(Bytes.from_list([255, 0, 128]).unwrap!, 5000)
+  feed.body.send("".bytes, 5000)
   feed.body.send("ok".bytes, 5000)
+  finish(feed)
+end
+
+# One piece of 512 KiB and 9 bytes: two chunks.
+def large(feed: Feed) -> Void
+  Task.sleep(20)
+  piece = "z".bytes
+  while piece.size < 524288
+    piece = piece + piece
+  end
+  feed.body.send(piece + "012345678".bytes, 5000)
   finish(feed)
 end
 
@@ -85,10 +97,14 @@ def backed_up(feed: Feed) -> Void
   finish(feed)
 end
 
-def stream(hub: Hub, job: Fn[Feed, Void], status: Int) -> Result[HTTP.StreamResponse]
+def stream_with(hub: Hub, job: Fn[Feed, Void], status: Int, headers: List[Header]) -> Result[HTTP.StreamResponse]
   body: Channel[Bytes] = Channel.new(2)
   Task.spawn(job, Feed(hub: hub, body: body))
-  return ok(HTTP.StreamResponse(status: status, headers: [Header(name: TYPE, value: "text/plain")], body: body))
+  return ok(HTTP.StreamResponse(status: status, headers: headers, body: body))
+end
+
+def stream(hub: Hub, job: Fn[Feed, Void], status: Int) -> Result[HTTP.StreamResponse]
+  return stream_with(hub, job, status, [Header(name: TYPE, value: "text/plain")])
 end
 
 # A block is the only way to make a handler that holds the hub.
@@ -104,6 +120,9 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/leave" -> return stream(hub, &until_closed, 200)
       "/binary" -> return stream(hub, &binary, 200)
       "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
+      "/large" -> return stream(hub, &large, 200)
+      "/length" -> return stream_with(hub, &short, 200, [Header(name: "Content-Length", value: "3")])
+      "/framing" -> return stream_with(hub, &short, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
       "/quiet" -> return stream(hub, &quiet, 200)
       "/slow" -> return stream(hub, &slow, 200)
       "/back" -> return stream(hub, &backed_up, 200)
@@ -163,6 +182,15 @@ def binary_chunk_of(socket: Socket) -> String
   return "#{size} #{data}"
 end
 
+# True once the server has closed the connection: the input ends.
+def closed_by_server(socket: Socket) -> Bool
+  line = TCP.read_line(socket, 5000)
+  while Result.ok?(line)
+    line = TCP.read_line(socket, 5000)
+  end
+  return Result.message(line) == "network: end of input"
+end
+
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
   options = HttpServerOptions(request_timeout_ms: 200, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
@@ -192,6 +220,19 @@ def main() -> Void
   puts(head_of(socket))
   puts(bytes_of(socket, 3))
 
+  puts("-- a piece over 512 KiB is sent as several chunks")
+  ask(socket, "GET", "/large", "")
+  puts(head_of(socket))
+  puts(TCP.read_line(socket, 5000).unwrap!)
+  bytes_of(socket, 524288)
+  TCP.read_line(socket, 5000).unwrap!
+  puts(binary_chunk_of(socket))
+  puts(chunk_of(socket))
+
+  puts("-- an empty body is a Content-Length of 0")
+  ask(socket, "GET", "/nothing", "")
+  puts(head_of(socket))
+
   puts("-- HEAD gets the head, and the producer is stopped")
   ask(socket, "HEAD", "/leave", "")
   puts(head_of(socket))
@@ -200,21 +241,23 @@ def main() -> Void
   puts(head_of(socket))
   puts(TCP.read_line(socket, 5000).unwrap!)
 
-  puts("-- a request sent behind a stream is answered after it")
+  puts("-- a request sent during a stream is dropped: the stream ends cleanly and the connection closes")
   TCP.send(socket, "GET /short HTTP/1.1\r\nHost: x\r\n\r\nGET /whole HTTP/1.1\r\nHost: x\r\n\r\n", 5000).unwrap!
   puts(head_of(socket))
   puts(chunk_of(socket))
   puts(chunk_of(socket))
-  puts(head_of(socket))
-  puts(TCP.read_line(socket, 5000).unwrap!)
+  puts(closed_by_server(socket))
+  TCP.close(socket)
 
   puts("-- the same after a chunked request body, where the next request is already in the server's buffer")
+  socket = connect(port)
   TCP.send(socket, "POST /short HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nz\r\n0\r\n\r\nGET /whole HTTP/1.1\r\nHost: x\r\n\r\n", 5000).unwrap!
   puts(head_of(socket))
   puts(chunk_of(socket))
   puts(chunk_of(socket))
-  puts(head_of(socket))
-  puts(TCP.read_line(socket, 5000).unwrap!)
+  puts(closed_by_server(socket))
+  TCP.close(socket)
+  socket = connect(port)
 
   puts("-- Connection: close ends the connection after the last chunk")
   ask(socket, "GET", "/short", "Connection: close\r\n")
@@ -246,6 +289,16 @@ def main() -> Void
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
 
+  puts("-- a client that sent bytes during the stream and then leaves is noticed too")
+  TCP.close(socket)
+  socket = connect(port)
+  TCP.send(socket, "GET /quiet HTTP/1.1\r\nHost: x\r\n\r\nG", 5000).unwrap!
+  puts(head_of(socket))
+  puts(chunk_of(socket))
+  TCP.close(socket)
+  puts(hub.said.recv(5000).unwrap!)
+  socket = connect(port)
+
   puts("-- a slow producer is not cut by the timeouts")
   ask(socket, "GET", "/slow", "")
   puts(head_of(socket))
@@ -260,6 +313,12 @@ def main() -> Void
   TCP.close(socket)
 
   puts("-- responses that cannot be streamed")
+  for path in ["/length", "/framing"]
+    socket = connect(port)
+    ask(socket, "GET", path, "")
+    puts(head_of(socket))
+    TCP.close(socket)
+  end
   socket = connect(port)
   ask(socket, "GET", "/nobody", "")
   puts(head_of(socket))

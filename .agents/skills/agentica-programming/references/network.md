@@ -215,10 +215,15 @@ end
   are `Bytes` sent as they are (a file or binary data works); empty ones are
   skipped. A body already closed when the handler returns goes out
   with `Content-Length`.
-- When the client leaves (its input ends or a send fails) the server closes the
-  channel: the producer's next `send` is `error("channel: closed")`, and it
-  must stop. `closed?` is `true` for a silent producer once the pieces already
-  sent were taken. A bounded channel is the backpressure.
+- The server reads the connection for the whole stream. When the client's input
+  ends (it left, or half-closed) or a send fails, it closes the channel: the
+  producer's next `send` is `error("channel: closed")`, and it must stop.
+  `closed?` is `true` for a silent producer once the pieces already sent were
+  taken. The body is then cut without its last chunk, so the client sees it as
+  incomplete. The producer must close the channel on every path: one that never
+  does holds the stream until the client leaves. A bounded channel is the
+  backpressure. Bytes the client sends during the stream (a pipelined request)
+  are dropped, and the connection closes after the stream.
 - A slow producer is fine: no timeout runs while the server waits for a piece
   (`idle_timeout_ms` counts between requests). `request_timeout_ms` bounds each
   piece's send, so a client that stops reading is cut off. `HEAD` gets the head
