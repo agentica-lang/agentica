@@ -460,7 +460,7 @@ end
 
 ## Errors
 
-A function that can fail returns a `Result` and passes errors up with `try`. Use a halting form such as `to_i!` only when a failure is a bug, and say why in a comment:
+A function that can fail returns a `Result` and passes errors up with `try`. Use a halting form such as `to_i!` only when a failure is a bug, and say why in a comment. A value that may be missing, with no error to report, is an [Optional](/library/data-structures/optional/#optional-or-result) (`some(x)` or `none`), not a `Result`:
 
 ```agentica {mode="check"}
 # bad

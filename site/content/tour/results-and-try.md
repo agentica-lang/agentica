@@ -6,7 +6,7 @@ description: Return errors as values with Result, check them, and pass them on w
 
 ## Result
 
-A function that can fail returns `Result[T]`. It is either `ok(value)` or `error(message)`. The message is always a `String`.
+A function that can fail returns `Result[T]`. It is either `ok(value)` or `error(message)`. The message is always a `String`. A value that may simply be missing, with no error to report, is an [Optional](/library/data-structures/optional/#optional-or-result) instead.
 
 ```agentica
 def divide(a: Int, b: Int) -> Result[Int]

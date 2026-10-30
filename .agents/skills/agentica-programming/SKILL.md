@@ -33,6 +33,8 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   Optionals of those (`CHECK-TYPE-MISMATCH`).
 - `try` only in a function that returns `Result[T]`, never in `main`;
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
+- A value that may be missing is `Optional[T]` (`some(x)`, `none`), not `nil`
+  and not an enum of your own; a failure with a reason is a `Result`.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
   `len`): `CHECK-UNKNOWN-METHOD`.
 

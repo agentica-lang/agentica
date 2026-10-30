@@ -138,9 +138,9 @@ struct User
   age: Int
 end
 
-enum Option[T]
-  Some(T)
-  None
+enum Change[T]
+  Added(T)
+  Removed(T)
 end
 ```
 
