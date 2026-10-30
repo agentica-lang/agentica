@@ -320,8 +320,8 @@ stage by hand.
 
 ### Frozen comparisons
 
-The slow tiers compare the Agentica stages with outputs frozen from the old
-Racket stages (removed; the tag `bootstrap-racket` keeps them).
+The slow tiers compare the Agentica stages with frozen outputs
+(`tests/fixtures/frontend/frozen/`).
 `tests/test_frontend_<stage>.py` for `lexer`, `parser`, `modules`, `check`,
 `lower`, `catalog`, `bytecode` run the stage with the product CLI and compare
 with `tests/fixtures/frontend/frozen/`. The fast cases are the bytes of

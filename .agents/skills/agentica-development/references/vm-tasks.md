@@ -41,7 +41,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   set up at N > 1), and a push skips the condvar signal while one spins. A task
   whose turn ends ready goes back with `agc_runq_push_own` (`requeue` in
   `vm/task.c`). Into an empty queue it sends no signal, since its own scheduler
-  pops it next, so a lone task stays on one core (#627); if that scheduler takes
+  pops it next, so a lone task stays on one core; if that scheduler takes
   its runnext slot first, it sends the wake then (`agc_runq_kick`). A task that
   a scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`, taken
   first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
@@ -84,7 +84,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `agc_task_park_within(vm, timeout_ms)` (with retry), which reads no clock: the
   entry sits in the heap's `pending` slot until the end of the scheduler's next
   turn, its next such park or `agc_timers_settle` before it sleeps, and is
-  dropped if the task was woken first (#629). `agc_timers_run` (turn boundary
+  dropped if the task was woken first. `agc_timers_run` (turn boundary
   and idle, in `agc_vm_run`) starts that clock and wakes the due tasks; `resume`
   and `unlink_task` take the entry out (`agc_timers_disarm`). Every change is
   made with `rt->sync` held, by any scheduler. The idle step (`idle_wait` in

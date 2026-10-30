@@ -131,9 +131,10 @@ before a release.
   feature without using it in `compiler/` and refreshes stage0; the second
   uses it. To rename a builtin that `compiler/` calls, the first PR keeps the
   old name as a catalog row whose key is the new one, plus the old C key for
-  the base stage0; the second removes both (#775, #776). When that is not
-  possible, compile `stage1` with another binary built from the parent commit
-  and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`. A new bytecode format
+  the base stage0; the second removes both. When that is not
+  possible, compile `stage1` with another binary built from the parent
+  commit and say so in the PR:
+  `make stage0 STAGE1_COMPILER="path/to/agentica"`. A new bytecode format
   needs the old VM to run the new compiler once by hand; the PR that changes
   the format writes the commands.
 
@@ -149,7 +150,7 @@ make stage0 STAGE1_COMPILER="build/vm/release/bootstrap/agentica --front-end I.a
 ```
 
 After the refresh, run `make fixed-point` and `make` as usual. A later PR
-removes the old keys once no stage0 imports them (as in #805).
+removes the old keys once no stage0 imports them.
 
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>`
 in the `test` job: stage2 built from the base stage0 with the PR's
