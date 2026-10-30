@@ -206,6 +206,7 @@ EXCLUDED = {
     "tests/test_frontend_parser.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_refreeze.py": "tools/refreeze.py, a developer tool",
     "tests/test_frontend_workspace.py": "the linker over an in-memory Workspace, the same on every system",
+    "tests/test_frontend_wire.py": "the chunks of the bytecode writer, pure Agentica, the same on every system",
     "tests/test_stdlib_docs.py": "a check of the sources (docs on every export), the same on every system",
     "tests/test_stdlib_modules.py": "a check of stdlib/MODULES and stdlib/CORE, the same on every system",
     "tests/test_style_line_width.py": "a check of the sources (line width), the same on every system",
