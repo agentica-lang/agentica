@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 351,
+  "stdout": [
+    "mmt3 encrypt 0 092368405296744a true",
+    "mmt3 encrypt 3 9bc02247ff5cefde9a0307f948f9437ef2a298cdd69542236cba47e8c954e819 true",
+    "mmt3 decrypt 4 c735fc558568759d2054a3b84846a3c27ff297cb477ed91ce1764776e6a373061970b87208b9b601",
+    "mmt2 decrypt 3 5ac6533b1de8edd31224a91f7361dc2b4ab33a5db7acee1cc8bfdf82bb1777c6",
+    "two-key true",
+    "empty 0",
+    "key 8 ok=false",
+    "key 32 ok=false",
+    "iv 7 ok=false",
+    "iv 16 ok=false",
+    "data 7 ok=false",
+    "data 9 ok=false",
+    ""
+  ],
+  "stderr": []
+}

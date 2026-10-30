@@ -122,6 +122,13 @@ in a PR that rewrites the goldens.
   charge `AGC_COST_SIZE`. Each of these builtins and
   `SecureRandom.random_bytes` takes or gives `Bytes`, under the catalog key
   `<name>.bytes`.
+- `Cipher.des_ede3_cbc_encrypt` and `_decrypt` and `CMAC.aes` and `des_ede3`
+  check the key, IV and block sizes first and give an error `Result`; then they
+  call `agc_des_ede3_cbc` (`EVP_CipherUpdate` in chunks of 1 GiB, padding off)
+  or `agc_cmac` (`EVP_Q_mac` with the `CMAC` MAC) in `vm/digest_openssl.c`,
+  which expand a two-key key to K1 K2 K1 and wipe that copy. A library failure
+  is `RUNTIME-INTERNAL` at the call. They charge `AGC_COST_SIZE` and run
+  without the shared lock, as the digests do.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;

@@ -8,6 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`
+  and `CMAC.des_ede3`, for payment formats.
+
+### Changed
+
+- **Breaking:** `Cipher` and `CMAC` are reserved type names.
+
 ## [0.17.0] - 2026-10-30
 
 ### Added

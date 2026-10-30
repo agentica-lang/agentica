@@ -2,8 +2,8 @@
  * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
  * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
  * hash (files.c), which streams a whole file in fixed chunks, secure random
- * bytes for SecureRandom and a constant-time compare for HMAC.secure_compare
- * (crypto.c). The OpenSSL code is in digest_openssl.c. Adapter header. Design:
+ * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare, and
+ * Triple DES CBC and CMAC for the Cipher and CMAC builtins (crypto.c). The OpenSSL code is in digest_openssl.c. Adapter header. Design:
  * docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
@@ -55,5 +55,28 @@ bool agc_secure_random(unsigned char *out, size_t n);
    they differ (OpenSSL's CRYPTO_memcmp). a and b may be NULL when n is 0. It reads only the two buffers: no library
    state, so it is safe on any thread. */
 bool agc_secure_equal(const unsigned char *a, const unsigned char *b, size_t n);
+
+/* Triple DES (DES-EDE3) has 8-byte blocks and IVs; a two-key key (16 bytes) is K1 K2 and runs as K1 K2 K1. */
+#define AGC_DES_BLOCK_BYTES 8
+/* The longest CMAC tag: the AES block. */
+#define AGC_CMAC_MAX_BYTES 16
+
+/* Encrypts (or decrypts) the n bytes at data with Triple DES in CBC mode and no padding into the n bytes at out, and
+   returns true. key_n is 16 (two-key) or 24 (three-key), iv has AGC_DES_BLOCK_BYTES bytes and n is a multiple of
+   AGC_DES_BLOCK_BYTES (any size: the call feeds OpenSSL in chunks); the caller checks them, and any other length
+   returns false. Returns false when the library fails; out then holds no usable bytes. The copies of the key it
+   makes are wiped. data may be NULL when n is 0. */
+bool agc_des_ede3_cbc(bool encrypt, const unsigned char *key, size_t key_n, const unsigned char *iv,
+                      const unsigned char *data, size_t n, unsigned char *out);
+
+/* The block ciphers of CMAC. */
+typedef enum { AGC_CMAC_AES, AGC_CMAC_DES_EDE3 } agc_cmac_cipher;
+
+/* Writes the CMAC (NIST SP 800-38B; RFC 4493 for AES) of the n bytes at data under the key into out and returns its
+   length: the full tag, 16 bytes for AES and 8 for Triple DES. The key picks the cipher's size: 16, 24 or 32 bytes
+   for AES-128, -192 or -256, and 16 (two-key) or 24 bytes for Triple DES. Returns 0 for another key length or when
+   the library fails. The copies of the key it makes are wiped. data may be NULL when n is 0. */
+size_t agc_cmac(agc_cmac_cipher cipher, const unsigned char *key, size_t key_n, const unsigned char *data, size_t n,
+                unsigned char out[AGC_CMAC_MAX_BYTES]);
 
 #endif

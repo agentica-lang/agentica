@@ -1,6 +1,6 @@
 /*
- * The digest adapter over OpenSSL's EVP interface, RAND_bytes and
- * CRYPTO_memcmp, the same library that tls_openssl.c links (system OpenSSL 3
+ * The digest adapter over OpenSSL's EVP interface (digests, HMAC, Triple DES
+ * CBC and CMAC), RAND_bytes and CRYPTO_memcmp, the same library that tls_openssl.c links (system OpenSSL 3
  * or the vendored one). Adapter layer, behind digest.h. Design:
  * docs/vm/15-layers.md §15.1.
  */
@@ -12,6 +12,7 @@
 #include <openssl/rand.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
 #error "the VM needs OpenSSL 3.0 or newer (LibreSSL is not supported): install the OpenSSL 3 development files or build with AGENTICA_OPENSSL=vendored"
@@ -142,4 +143,75 @@ bool agc_secure_random(unsigned char *out, size_t n) {
 bool agc_secure_equal(const unsigned char *a, const unsigned char *b, size_t n) {
   /* CRYPTO_memcmp gives 0 for equal bytes and nonzero otherwise, not an order; it reads all n bytes of both. */
   return n == 0 || CRYPTO_memcmp(a, b, n) == 0;
+}
+
+/* The 24-byte DES-EDE3 key of a 16- or 24-byte key into out: a two-key key K1 K2 runs as K1 K2 K1 (NIST SP 800-67
+   keying option 2). False for any other length, and out is then not written. */
+static bool des_ede3_key(const unsigned char *key, size_t key_n, unsigned char out[24]) {
+  if (key_n != 16 && key_n != 24) return false;
+  memcpy(out, key, key_n);
+  if (key_n == 16) memcpy(out + 16, key, 8);
+  return true;
+}
+
+/* EVP_CipherUpdate takes an int length and a Bytes value has no size cap, so the data goes in chunks of at most this
+   many bytes: a multiple of the block, well below INT_MAX. CBC carries its state from one update to the next. */
+#define CIPHER_CHUNK ((size_t)1 << 30)
+_Static_assert(CIPHER_CHUNK % AGC_DES_BLOCK_BYTES == 0 && CIPHER_CHUNK <= INT_MAX, "CIPHER_CHUNK must be whole blocks");
+
+bool agc_des_ede3_cbc(bool encrypt, const unsigned char *key, size_t key_n, const unsigned char *iv,
+                      const unsigned char *data, size_t n, unsigned char *out) {
+  unsigned char full_key[24];
+  if (n % AGC_DES_BLOCK_BYTES != 0 || !des_ede3_key(key, key_n, full_key)) return false;
+  /* DES-EDE3-CBC is in the default provider; no-legacy, which the vendored build sets, drops only single DES. */
+  EVP_CIPHER_CTX *ctx = digest_ready() ? EVP_CIPHER_CTX_new() : NULL;
+  /* Padding off: the caller passes whole blocks, so every update writes as many bytes as it reads and the final
+     writes none. */
+  bool done = ctx && EVP_CipherInit_ex2(ctx, EVP_des_ede3_cbc(), full_key, iv, encrypt ? 1 : 0, NULL) == 1 &&
+              EVP_CIPHER_CTX_set_padding(ctx, 0) == 1;
+  OPENSSL_cleanse(full_key, sizeof full_key);
+  for (size_t at = 0; done && at < n;) {
+    size_t chunk = n - at < CIPHER_CHUNK ? n - at : CIPHER_CHUNK;
+    int got = 0;
+    done = EVP_CipherUpdate(ctx, out + at, &got, data + at, (int)chunk) == 1 && (size_t)got == chunk;
+    at += chunk;
+  }
+  unsigned char last[AGC_DES_BLOCK_BYTES];
+  int tail = 0;
+  done = done && EVP_CipherFinal_ex(ctx, last, &tail) == 1 && tail == 0;
+  /* EVP_CIPHER_CTX_free wipes the key schedule it holds. */
+  EVP_CIPHER_CTX_free(ctx);
+  if (!done) ERR_clear_error();
+  return done;
+}
+
+size_t agc_cmac(agc_cmac_cipher cipher, const unsigned char *key, size_t key_n, const unsigned char *data, size_t n,
+                unsigned char out[AGC_CMAC_MAX_BYTES]) {
+  static const unsigned char none = 0;
+  unsigned char full_key[24];
+  const char *name = NULL;
+  /* The switch has no default, so -Wswitch flags a new cipher that is not added here. */
+  switch (cipher) {
+    case AGC_CMAC_AES:
+      name = key_n == 16 ? "AES-128-CBC" : key_n == 24 ? "AES-192-CBC" : key_n == 32 ? "AES-256-CBC" : NULL;
+      break;
+    case AGC_CMAC_DES_EDE3:
+      if (des_ede3_key(key, key_n, full_key)) {
+        name = "DES-EDE3-CBC";
+        key = full_key;
+        key_n = sizeof full_key;
+      }
+      break;
+  }
+  if (!name) return 0;
+  size_t len = 0;
+  /* EVP_Q_mac fetches the CMAC, sets the cipher (the CMAC provider's settable parameter is OSSL_MAC_PARAM_CIPHER), and
+     runs init, update and final. It takes size_t lengths throughout, and the key length is checked above. */
+  bool done = digest_ready() &&
+              EVP_Q_mac(NULL, "CMAC", NULL, name, NULL, key, key_n, n ? data : &none, n, out, AGC_CMAC_MAX_BYTES,
+                        &len) != NULL &&
+              len > 0;
+  if (key == full_key) OPENSSL_cleanse(full_key, sizeof full_key);
+  if (!done) ERR_clear_error();
+  return done ? len : 0;
 }

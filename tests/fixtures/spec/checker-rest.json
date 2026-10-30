@@ -11105,6 +11105,107 @@
       "actual": "Bool"
     }
   ],
+  "Cipher.des_ede3_cbc_encrypt and _decrypt take a key, an iv and data, CMAC.aes and des_ede3 a key and data, all Bytes; each gives a Result[Bytes]; Cipher and CMAC are reserved names": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  key = \"0123456789abcdef\".bytes",
+        "  iv = \"12345678\".bytes",
+        "  sealed: Result[Bytes] = Cipher.des_ede3_cbc_encrypt(key, iv, \"8 bytes!\".bytes)",
+        "  opened = Cipher.des_ede3_cbc_decrypt(key, iv, sealed.unwrap!)",
+        "  tag: Result[Bytes] = CMAC.aes(key, \"data\".bytes)",
+        "  short = CMAC.des_ede3(key, \"data\".bytes).unwrap!.take(4)",
+        "  puts(opened.ok? and tag.ok? and short.size == 4)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.des_ede3_cbc_encrypt(\"key\", k, k)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 35],
+      "covers": "\"key\"",
+      "expected": "Bytes",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  t = CMAC.aes(k, [1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 19],
+      "covers": "[1]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.des_ede3_cbc_decrypt(k, k)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [3, 7],
+      "covers": "Cipher.des_ede3_cbc_decrypt(k, k)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  t = CMAC.aes(k)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [3, 7],
+      "covers": "CMAC.aes(k)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  t: Bytes = CMAC.des_ede3(k, k)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 14],
+      "covers": "CMAC.des_ede3(k, k)",
+      "expected": "Bytes",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "struct Cipher",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "enum CMAC",
+        "  Aes",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Base64 and Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
     {
       "program": [
