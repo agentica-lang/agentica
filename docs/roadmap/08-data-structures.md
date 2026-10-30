@@ -46,9 +46,8 @@ to 11; faster lists (8d) have their own place in the order (step 8).
   owner's alternative of a doubling growable vector is still open.
 - [ ] Later, each after a real program needs it: tuples (`(Int, String)`
   values and destructuring, to return two values; then `Queue.pop`); `Bytes`
-  (binary data instead of `List[Int]`; until then `std/binary`, phase 13, packs
-  numbers into `List[Int]`, and when `Bytes` lands that API moves to it in the
-  same change as the `*_bytes` builtins); `Heap[T]` (a priority queue for
+  (binary data instead of `List[Int]`; `std/binary`,
+  phase 13, reads and writes it); `Heap[T]` (a priority queue for
   Dijkstra and scheduling; `Int`, `Float` or `String`, or a key function); a
   sorted map or set (iterate in key order; today sort the keys); and a deque
   (both ends).

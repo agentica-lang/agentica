@@ -45,6 +45,9 @@ SPARSE_KEY = "sparse".bytes
 # memcmp, where a loop over each byte took about 0.34 s per 8 MiB.
 ZERO_RUN = Bytes.from_list((1..4096).to_a.map do |_| 0 end).unwrap!
 
+# One header block of zeros: two of them end the archive.
+ZERO_BLOCK = ZERO_RUN.take(HEADER_BYTES)
+
 ## The knobs of `extract_tar`. Every other limit is a fixed ceiling named in `extract_tar`.
 export struct Options
   ## The whole call in milliseconds, 1 to 86400000.
@@ -311,7 +314,7 @@ def strip_slashes(path: String) -> String
 end
 
 def is_zero_block(block: Bytes) -> Bool
-  return block == ZERO_RUN.take(HEADER_BYTES)
+  return block == ZERO_BLOCK
 end
 
 def parse_octal(block: Bytes, offset: Int, length: Int, what: String, entry: Int) -> Result[Int]
