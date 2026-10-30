@@ -124,7 +124,8 @@ Weighed later (no fixed order):
 
 - **Order:** 7.4
   - **Next work:** New features, VM-only: the streaming items of phase 20 (20e
-    to 20g, [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)),
+    and 20f; 20g, the streamed server response, is built,
+    [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)),
     built on channels; then `TlsContext`
     ([§29](../future/29-tls-context.md#29-tls-contexts)), then ALPN (19c,
     owner 2026-10-16: the HTTP client stays small and opens its low layers,

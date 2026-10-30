@@ -37,7 +37,7 @@ EXTRAS_SHARD = 8
 # Fixtures pinned to a shard because they are costly; the others rotate over shards 1 to 7.
 HEAVY_FIXTURES = {
     "files-large.agc": 1, "process-limits.agc": 1, "tcp-exit.agc": 2, "json-decode-deep.agc": 3, "map-large.agc": 3,
-    "http-server-slow.agc": 4, "task-concurrent.agc": 5, "tcp-limits.agc": 5, "tcp-tasks.agc": 5,
+    "http-server-slow.agc": 4, "http-server-stream.agc": 4, "task-concurrent.agc": 5, "tcp-limits.agc": 5, "tcp-tasks.agc": 5,
     "process-timeouts.agc": 6, "callback-overflow.agc": 7, "tcp-errors.agc": 7}
 LIGHT_SHARD_ROTATION = (1, 2, 3, 4, 5, 6, 7)
 
@@ -59,7 +59,7 @@ SAMPLED_SWEEP = SWEEP_MODE == "sampled"
 # Fixtures whose every run is costly (1000 file rounds; three fixed sleeps): they get the `ends` sweep in every mode but
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
-ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc"}
+ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc", "http-server-stream.agc"}
 
 # What a run that outlived its time limit reports in place of an exit code.
 TIMEOUT = "timeout"

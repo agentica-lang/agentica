@@ -8,8 +8,8 @@ C. What is built is not in this file: the API, options, limits and answers are
 in the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md),
 "HTTP client and server (`std/http`)"), and the parsing rules, design, errors
 and tests in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7.
-This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
-what comes later (30.12 to 30.13).
+This file keeps what is not built: streaming on channels (20e and 20f, 30.11)
+and what comes later (30.12 to 30.13).
 
 **Streaming** is a new feature, VM-only, at order step 7.4 ([the order
 table](../roadmap/README.md#current-implementation-order)): after phase 17
@@ -25,9 +25,9 @@ parsing rules of [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6.
 
 At order step 7.4, after `Channel[T]` (§27.2, 17b), three items bring streaming
 back for the jobs a whole message cannot do. Each is built on channels with
-their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split
-only at character boundaries, at most 64 KiB each). Byte streams wait for
-binary bodies (#803).
+their timeouts, backpressure and close rules; the chunks of the client items
+are `String` (UTF-8, split only at character boundaries, at most 64 KiB each),
+and wait for binary bodies (#803). The server's (20g) are `Bytes`.
 
 **Channels are enough; `Lazy[T]` is not needed.** An HTTP body is pushed
 by I/O and read by another task, at its own speed: that is a bounded channel
@@ -64,21 +64,12 @@ closes the connection (never back to the pool) and ends with an error.
   the response is whole. It replaces `HTTP.request_stream` without a generic
   producer: the closure or task that feeds the channel carries whatever data it
   needs. The chunked encoder for requests comes back in C for it.
-- **20g Streamed responses** (server, SSE included):
-  `HTTP.listen_stream(host, port, handler: Fn[HttpRequest,
-Result[HttpStreamResponse]], options)`
-  and `HTTP.listen_stream_tls(...)`, with
-  `HttpStreamResponse(status: Int, headers: List[Header], body:
-Channel[String])`.
-  The handler returns at once with the channel; a task it spawned feeds it. The
-  connection sends chunked, or `Content-Length` when the channel is already
-  closed with everything buffered when the handler returns; it writes each piece
-  as it arrives, checks for a client that left on every receive timeout
-  (`idle_timeout_ms`), and closes the channel when the client leaves, so the
-  feeder's next `send` fails and it stops. An SSE handler sends `data: ...\n\n`
-  pieces and, if it wants, comment lines to keep the connection alive.
-  `HTTP.whole(text) -> Channel[String]` gives a closed channel holding one
-  piece, for the routes of a streaming server that answer with one text.
+- **20g Streamed responses** (server, SSE included) is built:
+  `HTTP.listen_stream`, `HTTP.listen_stream_tls`, `HTTP.StreamResponse` and
+  `HTTP.whole`
+  (the [network page](../../site/content/library/io-and-system/network.md), and
+  [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.7.2). Its body
+  is a `Channel[Bytes]`; a piece over 512 KiB is split into chunks.
 
 **One way for each job** (the table the skill teaches):
 
@@ -96,8 +87,8 @@ Channel[String])`.
   - **The one form:** `HTTP.listen`
 
 - **Job:** A server with at least one route that streams (SSE, big downloads)
-  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(text)` for its
-    other routes
+  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(data)` for its
+    other routes (built)
 
 The checker cannot stop `HTTP.open` on a small response, so these pass the
 one-way test by job, as `Task.map` and channels do (§27): each form exists for
