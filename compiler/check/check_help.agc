@@ -37,6 +37,11 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     )
   end
 
+  # try and a Result-typed place take a Result: an Optional becomes one through to_result.
+  if Types.is?(expected, "Result") and Types.is?(actual, "Optional")
+    return "this is #{Types.to_text(actual)}; turn it into a Result with .to_result(\"message\")"
+  end
+
   return convert_help(expected, actual)
 end
 
@@ -54,8 +59,8 @@ end
 ## method form is offered in it (`s.strip`, not `String.trim`).
 export def near(name: String, candidates: List[String], shared: List[String]) -> String
   case Suggest.closest_among(name, candidates, shared)
-    Ast.Optional.Present(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
+    Ast.Maybe.Absent -> return ""
   end
 end
 

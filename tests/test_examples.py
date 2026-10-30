@@ -325,8 +325,7 @@ def check_table(name):
 
 
 def test_help_answers_the_agentica_name_of_a_name_from_another_language():
-    for name, target in [("strip", "String.trim"), ("push", "List.append"), ("value!", "Result.unwrap!"),
-                         ("Json.get", "JSON.get")]:
+    for name, target in [("strip", "String.trim"), ("push", "List.append"), ("Json.get", "JSON.get")]:
         found = cli_run("help", name, "--json")
         assert (found.code, found.stderr) == (0, ""), name
         data = json.loads(found.stdout)
@@ -336,6 +335,8 @@ def test_help_answers_the_agentica_name_of_a_name_from_another_language():
         assert (text.code, text.stderr) == (0, ""), name
         assert cli_run("--ai", "help", name) == text
     # A name that fits several types lists each of them, in name order.
+    unwrap = json.loads(cli_run("help", "value!", "--json").stdout)
+    assert [builtin["name"] for builtin in unwrap["builtins"]] == ["Optional.unwrap!", "Result.unwrap!"]
     several = json.loads(cli_run("help", "to_i", "--json").stdout)
     assert [builtin["name"] for builtin in several["builtins"]] == ["Float.to_int", "String.to_int"]
     assert [builtin["ruby"] for builtin in several["builtins"]] == [

@@ -111,7 +111,7 @@ export def scope_of(project: Project.Project) -> Scope
         probed: [],
         direct: [],
         lock: Lock.Lock(file: "", packages: [], artifacts: []),
-        members: Members.none(),
+        members: Members.empty(),
         declared: {},
         opened: {},
         native_root: "",

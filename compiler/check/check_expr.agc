@@ -300,7 +300,7 @@ end
 # A block where a function is expected, or anywhere a type is not demanded.
 def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.Type) -> Result[State.Out]
   if T.unknown?(expected)
-    return Statements.check_block_body(cx, st, node, Ast.Optional.Absent, T.Type.Unknown, Ast.Optional.Absent)
+    return Statements.check_block_body(cx, st, node, Ast.Maybe.Absent, T.Type.Unknown, Ast.Maybe.Absent)
   elsif !T.is?(expected, "Fn")
     return error(
       State.fail_help(
@@ -318,9 +318,9 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
     cx,
     st,
     node,
-    Ast.Optional.Present(T.params(expected)),
+    Ast.Maybe.Present(T.params(expected)),
     T.result(expected),
-    Ast.Optional.Absent,
+    Ast.Maybe.Absent,
   )
 end
 
@@ -572,7 +572,13 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
     return ok(Sides(st: right.st.with(range_chain: left.st.range_chain), left: left.type, right: right.type))
   end
 
-  right = try State.expr(cx, left.st, node.right, T.Type.Unknown)
+  # An Optional on the left gives its type to the right side, so that `x == none` and `x == some([])` check.
+  wanted = T.Type.Unknown
+  if (node.op == "equal" or node.op == "not-equal") and T.is?(left.type, "Optional")
+    wanted = left.type
+  end
+
+  right = try State.expr(cx, left.st, node.right, wanted)
   return ok(Sides(st: right.st, left: left.type, right: right.type))
 end
 
@@ -758,7 +764,7 @@ end
 
 def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, true)
-  if !CheckTypes.primitive?(sides.left) and !T.is?(sides.left, "Range") and !T.is?(sides.left, "Bytes")
+  if !equatable?(sides.left)
     help = ""
     if T.is?(sides.left, "Set")
       help = "two sets are equal when each is a subset of the other: a.subset?(b) and b.subset?(a)"
@@ -769,13 +775,23 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
         cx,
         sides,
         node,
-        "equality is only defined for primitive values, ranges and Bytes, found #{T.to_text(sides.left)}",
+        "equality is only defined for primitive values, ranges, Bytes and Optionals of those, found " +
+          T.to_text(sides.left),
         help,
       ),
     )
   end
 
   return ok(T.Type.Bool)
+end
+
+# True for a type that == compares: a primitive, a Range, Bytes, or an Optional of one of those.
+def equatable?(type: T.Type) -> Bool
+  if T.is?(type, "Optional")
+    return equatable?(T.item(type))
+  end
+
+  return CheckTypes.primitive?(type) or T.is?(type, "Range") or T.is?(type, "Bytes")
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]

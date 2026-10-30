@@ -419,8 +419,8 @@ def stack_lines(root: Json) -> List[String]
   if not found.ok?
     return []
   end
-  none: List[Json] = []
-  frames = JSON.list(found.unwrap!).unwrap_or(none)
+  no_frames: List[Json] = []
+  frames = JSON.list(found.unwrap!).unwrap_or(no_frames)
   omitted = int_at(root, "stack_omitted").unwrap_or(0)
   lines: List[String] = []
   for index in 0...frames.length

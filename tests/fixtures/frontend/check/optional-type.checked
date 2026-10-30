@@ -1,0 +1,1 @@
+ERROR CHECK-OPTIONAL-TYPE 27:2:9-31:2:13 "none needs an expected Optional type" "add an Optional[T] annotation, for example age: Optional[Int] = none" signature="main() -> Void" file="optional-type.agc"

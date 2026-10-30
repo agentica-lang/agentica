@@ -22,8 +22,8 @@ export def unknown_import_help(
   end
 
   case Suggest.closest_among(member, exports.keys, [])
-    Ast.Optional.Present(name) ->
+    Ast.Maybe.Present(name) ->
       return Diag.Help.Hint("did you mean \"#{name}\"?")
-    Ast.Optional.Absent -> return Diag.Help.NoHelp
+    Ast.Maybe.Absent -> return Diag.Help.NoHelp
   end
 end

@@ -28,9 +28,9 @@ def main() -> Void
   puts(JSON.encode(-42))
   puts(JSON.encode(1000000000000000000000.0))
   empty: Map[String, Json] = {}
-  none: List[Json] = []
+  no_items: List[Json] = []
   puts(JSON.object(empty))
-  puts(JSON.array(none))
+  puts(JSON.array(no_items))
   o = JSON.object({"k": JSON.from(1), "j": JSON.array([JSON.from("x"), JSON.null()])})
   puts(o)
   puts(JSON.null?(JSON.null()))

@@ -140,7 +140,7 @@ def probe_line(probe: String) -> String
   end
 end
 
-def type_help(word: String) -> Ast.Optional[String]
+def type_help(word: String) -> Ast.Maybe[String]
   shared = [
     "Int",
     "Float",
@@ -152,6 +152,7 @@ def type_help(word: String) -> Ast.Optional[String]
     "Map",
     "Set",
     "Result",
+    "Optional",
     "Json",
     "Fn",
     "Task",
@@ -183,10 +184,10 @@ def ref_text(spec: String) -> String
   return "-"
 end
 
-def help_text(help: Ast.Optional[String]) -> String
+def help_text(help: Ast.Maybe[String]) -> String
   case help
-    Ast.Optional.Present(text) -> return Text.quote(text)
-    Ast.Optional.Absent -> return "-"
+    Ast.Maybe.Present(text) -> return Text.quote(text)
+    Ast.Maybe.Absent -> return "-"
   end
 end
 
@@ -258,6 +259,8 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.NativeStruct -> return "NativeStruct"
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
+    Model.Rule.OptionalNone -> return "OptionalNone"
+    Model.Rule.OptionalSome -> return "OptionalSome"
     Model.Rule.Prelude -> return "Prelude"
     Model.Rule.ProfileMeasure -> return "ProfileMeasure"
     Model.Rule.ResultDefault -> return "ResultDefault"

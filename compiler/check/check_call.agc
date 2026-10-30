@@ -432,8 +432,8 @@ def block_literal?(node: Ast.Expr) -> Bool
   end
 end
 
-# An argument that has no type of its own, so it waits for the others: an empty list or map, error(...), Set.new of an
-# empty list, a variant of a generic enum with no payload, a list or map literal that holds one of those, and the
+# An argument that has no type of its own, so it waits for the others: an empty list or map, error(...), none, Set.new
+# of an empty list, a variant of a generic enum with no payload, a list or map literal that holds one of those, and the
 # reference of a generic function.
 def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
   case node
@@ -443,7 +443,7 @@ def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
       return map.entries.size == 0 or map.entries.any? do |entry: Ast.MapEntry| needs_expected?(cx, entry.value) end
     Ast.Expr.Call(call) ->
       set_of_empty = call.name == "Set.new" and call.args.size == 1 and needs_expected?(cx, call.args[0])
-      return call.name == "error" or set_of_empty
+      return call.name == "error" or call.name == "none" or set_of_empty
     Ast.Expr.EnumConstructor(variant) ->
       definition = cx.enums.get(variant.enum_name)
       return variant.args.size == 0 and definition.ok? and definition.unwrap!.parameters.size > 0
@@ -469,7 +469,8 @@ end
 
 # The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open must be
 # annotated in the block (CHECK-BLOCK-TYPE otherwise), and an annotation binds it. The block's result binds what the Fn
-# result leaves open: a Result type is asked for as such, so that ok(...) and error(...) are read as the block's value.
+# result leaves open: a Result or an Optional type is asked for as such, so that ok(...) and error(...), or some(...)
+# and none, are read as the block's value.
 def check_generic_block(
   cx: State.Cx,
   st: State.St,
@@ -481,11 +482,13 @@ def check_generic_block(
   result = known_part(T.result(template), found)
   if T.unknown?(result) and T.is?(T.result(template), "Result")
     result = T.Type.Result(T.Type.Unknown)
+  elsif T.unknown?(result) and T.is?(T.result(template), "Optional")
+    result = T.Type.Optional(T.Type.Unknown)
   end
 
   case node
     Ast.Expr.BlockLit(block) ->
-      out = try Stmt.check_block_in(cx, st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, false)
+      out = try Stmt.check_block_in(cx, st, block, Ast.Maybe.Present(params), result, Ast.Maybe.Absent, false)
       learned = try Types.unify(cx, out.st, template, out.type, found, block.span)
       return ok(Inferred(st: out.st, substitutions: learned))
     _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
@@ -580,6 +583,8 @@ end
 def unknown_enum_help(name: String) -> String
   if name == "Result"
     return "Result has only Ok and Err: Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
+  elsif name == "Optional"
+    return "an Optional is written some(value) or none"
   end
 
   return ""
@@ -727,8 +732,8 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   known = expected_substitutions("Struct", name, parameters, expected)
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args, parameters, known)
   # A field with a default may be left out: the lowering fills it in at this construction.
-  none: Set[String] = Set.new([])
-  defaulted = cx.field_defaults.get(name, none)
+  no_defaults: Set[String] = Set.new([])
+  defaulted = cx.field_defaults.get(name, no_defaults)
   for field in fields.unwrap!
     if !checked.seen.include?(field.name) and !defaulted.include?(field.name)
       return error(
@@ -855,10 +860,10 @@ end
 
 # A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program
 # is not linked, every struct is visible.
-def updatable?(cx: State.Cx, visible: Ast.Optional[List[String]], name: String) -> Bool
+def updatable?(cx: State.Cx, visible: Ast.Maybe[List[String]], name: String) -> Bool
   case visible
-    Ast.Optional.Present(names) ->
+    Ast.Maybe.Present(names) ->
       return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
-    Ast.Optional.Absent -> return true
+    Ast.Maybe.Absent -> return true
   end
 end

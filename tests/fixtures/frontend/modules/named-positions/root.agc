@@ -33,8 +33,8 @@ def main() -> Void
   red = Color.Red
   green = Color.Green(1)
   named = Color.Green(n: 2)
-  some = Maybe.Some(build(2))
-  none: Maybe[Point] = Maybe.None
+  present = Maybe.Some(build(2))
+  absent: Maybe[Point] = Maybe.None
   p = Point(x: 1, y: 2)
   q = p.with(x: 3)
   r = lex("abc")
@@ -44,7 +44,7 @@ def main() -> Void
   pts: List[Point] = [p, q, twice("a")]
   shades: Map[String, Color] = {"r": red}
   mapped = pts.map do |v: Point| v.x end
-  h = Holder(spot: p, shade: green, maybe: some)
+  h = Holder(spot: p, shade: green, maybe: present)
   w = Wrap.Pair(red, Maybe.Some(green))
   t = Lib.Point(x: 0, y: 0)
   u = Lib.Color.Red

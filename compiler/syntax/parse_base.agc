@@ -482,14 +482,15 @@ def decorated?(lexeme: String) -> Bool
   return lexeme.ends_with?("?") or lexeme.ends_with?("!")
 end
 
-# One payload slot: a name binds the value, `_` drops it, and a literal, a variant, ok(...) or error(...) is a nested
-# pattern. A nested variant counts one level of nesting, which bounds the calls of the parser on a deep pattern.
+# One payload slot: a name binds the value, `_` drops it, and a literal, a variant, ok(...), error(...), some(...) or
+# none is a nested pattern. A nested variant counts one level of nesting, which bounds the calls of the parser on a
+# deep pattern.
 def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
   token = e.tokens[pos]
   kind = token.kind
   if kind == "name"
     lexeme = token.lexeme
-    if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
+    if constructor_pattern?(e, pos)
       return nested_slot(e, pos, ids)
     end
 
@@ -584,12 +585,33 @@ def negated(value: Ast.LitValue) -> Ast.LitValue
   end
 end
 
+# True when the name at pos starts a pattern of a builtin constructor: ok(, error(, some( or a bare none.
+def constructor_pattern?(e: Env, pos: Int) -> Bool
+  lexeme = e.tokens[pos].lexeme
+  if lexeme == "none"
+    return true
+  end
+
+  return (lexeme == "ok" or lexeme == "error" or lexeme == "some") and kind?(e, pos + 1, "left-paren")
+end
+
 def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   token = e.tokens[pos]
   lexeme = token.lexeme
   if lexeme == "_"
     node = Ast.Pattern.Wildcard(Ast.WildcardPattern(id: ids, span: token.span))
     return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
+  end
+
+  if lexeme == "none"
+    node = pattern_node(e, ids, "Optional", "None", [], pos, pos + 1)
+    return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
+  end
+
+  if lexeme == "some" and kind?(e, pos + 1, "left-paren")
+    parsed = try parse_slots(e, pos + 1, ids, "write some(_) to match without binding the value")
+    node = pattern_node(e, parsed.ids, "Optional", "Some", parsed.slots, pos, parsed.pos)
+    return ok(PatternAt(node: node, pos: parsed.pos, ids: parsed.ids + 1))
   end
 
   if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
@@ -642,6 +664,12 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   after = try expect(e, cursor, "type-name", "a variant name", false)
   enum_name = e.tokens[pos].lexeme
   variant_name = e.tokens[cursor].lexeme
+  if enum_name == "Optional"
+    return error(
+      unexpected_help(e, pos, "an Optional has no variant to name", "match an Optional with some(x) and none"),
+    )
+  end
+
   cursor = after
   if kind?(e, cursor, "dot")
     last = try expect(e, cursor + 1, "type-name", "a variant name", false)
@@ -690,7 +718,9 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
   token = e.tokens[at]
   kind = token.kind
   if kind == "name"
-    if (token.lexeme == "ok" or token.lexeme == "error") and kind_at(e, at + 1) == "left-paren"
+    if token.lexeme == "none"
+      return Scanned(next: at + 1, opens: false)
+    elsif constructor_pattern?(e, at)
       return Scanned(next: at + 2, opens: true)
     end
 

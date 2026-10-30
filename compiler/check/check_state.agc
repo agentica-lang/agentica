@@ -40,7 +40,7 @@ end
 export struct Capture
   boundary: Int
   params: List[Ast.BlockParam]
-  each_receiver: Ast.Optional[Ast.Expr]
+  each_receiver: Ast.Maybe[Ast.Expr]
 end
 
 ## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
@@ -110,7 +110,7 @@ export struct St
   depth: Int
   result: Slot
   loops: Int
-  capture: Ast.Optional[Capture]
+  capture: Ast.Maybe[Capture]
   range_chain: List[Int]
   signature: String
   nest: Int
@@ -169,7 +169,7 @@ export def fresh() -> St
     depth: 0,
     result: Slot.Known(Types.Type.Void),
     loops: 0,
-    capture: Ast.Optional.Absent,
+    capture: Ast.Maybe.Absent,
     range_chain: [],
     signature: "",
     nest: 0,
@@ -314,16 +314,16 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
   return ok(st.with(vars: st.vars.put(name, Binding(type: type, immutable: immutable, level: st.depth))))
 end
 
-## CHECK-REDEFINED-NAME for ok and error, which are builtin constructors.
+## CHECK-REDEFINED-NAME for ok, error, some and none, which are builtin constructors.
 export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
-  if name == "ok" or name == "error"
+  if name == "ok" or name == "error" or name == "some" or name == "none"
     return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
 
   return ok(true)
 end
 
-## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, puts, print, gets and gets!.
+## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, some, none, puts, print, gets and gets!.
 export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   try reserve_constructor(cx, st, name, span)
   if name == "puts" or name == "print" or name == "gets" or name == "gets!"

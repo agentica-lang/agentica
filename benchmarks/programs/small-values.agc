@@ -8,7 +8,7 @@ def main() -> Void
   n = text.length
   nothing: List[String] = []
   no_ints: List[Int] = []
-  none: Map[Int, Int] = {}
+  no_items: Map[Int, Int] = {}
   checksum = 0
   round = 0
   while round < rounds
@@ -32,7 +32,7 @@ def main() -> Void
       groups = groups.put(j % 101, groups.get(j % 101, []).push(j))
       j += 1
     end
-    counts = text.split(" ").reduce(none) do |acc, word| acc.put(word.length, acc.get(word.length, 0) + 1) end
+    counts = text.split(" ").reduce(no_items) do |acc, word| acc.put(word.length, acc.get(word.length, 0) + 1) end
     drops = 0
     k = 0
     while k < 8000

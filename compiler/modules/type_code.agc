@@ -87,6 +87,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Struct(name, args) -> return struct_text(name, args, keys, depth)
     T.Type.Var(name) -> return ok("X" + name_plain(name))
     T.Type.Result(item) -> return ok("R" + try written(item, keys, depth + 1))
+    T.Type.Optional(item) -> return ok("P" + try written(item, keys, depth + 1))
     T.Type.Task(item) -> return ok("K" + try written(item, keys, depth + 1))
     T.Type.Channel(item) -> return ok("C" + try written(item, keys, depth + 1))
     T.Type.Lazy(item) -> return ok("Z" + try written(item, keys, depth + 1))
@@ -156,7 +157,7 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
   end
 
   after = at + 1
-  if "RKCZDLS".contains?(letter)
+  if "RPKCZDLS".contains?(letter)
     item = try read_type(text, after, depth + 1, prefixes)
     return ok(Read(type: around(letter, item.type), next: item.next))
   end
@@ -202,6 +203,7 @@ end
 def around(letter: String, item: T.Type) -> T.Type
   case letter
     "R" -> return T.Type.Result(item)
+    "P" -> return T.Type.Optional(item)
     "K" -> return T.Type.Task(item)
     "C" -> return T.Type.Channel(item)
     "Z" -> return T.Type.Lazy(item)

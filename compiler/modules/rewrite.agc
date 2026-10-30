@@ -67,11 +67,11 @@ end
 
 # The library of an extern function of a package that its manifest declares ([native.NAME]) is the file or the system
 # name it says for this system, or the PKG- failure when it says none; any other library stays as written.
-def rewrite_native(cx: Resolve.Context, native: Ast.Optional[Ast.Native]) -> Result[Ast.Optional[Ast.Native]]
+def rewrite_native(cx: Resolve.Context, native: Ast.Maybe[Ast.Native]) -> Result[Ast.Maybe[Ast.Native]]
   case native
-    Ast.Optional.Present(found) ->
-      return ok(Ast.Optional.Present(found.with(library: try native_target(cx, found.library))))
-    Ast.Optional.Absent -> return ok(native)
+    Ast.Maybe.Present(found) ->
+      return ok(Ast.Maybe.Present(found.with(library: try native_target(cx, found.library))))
+    Ast.Maybe.Absent -> return ok(native)
   end
 end
 
@@ -155,10 +155,10 @@ def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
   return ok(type.with(name: name, args: args))
 end
 
-def rewrite_optional_type(cx: Resolve.Context, type: Ast.Optional[Ast.TypeRef]) -> Result[Ast.Optional[Ast.TypeRef]]
+def rewrite_optional_type(cx: Resolve.Context, type: Ast.Maybe[Ast.TypeRef]) -> Result[Ast.Maybe[Ast.TypeRef]]
   case type
-    Ast.Optional.Present(found) -> return ok(Ast.Optional.Present(try rewrite_type(cx, found)))
-    Ast.Optional.Absent -> return ok(type)
+    Ast.Maybe.Present(found) -> return ok(Ast.Maybe.Present(try rewrite_type(cx, found)))
+    Ast.Maybe.Absent -> return ok(type)
   end
 end
 
@@ -205,8 +205,8 @@ def rewrite_if(cx: Resolve.Context, node: Ast.IfStmt) -> Result[Ast.Stmt]
 
   else_body = node.else_body
   case node.else_body
-    Ast.Optional.Present(body) -> else_body = Ast.Optional.Present(try rewrite_stmts(cx, body))
-    Ast.Optional.Absent -> else_body = node.else_body
+    Ast.Maybe.Present(body) -> else_body = Ast.Maybe.Present(try rewrite_stmts(cx, body))
+    Ast.Maybe.Absent -> else_body = node.else_body
   end
 
   return ok(Ast.Stmt.If(node.with(branches: branches, else_body: else_body)))
@@ -243,10 +243,10 @@ def rewrite_pattern(cx: Resolve.Context, pattern: Ast.Pattern) -> Result[Ast.Pat
   end
 end
 
-def rewrite_optional_expr(cx: Resolve.Context, expr: Ast.Optional[Ast.Expr]) -> Result[Ast.Optional[Ast.Expr]]
+def rewrite_optional_expr(cx: Resolve.Context, expr: Ast.Maybe[Ast.Expr]) -> Result[Ast.Maybe[Ast.Expr]]
   case expr
-    Ast.Optional.Present(found) -> return ok(Ast.Optional.Present(try rewrite_expr(cx, found)))
-    Ast.Optional.Absent -> return ok(expr)
+    Ast.Maybe.Present(found) -> return ok(Ast.Maybe.Present(try rewrite_expr(cx, found)))
+    Ast.Maybe.Absent -> return ok(expr)
   end
 end
 
@@ -441,7 +441,7 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Update(node) ->
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_named(cx, node.args)
-      return ok(Ast.Expr.Update(node.with(target: target, args: args, visible: Ast.Optional.Present(cx.visible))))
+      return ok(Ast.Expr.Update(node.with(target: target, args: args, visible: Ast.Maybe.Present(cx.visible))))
     Ast.Expr.ListLit(node) -> return ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
     Ast.Expr.MapLit(node) -> return rewrite_map(cx, node)
     Ast.Expr.FieldAccess(node) -> return ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))

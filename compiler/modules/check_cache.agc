@@ -116,14 +116,14 @@ export def constant_names(program: Ast.Program) -> List[String]
 end
 
 ## The entry the cache holds for the file `key` if it is for the text with `digest`, else Absent.
-export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Ast.Optional[Entry]
+export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Ast.Maybe[Entry]
   if !cache.on
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   raw = cache.read.call(key)
   if !raw.ok?
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   return decode(raw.unwrap!, digest)
@@ -161,10 +161,10 @@ end
 
 ## The stub of `text`, which `program` is the parse of, or Absent when there is none worth keeping: nothing to blank,
 ## or the text does not have the shape the cut relies on, or the stub does not parse to the same declarations.
-export def stub_of(text: String, program: Ast.Program) -> Ast.Optional[String]
+export def stub_of(text: String, program: Ast.Program) -> Ast.Maybe[String]
   cuts = cuts_of(text, program.declarations)
   if !cuts.ok? or cuts.unwrap!.size == 0
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   pieces: List[String] = []
@@ -177,60 +177,60 @@ export def stub_of(text: String, program: Ast.Program) -> Ast.Optional[String]
 
   stub = pieces.push(text.slice(at, text.length - at)).join("")
   if stub.length == text.length and same_declarations?(program, stub)
-    return Ast.Optional.Present(stub)
+    return Ast.Maybe.Present(stub)
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
 # The entry in `raw` if it is well formed and for `digest`. Every length is looked at before a slice is taken: an entry
 # is the content of a file that anyone who can write the folder may have changed.
-def decode(raw: String, digest: String) -> Ast.Optional[Entry]
+def decode(raw: String, digest: String) -> Ast.Maybe[Entry]
   head = "#{FORMAT}\ntext #{digest}\ntree "
   if !raw.starts_with?(head) or raw.length < head.length + DIGEST_CHARS + 1
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   tree = raw.slice(head.length, DIGEST_CHARS)
   rest = raw.slice(head.length + DIGEST_CHARS, raw.length - head.length - DIGEST_CHARS)
   styled = rest.starts_with?(STYLED_STUB)
   if !styled and !rest.starts_with?(UNSTYLED_STUB)
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   after = rest.slice(STYLED_STUB.length, rest.length - STYLED_STUB.length)
   at = after.index_of("\n")
   if !at.ok? or at.unwrap! > STUB_LINE_CHARS
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   sizes = after.slice(0, at.unwrap!).split(" ")
   if sizes.size != 2 or sizes[0].length > SIZE_DIGITS
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   size = sizes[0].to_i()
   start = at.unwrap! + 1
   if !size.ok? or size.unwrap! < 0 or start + size.unwrap! > after.length
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   # A stub that is not the one whose digest the entry holds was damaged, and the entry is dropped.
   stub = after.slice(start, size.unwrap!)
   if text_digest(stub) != sizes[1]
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   constants = decode_constants(after.slice(start + size.unwrap!, after.length - start - size.unwrap!))
   if !constants.ok?
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   if tree == NO_TREE
     tree = ""
   end
 
-  return Ast.Optional.Present(Entry(tree: tree, styled: styled, stub: stub, constants: constants.unwrap!))
+  return Ast.Maybe.Present(Entry(tree: tree, styled: styled, stub: stub, constants: constants.unwrap!))
 end
 
 # The constants of the tail of an entry: nothing, or a line feed and a `const NAME TYPE` line for each.
@@ -322,11 +322,11 @@ def droppable?(wrapped: Ast.Decl, node: Ast.FunctionDecl) -> Bool
   end
 
   case node.native
-    Ast.Optional.Present(_) -> return false
-    Ast.Optional.Absent ->
+    Ast.Maybe.Present(_) -> return false
+    Ast.Maybe.Absent ->
       case node.doc
-        Ast.Optional.Present(_) -> return false
-        Ast.Optional.Absent -> return true
+        Ast.Maybe.Present(_) -> return false
+        Ast.Maybe.Absent -> return true
       end
   end
 end

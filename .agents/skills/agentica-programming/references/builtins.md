@@ -8,7 +8,7 @@ help NAME` prints a signature in method form (`s.strip()`; `--json` adds
 for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint (`len`,
 `int`) prints it and exits 2, as does an unknown name. Builtin namespaces and
 type names are reserved: no declaration, local, parameter, field or import alias
-may use them. `ok` and `error` are calls, never declared names.
+may use them. `ok`, `error`, `some` and `none` are calls, never declared names.
 
 ## Output, input, system
 
@@ -228,6 +228,21 @@ r.message() -> String                                    # the error message, or
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and
 `r.unwrap!`. Rules for `ok`, `error` and `try`:
 `language-blocks-results.md`; Void: `language-program-types.md`.
+
+## Optional
+
+```text
+some(value: T) -> Optional[T]
+none -> Optional[T]                                      # needs an expected Optional type
+o.unwrap_or(default: T) -> T
+o.unwrap!() -> T                                         # halts with RUNTIME-UNWRAP-NONE on none
+o.map(f: Fn[T, U]) -> Optional[U]                        # with a block: o.map do |x| x + 1 end
+o.some?() -> Bool
+o.none?() -> Bool
+o.to_result(message: String) -> Result[T]                # ok(x), or error(message) for none
+```
+
+Rules: `language-blocks-results.md`.
 
 ## Methods and Ruby names
 

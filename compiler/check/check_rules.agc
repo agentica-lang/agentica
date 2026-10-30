@@ -187,6 +187,8 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.Ok -> return check_ok(cx, st, site)
     Model.Rule.OkVoid -> return ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.Error -> return check_error(cx, st, site)
+    Model.Rule.OptionalSome -> return check_some(cx, st, site)
+    Model.Rule.OptionalNone -> return check_none(cx, st, site)
     Model.Rule.JsonDecode -> return check_json_type(cx, st, site, true)
     Model.Rule.JsonSchema -> return check_json_type(cx, st, site, false)
     Model.Rule.JsonEncode -> return check_json_encode(cx, st, site, false)
@@ -280,6 +282,41 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   end
 
   return ok(State.Out(st: message.st, type: expected))
+end
+
+# some(value): the expected Optional gives the value its expected type.
+def check_some(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  out = try State.expr(cx, st, site.args[0], T.only_optional_item(site.expected))
+  return ok(State.Out(st: out.st, type: T.Type.Optional(out.type)))
+end
+
+# none needs the Optional type from its context, except while a block is probed for its result type, as error(...)
+# does.
+def check_none(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  expected = site.expected
+  span = site.node.span
+  if !T.unknown?(expected) and !T.is?(expected, "Optional")
+    return error(State.mismatch(cx, st, expected, T.Type.Optional(T.Type.Var("T")), span))
+  end
+
+  if T.unknown?(expected) and st.probe
+    return ok(State.Out(st: st, type: T.Type.Optional(T.Type.Unknown)))
+  end
+
+  if T.unknown?(expected)
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-OPTIONAL-TYPE",
+        "none needs an expected Optional type",
+        span,
+        "add an Optional[T] annotation, for example age: Optional[Int] = none",
+      ),
+    )
+  end
+
+  return ok(State.Out(st: st, type: expected))
 end
 
 # JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct name whose fields can all be

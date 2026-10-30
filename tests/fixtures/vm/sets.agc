@@ -51,11 +51,11 @@ def main() -> Void
   puts(a.include?(7))
 
   # Empty sets need a type; the text form is Set[].
-  none: Set[Int] = Set.new([])
-  puts(none)
-  puts([none.empty?, a.empty?])
-  puts(none.size)
-  puts(none.add(5))
+  no_items: Set[Int] = Set.new([])
+  puts(no_items)
+  puts([no_items.empty?, a.empty?])
+  puts(no_items.size)
+  puts(no_items.add(5))
   puts(Set.size(a.delete(1).delete(2).delete(3)))
 
   # Set algebra keeps the order of the first set.
@@ -67,12 +67,12 @@ def main() -> Void
   puts(y.intersection(x))
   puts(x.difference(y))
   puts(y.difference(x))
-  puts(Set.union(x, none))
-  puts(Set.union(none, y))
-  puts(x.intersection(none))
-  puts(x.difference(none))
+  puts(Set.union(x, no_items))
+  puts(Set.union(no_items, y))
+  puts(x.intersection(no_items))
+  puts(x.difference(no_items))
   puts(x.difference(x))
-  puts([none.subset?(x), x.subset?(x), Set.new([2, 4]).subset?(y), y.subset?(x), x.subset?(none), none.subset?(none)])
+  puts([no_items.subset?(x), x.subset?(x), Set.new([2, 4]).subset?(y), y.subset?(x), x.subset?(no_items), no_items.subset?(no_items)])
 
   # Strings: write form in the text, any characters.
   words = Set.new(["pear", "apple", "pear", "", "日本", "a\"b", "line\nbreak", "é"])
@@ -93,7 +93,7 @@ def main() -> Void
   end
   puts("")
   puts(walk)
-  for n in none
+  for n in no_items
     puts("never")
   end
 
@@ -111,7 +111,7 @@ def main() -> Void
   tags = Tags(name: "t", seen: Set.new(["x", "y", "x"]))
   puts(tags)
   puts(tags.seen.add("z").size)
-  puts([Set.new([1, 2]), Set.new([2, 1]), none])
+  puts([Set.new([1, 2]), Set.new([2, 1]), no_items])
   puts({"low": Set.new([1]), "high": evens(10)})
   puts([describe(Slot.Held(evens(6))), describe(Slot.Free)])
   r: Result[Set[Int]] = ok(Set.new([7, 7]))

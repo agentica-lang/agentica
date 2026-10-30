@@ -21,6 +21,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   to the ciphertext, optional `auth_data`).
 - `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` for password hashing and key
   derivation.
+- `Optional[T]`, a builtin type for a value that may be missing: `some(x)` and
+  `none`, `case` arms `some(n) ->` and `none ->`, `==`, and the methods
+  `unwrap_or`, `unwrap!`, `map`, `some?`, `none?` and `to_result`.
 
 ### Changed
 
@@ -31,6 +34,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `File.stat` and `File.lstat` give `kind` `"fifo"`, `"socket"`,
   `"characterSpecial"`, `"blockSpecial"` or `"unknown"` for what is not a
   regular file, a directory or a link, instead of `"file"`.
+- **Breaking:** `Optional` is a reserved type name, and `some` and `none` are
+  reserved names, as `ok` and `error` are: a variable, parameter, field or
+  function named `some` or `none` is now `CHECK-REDEFINED-NAME`, and a pattern
+  binding named `none` is `CHECK-PATTERN-TYPE`. Rebuild `.agcb` files compiled
+  by 0.17.x that declare their own `enum Optional`.
 
 ## [0.17.0] - 2026-10-30
 

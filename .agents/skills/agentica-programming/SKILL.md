@@ -29,8 +29,8 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
 - Values never change: `xs = xs.push(4)`; a block cannot assign an outer
   variable (`reduce` for a total; a `for` loop, which can, to update several).
 - No implicit Int/Float (`n.to_f`); `<` only on numbers (strings: `a.compare(b)
-  < 0`); `==` only on Int, Float, Bool, String, Nil, Bytes, Range
-  (`CHECK-TYPE-MISMATCH`).
+  < 0`); `==` only on Int, Float, Bool, String, Nil, Bytes, Range and
+  Optionals of those (`CHECK-TYPE-MISMATCH`).
 - `try` only in a function that returns `Result[T]`, never in `main`;
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
@@ -45,8 +45,8 @@ Read only what the task needs.
 | `language-running.md` | `agentica` flags, `compile` and `run` of bytecode, the cache, `--sandbox` |
 | `language-program-types.md` | file shape, constants, `def`, `struct`, `enum`, types, `Void`, defaults |
 | `language-statements-expressions.md` | `case`, loops, assignment, literals, heredocs, operators, pipes, foreign forms |
-| `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try` |
-| `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, System, Time, Random, `to_s`; Ruby names |
+| `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try`, `Optional` |
+| `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
 | `modules.md` | several files, `std/`, `pkg/`, packages |

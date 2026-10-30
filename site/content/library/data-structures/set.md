@@ -38,8 +38,8 @@ Builds a set from a list. A repeated item is dropped, and the first one keeps it
 ```agentica
 def main() -> Void
   puts(Set.new([3, 1, 2, 3, 1]))
-  none: Set[String] = Set.new([])
-  puts(none)
+  empty_set: Set[String] = Set.new([])
+  puts(empty_set)
 end
 ```
 

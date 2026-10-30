@@ -224,8 +224,8 @@ export def refs_at(
         SymbolPaths.Expanded.Files(roots) ->
           linked = SymbolLink.link(roots, settings, cache.parses)
           case linked.program
-            Ast.Optional.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
-            Ast.Optional.Present(program) ->
+            Ast.Maybe.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
+            Ast.Maybe.Present(program) ->
               # The file of the position is the first root: when it is left out there is nothing to ask about.
               if program.modules[0].key != roots[0].key
                 return Referenced.Rejected(linked.skipped[0].problem)
@@ -419,8 +419,8 @@ def referenced_by_name(
   roots: List[SymbolPaths.Root],
 ) -> Referenced
   case linked.program
-    Ast.Optional.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
-    Ast.Optional.Present(program) ->
+    Ast.Maybe.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
+    Ast.Maybe.Present(program) ->
       case Front.query_linked(program, settings)
         Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
         Front.Outcome.Done(front) ->
@@ -447,8 +447,8 @@ end
 def file_names(settings: Env.Settings, found: Refs.Answer) -> Map[String, String]
   files: List[String] = found.references.map do |use: Refs.Reference| use.file end
   case found.definition
-    Ast.Optional.Present(declared) -> files = files.push(declared.file)
-    Ast.Optional.Absent -> files = files
+    Ast.Maybe.Present(declared) -> files = files.push(declared.file)
+    Ast.Maybe.Absent -> files = files
   end
 
   names: Map[String, String] = {}

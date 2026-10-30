@@ -88,8 +88,8 @@ def named(
   end
 
   case Sites.innermost(sites, offset)
-    Ast.Optional.Absent -> return missed
-    Ast.Optional.Present(site) ->
+    Ast.Maybe.Absent -> return missed
+    Ast.Maybe.Present(site) ->
       definition = Refs.definition_of(linked.modules, site.target)
       return Diag.Outcome.Done(
         TypeAt.Answer(
@@ -105,22 +105,22 @@ def named(
 end
 
 # `builtin` for a name that no file declares and the catalog knows, else `name`.
-def kind_of(definition: Ast.Optional[Definitions.Definition], site: Sites.Site) -> String
+def kind_of(definition: Ast.Maybe[Definitions.Definition], site: Sites.Site) -> String
   case builtin_of(definition, site)
-    Ast.Optional.Present(_) -> return "builtin"
-    Ast.Optional.Absent -> return "name"
+    Ast.Maybe.Present(_) -> return "builtin"
+    Ast.Maybe.Absent -> return "name"
   end
 end
 
-def builtin_of(definition: Ast.Optional[Definitions.Definition], site: Sites.Site) -> Ast.Optional[Model.Builtin]
+def builtin_of(definition: Ast.Maybe[Definitions.Definition], site: Sites.Site) -> Ast.Maybe[Model.Builtin]
   case definition
-    Ast.Optional.Present(_) -> return Ast.Optional.Absent
-    Ast.Optional.Absent ->
+    Ast.Maybe.Present(_) -> return Ast.Maybe.Absent
+    Ast.Maybe.Absent ->
       entry = CatalogJson.public(site.target.name)
       if entry.ok?
-        return Ast.Optional.Present(entry.unwrap!)
+        return Ast.Maybe.Present(entry.unwrap!)
       end
 
-      return Ast.Optional.Absent
+      return Ast.Maybe.Absent
   end
 end

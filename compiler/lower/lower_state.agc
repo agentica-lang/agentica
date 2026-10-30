@@ -215,6 +215,8 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.ATS(key, value) -> return vm_type?(cx, value)
     Types.Type.Set(item) -> return true
     Types.Type.Result(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
+    # An Optional is a value of the builtin enum Optional (Program.OPTIONAL).
+    Types.Type.Optional(item) -> return cx.user_types.get("Optional", "") == "Enum" and vm_type?(cx, item)
     Types.Type.Task(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
     Types.Type.Channel(item) -> return vm_type?(cx, item)
     Types.Type.Lazy(item) -> return vm_type?(cx, item)

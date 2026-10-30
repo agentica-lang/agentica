@@ -23,32 +23,32 @@ FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "ri
 export def blank_line_after_end(
   linked: Linker.Linked,
   styled: Set[String],
-) -> Ast.Optional[Failure.Problem]
+) -> Ast.Maybe[Failure.Problem]
   for module in linked.modules
     if module.blank_line_after_end and !styled.include?(module.file)
       case problem_in(module.file, module.text)
-        Ast.Optional.Present(problem) -> return Ast.Optional.Present(problem)
-        Ast.Optional.Absent -> next
+        Ast.Maybe.Present(problem) -> return Ast.Maybe.Present(problem)
+        Ast.Maybe.Absent -> next
       end
     end
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
 ## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
 export def follows_rule?(file: String, text: String) -> Bool
   case problem_in(file, text)
-    Ast.Optional.Present(_) -> return false
-    Ast.Optional.Absent -> return true
+    Ast.Maybe.Present(_) -> return false
+    Ast.Maybe.Absent -> return true
   end
 end
 
-def problem_in(file: String, text: String) -> Ast.Optional[Failure.Problem]
+def problem_in(file: String, text: String) -> Ast.Maybe[Failure.Problem]
   case Lexer.lex(text)
     Diag.Outcome.Done(tokens) -> return first_missing(file, text, tokens)
     # A file that linked lexes again, so this arm does not happen.
-    Diag.Outcome.Failed(_) -> return Ast.Optional.Absent
+    Diag.Outcome.Failed(_) -> return Ast.Maybe.Absent
   end
 end
 
@@ -56,17 +56,17 @@ end
 # break comes before and after it: a trailing comment is no token, and a line that goes on with a leading `.name` has
 # no line break after it, so neither makes it less bare. The kind of a token is checked before its neighbours, so the
 # many other tokens cost one comparison.
-def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Ast.Optional[Failure.Problem]
+def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Ast.Maybe[Failure.Problem]
   for index in 1...tokens.size - 1
     token = tokens[index]
     if token.kind == "end" and tokens[index - 1].kind == "NL" and tokens[index + 1].kind == "NL"
       if needs_empty_line?(text, tokens, index + 1)
-        return Ast.Optional.Present(missing(file, token))
+        return Ast.Maybe.Present(missing(file, token))
       end
     end
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
 # Whether the line after the line break at `tokens[at]` must be empty and is not. The end of the file needs nothing. A

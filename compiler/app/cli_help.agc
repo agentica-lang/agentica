@@ -145,8 +145,8 @@ def suggestion(name: String) -> String
   end
 
   case Suggest.closest_among(name, CALLABLE_NAMES, [])
-    Ast.Optional.Present(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
+    Ast.Maybe.Absent -> return ""
   end
 end
 

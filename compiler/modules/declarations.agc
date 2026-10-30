@@ -142,8 +142,8 @@ end
 ## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
 export def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
-    Ast.Optional.Present(alias) -> return "import #{alias} from #{written}"
-    Ast.Optional.Absent ->
+    Ast.Maybe.Present(alias) -> return "import #{alias} from #{written}"
+    Ast.Maybe.Absent ->
       pieces = decl.names.map do |entry| entry_text(entry) end
       return "import {#{pieces.join(", ")}} from #{written}"
   end
@@ -152,8 +152,8 @@ end
 ## The alias of an import, or "" for an import list (an alias is never empty).
 export def alias_of(decl: Ast.ImportDecl) -> String
   case decl.alias
-    Ast.Optional.Present(alias) -> return alias
-    Ast.Optional.Absent -> return ""
+    Ast.Maybe.Present(alias) -> return alias
+    Ast.Maybe.Absent -> return ""
   end
 end
 
@@ -253,13 +253,13 @@ end
 # resource or a struct: the block sits with the types, as a whole.
 def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
   case function.native
-    Ast.Optional.Present(link) ->
+    Ast.Maybe.Present(link) ->
       if link.with_types
         return 2
       end
 
       return plain
-    Ast.Optional.Absent -> return plain
+    Ast.Maybe.Absent -> return plain
   end
 end
 

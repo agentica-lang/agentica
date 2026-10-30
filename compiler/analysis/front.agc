@@ -161,7 +161,7 @@ end
 
 ## The first style problem of a linked program: the files whose project asks for a rule that they break. Absent when
 ## none does. The style rules come after the type check, so a program that does not check reports that first.
-export def style_problem(linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+export def style_problem(linked: Linker.Linked) -> Ast.Maybe[Problems.Problem]
   return Style.blank_line_after_end(linked, NO_STYLED)
 end
 
@@ -186,13 +186,13 @@ end
 # The result of checking `program` as query_file does, taking what `reusing` says is unchanged from an earlier check,
 # and the number of modules it took.
 def check_reusing(
-  reusing: Ast.Optional[Checker.Reusing],
+  reusing: Ast.Maybe[Checker.Reusing],
   program: Linker.Linked,
   settings: Env.Settings,
 ) -> Checker.Rechecked
   case reusing
-    Ast.Optional.Present(found) -> return Checker.check_query_reusing(program, settings, found)
-    Ast.Optional.Absent -> return Checker.Rechecked(checking: Checker.check_query(program, settings), taken: 0)
+    Ast.Maybe.Present(found) -> return Checker.check_query_reusing(program, settings, found)
+    Ast.Maybe.Absent -> return Checker.Rechecked(checking: Checker.check_query(program, settings), taken: 0)
   end
 end
 
@@ -295,8 +295,8 @@ def enter_checked(
 
     stub = ""
     case CheckCache.stub_of(module.text, module.program)
-      Ast.Optional.Present(found) -> stub = found
-      Ast.Optional.Absent -> stub = stub
+      Ast.Maybe.Present(found) -> stub = found
+      Ast.Maybe.Absent -> stub = stub
     end
 
     constants = coded_constants(module, checked, keys)
@@ -365,20 +365,20 @@ def style_after(
   checking: Checker.Checking,
   linked: Linker.Linked,
   styled: Set[String],
-) -> Ast.Optional[Problems.Problem]
+) -> Ast.Maybe[Problems.Problem]
   case checking
-    Checker.Checking.Failed(_) -> return Ast.Optional.Absent
+    Checker.Checking.Failed(_) -> return Ast.Maybe.Absent
     Checker.Checking.Done(_) -> return Style.blank_line_after_end(linked, styled)
   end
 end
 
-def finished(linked: Linker.Linked, checking: Checker.Checking, style: Ast.Optional[Problems.Problem]) -> Outcome
+def finished(linked: Linker.Linked, checking: Checker.Checking, style: Ast.Maybe[Problems.Problem]) -> Outcome
   case checking
     Checker.Checking.Failed(problem) -> return Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
       case style
-        Ast.Optional.Present(problem) -> return Outcome.Rejected(problem)
-        Ast.Optional.Absent -> return Outcome.Done(Checked(linked: linked, checked: checked))
+        Ast.Maybe.Present(problem) -> return Outcome.Rejected(problem)
+        Ast.Maybe.Absent -> return Outcome.Done(Checked(linked: linked, checked: checked))
       end
   end
 end

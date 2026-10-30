@@ -11,8 +11,8 @@ def lists(lazy: Lazy[Bytes]) -> Result[List[List[Int]]]
 end
 
 def main() -> Void
-  none = "".bytes
-  items: List[Bytes] = [b([104, 101]), none, b([108]), b([108, 111]), none]
+  no_bytes = "".bytes
+  items: List[Bytes] = [b([104, 101]), no_bytes, b([108]), b([108, 111]), no_bytes]
   packed = items.lazy.deflate.to_a.unwrap!
   puts("deflate #{Bytes.concat(packed).size} round #{lists(packed.lazy.inflate)}")
   raw = items.lazy.deflate(9, true).to_a.unwrap!
@@ -27,8 +27,8 @@ def main() -> Void
   puts("exact cap -> #{lists(gz.lazy.gunzip(5))}")
   puts("trailing -> #{[bytes, b([0])].lazy.gunzip.to_a}")
   puts("truncated -> #{[bytes.take(10)].lazy.gunzip.to_a}")
-  puts("nothing -> #{[none].lazy.inflate.to_a}")
-  puts("empty deflate #{Bytes.concat([none].lazy.deflate.to_a.unwrap!).to_a}")
+  puts("nothing -> #{[no_bytes].lazy.inflate.to_a}")
+  puts("empty deflate #{Bytes.concat([no_bytes].lazy.deflate.to_a.unwrap!).to_a}")
   puts("bad level -> #{items.lazy.gzip(10).to_a}")
   puts("bad cap -> #{items.lazy.inflate(false, 0).to_a}")
   puts("first #{lists(gz.lazy.gunzip.take(1))}")

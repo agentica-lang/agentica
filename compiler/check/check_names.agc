@@ -17,6 +17,7 @@ export def receiver_kind(type: T.Type) -> String
     word == "Set" or
     word == "Float" or
     word == "Result" or
+    word == "Optional" or
     word == "Json" or
     word == "Int" or
     word == "Range" or

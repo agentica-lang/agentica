@@ -153,11 +153,12 @@ def holds?(cx: State.Cx, type: T.Type, found: Fn[T.Type, Bool]) -> Bool
   return false
 end
 
-# The types inside a type that holds? walks next: the item of a Result or List, the key and value of a Map, the
-# type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
+# The types inside a type that holds? walks next: the item of a Result, Optional or List, the key and value of a Map,
+# the type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
 def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type
     T.Type.Result(item) -> return [item]
+    T.Type.Optional(item) -> return [item]
     T.Type.List(item) -> return [item]
     T.Type.Map(key, value) -> return [key, value]
     T.Type.Struct(name, args) ->
@@ -333,9 +334,9 @@ def task_map_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Bloc
     cx,
     counts.st,
     block,
-    Ast.Optional.Present([T.item(items.type)]),
+    Ast.Maybe.Present([T.item(items.type)]),
     task_map_block_result(site.expected),
-    Ast.Optional.Absent,
+    Ast.Maybe.Absent,
   )
   return task_map_result(cx, checked.st, checked.type, block.span)
 end
@@ -495,8 +496,8 @@ def check_block_value(
   callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->
-      known = Ast.Optional.Present(params)
-      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, Ast.Optional.Absent)
+      known = Ast.Maybe.Present(params)
+      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, Ast.Maybe.Absent)
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
       checked = try State.expr(cx, leading.st, callback, T.Type.Unknown)

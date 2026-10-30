@@ -95,7 +95,7 @@ def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, template: T.Typ
     result = T.Type.Unknown
   end
 
-  return Stmt.check_block_in(cx, bound.st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, step)
+  return Stmt.check_block_in(cx, bound.st, block, Ast.Maybe.Present(params), result, Ast.Maybe.Absent, step)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.
@@ -144,6 +144,7 @@ def free_variables(type: T.Type) -> List[String]
   case type
     T.Type.Var(name) -> return [name]
     T.Type.Result(item) -> return free_variables(item)
+    T.Type.Optional(item) -> return free_variables(item)
     T.Type.Task(item) -> return free_variables(item)
     T.Type.Channel(item) -> return free_variables(item)
     T.Type.Lazy(item) -> return free_variables(item)

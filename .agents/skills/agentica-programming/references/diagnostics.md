@@ -97,6 +97,7 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
   expected type.
 - `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
+- `CHECK-OPTIONAL-TYPE`: a `none` without an expected Optional type.
 - `CHECK-EXPECTED-TYPE`: `Channel.new(n)` or `ATS.new()` with no expected type.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).

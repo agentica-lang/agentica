@@ -95,7 +95,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   function_decls = functions.map do |entry: Located| entry.function end
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
-  watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys))
+  watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys).push("Optional"))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
   used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)).concat(Builtins.default_enums().to_a))
   tables = Program.build(decls, used, scanned.type_value)
@@ -160,10 +160,10 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
     case function.native
-      Ast.Optional.Present(native) ->
+      Ast.Maybe.Present(native) ->
         lowered = try Native.lower(cx.with(file: entry.file), function, native, struct_decls, index_of[entry.file])
         table = table.with(functions: table.functions.push(lowered))
-      Ast.Optional.Absent ->
+      Ast.Maybe.Absent ->
         table = try add_function(
           cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
         )
@@ -172,7 +172,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   for entry in plan.kept
     file = files_of[entry.name]
-    body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: Ast.Optional.Present(entry.value), span: entry.span))]
+    body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: Ast.Maybe.Present(entry.value), span: entry.span))]
     table = try add_function(cx, table, file, index_of[file], entry.name, [], body, entry.span)
   end
 
@@ -260,8 +260,8 @@ def field_fills_of(structs: List[LocatedStruct], index_of: Map[String, Int]) -> 
     values: Map[String, Ast.Expr] = {}
     for field in entry.decl.fields
       case field.default
-        Ast.Optional.Present(value) -> values = values.put(field.name, value)
-        Ast.Optional.Absent -> values = values
+        Ast.Maybe.Present(value) -> values = values.put(field.name, value)
+        Ast.Maybe.Absent -> values = values
       end
     end
 
@@ -310,8 +310,8 @@ def scan_all(
     constant_scans = constant_scans.push(scan)
     written = written.concat(scan.written)
     case decl.type
-      Ast.Optional.Present(ref) -> written = written.concat(Scans.written_in(ref, watched))
-      Ast.Optional.Absent -> written = written
+      Ast.Maybe.Present(ref) -> written = written.concat(Scans.written_in(ref, watched))
+      Ast.Maybe.Absent -> written = written
     end
   end
 
@@ -366,6 +366,7 @@ def names_in(type: Types.Type, watched: Set[String]) -> List[String]
     Types.Type.List(item) -> return names_in(item, watched)
     Types.Type.Set(item) -> return names_in(item, watched)
     Types.Type.Result(item) -> return names_in(item, watched)
+    Types.Type.Optional(item) -> return only("Optional", watched).concat(names_in(item, watched))
     Types.Type.Task(item) -> return names_in(item, watched)
     Types.Type.Channel(item) -> return names_in(item, watched)
     Types.Type.Lazy(item) -> return names_in(item, watched)

@@ -4,8 +4,8 @@
 ## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
 ## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is JSON.Codec[T], the JSON codec
-## of a struct (JSON.codec). Unknown is no type: the expected type when none is known (Unknown), and the type of a
-## literal the lexer could not classify.
+## of a struct (JSON.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected
+## type when none is known (Unknown), and the type of a literal the lexer could not classify.
 export enum Type
   Int
   Float
@@ -19,6 +19,7 @@ export enum Type
   Unknown
   Opaque(String)
   Result(Type)
+  Optional(Type)
   Task(Type)
   Channel(Type)
   Lazy(Type)
@@ -49,6 +50,7 @@ export def tag(type: Type) -> String
     Type.Unknown -> return "Unknown"
     Type.Opaque(name) -> return "Opaque"
     Type.Result(item) -> return "Result"
+    Type.Optional(item) -> return "Optional"
     Type.Task(item) -> return "Task"
     Type.Channel(item) -> return "Channel"
     Type.Lazy(item) -> return "Lazy"
@@ -74,10 +76,11 @@ export def unknown?(type: Type) -> Bool
   return tag(type) == "Unknown"
 end
 
-## The element type of a List, Set, Result, Task, Channel, Lazy or Codec; Unknown for any other type.
+## The element type of a List, Set, Result, Optional, Task, Channel, Lazy or Codec; Unknown for any other type.
 export def item(type: Type) -> Type
   case type
     Type.Result(inner) -> return inner
+    Type.Optional(inner) -> return inner
     Type.Task(inner) -> return inner
     Type.Channel(inner) -> return inner
     Type.Lazy(inner) -> return inner
@@ -157,6 +160,7 @@ export def same?(a: Type, b: Type) -> Bool
     Type.ATS(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
     Type.Fn(list, last) -> return same_all?(list, params(b)) and same?(last, result(b))
     Type.Result(inner) -> return same?(inner, item(b))
+    Type.Optional(inner) -> return same?(inner, item(b))
     Type.Task(inner) -> return same?(inner, item(b))
     Type.Channel(inner) -> return same?(inner, item(b))
     Type.Lazy(inner) -> return same?(inner, item(b))
@@ -248,6 +252,15 @@ export def only_result_item(type: Type) -> Type
   return Type.Unknown
 end
 
+## The item of an Optional, else Unknown: the expected type of the value inside some(...).
+export def only_optional_item(type: Type) -> Type
+  if is?(type, "Optional")
+    return item(type)
+  end
+
+  return Type.Unknown
+end
+
 ## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
 ## messages leave it out.
 export def display_name(name: String) -> String
@@ -293,6 +306,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Struct(name, args) -> return generic_text(name, args, written)
     Type.Enum(name, args) -> return generic_text(name, args, written)
     Type.Result(item) -> return "Result[#{to_text_as(item, written)}]"
+    Type.Optional(item) -> return "Optional[#{to_text_as(item, written)}]"
     Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
     Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
     Type.Lazy(item) -> return "Lazy[#{to_text_as(item, written)}]"
@@ -314,6 +328,7 @@ export def debug_text(type: Type) -> String
     Type.Struct(name, args) -> return struct_debug(name, args)
     Type.Enum(name, args) -> return "Enum(#{name}, [#{debug_list(args)}])"
     Type.Result(item) -> return "Result(#{debug_text(item)})"
+    Type.Optional(item) -> return "Optional(#{debug_text(item)})"
     Type.Task(item) -> return "Task(#{debug_text(item)})"
     Type.Channel(item) -> return "Channel(#{debug_text(item)})"
     Type.Lazy(item) -> return "Lazy(#{debug_text(item)})"

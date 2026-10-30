@@ -41,6 +41,9 @@ programs are valid and how they run.
 - **Type:** `Result[T]`
   - **Rule:** `ok(value)`, or `error(message)` with a `String` message
 
+- **Type:** `Optional[T]`
+  - **Rule:** `some(value)`, or `none` for a value that is missing
+
 - **Type:** `Json`
   - **Rule:** Opaque JSON value, used through the `JSON` module
 
@@ -87,8 +90,7 @@ inferred from the initializer, as in `count = 3`. An empty list, map or
 `Set.new([])` needs an expected type, from an annotation, a parameter, a field
 or a return type: `names: List[String] = []`. A non-empty list has one element
 type. There is no implicit numeric conversion and no `Any` type. `Nil` is not a
-nullable wildcard: `name: String = nil` is invalid; use an enum such as
-`Option[T]`.
+nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
 
 ### Operators
 
@@ -98,9 +100,12 @@ nullable wildcard: `name: String = nil` is invalid; use an enum such as
   `RUNTIME-DIVISION-BY-ZERO`, for `Float` too. An integer result outside `Int`
   is an error.
 - Ordering operators take two numbers of one type. `==` and `!=` take one
-  primitive type, two `Range` values (equal when start, end and kind match), or
-  two `Bytes` (equal when they have the same length and bytes). There is no
-  list or struct equality. `..` and `...` take two `Int` values.
+  primitive type, two `Range` values (equal when start, end and kind match), two
+  `Bytes` (equal when they have the same length and bytes), or two `Optional`
+  values of one of those (equal when both are `none`, or both are `some` with
+  equal items). An `Optional` on the left gives its type to the right side, so
+  `x == none` checks. There is no list or struct equality. `..` and `...` take
+  two `Int` values.
 - `and`, `or` and `not` take only `Bool`. `&&`, `||` and `!` are the same
   operators. A `!` directly after a name belongs to it (`read!`); `!=` is
   inequality.
@@ -152,9 +157,9 @@ builtin with effects (`stdout`, `stdin`, `filesystem`, `network`, `subprocess`,
 `clock`, `random`, `concurrency` and the rest): each is
 `CHECK-CONSTANT-EXPRESSION`, located at that form. Every expression inside the
 initializer, not only the result, has a data type: numbers, `String`, `Bool`,
-`Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result` and `JSON` of data
-types, and structs and enums whose fields and payloads are data; a function,
-`Channel`, task, handle or `ATS` table type (and `Void`) is
+`Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result`, `Optional` and `JSON`
+of data types, and structs and enums whose fields and payloads are data; a
+function, `Channel`, task, handle or `ATS` table type (and `Void`) is
 `CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no
 effects, but it makes a value with identity and state, which is why the type
 rule exists.
@@ -320,7 +325,8 @@ pattern.
 
 Enum values need every variant, unless there is a catch-all `_`. `Result[T]`
 matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`;
-`Result.Ok(_)` discards the payload. The builtin `Await[T]` of a timed
+`Result.Ok(_)` discards the payload. `Optional[T]` matches as `some(value)` and
+`none`. The builtin `Await[T]` of a timed
 `Task.await` matches as `Await.Done(value)` and `Await.TimedOut`, with the same
 rules. Every other `case`, including one on `Bool` or `Nil`, needs `_`. A
 catch-all is the last arm when it has no guard, and duplicate or unreachable
@@ -770,6 +776,23 @@ def read_age(text: String) -> Result[Int]
   return ok(age)
 end
 ```
+
+### Optional values
+
+- `some(value)` and `none` build Optionals. `Optional[T]` is builtin, not a user
+  enum. It is allowed wherever a type is (variables, parameters, returns,
+  fields, list and map items, type arguments) and can nest; `Optional[Void]` is
+  `CHECK-VOID-TYPE`.
+- `some(1)` infers `Optional[Int]`. `none` needs an expected Optional type, as
+  `error(...)` needs a Result type (`CHECK-OPTIONAL-TYPE` otherwise), and a
+  block of unknown result type takes it from its `some(...)` values.
+- `o.unwrap_or(default)` gives the item or the default, and evaluates both.
+  `o.unwrap!` gives the item; on `none` it halts with `RUNTIME-UNWRAP-NONE` at
+  the receiver. `o.map do |x| ... end` gives `some` of the block's value, or
+  `none` without calling the block. `o.some?` and `o.none?` test the variant.
+  `o.to_result(message)` gives `ok(item)` or `error(message)`, for `try`.
+- An Optional prints as `some(1)` or `none`. A struct with an `Optional` field
+  is not JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`).
 
 ### Function values
 

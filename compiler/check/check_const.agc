@@ -82,8 +82,8 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
   here = done.cx.with(file: entry.file)
   declared = T.Type.Unknown
   case entry.decl.type
-    Ast.Optional.Present(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)
-    Ast.Optional.Absent -> declared = declared
+    Ast.Maybe.Present(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)
+    Ast.Maybe.Absent -> declared = declared
   end
 
   out = try State.expr(here, done.st, entry.decl.value, declared)
@@ -193,10 +193,10 @@ def visit(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool)
   return check_data(cx, st, node, block_allowed)
 end
 
-def has_entry?(entry: Ast.Optional[Model.Builtin]) -> Bool
+def has_entry?(entry: Ast.Maybe[Model.Builtin]) -> Bool
   case entry
-    Ast.Optional.Present(found) -> return true
-    Ast.Optional.Absent -> return false
+    Ast.Maybe.Present(found) -> return true
+    Ast.Maybe.Absent -> return false
   end
 end
 
@@ -242,53 +242,53 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
 end
 
 # The builtin a call, method call or field access names: not a call of a function of the program.
-def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Ast.Optional[Model.Builtin]
+def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Ast.Maybe[Model.Builtin]
   case node
-    ConstWalk.Node.Stmt(stmt) -> return Ast.Optional.Absent
+    ConstWalk.Node.Stmt(stmt) -> return Ast.Maybe.Absent
     ConstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
           if cx.functions.has_key?(found.name)
-            return Ast.Optional.Absent
+            return Ast.Maybe.Absent
           end
 
           return entry_named(cx, found.name)
         Ast.Expr.MethodCall(found) -> return entry_resolved(cx, st, found.id)
         Ast.Expr.FieldAccess(found) -> return entry_resolved(cx, st, found.id)
-        _ -> return Ast.Optional.Absent
+        _ -> return Ast.Maybe.Absent
       end
   end
 end
 
-def entry_named(cx: State.Cx, name: String) -> Ast.Optional[Model.Builtin]
+def entry_named(cx: State.Cx, name: String) -> Ast.Maybe[Model.Builtin]
   found = ENTRIES.get(name)
   if found.ok?
-    return Ast.Optional.Present(found.unwrap!)
+    return Ast.Maybe.Present(found.unwrap!)
   end
 
-  return Ast.Optional.Absent
+  return Ast.Maybe.Absent
 end
 
-def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Ast.Optional[Model.Builtin]
+def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Ast.Maybe[Model.Builtin]
   resolved = st.resolved.get(id)
   if !resolved.ok?
-    return Ast.Optional.Absent
+    return Ast.Maybe.Absent
   end
 
   case resolved.unwrap!
     State.Resolved.Call(name, type) -> return entry_named(cx, name)
-    _ -> return Ast.Optional.Absent
+    _ -> return Ast.Maybe.Absent
   end
 end
 
-def refuse_form(cx: State.Cx, st: State.St, node: ConstWalk.Node, entry: Ast.Optional[Model.Builtin]) -> Result[Bool]
+def refuse_form(cx: State.Cx, st: State.St, node: ConstWalk.Node, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
   case node
     ConstWalk.Node.Stmt(stmt) -> return ok(true)
     ConstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
   end
 end
 
-def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Optional[Model.Builtin]) -> Result[Bool]
+def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
   span = Ast.expr_span(expr)
   case expr
     Ast.Expr.FunctionRef(found) -> return error(
@@ -327,9 +327,9 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Optional[
   end
 end
 
-def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Optional[Model.Builtin]) -> Result[Bool]
+def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Maybe[Model.Builtin]) -> Result[Bool]
   case entry
-    Ast.Optional.Present(found) ->
+    Ast.Maybe.Present(found) ->
       if found.effects.size > 0
         return error(
           refuse(
@@ -343,7 +343,7 @@ def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Opt
       end
 
       return ok(true)
-    Ast.Optional.Absent -> return ok(true)
+    Ast.Maybe.Absent -> return ok(true)
   end
 end
 

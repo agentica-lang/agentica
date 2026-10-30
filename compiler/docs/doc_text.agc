@@ -11,8 +11,8 @@ import Signature from "signature"
 export def text(module: String, documented: Model.Module) -> String
   blocks = ["# #{module}"]
   case documented.doc
-    Ast.Optional.Present(doc) -> blocks = blocks.push(doc)
-    Ast.Optional.Absent -> blocks = blocks
+    Ast.Maybe.Present(doc) -> blocks = blocks.push(doc)
+    Ast.Maybe.Absent -> blocks = blocks
   end
 
   for item in documented.items
@@ -26,8 +26,8 @@ end
 def item_blocks(item: Model.Item) -> List[String]
   blocks = ["## `#{item.signature}`"]
   case item.doc
-    Ast.Optional.Present(doc) -> blocks = blocks.push(doc)
-    Ast.Optional.Absent -> blocks = blocks
+    Ast.Maybe.Present(doc) -> blocks = blocks.push(doc)
+    Ast.Maybe.Absent -> blocks = blocks
   end
 
   parts = part_lines(item.detail)
@@ -54,8 +54,8 @@ end
 def field_signature(field: Model.Field) -> String
   typed = "#{field.name}: #{field.type}"
   case field.default
-    Ast.Optional.Present(written) -> return "#{typed} = #{written}"
-    Ast.Optional.Absent -> return typed
+    Ast.Maybe.Present(written) -> return "#{typed} = #{written}"
+    Ast.Maybe.Absent -> return typed
   end
 end
 
@@ -64,9 +64,9 @@ def variant_line(variant: Model.Variant) -> String
 end
 
 # A doc of several lines continues under the dash, indented.
-def part_line(signature: String, doc: Ast.Optional[String]) -> String
+def part_line(signature: String, doc: Ast.Maybe[String]) -> String
   case doc
-    Ast.Optional.Present(text) -> return "- `#{signature}` - #{text.split("\n").join("\n  ")}"
-    Ast.Optional.Absent -> return "- `#{signature}`"
+    Ast.Maybe.Present(text) -> return "- `#{signature}` - #{text.split("\n").join("\n  ")}"
+    Ast.Maybe.Absent -> return "- `#{signature}`"
   end
 end

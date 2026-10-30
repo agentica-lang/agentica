@@ -105,6 +105,8 @@ export def lower_call(
     key = try await_key(cx, node, checked, count)
   elsif form.ok? and CODEC_BUILTINS.include?(node.name)
     return lower_codec(cx, fx, node, key, want, void, checked, tail)
+  elsif form.ok? and (node.name == "some" or node.name == "none")
+    return lower_optional(cx, fx, node, want, void, checked, tail)
   end
 
   builtin = key != "" and VM_BUILTINS.include?(key)
@@ -223,6 +225,28 @@ def lower_codec(
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
+# some(x) and none: a value of the builtin enum Optional (Program.OPTIONAL), made by an `enum` instruction.
+def lower_optional(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, want: Int, void: Bool, checked: Bool, tail: Bool
+) -> Result[Lowering.Out]
+  if !checked
+    expr = Ast.Expr.Call(node)
+    try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
+  end
+
+  variant = "None"
+  if node.name == "some"
+    variant = "Some"
+  end
+
+  out = try Data.lower_enum(cx, fx, "Optional", variant, node.args, node.span, want)
+  if tail
+    return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span)))
+  end
+
+  return ok(out)
+end
+
 # The value of a lower_codec call, in want when the type name of JSON.codec is the value, else in a new register.
 def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, want: Int) -> Result[Lowering.Out]
   if node.name == "JSON.codec"
@@ -325,11 +349,11 @@ def lower_default(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Lowering.Fill, param: Int
 ) -> Result[Lowering.Out]
   case fill.params[param].default
-    Ast.Optional.Present(value) ->
+    Ast.Maybe.Present(value) ->
       here = cx.with(file: fill.file, index: fill.index)
       out = try lower_expression(here, fx.with(file: fill.index), value, fx.next - 1, false, false)
       return ok(Lowering.Out(fx: out.fx.with(file: fx.file), slot: out.slot))
-    Ast.Optional.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
+    Ast.Maybe.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
   end
 end
 
@@ -518,6 +542,8 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     fx = Lowering.place(right.fx, end_label)
   elsif Types.is?(Lowering.type_of(cx, node.left), "Bytes")
     fx = try lower_bytes_operator(cx, fx, node, dst)
+  elsif Types.is?(Lowering.type_of(cx, node.left), "Optional")
+    fx = try lower_optional_equality(cx, fx, node, dst)
   else
     ops = INT_OPS
     side = Lowering.type_of(cx, node.left)
@@ -559,6 +585,17 @@ def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst
   end
 
   return ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
+end
+
+# == and != on two Optionals call Optional.equal, the deep equality of the VM: `eq` takes no enum value.
+def lower_optional_equality(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst: Int) -> Result[Lowering.Fx]
+  window = try bytes_call(cx, fx, "Optional.equal", node.left, node.right, node.op_span)
+  op = "move"
+  if node.op == "not-equal"
+    op = "not"
+  end
+
+  return ok(Lowering.emit_at(window.fx, op, [dst, window.slot], node.op_span))
 end
 
 # The call of a builtin on two operands: both are lowered into consecutive new registers, and the call leaves its

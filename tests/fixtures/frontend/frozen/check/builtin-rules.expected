@@ -267,6 +267,8 @@ __fail_arg Plain
 error Error
 gets Plain
 gets! Plain
+none OptionalNone
 ok Ok
 print Show
 puts Show
+some OptionalSome

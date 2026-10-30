@@ -1,4 +1,4 @@
-program #154 0:1:1-1133:54:1
+program #154 0:1:1-1141:54:1
   module "root.agc"
     declaration: struct-decl #11 143:6:1-212:11:1 name="Holder"
       field: field-decl #5 159:7:3-171:8:1 name="spot"
@@ -55,7 +55,7 @@ program #154 0:1:1-1133:54:1
           pattern: variant-pattern #53 519:28:5-529:28:15 enum="@2::Maybe" variant="None" bindings=[]
           body: return-stmt #55 533:28:19-549:29:1
             value: name-ref #54 540:28:26-548:28:34 name="fallback"
-    declaration: function-decl #153 560:32:1-1133:54:1 name="main"
+    declaration: function-decl #153 560:32:1-1141:54:1 name="main"
       result: type-ref #59 574:32:15-578:32:19 name="Void"
       body: binding #61 581:33:3-597:34:1 name="red"
         value: enum-constructor #60 587:33:9-596:33:18 enum="@2::Color" variant="Red"
@@ -66,91 +66,91 @@ program #154 0:1:1-1133:54:1
         value: enum-constructor #67 632:35:11-649:35:28 enum="@2::Color" variant="Green"
           arg: named-arg #66 644:35:23-648:35:27 name="n"
             value: literal #65 647:35:26-648:35:27 value=int:2
-      body: binding #72 652:36:3-680:37:1 name="some"
-        value: enum-constructor #71 659:36:10-679:36:30 enum="@2::Maybe" variant="Some"
-          arg: call #70 670:36:21-678:36:29 name="@2::make" piped=false
-            arg: literal #69 676:36:27-677:36:28 value=int:2
-      body: binding #76 682:37:3-714:38:1 name="none"
-        type: type-ref #74 688:37:9-700:37:21 name="@2::Maybe"
-          arg: type-ref #73 694:37:15-699:37:20 name="@2::Point"
-        value: enum-constructor #75 703:37:24-713:37:34 enum="@2::Maybe" variant="None"
-      body: binding #82 716:38:3-738:39:1 name="p"
-        value: construct #81 720:38:7-737:38:24 type="@2::Point"
-          arg: named-arg #78 726:38:13-730:38:17 name="x"
-            value: literal #77 729:38:16-730:38:17 value=int:1
-          arg: named-arg #80 732:38:19-736:38:23 name="y"
-            value: literal #79 735:38:22-736:38:23 value=int:2
-      body: binding #87 740:39:3-757:40:1 name="q"
-        value: struct-update #86 744:39:7-756:39:19 visible=["@2::Point","Holder"]
-          target: name-ref #83 744:39:7-745:39:8 name="p"
-          arg: named-arg #85 751:39:14-755:39:18 name="x"
-            value: literal #84 754:39:17-755:39:18 value=int:3
-      body: binding #90 759:40:3-774:41:1 name="r"
-        value: call #89 763:40:7-773:40:17 name="@2::lex" piped=false
-          arg: literal #88 767:40:11-772:40:16 value=string:"abc"
-      body: binding #93 776:41:3-795:42:1 name="s"
-        value: call #92 789:41:16-794:41:21 name="@2::lex" piped=true
-          arg: literal #91 780:41:7-785:41:12 value=string:"abc"
-      body: binding #95 797:42:3-806:43:1 name="f"
-        value: function-ref #94 801:42:7-805:42:11 name="@2::lex"
-      body: binding #97 808:43:3-819:44:1 name="g"
-        value: function-ref #96 812:43:7-818:43:13 name="@2::make"
-      body: binding #105 821:44:3-859:45:1 name="pts"
-        type: type-ref #99 826:44:8-837:44:19 name="List"
-          arg: type-ref #98 831:44:13-836:44:18 name="@2::Point"
-        value: list-lit #104 840:44:22-858:44:40
-          element: name-ref #100 841:44:23-842:44:24 name="p"
-          element: name-ref #101 844:44:26-845:44:27 name="q"
-          element: call #103 847:44:29-857:44:39 name="@3::twice" piped=false
-            arg: literal #102 853:44:35-856:44:38 value=string:"a"
-      body: binding #113 861:45:3-901:46:1 name="shades"
-        type: type-ref #108 869:45:11-887:45:29 name="Map"
-          arg: type-ref #106 873:45:15-879:45:21 name="String"
-          arg: type-ref #107 881:45:23-886:45:28 name="@2::Color"
-        value: map-lit #112 890:45:32-900:45:42
-          entry: map-entry #111 891:45:33-899:45:41
-            key: literal #109 891:45:33-894:45:36 value=string:"r"
-            value: name-ref #110 896:45:38-899:45:41 name="red"
-      body: binding #122 903:46:3-942:47:1 name="mapped"
-        value: method-call #121 912:46:12-941:46:41 name="map"
-          target: name-ref #114 912:46:12-915:46:15 name="pts"
-          arg: block-lit #120 920:46:20-941:46:41
-            param: block-param #116 924:46:24-932:46:32 name="v"
-              type: type-ref #115 927:46:27-932:46:32 name="@2::Point"
-            body: expr-stmt #119 934:46:34-937:46:37
-              value: field-access #118 934:46:34-937:46:37 name="x"
-                target: name-ref #117 934:46:34-935:46:35 name="v"
-      body: binding #130 944:47:3-991:48:1 name="h"
-        value: construct #129 948:47:7-990:47:49 type="Holder"
-          arg: named-arg #124 955:47:14-962:47:21 name="spot"
-            value: name-ref #123 961:47:20-962:47:21 name="p"
-          arg: named-arg #126 964:47:23-976:47:35 name="shade"
-            value: name-ref #125 971:47:30-976:47:35 name="green"
-          arg: named-arg #128 978:47:37-989:47:48 name="maybe"
-            value: name-ref #127 985:47:44-989:47:48 name="some"
-      body: binding #135 993:48:3-1031:49:1 name="w"
-        value: enum-constructor #134 997:48:7-1030:48:40 enum="Wrap" variant="Pair"
-          arg: name-ref #131 1007:48:17-1010:48:20 name="red"
-          arg: enum-constructor #133 1012:48:22-1029:48:39 enum="@2::Maybe" variant="Some"
-            arg: name-ref #132 1023:48:33-1028:48:38 name="green"
-      body: binding #141 1033:49:3-1059:50:1 name="t"
-        value: construct #140 1037:49:7-1058:49:28 type="@2::Point"
-          arg: named-arg #137 1047:49:17-1051:49:21 name="x"
-            value: literal #136 1050:49:20-1051:49:21 value=int:0
-          arg: named-arg #139 1053:49:23-1057:49:27 name="y"
-            value: literal #138 1056:49:26-1057:49:27 value=int:0
-      body: binding #143 1061:50:3-1079:51:1 name="u"
-        value: enum-constructor #142 1065:50:7-1078:50:20 enum="@2::Color" variant="Red"
-      body: binding #146 1081:51:3-1098:52:1 name="v"
-        value: call #145 1085:51:7-1097:51:19 name="@2::lex" piped=false
-          arg: literal #144 1093:51:15-1096:51:18 value=string:"x"
-      body: expr-stmt #152 1100:52:3-1129:53:1
-        value: call #151 1100:52:3-1128:52:31 name="puts" piped=false
-          arg: interpolation #150 1105:52:8-1127:52:30
-            part: call #148 1108:52:11-1118:52:21 name="@2::lex" piped=false
-              arg: literal #147 1112:52:15-1117:52:20 value=string:"abc"
+      body: binding #72 652:36:3-683:37:1 name="present"
+        value: enum-constructor #71 662:36:13-682:36:33 enum="@2::Maybe" variant="Some"
+          arg: call #70 673:36:24-681:36:32 name="@2::make" piped=false
+            arg: literal #69 679:36:30-680:36:31 value=int:2
+      body: binding #76 685:37:3-719:38:1 name="absent"
+        type: type-ref #74 693:37:11-705:37:23 name="@2::Maybe"
+          arg: type-ref #73 699:37:17-704:37:22 name="@2::Point"
+        value: enum-constructor #75 708:37:26-718:37:36 enum="@2::Maybe" variant="None"
+      body: binding #82 721:38:3-743:39:1 name="p"
+        value: construct #81 725:38:7-742:38:24 type="@2::Point"
+          arg: named-arg #78 731:38:13-735:38:17 name="x"
+            value: literal #77 734:38:16-735:38:17 value=int:1
+          arg: named-arg #80 737:38:19-741:38:23 name="y"
+            value: literal #79 740:38:22-741:38:23 value=int:2
+      body: binding #87 745:39:3-762:40:1 name="q"
+        value: struct-update #86 749:39:7-761:39:19 visible=["@2::Point","Holder"]
+          target: name-ref #83 749:39:7-750:39:8 name="p"
+          arg: named-arg #85 756:39:14-760:39:18 name="x"
+            value: literal #84 759:39:17-760:39:18 value=int:3
+      body: binding #90 764:40:3-779:41:1 name="r"
+        value: call #89 768:40:7-778:40:17 name="@2::lex" piped=false
+          arg: literal #88 772:40:11-777:40:16 value=string:"abc"
+      body: binding #93 781:41:3-800:42:1 name="s"
+        value: call #92 794:41:16-799:41:21 name="@2::lex" piped=true
+          arg: literal #91 785:41:7-790:41:12 value=string:"abc"
+      body: binding #95 802:42:3-811:43:1 name="f"
+        value: function-ref #94 806:42:7-810:42:11 name="@2::lex"
+      body: binding #97 813:43:3-824:44:1 name="g"
+        value: function-ref #96 817:43:7-823:43:13 name="@2::make"
+      body: binding #105 826:44:3-864:45:1 name="pts"
+        type: type-ref #99 831:44:8-842:44:19 name="List"
+          arg: type-ref #98 836:44:13-841:44:18 name="@2::Point"
+        value: list-lit #104 845:44:22-863:44:40
+          element: name-ref #100 846:44:23-847:44:24 name="p"
+          element: name-ref #101 849:44:26-850:44:27 name="q"
+          element: call #103 852:44:29-862:44:39 name="@3::twice" piped=false
+            arg: literal #102 858:44:35-861:44:38 value=string:"a"
+      body: binding #113 866:45:3-906:46:1 name="shades"
+        type: type-ref #108 874:45:11-892:45:29 name="Map"
+          arg: type-ref #106 878:45:15-884:45:21 name="String"
+          arg: type-ref #107 886:45:23-891:45:28 name="@2::Color"
+        value: map-lit #112 895:45:32-905:45:42
+          entry: map-entry #111 896:45:33-904:45:41
+            key: literal #109 896:45:33-899:45:36 value=string:"r"
+            value: name-ref #110 901:45:38-904:45:41 name="red"
+      body: binding #122 908:46:3-947:47:1 name="mapped"
+        value: method-call #121 917:46:12-946:46:41 name="map"
+          target: name-ref #114 917:46:12-920:46:15 name="pts"
+          arg: block-lit #120 925:46:20-946:46:41
+            param: block-param #116 929:46:24-937:46:32 name="v"
+              type: type-ref #115 932:46:27-937:46:32 name="@2::Point"
+            body: expr-stmt #119 939:46:34-942:46:37
+              value: field-access #118 939:46:34-942:46:37 name="x"
+                target: name-ref #117 939:46:34-940:46:35 name="v"
+      body: binding #130 949:47:3-999:48:1 name="h"
+        value: construct #129 953:47:7-998:47:52 type="Holder"
+          arg: named-arg #124 960:47:14-967:47:21 name="spot"
+            value: name-ref #123 966:47:20-967:47:21 name="p"
+          arg: named-arg #126 969:47:23-981:47:35 name="shade"
+            value: name-ref #125 976:47:30-981:47:35 name="green"
+          arg: named-arg #128 983:47:37-997:47:51 name="maybe"
+            value: name-ref #127 990:47:44-997:47:51 name="present"
+      body: binding #135 1001:48:3-1039:49:1 name="w"
+        value: enum-constructor #134 1005:48:7-1038:48:40 enum="Wrap" variant="Pair"
+          arg: name-ref #131 1015:48:17-1018:48:20 name="red"
+          arg: enum-constructor #133 1020:48:22-1037:48:39 enum="@2::Maybe" variant="Some"
+            arg: name-ref #132 1031:48:33-1036:48:38 name="green"
+      body: binding #141 1041:49:3-1067:50:1 name="t"
+        value: construct #140 1045:49:7-1066:49:28 type="@2::Point"
+          arg: named-arg #137 1055:49:17-1059:49:21 name="x"
+            value: literal #136 1058:49:20-1059:49:21 value=int:0
+          arg: named-arg #139 1061:49:23-1065:49:27 name="y"
+            value: literal #138 1064:49:26-1065:49:27 value=int:0
+      body: binding #143 1069:50:3-1087:51:1 name="u"
+        value: enum-constructor #142 1073:50:7-1086:50:20 enum="@2::Color" variant="Red"
+      body: binding #146 1089:51:3-1106:52:1 name="v"
+        value: call #145 1093:51:7-1105:51:19 name="@2::lex" piped=false
+          arg: literal #144 1101:51:15-1104:51:18 value=string:"x"
+      body: expr-stmt #152 1108:52:3-1137:53:1
+        value: call #151 1108:52:3-1136:52:31 name="puts" piped=false
+          arg: interpolation #150 1113:52:8-1135:52:30
+            part: call #148 1116:52:11-1126:52:21 name="@2::lex" piped=false
+              arg: literal #147 1120:52:15-1125:52:20 value=string:"abc"
             part: text " "
-            part: name-ref #149 1122:52:25-1125:52:28 name="red"
+            part: name-ref #149 1130:52:25-1133:52:28 name="red"
   module "lib.agc"
     declaration: enum-decl #3 7:1:8-41:5:1 name="@2::Color" type-parameters=[]
       variant: enum-variant #0 20:2:3-24:3:1 name="Red"

@@ -82,6 +82,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   name.
 - `Result[T]`: `ok(value)` or `error(message)` (the message is a String); one
   type argument.
+- `Optional[T]`: `some(value)` or `none`, for a value that may be missing
+  (`language-blocks-results.md`).
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints
   `1..5`.
 - `Json`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or `&name`, the
@@ -97,7 +99,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent`, `StructMember`.
   `Name` is a struct you declare; its fields are typed and immutable.
 - Type names start uppercase; variables, functions and fields start lowercase
-  or `_`. `Option[T]` is not builtin; declare an enum.
+  or `_`.
 
 `type Names = List[String]` names any type and is transparent in every type
 position. `export type` makes it importable. It adds no runtime type and cannot
