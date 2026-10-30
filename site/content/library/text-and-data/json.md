@@ -62,6 +62,7 @@ def main() -> Void
     ok(user) -> puts("#{user.name} is #{user.age}")
     error(message) -> puts(message)
   end
+
   bad = JSON.decode("{\"name\": \"Bob\"}", User)
   puts(bad.ok?)
 end
@@ -202,6 +203,7 @@ def describe_age(age: JsonField[Int]) -> String
     JsonField.Null -> text = "age: clear"
     JsonField.Value(n) -> text = "age: set to #{n}"
   end
+
   return text
 end
 
@@ -213,6 +215,7 @@ def show(text: String) -> Result[Void]
     JsonField.Value(n) -> name = "set to #{n}"
     _ -> name = "keep"          # this API treats null like absent
   end
+
   puts("name: #{name}")
   puts(JSON.encode(update))
   return ok()
@@ -222,6 +225,7 @@ def main() -> Void
   for text in ["{}", "{\"age\": null}", "{\"name\": \"Ana\", \"age\": 30}"]
     Result.unwrap!(show(text))
   end
+
   reply = UpdateUser(name: JsonField.Value("Bo"), age: JsonField.Null)
   puts(JSON.encode(reply))
 end

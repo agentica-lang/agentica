@@ -46,6 +46,7 @@ export def write_line(stream: Stream, text: String) -> Result[Void]
   if fputs("#{text}\n", stream) < 0
     return error("cannot write to the stream")
   end
+
   return ok()
 end
 
@@ -54,6 +55,7 @@ export def flush(stream: Stream) -> Result[Void]
   if fflush(stream) != 0
     return error("cannot flush the stream")
   end
+
   return ok()
 end
 
@@ -97,6 +99,7 @@ export def cwd() -> Result[String]
     if Native.null?(getcwd(buf, 4096))
       return error("the working directory is longer than 4095 bytes")
     end
+
     ok(Native.get_string(buf, 0))
   end
 end
@@ -128,8 +131,10 @@ def main() -> Void
     if fputs("started\n", stream) < 0
       return error("cannot write the log")
     end
+
     ok()
   end
+
   IO.inspect(written)
 end
 ```
@@ -161,13 +166,16 @@ export def open_file(path: String, options: OpenOptions) -> Result[Int]
   if options.write
     flags = flags + O_WRONLY
   end
+
   if options.create
     flags = flags + O_CREAT
   end
+
   fd = open(path, flags, options.mode)
   if fd < 0
     return error("cannot open #{path}")
   end
+
   return ok(fd)
 end
 
@@ -177,9 +185,11 @@ export def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
   if on
     flag = FD_CLOEXEC
   end
+
   if fcntl_set(fd, F_SETFD, flag) < 0
     return error("cannot set close-on-exec on #{fd}")
   end
+
   return ok()
 end
 
@@ -191,9 +201,11 @@ export def write_fields(fd: Int, fields: List[String]) -> Result[Void]
   elsif fields.length == 2
     written = dprintf2(fd, "%s\t%s\n", fields[0], fields[1])
   end
+
   if written < 0
     return error("cannot write #{fields.length} fields to #{fd}")
   end
+
   return ok()
 end
 
@@ -229,6 +241,7 @@ extern "/opt/infer/libinfer.so"
     offload: C.Bool
     callback_data: C.Pointer
   end
+
   def infer_context_default_params() -> ContextParams
   compute def infer_init_from_model(model: Model, params: ContextParams) -> Context
 end

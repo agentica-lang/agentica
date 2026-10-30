@@ -17,6 +17,7 @@ def main() -> Void
   for name in seen
     puts(name)
   end
+
   puts(seen)
 end
 ```

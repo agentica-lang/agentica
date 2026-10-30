@@ -26,6 +26,7 @@ def main() -> Void
   total = File.chunks("notes.txt.gz").gunzip(1048576).reduce(0) do |n, chunk|
     n + chunk.size
   end
+
   puts(total)                                                 # ok(size of notes.txt)
   back = Zlib.inflate(Zlib.deflate("hi".bytes).unwrap!).unwrap!
   puts(back == "hi".bytes)                                    # true

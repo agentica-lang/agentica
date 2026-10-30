@@ -33,6 +33,7 @@ def max(a: Int, b: Int) -> Int
   if a > b
     return a
   end
+
   return b
 end
 
@@ -67,6 +68,7 @@ def report(count: Int) -> Void
     puts("nothing")
     return
   end
+
   puts("#{count} items")
 end
 
@@ -94,6 +96,7 @@ def factorial(n: Int) -> Int
   if n <= 1
     return 1
   end
+
   return n * factorial(n - 1)
 end
 ```
@@ -173,6 +176,7 @@ def validate(n: Int) -> Result[Int]
   if n < 0
     return error("negative")
   end
+
   return ok(n)
 end
 
@@ -217,7 +221,7 @@ end
 
 A parameter can end with `= value`. A call may leave it out.
 
-- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `[]`, `{}` or a variant without a payload such as `Level.Info`. Anything else is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]` or `{}`.
+- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]` or `{}`.
 - Parameters with a default go last (`CHECK-DEFAULT-ORDER`). The exception is a last `Fn` parameter, which a block fills.
 - Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 
@@ -240,6 +244,7 @@ def main() -> Void
   each_line("a.txt") do |line|
     puts(line)
   end
+
   each_line("b.txt", 50, &show)
 end
 ```
@@ -303,6 +308,7 @@ def main() -> Void
   longest = max_by(["pear", "fig", "banana"]) do |w|
     w.length
   end
+
   puts(longest.unwrap_or("none"))
 end
 ```

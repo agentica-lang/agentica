@@ -30,6 +30,9 @@ Change style only in code you touch. Restyle untouched code separately.
 - Separate top-level declarations with one blank line
   (`PARSE-MISSING-BLANK-LINE`); no double blank lines or blank lines right
   after `def` or before `end`.
+- Put a blank line after a block's `end` before the next statement
+  (`CHECK-BLANK-LINE-AFTER-END` with `blank_line_after_end = true` under
+  `[style]`; see `site/content/tour/modules.md`).
 - Break long calls/lists one item per line with a trailing comma; wrap long
   expressions in parentheses. Never continue an expression on a bare line.
 - Put spaces around operators and after commas, not inside brackets or
@@ -117,7 +120,8 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Errors
 
 - Fallible functions return `Result[T]`; propagate with `try`. No exceptions.
-  Non-fallible functions don't return `Result`.
+  Non-fallible functions don't return `Result`. A value that may be missing,
+  with no error to report, is an `Optional[T]` (`some`, `none`), not a `Result`.
 - Use halting forms (`to_i!`, `unwrap!`) only when failure is a bug; explain
   why in a comment.
 - Error text is lowercase, has no final period, and includes the bad value.

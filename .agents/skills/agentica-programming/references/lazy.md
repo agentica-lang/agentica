@@ -55,9 +55,11 @@ def main() -> Void
     if n > 2
       return error("stop")
     end
+
     puts(n)
     ok()
   end
+
   puts(done)                                                  # 1, 2, then error("stop")
 end
 ```

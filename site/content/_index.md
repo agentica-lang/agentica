@@ -22,6 +22,7 @@ def main() -> Void
   for i in 1..prices.size
     puts("item #{i}: #{with_tax(prices[i - 1])} cents")
   end
+
   total = prices.map(&with_tax).sum
   puts("total: #{total} cents")
 end

@@ -217,7 +217,7 @@ cannot be answered this way, is the first diagnostic and exits 1 as before.
 `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
 defined in the modules linked from the files under PATH (a file or a folder;
 every `*.agc` file below a folder; default `.`). NAME is written as the code
-writes it: `total`, `User.email`, `Option.Some`, `Models.User` through an import
+writes it: `total`, `User.email`, `Level.Info`, `Models.User` through an import
 alias of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match
 has its `kind` (`function`, `struct`, `enum`, `alias`, `resource`, `constant`,
 `field`, `variant` or `builtin`), `module`, `exported` (private declarations

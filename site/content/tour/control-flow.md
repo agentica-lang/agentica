@@ -57,6 +57,7 @@ def main() -> Void
   while n < 50
     n *= 3
   end
+
   puts(n)
 end
 ```
@@ -74,6 +75,7 @@ def main() -> Void
   for fruit in ["apple", "pear", "plum"]
     puts(fruit)
   end
+
   for _ in 1..2     # the body does not need the number
     puts("tick")
   end
@@ -95,6 +97,7 @@ def main() -> Void
   for i in 1..3
     puts(i)
   end
+
   2.times do |i|
     puts("round #{i}")
   end
@@ -119,9 +122,11 @@ def main() -> Void
     if n % 2 == 0
       next
     end
+
     if n > 4
       break
     end
+
     puts(n)
   end
 end
@@ -171,6 +176,7 @@ def main() -> Void
     "reset" -> total = 0
     _ -> puts("unknown command")
   end
+
   puts(total)
 end
 ```
@@ -191,6 +197,7 @@ def sign(n: Int) -> String
   if n < 0
     return "negative"
   end
+
   return "not negative"
 end
 

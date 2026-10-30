@@ -124,33 +124,30 @@ other: Event.Quit
 
 ## Generic enums
 
-An enum can take a type parameter. `Option` is not built in, but it is easy to write:
+An enum can take a type parameter. For a value that may be missing, use the built-in [Optional](/library/data-structures/optional/), not your own enum.
 
 ```agentica
-enum Option[T]
-  Some(T)
-  None
+enum Change[T]
+  Added(T)
+  Removed(T)
 end
 
-def find_even(xs: List[Int]) -> Option[Int]
-  for x in xs
-    if x % 2 == 0
-      return Option.Some(x)
-    end
+def describe(change: Change[Int]) -> String
+  case change
+    Change.Added(n) -> return "+#{n}"
+    Change.Removed(n) -> return "-#{n}"
   end
-  return Option.None
 end
 
 def main() -> Void
-  case find_even([1, 3, 4])
-    Option.Some(n) -> puts("found #{n}")
-    Option.None -> puts("none")
-  end
+  puts(describe(Change.Added(4)))
+  puts(describe(Change.Removed(2)))
 end
 ```
 
 ```output
-found 4
++4
+-2
 ```
 
 ## Enums are recursive
@@ -224,19 +221,14 @@ end
 
 ## Patterns inside patterns
 
-In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)` or `error(...)`, at any depth.
+In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)`, `error(...)`, `some(...)` or `none`, at any depth.
 
 ```agentica
-enum Option[T]
-  Some(T)
-  None
-end
-
-def describe(r: Result[Option[Int]]) -> String
+def describe(r: Result[Optional[Int]]) -> String
   case r
-    ok(Option.Some(0)) -> return "zero"
-    ok(Option.Some(n)) if n < 0 -> return "negative #{n}"
-    ok(Option.Some(n)) -> return "value #{n}"
+    ok(some(0)) -> return "zero"
+    ok(some(n)) if n < 0 -> return "negative #{n}"
+    ok(some(n)) -> return "value #{n}"
     ok(_) -> return "none"
     error("timeout") -> return "timed out"
     error(_) -> return "failed"
@@ -244,8 +236,8 @@ def describe(r: Result[Option[Int]]) -> String
 end
 
 def main() -> Void
-  puts(describe(ok(Option.Some(-3))))
-  puts(describe(ok(Option.None)))
+  puts(describe(ok(some(-3))))
+  puts(describe(ok(none)))
   puts(describe(error("timeout")))
 end
 ```
@@ -257,3 +249,52 @@ timed out
 ```
 
 An unguarded arm whose positions are only names or `_` covers its variant. Any other arm may fail, so end with `ok(_)`, a variant with `_` positions, or `_`.
+
+The payload of your own variant can be an [Optional](/library/data-structures/optional/), and the same patterns apply:
+
+```agentica
+enum Reading
+  Value(Optional[Int])
+  Missing
+end
+
+def label(r: Reading) -> String
+  case r
+    Reading.Value(some(0)) -> return "zero"
+    Reading.Value(some(n)) -> return "value #{n}"
+    Reading.Value(_) -> return "no value"
+    Reading.Missing -> return "missing"
+  end
+end
+
+def main() -> Void
+  puts(label(Reading.Value(some(0))))
+  puts(label(Reading.Value(some(5))))
+  puts(label(Reading.Value(none)))
+  puts(label(Reading.Missing))
+end
+```
+
+```output
+zero
+value 5
+no value
+missing
+```
+
+Here `some(n)` and `none` are both listed, but each arm has a variant inside, so neither covers `Reading.Value`. The case is not exhaustive until you add `Reading.Value(_)` or `_`, or use one arm with only a name, `Reading.Value(opt)`, and match `opt` inside it.
+
+```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
+enum Reading
+  Value(Optional[Int])
+  Missing
+end
+
+def main() -> Void
+  case Reading.Missing
+    Reading.Value(some(n)) -> puts("value #{n}")
+    Reading.Value(none) -> puts("no value")
+    Reading.Missing -> puts("missing")
+  end
+end
+```

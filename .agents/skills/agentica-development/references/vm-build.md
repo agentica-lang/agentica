@@ -18,7 +18,7 @@ make vm-third-party                  # only libgc (the vendored gc.o, or the sys
 make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make stage1 stage2 stage3            # the front end stages in build/stage/ (the chain: references/ci.md)
-make fixed-point                     # stage2 == stage3, and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `test` and in `vm-sanitizers`
+make fixed-point                     # stage2 == stage3, and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `checks` (part of `test`) and in `sanitizer-build`
 make stage0                          # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make CCACHE=                         # without ccache (used when installed and its cache dir is writable)
@@ -46,7 +46,7 @@ dist/agentica --dump-ir prog.agc
 dist/agentica prog.agc               # front end + VM in one step, in one process
 ```
 
-- CI runs `vm-sanitizers` only for the VM paths listed in the `changes` step
+- CI runs `vm-sanitizers` only for the VM paths listed in the `changes` job
   of `.github/workflows/ci.yml`; a new VM source or test file outside those
   paths must be added there (`references/ci.md`).
 - `agentica file.agc` runs in one process

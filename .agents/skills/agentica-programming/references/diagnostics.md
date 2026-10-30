@@ -92,7 +92,7 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   field named `with` (`value.with(...)` is the struct update).
 - `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`: a parameter without a default
   after one with a default (only a last `Fn` parameter may); a default that is
-  not a constant (a literal, `true`, `false`, `nil`, `[]`, `{}` or a
+  not a constant (a literal, `true`, `false`, `nil`, `none`, `[]`, `{}` or a
   payload-less enum variant).
 - `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
   expected type.

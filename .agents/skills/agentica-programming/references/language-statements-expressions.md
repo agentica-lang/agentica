@@ -86,8 +86,8 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   module exports it and you import it (`CHECK-IMPORT-NAME`).
   `return step(s.with(pos: s.pos + 1))` is a tail call.
 - Enum variants are qualified by their type. Payload variants take positional
-  arguments (`Option.Some("hi")`; `CHECK-ENUM-POSITIONAL-ARGS`); nullary ones
-  take `Option.None` or `Option.None()`. Generic arguments come from payloads
+  arguments (`Change.Added("hi")`; `CHECK-ENUM-POSITIONAL-ARGS`); nullary ones
+  take `Level.Info` or `Level.Info()`. Generic arguments come from payloads
   and expected types, so a nullary generic variant needs an expected type
   (`CHECK-ENUM-TYPE-INFERENCE`). An unknown variant is `CHECK-UNKNOWN-VARIANT`.
 - Field access `user.name`; index `items[0]`, `stock["apple"]` (a missing key is

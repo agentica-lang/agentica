@@ -1,0 +1,55 @@
+name: Set up the tools of a CI job
+description: >-
+  Node and Python with Poetry for the tests, and the system libraries that the build links (the guard step installs the
+  -dev packages when pkg-config cannot find them). ci.yml uses it in every job that builds or tests.
+inputs:
+  tools:
+    description: Install Node 24, Python 3.12 and the test dependencies of Poetry
+    default: 'true'
+  npm-cache:
+    description: Restore the npm cache of tools/jscpd (the job that runs make dup-check)
+    default: 'false'
+  sanitizers:
+    description: Check clang and install ripgrep, which the sanitizer jobs and make vm-layers use
+    default: 'false'
+  clang-tidy:
+    description: Install clang-tidy 19 (make vm-lint)
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      if: ${{ inputs.tools == 'true' && inputs.npm-cache != 'true' }}
+      with:
+        node-version: '24'
+    - uses: actions/setup-node@v7
+      if: ${{ inputs.tools == 'true' && inputs.npm-cache == 'true' }}
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: tools/jscpd/package-lock.json
+    - uses: actions/setup-python@v7
+      if: ${{ inputs.tools == 'true' }}
+      with:
+        python-version: '3.12'
+    - if: ${{ inputs.tools == 'true' }}
+      shell: bash
+      run: python3 -m pip install poetry==2.1.2
+    - if: ${{ inputs.tools == 'true' }}
+      shell: bash
+      run: poetry install --only test --no-root
+    - shell: bash
+      env:
+        SANITIZERS: ${{ inputs.sanitizers }}
+        CLANG_TIDY: ${{ inputs.clang-tidy }}
+      run: |
+        [ "$SANITIZERS" = true ] && clang --version
+        python3 --version
+        command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
+        if [ "$CLANG_TIDY" = true ]; then
+          command -v clang-tidy-19 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy-19; }
+        fi
+        if [ "$SANITIZERS" = true ]; then
+          command -v rg >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
+        fi
+        dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
