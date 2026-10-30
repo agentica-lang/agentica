@@ -482,9 +482,6 @@ jobs:
         run: make vm-sanitize-test SHARD=${{ matrix.shard }}/2
       - if: matrix.shard == 2
         run: make -j"$(nproc)" vm-gc-stress JOBS=4
-      - name: Processes left after the tests (temporary diagnostic of a job that did not end)
-        if: ${{ always() }}
-        run: ps -eo pid,ppid,pgid,etimes,stat,args --forest | tail -40
 
   # vm-tsan-run, the modules split in three (SHARD=I/N of mk/vm-test.mk). The ThreadSanitizer binary is linked again here,
   # because the sanitizer mode of the artifact and this mode share build/vm/flags; no object is compiled.
@@ -516,9 +513,6 @@ jobs:
           targets: dist/agentica vm-test-binaries
       - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP, TLS, HTTP, process and BDD modules on four schedulers under ThreadSanitizer
         run: make vm-tsan-run SHARD=${{ matrix.shard }}/3
-      - name: Processes left after the tests (temporary diagnostic of a job that did not end)
-        if: ${{ always() }}
-        run: ps -eo pid,ppid,pgid,etimes,stat,args --forest | tail -40
 
   vm-layers:
     needs: [changes, sanitizer-build]
