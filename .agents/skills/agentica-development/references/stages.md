@@ -433,7 +433,7 @@ catalog) and run in a golden fixture; do not add test-only exports.
 
 A builtin can have several signatures (alternatives by arity; the checker and
 lowering use the same selection). Only catalog initialization fills the
-alternatives field. `Map.get/2` returns `Result[V]`; `Map.get/3` returns `V`
+alternatives field. `Map.get/2` returns `Optional[V]`; `Map.get/3` returns `V`
 with an eagerly evaluated default. Text help lists both signatures and its
 JSON help carries an `overloads` array. There is no user-function
 overloading. A Plain or Prelude builtin may instead give its trailing

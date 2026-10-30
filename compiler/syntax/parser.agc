@@ -2975,7 +2975,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
   code = ""
   if ref.args.size == 0
     found = EXTERN_CODES.get(ref.name)
-    if found.ok? and !(result and (found.unwrap! == "y" or found.unwrap! == "c"))
+    if found.some? and !(result and (found.unwrap! == "y" or found.unwrap! == "c"))
       code = found.unwrap!
     elsif result and ref.name == "Void"
       code = "v"

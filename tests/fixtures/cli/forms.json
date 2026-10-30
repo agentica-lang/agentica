@@ -778,13 +778,13 @@
  "[[\"help\", \"Map.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"overloads\":[{\"arity\":2,\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Result[V]\",\"ruby\":\"map.get(key: K) -> Result[V]\",\"signature\":\"Map.get(map: Map[K, V], key: K) -> Result[V]\"},{\"arity\":3,\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"default\",\"type\":\"V\"}],\"result\":\"V\",\"ruby\":\"map.get(key: K, default: V) -> V\",\"signature\":\"Map.get(map: Map[K, V], key: K, default: V) -> V\"}]}\n",
+  "stdout": "{\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"overloads\":[{\"arity\":2,\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Optional[V]\",\"ruby\":\"map.get(key: K) -> Optional[V]\",\"signature\":\"Map.get(map: Map[K, V], key: K) -> Optional[V]\"},{\"arity\":3,\"description\":\"Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"default\",\"type\":\"V\"}],\"result\":\"V\",\"ruby\":\"map.get(key: K, default: V) -> V\",\"signature\":\"Map.get(map: Map[K, V], key: K, default: V) -> V\"}]}\n",
   "written": []
  },
  "[[\"help\", \"Map.get\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "map.get(key: K) -> Result[V]\nmap.get(key: K, default: V) -> V\nRead a value as a Result, or supply an eagerly evaluated default as a third argument.\n",
+  "stdout": "map.get(key: K) -> Optional[V]\nmap.get(key: K, default: V) -> V\nRead a value as some(value) or none, or supply an eagerly evaluated default as a third argument.\n",
   "written": []
  },
  "[[\"help\", \"Native.string_at\"], {}]": {

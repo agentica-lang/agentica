@@ -261,8 +261,8 @@ export def record_resolved(st: St, id: Int, resolved: Resolved) -> St
   return st.with(resolved: st.resolved.put(id, resolved))
 end
 
-## The binding of a name, or an error when the name is not in scope.
-export def lookup(st: St, name: String) -> Result[Binding]
+## The binding of a name, or none when the name is not in scope.
+export def lookup(st: St, name: String) -> Optional[Binding]
   return st.vars.get(name)
 end
 
@@ -285,7 +285,7 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
 
   try reserve_local(cx, st, name, span)
   existing = st.vars.get(name)
-  if existing.ok?
+  if existing.some?
     if existing.unwrap!.immutable
       return error(
         fail_help(

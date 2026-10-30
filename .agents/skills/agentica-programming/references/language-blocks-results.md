@@ -82,6 +82,7 @@ none -> Optional[T]
 - `o.unwrap_or(default)`, `o.unwrap!` (halts with `RUNTIME-UNWRAP-NONE` on
   `none`), `o.map do |x| x + 1 end`, `o.some?`, `o.none?`,
   `o.to_result("missing")` (a Result for `try`).
+- `m.get(k)` and `s.index_of(part)` give an Optional.
 - `==` compares two Optionals of a type with `==`: `o == none`,
   `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
   and reads `null` or a missing key as `none` (`json.md`).

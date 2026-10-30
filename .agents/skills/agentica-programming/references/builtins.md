@@ -73,7 +73,7 @@ s.start_with?(prefix: String) -> Bool
 s.end_with?(suffix: String) -> Bool
 String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String   # bad range halts
-String.index_of(s: String, part: String) -> Result[Int]      # first match; error if absent
+String.index_of(s: String, part: String) -> Optional[Int]    # first match; none if absent
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
 c.code() -> Int                                          # code point of one character; other lengths halt
@@ -159,7 +159,7 @@ Map.keys(map: Map[K, V]) -> List[K]                      # insertion order; O(n)
 Map.values(map: Map[K, V]) -> List[V]                    # same order as keys; O(n)
 Map.empty?(map: Map[K, V]) -> Bool
 m.key?(key: K) -> Bool
-Map.get(map: Map[K, V], key: K) -> Result[V]             # ok(value), or error when the key is missing
+Map.get(map: Map[K, V], key: K) -> Optional[V]           # some(value), or none when the key is missing
 Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated eagerly
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(log n) amortized

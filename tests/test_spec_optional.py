@@ -162,6 +162,31 @@ end
         None,
     ),
     (
+        "Map.get and String.index_of give an Optional",
+        'def main() -> Void\n  m = {"a": 1}\n  n: Optional[Int] = m.get("a")\n  i: Optional[Int] = "ab".index_of("b")\n'
+        "  puts(n.unwrap_or(0) + i.unwrap_or(0) + m.get(\"a\", 0))\nend\n",
+        None,
+        None,
+    ),
+    (
+        "try on Map.get needs to_result",
+        'def f() -> Result[Int]\n  m = {"a": 1}\n  n = try m.get("a")\n  return ok(n)\nend\n\ndef main() -> Void\nend\n',
+        "CHECK-TYPE-MISMATCH",
+        'm.get("a")',
+    ),
+    (
+        "an ok arm on String.index_of",
+        'def main() -> Void\n  case "ab".index_of("b")\n    ok(i) -> puts(i)\n    _ -> puts(0)\n  end\nend\n',
+        "CHECK-PATTERN-TYPE",
+        "ok(i)",
+    ),
+    (
+        "ok? on Map.get",
+        'def main() -> Void\n  m = {"a": 1}\n  puts(m.get("a").ok?)\nend\n',
+        "CHECK-UNKNOWN-METHOD",
+        'm.get("a").ok?',
+    ),
+    (
         "Optional[JsonField[T]] is no JSON field",
         "struct P\n  age: Optional[JsonField[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.encode(P(age: none)))\nend\n",
         "CHECK-JSON-FIELD-PLACE",

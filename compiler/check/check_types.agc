@@ -329,7 +329,7 @@ export def unify(
 ) -> Result[Map[String, ResolvedType]]
   if Types.is?(template, "Var")
     previous = substitutions.get(Types.name(template))
-    if previous.ok?
+    if previous.some?
       try State.ensure(cx, st, actual, previous.unwrap!, span)
       return ok(substitutions)
     end
@@ -744,7 +744,7 @@ end
 def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[ResolvedType]
   name = ref.name
   definition = cx.enums.get(name)
-  if definition.ok?
+  if definition.some?
     parameters = definition.unwrap!.parameters
     if parameters.size != ref.args.size
       return error(
@@ -1234,7 +1234,7 @@ end
 
 def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType
   found = substitutions.get(name)
-  if found.ok?
+  if found.some?
     return found.unwrap!
   end
 

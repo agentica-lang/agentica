@@ -2585,11 +2585,11 @@ ROWS_27: List[Model.Builtin] = [
         Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V"))),
         Model.Named(name: "key", type: Types.Type.Var("K")),
       ],
-      result: Types.Type.Result(Types.Type.Var("V")),
+      result: Types.Type.Optional(Types.Type.Var("V")),
       rule: Model.Rule.MapGet,
-      implementation: "Map.get",
+      implementation: "Map.get.optional",
       effects: [],
-      description: "Read a value as a Result, or supply an eagerly evaluated default as a third argument.",
+      description: "Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument.",
       alternatives: [
         Model.Builtin(
           name: "Map.get",
@@ -2602,7 +2602,9 @@ ROWS_27: List[Model.Builtin] = [
           rule: Model.Rule.MapGetDefault,
           implementation: "Map.get",
           effects: [],
-          description: "Read a value as a Result, or supply an eagerly evaluated default as a third argument.",
+          description: (
+            "Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
+          ),
           alternatives: [],
         ),
       ],
@@ -4195,11 +4197,11 @@ ROWS_42: List[Model.Builtin] = [
         Model.Named(name: "s", type: Types.Type.String),
         Model.Named(name: "part", type: Types.Type.String),
       ],
-      result: Types.Type.Result(Types.Type.Int),
+      result: Types.Type.Optional(Types.Type.Int),
       rule: Model.Rule.Plain,
-      implementation: "String.index_of",
+      implementation: "String.index_of.optional",
       effects: [],
-      description: "Find the first character index of part; absent text returns an error.",
+      description: "Find the first character index of part as some(index), or none when part is absent.",
       alternatives: [],
     ),
     Model.Builtin(

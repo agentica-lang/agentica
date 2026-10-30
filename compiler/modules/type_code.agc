@@ -129,7 +129,7 @@ def name_text(name: String, keys: Map[String, String]) -> Result[String]
   end
 
   split = name.index_of("::")
-  if !split.ok?
+  if split.none?
     return error("the name has a prefix that does not end")
   end
 

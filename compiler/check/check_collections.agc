@@ -555,7 +555,7 @@ end
 # Map.get gives a Result; with a default it gives the value. The value type of the map may come from the expected type,
 # or from the default when the map is the literal {}.
 def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bool) -> Result[State.Out]
-  value_context = T.only_result_item(site.expected)
+  value_context = T.only_optional_item(site.expected)
   if with_default
     value_context = site.expected
   end
@@ -582,7 +582,7 @@ def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bo
     return ok(State.Out(st: default.st, type: T.value(target.type)))
   end
 
-  return ok(State.Out(st: current, type: T.Type.Result(T.value(target.type))))
+  return ok(State.Out(st: current, type: T.Type.Optional(T.value(target.type))))
 end
 
 def check_map_delete(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

@@ -104,7 +104,7 @@ def check_limits(
 ) -> Result[Bool]
   for limit in row.limits
     found = bound.types.get(limit.variable)
-    if !found.ok?
+    if found.none?
       return error(
         State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call),
       )

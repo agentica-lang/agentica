@@ -29,16 +29,16 @@ export def add(pool: Pool, key: String, bytes: List[Int], items: Int) -> Pool
   return Pool(index: pool.index.put(key, pool.count), chunks: Wire.add(pool.chunks, bytes), count: pool.count + items)
 end
 
-## The number of the first item of the entry for the key, or an error when the pool has no such entry. Callers build
-## the bytes of an entry only after this fails, so a key that is already there costs no bytes.
-export def find(pool: Pool, key: String) -> Result[Int]
+## The number of the first item of the entry for the key, or none when the pool has no such entry. Callers build the
+## bytes of an entry only after this gives none, so a key that is already there costs no bytes.
+export def find(pool: Pool, key: String) -> Optional[Int]
   return pool.index.get(key)
 end
 
 ## The item of an entry with one item, added when the key is new: its number, and the pool that holds it.
 export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
   found = find(pool, key)
-  if found.ok?
+  if found.some?
     return Interned(pool: pool, id: found.unwrap!)
   end
 

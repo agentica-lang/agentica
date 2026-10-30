@@ -131,7 +131,7 @@ export def lower_call(
   shape = Defaults.Shape(required: count, total: count, fn_last: false)
   # A builtin or prelude form with defaults; `builtin` and `prelude` are true only when the form exists.
   defaulted = (builtin or prelude) and Builtins.defaulted?(form.unwrap!)
-  if fill.ok?
+  if fill.some?
     shape = fill.unwrap!.shape
   elsif defaulted
     shape = Defaults.builtin_shape(form.unwrap!)
@@ -270,7 +270,7 @@ end
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
 # gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
 def lower_argument(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], shape: Defaults.Shape, param: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Optional[Lowering.Fill], shape: Defaults.Shape, param: Int
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
   if source >= 0
@@ -440,7 +440,7 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
   read = cx.reads.get(node.name)
-  if !read.ok?
+  if read.none?
     return error(Lowering.internal(cx, "lower: constant #{node.name} has no slot", node.span))
   end
 
@@ -791,7 +791,7 @@ def lower_method_checked(
   cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, node: Ast.MethodCall, want: Int, void: Bool, known: Bool
 ) -> Result[Lowering.Out]
   resolved = cx.resolved.get(node.id)
-  if resolved.ok?
+  if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
     return lower_resolved(cx, fx, node.target, node.args, node.span, node.id, resolved.unwrap!, want, void)
   end
@@ -804,7 +804,7 @@ def lower_field_checked(
   cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, node: Ast.FieldAccess, want: Int, void: Bool, known: Bool
 ) -> Result[Lowering.Out]
   resolved = cx.resolved.get(node.id)
-  if resolved.ok?
+  if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
     return lower_resolved(cx, fx, node.target, [], node.span, node.id, resolved.unwrap!, want, void)
   end

@@ -65,7 +65,7 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
 
   note = at.notes.get(id)
   extra = ""
-  if note.ok?
+  if note.some?
     extra = note.unwrap!
   end
 

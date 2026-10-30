@@ -157,7 +157,7 @@ end
 # its own in this file, so it takes the place of the name.
 def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[Item]
   found = origins.get(node.name)
-  if !found.ok?
+  if found.none?
     return []
   end
 

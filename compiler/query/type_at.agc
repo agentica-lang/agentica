@@ -264,7 +264,7 @@ end
 # that stays as it is resolve to no catalog row.
 def resolved(checked: Checker.Checked, id: Int) -> Optional[Model.Builtin]
   found = checked.resolved.get(id)
-  if !found.ok?
+  if found.none?
     return none
   end
 

@@ -30,25 +30,30 @@ false
 ## get
 
 ```text
-Map.get(map: Map[K, V], key: K) -> Result[V]
+Map.get(map: Map[K, V], key: K) -> Optional[V]
 Map.get(map: Map[K, V], key: K, default: V) -> V
 ```
 
-With two arguments, `get` gives a Result: an error when the key is missing. With a third argument, it gives the value or the default.
+With two arguments, `get` gives an [Optional](/library/data-structures/optional/): `some(value)`, or `none` when the key is missing. With a third argument, it gives the value or the default.
 
 ```agentica
 def main() -> Void
   ages = {"Ana": 25}
   puts(ages.get("Ana"))
-  puts(ages.get("Bob").ok?)
+  puts(ages.get("Bob").none?)
   puts(ages.get("Bob", 0))
+  case ages.get("Ana")
+    some(age) -> puts("Ana is #{age}")
+    none -> puts("no Ana")
+  end
 end
 ```
 
 ```output
-ok(25)
-false
+some(25)
+true
 0
+Ana is 25
 ```
 
 `map[key]` also reads a value, and stops the program when the key is missing.

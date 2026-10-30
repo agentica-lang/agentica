@@ -169,6 +169,7 @@ LogRegistry.set_level
 LogRegistry.task_id
 Map.delete
 Map.get
+Map.get.optional
 Map.has_key?
 Map.keys
 Map.put
@@ -284,7 +285,7 @@ String.from_bytes.bytes
 String.from_code
 String.from_float
 String.from_int
-String.index_of
+String.index_of.optional
 String.join
 String.length
 String.replace

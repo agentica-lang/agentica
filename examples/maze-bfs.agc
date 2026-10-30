@@ -76,7 +76,7 @@ def reconstruct(start: Int, goal: Int, previous: Map[Int, Int]) -> List[Int]
   current = goal
   while current != start
     path = List.append(path, current)
-    current = Result.unwrap!(Map.get(previous, current))
+    current = Optional.unwrap!(Map.get(previous, current))
   end
   return List.reverse(List.append(path, start))
 end
@@ -90,15 +90,15 @@ def shortest_route(maze: Maze) -> Route
   head = 0
   tail = 1
   while Map.size(queue) > 0
-    current = Result.unwrap!(Map.get(queue, head))
+    current = Optional.unwrap!(Map.get(queue, head))
     queue = Map.delete(queue, head)
     head = head + 1
-    distance = Result.unwrap!(Map.get(distances, current))
+    distance = Optional.unwrap!(Map.get(distances, current))
     if current == maze.goal
       return Route(found: true, distance: distance, path: reconstruct(maze.start, maze.goal, previous))
     end
     for next in neighbors(maze, current)
-      if Map.get(maze.cells, next, false) and not Result.ok?(Map.get(distances, next))
+      if Map.get(maze.cells, next, false) and Optional.none?(Map.get(distances, next))
         distances = Map.put(distances, next, distance + 1)
         previous = Map.put(previous, next, current)
         queue = Map.put(queue, tail, next)

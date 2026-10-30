@@ -4,7 +4,7 @@ weight: 8
 description: A value that may be missing, with some and none.
 ---
 
-`Optional[T]` is `some(value)` or `none`. Use it for a value that may be missing: a struct field, a parameter, a return, a list or map item.
+`Optional[T]` is `some(value)` or `none`. Use it for a value that may be missing: a struct field, a parameter, a return, a list or map item. `map.get(key)` and `text.index_of(part)` give one.
 
 ```agentica
 struct User

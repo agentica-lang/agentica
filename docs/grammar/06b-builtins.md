@@ -113,8 +113,9 @@ Collection operations preserve their inputs. Costs exclude callback work.
   the call in the program (at the argument it names), never in the prelude.
   `reject` is `CHECK-UNKNOWN-METHOD`, and so are `select`, `collect`, `detect`
   and `inject` on a `Range`.
-- `Map.get` with two arguments gives `ok(value)` or `error(message)`. With
-  three, the default is always evaluated; `false` and `nil` are present values.
+- `Map.get` with two arguments gives `some(value)`, or `none` when the key is
+  missing. With three, the default is always evaluated; `false` and `nil` are
+  present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put
   back later goes to the end. It is O(log32 n) amortized along one line of
   versions, with an O(n) rebuild of the key list after many deletes.
@@ -233,8 +234,8 @@ Expected types flow into these operations for empty collections and Results.
   gives `x` back (a NaN reads back as NaN). It rounds to the nearest Float; a
   value past the range becomes an infinity or zero. Other text (`1e`, `.5`,
   ` 1`, `1_000.0`, `Infinity`) is `RUNTIME-INVALID-NUMBER`.
-- `String.index_of` gives the character index of the first match (`ok(0)` for an
-  empty part), or an error when absent. `String.at` halts with
+- `String.index_of` gives the character index of the first match as `some(i)`
+  (`some(0)` for an empty part), or `none` when absent. `String.at` halts with
   `RUNTIME-INDEX-OUT-OF-RANGE` outside the string.
 - `String.code` and `String.from_code` halt with `RUNTIME-INVALID-CHARACTER` on
   other input: a one-character string, or a scalar value (0 to 0x10FFFF, no

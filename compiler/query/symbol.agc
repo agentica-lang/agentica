@@ -142,7 +142,7 @@ end
 # The aliases that the roots import the module `key` under, in the order they were found.
 def aliases_for(aliases: Map[String, List[String]], key: String) -> List[String]
   found = aliases.get(key)
-  if found.ok?
+  if found.some?
     return found.unwrap!
   end
 

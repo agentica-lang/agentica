@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 25062,
+  "steps": 25480,
   "stdout": [
     "PARSE-GHERKIN-TABLE sample.feature:5:1-6",
     "PARSE-GHERKIN-TABLE sample.feature:4:1-16",

@@ -251,7 +251,7 @@ def downloaded_watched(
   found: List[String] = []
   for library in manifest.natives
     case targets.get(library.name)
-      ok(target) ->
+      some(target) ->
         case target
           Target.File(_) ->
             artifact = Lock.find_artifact(lock, package_name, library.name, os)
@@ -265,7 +265,7 @@ def downloaded_watched(
           _ -> next
         end
 
-      error(_) -> next
+      none -> next
     end
   end
 

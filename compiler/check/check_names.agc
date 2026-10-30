@@ -37,7 +37,7 @@ end
 ## push), then the builtin of the kind's module whose first parameter has that kind.
 export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   alias = cx.help.aliases.get("#{kind}.#{name}")
-  if alias.ok?
+  if alias.some?
     return alias.unwrap!
   end
 
@@ -58,7 +58,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   end
 
   module = cx.help.modules.get(kind)
-  if module.ok?
+  if module.some?
     names = names.concat(module_methods(cx, kind, "#{module.unwrap!}."))
   end
 
@@ -86,7 +86,7 @@ end
 ## The help for a method name another language has, or "".
 export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> String
   direct = cx.help.kind_methods.get("#{kind}.#{name}")
-  if direct.ok?
+  if direct.some?
     return direct.unwrap!
   end
 
@@ -111,7 +111,7 @@ end
 # True when Lazy has a step with that name: a method that takes a Lazy and returns one (not the source produce).
 def lazy_step?(name: String) -> Bool
   entry = ENTRIES.get("Lazy.#{name}")
-  if !entry.ok?
+  if entry.none?
     return false
   end
 
@@ -122,12 +122,12 @@ end
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".
 def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   module = cx.help.modules.get(kind)
-  if !module.ok?
+  if module.none?
     return ""
   end
 
   entry = ENTRIES.get("#{module.unwrap!}.#{name}")
-  if entry.ok? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
+  if entry.some? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
     return entry.unwrap!.name
   end
 
@@ -175,7 +175,7 @@ end
 # there are any (`len` is `.length` or `.size` on a String).
 def renamed_help(cx: State.Cx, kind: String, name: String) -> String
   candidates = cx.help.foreign_methods.get(name)
-  if !candidates.ok?
+  if candidates.none?
     return ""
   end
 

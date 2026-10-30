@@ -75,7 +75,7 @@ end
 # The foreign method names of the checker: `len` is `size` or `length`, in each module that has one.
 def from_renamed(method: String, kind: String, modules: Map[String, String]) -> List[String]
   renamed = Tables.foreign_methods().get(method)
-  if !renamed.ok?
+  if renamed.none?
     return []
   end
 
@@ -85,7 +85,7 @@ def from_renamed(method: String, kind: String, modules: Map[String, String]) -> 
     if kind == "" or receiver == kind
       for candidate in renamed.unwrap!
         alias = aliases.get("#{receiver}.#{candidate}")
-        if alias.ok?
+        if alias.some?
           found = found.push(alias.unwrap!)
         else
           found = found.push("#{modules[receiver]}.#{candidate}")

@@ -15,7 +15,7 @@ export def public(name: String) -> Result[Model.Builtin]
     return error("not a public builtin")
   end
 
-  return Builtins.lookup(name)
+  return Builtins.lookup(name).to_result("unknown builtin")
 end
 
 ## Every public builtin, in name order, each as `builtin` gives it.

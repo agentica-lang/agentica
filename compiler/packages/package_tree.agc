@@ -111,7 +111,7 @@ end
 # `MODE SP TYPE SP OID SP... SIZE TAB PATH`.
 def parse(record: String) -> Result[Line]
   tab = record.index_of("\t")
-  if !tab.ok?
+  if tab.none?
     return error("git ls-tree gave a line with no tab")
   end
 

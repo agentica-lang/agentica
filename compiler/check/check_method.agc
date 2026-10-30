@@ -83,7 +83,7 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
   name = type_name.name
   display = T.display_name(name)
   fields = cx.structs.get(name)
-  if fields.ok? and !cx.aliases.has_key?(name)
+  if fields.some? and !cx.aliases.has_key?(name)
     resolved = State.record_resolved(st, node.id, State.Resolved.Members(fields.unwrap!))
     return ok(State.Out(st: resolved, type: T.Type.List(T.Type.Struct("StructMember", []))))
   end

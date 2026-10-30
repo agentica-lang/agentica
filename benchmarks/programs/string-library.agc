@@ -18,8 +18,8 @@ def main() -> Void
     swapped = joined.replace("É", "e").downcase
     found = swapped.index_of("smörgåsbord")
     case found
-      ok(at) -> checksum += at
-      error(message) -> checksum -= 1
+      some(at) -> checksum += at
+      none -> checksum -= 1
     end
     j = 0
     n = swapped.length

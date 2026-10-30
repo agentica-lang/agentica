@@ -474,6 +474,7 @@ void agc_gc_measure(void);
 void agc_gc_collect(void);
 
 agc_value agc_result_value(bool ok, agc_value value);
+agc_value agc_optional_value(agc_vm *vm, bool some, agc_value value, uint32_t span);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);

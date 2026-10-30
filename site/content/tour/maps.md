@@ -50,22 +50,22 @@ end
 3
 ```
 
-`get` with a default never fails. `get` without one gives a [Result](/tour/results-and-try/).
+`get` with a default never fails. `get` without one gives an [Optional](/library/data-structures/optional/): `some(value)` or `none`.
 
 ```agentica
 def main() -> Void
   stock = {"apple": 3}
   puts(stock.get("kiwi", 0))
   puts(stock.get("apple"))
-  puts(stock.get("kiwi").ok?)
+  puts(stock.get("kiwi").none?)
   puts(stock.key?("apple"))
 end
 ```
 
 ```output
 0
-ok(3)
-false
+some(3)
+true
 true
 ```
 

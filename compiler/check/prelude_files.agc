@@ -82,7 +82,7 @@ def wanted_functions(keys: List[String]) -> Map[String, List[String]]
     function = key.slice(at + 2, key.length - at - 2)
     before = found.get(module)
     names: List[String] = []
-    if before.ok?
+    if before.some?
       names = before.unwrap!
     end
 

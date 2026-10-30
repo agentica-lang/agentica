@@ -43,12 +43,7 @@ def resolution(st: State.St, value: Ast.Expr) -> Optional[State.Resolved]
 end
 
 def found_resolution(st: State.St, id: Int) -> Optional[State.Resolved]
-  found = st.resolved.get(id)
-  if found.ok?
-    return some(found.unwrap!)
-  end
-
-  return none
+  return st.resolved.get(id)
 end
 
 # The builtin a dropped value calls: the one a method resolved to, or a call written by name. "" for anything else.
@@ -75,12 +70,12 @@ end
 
 # True when dropping the value loses something: a method that resolved to the receiver, to_s or inspect, a struct
 # update, or a call of a pure builtin.
-def unused_result?(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Result[Model.Builtin]) -> Bool
+def unused_result?(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Optional[Model.Builtin]) -> Bool
   if struct_update?(value) or yields_value?(resolved)
     return true
   end
 
-  if !entry.ok?
+  if entry.none?
     return false
   end
 
@@ -122,9 +117,9 @@ def unused_subject(name: String) -> String
 end
 
 # The help of CHECK-UNUSED-VALUE: assign the result to the name the call was made on, when there is one.
-def unused_help(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Result[Model.Builtin]) -> String
+def unused_help(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Optional[Model.Builtin]) -> String
   target = receiver_name(value)
-  keeps = struct_update?(value) or resolved_self?(resolved) or (entry.ok? and keeps_first_type?(entry.unwrap!))
+  keeps = struct_update?(value) or resolved_self?(resolved) or (entry.some? and keeps_first_type?(entry.unwrap!))
   if target != "" and keeps
     return "values are immutable, so this call changes nothing; assign the result, for example #{target} = ..."
   end

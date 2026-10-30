@@ -152,7 +152,7 @@ end
 def const_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Result[Operands]
   key = constant_key(instr.imm)
   found = Pool.find(tables.constants, key)
-  if found.ok?
+  if found.some?
     return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!)
   end
 
@@ -167,7 +167,7 @@ def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Res
   fields = positions.map do |position: Int| position.to_s end.join(",")
   key = "#{args[2]}:#{fields}"
   found = Pool.find(tables.updates, key)
-  if found.ok?
+  if found.some?
     return ok(plain(tables, args[0], args[1], found.unwrap!))
   end
 
@@ -190,7 +190,7 @@ def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Re
   args = instr.args
   key = "#{args[1]}:#{instr.name}"
   found = Pool.find(tables.builtins, key)
-  if found.ok?
+  if found.some?
     return wide_operands(program, tables, instr.op, args[0], found.unwrap!)
   end
 

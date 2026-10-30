@@ -380,7 +380,7 @@ end
 
 def heading_keyword(line: String) -> String
   colon = line.index_of(":")
-  if not colon.ok?
+  if colon.none?
     return ""
   end
   word = line.slice(0, colon.unwrap!)

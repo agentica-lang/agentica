@@ -129,7 +129,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
   end
 
   binding = State.lookup(st, node.name)
-  if binding.ok?
+  if binding.some?
     return ok(State.Out(st: st, type: binding.unwrap!.type))
   end
 
@@ -162,7 +162,7 @@ end
 # A constant is read after its initializer was checked, because the constants are checked in dependency order.
 def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[State.Out]
   type = cx.constants.get(node.name)
-  if !type.ok?
+  if type.none?
     return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span))
   end
 
@@ -186,7 +186,7 @@ end
 # parameter of the enclosing function counts as fixed); the type is then the Fn type with them put in.
 def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expected: T.Type) -> Result[State.Out]
   entry = cx.functions.get(node.name)
-  if !entry.ok?
+  if entry.none?
     return error(
       State.fail(cx, st, "CHECK-UNKNOWN-NAME", "a function reference requires a declared function", node.span),
     )

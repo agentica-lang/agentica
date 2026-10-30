@@ -323,7 +323,7 @@ def canonical_url(parts: Parts) -> String
 end
 
 def first_index(text: String, part: String) -> Int
-  return Result.unwrap_or(String.index_of(text, part), String.length(text))
+  return text.index_of(part).unwrap_or(text.length)
 end
 
 def parse_url(url: String) -> Result[Parts]

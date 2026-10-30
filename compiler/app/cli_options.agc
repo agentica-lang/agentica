@@ -120,7 +120,7 @@ def values(word: String) -> Int
   end
 
   found = ONCE.get(word)
-  if found.ok?
+  if found.some?
     return found.unwrap!
   end
 

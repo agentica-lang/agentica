@@ -167,7 +167,7 @@ end
 
 def signature_text(name: String) -> String
   found = Builtins.lookup(name)
-  if found.ok?
+  if found.some?
     return Text.quote(Builtins.signature(found.unwrap!))
   end
 

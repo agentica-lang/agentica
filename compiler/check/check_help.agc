@@ -48,7 +48,7 @@ end
 ## The help for a name another language has but Agentica does not, or "".
 export def foreign(tables: Tables, name: String) -> String
   found = tables.foreign_names.get(name)
-  if found.ok?
+  if found.some?
     return found.unwrap!
   end
 
