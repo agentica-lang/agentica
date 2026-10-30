@@ -27,6 +27,7 @@ def parse_price(text: String) -> Result[Int]
   elsif price == 0
     return error("free")
   end
+
   return ok(price)
 end
 
@@ -36,12 +37,14 @@ def main() -> Void
   for item in items
     total += item.price
   end
+
   names = items.map do |item| item.name.upcase end
   puts("#{names.join(",")} cost #{total}, half is #{total.to_f * 0.5}")
   case total
     15 -> puts("fifteen")
     _ -> puts("total is #{total}")
   end
+
   case parse_price("x7")
     ok(p) -> puts(describe(Status.Owed(p)))
     error(message) -> puts(message)
@@ -66,6 +69,7 @@ def main() -> Void
   pending.each do |task|
     puts("todo: #{task.title}")
   end
+
   puts("#{pending.size} of #{tasks.size} left")
 end
 ```
@@ -94,6 +98,7 @@ def parse_numbers(line: String) -> Result[List[Int]]
     n = try word.to_i
     numbers = numbers.push(n)
   end
+
   return ok(numbers)
 end
 
@@ -110,6 +115,7 @@ def main() -> Void
         IO.warn("skipped: #{message}")
     end
   end
+
   puts("#{count} numbers, total #{total}")
 end
 ```

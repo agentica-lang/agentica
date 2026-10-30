@@ -23,6 +23,7 @@ def parse_port(text: String) -> Result[Int]
   if n < 1 or n > 65535
     return error("port out of range: #{n}")
   end
+
   return ok(n)
 end
 

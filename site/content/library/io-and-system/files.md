@@ -155,6 +155,7 @@ def save_lines(path: String, lines: List[String]) -> Result[Void]
   for line in lines
     try File.write(file, line + "\n", 1000)
   end
+
   try File.flush(file, 1000)
   return File.close(file, 1000)
 end
@@ -184,6 +185,7 @@ def main() -> Void
   else
     puts("another copy is running")
   end
+
   closed = File.close(file, 1000)
 end
 ```
@@ -216,8 +218,10 @@ def main() -> Void
     if line.starts_with?("#")
       return error("comment found: #{line}")
     end
+
     ok()
   end
+
   puts(r)
 end
 ```

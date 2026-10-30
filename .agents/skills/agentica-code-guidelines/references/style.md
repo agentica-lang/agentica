@@ -91,6 +91,7 @@ def describe(visible: Bool) -> String
   if visible
     return "shown"
   end
+
   return "hidden"
 end
 ```
@@ -108,6 +109,7 @@ def total(prices: List[Int]) -> Int
   for price in prices
     sum += price
   end
+
   return sum
 end
 ```
@@ -120,6 +122,7 @@ export def total(prices: List[Int]) -> Int
   for price in prices
     sum += price
   end
+
   return sum
 end
 ```
@@ -153,6 +156,7 @@ def ship(weight: Int, width: Int, height: Int, depth: Int, rush: Bool, insured: 
       end
     end
   end
+
   return cost
 end
 ```
@@ -169,9 +173,11 @@ def ship(parcel: Parcel) -> Int
   if parcel.weight <= 0 or parcel.width <= 0
     return 0
   end
+
   if parcel.rush
     return parcel.weight * 3
   end
+
   return parcel.weight * 2
 end
 ```
@@ -185,6 +191,7 @@ def total(xs: List[Int]) -> Int
   xs.each do |x|
     sum += x
   end
+
   return sum
 end
 ```
@@ -196,6 +203,7 @@ def total(xs: List[Int]) -> Int
   for x in xs
     sum += x
   end
+
   return sum
 end
 
@@ -214,6 +222,7 @@ def color_name(code: Int) -> String
   elsif code == 1
     return "green"
   end
+
   return "unknown"
 end
 ```
@@ -294,6 +303,7 @@ def check(n: Int) -> Result[Int]
   if n < 0
     return error("negative: #{n}")
   end
+
   return ok(n)
 end
 
@@ -354,6 +364,7 @@ def size_name(n: Int) -> String
       end
     end
   end
+
   return "many"
 end
 ```
@@ -372,6 +383,7 @@ def pick_big(n: Int) -> String
   if n < 10
     return "few"
   end
+
   return "many"
 end
 ```
@@ -420,6 +432,7 @@ def port(n: Int) -> Result[Int]
   if n < 1 or n > 65535
     return error("Invalid port.")
   end
+
   return ok(n)
 end
 ```
@@ -430,6 +443,7 @@ def port(n: Int) -> Result[Int]
   if n < 1 or n > 65535
     return error("port out of range: #{n}")
   end
+
   return ok(n)
 end
 ```
@@ -443,6 +457,7 @@ def parse_port(text: String) -> Result[Int]
   if n < 1 or n > 65535
     return error("port out of range: #{n}")
   end
+
   return ok(n)
 end
 

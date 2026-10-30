@@ -25,9 +25,9 @@ agrees.
 Check every proposal against these rules first; they decide its cost.
 
 - A default is a constant: an `Int`, `Float` or `String` literal, `true`,
-  `false`, `nil`, `[]`, `{}` or a nullary enum variant. It cannot read another
-  parameter or a module constant (docs/grammar/06-semantics.md, "Default
-  parameter values").
+  `false`, `nil`, `none`, `[]`, `{}` or a nullary enum variant. It cannot read
+  another parameter or a module constant (docs/grammar/06-semantics.md,
+  "Default parameter values").
 - After a parameter with a default, every parameter has one, except a last
   `Fn` parameter (so a block still fills it).
 - A **builtin** row takes defaults only when its rule is `Plain` or `Prelude`

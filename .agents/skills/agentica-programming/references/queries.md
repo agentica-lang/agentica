@@ -185,7 +185,7 @@ folder; default `.`). NAME is written as the code writes it:
   (`import M from "m"`) in a file under PATH; exported names only. After
   `import {make as mk} from "m"`, `symbol mk` is `QUERY-NOT-FOUND` and `symbol
   make` finds the declaration.
-- `User.email`, `Models.User.email`: a struct field. `Option.Some`: a variant.
+- `User.email`, `Models.User.email`: a struct field. `Level.Info`: a variant.
 - `std/queue.pop`, `std/queue.Popped.value`: a linked `std/` module.
 - `Map.get`, `puts`: a builtin, with the `help` object and no place.
 

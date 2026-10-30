@@ -1,0 +1,55 @@
+name: Use the build of the build job
+description: >-
+  Unpack the dist/ and build/ folders that a build job of ci.yml uploaded, and show that make takes them as up to date.
+  Run it after checkout. The tests then run on the binary that was built once.
+inputs:
+  artifact:
+    description: Name of the artifact (one tar.gz, named like the artifact, with dist/ and build/)
+    required: true
+  extra:
+    description: Name of a second artifact whose folders of build/ are added (the TSan and GC stress builds), or empty
+    default: ''
+  targets:
+    description: The make targets that must not be rebuilt (the binary and the C test programs of the build job)
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ runner.temp }}/build-artifact
+    - uses: actions/download-artifact@v8
+      if: ${{ inputs.extra != '' }}
+      with:
+        name: ${{ inputs.extra }}
+        path: ${{ runner.temp }}/build-artifact
+    # An artifact keeps the permission bits (tar), but not the order of the times: make rebuilds a target that is older than a
+    # source, and the checkout of this job is newer than the files of the build job. So every unpacked file gets one time,
+    # taken after the checkout (the second that passes first keeps it from being earlier than a source): equal times are up to
+    # date for make, and the stamp files of the build keep their meaning (they change only when their content does).
+    - name: Unpack the build and date it after the checkout
+      shell: bash
+      run: |
+        for archive in "$RUNNER_TEMP"/build-artifact/*.tar.gz; do tar -xzf "$archive"; done
+        sleep 1
+        stamp=$(date +%s)
+        find dist build -exec touch -h -d "@$stamp" {} +
+        ls -l dist/agentica
+    # The proof that nothing is rebuilt: make runs the targets of the build job and no file of dist/ or build/ may change
+    # (a recompiled or relinked file has a new time). A failure here means the build job's files are not taken as current.
+    - name: The unpacked build is up to date, so make does not rebuild it
+      shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        listing() { find dist build -type f -printf '%p %T@ %s\n' | sort; }
+        listing > "$RUNNER_TEMP/listing-before"
+        # shellcheck disable=SC2086
+        make $TARGETS
+        listing > "$RUNNER_TEMP/listing-after"
+        if ! diff "$RUNNER_TEMP/listing-before" "$RUNNER_TEMP/listing-after"; then
+          echo "::error title=build artifact::make rebuilt files of the build job (above): the shards must use the artifact as it is"
+          exit 1
+        fi
+        echo "no file of dist/ or build/ changed: $(wc -l < "$RUNNER_TEMP/listing-after") files, none rebuilt"

@@ -73,6 +73,7 @@ def main() -> Void
     ok(bytes) -> puts("#{bytes} bytes written")
     error(message) -> IO.warn("cannot compress: #{message}")
   end
+
   puts(File.chunks("notes.txt.gz").gunzip.reduce(0) do |n, chunk| n + chunk.size end)
 end
 ```

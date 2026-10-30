@@ -197,6 +197,7 @@ def main() -> Void
     ok(created) -> puts("#{created.status} #{created.body}")
     error(message) -> IO.warn(message)
   end
+
   deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1")
   puts(deleted.ok?)
   HTTP.close_client(client)
@@ -245,6 +246,7 @@ def main() -> Void
     ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
     error(message) -> IO.warn(message)
   end
+
   HTTP.close_client(client)
 end
 ```
@@ -274,6 +276,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
     return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello"))
   end
+
   return ok(HttpResponse(status: 404, headers: [], body: "not found"))
 end
 

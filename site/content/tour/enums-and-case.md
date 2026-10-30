@@ -249,3 +249,52 @@ timed out
 ```
 
 An unguarded arm whose positions are only names or `_` covers its variant. Any other arm may fail, so end with `ok(_)`, a variant with `_` positions, or `_`.
+
+The payload of your own variant can be an [Optional](/library/data-structures/optional/), and the same patterns apply:
+
+```agentica
+enum Reading
+  Value(Optional[Int])
+  Missing
+end
+
+def label(r: Reading) -> String
+  case r
+    Reading.Value(some(0)) -> return "zero"
+    Reading.Value(some(n)) -> return "value #{n}"
+    Reading.Value(_) -> return "no value"
+    Reading.Missing -> return "missing"
+  end
+end
+
+def main() -> Void
+  puts(label(Reading.Value(some(0))))
+  puts(label(Reading.Value(some(5))))
+  puts(label(Reading.Value(none)))
+  puts(label(Reading.Missing))
+end
+```
+
+```output
+zero
+value 5
+no value
+missing
+```
+
+Here `some(n)` and `none` are both listed, but each arm has a variant inside, so neither covers `Reading.Value`. The case is not exhaustive until you add `Reading.Value(_)` or `_`, or use one arm with only a name, `Reading.Value(opt)`, and match `opt` inside it.
+
+```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
+enum Reading
+  Value(Optional[Int])
+  Missing
+end
+
+def main() -> Void
+  case Reading.Missing
+    Reading.Value(some(n)) -> puts("value #{n}")
+    Reading.Value(none) -> puts("no value")
+    Reading.Missing -> puts("missing")
+  end
+end
+```

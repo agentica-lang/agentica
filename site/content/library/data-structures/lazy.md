@@ -65,6 +65,7 @@ def main() -> Void
     puts(line)
     ok()
   end
+
   puts(head.ok? and errors.ok?)
 end
 ```
@@ -82,6 +83,7 @@ def produce(ch: Channel[Int]) -> Void
   for i in 1..6
     ch.send(i, 1000).unwrap!
   end
+
   ch.close
 end
 
@@ -226,9 +228,11 @@ def main() -> Void
     if n > 2
       return error("stopped at #{n}")
     end
+
     puts(n)
     ok()
   end
+
   puts(result)
 end
 ```

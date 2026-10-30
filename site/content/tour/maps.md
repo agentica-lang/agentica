@@ -101,6 +101,7 @@ def main() -> Void
   for name in prices.keys
     puts("#{name}: #{prices[name]}")
   end
+
   puts(prices.values)
 end
 ```
@@ -119,6 +120,7 @@ def main() -> Void
   for word in "a b a c a".split(" ")
     counts = counts.put(word, counts.get(word, 0) + 1)
   end
+
   puts(counts)
 end
 ```

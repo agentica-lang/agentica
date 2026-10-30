@@ -45,6 +45,7 @@ def main() -> Void
   if Logger.enabled?(LogLevel.Debug)
     Logger.debug("lines", {"count": count_lines().to_s})
   end
+
   Logger.set_level(LogLevel.Info)
   puts(Logger.enabled?(LogLevel.Debug))
 end
@@ -87,6 +88,7 @@ def main() -> Void
   _ = Logger.attach("audit", LogLevel.Warning) do |event|
     puts("audit: #{event.message}")
   end
+
   Logger.info("not for the audit handler")
   Logger.err("cannot open the cache")
   puts(Logger.attach("audit", LogLevel.Info, &Logger.stderr_text).message)
@@ -146,6 +148,7 @@ def main() -> Void
   _ = Logger.attach("file", LogLevel.Info) do |event|
     _ = File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
   end
+
   Logger.info("server started")
 end
 ```
@@ -166,6 +169,7 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
         end
     end
   end
+
   return ok()
 end
 
@@ -175,6 +179,7 @@ def main() -> Void
   _ = Logger.attach("file", LogLevel.Info) do |event|
     _ = events.send(event, 1000)
   end
+
   Logger.info("server started")
   _ = Logger.detach("file")
   events.close

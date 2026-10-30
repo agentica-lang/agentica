@@ -88,6 +88,7 @@ def main() -> Void
   total = "abc".bytes.to_a.reduce(0) do |sum, byte|
     sum + byte
   end
+
   puts(total)
 end
 ```
@@ -188,6 +189,7 @@ def main() -> Void
   for byte in "abc".bytes
     sum += byte
   end
+
   puts(sum)
   "ab".bytes.each do |byte|
     puts(byte)

@@ -25,6 +25,7 @@ def main() -> Void
   if MIME.text?(type)
     type = "#{type}; charset=utf-8"
   end
+
   puts(type)
 end
 ```
