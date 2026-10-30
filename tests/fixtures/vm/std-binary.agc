@@ -3,29 +3,29 @@ import Binary from "std/binary"
 struct IntReader
   name: String
   size: Int
-  read: Fn[List[Int], Int, Result[Int]]
+  read: Fn[Bytes, Int, Result[Int]]
 end
 
 struct IntWriter
   name: String
   low: Int
   high: Int
-  write: Fn[Int, Result[List[Int]]]
+  write: Fn[Int, Result[Bytes]]
 end
 
 struct Pair
   name: String
   size: Int
-  write: Fn[Int, Result[List[Int]]]
-  read: Fn[List[Int], Int, Result[Int]]
+  write: Fn[Int, Result[Bytes]]
+  read: Fn[Bytes, Int, Result[Int]]
   values: List[Int]
 end
 
-def write_i64_be(value: Int) -> Result[List[Int]]
+def write_i64_be(value: Int) -> Result[Bytes]
   return ok(Binary.write_i64_be(value))
 end
 
-def write_i64_le(value: Int) -> Result[List[Int]]
+def write_i64_le(value: Int) -> Result[Bytes]
   return ok(Binary.write_i64_le(value))
 end
 
@@ -101,15 +101,19 @@ def float_result_text(result: Result[Float]) -> String
   end
 end
 
-def bytes_result_text(result: Result[List[Int]]) -> String
+def bytes_result_text(result: Result[Bytes]) -> String
   case result
     ok(bytes) -> return "ok(#{bytes_text(bytes)})"
     error(message) -> return "error(#{message})"
   end
 end
 
-def bytes_text(bytes: List[Int]) -> String
-  return "[#{bytes.map do |b| b.to_s end.join(", ")}]"
+def bytes_text(bytes: Bytes) -> String
+  return "[#{bytes.to_a.map do |b| b.to_s end.join(", ")}]"
+end
+
+def pack(items: List[Int]) -> Bytes
+  return Bytes.from_list(items).unwrap!
 end
 
 def float_text(x: Float) -> String
@@ -157,7 +161,7 @@ def pow2(exponent: Int) -> Float
   return result
 end
 
-def unwrap_bytes(result: Result[List[Int]]) -> List[Int]
+def unwrap_bytes(result: Result[Bytes]) -> Bytes
   return result.unwrap!
 end
 
@@ -195,7 +199,7 @@ def round_trip_bytes() -> Int
   checked = 0
   for pair in pairs()
     for pattern in byte_patterns()
-      bytes = List.take(pattern, pair.size)
+      bytes = pack(List.take(pattern, pair.size))
       value = pair.read.call(bytes, 0)
       case value
         ok(v) ->
@@ -219,10 +223,10 @@ def round_trip_floats() -> Int
     failed += expect("f64_be #{float_text(x)}", float_result_text(Binary.read_f64_be(wide, 0)), "ok(#{float_text(x)})")
     little = Binary.write_f64_le(x)
     failed += expect("f64_le #{float_text(x)}", float_result_text(Binary.read_f64_le(little, 0)), "ok(#{float_text(x)})")
-    failed += expect("f64 order #{float_text(x)}", bytes_text(wide), bytes_text(little.reverse))
+    failed += expect("f64 order #{float_text(x)}", bytes_text(wide), bytes_text(pack(little.to_a.reverse)))
     narrow = Binary.write_f32_be(x)
     narrow_le = Binary.write_f32_le(x)
-    failed += expect("f32 order #{float_text(x)}", bytes_text(narrow), bytes_text(narrow_le.reverse))
+    failed += expect("f32 order #{float_text(x)}", bytes_text(narrow), bytes_text(pack(narrow_le.to_a.reverse)))
     rounded = Binary.read_f32_be(narrow, 0).unwrap!
     failed += expect("f32_be #{float_text(x)}", bytes_text(Binary.write_f32_be(rounded)), bytes_text(narrow))
     failed += expect("f32_le #{float_text(x)}", float_result_text(Binary.read_f32_le(narrow_le, 0)), "ok(#{float_text(rounded)})")
@@ -234,27 +238,27 @@ def round_trip_floats() -> Int
 end
 
 def float_bytes_back() -> Void
-  puts(bytes_text(Binary.write_f64_be(Binary.read_f64_be([127, 248, 0, 0, 0, 0, 0, 1], 0).unwrap!)))
-  puts(bytes_text(Binary.write_f64_le(Binary.read_f64_le([1, 0, 0, 0, 0, 0, 248, 255], 0).unwrap!)))
-  puts(bytes_text(Binary.write_f32_be(Binary.read_f32_be([127, 192, 0, 1], 0).unwrap!)))
-  puts(bytes_text(Binary.write_f32_le(Binary.read_f32_le([1, 0, 192, 255], 0).unwrap!)))
-  puts(bytes_text(Binary.write_f64_be(Binary.read_f64_be([127, 240, 0, 0, 0, 0, 0, 0], 0).unwrap!)))
-  puts(bytes_text(Binary.write_f32_le(Binary.read_f32_le([255, 255, 127, 255], 0).unwrap!)))
+  puts(bytes_text(Binary.write_f64_be(Binary.read_f64_be(pack([127, 248, 0, 0, 0, 0, 0, 1]), 0).unwrap!)))
+  puts(bytes_text(Binary.write_f64_le(Binary.read_f64_le(pack([1, 0, 0, 0, 0, 0, 248, 255]), 0).unwrap!)))
+  puts(bytes_text(Binary.write_f32_be(Binary.read_f32_be(pack([127, 192, 0, 1]), 0).unwrap!)))
+  puts(bytes_text(Binary.write_f32_le(Binary.read_f32_le(pack([1, 0, 192, 255]), 0).unwrap!)))
+  puts(bytes_text(Binary.write_f64_be(Binary.read_f64_be(pack([127, 240, 0, 0, 0, 0, 0, 0]), 0).unwrap!)))
+  puts(bytes_text(Binary.write_f32_le(Binary.read_f32_le(pack([255, 255, 127, 255]), 0).unwrap!)))
 end
 
 def offset_errors() -> Int
   failed = 0
   checked = 0
-  data = List.repeat(0, 12)
+  data = pack(List.repeat(0, 12))
   for reader in readers()
     last = data.size - reader.size
     failed += expect("#{reader.name} last offset", int_result_text(reader.read.call(data, last)), "ok(0)")
     for offset in [-1, last + 1, int_min(), 9223372036854775807]
-      want = "error(#{reader.name} at offset #{offset} is outside a list of length 12)"
+      want = "error(#{reader.name} at offset #{offset} is outside bytes of length 12)"
       failed += expect("#{reader.name} offset #{offset}", int_result_text(reader.read.call(data, offset)), want)
       checked += 1
     end
-    failed += expect("#{reader.name} empty", int_result_text(reader.read.call([], 0)), "error(#{reader.name} at offset 0 is outside a list of length 0)")
+    failed += expect("#{reader.name} empty", int_result_text(reader.read.call(pack([]), 0)), "error(#{reader.name} at offset 0 is outside bytes of length 0)")
   end
   for name in ["f32", "f64"]
     size = 4
@@ -262,7 +266,7 @@ def offset_errors() -> Int
       size = 8
     end
     for offset in [-1, data.size - size + 1, int_min(), 9223372036854775807]
-      want = "error(#{name} at offset #{offset} is outside a list of length 12)"
+      want = "error(#{name} at offset #{offset} is outside bytes of length 12)"
       if name == "f32"
         failed += expect("f32_be offset #{offset}", float_result_text(Binary.read_f32_be(data, offset)), want)
         failed += expect("f32_le offset #{offset}", float_result_text(Binary.read_f32_le(data, offset)), want)
@@ -277,33 +281,6 @@ def offset_errors() -> Int
   puts(int_result_text(Binary.read_u32_be(data, 10)))
   puts(int_result_text(Binary.read_i16_le(data, -1)))
   puts(float_result_text(Binary.read_f64_be(data, 5)))
-  return failed
-end
-
-def item_errors() -> Int
-  failed = 0
-  for bad in [-1, 256, 300, int_min(), 9223372036854775807]
-    data = [0, 0, 0, bad, 0, 0, 0, 0, 0, 0, 0, 0]
-    for reader in readers()
-      want = "error(value #{bad} at index 3 is not a byte)"
-      if reader.size >= 4
-        failed += expect("#{reader.name} item #{bad}", int_result_text(reader.read.call(data, 0)), want)
-      end
-      failed += expect("#{reader.name} item #{bad} outside", int_result_text(reader.read.call(data, 4)).starts_with?("ok(").to_s, "true")
-    end
-    failed += expect("f32 item #{bad}", float_result_text(Binary.read_f32_le(data, 1)), "error(value #{bad} at index 3 is not a byte)")
-    failed += expect("f64 item #{bad}", float_result_text(Binary.read_f64_be(data, 3)), "error(value #{bad} at index 3 is not a byte)")
-  end
-  first = [0, 0, 300, 0, -1, 0, 0, 0, 0, 0, 0, 0]
-  failed += expect("first bad by index", int_result_text(Binary.read_u64_be(first, 0)), "error(value 300 at index 2 is not a byte)")
-  failed += expect("first bad by index from 3", int_result_text(Binary.read_u64_le(first, 3)), "error(value -1 at index 4 is not a byte)")
-  failed += expect("u8 bad", int_result_text(Binary.read_u8([256], 0)), "error(value 256 at index 0 is not a byte)")
-  failed += expect("i8 bad", int_result_text(Binary.read_i8([0, -1], 1)), "error(value -1 at index 1 is not a byte)")
-  failed += expect("masked pair", int_result_text(Binary.read_u16_be([-1, 256], 0)), "error(value -1 at index 0 is not a byte)")
-  failed += expect("offset wins over item", int_result_text(Binary.read_u16_be([300], 0)), "error(u16 at offset 0 is outside a list of length 1)")
-  puts(int_result_text(Binary.read_u32_be([0, 1, 300, 0, 0, 0], 1)))
-  puts(int_result_text(Binary.read_i16_be([0, 0, 0, 0, -7, 0], 4)))
-  puts("item errors: #{failed} mismatches")
   return failed
 end
 
@@ -333,70 +310,38 @@ end
 
 def top_bit() -> Int
   failed = 0
-  failed += expect("u64_be top bit", int_result_text(Binary.read_u64_be([128, 0, 0, 0, 0, 0, 0, 0], 0)), "error(u64 at offset 0 does not fit in Int)")
-  failed += expect("u64_le top bit", int_result_text(Binary.read_u64_le([0, 0, 0, 0, 0, 0, 0, 128], 0)), "error(u64 at offset 0 does not fit in Int)")
-  failed += expect("u64_be offset", int_result_text(Binary.read_u64_be([1, 255, 255, 255, 255, 255, 255, 255, 255], 1)), "error(u64 at offset 1 does not fit in Int)")
-  failed += expect("i64_be same bytes", int_result_text(Binary.read_i64_be([128, 0, 0, 0, 0, 0, 0, 0], 0)), "ok(#{int_min()})")
-  failed += expect("i64_le all ones", int_result_text(Binary.read_i64_le([255, 255, 255, 255, 255, 255, 255, 255], 0)), "ok(-1)")
-  puts(int_result_text(Binary.read_u64_be([255, 255, 255, 255, 255, 255, 255, 255], 0)))
-  puts(int_result_text(Binary.read_i64_be([255, 255, 255, 255, 255, 255, 255, 255], 0)))
+  failed += expect("u64_be top bit", int_result_text(Binary.read_u64_be(pack([128, 0, 0, 0, 0, 0, 0, 0]), 0)), "error(u64 at offset 0 does not fit in Int)")
+  failed += expect("u64_le top bit", int_result_text(Binary.read_u64_le(pack([0, 0, 0, 0, 0, 0, 0, 128]), 0)), "error(u64 at offset 0 does not fit in Int)")
+  failed += expect("u64_be offset", int_result_text(Binary.read_u64_be(pack([1, 255, 255, 255, 255, 255, 255, 255, 255]), 1)), "error(u64 at offset 1 does not fit in Int)")
+  failed += expect("i64_be same bytes", int_result_text(Binary.read_i64_be(pack([128, 0, 0, 0, 0, 0, 0, 0]), 0)), "ok(#{int_min()})")
+  failed += expect("i64_le all ones", int_result_text(Binary.read_i64_le(pack([255, 255, 255, 255, 255, 255, 255, 255]), 0)), "ok(-1)")
+  puts(int_result_text(Binary.read_u64_be(pack([255, 255, 255, 255, 255, 255, 255, 255]), 0)))
+  puts(int_result_text(Binary.read_i64_be(pack([255, 255, 255, 255, 255, 255, 255, 255]), 0)))
   puts("top bit: #{failed} mismatches")
-  return failed
-end
-
-def joined(parts: List[List[Int]]) -> List[Int]
-  initial: List[Int] = []
-  return parts.reduce(initial) do |acc, part| List.concat(acc, part) end
-end
-
-def concat_cases() -> Int
-  failed = 0
-  none: List[List[Int]] = []
-  failed += expect("concat of none", bytes_text(Binary.concat(none)), "[]")
-  failed += expect("concat of one", bytes_text(Binary.concat([[1, 2, 3]])), "[1, 2, 3]")
-  failed += expect("concat of empty", bytes_text(Binary.concat([[]])), "[]")
-  failed += expect("concat of two", bytes_text(Binary.concat([[1], [2, 3]])), "[1, 2, 3]")
-  failed += expect("concat of three", bytes_text(Binary.concat([[1], [], [2, 3]])), "[1, 2, 3]")
-  failed += expect("concat of empties", bytes_text(Binary.concat([[], [], [], []])), "[]")
-  failed += expect("concat of five", bytes_text(Binary.concat([[1], [2], [], [3, 4], [5]])), "[1, 2, 3, 4, 5]")
-  parts: List[List[Int]] = []
-  for i in 0...1000
-    if i % 7 == 3
-      parts = parts.push([])
-    else
-      parts = parts.push([i % 256, (i + 1) % 256])
-    end
-  end
-  many = Binary.concat(parts)
-  failed += expect("concat of many", bytes_text(many), bytes_text(joined(parts)))
-  failed += expect("concat of many size", many.size.to_s, joined(parts).size.to_s)
-  puts("concat: #{many.size} bytes from #{parts.size} parts, #{failed} mismatches")
   return failed
 end
 
 def frame_cases() -> Int
   failed = 0
-  failed += expect("frame empty", bytes_result_text(Binary.frame([])), "ok([0, 0, 0, 0])")
-  failed += expect("frame three", bytes_result_text(Binary.frame([7, 8, 9])), "ok([0, 0, 0, 3, 7, 8, 9])")
-  payload = Binary.concat([Binary.write_u16_be(513).unwrap!, Binary.write_f64_le(1.5)])
+  failed += expect("frame empty", bytes_result_text(Binary.frame(pack([]))), "ok([0, 0, 0, 0])")
+  failed += expect("frame three", bytes_result_text(Binary.frame(pack([7, 8, 9]))), "ok([0, 0, 0, 3, 7, 8, 9])")
+  payload = Bytes.concat([Binary.write_u16_be(513).unwrap!, Binary.write_f64_le(1.5)])
   framed = Binary.frame(payload).unwrap!
   failed += expect("frame length", int_result_text(Binary.read_frame_length(framed, 0, payload.size)), "ok(#{payload.size})")
-  failed += expect("frame body", bytes_text(List.drop(framed, 4)), bytes_text(payload))
-  shifted = Binary.concat([[9, 9], framed])
+  failed += expect("frame body", bytes_text(framed.drop(4)), bytes_text(payload))
+  shifted = Bytes.concat([pack([9, 9]), framed])
   failed += expect("frame at offset", int_result_text(Binary.read_frame_length(shifted, 2, 65536)), "ok(10)")
-  failed += expect("frame odd items", bytes_result_text(Binary.frame([300, -1])), "ok([0, 0, 0, 2, 300, -1])")
-  failed += expect("limit equal", int_result_text(Binary.read_frame_length([0, 1, 17, 112], 0, 70000)), "ok(70000)")
-  failed += expect("limit zero", int_result_text(Binary.read_frame_length([0, 0, 0, 0], 0, 0)), "ok(0)")
-  failed += expect("limit above", int_result_text(Binary.read_frame_length([0, 1, 17, 112], 0, 65536)), "error(frame length 70000 is above the limit 65536)")
-  failed += expect("limit negative", int_result_text(Binary.read_frame_length([0, 0, 0, 1], 0, -1)), "error(frame limit -1 is negative)")
-  failed += expect("limit negative first", int_result_text(Binary.read_frame_length([], -5, -2)), "error(frame limit -2 is negative)")
-  failed += expect("limit smallest Int", int_result_text(Binary.read_frame_length([0, 0, 0, 1], 0, int_min())), "error(frame limit #{int_min()} is negative)")
-  failed += expect("offset before limit", int_result_text(Binary.read_frame_length([0, 0, 1], 0, 5)), "error(u32 at offset 0 is outside a list of length 3)")
-  failed += expect("offset before limit at max", int_result_text(Binary.read_frame_length([0, 0, 0, 1], 1, 9223372036854775807)), "error(u32 at offset 1 is outside a list of length 4)")
-  failed += expect("item before limit", int_result_text(Binary.read_frame_length([0, 300, 0, 0], 0, 5)), "error(value 300 at index 1 is not a byte)")
-  failed += expect("largest limit", int_result_text(Binary.read_frame_length([255, 255, 255, 255], 0, 9223372036854775807)), "ok(4294967295)")
-  puts(int_result_text(Binary.read_frame_length([0, 1, 17, 112], 0, 65536)))
-  puts(int_result_text(Binary.read_frame_length([0, 0, 0, 1], 0, -1)))
+  failed += expect("limit equal", int_result_text(Binary.read_frame_length(pack([0, 1, 17, 112]), 0, 70000)), "ok(70000)")
+  failed += expect("limit zero", int_result_text(Binary.read_frame_length(pack([0, 0, 0, 0]), 0, 0)), "ok(0)")
+  failed += expect("limit above", int_result_text(Binary.read_frame_length(pack([0, 1, 17, 112]), 0, 65536)), "error(frame length 70000 is above the limit 65536)")
+  failed += expect("limit negative", int_result_text(Binary.read_frame_length(pack([0, 0, 0, 1]), 0, -1)), "error(frame limit -1 is negative)")
+  failed += expect("limit negative first", int_result_text(Binary.read_frame_length(pack([]), -5, -2)), "error(frame limit -2 is negative)")
+  failed += expect("limit smallest Int", int_result_text(Binary.read_frame_length(pack([0, 0, 0, 1]), 0, int_min())), "error(frame limit #{int_min()} is negative)")
+  failed += expect("offset before limit", int_result_text(Binary.read_frame_length(pack([0, 0, 1]), 0, 5)), "error(u32 at offset 0 is outside bytes of length 3)")
+  failed += expect("offset before limit at max", int_result_text(Binary.read_frame_length(pack([0, 0, 0, 1]), 1, 9223372036854775807)), "error(u32 at offset 1 is outside bytes of length 4)")
+  failed += expect("largest limit", int_result_text(Binary.read_frame_length(pack([255, 255, 255, 255]), 0, 9223372036854775807)), "ok(4294967295)")
+  puts(int_result_text(Binary.read_frame_length(pack([0, 1, 17, 112]), 0, 65536)))
+  puts(int_result_text(Binary.read_frame_length(pack([0, 0, 0, 1]), 0, -1)))
   puts("frames: #{failed} mismatches")
   return failed
 end
@@ -407,10 +352,8 @@ def main() -> Void
   failed += round_trip_floats()
   float_bytes_back()
   failed += offset_errors()
-  failed += item_errors()
   failed += writer_errors()
   failed += top_bit()
-  failed += concat_cases()
   failed += frame_cases()
   if failed == 0
     puts("all checks ok")

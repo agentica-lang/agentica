@@ -229,7 +229,7 @@ def lower(linked: Linker.Linked, checked: Checker.Checked, out: String, settings
     Lowering.Lowered.Done(program) ->
       case Writer.write(program, settings.version)
         Writer.Written.Failed(problem) -> return "WRITE #{problem.code} #{problem.file}"
-        Writer.Written.Done(bytes) -> return save(Bytes.from_list(bytes).unwrap!, out)
+        Writer.Written.Done(bytes) -> return save(bytes, out)
       end
   end
 end
