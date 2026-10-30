@@ -6,7 +6,7 @@ description: The Zlib builtins and the Lazy steps, which compress bytes, files a
 
 `Zlib` holds the compression builtins for bytes in the zlib wrapper (RFC 1950, the Ruby and Python default) and in gzip (RFC 1952). Files and streams go through [Lazy](/library/data-structures/lazy/#zlib-steps) steps, which also speak raw DEFLATE (RFC 1951). The VM computes them with zlib, the library it already links; nothing is written in Agentica.
 
-Decoders are strict on purpose: one stream or member, with its checksum verified, and any trailing byte after it is an error. Unlike Python's `gzip.decompress`, concatenated members never decode: the second member is trailing bytes.
+There is no auto-detect, no dictionary and no metadata option. Decoders are strict on purpose: one stream or member, with its checksum verified, and any trailing byte after it is an error. Unlike Python's `gzip.decompress`, concatenated members never decode: the second member is trailing bytes.
 
 ## Bytes
 

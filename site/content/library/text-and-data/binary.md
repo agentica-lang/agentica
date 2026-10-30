@@ -38,7 +38,7 @@ Binary.read_<F>(data: Bytes, offset: Int) -> Result[Float]
 
 `<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64`, `i64` followed by `_be` or `_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`.
 
-A reader never halts the program: a bad offset is an `error(...)` (see Errors).
+A reader never halts the program: a bad offset or a `u64` with the top bit set is an `error(...)` (see Errors). The `offset` may be any `Int`.
 
 ```agentica
 import Binary from "std/binary"
@@ -124,7 +124,7 @@ true
 
 ## u64 and i64
 
-A `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` gives an error and `write_u64_*` rejects a negative value. For all 64 bits use `read_i64_*` and `write_i64_*`.
+A `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` gives an error and `write_u64_*` rejects a negative value. For all 64 bits use `read_i64_*` and `write_i64_*`. Every `ok` of an integer reader writes back to the same bytes; a float reader does too, except that a NaN pattern other than the canonical one comes back canonical.
 
 ```agentica
 import Binary from "std/binary"
@@ -144,6 +144,8 @@ ok(-9223372036854775808)
 error("value -1 does not fit in u64")
 [127, 255, 255, 255, 255, 255, 255, 255]
 ```
+
+Writers return new values and no buffer is ever changed. Offset writers into an existing `Bytes` are not part of the module. Half floats (f16) and varints (LEB128) are not supported; hex and Base64 are the `Digest` and `Base64` builtins. The bit operations and the `Float` bit conversions are `Int` and `Float` builtins, because in Agentica each one is a 64-bit loop or an exact scaling by powers of two with special cases for `-0.0`, NaN and subnormals.
 
 ## Joining
 
@@ -172,7 +174,7 @@ Binary.frame(payload: Bytes) -> Result[Bytes]
 Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```
 
-`frame` puts the 4-byte big-endian length in front of the payload. `read_frame_length` rejects a length above `max` before the body is read. Read the body yourself in a loop: `TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked.
+`frame` puts the payload's 4-byte big-endian length in front of it (an error above `4294967295` bytes). `read_frame_length` rejects a length above `max` before the body is read. Read the body yourself in a loop: `TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked.
 
 ```agentica
 import Binary from "std/binary"

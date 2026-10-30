@@ -972,7 +972,7 @@ def work(worker: Worker) -> Result[Void]
     end
     done = run_job(worker, socket, job)
     # The caller gave up on the reply (cancelled, or its wait timed out): the connection is closed, not pooled, so a
-    # timed-out call leaves no connection behind (docs/grammar/06c-tasks-and-tests.md).
+    # timed-out call leaves no connection behind (site/content/library/concurrency/task.md, Task.map).
     awaited = HttpWire.awaited?(job.reply)
     job.reply.send(done.answer, 0)
     # The idle wait below keeps job only for its origin and reply.

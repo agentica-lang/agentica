@@ -12,7 +12,8 @@ MANIFEST_FILE = "agentica.toml"
 NUL = String.from_code(0)
 
 # The most a file of a package may hold, and all the copied files together. The VM keeps at most 1 MiB of the output
-# of a child that was not read yet (docs/grammar/06d-io-and-network.md), and a file is a list of bytes in memory.
+# of a child that was not read yet (site/content/library/io-and-system/process.md), and a file is a list of bytes in
+# memory.
 MAX_FILE_BYTES = 1_048_576
 MAX_TOTAL_BYTES = 16_777_216
 COLLISION_HELP = "rename one of them, so that the package works on a case-insensitive file system"

@@ -1,8 +1,9 @@
 ## The byte encoding of the bytecode writer: little-endian integers, UTF-8 text, and the chunks the file is built from.
 ## A piece is a small `List[Int]` of bytes: appending a small piece to a list costs O(piece)
-## (docs/grammar/06b-builtins.md, List.concat), where a `Bytes` would copy what it already holds. The chunks keep the
-## pieces as a short open list, and seal it into a `Bytes` when it grows or a long piece comes, so the file is never
-## held as one `List[Int]`. join gives the file with one `Bytes.concat`, so nothing copies the output twice.
+## (site/content/library/data-structures/list.md, concat), where a `Bytes` would copy what it already holds. The
+## chunks keep the pieces as a short open list, and seal it into a `Bytes` when it grows or a long piece comes, so the
+## file is never held as one `List[Int]`. join gives the file with one `Bytes.concat`, so nothing copies the output
+## twice.
 
 # A piece of this many bytes or fewer joins the open list; a longer one is a chunk of its own.
 SMALL_PIECE = 32

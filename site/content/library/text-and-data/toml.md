@@ -37,7 +37,7 @@ end
 
 Errors: a duplicate key, a table defined twice, adding to an inline table or a static array, a dotted key that names a `[header]` table (or the reverse), `[[a]]` on a static array or table, control characters in strings and comments, and a lone carriage return.
 
-`Toml.get(value, path)` reads a dotted path (`"package.name"`). A segment of plain digits also indexes an array: `"bin.1.path"` is the second `[[bin]]`. A missing key gives an error naming it. A key that holds a dot cannot be reached this way: use `case` on the `Table`.
+`Toml.get(value, path)` reads a dotted path (`"package.name"`). A segment of plain digits (no sign, no leading zero) also indexes an array: `"bin.1.path"` is the second `[[bin]]`. A missing key gives an error naming it. A key that holds a dot cannot be reached this way: use `case` on the `Table`.
 
 ```agentica
 import Toml from "std/toml"

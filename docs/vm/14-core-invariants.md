@@ -332,4 +332,4 @@ Items in the plan to re-check with this rule before they start:
     enough, and does the change keep one way to wake a task and one place for
     each handle?
 
-[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
+[task-rules]: ../../site/content/library/concurrency/task.md

@@ -188,7 +188,8 @@ end
 ## Rules
 
 - `LogEvent` and `LogLevel` are builtin types. Their names are reserved: a struct or enum with either name is `CHECK-REDEFINED-NAME`.
-- Handlers and the global level live in the VM, and belong to one run. A child started with `Process.spawn` has its own.
+- Handlers and the global level live in the VM, and belong to one run. A child started with `Process.spawn` has its own. This registry is the language's only global state; `std/logger` reaches it through the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`).
+- Not planned for `std/logger`: log files and rotation, syslog, sampling, per-module levels, `Json` field values, configuration through environment variables, and lazy log arguments (a block given to `attach` is a handler, not a lazy message). Not planned for tracing: a language-level trace, trace lines on stdout, counters inside the tracer, a flag to turn stack traces off, and a stack of the parent task at spawn time; VM tracing is a developer tool of the VM, not a language feature.
 - There are no flags and no per-task metadata. Pass `fields` on each call, as the optional second argument.
 - Log calls are normal code, and count against `--max-steps`.
 - A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison. A call without `fields` also passes an empty map.

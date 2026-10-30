@@ -77,9 +77,10 @@ these, for each job:
 
 Elixir's `Task.async_stream` for a list: run a block for each item in its own
 task, at most `limit` at a time, each item with its own timeout, and get one
-`Result` per item, in input order. The contract is in the grammar
-([`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md), "`Task.map`");
-the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1 ("Task.map").
+`Result` per item, in input order. The contract is in
+[`library/concurrency/task.md`](../../site/content/library/concurrency/task.md)
+("Task.map"); the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1
+("Task.map").
 
 **Decisions:**
 
@@ -135,7 +136,9 @@ the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1 ("Task.map").
   `Task.cancel(task: Task[R]) -> Void` runs the same cancel as a timed-out item
   on the task it names. The use: a program keeps state in a task, uses it for a
   while, then drops it, without sending a "stop" message through a channel. The
-  contract is in the grammar ("Lightweight tasks"). A task that cancels itself
+  contract is in
+  [`library/concurrency/task.md`](../../site/content/library/concurrency/task.md)
+  ("Task.cancel"). A task that cancels itself
   or an ancestor is a descendant of the task it names, so it is cancelled with
   it: this is the plain walk with no special case. A cancel is not a crash. The
   `sched` trace line of the named task says `at=call`. `Task.await` with a
@@ -160,8 +163,8 @@ exception 1 of the std-first rule (time).
 
 A bounded buffer that tasks
 send values into and receive values from, so producer and consumer pipelines
-work. The contract is in the grammar
-([`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md), "Channels");
+work. The contract is in
+[`library/concurrency/channel.md`](../../site/content/library/concurrency/channel.md);
 the VM design (waits, reservations, close, owner, fairness) is in
 `docs/vm/10-io-scheduler.md` §10.2.2 ("Channel waits", `vm/channel.c`).
 
