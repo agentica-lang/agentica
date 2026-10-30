@@ -1,7 +1,8 @@
-# Blocks and Result
+# Blocks, Result and Optional
 
 The exact rule behind a checker error or a core question about blocks,
-closures, `Result` and `try`. Builtin methods and `to_s`: `builtins.md`.
+closures, `Result`, `try` and `Optional`. Builtin methods and `to_s`:
+`builtins.md`.
 
 ## Blocks and closures
 
@@ -65,3 +66,23 @@ error(message: String) -> Result[T]
   converted. `"x".to_i` is a Result, not `0`.
 - `Result.Ok(x)` and `Result.Err(m)` equal `ok(x)` and `error(m)`, as values and
   `case` patterns (`Result.Ok(_)` also for `Result[Void]`).
+
+## Optional
+
+```text
+some(value: T) -> Optional[T]
+none -> Optional[T]
+```
+
+- `Optional[T]` is a value that may be missing; it goes anywhere a type does
+  (fields, parameters, returns, list and map items) and nests.
+- `some(1)` is `Optional[Int]`. `none` needs an expected Optional type, as
+  `error` does (`CHECK-OPTIONAL-TYPE`): `age: Optional[Int] = none`.
+- `case o` needs both arms, `some(n) ->` and `none ->` (or `_`).
+- `o.unwrap_or(default)`, `o.unwrap!` (halts with `RUNTIME-UNWRAP-NONE` on
+  `none`), `o.map do |x| x + 1 end`, `o.some?`, `o.none?`,
+  `o.to_result("missing")` (a Result for `try`).
+- `==` compares two Optionals of a type with `==`: `o == none`,
+  `o == some(3)`. Prints as `some(3)` or `none`. A struct with an Optional
+  field is not JSON-encodable (`CHECK-NOT-ENCODABLE`).
+- `some`, `none`, `ok` and `error` cannot name a variable, function or field.

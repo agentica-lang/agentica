@@ -73,7 +73,7 @@ hello
 nil
 ```
 
-There are also lists, maps, structs, enums and results. Later pages show them.
+There are also lists, maps, structs, enums, results and [optional values](/library/data-structures/optional/) (`some(value)` or `none`). Later pages show them.
 
 `type Names = List[String]` gives a long type a short name. It is not a new type. Aliases cannot be constructors or enum patterns, and cycles are rejected.
 

@@ -10,6 +10,12 @@ section for the area you are changing.
 - `Result[T]` is builtin, with String errors and contextual `ok`/`error` typing.
   Forward expected types through the shared call path; do not add global
   inference or dummy payload types. Untyped errors are `CHECK-RESULT-TYPE`.
+- `Optional[T]` is `Types.Type.Optional`, checked like `Result` (`some` and
+  `none` are the catalog rules `OptionalSome` and `OptionalNone`; an untyped
+  `none` is `CHECK-OPTIONAL-TYPE`). At run time it is a value of the builtin
+  enum `Optional` (`lower_program.agc` `OPTIONAL`: `None`, `Some`), which the VM
+  prints as `none` and `some(x)`; `==` calls the VM builtin `Optional.equal`.
+  Its methods are prelude bodies (`stdlib/prelude/optional.agc`).
 - `try` is a unary expression node. It requires a Result-returning function
   (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through
   the current function's escape. It does not guarantee a return.
