@@ -33,7 +33,7 @@ section for the area you are changing.
   The checker allows only Int, Float or String elements/keys. sort_by calls the
   key once per element; the key callback's parameter type types an empty input
   list.
-- `index_of` returns character positions (an empty part is ok(0));
+- `index_of` returns character positions (an empty part is some(0));
   `from_code` rejects surrogates. `Float.to_int/to_int!` share `fallible`:
   NaN/infinity give RUNTIME-INVALID-NUMBER, out-of-range truncation
   RUNTIME-INTEGER-OVERFLOW. `Float` works as a builtin module prefix because

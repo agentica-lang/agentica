@@ -45,7 +45,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`some(x)` or `none`) instead of a `Result`: `try` on them is
   `CHECK-TYPE-MISMATCH` (use `.to_result("message")`), an `ok(...)` or
   `error(...)` arm is `CHECK-PATTERN-TYPE` (use `some(x)` and `none`), and
-  `.ok?` or `.message` is `CHECK-UNKNOWN-METHOD` (use `.some?` or `.none?`).
+  `.ok?`, `.error?` or `.message` is `CHECK-UNKNOWN-METHOD` (use `.some?` or
+  `.none?`). Rebuild `.agcb` files compiled by 0.17.x that call `m.get(k)` or
+  `s.index_of(part)`.
 
 ## [0.17.0] - 2026-10-30
 

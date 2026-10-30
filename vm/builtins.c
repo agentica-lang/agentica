@@ -248,26 +248,11 @@ static agc_value builtin_map_values(agc_vm *vm, agc_value *args, uint32_t span) 
   return map_walk(vm, agc_as_map(vm, args[0]), true, span);
 }
 
-static agc_string *ascii(const char *text) {
-  size_t n = strlen(text);
-  return agc_make_string(text, n, n);
-}
-
-/* m.get(k) as a Result, under the old "Map.get" key that front ends and .agcb files compiled before #831 PR 4
-   import; the catalog's key is "Map.get.optional". */
-static agc_value builtin_map_get(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  agc_value value;
-  if (agc_map_get(vm, agc_as_map(vm, args[0]), args[1], &value)) return agc_result_value(true, value);
-  agc_string *message = agc_concat(agc_concat(ascii("key "), agc_debug(vm, args[1])), ascii(" is not in the map"));
-  return agc_result_value(false, agc_string_value(message));
-}
-
+/* m.get(k): some(value), or none when the key is missing. */
 static agc_value builtin_map_get_optional(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   agc_value value;
   bool found = agc_map_get(vm, agc_as_map(vm, args[0]), args[1], &value);
-  return agc_optional_value(vm, found, found ? value : agc_void());
+  return agc_optional_value(vm, found, found ? value : agc_void(), span);
 }
 
 static agc_value builtin_map_get_default(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -534,7 +519,6 @@ const agc_builtin agc_core_builtins[] = {
   {"Map.size", 1, builtin_map_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Map.keys", 1, builtin_map_keys, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"Map.values", 1, builtin_map_values, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Map.get.optional", 2, builtin_map_get_optional, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},

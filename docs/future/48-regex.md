@@ -17,8 +17,8 @@ roadmap](../roadmap/pending-general-programming-and-mcp.md).
 - The string escapes are `\"`, `\\`, `\#`, `\n`, `\r` and `\t`
   (`docs/grammar/04-lexical.md`), so `"\d"` is `LEX-INVALID-ESCAPE`. There are
   no raw strings.
-- "Maybe" is `Result[T]`: `String.index_of` and `Map.get` (two arguments) return
-  `error(...)` when a value is absent. There is no builtin `Option`.
+- "Maybe" is `Optional[T]`: `String.index_of` and `Map.get` (two arguments)
+  return `none` when a value is absent.
 - A builtin runs to its end once started, so a C matcher without a stepper could
   hold the scheduler for a whole scan (`docs/vm/10-io-scheduler.md`,
   "Builtins").

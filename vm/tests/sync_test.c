@@ -175,8 +175,7 @@ static void test_leaf_and_direct_rows(void) {
     bool leaf, direct;
   } expected[] = {
       {"List.size", 1, true, false},     {"List.at", 2, true, false},        {"String.length", 1, true, false},
-      {"Int.bit_and", 2, true, false},   {"Map.get", 2, false, true},        {"Map.put", 3, false, true},
-      {"Map.get.optional", 2, false, true},
+      {"Int.bit_and", 2, true, false},   {"Map.get.optional", 2, false, true}, {"Map.put", 3, false, true},
       {"Map.has_key?", 2, false, true},  {"Set.include?", 2, false, true},   {"List.concat", 2, false, true},
       {"String.slice", 3, false, true},  {"String.split", 2, false, true},   {"puts", 1, false, false},
       {"List.map", 2, false, false},     {"IO.gets", 0, false, false},       {"Task.spawn", 1, false, false},
