@@ -173,6 +173,38 @@ def test_sha256_in_eight_tasks_on_four_schedulers_matches_hashlib(tmp_path):
     assert [json.loads(line) for line in result.stdout.splitlines()] == expected
 
 
+# Cipher and CMAC run without the shared lock (vm/crypto.c), so eight tasks encrypt, decrypt and MAC 64 KiB each at
+# once, which fills OpenSSL's fetch caches from several schedulers (vm/tools/tsan.supp names their wrappers). Each
+# task's answer must equal the same work done again in one task after the parallel run.
+CIPHER_TASKS = """\
+def work(seed: Int) -> Result[String]
+  bytes = (0..65535).to_a.map do |i|
+    (i * 13 + seed * 5) % 256
+  end
+  data = try Bytes.from_list(bytes)
+  key = data.drop(8).take(24)
+  iv = data.take(8)
+  sealed = try Cipher.des_ede3_cbc_encrypt(key, iv, data)
+  opened = try Cipher.des_ede3_cbc_decrypt(key.take(16), iv, try Cipher.des_ede3_cbc_encrypt(key.take(16), iv, data))
+  aes = try CMAC.aes(key.take(16), data)
+  tdes = try CMAC.des_ede3(key, data)
+  return ok("#{Digest.sha256_hexdigest(sealed)} #{opened == data} #{Digest.hexencode(aes + tdes)}")
+end
+
+def main() -> Void
+  results = Task.map((1..8).to_a, 8, 30000, &work)
+  for seed in 1..8
+    puts(results[seed - 1].unwrap! == work(seed).unwrap!)
+  end
+end
+"""
+
+
+def test_cipher_and_cmac_in_eight_tasks_on_four_schedulers_match_one_task(tmp_path):
+    result = vm(program(tmp_path, "cipher", CIPHER_TASKS))
+    assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
+
+
 # SecureRandom runs without the shared lock (vm/crypto.c; OpenSSL 3 keeps one generator per thread), so eight tasks
 # draw at once. 64 KiB of bytes and a uuid from each task repeat with negligible chance (2 ** -122 per uuid pair).
 SECURE_RANDOM_TASKS = """\

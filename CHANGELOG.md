@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   and exits 1 if any failed; `--json` gives one entry per file.
 - `TLS.connect` takes an optional client certificate and key (`cert_file`,
   `key_file`) for servers that require one (mTLS).
+- `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`
+  and `CMAC.des_ede3`, for payment formats.
 - `Optional[T]`, a builtin type for a value that may be missing: `some(x)` and
   `none`, `case` arms `some(n) ->` and `none ->`, `==`, and the methods
   `unwrap_or`, `unwrap!`, `map`, `some?`, `none?` and `to_result`.
@@ -23,6 +25,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
   `TLS.connect`.
+- **Breaking:** `Cipher` and `CMAC` are reserved type names.
 - **Breaking:** `Optional` is a reserved type name, and `some` and `none` are
   reserved names, as `ok` and `error` are.
 

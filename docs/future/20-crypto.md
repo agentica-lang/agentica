@@ -29,7 +29,8 @@ its names. `Crypto` stays a reserved type name only.
 - Hex and Base64 are the `Digest.hexencode`/`hexdecode` and `Base64` builtins
   (`docs/grammar/06b-builtins.md`).
 - No low-level primitives: no raw block ciphers, no ECB, no unauthenticated
-  modes.
+  modes. The one exception is Triple DES CBC with CMAC (#825), for payment
+  formats (`docs/grammar/06b-builtins.md`).
 - Errors are `Result` values. Hashes and HMAC have no effect label; the
   calls that draw random bytes use the existing `random` label.
 

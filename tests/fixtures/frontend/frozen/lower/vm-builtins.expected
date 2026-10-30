@@ -24,11 +24,15 @@ Bytes.plus
 Bytes.slice
 Bytes.take
 Bytes.to_a
+CMAC.aes
+CMAC.des_ede3
 Channel.close
 Channel.closed?
 Channel.new
 Channel.recv
 Channel.send
+Cipher.des_ede3_cbc_decrypt
+Cipher.des_ede3_cbc_encrypt
 Digest.hexdecode.bytes
 Digest.hexencode.bytes
 Digest.md5.bytes

@@ -334,13 +334,27 @@ static void test_crypto_keys(void) {
     "Base64.strict_encode64.bytes", "Digest.hexencode.bytes",
   };
   static const char *const two_data[] = {"HMAC.sha256.bytes", "HMAC.sha256_hexdigest.bytes", "HMAC.sha512.bytes",
-                                         "HMAC.sha512_hexdigest.bytes", "HMAC.secure_compare.bytes"};
+                                         "HMAC.sha512_hexdigest.bytes", "HMAC.secure_compare.bytes",
+                                         "CMAC.aes", "CMAC.des_ede3"};
+  static const char *const three_data[] = {"Cipher.des_ede3_cbc_encrypt", "Cipher.des_ede3_cbc_decrypt"};
   agc_value datas[] = {raw("", 0), raw("hello\xff\x00", 7)};
   for (size_t d = 0; d < 2; d++) {
     for (size_t k = 0; k < sizeof one_data / sizeof one_data[0]; k++) (void)call(one_data[k], 1, &datas[d]);
     agc_value args[2] = {datas[d], datas[1 - d]};
     for (size_t k = 0; k < sizeof two_data / sizeof two_data[0]; k++) (void)call(two_data[k], 2, args);
+    /* Neither size is a Triple DES key, IV or block: an error Result. */
+    agc_value cipher_args[3] = {datas[d], datas[1 - d], datas[d]};
+    for (size_t k = 0; k < sizeof three_data / sizeof three_data[0]; k++)
+      assert(!agc_as_result(&vm, call(three_data[k], 3, cipher_args))->ok);
   }
+  /* Sizes that fit give ok, and a 0xFF and a NUL in the key are bytes like any other. */
+  agc_value key = raw("hello\xff\x00!0123456789abcdef", 24), iv = raw("\x00\xff\x00\xff\x00\xff\x00\xff", 8);
+  agc_value cipher_args[3] = {key, iv, raw("\xff\x00\xff\x00\xff\x00\xff\x00", 8)};
+  const agc_result *sealed = agc_as_result(&vm, call("Cipher.des_ede3_cbc_encrypt", 3, cipher_args));
+  assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 8);
+  agc_value cmac_args[2] = {key, datas[1]};
+  const agc_result *tag = agc_as_result(&vm, call("CMAC.des_ede3", 2, cmac_args));
+  assert(tag->ok && agc_as_bytes(&vm, tag->value)->len == 8);
   agc_value hello = text("aGVsbG8=");
   const agc_result *decoded = agc_as_result(&vm, call("Base64.strict_decode64.bytes", 1, &hello));
   assert(decoded->ok && agc_as_bytes(&vm, decoded->value)->len == 5);
@@ -354,6 +368,9 @@ static void test_crypto_keys(void) {
   fails("Digest.sha256.bytes", 1, &list, "RUNTIME-INTERNAL");
   fails("Digest.hexencode.bytes", 1, &list, "RUNTIME-INTERNAL");
   fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
+  fails("CMAC.aes", 2, pair, "RUNTIME-INTERNAL");
+  agc_value triple[3] = {key, list, datas[1]};
+  fails("Cipher.des_ede3_cbc_decrypt", 3, triple, "RUNTIME-INTERNAL");
 }
 
 /* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a

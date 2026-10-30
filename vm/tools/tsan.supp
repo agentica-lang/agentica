@@ -13,12 +13,15 @@ race:uv__process_child_init
 # SIGCHLD that lands on a scheduler thread looks like a race with the uv_signal_start of the first Process.spawn on the
 # I/O thread. A plain libuv program reports the same pair. Only that handler's stack is suppressed.
 race:uv__signal_handler
-# EVP digests, HMACs and RAND_bytes look up and fill OpenSSL's fetch caches (methods, providers, generators) under the
-# system libcrypto's own locks and atomics, which TSan cannot see: when two schedulers hash, sign or draw at once, it
-# reports a race on that cached data (#532). TSan unwinds by frame pointers, which libcrypto does not keep, so a report
-# skips the adapter function that calls libcrypto (agc_digest, agc_hmac, agc_secure_random) and shows its caller
-# first. Only the three out-of-line wrappers in vm/crypto.c that do nothing but call the adapter are named, so a race
-# in the builtin code around them is still reported.
+# EVP digests, HMACs, ciphers, CMACs and RAND_bytes look up and fill OpenSSL's fetch caches (methods, providers,
+# generators) under the system libcrypto's own locks and atomics, which TSan cannot see: when two schedulers hash,
+# sign, encrypt or draw at once, it reports a race on that cached data (#532). TSan unwinds by frame pointers, which
+# libcrypto does not keep, so a report skips the adapter function that calls libcrypto (agc_digest, agc_hmac,
+# agc_secure_random, agc_des_ede3_cbc, agc_cmac) and shows its caller first. Only the five out-of-line wrappers in
+# vm/crypto.c that do nothing but call the adapter are named, so a race in the builtin code around them is still
+# reported.
 race:digest_compute
 race:hmac_compute
 race:secure_draw
+race:cipher_compute
+race:cmac_compute

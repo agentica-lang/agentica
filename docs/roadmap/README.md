@@ -139,7 +139,8 @@ Weighed later (no fixed order):
   - **Next work:** UDP (leaves the core plan, item 12 above), then the rest of
     the crypto module (`docs/future/20-crypto.md` §20: password hashing and
     AEAD on OpenSSL 3). `Base64`, `Digest`, `HMAC` (with
-    `HMAC.secure_compare`) and `SecureRandom` have landed
+    `HMAC.secure_compare`), `SecureRandom`, and Triple DES CBC and CMAC
+    (`Cipher`, `CMAC`) have landed
   - **Outcome:** Programs send UDP and encrypt
 
 - **Order:** 7.6

@@ -62,7 +62,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `Profile`, step costs |
-| `binary.md` | bytes, bit operations, `Digest` hashes, `HMAC`, `Base64`, hex, `SecureRandom`, `std/binary` (`read_u16_be`, `frame`) |
+| `binary.md` | bytes, bit operations, `Digest` hashes, `HMAC`, Triple DES (`Cipher`) and `CMAC`, `Base64`, hex, `SecureRandom`, `std/binary` (`read_u16_be`, `frame`) |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
