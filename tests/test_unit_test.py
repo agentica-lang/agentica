@@ -235,7 +235,7 @@ class UnitTest(TestCase):
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)
         self.assertEqual(status, 0)
-        self.assertEqual((report["passed"], report["failed"]), (23, 0))
+        self.assertEqual((report["passed"], report["failed"]), (24, 0))
 
     @slow
     def test_a_stderr_flood_a_print_without_end_and_a_flooding_step_listing_hit_the_output_limits(self):

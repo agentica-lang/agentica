@@ -9,6 +9,6 @@ def main() -> Void
   client = Result.unwrap!(HTTP.client(HTTP.client_options()))
   response = Result.unwrap!(HTTP.get(client, arguments[0]))
   puts(String.from_int(response.status))
-  puts(response.body)
+  puts(HTTP.text(response.body, response.headers).unwrap!)
   HTTP.close_client(client)
 end

@@ -9,7 +9,7 @@ struct Call
 end
 
 def post(call: Call) -> Result[HttpResponse]
-  return HTTP.post(call.pool, call.url, [], "do not send")
+  return HTTP.post(call.pool, call.url, "do not send".bytes)
 end
 
 def main() -> Void

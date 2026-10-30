@@ -8,7 +8,7 @@ struct Stats
 end
 
 def text_response(status: Int, body: String) -> HttpResponse
-  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "text/plain")], body: body)
+  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "text/plain")], body: body.bytes)
 end
 
 def stats_response(body: String) -> HttpResponse

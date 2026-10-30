@@ -30,19 +30,19 @@ end
 def quote(client: HttpClient, base: String, item: String, quantity: Int) -> String
   body = JSON.encode(Quote(item: item, quantity: quantity))
   headers = [Header(name: "Content-Type", value: "application/json")]
-  sent = HTTP.post(client, base + "/quote", headers, body)
+  sent = HTTP.post(client, base + "/quote", body.bytes, headers)
   if !sent.ok?
     return "error: no response"
   end
   response = sent.unwrap!
   if response.status == 200
-    reply = JSON.decode(response.body, Reply)
+    reply = JSON.decode(HTTP.text(response.body, response.headers).unwrap!, Reply)
     if !reply.ok?
       return "error: bad response"
     end
     return "#{item}: #{reply.unwrap!.total_cents}"
   elsif response.status == 400 || response.status == 404
-    return failure_text(response.body)
+    return failure_text(HTTP.text(response.body, response.headers).unwrap!)
   end
   return "error: bad response"
 end

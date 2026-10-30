@@ -1,7 +1,7 @@
 import HTTP from "std/http"
 
 def reply(status: Int, body: String) -> Result[HttpResponse]
-  return ok(HttpResponse(status: status, headers: [Header(name: "X-Seen", value: "yes")], body: body))
+  return ok(HttpResponse(status: status, headers: [Header(name: "X-Seen", value: "yes")], body: body.bytes))
 end
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
@@ -9,7 +9,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return error("the handler failed")
   end
   if request.path == "/unsendable"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Length", value: "3")], body: "abc"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Length", value: "3")], body: "abc".bytes))
   end
   if request.path == "/empty"
     return reply(204, "")
@@ -18,7 +18,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return reply(304, "")
   end
   if request.path == "/close"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Connection", value: "close")], body: "bye"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Connection", value: "close")], body: "bye".bytes))
   end
   if request.path == "/large"
     return reply(200, "0123456789abcdefg")
@@ -26,13 +26,22 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.path == "/missing"
     return reply(404, "not found")
   end
+  if request.path == "/binary"
+    return ok(HttpResponse(status: 200, headers: [], body: Bytes.from_list([255, 0, 128]).unwrap!))
+  end
+  if request.path == "/latin1"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=ISO-8859-1")], body: "caf".bytes + Bytes.from_list([233]).unwrap!))
+  end
+  if request.path == "/quoted"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; format=flowed; charset=\"UTF-8\"")], body: "ñandú".bytes))
+  end
   kind = HTTP.header_values(request.headers, "x-kind")
   return reply(200, "#{request.method} #{request.target} #{request.path} #{kind} [#{request.body}]")
 end
 
 def show(r: Result[HttpResponse]) -> Void
   case r
-    ok(response) -> puts("#{response.status} #{HTTP.header_values(response.headers, "x-seen")} #{HTTP.header_values(response.headers, "content-length")} #{HTTP.header_values(response.headers, "connection")} [#{response.body}]")
+    ok(response) -> puts("#{response.status} #{HTTP.header_values(response.headers, "x-seen")} #{HTTP.header_values(response.headers, "content-length")} #{HTTP.header_values(response.headers, "connection")} [#{HTTP.text(response.body, response.headers).unwrap!}]")
     error(message) -> puts("error: #{message}")
   end
 end
@@ -60,17 +69,24 @@ def main() -> Void
   pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64, ca_file: "")).unwrap!
   show(HTTP.get(pool, base + "/hello?x=1"))
   show(HTTP.get(pool, base + "/again"))
-  show(HTTP.post(pool, base + "/form", [Header(name: "X-Kind", value: "a"), Header(name: "x-kind", value: "b")], "ñandú"))
-  show(HTTP.request(pool, "HEAD", base + "/head", [], ""))
+  show(HTTP.post(pool, base + "/form", "ñandú".bytes, [Header(name: "X-Kind", value: "a"), Header(name: "x-kind", value: "b")]))
+  show(HTTP.request(pool, "HEAD", base + "/head", "".bytes))
   show(HTTP.get(pool, base + "/empty"))
   show(HTTP.get(pool, base + "/same"))
   show(HTTP.get(pool, base + "/missing"))
-  show(HTTP.post(pool, base + "/limit", [], "0123456789abcdef"))
+  show(HTTP.get(pool, base + "/quoted"))
+  binary = HTTP.get(pool, base + "/binary").unwrap!
+  IO.inspect(binary.body)
+  IO.inspect(HTTP.text(binary.body, binary.headers))
+  latin = HTTP.get(pool, base + "/latin1").unwrap!
+  IO.inspect(latin.body)
+  IO.inspect(HTTP.text(latin.body, latin.headers))
+  show(HTTP.post(pool, base + "/limit", "0123456789abcdef".bytes))
   show(HTTP.get(pool, base + "/close"))
   show(HTTP.get(pool, base + "/after-close"))
   show(HTTP.get(pool, base + "/fail"))
   show(HTTP.get(pool, base + "/unsendable"))
-  show(HTTP.post(pool, base + "/over", [], "0123456789abcdefg"))
+  show(HTTP.post(pool, base + "/over", "0123456789abcdefg".bytes))
   small = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16, ca_file: "")).unwrap!
   show(HTTP.get(small, base + "/large"))
   HTTP.close_client(small)

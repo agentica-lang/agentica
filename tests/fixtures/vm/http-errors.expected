@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 5869,
+  "steps": 6026,
   "stdout": [
     "error(\"http: every option must be positive\")",
     "error(\"http: max_connections must be at most 65536\")",
@@ -20,7 +20,7 @@
     "error(\"http: invalid method\")",
     "error(\"http: request body exceeds max_body_bytes\")",
     "error(\"http: body exceeds max_body_bytes\")",
-    "error(\"http: response body is not valid UTF-8\")",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"1\")], body: <Bytes 1 ff>))",
     ""
   ],
   "stderr": []

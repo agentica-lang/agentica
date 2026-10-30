@@ -94,7 +94,8 @@ export def foreign_names() -> Map[String, String]
     "Float.to_string": "use x.to_s",
     "Hash.new": "use a map literal with a type: m: Map[String, Int] = {}",
     "HttpWriter": (
-      "a std/http handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"
+      "a std/http handler returns its whole response: " +
+      "return ok(HttpResponse(status: 200, headers: [], body: text.bytes))"
     ),
     "Int.parse": "use s.to_i (a Result) or s.to_i!",
     "Int.to_float": "use n.to_f",

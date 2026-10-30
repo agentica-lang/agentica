@@ -8,7 +8,7 @@ struct Stats
 end
 
 def json_response(status: Int, body: String) -> HttpResponse
-  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "application/json")], body: body)
+  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "application/json")], body: body.bytes)
 end
 
 def failure(status: Int, message: String) -> HttpResponse
@@ -17,7 +17,7 @@ end
 
 def not_allowed(allow: String) -> HttpResponse
   headers = [Header(name: "Content-Type", value: "application/json"), Header(name: "Allow", value: allow)]
-  return HttpResponse(status: 405, headers: headers, body: JSON.encode({"error": "method not allowed"}))
+  return HttpResponse(status: 405, headers: headers, body: JSON.encode({"error": "method not allowed"}).bytes)
 end
 
 def integers(root: Json) -> Result[List[Int]]

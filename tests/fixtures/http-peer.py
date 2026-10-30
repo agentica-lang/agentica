@@ -47,7 +47,7 @@ class Web(http.server.BaseHTTPRequestHandler):
         pass
 
     def reply(self, status, body, headers=()):
-        data = body.encode()
+        data = body if isinstance(body, bytes) else body.encode()
         self.send_response(status)
         for name, value in headers:
             self.send_header(name, value)
@@ -71,6 +71,10 @@ class Web(http.server.BaseHTTPRequestHandler):
             for piece in [b"\xc3", b"\xb1and\xc3\xba", b" chunks"]:
                 self.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
             self.wfile.write(b"0\r\nX-Trailer: t\r\n\r\n")
+        elif self.path == "/binary":
+            self.reply(200, b"\xff\x00\x80", [("Content-Type", "application/octet-stream")])
+        elif self.path == "/latin1":
+            self.reply(200, "caf\u00e9".encode("latin-1"), [("Content-Type", "text/plain; charset=iso-8859-1")])
         elif self.path == "/close":
             self.send_response(200)
             self.send_header("Connection", "close")

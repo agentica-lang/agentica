@@ -1,7 +1,7 @@
 import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "served"))
+  return ok(HttpResponse(status: 200, headers: [], body: "served".bytes))
 end
 
 def keep(server: HttpServer) -> Result[Void]
@@ -22,7 +22,7 @@ end
 
 def show(label: String, outcome: Result[HttpResponse]) -> Void
   case outcome
-    ok(response) -> puts("#{label}: #{response.status} #{response.body}")
+    ok(response) -> puts("#{label}: #{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
     error(message) -> puts("#{label}: refused")
   end
 end

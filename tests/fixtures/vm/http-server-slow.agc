@@ -10,7 +10,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   else
     Task.sleep(300)
   end
-  return ok(HttpResponse(status: 200, headers: [], body: "slow #{request.path}"))
+  return ok(HttpResponse(status: 200, headers: [], body: "slow #{request.path}".bytes))
 end
 
 def fetch(url: String) -> Result[HttpResponse]

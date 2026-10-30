@@ -24,6 +24,12 @@ def serve(listener: Listener) -> List[String]
   seen = head(socket, port, seen)
   TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
   TCP.close(socket)
+  socket = Result.unwrap!(TCP.accept(listener, 5000))
+  seen = head(socket, port, seen)
+  # A body that is not UTF-8: the client keeps it as it came.
+  TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 3\r\n\r\n", 5000)
+  TCP.send_bytes(socket, Bytes.from_list([255, 0, 128]).unwrap!, 5000)
+  TCP.close(socket)
   return seen
 end
 
@@ -34,17 +40,21 @@ def main() -> Void
   pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
   base = "http://127.0.0.1:#{port}"
   first = Result.unwrap!(HTTP.get(pool, base + "/a?b=1#frag"))
-  second = HTTP.request(pool, "DELETE", base, [Header(name: "X-Id", value: "7")], "")
-  third = HTTP.post(pool, base + "/form", [], "ping\r\n")
+  second = HTTP.request(pool, "DELETE", base, "".bytes, [Header(name: "X-Id", value: "7")])
+  third = HTTP.post(pool, base + "/form", "ping\r\n".bytes)
   fourth = HTTP.get(pool, base + "/again")
+  fifth = Result.unwrap!(HTTP.get(pool, base + "/binary"))
   HTTP.close_client(pool)
   closed = HTTP.get(pool, base)
   IO.inspect(first.status)
   IO.inspect(first.body)
+  IO.inspect(HTTP.text(first.body, first.headers))
   IO.inspect(HTTP.header_values(first.headers, "X-NOTE"))
   IO.inspect(second)
   IO.inspect(third)
   IO.inspect(fourth)
+  IO.inspect(fifth.body)
+  IO.inspect(HTTP.text(fifth.body, fifth.headers))
   IO.inspect(closed)
   for line in Task.await(server)
     puts(line)

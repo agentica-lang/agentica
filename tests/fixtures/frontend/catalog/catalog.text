@@ -91,7 +91,7 @@ builtin HttpWire.connect_tls forms=1
 builtin HttpWire.drop_tls forms=1
   HttpWire.drop_tls(client: HttpClient) -> Void shape=(Opaque(HttpClient)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
 builtin HttpWire.encode_request forms=1
-  HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(Header)), String, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
+  HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: Bytes, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(Header)), Bytes, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
 builtin HttpWire.encode_response forms=1
   HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpRequest), Struct(HttpResponse), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the text of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
 builtin HttpWire.error_answer forms=1
@@ -863,11 +863,11 @@ record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int,
 record Header name: String, value: String
 record HttpClientOptions timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String
 record HttpRequest method: String, target: String, path: String, headers: List(Struct(Header)), body: String
-record HttpResponse status: Int, headers: List(Struct(Header)), body: String
+record HttpResponse status: Int, headers: List(Struct(Header)), body: Bytes
 record HttpServerOptions request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
 record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
-record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: String, deadline: Int, reply: Channel(Result(Struct(HttpResponse))), worker: Int, kept: Bool
+record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: Bytes, deadline: Int, reply: Channel(Result(Struct(HttpResponse))), worker: Int, kept: Bool
 record HttpWire.Reply head: String, closes: Bool
 record HttpWire.Response status: Int, headers: List(Struct(Header)), length: Int, chunked: Bool, until_close: Bool, closes: Bool, buffered: Int, ended: Bool
 record HttpWire.Text text: String, carry: Bytes, bytes: Int, valid: Bool, buffered: Int, ended: Bool

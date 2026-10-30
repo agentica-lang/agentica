@@ -1,7 +1,7 @@
 ### 10.6 HTTP parsing
 
-HTTP on the VM uses whole messages and `String` bodies. Streaming waits for
-channels (10.7). The rules of this section are fixed by the hostile-case tests
+HTTP on the VM uses whole messages. A response body is `Bytes` (a request body
+the server reads is still a `String`). Streaming waits for channels (10.7). The rules of this section are fixed by the hostile-case tests
 (10.7.4).
 
 - Well-formed messages give the status, headers and body, as an ok `Result`.
@@ -93,10 +93,11 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   of at most 1 MiB with no `String`) may use: the transfer stops at its
   `max_total_bytes`, the file never grows past it, and a failed download
   keeps the partial file.
-- **Bodies are text.** A request or response body must be valid UTF-8. The
-  client returns an `error` for a response body that is not, and the server
-  answers 400 without running the handler. Binary bodies are not built yet
-  (#803). `Content-Encoding` stays raw.
+- **Response bodies are bytes.** The client keeps a response body as it came,
+  and a handler returns `Bytes`; `HTTP.text` decodes UTF-8 only (a `charset`
+  other than `utf-8` is an error). A request body the server reads must still
+  be valid UTF-8, or the server answers 400 without running the handler
+  (#855). `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).

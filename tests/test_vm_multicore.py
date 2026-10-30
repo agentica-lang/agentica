@@ -2622,7 +2622,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.path == "/slow"
     Task.sleep(300)
   end
-  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))
 end
 
 def load(l: Load) -> Int
@@ -2630,7 +2630,7 @@ def load(l: Load) -> Int
   i = 0
   while i < l.requests
     r = HTTP.get(l.pool, "#{l.base}/#{i}")
-    if r.ok? && r.unwrap!.body == "/#{i}"
+    if r.ok? && r.unwrap!.body == "/#{i}".bytes
       same = same + 1
     end
     i = i + 1
@@ -2640,7 +2640,7 @@ end
 
 def slow(l: Load) -> Result[String]
   response = try HTTP.get(l.pool, l.base + "/slow")
-  return ok(response.body)
+  return HTTP.text(response.body, response.headers)
 end
 
 # GETs until one fails: the count of answers before the server closed. A wrong body counts as a failure (-1000).
@@ -2649,7 +2649,7 @@ def until_closed(l: Load) -> Int
   while true
     case HTTP.get(l.pool, "#{l.base}/#{answers}")
       ok(response) ->
-        if response.body != "/#{answers}"
+        if response.body != "/#{answers}".bytes
           return -1000
         end
         answers = answers + 1
@@ -2746,7 +2746,7 @@ def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_
 HTTP_QUEUED = r"""import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "never"))
+  return ok(HttpResponse(status: 200, headers: [], body: "never".bytes))
 end
 
 def main() -> Void
@@ -2798,7 +2798,7 @@ def spin(request: HttpRequest) -> Result[HttpResponse]
     n = n + text.reverse.length
   end
   TCP.close(signal)
-  return ok(HttpResponse(status: 200, headers: [], body: "#{n}"))
+  return ok(HttpResponse(status: 200, headers: [], body: "#{n}".bytes))
 end
 
 def main() -> Void

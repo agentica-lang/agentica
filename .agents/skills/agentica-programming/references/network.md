@@ -72,21 +72,22 @@ HTTP.client_options() -> HttpClientOptions
 HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download_options() -> DownloadOptions
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
 
 Header(name: String, value: String)
-HttpResponse(status: Int, headers: List[Header], body: String)
+HttpResponse(status: Int, headers: List[Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[Header], bytes_written: Int)
 HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String)
 ```
 
-- Every call is whole: it returns after the full body is read, which must be
-  valid UTF-8 within `max_body_bytes`. `client_options()` gives a 30 s timeout,
+- Every call is whole: it returns after the full body is read, as `Bytes` of at
+  most `max_body_bytes`, with any content. `client_options()` gives a 30 s timeout,
   a 30 s idle timeout, 4 connections per origin, a 1 MiB body limit and system
   CA trust. Options must be positive; `max_connections` is at most 65536 and
   `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the whole call.
@@ -101,7 +102,7 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   a timeout is `network: operation timed out`. No streaming, automatic redirect
   or gzip decoding. The client runs as Agentica code in tasks of its own, so it
   spends the run's `--max-steps` budget.
-- `download` streams a `GET` body to a new file instead of a `String`, for
+- `download` streams a `GET` body to a new file instead of `Bytes`, for
   binary-safe bodies up to 256 MiB: at most 1 MiB is held at once, every
   framing (`Content-Length`, chunked, close-delimited) counts against
   `max_total_bytes`, and the file never grows past it. The file must not
@@ -109,9 +110,13 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   download keeps the partial file. 4xx and 5xx still return `ok` with their
   status and written body, without redirect follow; the connection is not
   pooled. `DownloadOptions()` and `download_options()` give 30 s and 256 MiB.
+- A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
+  it with `HTTP.text(response.body, response.headers)`, which decodes UTF-8
+  only: a `charset` in `Content-Type` other than `utf-8`, or a body that is not
+  valid UTF-8, is an error (other charsets: the planned `agentica-lang/charset`
+  package). `HttpResponse` is not JSON encodable.
 - Names that do not exist: `HTTP.client()` (write
-  `HTTP.client(HTTP.client_options())`), `HTTP.text(response.body, t)`
-  (`response.body`), `header_timeout_ms` (`request_timeout_ms`), and `read`,
+  `HTTP.client(HTTP.client_options())`), `response.text`, `header_timeout_ms` (`request_timeout_ms`), and `read`,
   `trailers`, `close_body`, `request_stream` (one whole `HTTP.request`).
 
 ## HTTP server (`std/http`)
@@ -140,10 +145,10 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
 
-  return ok(HttpResponse(status: 404, headers: [], body: "not found\n"))
+  return ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void

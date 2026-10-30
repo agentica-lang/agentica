@@ -56,7 +56,7 @@ end
 
 def show(r: Result[HttpResponse]) -> String
   case r
-    ok(response) -> return "#{response.status} [#{String.length(response.body)} chars]"
+    ok(response) -> return "#{response.status} [#{response.body.size} bytes]"
     error(message) -> return message
   end
 end
@@ -66,7 +66,7 @@ def main() -> Void
   base = "http://127.0.0.1:#{TCP.local_port(listener)}"
   server = Task.spawn(&serve, listener)
   pool = Result.unwrap!(HTTP.client(HTTP.client_options().with(max_connections: 1, timeout_ms: 5000)))
-  puts("HEAD /head: #{show(HTTP.request(pool, "HEAD", base + "/head", [], ""))}")
+  puts("HEAD /head: #{show(HTTP.request(pool, "HEAD", base + "/head", "".bytes))}")
   for path in ["/head", "/head", "/extra", "/extra", "/chunked", "/chunked", "/204", "/204"]
     puts("#{path}: #{show(HTTP.get(pool, base + path))}")
   end

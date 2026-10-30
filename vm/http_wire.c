@@ -17,7 +17,7 @@
 #include <string.h>
 #include <time.h>
 
-/* The widest body HttpWire takes: std/http caps the text bodies of get and the
+/* The widest body HttpWire takes: std/http caps the bodies of the client and the
    server at 64 MiB itself, and only a file download may use up to this. */
 #define MAX_BODY ((int64_t)256 * 1024 * 1024)
 
@@ -409,12 +409,12 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   if (request->n != 5 || response->n != 3) return "invalid response";
   int64_t status = agc_as_int(vm, response->fields[0]);
   const agc_list *headers = agc_as_list(vm, response->fields[1]);
-  const agc_string *body = agc_as_string(vm, response->fields[2]);
+  const agc_bytes *body = agc_as_bytes(vm, response->fields[2]);
   bool close = agc_http_list_closes(vm, agc_as_list(vm, request->fields[3])) || agc_http_list_closes(vm, headers);
   *closes = close;
   if (status < 200 || status > 599) return "the status must be 200..599";
   bool bodyless = status == 204 || status == 304;
-  if (bodyless && body->bytes) return "a 204 or 304 response cannot have a body";
+  if (bodyless && body->len) return "a 204 or 304 response cannot have a body";
   char line[96];
   int len = snprintf(line, sizeof line, "HTTP/1.1 %" PRId64 " %s\r\n", status, reason_of(status));
   agc_http_put(b, line, (size_t)len);
@@ -425,7 +425,7 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   if (bad) return bad;
   if (!has_named(vm, headers, "date")) put_date(b, now_ms);
   if (!bodyless) {
-    len = snprintf(line, sizeof line, "Content-Length: %zu\r\n", body->bytes);
+    len = snprintf(line, sizeof line, "Content-Length: %zu\r\n", body->len);
     agc_http_put(b, line, (size_t)len);
   }
   if (close) agc_http_put_text(b, "Connection: close\r\n");
@@ -482,7 +482,7 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
   int64_t port = agc_as_int(vm, args[2]);
   const agc_string *method = agc_as_string(vm, args[3]);
   const agc_string *target = agc_as_string(vm, args[4]);
-  const agc_string *body = agc_as_string(vm, args[6]);
+  const agc_bytes *body = agc_as_bytes(vm, args[6]);
   if (!agc_http_token((const uint8_t *)method->data, method->bytes) || text_is(method, "CONNECT"))
     return "invalid method";
   if (target->bytes == 0) return "invalid request target";
@@ -504,8 +504,8 @@ static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *
   agc_http_put_text(b, "\r\n");
   size_t count = 1;
   bool post = text_is(method, "POST") || text_is(method, "PUT") || text_is(method, "PATCH");
-  if (body->bytes || post) {
-    snprintf(number, sizeof number, "Content-Length: %zu\r\n", body->bytes);
+  if (body->len || post) {
+    snprintf(number, sizeof number, "Content-Length: %zu\r\n", body->len);
     agc_http_put_text(b, number);
     count++;
   }
@@ -528,7 +528,7 @@ static agc_value builtin_encode_request(agc_vm *vm, agc_value *args, uint32_t sp
   if (!host_text(agc_as_string(vm, args[1]))) return agc_error_value("http: invalid host");
   int64_t port = agc_as_int(vm, args[2]);
   if (port < 1 || port > 65535) return agc_error_value("http: port must be 1..65535");
-  if ((int64_t)agc_as_string(vm, args[6])->bytes > agc_http_max_body(vm, args[7], span))
+  if ((int64_t)agc_as_bytes(vm, args[6])->len > agc_http_max_body(vm, args[7], span))
     return agc_error_value("http: request body exceeds max_body_bytes");
   agc_http_bytes out = {0};
   const char *bad = request_head(vm, &out, args, text_is(scheme, "https"));

@@ -33,9 +33,9 @@ def main() -> Void
   for url in ["ftp://x/", "http://", "http://u@h/", "http://h:/", "http://h:0/", "http://h:123456/", "http://[::1/", "http://[example.com]/", "http://h x/"]
     IO.inspect(HTTP.get(pool, url))
   end
-  IO.inspect(HTTP.request(pool, "GET", "http://127.0.0.1:#{port}/", [Header(name: "Host", value: "x")], ""))
-  IO.inspect(HTTP.request(pool, "BAD METHOD", "http://127.0.0.1:#{port}/", [], ""))
-  IO.inspect(HTTP.post(pool, "http://127.0.0.1:#{port}/", [], "this body is over the limit"))
+  IO.inspect(HTTP.request(pool, "GET", "http://127.0.0.1:#{port}/", "".bytes, [Header(name: "Host", value: "x")]))
+  IO.inspect(HTTP.request(pool, "BAD METHOD", "http://127.0.0.1:#{port}/", "".bytes))
+  IO.inspect(HTTP.post(pool, "http://127.0.0.1:#{port}/", "this body is over the limit".bytes))
   IO.inspect(HTTP.get(pool, "http://127.0.0.1:#{port}/big"))
   IO.inspect(HTTP.get(pool, "http://127.0.0.1:#{port}/bytes"))
   Task.await(server)

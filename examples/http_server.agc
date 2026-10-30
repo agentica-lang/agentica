@@ -2,9 +2,9 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
-  return ok(HttpResponse(status: 404, headers: [], body: "not found\n"))
+  return ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void
@@ -19,7 +19,7 @@ def main() -> Void
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
   puts(response.status)
-  puts(response.body)
+  puts(HTTP.text(response.body, response.headers).unwrap!)
   puts(HTTP.get(client, base + "/missing").unwrap!.status)
   HTTP.close_client(client)
   HTTP.close_server(server)
