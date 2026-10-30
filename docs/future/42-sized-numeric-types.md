@@ -147,7 +147,7 @@ conversion.
   builtin signatures. Reason: agents learn one name for the
   common case, and the new names are for the cases that need a width.
 - **No `Byte`.** `UInt8` is the byte type. Reason: a `Byte` alias would be a
-  second name for one type, and it reads like `Bytes` (§12.5).
+  second name for one type, and it reads like `Bytes`.
 - **Reserved names.** The new names are reserved, as the builtin records of
   §41.2 are, and a user `struct`, `enum`, type parameter or import alias with
   one of them is `CHECK-REDEFINED-NAME`. Reason: otherwise `Int8(...)` could
@@ -447,20 +447,15 @@ conversion.
 - **CBOR (§16).** Adds one row per type when CBOR lands. Nothing changes now.
 - **`std/binary`.** Recommended: step 3 moves the API to the types.
   Readers return the width type (`read_u16_be(data, offset) -> Result[UInt16]`),
-  and writers take it (`write_u16_be(value: UInt16) -> List[UInt8]`). The
+  and writers take it (`write_u16_be(value: UInt16) -> Bytes`). The
   function names stay. The errors that remain are for the offset and the frame
-  length, since a list of `UInt8` cannot hold a bad item. Reason: the range
+  length, since a `Bytes` cannot hold a bad item. Reason: the range
   check moves to the type, `Binary.write_u16_be(513)` still compiles (the
   literal takes the context type), and a value that is too big becomes an
   explicit conversion at the call site (`try n.to_uint16`). `read_frame_length`
   still returns `Result[Int]`, since a length is a count (below). This is
   breaking, and the module's design already names the move.
-- **Byte lists.** In step 3, `IO.read_bytes`, `File.read_bytes`,
-  `TCP.recv_bytes`, `Process.read_bytes`, `String.from_bytes` and the `*_bytes`
-  writers take and return `List[UInt8]`. This is breaking (§42.15).
-- **`Bytes`: added (0.17.0, #805).** It is its own type, not a `List[UInt8]`:
-  one byte per item, and the byte APIs take and return it. The owner decided
-  this on 2026-10-29.
+- `Bytes` is its own type (#805).
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
   program converts the bounds: `for i in 0...b.to_int`.
@@ -562,11 +557,10 @@ should have made.
 - **Step 2: Float32.** Type, literals (with `CHECK-FLOAT-RANGE`), `ROUND_F32`,
   the printing routine, `strtof` for text and JSON, and `Float32.to_bits` and
   `from_bits`.
-- **Step 3: binary API and byte lists.** `std/binary` moves to the sized types
-  (§42.10); the `*_bytes` builtins take `List[UInt8]`; `Float.to_bits32` and
-  `Float.from_bits32` are removed. This is one breaking PR, as the module's
-  design requires, and it is followed by a re-measure of the `binary` arm of the
-  evaluation rounds.
+- **Step 3: binary API.** `std/binary` moves to the sized types (§42.10);
+  `Float.to_bits32` and `Float.from_bits32` are removed. This is one breaking
+  PR, as the module's design requires, and it is followed by a re-measure of the
+  `binary` arm of the evaluation rounds.
 - **Step 4: typed storage, if measured.** §42.12.
 
 Tests, for each step: goldens for the VM, an independent Python peer with the
@@ -584,7 +578,7 @@ goldens that assert the code and the span (`CHECK-INT-RANGE`,
   front end. The sized rows go into its catalog.
 - **`stage0`.** Step 1 adds no syntax, and the compiler's own code does not use
   the new types, so no `stage0` refresh is needed for it. Step 3 may change the
-  compiler's use of the byte lists, which is a `stage0` change under §18.2 if it
+  compiler's use of `std/binary`, which is a `stage0` change under §18.2 if it
   does. The format change (§42.11) is the `stage0` path of §18.2.
 
 ### 42.15 Breaking changes
@@ -593,8 +587,7 @@ goldens that assert the code and the span (`CHECK-INT-RANGE`,
   `Float64` become reserved. A user `struct` with one of those names is
   `CHECK-REDEFINED-NAME`. `CHANGELOG.md` marks it **Breaking:**.
 - **Binary API (step 3).** The `std/binary` readers and writers take and return
-  the sized types, and the `*_bytes` builtins take `List[UInt8]`. `CHANGELOG.md`
-  marks it **Breaking:**.
+  the sized types. `CHANGELOG.md` marks it **Breaking:**.
 - **Float bit builtins (step 3).** `Float.to_bits32` and `Float.from_bits32` are
   removed in favour of `Float32.to_bits` and `from_bits`. `Float.to_bits`
   changes only if the owner decides on `UInt64` (§42.17).
@@ -625,7 +618,7 @@ Not planned:
 - **Implicit numeric promotion or widening.** A second rule would make
   conversion errors invisible to agents. Explicit conversions only (§42.6).
 - **Operator overloading to make conversions implicit.** §6 says there is none.
-- **A `Byte` alias** (§42.4) and a separate `Bytes` type (§42.10).
+- **A `Byte` alias** (§42.4).
 - **An unsigned `Int`.** `Int` stays signed, and `UInt64` covers the range above
   it.
 - **A target-dependent `Int` width.** The owner confirmed that `Int` and

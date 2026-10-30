@@ -138,19 +138,18 @@ before a release.
   the format writes the commands.
 
 A row whose **type** changes (`List[Int]` to `Bytes`), not only its name,
-cannot keep the old name for one PR: no source compiles against both types.
-The recipe of #805 (PRs 3 to 6): the first commit adds the new catalog rows
-with new C keys and keeps the old keys, which the base stage0 still uses. Keep
-`build/stage/stage1.agcb` as `I.agcb`, the intermediate front end. Later
+cannot keep the old name: no source compiles against both types. Keep the old C
+key for the base stage0, and add the new catalog rows with new C keys in the
+first commit. Run `make stage1` at that commit and copy
+`build/stage/stage1.agcb` to `I.agcb`, the intermediate front end. Later
 commits change the call sites. Then refresh stage0 with:
 
 ```sh
 make stage0 STAGE1_COMPILER="build/vm/release/bootstrap/agentica --front-end I.agcb"
 ```
 
-`make stage0-check` cannot pass for this change: say so in the PR, and the
-owner approves it by hand. A later PR removes the old keys once no stage0
-imports them (#805 PR 9, #826).
+After the refresh, run `make fixed-point` and `make` as usual. A later PR
+removes the old keys once no stage0 imports them (as in #805).
 
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>`
 in the `test` job: stage2 built from the base stage0 with the PR's
