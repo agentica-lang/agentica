@@ -20,12 +20,12 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.Function` | a function pointer (the first or the last parameter only, [below](#function-pointers)) | `C.Pointer` |
 | a `struct` of the block | a struct passed by value ([below](#c-structs)) | that struct |
 
-`C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`, or `C.Long` for a C `long`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+`C.Int` is `PARSE-EXTERN-TYPE`: write the width (`C.Int32` or `C.Int64`), or `C.Long` for a C `long`. A result may be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
-- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows and any `Int` elsewhere), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`: for text with a NUL or a known length, use `Native.from_string` and `bytesize` (below).
-- A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`. The same bits cross, and a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
-- A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
-- The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
+- An integer argument takes the bits of its type, read as signed or unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows, any `Int` elsewhere). C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`. For text with a NUL or a known length, use `Native.from_string` and `bytesize` (below).
+- A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare `uint64_t` or `size_t` as `C.Int64`, and `unsigned long` as `C.Long`. The same bits cross, so a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
+- A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity). A `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
+- C gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
 - A `C.Bytes` argument is a `Bytes`: C gets a copy, valid only during the call. Pass the length (`b.size`) as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
 
@@ -49,20 +49,20 @@ def main() -> Void
 end
 ```
 
-- `...` comes after one C parameter at least, not counting a `C.Function` (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
+- `...` comes after at least one C parameter, not counting a `C.Function` (`PARSE-EXTERN-VARIADIC-FIXED`). It appears once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty; the 64 parameters count both parts.
 - A variadic parameter is `C.Int32`, `C.Int64`, `C.UInt32`, `C.Long`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
 - The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
-- The call follows the variadic rules of each system's C ABI, which differ from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
+- The call follows each system's variadic C ABI, which differs from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
 
 ## Reading memory that C returns
 
 A function that returns a pointer and a length, or text that may be NULL, is declared `-> C.Pointer`, and your program copies the memory:
 
-- `Native.get_string(p, offset)` copies the NUL-terminated text that starts `offset` bytes past `p`, and `Native.get_string(p, offset, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
+- `Native.get_string(p, offset)` copies the NUL-terminated text that starts `offset` bytes past `p`. `Native.get_string(p, offset, length)` copies exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
 - `Native.get_bytes(p, offset, length)` copies `length` bytes into a `Bytes`.
-- A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
+- A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. A negative length fails with `RUNTIME-INVALID-COUNT`, after the pointer is checked. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
 - `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
-- `Native.address(p)` is the other way: the integer value of `p`. Pointers have no `==`, so compare addresses, or subtract two pointers into one block for the bytes between them: SQLite's `pzTail` minus the SQL text is how much it read. The address of a freed buffer fails with `RUNTIME-NATIVE-CLOSED`.
+- `Native.address(p)` is the integer value of `p`. Pointers have no `==`, so compare addresses, or subtract two pointers into one block for the bytes between them: SQLite's `pzTail` minus the SQL text is how much it read. The address of a freed buffer fails with `RUNTIME-NATIVE-CLOSED`.
 
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
@@ -101,17 +101,15 @@ def main() -> Void
 end
 ```
 
-- The block form, `Native.memory_pointer(size) do |buf| ... end`, gives the buffer to the block and frees it when the block ends, also when the block ends early with an error that `try` returns. The call returns the block's value. A runtime error in the block stops the task, whose end frees the buffer. A buffer that the block hands to another task with `Task.spawn_owning` is not freed at the block's end: its new owner frees it.
-- The plain form, `buf = Native.memory_pointer(size)`, is for a buffer that outlives one block, such as one that C keeps between calls.
-
+- The block form, `Native.memory_pointer(size) do |buf| ... end`, gives the buffer to the block and frees it when the block ends, also when the block ends early with an error that `try` returns. The call returns the block's value. A runtime error in the block stops the task, and the task's end frees the buffer. A buffer that the block hands to another task with `Task.spawn_owning` is not freed at the block's end: its new owner frees it.
+- The plain form, `buf = Native.memory_pointer(size)`, is for a buffer that outlives one block, such as one that C keeps between calls. A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
 - The calling task owns a plain buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. The end of the run frees a buffer still open, as it frees a resource (below).
-- A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
 - `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
 - A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
 - A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`, and `Native.closed?(buf)` is `true`. A `C.Pointer` that C gave is never closed (NULL included: test it with `Native.null?`). `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
 - The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `MemoryPointer.from_string(text)`, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
 
-A C function that takes text with its length, such as `sqlite3_bind_text`, `PQexecParams` or `mysql_real_query`, gets a buffer of `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) and `text.bytesize`. The buffer holds the UTF-8 bytes of the text and a NUL after them, so its size is `text.bytesize + 1`, and a NUL inside the text is copied like any other byte, which a `C.String` refuses. A pointer that C returns into the text, such as SQLite's `pzTail`, stays valid while the buffer lives: `Native.address(tail) - Native.address(buf)` is how many bytes C read. It is an owned buffer like the others, with the same block form and the same rules above.
+A C function that takes text with its length, such as `sqlite3_bind_text`, `PQexecParams` or `mysql_real_query`, gets a buffer of `Native.from_string(text)` (Ruby ffi's `MemoryPointer.from_string`) and `text.bytesize`. The buffer holds the UTF-8 bytes of the text and a NUL after them, so its size is `text.bytesize + 1`. A NUL inside the text is copied like any other byte, which a `C.String` refuses. A pointer that C returns into the text, such as SQLite's `pzTail`, stays valid while the buffer lives: `Native.address(tail) - Native.address(buf)` is how many bytes C read. It is an owned buffer like the others, with the same block form and rules.
 
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
@@ -133,7 +131,7 @@ def main() -> Void
 end
 ```
 
-Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
+Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned. The offset need not be aligned:
 
 | Read | Write | Item |
 |---|---|---|
@@ -145,7 +143,7 @@ Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one 
 | `Native.get_string(p, offset)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
 | `Native.get_bytes(p, offset, length)` (above) | `Native.put_bytes(p, offset, bytes)` | a `Bytes` |
 
-- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
+- A `put_int` form takes a value that fits its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
 - `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too. `put_pointer` stores an address that nothing tracks: keep the buffer it points to unfreed while C uses it.
 
 ```agentica {mode="check"}
@@ -166,14 +164,14 @@ end
 ```
 
 - A buffer knows its size: a read or write that starts before it or runs past its end fails with `RUNTIME-NATIVE-BOUNDS`, and so does `Native.get_string` of a buffer with no NUL after the offset. Nothing outside the buffer is ever read or written.
-- A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `get_bytes` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`; any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library. Two tasks that read and write the same memory of C at once race, as in C; each read or write of an owned buffer holds a lock.
+- A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `get_bytes` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`. Any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library. Two tasks that read and write the same memory of C at once race, as in C; each read or write of an owned buffer holds a lock.
 - A negative count or size fails with `RUNTIME-INVALID-COUNT`.
 
 `Native.offset(p, n)` is the pointer `n` bytes past `p`, for C structs whose fields point into one block, such as the `length`, `is_null` and `buffer` cells of a MySQL bind:
 
 - For a pointer that C returned it is the plain sum (wrapping on overflow), trusted like `p`.
 - For an owned buffer it is a view of the same memory from byte `n` to the buffer's end. `n` outside 0 to the size fails with `RUNTIME-NATIVE-BOUNDS`, and reads and writes through the view are checked against its range.
-- The view belongs to its buffer: freeing the buffer closes it (`RUNTIME-NATIVE-CLOSED`, `Native.closed?` is `true`), and a `compute def` call that takes the view keeps the buffer until it returns. `Native.free` of a view fails with `RUNTIME-NATIVE-NOT-OWNED`, and `Task.spawn_owning` hands over the buffer, not a view.
+- The view belongs to its buffer: freeing the buffer closes it (`RUNTIME-NATIVE-CLOSED`, `Native.closed?` is `true`). A `compute def` call that takes the view keeps the buffer until it returns. `Native.free` of a view fails with `RUNTIME-NATIVE-NOT-OWNED`, and `Task.spawn_owning` hands over the buffer, not a view.
 
 ```agentica {mode="check"}
 extern "/opt/db/libdb.so"
@@ -191,7 +189,9 @@ end
 
 ## Resources
 
-A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`. On Windows `GetProcAddress` searches only the exports of that DLL, so `free: free` (a function of a dependency such as the C runtime) is `RUNTIME-NATIVE-LOAD` there although Linux and macOS find it: declare the free function from the library that exports it. The name is as in C and may start with a capital letter, such as `PQfinish` or `SSL_free`; only the dotted `C.Function` (below) is read as a type. `resource Name, free_ref: c_function` declares a resource whose free function takes a reference to the pointer (its address, as Ruby's `Fiddle::Pointer#ref` gives), as `void c_function(void **)`: `duckdb_close` and `duckdb_disconnect` are such functions. Each free passes that address, once, and the function may write NULL there. A resource has one free function: `free:` and `free_ref:` together are `PARSE-EXTERN-FREE`.
+A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`. On Windows `GetProcAddress` searches only the exports of that DLL, so `free: free` (a function of a dependency such as the C runtime) is `RUNTIME-NATIVE-LOAD` there, although Linux and macOS find it: declare the free function from the library that exports it. The name is as in C and may start with a capital letter, such as `PQfinish` or `SSL_free`; only the dotted `C.Function` (below) is read as a type.
+
+`resource Name, free_ref: c_function` declares a resource whose free function takes a reference to the pointer (its address, as Ruby's `Fiddle::Pointer#ref` gives), as `void c_function(void **)`. `duckdb_close` and `duckdb_disconnect` are such functions. Each free passes that address, once, and the function may write NULL there. A resource has one free function: `free:` and `free_ref:` together are `PARSE-EXTERN-FREE`.
 
 ```agentica {mode="check"}
 extern "libc.so.6"
@@ -211,13 +211,14 @@ end
 
 - A function declared `-> Stream` gives a `Result[Stream]`: a NULL result is `error("fopen returned NULL")`, anything else is `ok` with a resource that the calling task owns.
 - `Native.close(stream)` runs the free function once and closes the resource; closing it again does nothing. A call that takes a closed resource fails with `RUNTIME-NATIVE-CLOSED`.
-- `Native.closed?(stream)` asks first, so a wrapper can return an `error` instead of stopping the task: it is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource; `false` for a live one, also while a `compute def` call holds it (closed during that call, it is `true` at once). It never stops the task. `true` is final; `false` can be out of date at once if another task may close the resource.
+- `Native.closed?(stream)` never stops the task, so a wrapper can return an `error` instead. It is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource. It is `false` for a live one, also while a `compute def` call holds it; closed during that call, it is `true` at once. `true` is final; `false` can be out of date at once if another task may close the resource.
 - A resource the task did not close is freed when the task ends (return, crash or cancel), like a file. `Task.spawn_owning(&work, stream)` hands it to the new task.
 - A `compute def` call keeps its resource arguments until it returns: if the resource is closed meanwhile, or its task is cancelled, the free runs when the call ends.
 - Any task may pass a resource or an owned buffer to C, for instance one it got through a closure or a channel: nothing checks who owns it. Only the owner's end frees it, and `Native.close` or `Native.free` by any task closes it for all. Two tasks inside C on the same object at once race, as in C; `sqlite3_interrupt` or `duckdb_interrupt` from another task is the intended use.
 - A free function that blocks (`mysql_close`, a `duckdb_close` that checkpoints) runs on the scheduler at `Native.close` or at the owner's end, like a `def` call, and stalls the other tasks.
 - Each owner frees its resources newest first. A parent handed to another task with `Task.spawn_owning` may be freed before its children: close the children first, or keep a parent and its children in one task.
-- When the run ends (`main` returns, `System.exit`, a crash of `main`, the step limit, or the first `SIGINT`, `SIGTERM` or `SIGHUP`), a compute call that has not started is never made, child programs stop, files are written, the run waits for the running `compute def` calls that hold a resource, and then every resource and buffer still open is freed, newest first (the reverse of opening), whatever task owns it. The frees stop at the first resource that a running call still holds and never skip past it, so that one and all older ones stay unfreed. So `stream` above keeps what `fputs` wrote even without `Native.close`. A resource that such a call returns at that point is never freed. After a signal the run does not wait for those calls, and what they hold is not freed. The wait and the frees share the flush limit of the files (30 seconds, `--flush-timeout MS`): a call or a free function that takes longer is left behind, the exit code stays, and stderr gets one line saying native resources may not be freed. With `--flush-timeout 0` nothing is freed. A second signal ends the run at once.
+- When the run ends (`main` returns, `System.exit`, a crash of `main`, the step limit, or the first `SIGINT`, `SIGTERM` or `SIGHUP`), a compute call that has not started is never made, child programs stop, files are written, and the run waits for the running `compute def` calls that hold a resource. Then every resource and buffer still open is freed, newest first (the reverse of opening), whatever task owns it. The frees stop at the first resource that a running call still holds and never skip past it, so that one and all older ones stay unfreed. So `stream` above keeps what `fputs` wrote even without `Native.close`. A resource that such a call returns at that point is never freed.
+- After a signal the run does not wait for those calls, and what they hold is not freed. The wait and the frees share the file flush limit (30 seconds, `--flush-timeout MS`): a call or a free function that takes longer is left behind, the exit code stays, and stderr gets one line saying native resources may not be freed. With `--flush-timeout 0` nothing is freed. A second signal ends the run at once.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
 - A resource is a type: `export resource` makes it importable, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
 
@@ -232,7 +233,7 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 
 ## Function pointers
 
-Some libraries give their functions as a table of C function pointers, not by name: onnxruntime's `OrtGetApiBase()->GetApi(version)` gives the `OrtApi` struct, and every call is `api->CreateEnv(...)`. A `def` whose first parameter is `fn: C.Function` calls the function at that address, with the signature the `def` declares (Ruby ffi's `FFI::Function.new(ret, params, pointer)`). Read the address from the table with `Native.get_pointer`; a pointer is 8 bytes on every system with native calls.
+Some libraries give their functions as a table of C function pointers, not by name: onnxruntime's `OrtGetApiBase()->GetApi(version)` gives the `OrtApi` struct, and every call is `api->CreateEnv(...)`. A `def` whose first parameter is `fn: C.Function` calls the function at that address, with the signature the `def` declares (Ruby ffi's `FFI::Function.new(ret, params, pointer)`). Read the address from the table with `Native.get_pointer`. A pointer is 8 bytes on every system with native calls.
 
 ```agentica {mode="check"}
 # The slots of struct plugin_api in plugin.h, in order.
@@ -266,7 +267,7 @@ end
 
 - The other parameters, the result, out parameters, resources and `compute def` work as for a function found by name. The `def` has no C name: `= "symbol"` is `PARSE-EXTERN-FUNCTION`.
 - `resource Name, free: C.Function` declares a resource whose free function is a function pointer too, such as `api->ReleaseSession`. The `def` that makes one, as its result or an out parameter, takes that address as its last parameter, after any `out` parameters: `free: C.Function`. A sole `C.Function` parameter of a `def` that returns such a resource is its free function, not the function to call: `def thing_new(free: C.Function) -> Thing` calls `thing_new` by name (a call through a pointer that makes one takes two `C.Function` parameters). `Native.close`, the end of the owning task and a dropped `compute def` result call it once, as for a free function found by name. One call makes one such resource at most.
-- A `C.Function` is the first parameter (the function to call) or the last (the free function); anywhere else it is `PARSE-EXTERN-FUNCTION`. It is never a result, an out parameter or a variadic parameter. The program sees it as a `C.Pointer`. The parameter names are free: `fn` and `free` are a convention.
+- A `C.Function` is the first parameter (the function to call) or the last (the free function). Anywhere else it is `PARSE-EXTERN-FUNCTION`. It is never a result, an out parameter or a variadic parameter. The program sees it as a `C.Pointer`. The parameter names are free: `fn` and `free` are a convention.
 - A NULL address fails the call with `RUNTIME-NATIVE-NULL` before C runs, and an owned buffer with `RUNTIME-NATIVE-BOUNDS`. Any other address is trusted: one that is not a function of the declared signature is undefined behavior, like a wrong signature.
 - An extern block whose functions are all called through a pointer never opens its library, so a wrong library path is not reported.
 
@@ -301,12 +302,12 @@ def main() -> Void
 end
 ```
 
-- A field is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block, and your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
-- The struct is laid out as the C compiler of the system lays it out, padding included. Declare every field of the header, in its order: a wrong field list is undefined behavior, like a wrong signature. A struct has one field at least (`PARSE-EXTERN-TYPE`) and at most 1024, nested ones counted, in at most 16 levels (`PARSE-EXTERN-ARITY`).
+- A field is an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block. Your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
+- The struct is laid out as the system's C compiler lays it out, padding included. Declare every field of the header, in its order: a wrong field list is undefined behavior, like a wrong signature. A struct has one field at least (`PARSE-EXTERN-TYPE`) and at most 1024, nested ones counted, in at most 16 levels (`PARSE-EXTERN-ARITY`).
 - A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_struct`, [below](#structs-through-pointers)) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
 - Each field of an argument is checked as an argument is, before C runs: an integer outside the bits of its type fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
 - A `C.Pointer` field is an address that nothing tracks: the memory it names must outlive C's use. A `compute def` call holds the owned buffers in the fields of its struct arguments until it returns, as it holds its buffer arguments.
-- The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before), and `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.
+- The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before). `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.
 
 ### Structs through pointers
 
@@ -316,7 +317,7 @@ A C struct that sits in memory, such as an array of MySQL binds or the result th
 - `Native.get_struct(p, offset, Name)` reads the struct at `offset` bytes past `p` into a new record, as a struct result is read.
 - `Native.put_struct(p, offset, value)` writes the record there, as a struct argument is written. Every field is checked before the first byte is written: an integer outside its bits fails with `RUNTIME-INTEGER-OVERFLOW`, a freed buffer in a `C.Pointer` field with `RUNTIME-NATIVE-CLOSED`. A buffer stored in a `C.Pointer` field is an address that nothing tracks, as with `put_pointer`.
 - The bounds are those of the typed reads and writes above, for the size of the struct: checked in an owned buffer or a view, trusted at a pointer that C returned.
-- The type is a struct of an extern block, or a type alias of one; any other type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH`.
+- The type is a struct of an extern block, or a type alias of one. Any other type, or a value in place of the type name, is `CHECK-TYPE-MISMATCH`.
 
 ```agentica {mode="check"}
 extern "/opt/db/libdb.so"
