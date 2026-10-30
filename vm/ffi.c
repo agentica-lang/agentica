@@ -183,7 +183,8 @@ typedef struct {
 } native_wait;
 
 /* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer, the
-   array forms, get_bytes and put_bytes (ITEM_BYTE, written only from 0 to 255). ITEM_WIDTHS has the size of each. */
+   array forms, the byte-list get_bytes and put_bytes of the old keys (ITEM_BYTE, written only from 0 to 255).
+   ITEM_WIDTHS has the size of each. */
 typedef enum {
   ITEM_INT8, ITEM_INT16, ITEM_INT32, ITEM_INT64, ITEM_UINT8, ITEM_UINT16, ITEM_UINT32, ITEM_FLOAT32, ITEM_FLOAT64,
   ITEM_POINTER, ITEM_BYTE
