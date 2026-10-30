@@ -78,11 +78,20 @@ none -> Optional[T]
   (fields, parameters, returns, list and map items) and nests.
 - `some(1)` is `Optional[Int]`. `none` needs an expected Optional type, as
   `error` does (`CHECK-OPTIONAL-TYPE`): `age: Optional[Int] = none`.
-- `case o` needs both arms, `some(n) ->` and `none ->` (or `_`).
+- A field or parameter may default to `none` (`port: Optional[Int] = none`);
+  `some(1)` is not a constant (`CHECK-DEFAULT-VALUE`). `T` may be a type
+  parameter: `def first_or_none[T](xs: List[T]) -> Optional[T]`.
+- `case o` needs both arms, `some(n) ->` and `none ->` (or `_`). Patterns nest,
+  also in a user variant (`enum E` with `A(Optional[Int])`: `E.A(some(0))`,
+  `E.A(none)`, `ok(some(n))`). An arm with a literal or a nested variant
+  covers nothing, so end with a names-only arm (`E.A(opt)`, `E.A(_)`, `some(n)`)
+  or `_`, else `CHECK-NON-EXHAUSTIVE-CASE`.
 - `o.unwrap_or(default)`, `o.unwrap!` (halts with `RUNTIME-UNWRAP-NONE` on
   `none`), `o.map do |x| x + 1 end`, `o.some?`, `o.none?`,
   `o.to_result("missing")` (a Result for `try`).
-- `m.get(k)` and `s.index_of(part)` give an Optional.
+- `m.get(k)` and `s.index_of(part)` give an Optional. A missing value that is
+  normal is an Optional; a failure the caller needs a reason for is a Result.
+  `List.find` and `Lazy.find` give a Result (`error("not found")`).
 - `==` compares two Optionals of a type with `==`: `o == none`,
   `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
   and reads `null` or a missing key as `none` (`json.md`).

@@ -117,7 +117,8 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Errors
 
 - Fallible functions return `Result[T]`; propagate with `try`. No exceptions.
-  Non-fallible functions don't return `Result`.
+  Non-fallible functions don't return `Result`. A value that may be missing,
+  with no error to report, is an `Optional[T]` (`some`, `none`), not a `Result`.
 - Use halting forms (`to_i!`, `unwrap!`) only when failure is a bug; explain
   why in a comment.
 - Error text is lowercase, has no final period, and includes the bad value.

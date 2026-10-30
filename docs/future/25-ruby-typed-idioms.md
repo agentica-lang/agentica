@@ -385,8 +385,9 @@ does not have. **Open questions:** a builtin rule for "any type" methods, as
 
 **What:** `user&.address&.city`. **Why:** short code for optional values. **Why
 not now:** `nil` is not a value of every type, so there is nothing to navigate;
-it needs optional types (`T?`) first. **Open questions:** whether `T?` comes at
-all, and how it relates to user `Option[T]` and to `JsonField` (grammar, JSON).
+it would work on the builtin `Optional[T]`. **Open questions:** whether a `T?`
+spelling comes at all, and how `&.` relates to `Optional[T]` and to `JsonField`
+(grammar, JSON).
 
 #### 25.12.6 Destructuring
 

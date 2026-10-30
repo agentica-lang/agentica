@@ -28,7 +28,81 @@ Ana is 31
 Bo gave no age
 ```
 
-A `case` needs both arms, `some(n) ->` and `none ->`, or a final `_`. `==` compares two Optionals whose items have `==`: `age == none`, `age == some(31)`. An Optional prints as `some(31)` or `none`. A field or parameter may default to `none`: `port: Optional[Int] = none`. In [JSON](/library/text-and-data/json/#optional-values), `none` is `null` and `some(x)` is `x`.
+A `case` needs both arms, `some(n) ->` and `none ->`, or a final `_`. An arm with a literal inside, such as `some(0) ->`, may fail, so it covers nothing: add `some(n) ->` or `_` after it. [Patterns inside patterns](/tour/enums-and-case/#patterns-inside-patterns) shows an Optional in a user enum or a `Result`. `==` compares two Optionals whose items have `==`: `age == none`, `age == some(31)`. An Optional prints as `some(31)` or `none`. A field or parameter may default to `none`: `port: Optional[Int] = none`. In [JSON](/library/text-and-data/json/#optional-values), `none` is `null` (a missing key when decoding) and `some(x)` is `x`.
+
+## Fields, parameters, items and generics
+
+`Optional[T]` goes wherever a type does, `T` may be a type parameter, and Optionals nest. A parameter or field defaults to `none`, and a caller leaves it out or passes `some(x)`.
+
+```agentica
+struct Config
+  host: String
+  port: Optional[Int] = none
+end
+
+struct Box[T]
+  item: Optional[T]
+end
+
+def greet(name: String, title: Optional[String] = none) -> String
+  return "#{title.unwrap_or("Mx")} #{name}"
+end
+
+def first_or_none[T](xs: List[T]) -> Optional[T]
+  if xs.length == 0
+    return none
+  end
+
+  return some(xs[0])
+end
+
+def main() -> Void
+  puts(Config(host: "localhost"))
+  puts(Box(item: some(3)))
+  puts(greet("Ana"))
+  puts(greet("Ana", some("Dr")))
+  puts(first_or_none(["a", "b"]))
+  empty: List[Int] = []
+  puts(first_or_none(empty))
+  scores: Map[String, Optional[Int]] = {"ana": some(9), "bo": none}
+  items: List[Optional[Int]] = [some(1), none, some(3)]
+  puts(scores)
+  puts(items.reduce(0) do |sum, o| sum + o.unwrap_or(0) end)
+end
+```
+
+```output
+Config(host: "localhost", port: none)
+Box(item: some(3))
+Mx Ana
+Dr Ana
+some("a")
+none
+{"ana": some(9), "bo": none}
+4
+```
+
+## Lookups
+
+`map.get(key)` and `text.index_of(part)` give an Optional: `some` when the key or the text is there, `none` when it is not. Pick the way to read it: `unwrap_or` for a default, `case` to act on each side, `unwrap!` only when `none` would be a bug.
+
+```agentica
+def main() -> Void
+  stock = {"apple": 3, "pear": 0}
+  puts(stock.get("apple").unwrap_or(0))
+  puts(stock.get("kiwi").unwrap_or(0))
+  case "hello world".index_of("wor")
+    some(i) -> puts("found at #{i}")
+    none -> puts("not found")
+  end
+end
+```
+
+```output
+3
+0
+found at 6
+```
 
 ## some
 
@@ -192,3 +266,7 @@ end
 ok(4)
 error("no even number")
 ```
+
+## Optional or Result
+
+Use an Optional when having no value is normal and needs no reason: a lookup that finds nothing, a setting the caller left out. Use a [Result](/tour/results-and-try/) when something failed and the caller needs to know why, such as a parse or a file read. `to_result("message")` turns the first into the second when a missing value is an error for the caller. `List.find` and `Lazy.find` give a Result with `error("not found")`, not an Optional.

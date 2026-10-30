@@ -5,7 +5,7 @@ enum Level
   Warn
 end
 
-# A default is a constant: a literal, true, false, nil, [], {} or an enum variant without a payload.
+# A default is a constant: a literal, true, false, nil, none, [], {} or an enum variant without a payload.
 def label(text: String, level: Level = Level.Info, tags: List[String] = []) -> String
   return "#{level} #{text} #{tags.size}"
 end

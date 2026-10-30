@@ -339,12 +339,16 @@ Exhaustiveness and reachability are conservative, and no deeper analysis is
 done. An arm covers its variant only when it has no guard and every slot is a
 name or `_`. An arm with a guard, a literal slot or a nested variant covers
 nothing: it is a test that may fail. So a guarded `_ if c ->` does not make a
-case exhaustive, and a case that matches only `Shape.Boxed(Option.Some(n))`
-needs a `Shape.Boxed(_)` arm (or `_`) after it, as `ok(Reading.Value(n))` needs
-`ok(_)`. An arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an
-earlier arm without a guard already covers its variant with names and `_`, or
-follows an unguarded catch-all. The same pattern may come again after a guarded
-or refutable arm, guarded or not.
+case exhaustive, and a case that matches only `Shape.Boxed(some(n))` (a variant
+with an `Optional` payload) needs a `Shape.Boxed(_)` arm (or `_`) after it, as
+`ok(Reading.Value(n))` needs `ok(_)` and `some(0)` needs `some(n)` or `_`. An
+arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an earlier arm
+without a guard already covers its variant with names and `_`, or follows an
+unguarded catch-all. The same pattern may come again after a guarded or
+refutable arm, guarded or not.
+
+The example declares a user generic enum, to show the rules; a value that may be
+missing is the builtin `Optional[T]` (see "Optional values").
 
 ```ruby
 enum Option[T]
