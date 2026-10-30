@@ -501,10 +501,9 @@ section says how the scheduler and the loop keep them.
     wake, and the print that notices it fails with `RUNTIME-INTERNAL` (`cannot
     write to standard output` or `standard error`). `end_run` folds a failed
     stream into exit code 1, even when no print saw the error. The blocking
-    `fwrite` of the `FILE` stays for the fallbacks of §14.1: a reopen or `dup`
-    that fails, a descriptor not open for writing, another descriptor type, and
-    builds that are not Linux, macOS or Windows. The records of `agentica test`
-    do not use this module. They travel on the child channel (§10.4).
+    `fwrite` of the `FILE` stays only for the fallbacks of §14.1. The records of
+    `agentica test` do not use this module. They travel on the child channel
+    (§10.4).
   - **One target, one buffer.** When stdout and stderr are one target (the same
     `st_dev` and `st_ino`, or on Windows the same kernel object by
     `CompareObjectHandles`, such as a terminal, `2>&1`, or one file), stderr

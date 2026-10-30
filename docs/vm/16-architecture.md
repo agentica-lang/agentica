@@ -307,12 +307,11 @@ talking to each other.
   and the I/O thread. This is the main cost of threads against BEAM's
   per-process heaps. Parallel marking helps. Boehm stops threads with signals
   installed with `SA_RESTART`, and the syscall paths retry on `EINTR` (§10.2.3).
-- **stdout and stderr are locked per stream when N > 1** (§10.2.3). A print is a
-  copy into the stream's buffer, or a wait in its FIFO, and the loop writes it
-  (§10.2.2). So only the blocking fallbacks (§14.1) can block a scheduler thread
-  that holds a lock. An OS lock cannot be held across a park, so whole prints at
-  N > 1 are ordered by a short lock around the buffer and the FIFO (§16.11). At
-  N = 1 nothing is locked.
+- **stdout and stderr are locked per stream when N > 1** (§10.2.3, Output). A
+  print is a copy into the stream's buffer, or a wait in its FIFO, and the loop
+  writes it (§10.2.2). So only the blocking fallbacks (§14.1) can block a
+  scheduler thread that holds a lock. Why the lock is short and never held
+  across a park is in §16.11. At N = 1 nothing is locked.
 - **One bounded wait on the exit path.** `close_children` (§14.4, step 1) does
   not block the loop thread: it runs the loop (`await_exits` in
   `vm/process.c`, `uv_run` under a timer) until libuv's exit callbacks have
@@ -712,9 +711,9 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
 - **A libuv step whose result a half needs** (decided, for sockets). `serve`
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread. A TLS child finishes its
   handshake there, and the request hands the child to `accept_done`.
-- **stdout and stderr on the loop** (row 7.2.1f, built). The per-stream lock of
-  §10.2.3 cannot be held across a park, so each stream has a short lock around
-  its buffer and FIFO and a single writer on the loop (§16.8, §10.2.2).
+- **stdout and stderr on the loop** (decided, built; §10.2.2). An OS lock
+  cannot be held across a park, so each stream has a short lock around its
+  buffer and FIFO and a single writer on the loop (§16.8).
 - **The blocking fallback at the end of the run** (open). The end of the run
   waits for the schedulers (built; §16.9, "Threads"). What stays open is the
   blocking fallback (one scheduler only, §16.9, "`--schedulers N`"). A scheduler

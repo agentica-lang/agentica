@@ -66,11 +66,10 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   read is in flight. Cancelling a reader detaches the job rather than
   interrupting the OS read. This is a portability exception, not a pattern for
   other I/O (§10.2.2, Stdin).
-- **Windows stdout and stderr.** The loop never waits for a reader. A pipe is
-  written by a libuv pipe handle, one request at a time. A console, or a handle
-  that libuv refuses, is written by a pool job, since libuv writes a console on
-  the loop thread. The stop signal and the final notices share one wait of up to
-  200 ms that the exit uses (§10.2.2).
+- **Windows stdout and stderr.** The loop never waits for a reader: a pipe is
+  written by a libuv pipe handle, a console or a refused handle by a pool job
+  (§10.2.2, Windows). The stop signal and the final notices share one wait of
+  up to 200 ms that the exit uses.
 - **Pool-thread fallbacks.** stdin stays a pool job with a blocking read when it
   cannot be made non-blocking (no `/proc/self/fd/N` reopen, no `F_DUPFD`, no
   poller, or write-only stdin). A regular file whose read can block
@@ -87,13 +86,9 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   stderr goes through the same buffer (`agc_output_forward`). In the fallback it
   takes the blocking `fwrite` on the I/O thread, under the stream's lock
   (§10.2.3, Output). The final C stdio flush is in §14.4, step 4.
-- **Notices (text the VM writes to stderr by itself).** Crash diagnostics and
-  the unobserved-task summary are queued (at most 1 MiB) ahead of waiting
-  writers, never inside a print. The diagnostic of a failed run is queued after
-  the blocking streams are flushed and before the end-of-run wait, so the flush
-  limit covers it. What is known only after the wait goes out with non-blocking
-  writes, and what a stuck pipe will not take is dropped. The exit stays bounded
-  (§10.2.2, Notices).
+- **Notices (text the VM writes to stderr by itself).** They are queued, never
+  written inside a print, and what a stuck pipe will not take is dropped, so the
+  exit stays bounded (§10.2.2, Notices).
 - **Release flush of a file handle.** When a file job is dropped before its pool
   work ran (its timeout, a cancel, or the flush limit), or a handle is released
   at the end of the run (`release_handles`), `release_state` in `vm/files.c`
@@ -102,10 +97,8 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   the write. The write is at most 4 KiB (`WRITE_BUFFER`) for a `File.open`
   handle, and at most 64 KiB (`CHUNK`) for the `Lazy.write_lines` handle
   (`vm/lazy.c`).
-- **Stdout and stderr on one target.** When both descriptors are the same file
-  (`st_dev` and `st_ino`; on Windows `CompareObjectHandles`, which matches only
-  the same kernel object), they share one buffer and FIFO, so output keeps the
-  order of the calls.
+- **Stdout and stderr on one target** share one buffer and FIFO, so output keeps
+  the order of the calls (§10.2.2, One target, one buffer).
 
 ### 14.2 Timeouts
 
