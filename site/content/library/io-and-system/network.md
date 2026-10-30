@@ -112,7 +112,7 @@ TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Resu
 TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
 - `TLS.connect` uses TLS 1.2 or later and always checks the certificate and the host name (an IP address host against the certificate's IP addresses).
-- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them.
+- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails the connect.
 
   | System | Store |
   |---|---|

@@ -15,7 +15,7 @@ Task.spawn(function: Fn[R]) -> Task[R]
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and returns its `Task` handle. Without an argument, the function takes no parameter: `Task.spawn(&work)` starts `work()`.
+Starts `function(argument)` in a new task and returns its `Task` handle. Without an argument, the function takes no parameter: `Task.spawn(&work)` starts `work()`. The function takes one parameter at most; use a struct for several values.
 
 A block is the function too: `Task.spawn do ... end` runs the block as a task, like Ruby's `Thread.new { }`, and it may capture locals. Give a block or a function reference, not both (`CHECK-BLOCK-TARGET`). `Task.spawn_owning` always takes the handle.
 
@@ -88,12 +88,12 @@ error("network: end of input")
 Task.await(task: Task[R]) -> R
 ```
 
-Waits for the task and gives its result. Waiting again gives the same value.
+Waits for the task and gives its result. Waiting again gives the same value, and `false`, `nil` and `error` are normal results.
 
 - A runtime error in a task other than `main` is a crash. It ends only that task: the error goes to stderr at once, with ` in a task` after the code (`--json` adds `"task": true`), the task's own running tasks are cancelled and its handles close. This is sound because values are immutable: a crashed task cannot leave a shared value half-updated, and the only mutable state lives in handles.
 - Awaiting a crashed task that returns a `Result` gives `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. For any other type the waiting task stops with `RUNTIME-TASK-CRASHED`.
 - A crash that no await sees makes the run exit with code 1 when `main` returns.
-- Awaiting yourself, directly or through other tasks (a handle can arrive over a [Channel](/library/concurrency/channel/)), stops with `RUNTIME-TASK-AWAIT-CYCLE`.
+- Awaiting yourself, directly or through other tasks (a handle can arrive over a [Channel](/library/concurrency/channel/), or inside a closure that captures it), stops with `RUNTIME-TASK-AWAIT-CYCLE`.
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -410,7 +410,7 @@ end
 Task.unobserved_crash() -> Result[String]
 ```
 
-Gives `ok(text)` with the first crash that no `Task.await` has seen, else an error. Asking does not count as seeing.
+Gives `ok(text)` with the first crash that no `Task.await` has seen, else `error("no unobserved crash")`. Asking does not count as seeing.
 
 ```agentica
 def boom(n: Int) -> Int

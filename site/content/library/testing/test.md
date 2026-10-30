@@ -47,7 +47,7 @@ Builds a test from a name and a block. A `TestCase` keeps the name, the block an
 Test.run(tests: List[TestCase]) -> Void
 ```
 
-Serves the test runner and never returns. Call it from `main` itself: in any other task it fails with `RUNTIME-TEST-RUN`.
+Serves the test runner and never returns. Call it from `main` itself: in a test or in any other task it fails with `RUNTIME-TEST-RUN` at the call ("call Test.run from main, outside every test").
 
 Under `agentica test`, the runner talks to the file on a channel of its own (see [Process](/library/io-and-system/process/)). A test's standard input and output are its own: `IO.gets` returns the end-of-input error, and anything the test prints, even a line that looks like a record, is only output, shown under a failed test. A test must not call `Process.parent_read_line` or `Process.parent_send`; they belong to the runner, and nothing stops a test from breaking the protocol. A file that calls `Test.run` with the `agentica test` arguments but without that channel fails with `RUNTIME-TEST-RUN`.
 
