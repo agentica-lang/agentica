@@ -31,12 +31,12 @@ export struct Reference
   span: Source.Span
 end
 
-## What a position or a name names and where it is used. `definition` is the declaration as `symbol` lists it (Absent
+## What a position or a name names and where it is used. `definition` is the declaration as `symbol` lists it (`none`
 ## for a builtin, which `builtin` names: `File.read`; "" for anything else); a local is a match of the kind
 ## `parameter`, `local`, `loop` or `pattern`. `references` do not include the definition; they are in the order of the
 ## linked files and, within one file, of the text.
 export struct Answer
-  definition: Ast.Maybe[Symbol.Match]
+  definition: Optional[Symbol.Match]
   builtin: String
   references: List[Reference]
 end
@@ -50,13 +50,13 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
     Position.Located.At(offset) ->
       here = Position.character(offset, asked.line, asked.column)
       case Locals.find(module, checked.bound, offset)
-        Ast.Maybe.Present(found) ->
+        some(found) ->
           if found.local.kind == "discard"
             return Diag.Outcome.Failed(Position.no_expression(asked, here))
           end
 
           return Diag.Outcome.Done(of_local(linked, checked, found.local))
-        Ast.Maybe.Absent -> return of_name(linked, checked, asked, offset, here)
+        none -> return of_name(linked, checked, asked, offset, here)
       end
   end
 end
@@ -64,9 +64,9 @@ end
 ## The references to the declaration or builtin that `found` is, a match of `Symbol.answer` over the modules of
 ## `linked` (checked as `checked`). A builtin has no definition: `builtin` names it.
 export def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
-  defined = Ast.Maybe.Present(found)
+  defined = some(found)
   if found.kind == "builtin"
-    defined = Ast.Maybe.Absent
+    defined = none
   end
 
   return of_target(linked, checked, target_of(linked.modules, found), defined)
@@ -76,16 +76,16 @@ end
 ## and a builtin may be a method that resolved through one.
 export def needs_types?(found: Answer) -> Bool
   case found.definition
-    Ast.Maybe.Present(declared) -> return declared.kind == "field"
-    Ast.Maybe.Absent -> return true
+    some(declared) -> return declared.kind == "field"
+    none -> return true
   end
 end
 
-## The definition of the declaration `target` names, or Absent for a builtin.
+## The definition of the declaration `target` names, or `none` for a builtin.
 export def definition_of(
   modules: List[Linker.LinkedModule],
   target: Sites.Target,
-) -> Ast.Maybe[Definitions.Definition]
+) -> Optional[Definitions.Definition]
   if target.kind == "field"
     return Definitions.of_field(modules, target.owner, target.name)
   elsif target.kind == "variant"
@@ -105,7 +105,7 @@ def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Loca
   end
 
   return Answer(
-    definition: Ast.Maybe.Present(of_definition(module.key, Definitions.of_local(module, local, type))),
+    definition: some(of_definition(module.key, Definitions.of_local(module, local, type))),
     builtin: "",
     references: once(uses.sort_by do |use: Reference| use.span.start.offset end),
   )
@@ -151,21 +151,21 @@ def of_name(
   declared = Sites.declared_names(linked.modules)
   root = linked.modules[0]
   case Sites.imported(root, offset)
-    Ast.Maybe.Present(target) -> return Diag.Outcome.Done(of_target(linked, checked, target, Ast.Maybe.Absent))
-    Ast.Maybe.Absent -> declared = declared
+    some(target) -> return Diag.Outcome.Done(of_target(linked, checked, target, none))
+    none -> declared = declared
   end
 
   own = Sites.of_module(root, checked, declared, "")
   case Sites.innermost(own, offset)
-    Ast.Maybe.Absent -> return Diag.Outcome.Failed(Position.no_expression(asked, here))
-    Ast.Maybe.Present(site) ->
+    none -> return Diag.Outcome.Failed(Position.no_expression(asked, here))
+    some(site) ->
       key = site.target.key
       found = used(root, own, key)
       for module in linked.modules.drop(1)
         found = found.concat(used(module, Sites.of_module(module, checked, declared, key), key))
       end
 
-      return Diag.Outcome.Done(named_answer(linked, site.target, Ast.Maybe.Absent, found))
+      return Diag.Outcome.Done(named_answer(linked, site.target, none, found))
   end
 end
 
@@ -189,7 +189,7 @@ def of_target(
   linked: Linker.Linked,
   checked: Checker.Checked,
   target: Sites.Target,
-  defined: Ast.Maybe[Symbol.Match],
+  defined: Optional[Symbol.Match],
 ) -> Answer
   declared = Sites.declared_names(linked.modules)
   found: List[Reference] = []
@@ -212,29 +212,29 @@ end
 def named_answer(
   linked: Linker.Linked,
   target: Sites.Target,
-  given: Ast.Maybe[Symbol.Match],
+  given: Optional[Symbol.Match],
   references: List[Reference],
 ) -> Answer
   definition = given
   case given
-    Ast.Maybe.Absent -> definition = defined(linked.modules, target)
-    Ast.Maybe.Present(_) -> definition = given
+    none -> definition = defined(linked.modules, target)
+    some(_) -> definition = given
   end
 
   builtin = ""
   case definition
-    Ast.Maybe.Absent -> builtin = target.name
-    Ast.Maybe.Present(_) -> builtin = ""
+    none -> builtin = target.name
+    some(_) -> builtin = ""
   end
 
   return Answer(definition: definition, builtin: builtin, references: references)
 end
 
-# The declaration of `target` as `symbol` lists it; Absent for a builtin.
-def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Ast.Maybe[Symbol.Match]
+# The declaration of `target` as `symbol` lists it; `none` for a builtin.
+def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optional[Symbol.Match]
   case definition_of(modules, target)
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(declared) ->
+    none -> return none
+    some(declared) ->
       home = modules.filter do |module: Linker.LinkedModule| module.file == declared.file end
       return Symbol.declared_at(home[0], declared.name_span)
   end

@@ -17,7 +17,7 @@ import Locals from "locals"
 ## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `parameter`,
 ## `local`, `loop` or `pattern` for a local; `alias` is for the name of a type alias), its name as
 ## the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name (for a
-## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or Absent; `signature` is the
+## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or `none`; `signature` is the
 ## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
 ## `Circle(Float)` for a variant. `exported` is whether the file exports the declaration, or the struct or enum a field
 ## or variant belongs to; a local is not.
@@ -27,7 +27,7 @@ export struct Definition
   file: String
   span: Source.Span
   name_span: Source.Span
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
   signature: String
   exported: Bool
 end
@@ -40,14 +40,14 @@ end
 
 # What the parsed file says about a declaration: its doc and its signature.
 struct Described
-  doc: Ast.Maybe[String]
+  doc: Optional[String]
   signature: String
   exported: Bool
 end
 
-## The definition of what `expr` names, or Absent. `types` is `Checked.types`: the struct of a field access is the type
+## The definition of what `expr` names, or `none`. `types` is `Checked.types`: the struct of a field access is the type
 ## of its target.
-export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr: Ast.Expr) -> Ast.Maybe[Definition]
+export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr: Ast.Expr) -> Optional[Definition]
   case expr
     Ast.Expr.Call(node) -> return top_level(modules, node.name)
     Ast.Expr.FunctionRef(node) -> return top_level(modules, node.name)
@@ -58,23 +58,23 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
     Ast.Expr.ConstRef(node) -> return top_level(modules, node.name)
     Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)
     Ast.Expr.FieldAccess(node) -> return field(find(modules, T.name(target_type(types, node.target))), node.name)
-    _ -> return Ast.Maybe.Absent
+    _ -> return none
   end
 end
 
 ## The definition of the top-level declaration with the linked name `name` (a function, struct, enum, alias or
-## constant), or Absent for a builtin, which no file declares.
-export def of_name(modules: List[Linker.LinkedModule], name: String) -> Ast.Maybe[Definition]
+## constant), or `none` for a builtin, which no file declares.
+export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]
   return top_level(modules, name)
 end
 
-## The definition of the field `name` of the struct with the linked name `owner`, or Absent.
-export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Ast.Maybe[Definition]
+## The definition of the field `name` of the struct with the linked name `owner`, or `none`.
+export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
   return field(find(modules, owner), name)
 end
 
-## The definition of the variant `name` of the enum with the linked name `owner`, or Absent.
-export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Ast.Maybe[Definition]
+## The definition of the variant `name` of the enum with the linked name `owner`, or `none`.
+export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
   return variant(find(modules, owner), name)
 end
 
@@ -89,7 +89,7 @@ export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text:
     module,
     local.span,
     local.name_span,
-    Described(doc: Ast.Maybe.Absent, signature: "#{local.name}: #{type_text}", exported: false),
+    Described(doc: none, signature: "#{local.name}: #{type_text}", exported: false),
   )
 end
 
@@ -103,28 +103,28 @@ def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   return T.Type.Unknown
 end
 
-def top_level(modules: List[Linker.LinkedModule], name: String) -> Ast.Maybe[Definition]
+def top_level(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]
   case find(modules, name)
-    Ast.Maybe.Present(found) -> return Ast.Maybe.Present(whole(found))
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
+    some(found) -> return some(whole(found))
+    none -> return none
   end
 end
 
-# The first declaration with the linked name `name`; Absent for a builtin, which no file declares.
-def find(modules: List[Linker.LinkedModule], name: String) -> Ast.Maybe[Found]
+# The first declaration with the linked name `name`; `none` for a builtin, which no file declares.
+def find(modules: List[Linker.LinkedModule], name: String) -> Optional[Found]
   if name == ""
-    return Ast.Maybe.Absent
+    return none
   end
 
   for module in modules
     for declaration in module.declarations
       if declared_name(declaration) == name
-        return Ast.Maybe.Present(Found(module: module, declaration: declaration))
+        return some(Found(module: module, declaration: declaration))
       end
     end
   end
 
-  return Ast.Maybe.Absent
+  return none
 end
 
 def declared_name(declaration: Ast.Decl) -> String
@@ -158,40 +158,40 @@ def whole(found: Found) -> Definition
   end
 end
 
-def variant(found: Ast.Maybe[Found], name: String) -> Ast.Maybe[Definition]
+def variant(found: Optional[Found], name: String) -> Optional[Definition]
   case found
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(at) ->
+    none -> return none
+    some(at) ->
       case at.declaration
         Ast.Decl.Enum(node) ->
           for item in node.variants
             if item.name == name
               said = of_member(at.module, node.name, name)
-              return Ast.Maybe.Present(made("variant", name, at.module, item.span, item.name_span, said))
+              return some(made("variant", name, at.module, item.span, item.name_span, said))
             end
           end
 
-          return Ast.Maybe.Absent
-        _ -> return Ast.Maybe.Absent
+          return none
+        _ -> return none
       end
   end
 end
 
-def field(found: Ast.Maybe[Found], name: String) -> Ast.Maybe[Definition]
+def field(found: Optional[Found], name: String) -> Optional[Definition]
   case found
-    Ast.Maybe.Absent -> return Ast.Maybe.Absent
-    Ast.Maybe.Present(at) ->
+    none -> return none
+    some(at) ->
       case at.declaration
         Ast.Decl.Struct(node) ->
           for item in node.fields
             if item.name == name
               said = of_member(at.module, node.name, name)
-              return Ast.Maybe.Present(made("field", name, at.module, item.span, item.name_span, said))
+              return some(made("field", name, at.module, item.span, item.name_span, said))
             end
           end
 
-          return Ast.Maybe.Absent
-        _ -> return Ast.Maybe.Absent
+          return none
+        _ -> return none
       end
   end
 end
@@ -229,7 +229,7 @@ def top(
 end
 
 def nothing_said() -> Described
-  return Described(doc: Ast.Maybe.Absent, signature: "", exported: false)
+  return Described(doc: none, signature: "", exported: false)
 end
 
 # The doc and signature of the top-level declaration with the linked name `linked`, from the parsed file.

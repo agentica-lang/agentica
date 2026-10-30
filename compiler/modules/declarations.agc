@@ -142,8 +142,8 @@ end
 ## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
 export def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
-    Ast.Maybe.Present(alias) -> return "import #{alias} from #{written}"
-    Ast.Maybe.Absent ->
+    some(alias) -> return "import #{alias} from #{written}"
+    none ->
       pieces = decl.names.map do |entry| entry_text(entry) end
       return "import {#{pieces.join(", ")}} from #{written}"
   end
@@ -151,10 +151,7 @@ end
 
 ## The alias of an import, or "" for an import list (an alias is never empty).
 export def alias_of(decl: Ast.ImportDecl) -> String
-  case decl.alias
-    Ast.Maybe.Present(alias) -> return alias
-    Ast.Maybe.Absent -> return ""
-  end
+  return decl.alias.unwrap_or("")
 end
 
 ## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a
@@ -253,13 +250,13 @@ end
 # resource or a struct: the block sits with the types, as a whole.
 def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
   case function.native
-    Ast.Maybe.Present(link) ->
+    some(link) ->
       if link.with_types
         return 2
       end
 
       return plain
-    Ast.Maybe.Absent -> return plain
+    none -> return plain
   end
 end
 

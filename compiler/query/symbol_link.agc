@@ -17,10 +17,10 @@ export struct Skipped
   problem: Problems.Problem
 end
 
-## What linking the roots gave: the program of the roots that linked (Absent when none did), its modules in the order
+## What linking the roots gave: the program of the roots that linked (`none` when none did), its modules in the order
 ## they were linked, with the roots among them, and the roots left out.
 export struct Linked
-  program: Ast.Maybe[Linker.Linked]
+  program: Optional[Linker.Linked]
   modules: List[Linker.LinkedModule]
   skipped: List[Skipped]
 end
@@ -35,8 +35,8 @@ export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: M
 
   modules: List[Linker.LinkedModule] = []
   case programs.linked
-    Ast.Maybe.Present(together) -> modules = together.modules
-    Ast.Maybe.Absent -> modules = modules
+    some(together) -> modules = together.modules
+    none -> modules = modules
   end
 
   return Linked(program: programs.linked, modules: modules, skipped: skipped)

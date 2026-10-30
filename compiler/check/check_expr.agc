@@ -300,7 +300,7 @@ end
 # A block where a function is expected, or anywhere a type is not demanded.
 def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.Type) -> Result[State.Out]
   if T.unknown?(expected)
-    return Statements.check_block_body(cx, st, node, Ast.Maybe.Absent, T.Type.Unknown, Ast.Maybe.Absent)
+    return Statements.check_block_body(cx, st, node, none, T.Type.Unknown, none)
   elsif !T.is?(expected, "Fn")
     return error(
       State.fail_help(
@@ -318,9 +318,9 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
     cx,
     st,
     node,
-    Ast.Maybe.Present(T.params(expected)),
+    some(T.params(expected)),
     T.result(expected),
-    Ast.Maybe.Absent,
+    none,
   )
 end
 

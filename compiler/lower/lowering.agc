@@ -160,10 +160,10 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
     case function.native
-      Ast.Maybe.Present(native) ->
+      some(native) ->
         lowered = try Native.lower(cx.with(file: entry.file), function, native, struct_decls, index_of[entry.file])
         table = table.with(functions: table.functions.push(lowered))
-      Ast.Maybe.Absent ->
+      none ->
         table = try add_function(
           cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
         )
@@ -172,7 +172,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   for entry in plan.kept
     file = files_of[entry.name]
-    body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: Ast.Maybe.Present(entry.value), span: entry.span))]
+    body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: some(entry.value), span: entry.span))]
     table = try add_function(cx, table, file, index_of[file], entry.name, [], body, entry.span)
   end
 
@@ -260,8 +260,8 @@ def field_fills_of(structs: List[LocatedStruct], index_of: Map[String, Int]) -> 
     values: Map[String, Ast.Expr] = {}
     for field in entry.decl.fields
       case field.default
-        Ast.Maybe.Present(value) -> values = values.put(field.name, value)
-        Ast.Maybe.Absent -> values = values
+        some(value) -> values = values.put(field.name, value)
+        none -> values = values
       end
     end
 
@@ -310,8 +310,8 @@ def scan_all(
     constant_scans = constant_scans.push(scan)
     written = written.concat(scan.written)
     case decl.type
-      Ast.Maybe.Present(ref) -> written = written.concat(Scans.written_in(ref, watched))
-      Ast.Maybe.Absent -> written = written
+      some(ref) -> written = written.concat(Scans.written_in(ref, watched))
+      none -> written = written
     end
   end
 

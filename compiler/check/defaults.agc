@@ -88,15 +88,9 @@ end
 
 ## True when a struct field has a default value.
 export def field_default?(field: Ast.FieldDecl) -> Bool
-  case field.default
-    Ast.Maybe.Present(value) -> return true
-    Ast.Maybe.Absent -> return false
-  end
+  return field.default.some?
 end
 
 def default?(param: Ast.Param) -> Bool
-  case param.default
-    Ast.Maybe.Present(value) -> return true
-    Ast.Maybe.Absent -> return false
-  end
+  return param.default.some?
 end

@@ -488,7 +488,7 @@ def check_generic_block(
 
   case node
     Ast.Expr.BlockLit(block) ->
-      out = try Stmt.check_block_in(cx, st, block, Ast.Maybe.Present(params), result, Ast.Maybe.Absent, false)
+      out = try Stmt.check_block_in(cx, st, block, some(params), result, none, false)
       learned = try Types.unify(cx, out.st, template, out.type, found, block.span)
       return ok(Inferred(st: out.st, substitutions: learned))
     _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
@@ -858,12 +858,12 @@ def empty_field_failure(cx: State.Cx, st: State.St, name: String, span: Source.S
   )
 end
 
-# A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program
+# A builtin record can always be updated; a struct of the program only when the file may build it. `none`: the program
 # is not linked, every struct is visible.
-def updatable?(cx: State.Cx, visible: Ast.Maybe[List[String]], name: String) -> Bool
+def updatable?(cx: State.Cx, visible: Optional[List[String]], name: String) -> Bool
   case visible
-    Ast.Maybe.Present(names) ->
+    some(names) ->
       return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
-    Ast.Maybe.Absent -> return true
+    none -> return true
   end
 end
