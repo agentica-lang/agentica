@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica check [PATH...]` checks several files and folders (none: the
+  current folder), prints the first problem of each failing file and a count,
+  and exits 1 if any failed; `--json` gives one entry per file.
 - `TLS.connect` takes an optional client certificate and key (`cert_file`,
   `key_file`) for servers that require one (mTLS).
 - `Cipher.des_ede3_cbc_encrypt` and `_decrypt` (Triple DES CBC) and `CMAC.aes`

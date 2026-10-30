@@ -83,7 +83,8 @@ OPTIONS = [
     ["--version", "--foo"], ["--foo", "--version"], ["--", "ok.agc"], ["ok.agc", "--version"],
     ["check", "--json", "ok.agc"], ["compile", "ok.agc"], ["--dump", "compile", "ok.agc", "-o", "out.agcb"],
     ["--max-steps", "1", "check", "ok.agc"], ["--json", "check", "ok.agc"], ["--ai", "check", "ok.agc"],
-    ["check", "nope.agc"], ["nope.agc"], ["check", "."],
+    ["check", "nope.agc"], ["nope.agc"], ["check", "."], ["check", "ok.agc", "divide.agc"],
+    ["--json", "check", "ok.agc", "tab.agc"], ["--ai", "check", "ok.agc", "tab.agc"], ["check", "ok.agc", "nope.agc"],
     ["--max-steps", "5", "--seed", "1", "--json", "--deny-run", "--flush-timeout", "10000", "ok.agc"],
     ["--seed", "1", "--flush-timeout", "10000", "--schedulers", "1", "--deny-run", "ok.agc"],
 ]
