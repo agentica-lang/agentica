@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica check [PATH...]` checks several files and folders (none: the
+  current folder), prints the first problem of each failing file and a count,
+  and exits 1 if any failed; `--json` gives one entry per file.
+
 ## [0.17.0] - 2026-10-30
 
 ### Added

@@ -4,9 +4,13 @@ The exact rules of the command line: running, checking and compiling a
 program, the bytecode cache and the sandbox flags.
 
 - `agentica FILE.agc ARGS` checks, then runs; `System.args()` returns ARGS (the
-  words after the file are the program's). `agentica check FILE.agc` only checks
-  (`check --stdin FILE.agc` reads the text from standard input). Exit 0 is
-  success, 1 a diagnostic, 2 bad usage or an unreadable file.
+  words after the file are the program's). `agentica check [PATH...]` only
+  checks: one file prints `check ok`; several files or folders (none: the
+  current folder; not `deps/`, `agc_libs/` or hidden folders) check every `.agc`
+  file, print each file's first diagnostic and a count, and with `--json` print
+  one object `{ok, checked, failed, files}`. `check --stdin FILE.agc` reads the
+  text from standard input. Exit 0 is success, 1 a diagnostic, 2 bad usage or an
+  unreadable file.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);

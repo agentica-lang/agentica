@@ -44,8 +44,10 @@ import Resolve from "../modules/resolve_import"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
+import SymbolPaths from "../query/symbol_paths"
 import SourceFile from "../syntax/source_file"
 import Add from "cli_add"
+import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
 import Help from "cli_help"
 import Install from "cli_install"
@@ -119,14 +121,11 @@ def dispatch(session: Session) -> Int
 
   if first == "check" and rest.size > 0 and rest[0] == "--stdin"
     return check_stdin(session, rest.drop(1))
+  elsif first == "check"
+    return check(session, rest)
   end
 
   usable = rest.size >= 1
-  if first == "check"
-    # `check FILE --stdin` would check the disk while the caller means the buffer.
-    usable = usable and !rest.drop(1).any? do |word: String| word == "--stdin" end
-  end
-
   if first == "compile"
     usable = rest.size == 3 and rest[1] == "-o" and !session.options.dump and !session.options.dump_ir
   end
@@ -271,6 +270,84 @@ end
 def type_at(session: Session, asked: QueryPosition.Asked, partial: Bool) -> Reply.Answer
   settings = CheckCache.attach(session.settings, asked.file, !session.options.no_cache)
   return CliQuery.type_at(asked, session.options.style, partial, settings)
+end
+
+# `check [PATH...]`: one file, or every `.agc` file of the folders and files named (none: the working folder). One file
+# answers as `check` always did; anything else checks every file and ends with a count (`check_all`). `--json` and
+# `--ai` may stand among the paths, as for the query commands; `--stdin` after a path would check the disk while the
+# caller means the buffer, so it is a usage error.
+def check(session: Session, words: List[String]) -> Int
+  case QueryOptions.parse(words, session.options.style, CliCheck.usage(), false)
+    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Ready(asked) ->
+      styled = session.with(options: session.options.with(style: asked.style))
+      if asked.stdin != ""
+        return emit(Reply.failed(2, Texts.usage_text()))
+      end
+
+      if asked.words.size == 1 and !styled.settings.workspace.directory_exists.call(asked.words[0])
+        return program(styled, "check", asked.words)
+      end
+
+      return check_all(styled, asked.words)
+  end
+end
+
+# Checks every file of `paths`, prints the problem of each file that fails (the first one of each, as for one file) and
+# the count, and gives 1 when any failed. A path that names no file or folder, or a folder with no `.agc` file, is a
+# usage error before any file is checked.
+def check_all(session: Session, paths: List[String]) -> Int
+  case SymbolPaths.expand(session.settings.workspace, paths, "", CliCheck.usage())
+    SymbolPaths.Expanded.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    SymbolPaths.Expanded.Files(roots) ->
+      entries = roots.map do |root: SymbolPaths.Root| check_entry(session, root.typed) end
+      return report(session, entries)
+  end
+end
+
+def check_entry(session: Session, file: String) -> CliCheck.Entry
+  settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
+  case Core.check(Cache.empty(), settings, file)
+    Core.Verdict.Passed -> return CliCheck.Entry.Passed(file)
+    Core.Verdict.Unreadable -> return CliCheck.Entry.Unreadable(file)
+    Core.Verdict.Rejected(problem) -> return CliCheck.Entry.Failed(file, Core.named(session.settings, problem, file))
+  end
+end
+
+# The answer of a run over several files. The JSON form is one document on stdout; the others print each problem on
+# stderr, in the order of the files, then the count.
+def report(session: Session, entries: List[CliCheck.Entry]) -> Int
+  failed = CliCheck.failures(entries)
+  if session.options.style == "json"
+    print(CliCheck.json_text(entries))
+    return failed_status(failed)
+  end
+
+  for entry in entries
+    show_entry(session, entry)
+  end
+
+  if failed == 0
+    return emit(Reply.printed(CliCheck.ok_text(entries.size)))
+  end
+
+  return emit(Reply.failed(1, CliCheck.failed_text(failed, entries.size)))
+end
+
+def failed_status(failed: Int) -> Int
+  if failed == 0
+    return 0
+  end
+
+  return 1
+end
+
+def show_entry(session: Session, entry: CliCheck.Entry) -> Void
+  case entry
+    CliCheck.Entry.Passed(_) -> return
+    CliCheck.Entry.Unreadable(file) -> IO.warn("agentica: cannot read #{file}")
+    CliCheck.Entry.Failed(file, problem) -> show(session, problem, file)
+  end
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and
@@ -452,6 +529,12 @@ end
 # root file names it as it was typed (the linker knows it by its absolute path), and one in an imported file by its
 # canonical path. A problem of the arguments (`<arguments>`) has no source lines to show.
 def reject(session: Session, problem: Problems.Problem, source: String, status: Int) -> Int
+  show(session, problem, source)
+  return status
+end
+
+# Prints the problem as `reject` says, and leaves the status to the caller.
+def show(session: Session, problem: Problems.Problem, source: String) -> Void
   style = session.options.style
   root = Core.root?(problem.file, source, session.settings)
   shown = Core.named(session.settings, problem, source)
@@ -473,8 +556,6 @@ def reject(session: Session, problem: Problems.Problem, source: String, status: 
       IO.warn(Plain.format(shown, text))
     end
   end
-
-  return status
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight

@@ -72,7 +72,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`; `agentica check src tests/util.agc` checks several files and folders at once (see [Options](#options)). Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -192,6 +192,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
+| `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH, and ends with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1). It skips hidden folders, `agc_libs/` and the `deps/` of a project, as `symbol` does. Each failing file prints its first diagnostic, as one file does. One file alone prints `check ok`, as before. With `--json`, stdout is one object, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file. A path that does not exist or a folder with no `.agc` file is `QUERY-USAGE` (exit 2) and no file is checked |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `install` | fetches the packages of `agentica.lock` with the system `git` into the download cache and writes them to `deps/NAME/` next to `agentica.toml`, where a build reads them (see the modules tour); never changes the lock |
