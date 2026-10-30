@@ -84,18 +84,19 @@ Weighed later (no fixed order):
   (phase 24: a crash ends only its task; a handle belongs to the task that
   opened it, [§14.5](../vm/14-core-invariants.md#145-handles)) and unit tests
   ([phase 25](25-unit-tests.md)).
-- **7.2.1a to 7.2.1h:** the VM core ([§14](../vm/14-core-invariants.md#14-vm-core-invariants)),
-  the first part of the [VM layers](07-vm.md#7l-vm-layers), the architecture
-  note ([§16](../vm/16-architecture.md#16-vm-architecture)), asynchronous process
+- **7.2.1a to 7.2.1h:** the VM core
+  ([§14](../vm/14-core-invariants.md#14-vm-core-invariants)), the first part of
+  the [VM layers](07-vm.md#7l-vm-layers), the architecture note
+  ([§16](../vm/16-architecture.md#16-vm-architecture)), asynchronous process
   close and the flush limit, `Channel[T]` (17b), stdout and stderr on the loop,
   the pipe operator `|>` (15l), and `File.each_line` (17d).
 - **7.2.2, 7.2.3:** the 6c pilot and the smaller skill (`docs/eval.md`, rounds
   9 to 12).
 - **7.2a:** doc comments (22a, [§32](../future/32-doc-comments.md)) and digit
   separators (phase 23, the grammar's literals).
-- **7.2.4 to 7.2.6:** binary data (phase 13, [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)),
-  stack traces (14b), and `System.env` and `Path.real` for the self-hosted
-  front end.
+- **7.2.4 to 7.2.6:** binary data (phase 13,
+  [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)), stack traces
+  (14b), and `System.env` and `Path.real` for the self-hosted front end.
 - **7.2.7 to 7.2.9:** the self-hosted front end
   ([§18](../future/18-front-end-language.md)), with the new import forms and
   module constants (44a0 to 44d; 44e, static data, only if start-up numbers
