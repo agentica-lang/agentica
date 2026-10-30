@@ -109,12 +109,10 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   ends with the timeout error and the task wakes. The timer lives with the job
   because the START request that the job pays anyway starts it, and the job's
   outcome decides between the timeout and the completion.
-- **A wait with only a deadline is a task timer.** `Task.sleep`, the timed
-  await, a channel deadline, `Task.map`'s oldest deadline and a handle lock's
-  deadline arm the task's own timer (`agc_task_park_until`, `vm/timers.c`; a
-  channel's starts its clock late, `agc_task_park_within`) in the scheduler's
-  heap. Such a wait has no I/O, so it needs no job, no registry slot and no
-  request to the I/O thread (§16.9, "Timers").
+- **A wait with only a deadline is a task timer.** It arms the task's own timer
+  in the scheduler's heap (`agc_task_park_until`, `vm/timers.c`). Such a wait
+  has no I/O, so it needs no job, no registry slot and no request to the I/O
+  thread. §16.9, "Timers", lists the waits that use it.
 
 No builtin starts its own timer for a timeout. As built, a few timers are not
 job timeouts and stay: a captured child's grace period (§10.4), the `HttpClient`

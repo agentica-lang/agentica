@@ -196,11 +196,10 @@ that still apply.
   `main`, and then the table is only read: it needs no lock and no atomic once
   the other schedulers start. The entry of a front-end file runs only pure
   builtins, so it spawns no task. A hand-made entry could spawn a task before
-  its last write, so the multicore build must not run a second task on another
-  scheduler until the entry has handed over to `main` (its first `TAIL_CALL` or
-  `RETURN`), or publish the table with one release store of a flag that
-  `GLOBAL` reads with acquire (a slot is a 16-byte value, so per-slot ordering
-  would not stop a torn read). At N=1 tasks interleave on one thread and
+  its last write, so a run with N>1 starts no second scheduler until the entry
+  has handed over to `main` (its first `TAIL_CALL` or `RETURN`; §16.9,
+  "Threads"). A slot is a 16-byte value, so per-slot ordering would not stop a
+  torn read. At N=1 tasks interleave on one thread and
   nothing is racy.
 - **Order of work.** The task fixtures run as a stress test with
   `--schedulers 4`, under TSan when available (`make vm-tsan` runs the C tests

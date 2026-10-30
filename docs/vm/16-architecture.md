@@ -6,13 +6,12 @@ queues and who owns what. The VM runs one scheduler per logical core by default;
 with N = 1 the scheduler and the loop share one thread. §16.9 says what differs,
 and this model also serves N = 1.
 
-It replaces the first multicore design of §10.2.3 (BEAM style: one loop, one run
-queue and one resource registry per scheduler, a home scheduler for each task,
-work stealing first). The new model has one loop, one run queue and no home.
-§10.2.3 keeps the rules that still hold (the park and wake protocol, the cancel
-and stop flags, the state split, the stream locks, the `--schedulers` flag).
-§14's five rules hold in this model; §16.6 maps each to the component that
-enforces it.
+The model has one loop, one run queue and no home scheduler for a task. A BEAM
+style design (one loop, run queue and resource registry per scheduler, a home
+scheduler for each task, work stealing first) was rejected. §10.2.3 keeps the
+rules per thread (the park and wake protocol, the cancel and stop flags, the
+state split, the stream locks, the `--schedulers` flag). §14's five rules hold
+in this model; §16.6 maps each to the component that enforces it.
 
 ### 16.1 Components
 
@@ -213,8 +212,8 @@ The invariants:
    the state CAS only. The resumed task, which holds its own reference, detaches
    the job (the "cancelled" outcome, by the same CAS) and posts the cancel
    request. A wait with no job (`Task.await`, stdin waiters) uses the state CAS
-   only. A parked channel wait always has a deadline. As built it is a timer of
-   the task (§16.9, "Timers"), not a job, so it too uses the state CAS only.
+   only. A parked channel wait always has a deadline, a timer of the task
+   (§16.9, "Timers"), not a job, so it too uses the state CAS only.
 4. **Memory order.** The outcome CAS is release and the task's read of it is
    acquire. The resumed task reads the outcome.
 5. **Completion** is set when the job's last phase ends: `after_work` for a pool
@@ -293,9 +292,8 @@ The rules of §14 and the component that enforces each:
 
 Threads in one VM share immutable values without copying. There are no per-task
 heaps and no message copies (§10.2.3). The one table a run writes into the
-loaded program is the Globals table of the module constants. The entry writes it
-once, before `main`. After that it is read-only, so schedulers read it without a
-lock (§10.2.3). Between VMs, the only sharing is by OS processes, and it is
+loaded program is the Globals table of the module constants (§10.2.3, "The
+Globals table"). Between VMs, the only sharing is by OS processes, and it is
 explicit: `Process.spawn` and the planned fd 3 channel of 25c, like Erlang nodes
 talking to each other.
 
@@ -393,13 +391,12 @@ one exit path are as in §16.1 to §16.6. What differs:
   the inbox in the order of the calls. At N = 1 the steps run inline, and a read
   of buffered bytes or a send that goes out at once returns without a park
   (`agc_io_here`). The HTTP server keeps its state on the I/O thread the same
-  way: its accepts and waits are jobs that the I/O thread ends, and a
-  connection's end gives its room back with a posted step. Processes and the
-  child channel are requests too. The I/O thread owns each child's handles,
-  buffers and request slots, and a posted request carries its result, which the
-  `done` half reads. At N > 1 a spawn, a close and `Process.read_available` park
-  too. The parent channel of a child run (`Test.run`) opens at the start of the
-  run (`agc_parent_take`). `agc_io_uv` aborts off the I/O thread.
+  way (§10.7.2). Processes and the child channel are requests too. The I/O
+  thread owns each child's handles, buffers and request slots, and a posted
+  request carries its result, which the `done` half reads. At N > 1 a spawn, a
+  close and `Process.read_available` park too. The parent channel of a child run
+  (`Test.run`) opens at the start of the run (`agc_parent_take`). `agc_io_uv`
+  aborts off the I/O thread.
 - **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
   DONE, EXPIRED or CANCELLED), set once by CAS (`agc_job_settle`, release;
   `agc_io_finish` reads it with acquire). It also has an atomic reference count.

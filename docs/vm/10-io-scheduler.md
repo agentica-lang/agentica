@@ -386,12 +386,12 @@ section says how the scheduler and the loop keep them.
   A handle that the dropped result would have handed out is closed. The
   `expired` half never runs on a detached job, so it never closes a handle a
   task holds. A kind may set a `cancel` half, which ends the job early and
-  returns true. No pool kind may have one, since a pool thread may still use the
-  data. `HttpWire.accept` and `HttpWire.wait` use it to leave at once. For TCP
-  and process kinds at the deadline, a read, accept or wait leaves its handle
-  open, a connect closes the socket it was opening, and a send waits for its
-  write callback. A listen has no deadline. A pool job (files, stdin) runs until
-  its work ends.
+  returns true. A pool kind may have one only with a `more` step, and it is
+  called only once the job waits on the loop (§14.3), since a pool thread may
+  still use the data. `HttpWire.accept` and `HttpWire.wait` use it to leave at
+  once. For TCP and process kinds at the deadline, a read, accept or wait leaves
+  its handle open, a connect closes the socket it was opening, and a send waits
+  for its write callback. A listen has no deadline.
 - **External jobs.** A kind with `external` set has no `work` half. A libuv
   callback on the loop thread completes it, which puts the job on the ready
   list. A second call does nothing.
