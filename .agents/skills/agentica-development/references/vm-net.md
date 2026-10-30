@@ -214,8 +214,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     one `Connection: close`. It returns whether the connection closes, or the
     reason it does not write.
 - Client connections: a connection is kept only with nothing left after the
-  response (the `buffered` and `ended` fields, and a 0-byte `read_text` after a
-  chunked body). An idempotent call that fails on a reused connection before any
+  response (the `buffered` and `ended` fields, and `HttpWire.idle?` after any
+  body). An idempotent call that fails on a reused connection before any
   response byte is retried once on a new one (`run_job`). A close-delimited body
   over TLS needs `close_notify` (`HttpWire.clean_eof?`); a bare FIN gives
   "truncated HTTP body". A worker whose caller gave up (`HttpWire.awaited?`: the

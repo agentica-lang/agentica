@@ -324,8 +324,6 @@ static agc_value builtin_chunk_read(agc_vm *vm, agc_value *args, uint32_t span) 
   return between_reads(vm, &b);
 }
 
-/* The length of the longest prefix of s that does not end inside a UTF-8
-   sequence. Bytes that can never be valid stay in it, so the decoding fails. */
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
   agc_list_cursor cursor;
   agc_value item;

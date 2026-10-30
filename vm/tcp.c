@@ -245,13 +245,9 @@ static bool read_ready(net *n, request *q) {
    does not keep such a connection. I/O thread only. */
 static bool input_ended(const net *n) { return n->in.eof || n->in.error || n->raw_eof; }
 
-/* The cut of HttpWire.idle?: no bytes are taken, only the count left in the input and whether it has ended. I/O thread
-   only. */
+/* The cut of HttpWire.idle?: no bytes are taken (the request's cut stays empty), only the count left in the input and
+   whether it has ended. I/O thread only. */
 static void cut_idle(net *n, request *q) {
-  q->cut.error = n->in.error;
-  q->cut.status = AGC_CUT_DATA;
-  q->cut.len = 0;
-  q->cut.data = NULL;
   q->buffered = agc_inbuf_pending(&n->in);
   q->ended = input_ended(n);
 }
@@ -273,12 +269,13 @@ static void cut_head(net *n, request *q) {
   q->ended = input_ended(n);
 }
 
-/* The values of the two cuts, built on a scheduler from the request alone. std/http matches on "error reading from
-   stream port" (a prefix) and "network: end of input" of both (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
+/* The value of HttpWire.idle?, built on a scheduler from the request alone. */
 static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
+/* The value of the head cut, built on a scheduler from the request alone. std/http matches on "error reading from
+   stream port" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
 static agc_value head_value(agc_vm *vm, const request *q) {
   if (q->cut.len && q->kind == REQ_RESPONSE)
     return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);

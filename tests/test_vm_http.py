@@ -537,10 +537,21 @@ def send_in_pieces(port, pieces):
     return top.split(b" ")[1].decode(), body.decode()
 
 
+def read_after_close(port, data):
+    """Sends data, closes the write side and returns what the server sent before it closed."""
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
+        conn.sendall(data)
+        conn.shutdown(socket.SHUT_WR)
+        got = b""
+        while chunk := conn.recv(65536):
+            got += chunk
+    return got
+
+
 def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     """A head or body split across reads gets the same answer as one sent whole: a UTF-8 character split across
-    reads and chunks (and an unfinished one, which is just bytes), a forbidden trailer split mid-name, and heads too
-    large however slowly they arrive."""
+    reads and chunks (and an unfinished one, which is just bytes), bodies of exactly the limit, bodies cut short by a
+    close, a forbidden trailer split mid-name, and heads too large however slowly they arrive."""
     vm, port = start_server(tmp_path, adopt)
     length = b"POST /length HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
     chunked = b"POST /chunked HTTP/1.1\r\nHost: x\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n"
@@ -553,6 +564,14 @@ def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     assert send_in_pieces(port, [chunked + b"3\r\nab", b"\xc3\r\n0\r\n\r\n"]) == (
         "200", "POST /chunked bytes [97, 98, 195]")
     assert send_in_pieces(port, [chunked + b"0\r\nConte", b"nt-Length: 2\r\n\r\n"])[0] == "400"
+    # A body of exactly max_body_bytes (1024 in SERVER_PROGRAM) is served, with either framing.
+    full = b"a" * 1024
+    assert send_in_pieces(port, [length % 1024 + full]) == ("200", "POST /length " + full.decode())
+    assert send_in_pieces(port, [chunked + b"400\r\n" + full + b"\r\n0\r\n\r\n"]) == (
+        "200", "POST /chunked " + full.decode())
+    # A body that the close cuts short gets no answer, with either framing.
+    assert read_after_close(port, length % 10 + b"abc") == b""
+    assert read_after_close(port, chunked + b"5\r\nab") == b""
     many = b"GET / HTTP/1.1\r\nHost: x\r\n" + b"".join(b"X-%d: v\r\n" % k for k in range(101)) + b"\r\n"
     assert send_in_pieces(port, [many[:300], many[300:900], many[900:]])[0] == "431"
     unended = b"GET /" + b"a" * 80000
