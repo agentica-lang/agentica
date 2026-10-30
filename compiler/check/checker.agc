@@ -163,6 +163,7 @@ def start(linked: Linker.Linked) -> State.Cx
     resources: Set.new([]),
     c_structs: Set.new([]),
     callbacks: {},
+    natives: Set.new([]),
     functions: {},
     constants: {},
     type_params: [],

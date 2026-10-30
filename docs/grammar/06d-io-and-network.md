@@ -95,11 +95,12 @@ end
   `CHECK-TYPE-MISMATCH`.
 - `Native.callback(Name, &function)` gives the callback `Name` of the block, a
   resource. `Name` that is not a callback is `CHECK-TYPE-MISMATCH` at it. The
-  function is named with `&`: an `Fn` value is `CHECK-NATIVE-CALLBACK` at it.
-  It takes and returns the Agentica types of the callback's C types; anything
-  else is `CHECK-TYPE-MISMATCH` at it. The VM does not make callbacks: a
-  program that calls `Native.callback` is refused at load with
-  `RUNTIME-NATIVE-UNSUPPORTED`, exit 2.
+  function is a declared function named with `&`: an `Fn` value or a function of
+  an extern block is `CHECK-NATIVE-CALLBACK` at it. It takes and returns the
+  Agentica types of the callback's C types; anything else is
+  `CHECK-TYPE-MISMATCH` at it. The VM does not make callbacks: a program that
+  calls `Native.callback` is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`,
+  exit 2.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses a program that declares any extern

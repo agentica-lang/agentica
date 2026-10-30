@@ -911,8 +911,9 @@ end
 
 # callback Name(params) -> result declares a C function pointer type: Native.callback(Name, &function) makes one, a
 # resource (Native.close, Native.closed? and Task.spawn_owning take it), which a def of the block takes as a parameter
-# of that type, also in the variadic part, and a type alias names. The function is named with & (a block or an Fn value
-# is refused) and takes and returns the Agentica types of the callback.
+# of that type, also in the variadic part, and a type alias names. The function is a declared function named with &
+# (a block, an Fn value and a function of an extern block are refused) and takes and returns the Agentica types of the
+# callback.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  cmp: Compare = Native.callback(Cmp, &by_length)\n"
      "  puts(sqlite3_create_collation(db, \"len\", 1, Native.null(), cmp))\n"
@@ -928,6 +929,8 @@ end
     ("  Native.callback(3, &by_length)", "CHECK-TYPE-MISMATCH", (33, 19), (33, 20)),
     ("  f = &by_length\n  Native.callback(Compare, f)", "CHECK-NATIVE-CALLBACK", (34, 28), (34, 29)),
     ("  Native.callback(Hook) do |a, op, d, t, r| puts(t) end", "CHECK-BLOCK-TARGET", (33, 25), (33, 56)),
+    ("  Native.callback(Compare, &sqlite3_create_collation)", "CHECK-NATIVE-CALLBACK", (33, 28), (33, 53)),
+    ("  Native.callback(Hook, &sqlite3_open)", "CHECK-NATIVE-CALLBACK", (33, 25), (33, 38)),
     ("  Native.callback(Compare, &nothing)", "CHECK-UNKNOWN-NAME", (33, 28), (33, 36)),
     ("  Native.callback(Compare, &pass)", "CHECK-ENUM-TYPE-INFERENCE", (33, 28), (33, 33)),
     ("  sqlite3_update_hook(db, Native.null(), Native.null())", "CHECK-TYPE-MISMATCH", (33, 27), (33, 40)),
@@ -945,8 +948,8 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
 
 # A callback crosses by value: its parameters are C integer types, C.Double, C.Float, C.Bool, C.String or C.Pointer,
 # and its result one of them but C.String, or Void (else PARSE-EXTERN-TYPE at the type). It has no default, out
-# parameter or `...`, takes at most 64 parameters, and is a parameter of a def of its block below it, not a result, an
-# out parameter or a struct field.
+# parameter, `...` or two parameters of one name, takes at most 64 parameters, and is a parameter of a def of its
+# block below it, not a result, an out parameter or a struct field.
 @pytest.mark.parametrize("member, code, start, stop", [
     ("callback F(a: C.Bytes) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 24)),
     ("callback F(a: C.Function) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 27)),
@@ -956,6 +959,7 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
     ("callback F(a: C.Int32) -> C.String", "PARSE-EXTERN-TYPE", (2, 29), (2, 37)),
     ("callback F(v: Void) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 21)),
     ("callback F(a: C.Int32 = 1) -> Void", "PARSE-EXTERN-DEFAULT", (2, 14), (2, 28)),
+    ("callback F(n: C.Int32, n: C.Int32) -> Void", "CHECK-REDEFINED-NAME", (2, 26), (2, 36)),
     ("callback F(out a: C.Int32) -> Void", "PARSE-EXTERN-OUT", (2, 14), (2, 28)),
     ("callback F(a: C.Int32, ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 26), (2, 29)),
     ("callback F(a: C.Int32) -> C.Int32\n  def f() -> F", "PARSE-EXTERN-TYPE", (3, 14), (3, 15)),

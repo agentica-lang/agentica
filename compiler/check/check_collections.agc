@@ -265,9 +265,10 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 end
 
 # Native.callback(Name, &function): Name is a callback of an extern block (CHECK-TYPE-MISMATCH otherwise), and the
-# function is named with & (CHECK-NATIVE-CALLBACK for any other value: a block or an Fn value may capture values, and
-# C passes its own context through a user data pointer) and takes and returns the Agentica types of the callback
-# (CHECK-TYPE-MISMATCH). The call gives the callback, a resource.
+# function is a declared function named with & that is not a function of an extern block (CHECK-NATIVE-CALLBACK
+# otherwise: an Fn value may capture values, C passing its own context through a user data pointer, and a compute def
+# would wait inside the callback). It takes and returns the Agentica types of the callback (CHECK-TYPE-MISMATCH, with
+# the C to Agentica help); a generic function takes them from the callback. The call gives the callback, a resource.
 def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   callback_help = "declare the C function type with callback Name(params) -> result in an extern block"
   first = site.args[0]
@@ -308,22 +309,29 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
 
   target = site.args[1]
   expected = cx.callbacks[T.name(wanted)]
-  case target
-    Ast.Expr.FunctionRef(node) -> current = current
-    _ ->
-      return error(
-        State.fail_help(
-          cx,
-          current,
-          "CHECK-NATIVE-CALLBACK",
-          "Native.callback takes a function named with &, not a block or a function value",
-          Ast.expr_span(target),
-          "write a def that takes #{T.to_text(expected)} and pass &name; C's user data pointer carries any context",
-        ),
-      )
+  named = callback_target(target)
+  if named == "" or cx.natives.include?(named)
+    return error(
+      State.fail_help(
+        cx,
+        current,
+        "CHECK-NATIVE-CALLBACK",
+        "Native.callback takes &name of a declared function that is not a function of an extern block",
+        Ast.expr_span(target),
+        "write a def that takes #{T.to_text(expected)} and pass &name; C's user data pointer carries any context",
+      ),
+    )
   end
 
-  given = try State.expr(cx, current, target, expected)
+  # A plain function is checked against its own type, so a mismatch gets the help below; a generic one takes its
+  # type parameters from the callback.
+  context = T.Type.Unknown
+  found = cx.functions.get(named)
+  if found.some? and found.unwrap!.type_parameters.size > 0
+    context = expected
+  end
+
+  given = try State.expr(cx, current, target, context)
   if !T.same?(given.type, expected)
     return error(
       State.fail_help(
@@ -338,6 +346,14 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
   end
 
   return ok(State.Out(st: given.st, type: wanted))
+end
+
+# The function that the second argument of Native.callback names with &, or "" for any other value.
+def callback_target(expr: Ast.Expr) -> String
+  case expr
+    Ast.Expr.FunctionRef(node) -> return node.name
+    _ -> return ""
+  end
 end
 
 def type_name?(expr: Ast.Expr) -> Bool

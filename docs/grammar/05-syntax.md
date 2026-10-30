@@ -164,7 +164,8 @@ that cross by value: an integer type, `C.Double`, `C.Float`, `C.Bool`,
 `C.String`, or `Void`; any other type is `PARSE-EXTERN-TYPE` at the type. It
 has no default (`PARSE-EXTERN-DEFAULT`), no out parameter (`PARSE-EXTERN-OUT`
 at the parameter), no `...` (`PARSE-EXTERN-VARIADIC`) and at most 64
-parameters (`PARSE-EXTERN-ARITY`). For the rest of the language it is a
+parameters (`PARSE-EXTERN-ARITY`); a parameter name used twice is
+`CHECK-REDEFINED-NAME` at the second. For the rest of the language it is a
 resource: a type, with `export` and the place of a type in the declaration
 order (a block that declares one goes with the types). A `def` of the block
 below it takes it as a parameter, also in the variadic part; a callback result

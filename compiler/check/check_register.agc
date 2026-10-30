@@ -85,10 +85,22 @@ def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
   return ok(found)
 end
 
-# The Fn type of the function of a callback, by its name; any other resource leaves the context as it is.
+# The Fn type of the function of a callback, by its name; any other resource leaves the context as it is. Two
+# parameters of one name are CHECK-REDEFINED-NAME, as in a def.
 def register_callback(cx: State.Cx, st: State.St, node: Ast.ResourceDecl) -> Result[State.Cx]
   case node.callback
     some(callback) ->
+      seen: Set[String] = Set.new([])
+      for param in callback.params
+        if seen.include?(param.name)
+          return error(
+            State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
+          )
+        end
+
+        seen = seen.add(param.name)
+      end
+
       refs = callback.params.map do |param: Ast.Param| param.type end
       params = try Types.resolve_all(cx, st, refs)
       result = try Types.resolve_type(cx, st, callback.result, true)
@@ -497,7 +509,12 @@ def register_function(
     result: result,
     shape: Defaults.shape(node.params),
   )
-  return ok(cx.with(functions: cx.functions.put(node.name, signature)))
+  natives = cx.natives
+  if node.native.some?
+    natives = natives.add(node.name)
+  end
+
+  return ok(cx.with(functions: cx.functions.put(node.name, signature), natives: natives))
 end
 
 # CHECK-REDEFINED-NAME at a type parameter named like a type the file can write: it would hide that type.
