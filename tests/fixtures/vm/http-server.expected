@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 24153,
+  "steps": 31615,
   "stdout": [
     "HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)",
     "error(\"http: every option must be positive\")",
@@ -15,6 +15,11 @@
     "204 [\"yes\"] [] [] []",
     "304 [\"yes\"] [] [] []",
     "404 [\"yes\"] [\"9\"] [] [not found]",
+    "200 [] [\"7\"] [] [ñandú]",
+    "<Bytes 3 ff0080>",
+    "error(\"http: body is not valid UTF-8\")",
+    "<Bytes 4 636166e9>",
+    "error(\"http: charset iso-8859-1 is not supported, decode the body with agentica-lang/charset\")",
     "200 [\"yes\"] [\"40\"] [] [POST /limit /limit [] [0123456789abcdef]]",
     "200 [] [\"3\"] [\"close\"] [bye]",
     "200 [\"yes\"] [\"35\"] [] [GET /after-close /after-close [] []]",

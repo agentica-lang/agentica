@@ -47,7 +47,7 @@ class Web(http.server.BaseHTTPRequestHandler):
         pass
 
     def reply(self, status, body, headers=()):
-        data = body.encode()
+        data = body if isinstance(body, bytes) else body.encode()
         self.send_response(status)
         for name, value in headers:
             self.send_header(name, value)
@@ -71,6 +71,17 @@ class Web(http.server.BaseHTTPRequestHandler):
             for piece in [b"\xc3", b"\xb1and\xc3\xba", b" chunks"]:
                 self.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
             self.wfile.write(b"0\r\nX-Trailer: t\r\n\r\n")
+        elif self.path == "/binary":
+            self.reply(200, b"\xff\x00\x80", [("Content-Type", "application/octet-stream")])
+        elif self.path == "/binary-chunked":
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            for piece in [b"\xff\x00", b"\x80\r\n"]:
+                self.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
+            self.wfile.write(b"0\r\n\r\n")
+        elif self.path == "/latin1":
+            self.reply(200, "caf\u00e9".encode("latin-1"), [("Content-Type", "text/plain; charset=iso-8859-1")])
         elif self.path == "/close":
             self.send_response(200)
             self.send_header("Connection", "close")
@@ -99,6 +110,10 @@ class Web(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/echo":
+            # The request bytes as the peer received them: their count and hex, so non-UTF-8 and CRLF show.
+            self.reply(200, "%d %s" % (len(body), body.hex()))
+            return
         self.reply(200, "%s %d %s" % (self.headers.get("X-Kind"), len(body), body[:8].decode()))
 
     def do_DELETE(self):

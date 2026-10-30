@@ -1,11 +1,11 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3418,
+  "steps": 3517,
   "stdout": [
     "[error(\"task: timed out\")]",
-    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"2\")], body: \"ok\"))",
-    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"2\")], body: \"ok\"))",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"2\")], body: <Bytes 2 6f6b>))",
     "GET /slow HTTP/1.1",
     "GET /after HTTP/1.1",
     ""

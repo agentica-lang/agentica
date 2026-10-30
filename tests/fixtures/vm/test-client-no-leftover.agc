@@ -1,7 +1,7 @@
 import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "served"))
+  return ok(HttpResponse(status: 200, headers: [], body: "served".bytes))
 end
 
 def main() -> Void
@@ -10,12 +10,12 @@ def main() -> Void
   Test.run([
     Test.test("a client made in a test leaves no task behind") do
       pool = HTTP.client(HTTP.client_options()).unwrap!
-      Test.eq(HTTP.get(pool, url).unwrap!.body, "served")
+      Test.eq(HTTP.get(pool, url).unwrap!.body, "served".bytes)
     end,
     Test.test("a client made in an earlier test still works") do
       pool = HTTP.client(HTTP.client_options()).unwrap!
-      first = HTTP.get(pool, url).unwrap!.body
-      Test.eq(first + HTTP.get(pool, url).unwrap!.body, "servedserved")
+      first = HTTP.get(pool, url).unwrap!.body.size
+      Test.eq(first + HTTP.get(pool, url).unwrap!.body.size, 12)
     end
   ])
 end

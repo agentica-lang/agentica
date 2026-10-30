@@ -1,8 +1,9 @@
 ### 10.6 HTTP parsing
 
-HTTP on the VM uses whole messages and `String` bodies. Streaming waits for
-channels (10.7). The rules of this section are fixed by the hostile-case tests
-(10.7.4).
+HTTP on the VM uses whole messages. The client's request and response bodies
+and a handler's response body are `Bytes` (a request body the server reads is
+still a `String`). Streaming waits for channels (10.7). The rules of this
+section are fixed by the hostile-case tests (10.7.4).
 
 - Well-formed messages give the status, headers and body, as an ok `Result`.
 - Malformed or hostile input is rejected. A server answers with an error status
@@ -73,8 +74,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   bytes read so far and returns a record.
 - **`std/http`** keeps the rest: options, URL parsing, request building, the
   accept and connection loops, the server's reads and writes, keep-alive,
-  handler dispatch, and the header helpers. A body crosses as `String` pieces
-  joined once.
+  handler dispatch, and the header helpers. A client body crosses as `Bytes`
+  pieces joined once; a server request body, as `String` pieces joined once.
 - **Timeouts.** `get`, `post` and `request` block only the calling task. One
   `timeout_ms` covers the whole call: the wait for a pooled connection, DNS,
   connect, the TLS handshake, the request and the response. 4xx and 5xx are
@@ -85,18 +86,19 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   connection (server), and how long an idle pooled connection is kept (client).
 - **Body limit and memory.** `max_body_bytes` defaults to 1 MiB on both sides
   and may be raised to 64 MiB. A body is held in C once and in its `String`
-  once, so body memory is at most `max_body_bytes` × `max_connections` × 4 (512
-  MiB with the server defaults). A program that raises `max_body_bytes` must
-  lower `max_connections`. A body over the limit is an `error` on the client,
-  and a 413 on the server, before the handler runs. `HttpWire` itself takes up
-  to 256 MiB, which only a file download (`HTTP.download`, streamed in pieces
-  of at most 1 MiB with no `String`) may use: the transfer stops at its
-  `max_total_bytes`, the file never grows past it, and a failed download
-  keeps the partial file.
-- **Bodies are text.** A request or response body must be valid UTF-8. The
-  client returns an `error` for a response body that is not, and the server
-  answers 400 without running the handler. Binary bodies are not built yet
-  (#803). `Content-Encoding` stays raw.
+  or `Bytes` once, so body memory is at most `max_body_bytes` ×
+  `max_connections` × 4 (512 MiB with the server defaults). A program that
+  raises `max_body_bytes` must lower `max_connections`. A body over the limit
+  is an `error` on the client, and a 413 on the server, before the handler
+  runs. `HttpWire` itself takes up to 256 MiB, which only a file download
+  (`HTTP.download`, streamed in pieces of at most 1 MiB with no `String`) may
+  use: the transfer stops at its `max_total_bytes`, the file never grows past
+  it, and a failed download keeps the partial file.
+- **Response bodies are bytes.** The client keeps a response body as it came,
+  and a handler returns `Bytes`; `HTTP.text` decodes UTF-8 only (a `charset`
+  other than `utf-8` is an error). A request body the server reads must still
+  be valid UTF-8, or the server answers 400 without running the handler
+  (#855). `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).
@@ -216,14 +218,13 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   close-delimited body is not kept either; a `Content-Length` over
   `max_body_bytes` is `http: body exceeds max_body_bytes`. An interim (1xx)
   head comes back as it is, and `std/http` reads at most 15 of them. The body is
-  read with `read_text`, `chunk` and `text` as on the server, so it goes into
-  text as it arrives and must be valid UTF-8.
+  read with `TCP.recv_bytes` and `chunk` (whose runs say which bytes of a
+  framing read are body) and kept as `Bytes`, whatever it holds.
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
   and nothing after the response: `buffered` must be 0 and `ended` false on
-  `HttpWire.Response` (after a head with no body) and `HttpWire.Text` (after
-  the last body read), and after a chunked body on the last framing read and
-  a `read_text` of 0 bytes, which does not wait. Bytes there are a server bug
+  `HttpWire.Response` (after a head with no body), and after a body on a
+  `read_text` of 0 bytes, which does not wait. Bytes there are a server bug
   or a response nobody asked for, and the next call must not read them; an
   input that has already ended (`ended`: the end of input, a TCP FIN under TLS,
   or a read error) would fail the next call. Header names are lowercased and
@@ -246,7 +247,6 @@ Properties of the client that no test checks:
   race.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
-- A body that is not UTF-8 also closes the connection.
 - After `close_client` no request goes out that a worker had not started:
   every job still on `jobs`, waiting or in a worker's inbox is answered
   `http: client is closed`, and a worker checks `jobs.closed?` before it runs
@@ -455,7 +455,8 @@ The codes that the hostile-case goldens fix are those 10.6 marks as fixed.
 covers a URL that is not `http://` or `https://` with a host (userinfo and
 non-ASCII are rejected), DNS, connect and TLS failures, the timeout,
 `http: client is closed`, a malformed response, a body over `max_body_bytes`,
-and a body that is not UTF-8. A connection that fails is never pooled.
+and a truncated body. A body that is not UTF-8 is no failure of the call:
+`HTTP.text` refuses it. A connection that fails is never pooled.
 
 #### 10.7.4 Tests
 

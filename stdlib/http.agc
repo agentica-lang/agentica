@@ -1,15 +1,16 @@
 ## An HTTP/1.1 client and server.
 ##
 ## Import it with `import HTTP from "std/http"`. Every call is whole: it returns after the whole response arrived, and
-## the body is a `String`. Status codes such as 404 or 500 are normal responses. A bad URL, a refused connection, a
-## timeout or a body over the limit is an `error` result.
+## every body is `Bytes`, as it came over the wire; `text` decodes one as UTF-8. Status codes such as 404 or 500 are
+## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 
 READ_BYTES = 65536
-# Chunked framing is read in small pieces, since chunk data goes straight into text.
+# Chunked framing is read in small pieces, so the decoder sees the bytes of a chunk's framing and no more.
 FRAME_BYTES = 512
-# A body of at most this many characters goes in the same send as the head.
+# A body of at most this many bytes goes in the same send as the head.
 SMALL_BODY = 16384
-TEXT_BYTES = 1048576
+# The most bytes of one read of a body (TCP.recv_bytes takes at most 1 MiB).
+BODY_READ_BYTES = 1048576
 BAD_TEXT = "400 request body is not valid UTF-8"
 # The least time an error answer gets to be sent, even past the request deadline.
 ANSWER_MS = 100
@@ -28,7 +29,11 @@ TIMED_OUT = "network: operation timed out"
 CUT_SHORT = "http: connection closed before the response was complete"
 TRUNCATED = "http: truncated HTTP body"
 TOO_LARGE = "http: body exceeds max_body_bytes"
-BAD_BODY = "http: response body is not valid UTF-8"
+BAD_BODY = "http: body is not valid UTF-8"
+# The charsets that text reads as UTF-8 (us-ascii is a strict subset of it), and the most characters of a refused
+# charset that its error repeats.
+UTF8_CHARSETS = Set.new(["utf-8", "utf8", "us-ascii"])
+MAX_SHOWN = 64
 # Texts of the C builtins that std/http matches on (vm/channel.c, vm/tcp.c); each is marked there.
 CHANNEL_CLOSED = "channel: closed"
 END_OF_INPUT = "network: end of input"
@@ -53,7 +58,7 @@ CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
 NO_BODY = "a 204 or 304 response cannot have a body"
 CRLF = "\r\n".bytes
-# The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
+# The widest body a download may write, in bytes. The client and server bodies stay capped at 64 MiB by
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
 # this value as a literal (a field default cannot name a constant), so the two must match.
 DOWNLOAD_MAX_BYTES = 268435456
@@ -214,7 +219,7 @@ export struct StreamResponse
 end
 
 struct Whole
-  text: String
+  body: Bytes
   kept: Bool
 end
 
@@ -247,25 +252,26 @@ export def close_client(pool: HttpClient) -> Void
   Channel.close(HttpWire.jobs(pool))
 end
 
-## Sends a `GET` request to `url` and returns the response.
+## Sends a `GET` request to `url` and returns the response, whose `body` is `Bytes`.
 export def get(pool: HttpClient, url: String) -> Result[HttpResponse]
-  return request(pool, "GET", url, [], "")
+  return request(pool, "GET", url, NO_BYTES)
 end
 
-## Sends a `POST` request to `url` with `headers` and the text `body`, which default to none.
-export def post(pool: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
-  return request(pool, "POST", url, headers, body)
+## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
+## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
+export def post(pool: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+  return request(pool, "POST", url, body, headers)
 end
 
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
 ## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
-## `Connection`. `headers` and `body` default to none.
+## `Connection`. The `body` is `Bytes` of at most `max_body_bytes` (`"".bytes` sends none); `headers` default to none.
 export def request(
   pool: HttpClient,
   method: String,
   url: String,
+  body: Bytes,
   headers: List[Header] = [],
-  body: String = "",
 ) -> Result[HttpResponse]
   where = try parse_url(url)
   options = HttpWire.options(pool)
@@ -334,7 +340,7 @@ export def download(pool: HttpClient, url: String, path: String, options: Downlo
     "GET",
     where.target,
     [],
-    "",
+    NO_BYTES,
     client_options.max_body_bytes,
   )
   deadline = Time.monotonic_ms() + options.timeout_ms
@@ -357,6 +363,26 @@ export def header_values(headers: List[Header], name: String) -> List[String]
     end
   end
   return found
+end
+
+## Returns `body` as a `String`, decoding it as UTF-8 and nothing else. `headers` are those of the same message
+## (`response.headers`): when its `Content-Type` has a `charset`, it must be `utf-8` (or `us-ascii`, which UTF-8
+## contains); without one the body is read as UTF-8. A body that is not valid UTF-8, or any other charset, is an
+## `error` result; the charset error names the charset. Other charsets (Latin-1, Windows-1252, Shift_JIS, UTF-16) are
+## for the `agentica-lang/charset` package.
+export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
+  charset = charset_of(headers)
+  if charset != "" and not UTF8_CHARSETS.include?(charset)
+    shown = charset
+    if shown.length > MAX_SHOWN
+      shown = shown.slice(0, MAX_SHOWN)
+    end
+    return error("http: charset #{shown} is not supported, decode the body with agentica-lang/charset")
+  end
+  case String.from_bytes(body)
+    ok(decoded) -> return ok(decoded)
+    error(_) -> return error(BAD_BODY)
+  end
 end
 
 ## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
@@ -483,6 +509,26 @@ def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
     return error("http: max_body_bytes must be at most 67108864")
   end
   return ok()
+end
+
+# The charset parameter of the first Content-Type header, in lowercase and unquoted; "" when there is none.
+def charset_of(headers: List[Header]) -> String
+  types = header_values(headers, "content-type")
+  if List.size(types) == 0
+    return ""
+  end
+  parameters = String.split(List.at(types, 0), ";")
+  for parameter in List.drop(parameters, 1)
+    at = first_of(parameter, "=")
+    if at < parameter.length and parameter.slice(0, at).strip.downcase == "charset"
+      value = rest_of(parameter, at + 1).strip
+      if value.length >= 2 and value.starts_with?("\"") and value.ends_with?("\"")
+        value = value.slice(1, value.length - 2)
+      end
+      return value.downcase
+    end
+  end
+  return ""
 end
 
 def first_of(text: String, part: String) -> Int
@@ -658,7 +704,7 @@ def read_length(reading: Reading) -> Result[Incoming]
   body = Body(pieces: [], carry: NO_BYTES)
   left = reading.head.length
   while left > 0
-    piece = try more_text(reading, body.carry, smaller(left, TEXT_BYTES))
+    piece = try more_text(reading, body.carry, smaller(left, BODY_READ_BYTES))
     body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
     left = left - piece.bytes
   end
@@ -672,7 +718,7 @@ def read_chunked(reading: Reading) -> Result[Incoming]
   while not state.done
     if state.remaining > 0
       # The rest of a chunk goes straight into text; only framing goes through the decoder.
-      piece = try more_text(reading, body.carry, smaller(state.remaining, TEXT_BYTES))
+      piece = try more_text(reading, body.carry, smaller(state.remaining, BODY_READ_BYTES))
       body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
       state = HttpWire.chunk_read(state, piece.bytes)
     else
@@ -848,7 +894,7 @@ def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, 
   request = incoming.request
   timeout = options.request_timeout_ms
   ready = take_ready(response.body)
-  head_only = HttpResponse(status: response.status, headers: response.headers, body: "")
+  head_only = HttpResponse(status: response.status, headers: response.headers, body: NO_BYTES)
   case HttpWire.encode_response(request, head_only, Time.now_ms())
     ok(reply) ->
       bodyless = response.status == 204 or response.status == 304
@@ -1121,13 +1167,13 @@ def send_response(
   deadline = Time.monotonic_ms() + timeout
   body = response.body
   if request.method == "HEAD"
-    body = ""
+    body = NO_BYTES
   end
-  if String.length(body) <= SMALL_BODY
-    try TCP.send(socket, reply.head + body, timeout)
+  if body.size <= SMALL_BODY
+    try send_all(socket, reply.head.bytes + body, timeout)
   else
     try TCP.send(socket, reply.head, timeout)
-    try TCP.send(socket, body, try time_left(socket, deadline))
+    try send_all(socket, body, try time_left(socket, deadline))
   end
   if reply.closes
     linger(socket, "", deadline)
@@ -1140,7 +1186,7 @@ def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
   write_response(
     socket,
     request,
-    HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: ""),
+    HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES),
     timeout,
   )
 end
@@ -1241,7 +1287,7 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   inbox: Channel[HttpWire.Job] = Channel.new(1)
   # A new channel with room for one: this send cannot fail.
   inbox.send(job, 0)
-  notice = job.with(head: "", body: "", worker: id, kept: false)
+  notice = job.with(head: "", body: NO_BYTES, worker: id, kept: false)
   worker = Worker(id: id, client: pool.client, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice)
   Task.spawn(&supervise, worker)
   pool = pool.with(inboxes: Map.put(pool.inboxes, id, inbox), busy: Map.put(pool.busy, id, job.reply), next_id: id + 1)
@@ -1360,7 +1406,7 @@ def work(worker: Worker) -> Result[Void]
     awaited = HttpWire.awaited?(job.reply)
     job.reply.send(done.answer, 0)
     # The idle wait below keeps job only for its origin and reply.
-    job = job.with(head: "", body: "")
+    job = job.with(head: "", body: NO_BYTES)
     if not done.kept or not awaited
       close_socket(done.socket)
       tell(worker, job, false)
@@ -1447,8 +1493,8 @@ def exchange(answer: Answer, reused: Bool) -> Attempt
     TCP.close(socket)
     return Attempt(answer: error(TIMED_OUT), kept: false, retry: false)
   end
-  if String.length(job.body) <= SMALL_BODY
-    sent = TCP.send(socket, job.head + job.body, left)
+  if job.body.size <= SMALL_BODY
+    sent = send_all(socket, job.head.bytes + job.body, left)
     return finish_exchange(answer, read_response(answer), sent, reused)
   end
   writer = Task.spawn(&send_request, answer)
@@ -1475,7 +1521,7 @@ def send_request(answer: Answer) -> Result[Void]
   if left <= 0
     return error(TIMED_OUT)
   end
-  return TCP.send(answer.socket, answer.job.head + answer.job.body, left)
+  return send_all(answer.socket, answer.job.head.bytes + answer.job.body, left)
 end
 
 # A failure before any byte of the response (the end of input, a read or a write error) is retried on a reused
@@ -1537,7 +1583,7 @@ end
 
 # A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
 # are a server bug or a response nobody asked for, and the next call must not read them; after an end of input the
-# next call would fail.
+# next call would fail. The body is the bytes the framing carries, whatever they hold.
 def read_body(answer: Answer, head: HttpWire.Response) -> Received
   whole: Result[Whole] = error("")
   if head.chunked
@@ -1545,81 +1591,70 @@ def read_body(answer: Answer, head: HttpWire.Response) -> Received
   elsif head.until_close
     whole = read_until_close(answer)
   elsif head.length == 0
-    whole = ok(Whole(text: "", kept: head.buffered == 0 and not head.ended))
+    whole = ok(Whole(body: NO_BYTES, kept: head.buffered == 0 and not head.ended))
   else
     whole = read_length_body(answer, head.length)
   end
   case whole
-    ok(body) ->
-      response = HttpResponse(status: head.status, headers: head.headers, body: body.text)
-      return Received(response: ok(response), kept: body.kept and not head.closes, started: true)
+    ok(done) ->
+      response = HttpResponse(status: head.status, headers: head.headers, body: done.body)
+      return Received(response: ok(response), kept: done.kept and not head.closes, started: true)
     error(message) -> return failed_read(message, true)
   end
 end
 
-# The next bytes of a body as text, at most most of them; bytes is 0 at the end of input.
-def more_body(answer: Answer, carry: Bytes, most: Int) -> Result[HttpWire.Text]
-  left = try time_left(answer.socket, answer.job.deadline)
-  piece = try HttpWire.read_text(answer.socket, most, carry, left)
-  if not piece.valid
-    return error(BAD_BODY)
-  end
-  return ok(piece)
-end
-
-def whole_text(body: Body, kept: Bool) -> Result[Whole]
-  if not body.carry.empty?
-    return error(BAD_BODY)
-  end
-  return ok(Whole(text: String.join(body.pieces, ""), kept: kept))
-end
-
 def read_length_body(answer: Answer, length: Int) -> Result[Whole]
-  body = Body(pieces: [], carry: NO_BYTES)
+  pieces: List[Bytes] = []
   left = length
-  clean = true
   while left > 0
-    piece = try more_body(answer, body.carry, smaller(left, TEXT_BYTES))
-    if piece.bytes == 0
+    data = try recv_body(answer.socket, smaller(left, BODY_READ_BYTES), answer.job.deadline)
+    if data.empty?
       return error(TRUNCATED)
     end
-    body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
-    left = left - piece.bytes
-    clean = piece.buffered == 0 and not piece.ended
+    pieces = List.append(pieces, data)
+    left = left - data.size
   end
-  return whole_text(body, clean)
+  return ok(Whole(body: Bytes.concat(pieces), kept: nothing_buffered(answer)))
 end
 
-# Bytes read past the end of the body, or still in the input after it, stop the connection from being kept.
+# Bytes read past the end of the body, or still in the input after it, stop the connection from being kept. Framing
+# goes through the decoder, whose runs say which bytes of each framing read are body.
 def read_chunked_body(answer: Answer) -> Result[Whole]
-  data = NO_BYTES
+  deadline = answer.job.deadline
+  framing = NO_BYTES
   state = HttpWire.chunked(answer.max_body_bytes)
-  body = Body(pieces: [], carry: NO_BYTES)
+  pieces: List[Bytes] = []
   while not state.done
     if state.remaining > 0
-      piece = try more_body(answer, body.carry, smaller(state.remaining, TEXT_BYTES))
-      if piece.bytes == 0
-        return error(TRUNCATED)
-      end
-      body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
-      state = HttpWire.chunk_read(state, piece.bytes)
-    else
-      data = try TCP.recv_bytes(answer.socket, FRAME_BYTES, try time_left(answer.socket, answer.job.deadline))
+      data = try recv_body(answer.socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
       if data.empty?
         return error(TRUNCATED)
       end
-      case HttpWire.chunk(state, data, 0)
+      pieces = List.append(pieces, data)
+      state = HttpWire.chunk_read(state, data.size)
+    else
+      framing = try recv_body(answer.socket, FRAME_BYTES, deadline)
+      if framing.empty?
+        return error(TRUNCATED)
+      end
+      case HttpWire.chunk(state, framing, 0)
         ok(next) -> state = next
         error(problem) -> return error("http: #{rest_of(problem, 4)}")
       end
-      piece = HttpWire.text(body.carry, data, state.runs)
-      if not piece.valid
-        return error(BAD_BODY)
-      end
-      body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
+      pieces = add_runs(pieces, framing, state.runs)
     end
   end
-  return whole_text(body, state.next == data.size and nothing_buffered(answer))
+  return ok(Whole(body: Bytes.concat(pieces), kept: state.next == framing.size and nothing_buffered(answer)))
+end
+
+# The pieces with the runs of data (start, length pairs) added.
+def add_runs(pieces: List[Bytes], data: Bytes, runs: List[Int]) -> List[Bytes]
+  at = 0
+  while at < List.size(runs)
+    pieces = List.append(pieces, data.slice(List.at(runs, at), List.at(runs, at + 1)))
+    at = at + 2
+  end
+  return pieces
 end
 
 # Whether the socket's input holds no byte now and has not ended: a read of 0 bytes does not wait.
@@ -1636,21 +1671,21 @@ end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
 def read_until_close(answer: Answer) -> Result[Whole]
-  body = Body(pieces: [], carry: NO_BYTES)
+  pieces: List[Bytes] = []
   total = 0
   while true
-    piece = try more_body(answer, body.carry, TEXT_BYTES)
-    if piece.bytes == 0
+    data = try recv_body(answer.socket, BODY_READ_BYTES, answer.job.deadline)
+    if data.empty?
       if not HttpWire.clean_eof?(answer.socket)
         return error(TRUNCATED)
       end
-      return whole_text(body, false)
+      return ok(Whole(body: Bytes.concat(pieces), kept: false))
     end
-    total = total + piece.bytes
+    total = total + data.size
     if total > answer.max_body_bytes
       return error(TOO_LARGE)
     end
-    body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
+    pieces = List.append(pieces, data)
   end
   return error(TRUNCATED)
 end
@@ -1792,7 +1827,7 @@ def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadl
   left = length
   written = 0
   while left > 0
-    data = try recv_body(socket, smaller(left, TEXT_BYTES), deadline)
+    data = try recv_body(socket, smaller(left, BODY_READ_BYTES), deadline)
     if data.empty?
       return error(TRUNCATED)
     end
@@ -1809,7 +1844,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
   written = 0
   while not state.done
     if state.remaining > 0
-      data = try recv_body(socket, smaller(state.remaining, TEXT_BYTES), deadline)
+      data = try recv_body(socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
       if data.empty?
         return error(TRUNCATED)
       end
@@ -1852,7 +1887,7 @@ end
 def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
   written = 0
   while true
-    data = try recv_body(socket, TEXT_BYTES, deadline)
+    data = try recv_body(socket, BODY_READ_BYTES, deadline)
     if data.empty?
       if not HttpWire.clean_eof?(socket)
         return error(TRUNCATED)

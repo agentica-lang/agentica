@@ -33,23 +33,29 @@ def options(timeout: Int, connections: Int, body: Int, ca: String) -> HttpClient
   return HttpClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, ca_file: ca)
 end
 
-def short(body: String) -> String
-  if String.length(body) > 20
-    return String.slice(body, 0, 20)
+# A body as text; one that is not UTF-8 says so, since these shows print text.
+def decoded(body: Bytes) -> String
+  return Result.unwrap_or(String.from_bytes(body), "<not UTF-8>")
+end
+
+def short(body: Bytes) -> String
+  text = decoded(body)
+  if String.length(text) > 20
+    return String.slice(text, 0, 20)
   end
-  return body
+  return text
 end
 
 def show(r: Result[HttpResponse]) -> Void
   case r
-    ok(response) -> puts("#{response.status} #{short(response.body)} #{String.length(response.body)}")
+    ok(response) -> puts("#{response.status} #{short(response.body)} #{String.length(decoded(response.body))}")
     error(message) -> puts(String.replace(message, "\\n", " | "))
   end
 end
 
 def fetch(f: Fetch) -> Result[String]
   response = try HTTP.get(f.pool, f.url)
-  return ok(response.body)
+  return HTTP.text(response.body, response.headers)
 end
 
 def same(a: Task[Result[String]], b: Task[Result[String]], c: Task[Result[String]]) -> Bool
@@ -74,16 +80,23 @@ def main() -> Void
   plain = "http://127.0.0.1:#{System.args()[1]}"
   pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
   hello = Result.unwrap!(HTTP.get(pool, plain + "/hello"))
-  puts("#{hello.status} #{hello.body} #{HTTP.header_values(hello.headers, "X-MULTI")}")
+  puts("#{hello.status} #{decoded(hello.body)} #{HTTP.header_values(hello.headers, "X-MULTI")}")
   show(HTTP.get(pool, plain + "/chunked"))
+  binary = Result.unwrap!(HTTP.get(pool, plain + "/binary"))
+  puts("#{binary.status} #{binary.body.size} #{binary.body[0]} #{binary.body[2]} #{HTTP.text(binary.body, binary.headers).ok?}")
+  chunked = Result.unwrap!(HTTP.get(pool, plain + "/binary-chunked"))
+  puts("#{chunked.body.size} #{chunked.body.to_a}")
+  show(HTTP.post(pool, plain + "/echo", Bytes.from_list([255, 0, 128, 13, 10]).unwrap!))
+  latin = Result.unwrap!(HTTP.get(pool, plain + "/latin1"))
+  puts("#{latin.body.size} #{latin.body[3]} #{HTTP.text(latin.body, latin.headers).ok?}")
   first = Result.unwrap!(HTTP.get(pool, plain + "/port")).body
-  show(HTTP.post(pool, plain + "/post", [Header(name: "X-Kind", value: "form")], "a=1&b=ñ"))
+  show(HTTP.post(pool, plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")]))
   puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body == first)
   show(HTTP.get(pool, plain + "/close"))
   puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body != first)
   show(HTTP.get(pool, plain + "/nothing"))
-  show(HTTP.post(pool, plain + "/post"))
-  show(HTTP.request(pool, "DELETE", plain + "/item"))
+  show(HTTP.post(pool, plain + "/post", "".bytes))
+  show(HTTP.request(pool, "DELETE", plain + "/item", "".bytes))
   HTTP.close_client(pool)
   slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
   show(HTTP.get(slow, plain + "/slow"))
@@ -100,7 +113,7 @@ def main() -> Void
   closing = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
   pending = Task.spawn(&fetch, Fetch(pool: closing, url: plain + "/hold"))
   watcher = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
-  while Result.unwrap!(HTTP.get(watcher, plain + "/held")).body == "0"
+  while Result.unwrap!(HTTP.get(watcher, plain + "/held")).body == "0".bytes
     Task.sleep(1)
   end
   HTTP.close_client(closing)
@@ -115,7 +128,7 @@ def main() -> Void
   secure = Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/ca.pem")))
   show(HTTP.get(secure, "https://localhost:#{port}/hello"))
   show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
-  show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", [], "over tls"))
+  show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", "over tls".bytes))
   show(HTTP.get(secure, "https://localhost:#{port}/notify"))
   show(HTTP.get(secure, "https://localhost:#{port}/close"))
   show(HTTP.get(secure, "http://localhost:#{port}/hello"))
@@ -133,14 +146,14 @@ def main() -> Void
     upload = upload + upload
   end
   large = Result.unwrap!(HTTP.client(options(limit, 1, 8388608, "")))
-  show(HTTP.post(large, raw + "/early", [], upload))
+  show(HTTP.post(large, raw + "/early", upload.bytes))
   hostile = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
   stale = Result.unwrap!(HTTP.client(options(limit, 1, 1000, "")))
   show(HTTP.get(stale, raw + "/stale"))
-  show(HTTP.post(stale, raw + "/after", [], "x"))
+  show(HTTP.post(stale, raw + "/after", "x".bytes))
   show(HTTP.get(stale, raw + "/stale"))
   show(HTTP.get(stale, raw + "/after"))
-  show(HTTP.request(stale, "HEAD", raw + "/headlength", [], ""))
+  show(HTTP.request(stale, "HEAD", raw + "/headlength", "".bytes))
   show(HTTP.get(stale, raw + "/after"))
   for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless", "/nocontent", "/after"]
     show(HTTP.get(hostile, raw + path))
@@ -157,9 +170,9 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     while String.length(big) < 8388608
       big = big + big
     end
-    return ok(HttpResponse(status: 200, headers: [], body: big))
+    return ok(HttpResponse(status: 200, headers: [], body: big.bytes))
   end
-  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{request.body}"))
+  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{request.body}".bytes))
 end
 
 def main() -> Void
@@ -377,6 +390,10 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
     check_lines(run_program(tmp_path, "plain", PLAIN_PROGRAM, ports), [
         '200 hello 127.0.0.1 ["a", "b"]',
         "200 ñandú chunks 12",
+        "200 3 255 128 false",
+        "5 [255, 0, 128, 13, 10]",
+        "200 5 ff00800d0a 12",
+        "4 233 false",
         "200 form 8 a=1&b=ñ 14",
         "true",
         "200 until the end 13",

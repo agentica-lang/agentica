@@ -15,7 +15,7 @@ export def unknown_import_help(
   removed = ["respond", "begin", "write", "write_bytes", "finish"].any? do |name| name == member end
   if key == "std/http.agc" and removed
     return Diag.Help.Hint(
-      "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))",
+      "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text.bytes))",
     )
   elsif key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")

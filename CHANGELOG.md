@@ -8,6 +8,21 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `HTTP.text(body, headers)` decodes a body as UTF-8 only: the `charset` of
+  `Content-Type` must be `utf-8` or absent, and any other charset is an error
+  that names it.
+
+### Changed
+
+- **Breaking:** the body of an `HttpResponse` is `Bytes`, for the client's
+  responses and for the ones a `listen` handler returns (write `"text".bytes`,
+  and `HTTP.text(r.body, r.headers)` to read text); `HttpResponse` is no longer
+  JSON encodable. `HTTP.post` and `HTTP.request` take a `Bytes` body before
+  `headers`, which is `[]` by default and no longer comes first. Rebuild `.agcb`
+  files that call them.
+
 ## [0.19.0-beta.1] - 2026-10-30
 
 ### Added

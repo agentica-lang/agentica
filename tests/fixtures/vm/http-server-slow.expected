@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2889,
+  "steps": 3055,
   "stdout": [
-    "\"slow /slow\"",
+    "<Bytes 10 736c6f77202f736c6f77>",
     "hanging",
     "main returns while a handler runs",
     ""

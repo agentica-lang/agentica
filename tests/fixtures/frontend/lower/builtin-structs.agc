@@ -1,6 +1,6 @@
 def handle(request: HttpRequest) -> HttpResponse
   headers = [Header(name: "a", value: request.path)]
-  return HttpResponse(status: 200, headers: headers, body: request.body)
+  return HttpResponse(status: 200, headers: headers, body: request.body.bytes)
 end
 
 def main() -> Void

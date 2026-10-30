@@ -38,7 +38,7 @@ def main() -> Void
   response = HTTP.get(client, base + "/events").unwrap!
   puts(response.status)
   puts(HTTP.header_values(response.headers, "transfer-encoding"))
-  puts(response.body)
+  puts(HTTP.text(response.body, response.headers).unwrap!)
   puts(HTTP.get(client, base + "/missing").unwrap!.status)
   HTTP.close_client(client)
   HTTP.close_server(server)

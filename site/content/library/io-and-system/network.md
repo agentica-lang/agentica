@@ -137,7 +137,7 @@ end
 
 HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
-- Every call is whole: it returns after the whole response arrived. The body is a `String` and must be valid UTF-8; it is not decompressed.
+- Every call is whole: it returns after the whole response arrived. The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it as UTF-8.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
@@ -179,11 +179,11 @@ end
 
 ```text
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header] = [], body: String = "") -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
 ```
 
-- `HttpResponse` has `status`, `headers` (names in lowercase) and `body`. `post` sends a text body; `request` takes any method. `headers` and `body` default to `[]` and `""`, so `HTTP.request(client, "DELETE", url)` needs no empty arguments.
+- `HttpResponse` has `status`, `headers` (names in lowercase) and `body`, which is `Bytes`. `post` sends a `Bytes` body, as Ruby's `Net::HTTP.post(uri, data, header)` does, and `request` takes any method. Send text as `"text".bytes`, and no body as `"".bytes`. The body is at most `max_body_bytes`, and `headers` default to `[]`.
 - URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result.
 - The client adds `Host` and `Content-Length`; a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
@@ -193,15 +193,41 @@ import HTTP from "std/http"
 def main() -> Void
   client = HTTP.client(HTTP.client_options()).unwrap!
   headers = [Header(name: "Content-Type", value: "application/json")]
-  case HTTP.post(client, "http://localhost:8080/items", headers, "{\"name\":\"tea\"}")
-    ok(created) -> puts("#{created.status} #{created.body}")
+  case HTTP.post(client, "http://localhost:8080/items", "{\"name\":\"tea\"}".bytes, headers)
+    ok(created) -> puts("#{created.status} #{HTTP.text(created.body, created.headers).unwrap!}")
     error(message) -> IO.warn(message)
   end
 
-  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1")
+  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", "".bytes)
   puts(deleted.ok?)
   HTTP.close_client(client)
 end
+```
+
+### HTTP.text
+
+```text
+HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
+```
+
+Decodes a body as UTF-8, and nothing else. Pass the `headers` of the same message: when its `Content-Type` has a `charset`, it must be `utf-8` or `us-ascii` (any case, quoted or not), and without one the body is read as UTF-8. A body that is not valid UTF-8, or a body with any other charset (`iso-8859-1`, `shift_jis`, `utf-16`), is an `error` result: the charset error names the charset. Other charsets belong to the planned `agentica-lang/charset` package.
+
+```agentica
+import HTTP from "std/http"
+
+def main() -> Void
+  utf8 = [Header(name: "content-type", value: "text/plain; charset=UTF-8")]
+  latin1 = [Header(name: "content-type", value: "text/plain; charset=iso-8859-1")]
+  puts(HTTP.text("café".bytes, utf8).unwrap!)
+  puts(HTTP.text("caf".bytes + Bytes.from_list([233]).unwrap!, latin1).ok?)
+  puts(HTTP.text(Bytes.from_list([255, 0, 128]).unwrap!).ok?)
+end
+```
+
+```output
+café
+false
+false
 ```
 
 ### HTTP.header_values
@@ -274,10 +300,10 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello".bytes))
   end
 
-  return ok(HttpResponse(status: 404, headers: [], body: "not found"))
+  return ok(HttpResponse(status: 404, headers: [], body: "not found".bytes))
 end
 
 def main() -> Void
@@ -285,7 +311,7 @@ def main() -> Void
   client = HTTP.client(HTTP.client_options()).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
-  puts("#{response.status} #{response.body}")
+  puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
   puts(HTTP.get(client, base + "/missing").unwrap!.status)
   HTTP.close_client(client)
   HTTP.close_server(server)
@@ -383,7 +409,7 @@ def main() -> Void
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/events").unwrap!
   puts(HTTP.header_values(response.headers, "transfer-encoding"))
-  puts(response.body)
+  puts(HTTP.text(response.body, response.headers).unwrap!)
   puts(HTTP.get(client, base + "/missing").unwrap!.status)
   HTTP.close_client(client)
   HTTP.close_server(server)
@@ -419,7 +445,7 @@ HTTP.close_server(server: HttpServer) -> Void
 import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}"))
+  return ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}".bytes))
 end
 
 def main() -> Void

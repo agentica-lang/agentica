@@ -78,7 +78,7 @@ export RECORDS: List[Model.Record] = [
       fields: [
         Model.Named(name: "status", type: Types.Type.Int),
         Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
-        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "body", type: Types.Type.Bytes),
       ],
     ),
     Model.Record(
@@ -132,7 +132,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "port", type: Types.Type.Int),
         Model.Named(name: "method", type: Types.Type.String),
         Model.Named(name: "head", type: Types.Type.String),
-        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "body", type: Types.Type.Bytes),
         Model.Named(name: "deadline", type: Types.Type.Int),
         Model.Named(name: "reply", type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpResponse", [])))),
         Model.Named(name: "worker", type: Types.Type.Int),
@@ -956,7 +956,7 @@ ROWS_10: List[Model.Builtin] = [
         Model.Named(name: "method", type: Types.Type.String),
         Model.Named(name: "target", type: Types.Type.String),
         Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
-        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "body", type: Types.Type.Bytes),
         Model.Named(name: "max_body_bytes", type: Types.Type.Int),
       ],
       result: Types.Type.Result(Types.Type.String),

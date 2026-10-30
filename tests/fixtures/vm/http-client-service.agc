@@ -28,7 +28,7 @@ end
 
 def get(pool: HttpClient, url: String) -> String
   case HTTP.get(pool, url)
-    ok(response) -> return "#{response.status} #{response.body}"
+    ok(response) -> return "#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}"
     error(message) -> return message
   end
 end

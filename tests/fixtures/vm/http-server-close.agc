@@ -21,14 +21,14 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   side = side_of(request)
   if request.path == "/left"
     Task.spawn(&linger, Signal(port: side, word: "left"))
-    return ok(HttpResponse(status: 200, headers: [], body: "returned"))
+    return ok(HttpResponse(status: 200, headers: [], body: "returned".bytes))
   end
   Task.spawn(&linger, Signal(port: side, word: "spawned"))
   socket = TCP.connect("127.0.0.1", side, 5000).unwrap!
   TCP.send(socket, "sleeping\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HttpResponse(status: 200, headers: [], body: "late"))
+  return ok(HttpResponse(status: 200, headers: [], body: "late".bytes))
 end
 
 def fetch(url: String) -> Result[HttpResponse]
@@ -38,7 +38,7 @@ end
 
 def show(r: Result[HttpResponse]) -> Void
   case r
-    ok(response) -> puts("#{response.status} #{response.body}")
+    ok(response) -> puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
     error(message) -> puts("error: #{message}")
   end
 end

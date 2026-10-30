@@ -6,20 +6,20 @@ def options(timeout_ms: Int, max_connections: Int) -> HttpClientOptions
 end
 
 def answer(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))
 end
 
 def download_answer(request: HttpRequest) -> Result[HttpResponse]
   if request.path == "/tiny"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Total", value: "4")], body: "abcd"))
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Total", value: "4")], body: "abcd".bytes))
   end
   if request.path == "/hundred"
-    return ok(HttpResponse(status: 200, headers: [], body: "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"))
+    return ok(HttpResponse(status: 200, headers: [], body: "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789".bytes))
   end
   if request.path == "/gone"
-    return ok(HttpResponse(status: 404, headers: [], body: "nope"))
+    return ok(HttpResponse(status: 404, headers: [], body: "nope".bytes))
   end
-  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))
 end
 
 def main() -> Void
@@ -47,13 +47,38 @@ def main() -> Void
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try Test.eq(HTTP.wait(server).ok?, true)
-      Test.eq(response.unwrap!.body, "/inside")
+      Test.eq(response.unwrap!.body, "/inside".bytes)
     end,
     Test.test("header values match names in any case") do
       headers = [Header(name: "Set-Cookie", value: "a=1"), Header(name: "Content-Type", value: "text/plain"),
                  Header(name: "set-cookie", value: "b=2")]
       try Test.eq(HTTP.header_values(headers, "SET-COOKIE"), ["a=1", "b=2"])
       Test.eq(HTTP.header_values(headers, "x-missing"), [])
+    end,
+    Test.test("text decodes a body as UTF-8 and nothing else") do
+      latin = [Header(name: "Content-Type", value: "text/plain; Charset=\"ISO-8859-1\"")]
+      binary = Bytes.from_list([255, 0, 128]).unwrap!
+      try Test.eq(HTTP.text("ñandú".bytes).unwrap!, "ñandú")
+      try Test.eq(HTTP.text("ñ".bytes, [Header(name: "content-type", value: "text/html; charset=UTF-8")]).unwrap!, "ñ")
+      try Test.eq(HTTP.text(binary).message, "http: body is not valid UTF-8")
+      try Test.eq(HTTP.text("caf".bytes, latin).ok?, false)
+      Test.eq(String.starts_with?(HTTP.text("caf".bytes, latin).message, "http: charset iso-8859-1 is not supported"), true)
+    end,
+    Test.test("text reads the charset of the first Content-Type header") do
+      type = "content-type"
+      binary = Bytes.from_list([255, 0, 128]).unwrap!
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; charset=utf8")]).unwrap!, "é")
+      try Test.eq(HTTP.text("e".bytes, [Header(name: type, value: "text/plain; charset=US-ASCII")]).unwrap!, "e")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; charset=")]).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=utf-8")]).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain")]).unwrap!, "é")
+      mixed = [Header(name: type, value: "text/plain; charset=utf-8"), Header(name: type, value: "text/plain; charset=latin1")]
+      try Test.eq(HTTP.text("é".bytes, mixed).unwrap!, "é")
+      try Test.eq(HTTP.text("é".bytes, mixed.reverse).ok?, false)
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=latin1")]).ok?, false)
+      try Test.eq(HTTP.text(binary, [Header(name: type, value: "text/plain; charset=utf-8")]).ok?, false)
+      long = [Header(name: type, value: "text/plain; charset=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")]
+      Test.eq(HTTP.text("e".bytes, long).message.length < 150, true)
     end,
     Test.test("bad URLs fail before any connection") do
       pool = try HTTP.client(HTTP.client_options())

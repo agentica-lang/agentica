@@ -7,7 +7,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   TCP.send(socket, "handling\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HttpResponse(status: 200, headers: [], body: "late"))
+  return ok(HttpResponse(status: 200, headers: [], body: "late".bytes))
 end
 
 def fetch(url: String) -> Result[HttpResponse]

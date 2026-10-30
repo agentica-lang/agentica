@@ -98,9 +98,9 @@ def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
   options = HttpClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, ca_file: "#{System.args()[0]}/ca.pem")
   pool = Result.unwrap!(HTTP.client(options))
-  puts(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body)
+  puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body).unwrap!)
   Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
-  puts(Result.unwrap!(HTTP.get(pool, "#{base}/ping")).body)
+  puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/ping")).body).unwrap!)
 end
 """
 
@@ -118,7 +118,7 @@ end
 
 def show(r: Result[HttpResponse]) -> String
   case r
-    ok(response) -> return response.body
+    ok(response) -> return String.from_bytes(response.body).unwrap!
     error(message) -> return message
   end
 end
@@ -161,7 +161,7 @@ end
 
 def show(r: Result[HttpResponse]) -> String
   case r
-    ok(response) -> return response.body
+    ok(response) -> return String.from_bytes(response.body).unwrap!
     error(message) -> return message
   end
 end

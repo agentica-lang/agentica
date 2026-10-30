@@ -157,12 +157,12 @@ def main() -> Void
   t0 = Time.monotonic_ms()
   bounded = Task.map(Range.to_a(0..8), 3, 20000) do |i|
     response = try HTTP.get(pool, "#{base()}/a/#{i}")
-    ok(response.body)
+    HTTP.text(response.body, response.headers)
   end
   t1 = Time.monotonic_ms()
   everyone = Task.map(Range.to_a(0..7), 8, 20000) do |i|
     response = try HTTP.get(pool, "#{base()}/b/#{i}")
-    ok(response.body)
+    HTTP.text(response.body, response.headers)
   end
   t2 = Time.monotonic_ms()
   puts("bounded #{bounded}")
@@ -177,7 +177,7 @@ def main() -> Void
   pool = client()
   results = Task.map(["/slow"], 1, @300@) do |path|
     response = try HTTP.get(pool, base() + path)
-    ok(response.body)
+    HTTP.text(response.body, response.headers)
   end
   puts(results)
   puts("call done")
