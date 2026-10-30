@@ -222,8 +222,8 @@ must still pass its 250 ms limit.
   The loader checks the registers of `LIST_LEN`, `LIST_GET` and the window of
   `LIST`.
 - The limits stay as they are: 1,048,576 items for `List.repeat` and
-  `Range.to_a` (`AGC_MAX_LIST_COUNT`), 1 MiB for `IO.read_bytes` and byte writes
-  (`agc_byte_list`). `append`, `concat` and nested lists have no limit:
+  `Range.to_a` (`AGC_MAX_LIST_COUNT`), 1 MiB for `IO.read_bytes` and byte
+  writes. `append`, `concat` and nested lists have no limit:
   `--max-steps` bounds instructions, not memory ([§1](README.md#1-overview)),
   and a hostile file can reach the out-of-memory exit 70.
 - Size arithmetic uses the checked helpers (§5.2). `len` cannot pass `SIZE_MAX /

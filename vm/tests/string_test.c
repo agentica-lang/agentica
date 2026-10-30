@@ -218,23 +218,19 @@ static void shared_strings(agc_vm *vm) {
   args[0] = agc_int(0x1F600);
   assert(STR(call(vm, "String.from_code", 1, args))->bytes == 4);
 
-  agc_value bytes[2] = {agc_int(0xC3), agc_int(0xA9)};
-  args[0] = agc_list_value(agc_list_from_array(NULL, 0));
-  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value) == rt->empty_string);
-  bytes[0] = agc_int('h');
-  args[0] = agc_list_value(agc_list_from_array(bytes, 1));
-  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value) == rt->chars['h']);
-  bytes[0] = agc_int(0xC3);
-  args[0] = agc_list_value(agc_list_from_array(bytes, 2));
-  agc_string *accent = STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value);
+  args[0] = agc_bytes_value(agc_empty_bytes());
+  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes.bytes", 1, args))->value) == rt->empty_string);
+  args[0] = agc_bytes_value(agc_make_bytes((const uint8_t *)"h", 1));
+  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes.bytes", 1, args))->value) == rt->chars['h']);
+  args[0] = agc_bytes_value(agc_make_bytes((const uint8_t *)"\xC3\xA9", 2));
+  agc_string *accent = STR(agc_as_result(vm, call(vm, "String.from_bytes.bytes", 1, args))->value);
   assert(accent->bytes == 2 && accent->chars == 1);
 
   args[0] = str("");
-  assert(agc_as_list(vm, call(vm, "String.to_bytes", 1, args)) == agc_as_list(vm, rt->empty_list));
+  assert(agc_as_bytes(vm, call(vm, "String.bytes", 1, args)) == agc_empty_bytes());
   args[0] = agc_string_value(accent);
-  const agc_list *encoded = agc_as_list(vm, call(vm, "String.to_bytes", 1, args));
-  assert(agc_list_len(encoded) == 2 && agc_as_int(vm, agc_list_get(encoded, 0)) == 0xC3 &&
-         agc_as_int(vm, agc_list_get(encoded, 1)) == 0xA9);
+  const agc_bytes *encoded = agc_as_bytes(vm, call(vm, "String.bytes", 1, args));
+  assert(encoded->len == 2 && encoded->data[0] == 0xC3 && encoded->data[1] == 0xA9);
 
   args[0] = str("a");
   assert(STR(call(vm, "String.upcase", 1, args)) == rt->chars['A']);

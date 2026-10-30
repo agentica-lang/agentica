@@ -1,8 +1,8 @@
 /*
  * The Bytes value: equality, the Map key hash, the text forms, the JSON refusal,
  * the shared empty value, every builtin with good and bad arguments, bounds, the
- * size overflow guard, values that live through a collection, and the two keys
- * of each crypto builtin (vm/crypto.c), String.from_bytes and FrontEnd.hand_off.
+ * size overflow guard, values that live through a collection, and the crypto
+ * builtins (vm/crypto.c), String.from_bytes and FrontEnd.hand_off on Bytes.
  */
 #include "../core.h"
 #include "../services.h"
@@ -324,110 +324,65 @@ static void test_wrong_tags(void) {
   fails("Bytes.slice", 3, three, "RUNTIME-INTERNAL");
 }
 
-/* What an old List[Int] key answered against what its ".bytes" key answered: a byte list where the new key gives a
-   Bytes (inside a Result too), the same value otherwise. */
-static void same_answer(agc_value old, agc_value now) {
-  if (now.tag == AGC_T_RESULT) {
-    const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
-    assert(a->ok == b->ok);
-    old = a->value;
-    now = b->value;
-  }
-  if (now.tag == AGC_T_BYTES) now = call("Bytes.to_a", 1, &now);
-  assert(agc_equal(&vm, old, now, 0));
-}
-
-/* Calls name with args and name + ".bytes" with the same args, each Bytes argument given to the old key as its list. */
-static void both_keys(const char *name, uint32_t arity, const agc_value *args) {
-  agc_value old[2], now[2];
-  for (uint32_t k = 0; k < arity; k++) {
-    now[k] = args[k];
-    old[k] = args[k].tag == AGC_T_BYTES ? call("Bytes.to_a", 1, &now[k]) : args[k];
-  }
-  char key[64];
-  snprintf(key, sizeof key, "%s.bytes", name);
-  same_answer(call(name, arity, old), call(key, arity, now));
-}
-
-/* Each crypto builtin on bytes has the catalog's "<name>.bytes" key on Bytes and the old "<name>" key on byte lists,
-   which front ends and .agcb files compiled before #805 PR 3 import: both give the same answer. The old key still halts on an item that is
-   not a byte (RUNTIME-INVALID-NUMBER); the new key cannot see one, and a list there is a wrong tag. */
+/* Each crypto builtin on bytes runs on empty Bytes and on Bytes with a NUL and a 0xFF in them, and a List there is a
+   wrong tag (the type cannot give one; only hand-made bytecode can). */
 static void test_crypto_keys(void) {
   static const char *const one_data[] = {
-    "Digest.md5",           "Digest.md5_hexdigest", "Digest.sha1",           "Digest.sha1_hexdigest",
-    "Digest.sha256",        "Digest.sha256_hexdigest", "Digest.sha512",      "Digest.sha512_hexdigest",
-    "Base64.encode64",      "Base64.strict_encode64", "Digest.hexencode",
+    "Digest.md5.bytes",      "Digest.md5_hexdigest.bytes",    "Digest.sha1.bytes",
+    "Digest.sha1_hexdigest.bytes", "Digest.sha256.bytes",     "Digest.sha256_hexdigest.bytes",
+    "Digest.sha512.bytes",   "Digest.sha512_hexdigest.bytes", "Base64.encode64.bytes",
+    "Base64.strict_encode64.bytes", "Digest.hexencode.bytes",
   };
-  static const char *const one_text[] = {"Base64.decode64", "Base64.strict_decode64", "Base64.urlsafe_decode64",
-                                         "Digest.hexdecode"};
-  static const char *const two_data[] = {"HMAC.sha256", "HMAC.sha256_hexdigest", "HMAC.sha512",
-                                         "HMAC.sha512_hexdigest", "HMAC.secure_compare"};
-  agc_value datas[] = {raw("", 0), raw("hello\xff\x00", 7), raw("abc", 3)};
-  agc_value texts[] = {text(""), text("aGVsbG8="), text("aGVsbG8"), text("68656C6c6f"), text("not base64!")};
-  for (size_t d = 0; d < 3; d++) {
-    for (size_t k = 0; k < sizeof one_data / sizeof one_data[0]; k++) both_keys(one_data[k], 1, &datas[d]);
-    for (size_t f = 0; f < 2; f++) {
-      agc_value args[2] = {datas[d], agc_bool(f)};
-      both_keys("Base64.urlsafe_encode64", 2, args);
-    }
-    for (size_t e = 0; e < 3; e++) {
-      agc_value args[2] = {datas[d], datas[e]};
-      for (size_t k = 0; k < sizeof two_data / sizeof two_data[0]; k++) both_keys(two_data[k], 2, args);
-    }
+  static const char *const two_data[] = {"HMAC.sha256.bytes", "HMAC.sha256_hexdigest.bytes", "HMAC.sha512.bytes",
+                                         "HMAC.sha512_hexdigest.bytes", "HMAC.secure_compare.bytes"};
+  agc_value datas[] = {raw("", 0), raw("hello\xff\x00", 7)};
+  for (size_t d = 0; d < 2; d++) {
+    for (size_t k = 0; k < sizeof one_data / sizeof one_data[0]; k++) (void)call(one_data[k], 1, &datas[d]);
+    agc_value args[2] = {datas[d], datas[1 - d]};
+    for (size_t k = 0; k < sizeof two_data / sizeof two_data[0]; k++) (void)call(two_data[k], 2, args);
   }
-  for (size_t t = 0; t < sizeof texts / sizeof texts[0]; t++)
-    for (size_t k = 0; k < sizeof one_text / sizeof one_text[0]; k++) both_keys(one_text[k], 1, &texts[t]);
+  agc_value hello = text("aGVsbG8=");
+  const agc_result *decoded = agc_as_result(&vm, call("Base64.strict_decode64.bytes", 1, &hello));
+  assert(decoded->ok && agc_as_bytes(&vm, decoded->value)->len == 5);
 
   agc_value count = agc_int(33);
-  assert(agc_list_len(agc_as_list(&vm, call("SecureRandom.random_bytes", 1, &count))) == 33);
   assert(agc_as_bytes(&vm, call("SecureRandom.random_bytes.bytes", 1, &count))->len == 33);
   count = agc_int(0);
   assert(shared_empty(call("SecureRandom.random_bytes.bytes", 1, &count)));
 
-  const int64_t bad[] = {1, 256};
-  agc_value list = ints(bad, 2), pair[2] = {raw("k", 1), list};
-  fails("Digest.sha256", 1, &list, "RUNTIME-INVALID-NUMBER");
-  fails("Base64.strict_encode64", 1, &list, "RUNTIME-INVALID-NUMBER");
-  pair[0] = call("Bytes.to_a", 1, &pair[0]);
-  fails("HMAC.sha256", 2, pair, "RUNTIME-INVALID-NUMBER");
-  list = call("Bytes.to_a", 1, &datas[2]);
+  agc_value list = call("Bytes.to_a", 1, &datas[1]), pair[2] = {datas[1], list};
   fails("Digest.sha256.bytes", 1, &list, "RUNTIME-INTERNAL");
   fails("Digest.hexencode.bytes", 1, &list, "RUNTIME-INTERNAL");
-  pair[0] = datas[2];
-  pair[1] = list;
   fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
 }
 
-/* String.from_bytes on a Bytes ("String.from_bytes.bytes") and on a byte list (the old key, for front ends and .agcb
-   files compiled before #805 PR 4) gives the same answer, and the old String.to_bytes gives the list of String.bytes.
-   A bad item is an error of the old key only; the new key with a list is a wrong tag. */
+/* String.from_bytes decodes strictly: valid UTF-8 (a NUL included) gives the String, a cut or a surrogate is an
+   error, and a List there is a wrong tag. */
 static void test_string_keys(void) {
-  agc_value samples[] = {raw("", 0), raw("h", 1), raw("caf\xc3\xa9", 5), raw("\xc3", 1), raw("\xed\xa0\x80", 3),
-                         raw("a\x00b", 3)};
+  struct {
+    agc_value data;
+    bool ok;
+  } samples[] = {{raw("", 0), true},      {raw("h", 1), true},           {raw("caf\xc3\xa9", 5), true},
+                 {raw("\xc3", 1), false}, {raw("\xed\xa0\x80", 3), false}, {raw("a\x00b", 3), true}};
   for (size_t k = 0; k < sizeof samples / sizeof samples[0]; k++) {
-    agc_value list = call("Bytes.to_a", 1, &samples[k]);
-    agc_value old = call("String.from_bytes", 1, &list), now = call("String.from_bytes.bytes", 1, &samples[k]);
-    const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
-    assert(a->ok == b->ok);
-    if (a->ok) {
-      agc_value decoded = b->value, made = call("String.bytes", 1, &decoded);
-      assert(agc_equal(&vm, a->value, decoded, 0));
-      assert(agc_equal(&vm, call("String.to_bytes", 1, &decoded), call("Bytes.to_a", 1, &made), 0));
+    const agc_result *r = agc_as_result(&vm, call("String.from_bytes.bytes", 1, &samples[k].data));
+    assert(r->ok == samples[k].ok);
+    if (r->ok) {
+      agc_value decoded = r->value;
+      assert(agc_equal(&vm, call("String.bytes", 1, &decoded), samples[k].data, 0));
     }
   }
-  const int64_t bad[] = {104, 256};
-  agc_value list = ints(bad, 2);
-  assert(!agc_as_result(&vm, call("String.from_bytes", 1, &list))->ok);
+  agc_value list = call("Bytes.to_a", 1, &samples[2].data);
   fails("String.from_bytes.bytes", 1, &list, "RUNTIME-INTERNAL");
 }
 
-/* FrontEnd.hand_off under both keys gives the driver the same program bytes: "FrontEnd.hand_off.bytes" takes a Bytes,
-   the old key (an older stage0) a byte list. The hand-off ends the run, which comes back here through vm.fail. */
-static void handed(const char *name, agc_value program, agc_front_end *fe) {
+/* FrontEnd.hand_off gives the driver the program's bytes. The hand-off ends the run, which comes back here through
+   vm.fail. */
+static void handed(agc_value program, agc_front_end *fe) {
   agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
   memset(fe, 0, sizeof *fe);
   if (setjmp(vm.fail) == 0) {
-    (void)row(name, 3)->fn(&vm, args, 0);
+    (void)row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
     assert(0);
   }
   assert(fe->handed && fe->option_count == 0 && fe->argument_count == 0);
@@ -437,14 +392,9 @@ static void test_hand_off_keys(void) {
   agc_front_end fe;
   vm.rt->front_end = &fe;
   agc_value program = raw("AGCB\x06\x00\xff", 7);
-  handed("FrontEnd.hand_off.bytes", program, &fe);
+  handed(program, &fe);
   assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
-  handed("FrontEnd.hand_off", call("Bytes.to_a", 1, &program), &fe);
-  assert(fe.program_len == 7 && memcmp(fe.program, "AGCB\x06\x00\xff", 7) == 0);
-  const int64_t bad[] = {1, 300};
-  agc_value args[3] = {ints(bad, 2), vm.rt->empty_list, vm.rt->empty_list};
-  assert(!agc_as_result(&vm, call("FrontEnd.hand_off", 3, args))->ok);
-  args[0] = call("Bytes.to_a", 1, &program);
+  agc_value args[3] = {call("Bytes.to_a", 1, &program), vm.rt->empty_list, vm.rt->empty_list};
   fails("FrontEnd.hand_off.bytes", 3, args, "RUNTIME-INTERNAL");
   vm.rt->front_end = NULL;
 }
@@ -467,7 +417,7 @@ static void hand_off_large(agc_front_end *fe) {
   int registered = GC_general_register_disappearing_link((void **)&handed_block, base);
   assert(registered == GC_SUCCESS);
 #endif
-  handed("FrontEnd.hand_off.bytes", agc_bytes_value(b), fe);
+  handed(agc_bytes_value(b), fe);
 }
 
 /* Overwrites the stack below the caller, so stale copies of the Bytes value left by hand_off_large do not hold it. */

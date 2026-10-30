@@ -79,8 +79,6 @@ typedef struct {
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err, fd;
-  /* The result of a read or File.sha256 is a byte list (the old keys), not a Bytes (bytes_result). */
-  bool list;
   bool owns_st, polled, locked, regular;
   const char *file_type;
   agc_vm *vm;
@@ -98,14 +96,13 @@ typedef struct {
 
 typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_READ, LINES_CLOSE, LINES_CLOSED } lines_phase;
 
-/* A line reader, or with `chunks` a reader of byte chunks of `limit` bytes (File.chunks): Bytes, or byte lists with
-   `list` (the old __lazy_chunks key). */
+/* A line reader, or with `chunks` a reader of Bytes chunks of `limit` bytes (File.chunks). */
 struct agc_line_reader {
   lines_phase phase;
   agc_value path, handle, outcome;
   size_t limit;
   int64_t timeout;
-  bool chunks, list;
+  bool chunks;
 };
 
 typedef enum {
@@ -1378,8 +1375,7 @@ static agc_value real_result(const op *o) {
 }
 
 static agc_value bytes_result(const op *o) {
-  if (!o->list) return agc_result_value(true, agc_bytes_value(agc_make_bytes(o->out, o->out_len)));
-  return agc_result_value(true, agc_list_value(agc_list_of_bytes(o->out, o->out_len)));
+  return agc_result_value(true, agc_bytes_value(agc_make_bytes(o->out, o->out_len)));
 }
 
 static agc_value closed(agc_vm *vm, void *data, agc_value context) {
@@ -1517,20 +1513,14 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   return agc_void();
 }
 
-/* A job on the file at path; list is the result form of File.sha256 (bytes_result). */
-static agc_value path_job(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout, const char *who,
-                          const char *expected, bool list) {
+/* A job on the file at path. */
+static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout, const char *who,
+                         const char *expected) {
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return contract_error(who, expected, path);
   op *o = new_op(vm, kind);
   o->path = agc_host_path(vm, path);
-  o->list = list;
   return start(vm, o, agc_void(), timeout);
-}
-
-static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout, const char *who,
-                         const char *expected) {
-  return path_job(vm, kind, path, timeout, who, expected, false);
 }
 
 static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1569,19 +1559,10 @@ static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
   return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
 }
 
-/* File.sha256 under the catalog's "File.sha256.bytes" key gives a Bytes, under the old "File.sha256" key a byte list.
-   The old keys of File.sha256, read_bytes and write_bytes stay for front ends and .agcb files compiled before #805
-   PR 4; PR 9 removes them. */
-static agc_value sha256(agc_vm *vm, agc_value *args, uint32_t span, bool list) {
+/* File.sha256: the SHA-256 of the file's bytes, as a Bytes. */
+static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_job(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who,
-                  complete_expected, list);
-}
-
-static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) { return sha256(vm, args, span, true); }
-
-static agc_value builtin_sha256_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return sha256(vm, args, span, false);
+  return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1716,7 +1697,7 @@ static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value 
   return NULL;
 }
 
-static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout, bool list) {
+static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout) {
   agc_value failure;
   if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, true, &failure);
@@ -1724,29 +1705,20 @@ static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t coun
   op *o = new_op(vm, kind);
   o->st = st;
   o->count = count;
-  o->list = list;
   return start(vm, o, handle, timeout);
 }
 
-/* File.read_bytes: a Bytes under "File.read_bytes.bytes", a byte list under the old key. */
-static agc_value read_bytes(agc_vm *vm, agc_value *args, uint32_t span, bool list) {
+/* File.read_bytes: up to max_bytes bytes, as a Bytes. */
+static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 1 || (uint64_t)count > LIMIT) return error_of("filesystem: max_bytes must be between 1 and 1048576");
-  return read_op(vm, args[0], OP_READ_BYTES, (size_t)count, agc_as_int(vm, args[2]), list);
-}
-
-static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_bytes(vm, args, span, true);
-}
-
-static agc_value builtin_read_bytes_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_bytes(vm, args, span, false);
+  return read_op(vm, args[0], OP_READ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]), false);
+  return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]));
 }
 
 /* The buffered output, then `len` bytes of data and an LF when `newline`, in one write job. */
@@ -1787,15 +1759,7 @@ static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
   return write_bytes(vm, args[0], (const uint8_t *)content->data, content->bytes, agc_as_int(vm, args[2]));
 }
 
-static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  const agc_list *values = agc_as_list(vm, args[1]);
-  const uint8_t *data = agc_byte_list(vm, values, LIMIT);
-  if (!data) return error_of("network: bytes must be 0..255 and at most 1048576 per call");
-  return write_bytes(vm, args[0], data, agc_list_len(values), agc_as_int(vm, args[2]));
-}
-
-/* File.write_bytes on a Bytes ("File.write_bytes.bytes"): the data needs no check but the size. */
+/* File.write_bytes: the data needs no check but the size. */
 static agc_value builtin_write_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   size_t len;
@@ -1875,7 +1839,6 @@ static void lines_init(agc_line_reader *r, agc_value path, size_t limit, int64_t
   r->limit = limit;
   r->timeout = timeout;
   r->chunks = false;
-  r->list = false;
 }
 
 bool agc_lines_buffer_ok(int64_t buffer_bytes) {
@@ -1894,14 +1857,13 @@ agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes,
 
 bool agc_chunks_size_ok(int64_t size) { return size >= 1 && size <= MAX_LINE_BUFFER; }
 
-agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, bool list, uint32_t span) {
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span) {
   files_on(vm, span);
   agc_as_string(vm, path);
   if (!agc_chunks_size_ok(size)) agc_fail(vm, "RUNTIME-INTERNAL", "a chunk reader with an unchecked size", span);
   agc_line_reader *r = agc_alloc(sizeof(agc_line_reader));
   lines_init(r, path, (size_t)size, timeout);
   r->chunks = true;
-  r->list = list;
   return r;
 }
 
@@ -1913,7 +1875,7 @@ static bool chunks_take(agc_vm *vm, const agc_line_reader *r, file_state *st, ag
   size_t n = have < r->limit ? have : r->limit;
   agc_charge_bytes(vm, n);
   const uint8_t *data = st->buf + st->start;
-  *chunk = r->list ? agc_list_value(agc_list_of_bytes(data, n)) : agc_bytes_value(agc_make_bytes(data, n));
+  *chunk = agc_bytes_value(agc_make_bytes(data, n));
   st->start += n;
   return true;
 }
@@ -2058,11 +2020,6 @@ static agc_value writer_put(agc_vm *vm, agc_line_writer *w, file_state *st, agc_
   size_t len;
   if (w->form == AGC_WRITE_BYTES) {
     data = agc_bytes_data(vm, item, &len);
-  } else if (w->form == AGC_WRITE_BYTE_LISTS) {
-    const agc_list *list = agc_as_list(vm, item);
-    len = agc_list_len(list);
-    data = agc_byte_list(vm, list, len);
-    if (!data) return error_of("filesystem: bytes must be between 0 and 255");
   } else {
     const agc_string *line = agc_as_string(vm, item);
     if (line->bytes > LIMIT) return error_of("filesystem: line exceeds 1048576 bytes");
@@ -2293,10 +2250,8 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
 
 const agc_builtin agc_file_builtins[] = {
   {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -2316,10 +2271,9 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   /* New rows go last: a C test may index a table by position. */
-  {"File.sha256", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"File.read_bytes.bytes", 3, builtin_read_bytes_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"File.read_bytes.bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.write_bytes.bytes", 3, builtin_write_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"File.sha256.bytes", 2, builtin_sha256_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.sha256.bytes", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
@@ -2360,11 +2314,10 @@ void agc_lines_stop(agc_line_reader *r, agc_value outcome) {
 
 bool agc_chunks_size_ok(int64_t size) { return size >= 1 && size <= MAX_LINE_BUFFER; }
 
-agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, bool list, uint32_t span) {
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span) {
   (void)path;
   (void)size;
   (void)timeout;
-  (void)list;
   agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 

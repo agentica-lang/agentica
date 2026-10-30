@@ -88,21 +88,12 @@ static void check_bytes(agc_value value, const uint8_t *data, size_t n) {
   assert(got->len == n && (n == 0 || memcmp(got->data, data, n) == 0));
 }
 
-/* The bytes of a byte list, as the old keys give them. */
-static agc_value list_as_bytes(agc_value list) {
-  const agc_list *l = agc_as_list(&vm, list);
-  size_t n = agc_list_len(l);
-  agc_bytes *b = agc_new_bytes(n);
-  for (size_t k = 0; k < n; k++) b->data[k] = (uint8_t)agc_as_int(&vm, agc_list_get(l, k));
-  return agc_bytes_value(b);
-}
-
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
   agc_test_fails(&vm, name, agc_find_builtin((const uint8_t *)name, strlen(name), arity), args, code);
 }
 
-/* The 5 public rows in the contract's order, with their arities, then their
-   ".bytes" keys: pure calls, never shared, since the streams of the Lazy
+/* The 5 public rows in the contract's order, under their ".bytes" keys, with
+   their arities: pure calls, never shared, since the streams of the Lazy
    steps have no row. */
 static void test_table(void) {
   struct {
@@ -110,9 +101,8 @@ static void test_table(void) {
     uint32_t arity;
     bool shared;
   } expected[] = {
-    {"Zlib.deflate", 3, false}, {"Zlib.inflate", 2, false}, {"Zlib.gzip", 3, false}, {"Zlib.gunzip", 2, false},
-    {"Zlib.crc32", 2, false}, {"Zlib.deflate.bytes", 3, false}, {"Zlib.inflate.bytes", 2, false},
-    {"Zlib.gzip.bytes", 3, false}, {"Zlib.gunzip.bytes", 2, false}, {"Zlib.crc32.bytes", 2, false},
+    {"Zlib.deflate.bytes", 3, false}, {"Zlib.inflate.bytes", 2, false}, {"Zlib.gzip.bytes", 3, false},
+    {"Zlib.gunzip.bytes", 2, false},  {"Zlib.crc32.bytes", 2, false},
   };
   size_t count = sizeof expected / sizeof expected[0];
   assert(agc_zlib_builtin_count == count);
@@ -289,51 +279,8 @@ static void test_crc32(void) {
   check_error(call("Zlib.crc32.bytes", 2, big_args), "zlib: input exceeds 1048576 bytes");
 }
 
-/* What an old List[Int] key answered against what its ".bytes" key answered: the same Result, with a byte list where
-   the new key gives a Bytes. */
-static void same_answer(agc_value old, agc_value now) {
-  const agc_result *a = agc_as_result(&vm, old), *b = agc_as_result(&vm, now);
-  assert(a->ok == b->ok);
-  agc_value was = a->value;
-  if (b->value.tag == AGC_T_BYTES) was = list_as_bytes(was);
-  assert(agc_equal(&vm, was, b->value, 0));
-}
-
-/* Each Zlib builtin has the catalog's "<name>.bytes" key on Bytes and the old "<name>" key on byte lists, which
-   front ends and .agcb files compiled before #805 PR 5 import: both give the same answer, errors included. The old
-   key still refuses an item that is not a byte; the new key cannot see one, and a list there is a wrong tag. */
-static void test_old_keys(void) {
-  static const char *const names[] = {"Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32"};
-  static const uint32_t arities[] = {3, 2, 3, 2, 2};
-  agc_value inputs[] = {bytes_of(NULL, 0), bytes_of(abc_bytes, sizeof abc_bytes), bytes_of(zlib_abc, sizeof zlib_abc),
-                        bytes_of(zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc)};
-  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++)
-    for (size_t i = 0; i < sizeof inputs / sizeof inputs[0]; i++) {
-      size_t len;
-      const uint8_t *data = agc_bytes_data(&vm, inputs[i], &len);
-      agc_value now[3] = {inputs[i], agc_int(arities[k] == 3 ? 6 : 1048576), agc_int(1048576)};
-      if (k == 4) now[1] = agc_int(7);
-      agc_value old[3] = {byte_list(data, len), now[1], now[2]};
-      char key[32];
-      snprintf(key, sizeof key, "%s.bytes", names[k]);
-      same_answer(call(names[k], arities[k], old), call(key, arities[k], now));
-    }
-  agc_list_builder bad;
-  agc_list_builder_sized(&bad, 2);
-  agc_list_builder_push(&bad, agc_int(0x61));
-  agc_list_builder_push(&bad, agc_int(256));
-  agc_value bad_data[] = {agc_list_value(agc_list_builder_finish(&bad)), agc_int(6), agc_int(100)};
-  check_error(call("Zlib.deflate", 3, bad_data), "zlib: bytes must be between 0 and 255");
-  bad_data[1] = agc_int(0);
-  check_error(call("Zlib.crc32", 2, bad_data), "zlib: bytes must be between 0 and 255");
-  /* A stream opened for the old __lazy_zlib key gives byte lists. */
-  agc_resource *r = agc_zstep_open(&vm, 3, 0, 100, true);
-  size_t used = 0;
-  agc_value out = agc_void();
-  assert(agc_zstep_next(&vm, r, zlib_abc, sizeof zlib_abc, &used, false, &out) != AGC_ZSTEP_FAILED);
-  assert(used == sizeof zlib_abc && out.tag == AGC_T_LIST);
-  check_bytes(list_as_bytes(out), abc_bytes, sizeof abc_bytes);
-  agc_zstep_close(&vm, r);
+/* A List given to a Zlib row is a wrong tag: the type cannot give one, only hand-made bytecode can. */
+static void test_list_refused(void) {
   agc_task *main_task = vm.task;
   vm.in_turn = false;
   agc_value list_args[] = {byte_list(abc_bytes, sizeof abc_bytes), agc_int(6), agc_int(100)};
@@ -344,10 +291,9 @@ static void test_old_keys(void) {
   vm.in_turn = true;
 }
 
-/* A chunk of a stream: a Bytes, or a byte list from a stream opened for the old __lazy_zlib key. */
+/* A chunk of a stream: a Bytes. */
 static void sink_put(agc_vm *v, sink *s, agc_value chunk) {
   if (agc_is(chunk, AGC_T_VOID)) return;
-  if (chunk.tag == AGC_T_LIST) chunk = list_as_bytes(chunk);
   size_t n;
   const uint8_t *data = agc_bytes_data(v, chunk, &n);
   assert(n > 0 && n <= 65536);
@@ -398,7 +344,7 @@ static agc_zstep_status pump(agc_vm *v, agc_resource *r, const uint8_t *in, size
 /* One stream of KIND over IN, opened, pumped and closed. */
 static agc_zstep_status run_step(int64_t kind, int64_t level, int64_t max_bytes, const uint8_t *in, size_t len,
                                  size_t step, sink *s, agc_value *error) {
-  agc_resource *r = agc_zstep_open(&vm, kind, level, max_bytes, false);
+  agc_resource *r = agc_zstep_open(&vm, kind, level, max_bytes);
   agc_zstep_status status = pump(&vm, r, in, len, step, false, s, error);
   agc_zstep_close(&vm, r);
   assert(r->native == NULL);
@@ -472,10 +418,10 @@ static void test_zstep_round_trip(void) {
       for (size_t k = 0; k < 4; k++) {
         sink coded = {0}, back = {0};
         agc_value error = agc_void();
-        agc_resource *r = agc_zstep_open(&vm, enc, levels[l], 0, false);
+        agc_resource *r = agc_zstep_open(&vm, enc, levels[l], 0);
         assert(pump(&vm, r, plain, TOTAL, steps[k], k == 0, &coded, &error) == AGC_ZSTEP_END);
         agc_zstep_close(&vm, r);
-        r = agc_zstep_open(&vm, enc + 3, 0, TOTAL, false);
+        r = agc_zstep_open(&vm, enc + 3, 0, TOTAL);
         assert(pump(&vm, r, coded.data, coded.len, steps[3 - k], k == 1, &back, &error) == AGC_ZSTEP_END);
         agc_zstep_close(&vm, r);
         assert(back.len == TOTAL && memcmp(back.data, plain, TOTAL) == 0);
@@ -528,7 +474,7 @@ static void test_zstep_strict(void) {
   memcpy(buf + sizeof zlib_abc, zlib_abc, sizeof zlib_abc);
   check_step_error(run_step(3, 0, 100, buf, sizeof buf, 1, &s, &error), error,
                    "zlib: trailing bytes after stream end");
-  agc_resource *r = agc_zstep_open(&vm, 3, 0, 100, false);
+  agc_resource *r = agc_zstep_open(&vm, 3, 0, 100);
   assert(pump(&vm, r, zlib_abc, sizeof zlib_abc, 2, true, &s, &error) == AGC_ZSTEP_END);
   size_t used;
   assert(agc_zstep_next(&vm, r, no_bytes, 0, &used, false, &error) == AGC_ZSTEP_END);
@@ -555,14 +501,14 @@ static void test_zstep_strict(void) {
    task's end frees what the run did not, and a pass over a freed stream is
    an internal error, never a use after free. */
 static void test_zstep_lifetime(void) {
-  agc_resource *r = agc_zstep_open(&vm, 0, 6, 0, false);
+  agc_resource *r = agc_zstep_open(&vm, 0, 6, 0);
   agc_zstep_close(&vm, r);
   agc_zstep_close(&vm, r);
   assert(r->native == NULL);
   agc_task *main_task = vm.task;
   agc_task *other = agc_new_task(&vm);
   vm.task = other;
-  agc_resource *owned[2] = {agc_zstep_open(&vm, 2, 6, 0, false), agc_zstep_open(&vm, 5, 0, 10, false)};
+  agc_resource *owned[2] = {agc_zstep_open(&vm, 2, 6, 0), agc_zstep_open(&vm, 5, 0, 10)};
   vm.task = main_task;
   agc_close_owned(&vm, other);
   assert(owned[0]->native == NULL && owned[1]->native == NULL);
@@ -597,8 +543,8 @@ static void round_trip(agc_vm *v, intptr_t seed, bool leave_open) {
   sink coded = {0}, back = {0};
   agc_value error = agc_void();
   int64_t kind = seed % 3;
-  agc_resource *enc = agc_zstep_open(v, kind, 6, 0, false);
-  agc_resource *dec = agc_zstep_open(v, kind + 3, 0, sizeof pattern, false);
+  agc_resource *enc = agc_zstep_open(v, kind, 6, 0);
+  agc_resource *dec = agc_zstep_open(v, kind + 3, 0, sizeof pattern);
   if (pump(v, enc, pattern, sizeof pattern, 100, false, &coded, &error) != AGC_ZSTEP_END ||
       pump(v, dec, coded.data, coded.len, 7, false, &back, &error) != AGC_ZSTEP_END || back.len != sizeof pattern ||
       memcmp(back.data, pattern, sizeof pattern) != 0)
@@ -649,7 +595,7 @@ int main(void) {
   test_oneshot_compress();
   test_oneshot_decode();
   test_crc32();
-  test_old_keys();
+  test_list_refused();
   test_zstep_check();
   test_zstep_vectors();
   test_zstep_round_trip();

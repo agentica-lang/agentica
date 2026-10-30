@@ -546,21 +546,6 @@ char *agc_cstr(const agc_string *s) {
   return copy;
 }
 
-uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit) {
-  size_t n = agc_list_len(values);
-  if (n > limit) return NULL;
-  uint8_t *data = agc_alloc_atomic(n ? n : 1);
-  agc_list_cursor cursor;
-  agc_list_cursor_begin(&cursor, values, 0);
-  agc_value item;
-  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) {
-    int64_t b = agc_as_int(vm, item);
-    if (b < 0 || b > 255) return NULL;
-    data[k] = (uint8_t)b;
-  }
-  return data;
-}
-
 size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }
 
 uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at) {

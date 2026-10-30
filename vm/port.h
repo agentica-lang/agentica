@@ -298,7 +298,7 @@ typedef struct {
 #define AGC_FRONT_END_MAX_ARGUMENTS 1048576
 
 /* The most bytes of standard input that FrontEnd.stdin_bytes takes, far below a source file the loader would accept
- * (AGC_MAX_FILE_BYTES): the old key gives them as a List of Int, 8 bytes a byte. */
+ * (AGC_MAX_FILE_BYTES). */
 #define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
 
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the hand-off of

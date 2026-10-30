@@ -160,9 +160,6 @@ typedef struct {
   uint32_t count;
 } free_list;
 
-/* How the copy of a C.Bytes argument went (copy_bytes). */
-typedef enum { BYTES_OK, BYTES_RANGE, BYTES_TAG } bytes_outcome;
-
 /* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor FD is never polled itself: the
    poller polls a new open of its file, or a duplicate (agc_poller_open_copy), which it owns and closes once its wait is
    over. So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
@@ -182,12 +179,11 @@ typedef struct {
   bool writing;
 } native_wait;
 
-/* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer, the
-   array forms, the byte-list get_bytes and put_bytes of the old keys (ITEM_BYTE, written only from 0 to 255).
-   ITEM_WIDTHS has the size of each. */
+/* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer, and
+   the array forms. ITEM_WIDTHS has the size of each. */
 typedef enum {
   ITEM_INT8, ITEM_INT16, ITEM_INT32, ITEM_INT64, ITEM_UINT8, ITEM_UINT16, ITEM_UINT32, ITEM_FLOAT32, ITEM_FLOAT64,
-  ITEM_POINTER, ITEM_BYTE
+  ITEM_POINTER
 } item_kind;
 
 /* What a memory builtin reads or writes: COUNT items of SIZE bytes at OFFSET bytes past its pointer. A bad offset
@@ -215,7 +211,7 @@ typedef struct agc_ffi_cache {
   size_t size, used;
 } agc_ffi_cache;
 
-static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *), 1};
+static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
 
 static uint64_t text_hash(const char *data, size_t len) {
   uint64_t h = 1469598103934665603ULL;
@@ -1025,11 +1021,7 @@ static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layo
       break;
     }
     case AGC_C_POINTER: (void)buffer_of(vm, v); break;
-    /* A Bytes, or a byte list from a .agcb compiled before #805 PR 8: the signature code "y" is the same for both, so
-       the tag decides (PR 9 removes the list form). copy_byte_arguments checks the items of a list. */
-    case AGC_C_BYTES:
-      if (!agc_is(v, AGC_T_BYTES)) agc_as_list(vm, v);
-      break;
+    case AGC_C_BYTES: agc_as_bytes(vm, v); break;
     /* A resource parameter takes a resource of an extern block, never an owned buffer or a view of one: only
        hand-made bytecode passes one, and held_by and c_argument read a resource as its own. */
     case AGC_C_RESOURCE:
@@ -1144,40 +1136,15 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *l
   return out;
 }
 
-/* A malloc'd copy of a C.Bytes argument V into *OUT: the data of a Bytes, or the items of a byte list (the old form)
-   in one walk. An item outside 0..255 (C cannot take it) or not an Int (invalid bytecode) gives no copy. It runs
-   without rt->sync (a Bytes and a List are immutable) and never fails: the caller fails once it holds the lock again.
-   It adds the work to *ITEMS (list items) or *DATA (bytes of a Bytes), which the caller charges. */
-static bytes_outcome copy_bytes(agc_vm *vm, agc_value v, uint8_t **out, uint64_t *items, size_t *data) {
-  if (agc_is(v, AGC_T_BYTES)) {
-    const agc_bytes *b = agc_as_bytes(vm, v);
-    uint8_t *copy = malloc(b->len ? b->len : 1);
-    if (!copy) agc_out_of_memory();
-    if (b->len) memcpy(copy, b->data, b->len);
-    *data += b->len;
-    *out = copy;
-    return BYTES_OK;
-  }
-  const agc_list *bytes = agc_as_list(vm, v);
-  size_t n = agc_list_len(bytes);
-  *items += n;
-  uint8_t *copy = malloc(n ? n : 1);
+/* A malloc'd copy of the Bytes argument V into *OUT. It runs without rt->sync (a Bytes is immutable) and adds the
+   bytes to *DATA, which the caller charges. */
+static void copy_bytes(agc_vm *vm, agc_value v, uint8_t **out, size_t *data) {
+  const agc_bytes *b = agc_as_bytes(vm, v);
+  uint8_t *copy = malloc(b->len ? b->len : 1);
   if (!copy) agc_out_of_memory();
-  for (size_t k = 0; k < n; k++) {
-    agc_value item = agc_list_get(bytes, k);
-    if (!agc_is(item, AGC_T_INT)) {
-      free(copy);
-      return BYTES_TAG;
-    }
-    int64_t byte = agc_as_int(vm, item);
-    if (byte < 0 || byte > 255) {
-      free(copy);
-      return BYTES_RANGE;
-    }
-    copy[k] = (uint8_t)byte;
-  }
+  if (b->len) memcpy(copy, b->data, b->len);
+  *data += b->len;
   *out = copy;
-  return BYTES_OK;
 }
 
 static void free_bytes(const ffi_entry *e, uint8_t **bytes) {
@@ -1185,11 +1152,9 @@ static void free_bytes(const ffi_entry *e, uint8_t **bytes) {
 }
 
 /* Copies the C.Bytes arguments of a call into BYTES (NULL for the other parameters); the caller has checked that
-   each is a Bytes or a List. A long copy takes long, so it runs with rt->sync dropped (a shared builtin is called
-   with it taken once), and the lock is taken again before anything shared is read. The turn is charged one unit per
-   list item and by size for a Bytes. On a failure nothing is left allocated. */
-static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes,
-                                uint32_t span) {
+   each is a Bytes. A long copy takes long, so it runs with rt->sync dropped (a shared builtin is called with it taken
+   once), and the lock is taken again before anything shared is read. The turn is charged by size. */
+static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes) {
   bool any = false;
   for (uint32_t k = 0; k < e->count; k++) {
     bytes[k] = NULL;
@@ -1198,20 +1163,13 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
   if (!any) return;
   bool unlock = vm->sync_depth == 1;
   if (unlock) agc_sync_drop(vm);
-  bytes_outcome bad = BYTES_OK;
-  uint64_t items = 0;
   size_t data = 0;
-  for (uint32_t k = 0; k < e->count && bad == BYTES_OK; k++) {
+  for (uint32_t k = 0; k < e->count; k++) {
     if (e->params[k] != AGC_C_BYTES || e->out[k]) continue;
-    bad = copy_bytes(vm, agc_list_get(values, e->arg[k]), &bytes[k], &items, &data);
+    copy_bytes(vm, agc_list_get(values, e->arg[k]), &bytes[k], &data);
   }
   if (unlock) agc_sync_take(vm);
-  agc_charge(vm, items);
   agc_charge_bytes(vm, data);
-  if (bad == BYTES_OK) return;
-  free_bytes(e, bytes);
-  if (bad == BYTES_TAG) agc_wrong_tag(vm);
-  agc_fail(vm, "RUNTIME-INVALID-NUMBER", "a C.Bytes item is not a byte (0 to 255)", span);
 }
 
 /* The resource or owned buffer that argument K holds (a resource parameter, or a C.Pointer one given a buffer), or
@@ -1441,7 +1399,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   if (e->compute) (void)agc_io_loop(vm);
   check_open(vm, e, values, NULL, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
-  copy_byte_arguments(vm, e, values, bytes, span);
+  copy_byte_arguments(vm, e, values, bytes);
   check_open(vm, e, values, bytes, span);
   agc_charge(vm, FFI_CALL_COST);
   /* The struct arguments are copied in proportion to their size. */
@@ -1765,8 +1723,7 @@ static agc_value load_item(item_kind kind, const uint8_t *at) {
     case ITEM_INT16: { int16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_INT32: { int32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_INT64: { int64_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
-    case ITEM_UINT8:
-    case ITEM_BYTE: { uint8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_UINT8: { uint8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_UINT16: { uint16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_UINT32: { uint32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_FLOAT32: { float x; memcpy(&x, at, sizeof x); return agc_float(x); }
@@ -1777,8 +1734,8 @@ static agc_value load_item(item_kind kind, const uint8_t *at) {
 }
 
 /* Checks V before an item of KIND is written: an Int that fits in the item's bits read as signed or as unsigned (an
-   int8 takes -128 to 255, the same bits; a byte of put_bytes only 0 to 255), a Float (a float32 takes any, one outside
-   the range of a float becomes an infinity), or a C.Pointer (an owned buffer, unless freed, gives its address). */
+   int8 takes -128 to 255, the same bits), a Float (a float32 takes any, one outside the range of a float becomes an
+   infinity), or a C.Pointer (an owned buffer, unless freed, gives its address). */
 static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
   if (kind == ITEM_FLOAT32 || kind == ITEM_FLOAT64) {
     (void)agc_as_float(vm, v);
@@ -1786,9 +1743,6 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
     agc_c_resource *res = buffer_of(vm, v);
     if (!res) (void)agc_as_c_pointer(vm, v);
     if (res && root_of(res)->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span);
-  } else if (kind == ITEM_BYTE) {
-    int64_t n = agc_as_int(vm, v);
-    if (n < 0 || n > 255) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a byte must be 0 to 255", span);
   } else if (!fits_bits(agc_as_int(vm, v), (unsigned)ITEM_WIDTHS[kind] * 8)) {
     agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "the value does not fit in the memory item", span);
   }
@@ -1799,8 +1753,7 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
 static void store_item(agc_vm *vm, item_kind kind, uint8_t *at, agc_value v) {
   switch (kind) {
     case ITEM_INT8:
-    case ITEM_UINT8:
-    case ITEM_BYTE: { uint8_t x = (uint8_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_UINT8: { uint8_t x = (uint8_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_INT16:
     case ITEM_UINT16: { uint16_t x = (uint16_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_INT32:
@@ -2002,9 +1955,7 @@ static agc_value builtin_put_floats64(agc_vm *vm, agc_value *args, uint32_t span
   return put_array(vm, args, span, ITEM_FLOAT64);
 }
 /* Native.get_bytes(pointer, offset, length) and put_bytes(pointer, offset, bytes), Ruby ffi's get_bytes and put_bytes
-   with a Bytes for their String, under the catalog's "Native.get_bytes.bytes" and "Native.put_bytes.bytes" keys. The
-   old keys "Native.get_bytes" and "Native.put_bytes" give and take a byte list, for .agcb files compiled before #805
-   PR 8 (PR 9 removes them). */
+   with a Bytes for their String. */
 static agc_value builtin_get_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), 1, span + 2, span + 3};
   bool locked;
@@ -2024,12 +1975,6 @@ static agc_value builtin_put_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   if (n) memmove(at, data, n);
   memory_done(vm, locked);
   return agc_void();
-}
-static agc_value builtin_get_byte_list(agc_vm *vm, agc_value *args, uint32_t span) {
-  return get_array(vm, args, span, ITEM_BYTE);
-}
-static agc_value builtin_put_byte_list(agc_vm *vm, agc_value *args, uint32_t span) {
-  return put_array(vm, args, span, ITEM_BYTE);
 }
 
 /* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
@@ -2174,7 +2119,6 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.offset", 2, builtin_native_offset, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Native.get_bytes", 3, builtin_get_byte_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.get_bytes.bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.memory_pointer", 2, builtin_memory_pointer_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -2207,7 +2151,6 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Native.put_bytes", 3, builtin_put_byte_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.put_bytes.bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.size_of", 1, builtin_size_of, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.get_struct", 3, builtin_get_struct, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

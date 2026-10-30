@@ -81,23 +81,22 @@ typedef struct agc_line_reader agc_line_reader;
 typedef enum { AGC_LINES_LINE, AGC_LINES_WAIT, AGC_LINES_END } agc_lines_status;
 bool agc_lines_buffer_ok(int64_t buffer_bytes);
 agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span);
-/* The same reader over the bytes of a regular file (File.chunks): each LINE is a Bytes of `size` bytes (a List[Int]
-   with `list`: the old __lazy_chunks key), the last one shorter, and a file that is not regular is refused when it
-   opens. */
+/* The same reader over the bytes of a regular file (File.chunks): each LINE is a Bytes of `size` bytes, the last one
+   shorter, and a file that is not regular is refused when it opens. */
 bool agc_chunks_size_ok(int64_t size);
-agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, bool list, uint32_t span);
+agc_line_reader *agc_chunks_new(agc_vm *vm, agc_value path, int64_t size, int64_t timeout, uint32_t span);
 agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, agc_value *out);
 void agc_lines_stop(agc_line_reader *r, agc_value outcome);
 /* The lines of Lazy.write_lines (vm/lazy.c) into a file by path, created or truncated: the same rules as the reader.
    agc_writer_new opens nothing; the first agc_writer_next opens the file. READY means the writer waits for a line:
-   the next call passes it as `line` (a String, or a byte chunk written as it is: Lazy.write_bytes, a Bytes with
-   AGC_WRITE_BYTES, a List[Int] with AGC_WRITE_BYTE_LISTS for the old __lazy_write_bytes key; Void passes none). WAIT
+   the next call passes it as `line` (a String, or with AGC_WRITE_BYTES a Bytes chunk written as it is:
+   Lazy.write_bytes; Void passes none). WAIT
    means the task parks on a file job, whose result is the `last` of the next call (with a Void line). END puts the outcome in *out and comes only after the
    file is flushed and closed. agc_writer_stop, while READY, ends the writer with that outcome: the next calls close
    the file. */
 typedef struct agc_line_writer agc_line_writer;
 typedef enum { AGC_WRITER_READY, AGC_WRITER_WAIT, AGC_WRITER_END } agc_writer_status;
-typedef enum { AGC_WRITE_LINES, AGC_WRITE_BYTES, AGC_WRITE_BYTE_LISTS } agc_writer_form;
+typedef enum { AGC_WRITE_LINES, AGC_WRITE_BYTES } agc_writer_form;
 agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc_writer_form form, uint32_t span);
 agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
 void agc_writer_stop(agc_line_writer *w, agc_value outcome);
@@ -127,18 +126,16 @@ uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
 bool agc_inbuf_unread(agc_inbuf *b, const uint8_t *data, size_t len);
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
-/* The data and length of a byte argument of TCP, Process and HttpWire: a Bytes, which keeps the data alive, or for
-   the old List[Int] keys (list) a GC-atomic copy of the list; NULL when it has more than limit bytes or an item is
-   not a byte. */
-const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, bool list, size_t limit, size_t *len);
-/* A byte read's value is a Bytes, or a List[Int] with `list` (the old keys of TCP.recv_bytes and
-   Process.read_bytes). */
-agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count, bool list);
+/* The data and length of a Bytes argument of TCP, Process and HttpWire, which the argument keeps alive; NULL when it
+   has more than limit bytes. */
+const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, size_t limit, size_t *len);
+/* A byte read's value is a Bytes. */
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
 void agc_inbuf_take(agc_inbuf *b, size_t n);
 void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut);
 void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut);
 agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end);
-agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut, bool list);
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut);
 void agc_inbuf_cut_free(agc_inbuf_cut *cut);
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
                      size_t len, void (*done)(struct uv_write_s *req, int status));
@@ -176,12 +173,12 @@ extern const size_t agc_file_builtin_count;
    level or max_bytes. agc_zstep_open starts the codec as a registered entry the calling task owns, so the task's end
    frees it when the run did not; agc_zstep_close frees it (idempotent). agc_zstep_next runs one pass over `in` with
    `finish` once no item will come, sets *used, and puts a chunk of at most 64 KiB in *out when it produced bytes
-   (Void when not): a Bytes, or a List[Int] for a stream opened with `list` (the old __lazy_zlib key). INPUT: the
-   stream wants the next item. AGAIN: call again with what is left of `in` (maybe none).
+   (Void when not): a Bytes. INPUT: the stream wants the next item. AGAIN: call again with what is left of `in` (maybe
+   none).
    END: the stream ended; a later call with bytes is a trailing byte. FAILED: *out is the error Result. */
 typedef enum { AGC_ZSTEP_INPUT, AGC_ZSTEP_AGAIN, AGC_ZSTEP_END, AGC_ZSTEP_FAILED } agc_zstep_status;
 agc_value agc_zstep_check(int64_t kind, int64_t level, int64_t max_bytes);
-agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes, bool list);
+agc_resource *agc_zstep_open(agc_vm *vm, int64_t kind, int64_t level, int64_t max_bytes);
 void agc_zstep_close(agc_vm *vm, agc_resource *r);
 agc_zstep_status agc_zstep_next(agc_vm *vm, agc_resource *r, const uint8_t *in, size_t len, size_t *used, bool finish,
                                 agc_value *out);

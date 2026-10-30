@@ -534,19 +534,8 @@ static void refused_with(agc_value result, const char *message) {
   assert(s->bytes == strlen(message) && memcmp(s->data, message, s->bytes) == 0);
 }
 
-/* n bytes at data as a Bytes, or as a byte list for the old keys (list). */
-static agc_value byte_value(const char *data, size_t n, bool list) {
-  if (!list) return agc_bytes_value(agc_make_bytes((const uint8_t *)data, n));
-  agc_value items[8];
-  assert(n <= 8);
-  for (size_t k = 0; k < n; k++) items[k] = agc_int((uint8_t)data[k]);
-  return agc_list_value(agc_list_from_array(items, n));
-}
-
-/* Process.send_bytes and Process.read_bytes have the catalog's "<name>.bytes" key on Bytes and the old "<name>" key
-   on byte lists, which front ends and .agcb files compiled before #805 PR 6 import: the echo child gives back what
-   each key sent, and each read gives it in the form of its key, empty at the end of input. Only the old send refuses
-   an item that is not a byte; both refuse more than 1 MiB. Needs the environment of the echo child. */
+/* Process.send_bytes and Process.read_bytes on Bytes: the echo child gives back what was sent, and a read at the end
+   of input is empty. A send of more than 1 MiB is refused. Needs the environment of the echo child. */
 static void byte_key_tests(const char *self) {
   static const char sent[] = "\x00\xff" "a\n";
   agc_value words[] = {text("--echo"), text("space \"quoted\""), text("")};
@@ -554,13 +543,8 @@ static void byte_key_tests(const char *self) {
   agc_value handle = ok(call("Process.spawn_captured", args));
   args[0] = handle;
   args[2] = agc_int(5000);
-  args[1] = byte_value(sent, 4, true);
-  ok(call("Process.send_bytes", args));
-  args[1] = byte_value(sent, 4, false);
+  args[1] = agc_bytes_value(agc_make_bytes((const uint8_t *)sent, 4));
   ok(call("Process.send_bytes.bytes", args));
-  agc_value bad[] = {agc_int(256)};
-  args[1] = agc_list_value(agc_list_from_array(bad, 1));
-  refused_with(call("Process.send_bytes", args), "process: bytes must be 0..255 and at most 1048576 per call");
   agc_bytes *big = agc_new_bytes(1048577);
   memset(big->data, 0, big->len);
   args[1] = agc_bytes_value(big);
@@ -570,13 +554,9 @@ static void byte_key_tests(const char *self) {
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   args[1] = agc_int(4);
   for (int round = 0; round < 2; round++) {
-    agc_value old = ok(call("Process.read_bytes", args));
-    agc_value now = ok(call("Process.read_bytes.bytes", args));
-    const agc_bytes *b = agc_as_bytes(&vm, now);
-    const agc_list *l = agc_as_list(&vm, old);
+    const agc_bytes *b = agc_as_bytes(&vm, ok(call("Process.read_bytes.bytes", args)));
     size_t n = round ? 0 : 4;
-    assert(b->len == n && agc_list_len(l) == n && (n == 0 || memcmp(b->data, sent, n) == 0));
-    for (size_t k = 0; k < n; k++) assert(agc_as_int(&vm, agc_list_get(l, k)) == (uint8_t)sent[k]);
+    assert(b->len == n && (n == 0 || memcmp(b->data, sent, n) == 0));
   }
   call("Process.close", args);
 }
