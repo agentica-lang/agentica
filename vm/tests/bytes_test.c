@@ -421,8 +421,17 @@ static void test_gcm_and_kdf_keys(void) {
   assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   kdf[3] = agc_int(AGC_MAX_LIST_COUNT + 1);
   assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  /* The work cap: 25000001 iterations of two 32-byte blocks, and an iteration count whose product with the blocks
+     overflows 64 bits, are refused before any work. */
+  kdf[2] = agc_int(25000001);
+  kdf[3] = agc_int(64);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  kdf[2] = agc_int(INT64_MAX);
+  kdf[3] = agc_int(AGC_MAX_LIST_COUNT);
+  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   /* Two iterations over two 32-byte blocks hash 2 * 2 * 128 bytes, charged in units of 64 bytes, besides the
      AGC_COST_SIZE that the interpreter adds for the arguments. */
+  kdf[2] = agc_int(2);
   kdf[3] = agc_int(64);
   assert(cost_of("KDF.pbkdf2_hmac_sha256", 4, kdf) == 8);
   agc_value scrypt[6] = {empty, empty, agc_int(16), agc_int(1), agc_int(1), agc_int(64)};
@@ -436,6 +445,10 @@ static void test_gcm_and_kdf_keys(void) {
   scrypt[2] = agc_int(2);
   scrypt[3] = agc_int((int64_t)1 << 20);
   scrypt[4] = agc_int(1024);
+  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  /* A small n with a large p is still bounded work: r * p * (n + 16) above 2^25. */
+  scrypt[3] = agc_int(1);
+  scrypt[4] = agc_int(((int64_t)1 << 25) / 18 + 1);
   assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
 }
 

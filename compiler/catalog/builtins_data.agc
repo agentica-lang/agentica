@@ -5983,7 +5983,8 @@ ROWS_65: List[Model.Builtin] = [
       effects: [],
       description: (
         "Derive length bytes (1 to 1048576) from a password and a salt with PBKDF2-HMAC-SHA256 (RFC 8018) and at " +
-        "least 1 iteration; a password or salt over 1048576 bytes is an error; VM only."
+        "least 1 iteration, iterations * ceil(length / 32) at most 50000000; a password or salt over 1048576 " +
+        "bytes is an error; VM only."
       ),
       alternatives: [],
     ),
@@ -6003,8 +6004,8 @@ ROWS_65: List[Model.Builtin] = [
       effects: [],
       description: (
         "Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power " +
-        "of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes), or an error; " +
-        "VM only."
+        "of 2, block size r and parallelization p, in at most 1025 MiB (128 * r * (n + p + 2) bytes) and with " +
+        "r * p * (n + 16) at most 2^25, or an error; VM only."
       ),
       alternatives: [],
     ),

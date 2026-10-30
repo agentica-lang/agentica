@@ -121,9 +121,11 @@ KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) ->
   16-byte tag appended; decrypting takes that form and gives an `error(...)`
   when the key, IV, data or `auth_data` do not match the tag, never partial
   plaintext. `auth_data` is authenticated, not encrypted.
-- KDF: `iterations` at least 1, `length` 1 to 1048576; scrypt's `n` is a
-  power of 2 and its memory, 128 * r * (n + p + 2) bytes, at most 1025 MiB.
-  Other values give an `error(...)`. OWASP's password storage cheat sheet
+- KDF: `iterations` at least 1, `length` 1 to 1048576, and
+  `iterations * ceil(length / 32)` at most 50000000; scrypt's `n` is a power
+  of 2, `r * p * (n + 16)` at most 2^25 and its native memory,
+  128 * r * (n + p + 2) bytes, at most 1025 MiB (about 1 GiB per call). Other
+  values give an `error(...)`. OWASP's password storage cheat sheet
   advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
   `n = 131072, r = 8, p = 1`. Compare a derived key with
   `HMAC.secure_compare`. `KDF` is a reserved type name.

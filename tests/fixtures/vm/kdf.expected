@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 331,
+  "steps": 421,
   "stdout": [
     "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783",
     "4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d",
@@ -24,6 +24,12 @@
     "r p 2^30 ok=false",
     "memory 2 GiB ok=false",
     "length 0 scrypt ok=false",
+    "pbkdf2 rounds 50000001 ok=false",
+    "pbkdf2 rounds 2 * 25000001 ok=false",
+    "pbkdf2 iterations 10^12 ok=false",
+    "scrypt work 2^25 + 16384 ok=false",
+    "scrypt n 2 p 8000000 ok=false",
+    "scrypt n 2^17 r 8 p 128 ok=false",
     ""
   ],
   "stderr": []

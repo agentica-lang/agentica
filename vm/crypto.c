@@ -518,9 +518,18 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
 /* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the SecureRandom counts. Real ones are tens of
    bytes, and it keeps the int lengths OpenSSL takes for the password and the salt far away. */
 #define KDF_MAX_BYTES ((size_t)AGC_MAX_LIST_COUNT)
-/* The most memory scrypt may take, 128 * r * (n + p + 2) bytes: OpenSSL 3.5's own default cap (1025 MiB), which
-   n = 2^20 with r = 8 (RFC 7914 §12, the last vector) fits. */
+/* The most memory scrypt may take, 128 * r * (n + p + 2) bytes of native memory outside the GC: the default cap of
+   OpenSSL 3's scrypt provider (1025 MiB), which n = 2^20 with r = 8 (RFC 7914 §12, the last vector) fits. */
 #define SCRYPT_MAX_MEMORY ((uint64_t)1025 * 1024 * 1024)
+/* A KDF runs inside one builtin call on its scheduler, where neither --max-steps nor a signal can stop it, so its work
+   is capped before the call, so the worst valid call takes tens of seconds at most on one core: about 80 and 32
+   times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block; scrypt
+   with n = 2^17, r = 8, p = 1).
+   PBKDF2's work is iterations * ceil(length / 32). scrypt's is r * p * (n + 16): each of the p lanes mixes n blocks of
+   128 * r bytes, and PBKDF2 makes and reads each lane's block too, which costs about as much as 16 more blocks (a
+   call with n = 2 and a large p measured about 9 block-times per lane). */
+#define PBKDF2_MAX_WORK ((uint64_t)50000000)
+#define SCRYPT_MAX_WORK ((uint64_t)1 << 25)
 
 /* Derives out_n bytes into out (agc_pbkdf2_hmac_sha256 or agc_scrypt), whose parameters the caller checked. A library
    failure stops the run; the adapter has then wiped out. One of the libcrypto wrappers that vm/tools/tsan.supp names
@@ -547,7 +556,9 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   if (password_n > KDF_MAX_BYTES || salt_n > KDF_MAX_BYTES)
     return agc_error_value("a KDF password and salt have at most 1048576 bytes each");
   if (length < 1 || (uint64_t)length > KDF_MAX_BYTES) return agc_error_value("a KDF length is 1 to 1048576 bytes");
-  uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES;
+  uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES, rounds;
+  if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
+    return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   agc_bytes *out = agc_new_bytes((size_t)length);
   kdf_compute(vm, kdf, password, password_n, salt, salt_n, out->data, (size_t)length, span);
   uint64_t total;
@@ -557,7 +568,8 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
 }
 
 /* KDF.pbkdf2_hmac_sha256(password, salt, iterations, length): PBKDF2 (RFC 8018 §5.2) with HMAC-SHA256, Ruby's
-   OpenSSL::KDF.pbkdf2_hmac with hash "SHA256". iterations below 1 or a length outside 1..1048576 is an error Result.
+   OpenSSL::KDF.pbkdf2_hmac with hash "SHA256". iterations below 1, a length outside 1..1048576 or more work than
+   PBKDF2_MAX_WORK is an error Result.
    Each iteration of each 32-byte block hashes two 64-byte blocks. No shared lock, as digest_value. */
 static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t iterations = agc_as_int(vm, args[2]);
@@ -569,9 +581,11 @@ static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_
 }
 
 /* KDF.scrypt(password, salt, n, r, p, length): scrypt (RFC 7914), Ruby's OpenSSL::KDF.scrypt. n is a power of 2
-   above 1 and below 2^(16 * r), r and p are at least 1 with r * p below 2^30, and the memory 128 * r * (n + p + 2) is
-   at most SCRYPT_MAX_MEMORY; anything else is an error Result, checked before any work. The work is about two passes
-   over the n blocks of 128 * r bytes for each of the p lanes. No shared lock, as digest_value. */
+   above 1 and below 2^(16 * r), r and p are at least 1 with r * p below 2^30, r * p * (n + 16) is at most
+   SCRYPT_MAX_WORK,
+   and the memory 128 * r * (n + p + 2) is at most SCRYPT_MAX_MEMORY; anything else is an error Result, checked
+   before any work. The work is about two passes over the n blocks of 128 * r bytes for each of the p lanes. No shared
+   lock, as digest_value. */
 static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[2]), r = agc_as_int(vm, args[3]), p = agc_as_int(vm, args[4]);
   if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("KDF.scrypt needs n to be a power of 2 above 1");
@@ -579,12 +593,16 @@ static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   if (p > ((1 << 30) - 1) / r) return agc_error_value("KDF.scrypt needs r * p below 2^30");
   /* RFC 7914 §2: n < 2^(128 * r / 8). Only r <= 3 can meet it, since n fits in 63 bits. */
   if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r)) return agc_error_value("KDF.scrypt needs n below 2^(16 * r)");
-  uint64_t lanes, memory, work;
+  uint64_t lanes, memory, work, rounds;
+  /* r * p is below 2^30, so only the product with n + 16 can overflow. */
+  if (__builtin_add_overflow((uint64_t)n, (uint64_t)16, &rounds) ||
+      __builtin_mul_overflow(rounds, (uint64_t)r * (uint64_t)p, &rounds) || rounds > SCRYPT_MAX_WORK)
+    return agc_error_value("KDF.scrypt needs r * p * (n + 16) of at most 2^25");
   bool big = __builtin_add_overflow((uint64_t)n, (uint64_t)p + 2, &lanes) ||
              __builtin_mul_overflow(lanes, (uint64_t)r * 128, &memory) || memory > SCRYPT_MAX_MEMORY;
   if (big) return agc_error_value("KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
-  /* memory fits in 2^31, so the work below fits in 64 bits. */
-  if (__builtin_mul_overflow((uint64_t)n * (uint64_t)r * 256, (uint64_t)p, &work)) work = UINT64_MAX;
+  /* rounds is at most 2^25, so the work fits in 64 bits. */
+  work = rounds * 256;
   kdf_params kdf = {.scrypt = true, .n = (uint64_t)n, .r = (uint64_t)r, .p = (uint64_t)p};
   return kdf_value(vm, args, 5, &kdf, work, span);
 }

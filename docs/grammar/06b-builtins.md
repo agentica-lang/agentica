@@ -349,12 +349,15 @@ Expected types flow into these operations for empty collections and Results.
   `ok(key)` of scrypt (RFC 7914), as Ruby's `OpenSSL::KDF.scrypt` does: `n` is
   the cost, a power of 2 above 1 (and below 2^(16 * r)), `r` the block size
   and `p` the parallelization, both at least 1 with `r * p` below 2^30, and
-  the memory it takes, 128 * r * (n + p + 2) bytes, is at most 1025 MiB.
-  `iterations` is at least 1, `length` is 1 to 1048576, and the password and
-  the salt have at most 1048576 bytes each; anything else gives an
-  `error(...)` before any work. Both are built on OpenSSL, take time in
-  proportion to `iterations` or to `n * r * p`, and have no effect label.
-  `KDF` is a reserved type name.
+  the native memory it takes outside the GC, 128 * r * (n + p + 2) bytes, is
+  at most 1025 MiB. `iterations` is at least 1, `length` is 1 to 1048576, and
+  the password and the salt have at most 1048576 bytes each. The work is
+  capped, since a call runs to its end on its scheduler (`--max-steps` and a
+  signal wait for it): `iterations * ceil(length / 32)` is at most 50000000,
+  and scrypt's `r * p * (n + 16)` at most 2^25 (33554432), so a call takes
+  tens of seconds at most. Anything else gives an `error(...)` before any
+  work. Both are built on OpenSSL, take time in proportion to that work, and
+  have no effect label. `KDF` is a reserved type name.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 of a `Bytes` on one line,
   `encode64(data)` the same in lines of 60 characters that each end in a
