@@ -7,7 +7,8 @@
 # A piece of this many bytes or fewer joins the open list; a longer one is a chunk of its own.
 SMALL_PIECE = 32
 
-# The open list is sealed when it holds more than this many bytes, so it stays small and the sealing is amortized.
+# add seals the open list when it holds more than this many bytes, so it stays small and the sealing is amortized.
+# add_all may leave it longer (the open list of the other chunks joins it) until the next add seals it.
 OPEN_LIMIT = 4096
 
 ## The sealed chunks in order, the bytes not sealed yet (they come after the chunks), and the first sealing that
@@ -117,11 +118,13 @@ end
 
 ## All the chunks as one `Bytes`, or an error naming the first item that was not a byte.
 export def join(chunks: Chunks) -> Result[Bytes]
-  if chunks.failed != ""
-    return error(chunks.failed)
+  # The failure is read after the close: sealing the open list is where a bad item of it is found.
+  closed = close(chunks)
+  if closed.failed != ""
+    return error(closed.failed)
   end
 
-  return ok(Bytes.concat(close(chunks).done))
+  return ok(Bytes.concat(closed.done))
 end
 
 # The chunks with the open list sealed as a chunk.
