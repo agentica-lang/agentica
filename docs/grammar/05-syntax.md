@@ -298,7 +298,8 @@ match_arm        = pattern, [ "if", expression ], "->",
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
                  | variant_pattern ;
 variant_pattern  = qualified_variant, [ "(", pattern_slots, ")" ]
-                 | ( "ok" | "error" ), "(", pattern_slots, ")" ;
+                 | ( "ok" | "error" | "some" ), "(", pattern_slots, ")"
+                 | "none" ;
 qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
 pattern_slots    = pattern_slot, { ",", pattern_slot } ;
 pattern_slot     = NAME | "_" | literal | "-", INTEGER | "-", FLOAT

@@ -546,8 +546,10 @@ def test_a_table_type_in_a_module_answers_alike_cold_warm_and_off(ws):
     assert settled(ws, **asked)[0][0] == 1
 
 
-# A module whose constant has the type of a generic struct with arguments, which the entry writes with its own letter.
+# A module whose constants have the type of a generic struct with arguments and an Optional, which the entry writes
+# with their own letters.
 GENERIC = '''export ORIGIN = Pt(x: ["a"])
+export LIMIT = some(3)
 
 export struct Pt[T]
   x: T
@@ -558,7 +560,8 @@ THROUGH_GENERIC = '''import Gen from "gen"
 
 def main() -> Void
   origin: Gen.Pt[List[String]] = Gen.ORIGIN
-  puts(origin.x.size.to_s)
+  limit: Optional[Int] = Gen.LIMIT
+  puts("#{origin.x.size} #{limit}")
 end
 '''
 
@@ -570,12 +573,14 @@ def test_a_generic_struct_constant_is_read_back_from_its_entry(ws):
     first = settled(ws, **asked)
     assert first[0] == (0, '{"ok":true}\n', "")
     assert any(b"\nconst ORIGIN G@" in path.read_bytes() for path in entries(ws))
+    assert any(b"\nconst LIMIT Pi" in path.read_bytes() for path in entries(ws))
     # The second run reads the entry: the same wrong use gets the same diagnostic, cold, warm and off.
-    wrong = THROUGH_GENERIC.replace("Gen.Pt[List[String]]", "Gen.Pt[Int]")
-    (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
-    failed = settled(ws, source=wrong, needle="origin.x")
-    assert failed[0][0] == 1
-    assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"
+    for right, mistake in [("Gen.Pt[List[String]]", "Gen.Pt[Int]"), ("Optional[Int]", "Optional[String]")]:
+        wrong = THROUGH_GENERIC.replace(right, mistake)
+        (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
+        failed = settled(ws, source=wrong, needle="origin.x")
+        assert failed[0][0] == 1
+        assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"
 
 
 # A module with a generic function: the stub keeps the signature with its type parameters, and the body goes.

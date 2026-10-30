@@ -696,7 +696,7 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
     )
   end
 
-  variant = "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
+  variant = pattern_text(pattern)
   return State.fail(
     cx,
     st,
@@ -704,6 +704,18 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
     "variant pattern \"#{variant}\" does not match #{T.to_text(value_type)}",
     pattern.span,
   )
+end
+
+# A variant pattern as the program writes it: some(...), none, ok(...) and error(...) for the builtin enums,
+# Enum.Variant for the others.
+def pattern_text(pattern: Ast.VariantPattern) -> String
+  case pattern.enum_name + "." + pattern.variant_name
+    "Optional.Some" -> return "some(...)"
+    "Optional.None" -> return "none"
+    "Result.Ok" -> return "ok(...)"
+    "Result.Err" -> return "error(...)"
+    _ -> return "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
+  end
 end
 
 # The variant names a case on this type must cover: Ok and Err for a Result, Some and None for an Optional, the

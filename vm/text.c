@@ -228,9 +228,19 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
   return &p->variants[e->variant];
 }
 
-/* The enum named Optional is the builtin one: no declaration may take that name (it is a reserved type name). */
-static bool optional_enum(const agc_string *name) {
-  return name->bytes == 8 && memcmp(name->data, "Optional", 8) == 0;
+static bool string_is(const agc_string *s, const char *text, size_t n) {
+  return s->bytes == n && memcmp(s->data, text, n) == 0;
+}
+
+/* The builtin enum Optional: named Optional, with the variants None (no payload) and Some (one), in that order. No
+   declaration may take the name now, but a .agcb file from before could declare its own enum Optional; the shape
+   check keeps most of those printing as Enum.Variant. The loader numbers the variants of each enum in a row, so
+   first + count never passes variant_count. */
+static bool optional_enum(const agc_program *p, const agc_enum_def *def) {
+  if (!string_is(def->name, "Optional", 8) || def->count != 2) return false;
+  const agc_variant_def *none = &p->variants[def->first];
+  const agc_variant_def *some = &p->variants[def->first + 1];
+  return none->arity == 0 && some->arity == 1 && string_is(none->name, "None", 4) && string_is(some->name, "Some", 4);
 }
 
 static size_t item_count(agc_vm *vm, agc_value v) {
@@ -280,8 +290,9 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   }
   const agc_enum *e = agc_as_enum(vm, v);
   const agc_variant_def *variant = variant_def(vm, e);
-  const agc_string *owner = vm->rt->program->enums[variant->owner].name;
-  if (optional_enum(owner)) {
+  const agc_program *program = vm->rt->program;
+  const agc_string *owner = program->enums[variant->owner].name;
+  if (optional_enum(program, &program->enums[variant->owner])) {
     /* The builtin enum Optional prints as its constructors are written: none and some(x). */
     if (e->n == 0) {
       append(b, "none", 4);

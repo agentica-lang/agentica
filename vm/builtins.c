@@ -411,8 +411,13 @@ static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 /* == and != on two Optional values (enum values of the builtin enum Optional): the deep equality of Test.eq, since
-   the interpreter's eq takes no enum. The checker allows it only when the item has equality. */
+   the interpreter's eq takes no enum. The checker allows it only when the item has equality. Two different variants
+   and two nones are answered here, without the work stack of agc_equal: `x == none` is the common case. */
 static agc_value builtin_optional_equal(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_enum *a = agc_as_enum(vm, args[0]);
+  const agc_enum *b = agc_as_enum(vm, args[1]);
+  if (a->variant != b->variant) return agc_bool(false);
+  if (a->n == 0) return agc_bool(true);
   return agc_bool(agc_equal(vm, args[0], args[1], span));
 }
 

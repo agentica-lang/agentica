@@ -5936,10 +5936,10 @@ ROWS_65: List[Model.Builtin] = [
     Model.Builtin(
       name: "Optional.map",
       parameters: [
-        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
-        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Var("U"))),
       ],
-      result: Types.Type.Optional(Types.Type.Var("B")),
+      result: Types.Type.Optional(Types.Type.Var("U")),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -5948,7 +5948,7 @@ ROWS_65: List[Model.Builtin] = [
     ),
     Model.Builtin(
       name: "Optional.none?",
-      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
       result: Types.Type.Bool,
       rule: Model.Rule.Prelude,
       implementation: "",
@@ -5958,7 +5958,7 @@ ROWS_65: List[Model.Builtin] = [
     ),
     Model.Builtin(
       name: "Optional.some?",
-      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
       result: Types.Type.Bool,
       rule: Model.Rule.Prelude,
       implementation: "",
@@ -5969,10 +5969,10 @@ ROWS_65: List[Model.Builtin] = [
     Model.Builtin(
       name: "Optional.to_result",
       parameters: [
-        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
         Model.Named(name: "message", type: Types.Type.String),
       ],
-      result: Types.Type.Result(Types.Type.Var("A")),
+      result: Types.Type.Result(Types.Type.Var("T")),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -5981,8 +5981,8 @@ ROWS_65: List[Model.Builtin] = [
     ),
     Model.Builtin(
       name: "Optional.unwrap!",
-      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A")))],
-      result: Types.Type.Var("A"),
+      parameters: [Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T")))],
+      result: Types.Type.Var("T"),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],
@@ -5992,10 +5992,10 @@ ROWS_65: List[Model.Builtin] = [
     Model.Builtin(
       name: "Optional.unwrap_or",
       parameters: [
-        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("A"))),
-        Model.Named(name: "default", type: Types.Type.Var("A")),
+        Model.Named(name: "o", type: Types.Type.Optional(Types.Type.Var("T"))),
+        Model.Named(name: "default", type: Types.Type.Var("T")),
       ],
-      result: Types.Type.Var("A"),
+      result: Types.Type.Var("T"),
       rule: Model.Rule.Prelude,
       implementation: "",
       effects: [],

@@ -836,17 +836,17 @@ builtin CMAC.aes forms=1
 builtin CMAC.des_ede3 forms=1
   CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes] shape=(Bytes, Bytes) -> Result(Bytes) rule=Plain impl="CMAC.des_ede3" effects=[] desc="CMAC (NIST SP 800-38B) of data (bytes) with Triple DES, for payment formats; a key of 16 (two-key) or 24 bytes; the full 8-byte tag, or an error for another key size; VM only."
 builtin Optional.map forms=1
-  Optional.map(o: Optional[A], f: Fn[A, B]) -> Optional[B] shape=(Optional(Var(A)), Fn([Var(A)], Var(B))) -> Optional(Var(B)) rule=Prelude impl="" effects=[] desc="some(f(x)) for some(x), else none; f runs only for some."
+  Optional.map(o: Optional[T], f: Fn[T, U]) -> Optional[U] shape=(Optional(Var(T)), Fn([Var(T)], Var(U))) -> Optional(Var(U)) rule=Prelude impl="" effects=[] desc="some(f(x)) for some(x), else none; f runs only for some."
 builtin Optional.none? forms=1
-  Optional.none?(o: Optional[A]) -> Bool shape=(Optional(Var(A))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
+  Optional.none?(o: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is none."
 builtin Optional.some? forms=1
-  Optional.some?(o: Optional[A]) -> Bool shape=(Optional(Var(A))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
+  Optional.some?(o: Optional[T]) -> Bool shape=(Optional(Var(T))) -> Bool rule=Prelude impl="" effects=[] desc="Check whether the value is some(x)."
 builtin Optional.to_result forms=1
-  Optional.to_result(o: Optional[A], message: String) -> Result[A] shape=(Optional(Var(A)), String) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
+  Optional.to_result(o: Optional[T], message: String) -> Result[T] shape=(Optional(Var(T)), String) -> Result(Var(T)) rule=Prelude impl="" effects=[] desc="ok(x) for some(x), else error(message), to join try code."
 builtin Optional.unwrap! forms=1
-  Optional.unwrap!(o: Optional[A]) -> A shape=(Optional(Var(A))) -> Var(A) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
+  Optional.unwrap!(o: Optional[T]) -> T shape=(Optional(Var(T))) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x); halt on none."
 builtin Optional.unwrap_or forms=1
-  Optional.unwrap_or(o: Optional[A], default: A) -> A shape=(Optional(Var(A)), Var(A)) -> Var(A) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
+  Optional.unwrap_or(o: Optional[T], default: T) -> T shape=(Optional(Var(T)), Var(T)) -> Var(T) rule=Prelude impl="" effects=[] desc="Return x of some(x), else default; both arguments run eagerly."
 builtin none forms=1
   none() -> Optional[T] shape=() -> Optional(Var(T)) rule=OptionalNone impl="" effects=[] desc="The absent value; needs an expected Optional type."
 builtin some forms=1
