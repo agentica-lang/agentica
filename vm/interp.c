@@ -529,150 +529,6 @@ void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
   push_frame(vm, t, function, 0, 0, 0);
 }
 
-/* The most callbacks of native code that run one inside the other in a task: each holds C's frames and a turn loop on
-   the thread's stack, which AGC_MAX_DEPTH does not bound. */
-#define MAX_NESTED_CALLBACKS 128
-
-static agc_step nested_step(agc_vm *vm, agc_stepper *self, agc_value last) {
-  nested_barrier *b = (nested_barrier *)self;
-  b->value = last;
-  b->done = true;
-  sync_budget(vm);
-  end_turn_now(vm);
-  return (agc_step){.kind = AGC_STEP_YIELD};
-}
-
-/* The part of agc_task_run_nested that a failure leaves by longjmp: it returns only when the callback has returned. */
-static void run_nested(agc_vm *vm, agc_task *t, nested_barrier *b, agc_value fn, const agc_value *args, uint32_t argc,
-                       uint32_t span) {
-  call_value(vm, t, fn, 1, args, argc, 0, span);
-  count_step(vm, span);
-  while (!b->done) {
-    agc_turn_result r = vm->yield ? AGC_TURN_YIELD : agc_run_turn(vm);
-    if (b->done) break;
-    /* The barrier keeps the task from ending, and agc_task_parking from parking. */
-    if (r != AGC_TURN_YIELD) agc_fail(vm, "RUNTIME-INTERNAL", "a callback of native code left its frames", span);
-    t->steps += agc_turn_finish(vm);
-    int sig = agc_io_stop_signal();
-    if (sig) agc_stop(vm, sig);
-    agc_turn_begin(vm);
-  }
-}
-
-bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span,
-                         agc_value *result, agc_outcome *failed) {
-  agc_task *t = vm->task;
-  if (t->callbacks >= MAX_NESTED_CALLBACKS) {
-    /* Not raised here: C's frames are on the stack, so the caller raises it once C has returned. */
-    agc_outcome deep = *vm->outcome;
-    vm->outcome->kind = AGC_FAILED;
-    vm->outcome->code = "RUNTIME-STACK-OVERFLOW";
-    vm->outcome->message = "callbacks of native code nest too deep";
-    vm->outcome->message_len = strlen(vm->outcome->message);
-    vm->outcome->text = NULL;
-    vm->outcome->span = span;
-    agc_stack_capture(vm, vm->outcome);
-    *failed = *vm->outcome;
-    *vm->outcome = deep;
-    return false;
-  }
-  /* What the outer turn has, given back on the way out. None of it changes after the setjmp below. */
-  agc_frame *frames = t->frames;
-  uint32_t frame_count = t->frame_count, frame_capacity = t->frame_capacity, depth = t->depth;
-  agc_value *regs = t->regs;
-  size_t reg_capacity = t->reg_capacity;
-  agc_stepper *stepper = t->stepper;
-  int64_t turn_cost = t->turn_cost;
-  agc_catch_buf *jit_catch = vm->jit_catch;
-  bool in_turn = vm->in_turn;
-  uint32_t sync_depth = vm->sync_depth;
-  agc_lock *stream_lock = vm->stream_lock;
-  agc_outcome outcome = *vm->outcome;
-  jmp_buf turn;
-  memcpy(turn, vm->turn, sizeof turn);
-
-  /* New frame and register arrays: the outer turn loop (and compiled code) keep pointers into the old ones. */
-  uint32_t capacity = frame_count + 64;
-  t->frames = agc_alloc(agc_size_mul(capacity, sizeof(agc_frame)));
-  memcpy(t->frames, frames, (size_t)frame_count * sizeof(agc_frame));
-  t->frame_capacity = capacity;
-  t->regs = NULL;
-  t->reg_capacity = 0;
-  t->stepper = NULL;
-  t->turn_cost = 0;
-  nested_barrier *b = agc_alloc(sizeof *b);
-  b->stepper.step = nested_step;
-  b->stepper.unlocked = true;
-  b->stepper.no_block = true;
-  agc_native *st = agc_alloc(sizeof(agc_native));
-  st->kind = AGC_NATIVE_STEPPER;
-  st->span = span;
-  st->stepper = &b->stepper;
-  st->fn = agc_void();
-  agc_frame *barrier = new_frame(t);
-  barrier->function = 0;
-  barrier->pc = 0;
-  barrier->base = 0;
-  barrier->ret = 0;
-  barrier->tail = false;
-  barrier->native = st;
-
-  /* Native.call is a shared builtin: rt->sync is let go while the callback runs, so other schedulers go on, and the
-     callback's own builtins take it as at the top of a turn. */
-  if (sync_depth) {
-    vm->sync_depth = 0;
-    agc_lock_drop_shared(vm->rt->sync);
-  }
-  vm->jit_catch = NULL;
-  vm->in_turn = true;
-  t->callbacks++;
-  /* Volatile: set after the setjmp and read after a longjmp to it. */
-  volatile bool ok = false;
-  if (setjmp(vm->turn) == 0) {
-    run_nested(vm, t, b, fn, args, argc, span);
-    *result = b->value;
-    ok = true;
-  } else {
-    *failed = *vm->outcome;
-  }
-  t->callbacks--;
-  if (vm->stream_lock != stream_lock) {
-    if (vm->stream_lock) agc_lock_drop(vm->stream_lock);
-    vm->stream_lock = stream_lock;
-  }
-  if (vm->sync_depth) {
-    vm->sync_depth = 0;
-    agc_lock_drop_shared(vm->rt->sync);
-  }
-  if (sync_depth) {
-    agc_lock_take_shared(vm->rt->sync);
-    vm->sync_depth = sync_depth;
-  }
-  t->frames = frames;
-  t->frame_count = frame_count;
-  t->frame_capacity = frame_capacity;
-  t->depth = depth;
-  t->regs = regs;
-  t->reg_capacity = reg_capacity;
-  t->stepper = stepper;
-  t->turn_cost = turn_cost;
-  t->parking = t->retry = false;
-  vm->jit_catch = jit_catch;
-  vm->in_turn = in_turn;
-  memcpy(vm->turn, turn, sizeof turn);
-  *vm->outcome = outcome;
-  /* The outer turn goes on with what is left of the budget: the barrier, or a failure, may have ended the turn. */
-  sync_budget(vm);
-  vm->yield = false;
-  set_counter(vm);
-  return ok;
-}
-
-_Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
-  *vm->outcome = *failed;
-  unwind(vm);
-}
-
 static void finish_native(agc_vm *vm, agc_value result) {
   agc_task *t = vm->task;
   agc_frame *frame = &t->frames[t->frame_count - 1];
@@ -1972,4 +1828,151 @@ __attribute__((noinline)) agc_value *agc_jit_block_return(agc_vm *vm, const agc_
     apply_cost(vm);
   }
   return R;
+}
+
+/* The most callbacks of native code that run one inside the other in a task: each holds C's frames and a turn loop on
+   the thread's stack, which AGC_MAX_DEPTH does not bound. */
+#define MAX_NESTED_CALLBACKS 128
+
+/* The nested run is cold: in .text.unlikely it leaves plain_turn where it was in .text (make layout-check). */
+#define NESTED __attribute__((cold))
+
+static NESTED agc_step nested_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  nested_barrier *b = (nested_barrier *)self;
+  b->value = last;
+  b->done = true;
+  sync_budget(vm);
+  end_turn_now(vm);
+  return (agc_step){.kind = AGC_STEP_YIELD};
+}
+
+/* The part of agc_task_run_nested that a failure leaves by longjmp: it returns only when the callback has returned. */
+static NESTED void run_nested(agc_vm *vm, agc_task *t, nested_barrier *b, agc_value fn, const agc_value *args,
+                              uint32_t argc, uint32_t span) {
+  call_value(vm, t, fn, 1, args, argc, 0, span);
+  count_step(vm, span);
+  while (!b->done) {
+    agc_turn_result r = vm->yield ? AGC_TURN_YIELD : agc_run_turn(vm);
+    if (b->done) break;
+    /* The barrier keeps the task from ending, and agc_task_parking from parking. */
+    if (r != AGC_TURN_YIELD) agc_fail(vm, "RUNTIME-INTERNAL", "a callback of native code left its frames", span);
+    t->steps += agc_turn_finish(vm);
+    int sig = agc_io_stop_signal();
+    if (sig) agc_stop(vm, sig);
+    agc_turn_begin(vm);
+  }
+}
+
+NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span,
+                         agc_value *result, agc_outcome *failed) {
+  agc_task *t = vm->task;
+  if (t->callbacks >= MAX_NESTED_CALLBACKS) {
+    /* Not raised here: C's frames are on the stack, so the caller raises it once C has returned. */
+    agc_outcome deep = *vm->outcome;
+    vm->outcome->kind = AGC_FAILED;
+    vm->outcome->code = "RUNTIME-STACK-OVERFLOW";
+    vm->outcome->message = "callbacks of native code nest too deep";
+    vm->outcome->message_len = strlen(vm->outcome->message);
+    vm->outcome->text = NULL;
+    vm->outcome->span = span;
+    agc_stack_capture(vm, vm->outcome);
+    *failed = *vm->outcome;
+    *vm->outcome = deep;
+    return false;
+  }
+  /* What the outer turn has, given back on the way out. None of it changes after the setjmp below. */
+  agc_frame *frames = t->frames;
+  uint32_t frame_count = t->frame_count, frame_capacity = t->frame_capacity, depth = t->depth;
+  agc_value *regs = t->regs;
+  size_t reg_capacity = t->reg_capacity;
+  agc_stepper *stepper = t->stepper;
+  int64_t turn_cost = t->turn_cost;
+  agc_catch_buf *jit_catch = vm->jit_catch;
+  bool in_turn = vm->in_turn;
+  uint32_t sync_depth = vm->sync_depth;
+  agc_lock *stream_lock = vm->stream_lock;
+  agc_outcome outcome = *vm->outcome;
+  jmp_buf turn;
+  memcpy(turn, vm->turn, sizeof turn);
+
+  /* New frame and register arrays: the outer turn loop (and compiled code) keep pointers into the old ones. */
+  uint32_t capacity = frame_count + 64;
+  t->frames = agc_alloc(agc_size_mul(capacity, sizeof(agc_frame)));
+  memcpy(t->frames, frames, (size_t)frame_count * sizeof(agc_frame));
+  t->frame_capacity = capacity;
+  t->regs = NULL;
+  t->reg_capacity = 0;
+  t->stepper = NULL;
+  t->turn_cost = 0;
+  nested_barrier *b = agc_alloc(sizeof *b);
+  b->stepper.step = nested_step;
+  b->stepper.unlocked = true;
+  b->stepper.no_block = true;
+  agc_native *st = agc_alloc(sizeof(agc_native));
+  st->kind = AGC_NATIVE_STEPPER;
+  st->span = span;
+  st->stepper = &b->stepper;
+  st->fn = agc_void();
+  agc_frame *barrier = new_frame(t);
+  barrier->function = 0;
+  barrier->pc = 0;
+  barrier->base = 0;
+  barrier->ret = 0;
+  barrier->tail = false;
+  barrier->native = st;
+
+  /* Native.call is a shared builtin: rt->sync is let go while the callback runs, so other schedulers go on, and the
+     callback's own builtins take it as at the top of a turn. */
+  if (sync_depth) {
+    vm->sync_depth = 0;
+    agc_lock_drop_shared(vm->rt->sync);
+  }
+  vm->jit_catch = NULL;
+  vm->in_turn = true;
+  t->callbacks++;
+  /* Volatile: set after the setjmp and read after a longjmp to it. */
+  volatile bool ok = false;
+  if (setjmp(vm->turn) == 0) {
+    run_nested(vm, t, b, fn, args, argc, span);
+    *result = b->value;
+    ok = true;
+  } else {
+    *failed = *vm->outcome;
+  }
+  t->callbacks--;
+  if (vm->stream_lock != stream_lock) {
+    if (vm->stream_lock) agc_lock_drop(vm->stream_lock);
+    vm->stream_lock = stream_lock;
+  }
+  if (vm->sync_depth) {
+    vm->sync_depth = 0;
+    agc_lock_drop_shared(vm->rt->sync);
+  }
+  if (sync_depth) {
+    agc_lock_take_shared(vm->rt->sync);
+    vm->sync_depth = sync_depth;
+  }
+  t->frames = frames;
+  t->frame_count = frame_count;
+  t->frame_capacity = frame_capacity;
+  t->depth = depth;
+  t->regs = regs;
+  t->reg_capacity = reg_capacity;
+  t->stepper = stepper;
+  t->turn_cost = turn_cost;
+  t->parking = t->retry = false;
+  vm->jit_catch = jit_catch;
+  vm->in_turn = in_turn;
+  memcpy(vm->turn, turn, sizeof turn);
+  *vm->outcome = outcome;
+  /* The outer turn goes on with what is left of the budget: the barrier, or a failure, may have ended the turn. */
+  sync_budget(vm);
+  vm->yield = false;
+  set_counter(vm);
+  return ok;
+}
+
+NESTED _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed) {
+  *vm->outcome = *failed;
+  unwind(vm);
 }
