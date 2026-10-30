@@ -44,13 +44,13 @@ to 11; faster lists (8d) have their own place in the order (step 8).
   [`docs/vm/17-lists.md`](../vm/17-lists.md) §17.12; numbers in
   [`docs/vm-benchmarks.md`](../vm-benchmarks.md). The comparison with the
   owner's alternative of a doubling growable vector is still open.
+- [x] `Bytes` (binary data instead of `List[Int]`, with `std/binary` on it)
+  landed in 0.17.0 (#805).
 - [ ] Later, each after a real program needs it: tuples (`(Int, String)`
-  values and destructuring, to return two values; then `Queue.pop`); `Bytes`
-  (binary data instead of `List[Int]`; `std/binary`,
-  phase 13, reads and writes it); `Heap[T]` (a priority queue for
-  Dijkstra and scheduling; `Int`, `Float` or `String`, or a key function); a
-  sorted map or set (iterate in key order; today sort the keys); and a deque
-  (both ends).
+  values and destructuring, to return two values; then `Queue.pop`); `Heap[T]`
+  (a priority queue for Dijkstra and scheduling; `Int`, `Float` or `String`, or
+  a key function); a sorted map or set (iterate in key order; today sort the
+  keys); and a deque (both ends).
 
 **Done when:** ranges, sets, queues and the faster lists run on the VM,
 and an evaluation round shows agents use ranges without `while` workarounds.

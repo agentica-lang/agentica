@@ -95,8 +95,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   keeps the partial file.
 - **Bodies are text.** A request or response body must be valid UTF-8. The
   client returns an `error` for a response body that is not, and the server
-  answers 400 without running the handler. Binary bodies wait for `Bytes` (phase
-  13). `Content-Encoding` stays raw.
+  answers 400 without running the handler. Binary bodies are not built yet
+  (#803). `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).

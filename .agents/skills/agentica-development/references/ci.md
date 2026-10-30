@@ -137,6 +137,20 @@ before a release.
   needs the old VM to run the new compiler once by hand; the PR that changes
   the format writes the commands.
 
+A row whose **type** changes (`List[Int]` to `Bytes`), not only its name,
+cannot keep the old name: no source compiles against both types. Keep the old C
+key for the base stage0, and add the new catalog rows with new C keys in the
+first commit. Run `make stage1` at that commit and copy
+`build/stage/stage1.agcb` to `I.agcb`, the intermediate front end. Later
+commits change the call sites. Then refresh stage0 with:
+
+```sh
+make stage0 STAGE1_COMPILER="build/vm/release/bootstrap/agentica --front-end I.agcb"
+```
+
+After the refresh, run `make fixed-point` and `make` as usual. A later PR
+removes the old keys once no stage0 imports them (as in #805).
+
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>`
 in the `test` job: stage2 built from the base stage0 with the PR's
 `compiler/` must equal the PR's file. It checks the merge commit, so when

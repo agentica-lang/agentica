@@ -26,8 +26,8 @@ parsing rules of [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6.
 At order step 7.4, after `Channel[T]` (§27.2, 17b), three items bring streaming
 back for the jobs a whole message cannot do. Each is built on channels with
 their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split
-only at character boundaries, at most 64 KiB each) until `Bytes` lands (phase
-13, order row 7.2.4), which adds byte streams then.
+only at character boundaries, at most 64 KiB each). Byte streams wait for
+binary bodies (#803).
 
 **Channels are enough; `Lazy[T]` is not needed.** An HTTP body is pushed
 by I/O and read by another task, at its own speed: that is a bounded channel
@@ -109,10 +109,11 @@ uploads to an Agentica server); each would need its own one-way test.
 
 ### 30.12 Later: binary bodies and `TlsContext`
 
-- **Binary bodies** come after `Bytes` (phase 13): byte forms of the body
-  fields and of the stream pieces. They pass the one-way test because a `String`
-  cannot hold arbitrary bytes. Their shape is decided with phase 13; until then
-  a binary body is an `error` (client) or 400 (server).
+- **Binary bodies** are still planned (#803). They need `Bytes`, which has
+  landed (0.17.0, #805): byte forms of the body fields and of the stream pieces.
+  They pass the one-way test because a `String` cannot hold arbitrary bytes.
+  Their shape is decided in #803; until then a binary body is an `error`
+  (client) or 400 (server).
 - **`TlsContext`** (§29, phase 19) comes at order step 7.4, right after 20g. It
   changes `TLS` and `HTTP` together in one breaking step: `HttpClientOptions`
   loses `ca_file` and `HTTP.client` takes a context, and `HTTP.listen_tls` and
@@ -136,7 +137,8 @@ Agentica can build what it needs:
 1. **ALPN in TLS** (item 19c, §29.7): the `alpn` option and `TLS.alpn(socket)`.
    Without it an HTTP/2 or gRPC library written in Agentica cannot reach
    HTTPS servers, which offer `h2` only through ALPN; with it, such a library
-   needs only the public `TCP`, `TLS` and `std/binary` (then `Bytes`, phase 13).
+   needs only the public `TCP`, `TLS` and `std/binary`, plus `Bytes` (0.17.0,
+   #805).
 2. **A public HTTP/1.1 connection** (designed with 20e): open one connection
    outside the pool, send a request, read the response head, then read the
    body piece by piece, like `http.client.HTTPConnection`. `HTTP.open` of 20e
