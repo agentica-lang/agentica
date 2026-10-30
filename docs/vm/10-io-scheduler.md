@@ -3,9 +3,8 @@
 The core rules (waiting, timeouts, cancelling, ending, handles) are in §14. This
 section says how the scheduler and the loop keep them.
 
-- **Target.** N scheduler threads run the interpreter and pull ready tasks from
-  one global run queue. One I/O thread, the main thread, runs the only libuv
-  loop (10.2.3, §16). By default there is one scheduler per logical core. With
+- **Target.** N scheduler threads, one global run queue and one I/O thread that
+  runs the only libuv loop (§16; the rules per thread are in 10.2.3). With
   `--schedulers 1` the scheduler and the loop share one thread.
 - **Tasks are VM stacks.** A blocking builtin starts a libuv request, parks its
   task, and the scheduler runs another (10.2.1). Only the loop's thread calls
@@ -140,22 +139,14 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")`. Either entry marks the crash observed. If `main`
   returns with a crash that no await observed, the run prints one summary line
   and exits with code 1.
-- **Owners (phase 24, 24b).** The task that makes a user-visible handle owns it.
-  The resource records the owner and its kind's close, and the task keeps the
-  list of what it owns (`agc_own`). `finish_task` calls `agc_close_owned` for
-  every task that ends, whether it returns, crashes or is cancelled. A socket,
-  listener or TLS socket is disowned. A process closes with `shut`, which only
-  signals (§10.4 Close), never with the release that kills every child. A file
-  closes by an `OP_CLOSE` job, and a server by `close_server`. The process
-  guard, job resources, stream locks and `HttpClient` have no owner.
-  `Task.spawn` moves nothing, so a handle that a helper returns is closed when
-  the helper ends. The one hand-off is `Task.spawn_owning(&f, handle)` ([handle
-  ownership][task-rules]). `agc_task_spawn_owning` walks the argument without
-  `rt->sync` for the handles in it (a struct, enum, List, Map or Result may hold
-  several), then, under the lock, checks that the caller owns every one, open,
-  else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument, before any task is
-  made. Then it moves all of them to the new task. `HttpWire.spawn`
-  does the same (10.7.2).
+- **Owners (phase 24, 24b).** The rule, the owner record, the one close path and
+  the one hand-off, `Task.spawn_owning` (with `HttpWire.spawn`, 10.7.2), are in
+  §14.5. What each kind does at the close: a socket, listener or TLS socket is
+  disowned. A process closes with `shut`, which only signals (§10.4 Close),
+  never with the release that kills every child. A file closes by an `OP_CLOSE`
+  job, and a server by `close_server`. The process guard, job resources, stream
+  locks and `HttpClient` have no owner. `agc_task_spawn_owning` walks its
+  argument without `rt->sync` (§16.9, "One coarse lock").
   - A file's close is an `OP_CLOSE` job with no task. It waits while another job
     holds the file, also a detached one (`agc_io_finish` and `end_detached` pass
     the lock on first). A file that is closing gives every caller the closed
@@ -169,10 +160,8 @@ section says how the scheduler and the loop keep them.
     bounds it. A close that waits behind a job that can wait for ever (a FIFO or
     pipe read) keeps the descriptor open until that job ends or times out. The
     awaiters do not wait for it.
-  - A cancelled task's handles close too, also those of a task parked in a
-    stepper (`File.each_line`). A file that a detached job still holds closes
-    when that job ends. A handle made outside a turn has no owner, and is closed
-    when its result is dropped.
+  - A file that a detached job still holds closes when that job ends. A handle
+    made outside a turn has no owner, and is closed when its result is dropped.
 - **Cancellation (20b).** A program cancels tasks only through a crash (which
   cancels the crashed task's descendants), `HTTP.close_server`, and the deadline
   of a `Task.map` item. Each task records its parent and its running children,
@@ -249,11 +238,11 @@ section says how the scheduler and the loop keep them.
   is the job's timer (a negative timeout starts none). `CALL_BUILTIN` ends the
   turn.
 - **Waking and parking.** The work and timer callbacks only set flags and put
-  the job on the loop's ready list. After each `uv_run` the scheduler drains
-  that list and queues the tasks. On completion the `done` half runs on the
-  interpreter thread and builds GC values from the `malloc`'d result. On timeout
-  the `expired` half gives the timeout error (`filesystem: operation timed out`
-  for a file) and, for a handle operation, closes the handle.
+  the job on the loop's ready list, which the scheduler drains after each
+  `uv_run` (§16.9). On completion the `done` half runs on the interpreter thread
+  and builds GC values from the `malloc`'d result. On timeout the `expired` half
+  gives the timeout error (`filesystem: operation timed out` for a file) and,
+  for a handle operation, closes the handle.
 - **Thread-pool threads** run only the `work` half, on `malloc` memory.
   `UV_USE_IO_URING` is set to `0` (unless already set) before the loop is made,
   so libuv uses its thread pool and epoll. `SIGINT`, `SIGTERM` and `SIGHUP` are
@@ -263,50 +252,45 @@ section says how the scheduler and the loop keep them.
 - **Pool size.** The VM never sets the pool size. The libuv variable
   `UV_THREADPOOL_SIZE` does (there is no `AGENTICA_*` variable). libuv reads it
   once, when the pool is created, so it must be set before the VM starts. The
-  default is 4, and the cap 1024. The pool runs regular-file I/O, opens and path
-  calls, DNS (`getaddrinfo`), and the TLS setup jobs. Blocking stdin is the
-  exception: a failed Unix poller setup can keep one pool thread until input
-  arrives (Stdin below). Windows stdin never uses the pool. All other work must
-  finish without waiting indefinitely for input.
+  default is 4, and the cap 1024. The pool runs the bounded work of §14.1, with
+  opens and path calls. Blocking stdin is the exception: a failed Unix poller
+  setup can keep one pool thread until input arrives (Stdin below). Windows
+  stdin never uses the pool.
 - **We only wait where the loop can cancel** (§14.1). Files open with
   `O_CLOEXEC` and `O_NONBLOCK`, so opening a FIFO never waits for a peer. The
-  pool job then picks the path by `fstat` and an `epoll_ctl` probe, never by
-  name. A regular file, a block device, or a device that epoll refuses with
-  `EPERM` (`/dev/null`, `/dev/zero`) is blocking and runs in the pool. Any other
-  probe error is the call's error, never a fall back to blocking. A pipe, FIFO,
-  terminal or other waiting character device is non-blocking on the loop through
-  a poller (`uv_poll_t`). A handle call tries its step on the loop thread. When
-  it would wait, it parks on an `external` job, and the poller's callback
-  repeats the step. A whole-file call opens in the pool. If the path is
-  pollable, its `more` step keeps the same job and task waiting on the loop (a
-  pool kind with a `cancel` half must have a `more` step, which `start_job`
-  checks). A poller error is reported by repeating the step, so the call gets
-  the real error (`EPIPE` for a reader that left). `read_text` of a pipe, or of
-  a regular file that reports size 0 (`/proc`, `/sys`), reads to EOF, at most 1
-  MiB. `File.each_line` reads one job per read, of at most `buffer_bytes` into a
-  buffer made once. A timed-out read closes the handle. Between reads the task
-  runs the block for every complete line already buffered. On Windows no `File`
-  call waits on the loop: `probe` refuses a named pipe or a device with
-  `ENOTSUP`, and the call closes it (§14.1).
+  pool job then sorts the path by what it is, never by name (`fstat` and an
+  `epoll_ctl` probe, §14.1). A pipe, FIFO, terminal or other waiting character
+  device is non-blocking on the loop through a poller (`uv_poll_t`). A handle
+  call tries its step on the loop thread. When it would wait, it parks on an
+  `external` job, and the poller's callback repeats the step. A whole-file call
+  opens in the pool. If the path is pollable, its `more` step keeps the same job
+  and task waiting on the loop (a pool kind with a `cancel` half must have a
+  `more` step, which `start_job` checks). A poller error is reported by
+  repeating the step, so the call gets the real error (`EPIPE` for a reader that
+  left). `read_text` of a pipe, or of a regular file that reports size 0
+  (`/proc`, `/sys`), reads to EOF, at most 1 MiB. `File.each_line` reads one job
+  per read, of at most `buffer_bytes` into a buffer made once. A timed-out read
+  closes the handle. Between reads the task runs the block for every complete
+  line already buffered. On Windows no `File` call waits on the loop: `probe`
+  refuses a named pipe or a device with `ENOTSUP`, and the call closes it
+  (§14.1).
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else
   (§14.4):
-  1. kill the children and drive the loop until libuv's exit callbacks have
-     reaped them (10.4, Close; at most about 2 seconds);
+  1. kill the children and reap them (§14.4, step 1; 10.4, Close);
   2. one non-blocking TLS `close_notify` on each TLS session that finished its
      handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1). Each
      TCP socket and listener still open is then closed the way a close from a
      task closes it, so the peer reads the end of input: Windows resets a
-     socket left to the exit while a read is pending (#489);
+     socket left to the exit while a read is pending;
   3. flush the blocking stdout and stderr (`fflush`, retried on `EINTR`), then
      queue the diagnostic of a failed run as a kept notice (10.2.2), so the wait
      below covers it. Close every open file, and wait for their flush jobs and
      for the stdout and stderr buffers to drain. The wait first drains the pool
-     jobs that have already finished. It is always bounded: 30 seconds by
-     default, or `--flush-timeout MS`, or `AGENTICA_FLUSH_TIMEOUT_MS` (the flag
-     wins; there is no way to turn the limit off). So a FIFO whose reader
-     stopped cannot keep the run open for ever. When it runs out, the VM prints
+     jobs that have already finished. It is bounded by the flush limit (§14.4),
+     so a FIFO whose reader stopped cannot keep the run open for ever. When it
+     runs out, the VM prints
      `agentica: file data may not be written: the flush took longer than MS ms`
      (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). The exit code
      does not change. Then free what native code still owns, within the same
@@ -330,16 +314,14 @@ section says how the scheduler and the loop keep them.
   first signal is stored and wakes the loop. The scheduler checks it after every
   turn, before it waits and before it reports a stall, and the run ends as an
   exit with code 128 + signal. `end_run` runs the steps above, then raises the
-  signal again with its default action. A second signal ends the VM at once, but
-  only after the children are stopped. Until then it is only recorded. A
-  3-second grace timer (`STOP_GRACE_SECONDS`) backs this up. A driven VM
-  (`--driver-pid`) whose driver is gone treats even the first signal as a second
-  one. The handler has no `SA_RESTART`, so a blocking fallback write that nobody
-  reads returns `EINTR`. The run then ends as the stop (128 + signal, no
-  diagnostic), and that write is not retried. A stream on the loop has no
-  blocked write. Once a stop signal is set, its wait in step 3 ends after one
-  non-blocking write (End of run and stop). A CPU-bound task delays the stop by
-  at most one turn.
+  signal again with its default action. A second signal ends the VM at once
+  (§14.4), but only after the children are stopped. Until then it is only
+  recorded. A 3-second grace timer (`STOP_GRACE_SECONDS`) backs this up. A
+  driven VM (`--driver-pid`) whose driver is gone treats even the first signal
+  as a second one. The handler has no `SA_RESTART`, so a blocking fallback
+  write that nobody reads returns `EINTR`. The run then ends as the stop (128 +
+  signal, no diagnostic), and that write is not retried. A stream on the loop
+  has no blocked write. A CPU-bound task delays the stop by at most one turn.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight), a
   `next_owner` task, and a FIFO of waiting tasks, all in GC memory. Every handle
   builtin (`read_bytes`, `read_line`, `write`, `write_bytes`, `flush`, `close`)
@@ -393,10 +375,7 @@ section says how the scheduler and the loop keep them.
     then get the closed error. `closed?` is true when the channel is closed, the
     ring is empty and nothing is reserved, and it stays true.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
-    (`agc_channel_claim`). When the owner ends in any way, `finish_task` runs
-    `agc_close_owned`, which calls the same close. A `close` from any task drops
-    the entry first. A channel never handed over has no entry (§14.5 of
-    `docs/vm/14-core-invariants.md`).
+    (`agc_channel_claim`); §14.5 has the rules.
   - **Choices.** Mid-FIFO removal is O(n), as for the lock FIFO. A waiter whose
     timer fired before any wake still takes a value that reached the ring before
     it re-ran, instead of failing at once.
@@ -407,12 +386,12 @@ section says how the scheduler and the loop keep them.
   A handle that the dropped result would have handed out is closed. The
   `expired` half never runs on a detached job, so it never closes a handle a
   task holds. A kind may set a `cancel` half, which ends the job early and
-  returns true. No pool kind may have one, since a pool thread may still use the
-  data. `HttpWire.accept` and `HttpWire.wait` use it to leave at once. For TCP
-  and process kinds at the deadline, a read, accept or wait leaves its handle
-  open, a connect closes the socket it was opening, and a send waits for its
-  write callback. A listen has no deadline. A pool job (files, stdin) runs until
-  its work ends.
+  returns true. A pool kind may have one only with a `more` step, and it is
+  called only once the job waits on the loop (§14.3), since a pool thread may
+  still use the data. `HttpWire.accept` and `HttpWire.wait` use it to leave at
+  once. For TCP and process kinds at the deadline, a read, accept or wait leaves
+  its handle open, a connect closes the socket it was opening, and a send waits
+  for its write callback. A listen has no deadline.
 - **External jobs.** A kind with `external` set has no `work` half. A libuv
   callback on the loop thread completes it, which puts the job on the ready
   list. A second call does nothing.
@@ -518,10 +497,9 @@ section says how the scheduler and the loop keep them.
     wake, and the print that notices it fails with `RUNTIME-INTERNAL` (`cannot
     write to standard output` or `standard error`). `end_run` folds a failed
     stream into exit code 1, even when no print saw the error. The blocking
-    `fwrite` of the `FILE` stays for the fallbacks of §14.1: a reopen or `dup`
-    that fails, a descriptor not open for writing, another descriptor type, and
-    builds that are not Linux, macOS or Windows. The records of `agentica test`
-    do not use this module. They travel on the child channel (§10.4).
+    `fwrite` of the `FILE` stays only for the fallbacks of §14.1. The records of
+    `agentica test` do not use this module. They travel on the child channel
+    (§10.4).
   - **One target, one buffer.** When stdout and stderr are one target (the same
     `st_dev` and `st_ino`, or on Windows the same kernel object by
     `CompareObjectHandles`, such as a terminal, `2>&1`, or one file), stderr
@@ -550,9 +528,8 @@ section says how the scheduler and the loop keep them.
     notices in with force, and restarts the writer for each stream that is not
     writing. So the wait ends when the data is written, not at the limit. With a
     stop signal set, `agc_output_busy` makes one non-blocking write per stream
-    (on Windows, within the shared 200 ms). It then stops waiting for stdout and
-    stderr, so a reader that never reads cannot hold a stopped VM for the flush
-    limit. Files keep their wait.
+    (on Windows, within the shared 200 ms) and then stops waiting for them
+    (§14.4).
   - **A child's stderr.** `vm/process.c` hands each chunk of a plain child's
     stderr to `agc_output_forward` on the I/O thread. The bytes join the notice
     queue, so they never enter a print that holds the stream. They keep their
