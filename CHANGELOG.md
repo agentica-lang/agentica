@@ -34,6 +34,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.StreamResponse` whose body is a `Channel[Bytes]`, sent as chunks as they
   arrive, for Server-Sent Events, tokens or files; `HTTP.whole(data)` is the
   channel of a route with one whole body.
+- `callback Name(params) -> result` in an extern block and
+  `Native.callback(Name, &fn)` are checked and compiled; running them is
+  refused at load until the VM makes callbacks.
 
 ## [0.18.0] - 2026-10-30
 

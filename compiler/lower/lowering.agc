@@ -79,6 +79,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   functions: List[Located] = []
   constants: List[LocatedConst] = []
   structs: List[LocatedStruct] = []
+  callbacks: List[Ast.ResourceDecl] = []
   decls: List[Ast.Decl] = []
   modules = linked.modules.concat(checked.prelude)
   for module in modules
@@ -88,6 +89,11 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
         Ast.Decl.Function(node) -> functions = functions.push(Located(file: module.file, function: node))
         Ast.Decl.Constant(node) -> constants = constants.push(LocatedConst(file: module.file, constant: node))
         Ast.Decl.Struct(node) -> structs = structs.push(LocatedStruct(file: module.file, decl: node))
+        Ast.Decl.Resource(node) ->
+          if node.callback.some?
+            callbacks = callbacks.push(node)
+          end
+
         _ -> functions = functions
       end
     end
@@ -152,6 +158,10 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       layout = try Native.struct_layout(cx, entry.decl.name, struct_decls)
       layouts = layouts.put(entry.decl.name, layout)
     end
+  end
+
+  for callback in callbacks
+    layouts = layouts.put(callback.name, Native.callback_signature(callback))
   end
 
   cx = cx.with(layouts: layouts)

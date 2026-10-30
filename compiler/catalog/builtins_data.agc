@@ -2683,6 +2683,22 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.callback",
+      parameters: [
+        Model.Named(name: "type", type: Types.Type.Var("T")),
+        Model.Named(name: "function", type: Types.Type.Var("F")),
+      ],
+      result: Types.Type.Var("T"),
+      rule: Model.Rule.NativeCallback,
+      implementation: "Native.callback",
+      effects: ["native"],
+      description: (
+        "A C function pointer of a callback of an extern block that calls the named function, a resource that " +
+        "the calling task owns; C must not call it after Native.close or the owner's end."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.close",
       parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
       result: Types.Type.Void,

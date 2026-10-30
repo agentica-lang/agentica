@@ -870,3 +870,114 @@ def test_an_extern_block_with_a_struct_goes_with_the_types(tmp_path):
     assert check(source(tmp_path, block + '\ndef main() -> Void\n  puts(pair().x)\nend\n')).code == 0
     late = 'def main() -> Void\n  puts(pair().x)\nend\n\n' + block
     assert at(problem_of(check(source(tmp_path, late))))[:2] == ("CHECK-DECL-ORDER", (6, 3))
+
+
+CALLBACKS = """extern "libsqlite3.so.0"
+  resource Db, free: sqlite3_close_v2
+  ## The comparison of a collation.
+  export callback Compare(arg: C.Pointer, a_len: C.Int32, a: C.Pointer, b_len: C.Int32, b: C.Pointer) -> C.Int32
+  callback Hook(arg: C.Pointer, op: C.Int32, db: C.String, table: C.String, row: C.Int64) -> Void
+  callback Scale(x: C.Double, y: C.Float, on: C.Bool, n: C.UInt8) -> C.Float
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
+  compute def sqlite3_create_collation(db: Db, name: C.String, enc: C.Int32, arg: C.Pointer, cmp: Compare) -> C.Int32
+  def sqlite3_update_hook(db: Db, hook: Hook, arg: C.Pointer) -> C.Pointer
+  def sqlite3_config(op: C.Int32, ..., log: Hook, arg: C.Pointer) -> C.Int32
+end
+
+type Cmp = Compare
+
+def by_length(arg: C.Pointer, a_len: Int, a: C.Pointer, b_len: Int, b: C.Pointer) -> Int
+  return a_len - b_len
+end
+
+def on_change(arg: C.Pointer, op: Int, db: String, table: String, row: Int) -> Void
+  puts(table)
+end
+
+def scale(x: Float, y: Float, on: Bool, n: Int) -> Float
+  return x * y
+end
+
+def pass[T](x: T) -> T
+  return x
+end
+
+def main() -> Void
+  db = sqlite3_open(":memory:").db
+%s
+end
+"""
+
+
+# callback Name(params) -> result declares a C function pointer type: Native.callback(Name, &function) makes one, a
+# resource (Native.close, Native.closed? and Task.spawn_owning take it), which a def of the block takes as a parameter
+# of that type, also in the variadic part, and a type alias names. The function is a declared function named with &
+# (a block, an Fn value and a function of an extern block are refused) and takes and returns the Agentica types of the
+# callback.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  cmp: Compare = Native.callback(Cmp, &by_length)\n"
+     "  puts(sqlite3_create_collation(db, \"len\", 1, Native.null(), cmp))\n"
+     "  hook = Native.callback(Hook, &on_change)\n"
+     "  puts(Native.null?(sqlite3_update_hook(db, hook, Native.null())))\n"
+     "  puts(sqlite3_config(16, hook, Native.null()))\n"
+     "  puts(Native.closed?(Native.callback(Scale, &scale)))\n"
+     "  Native.close(cmp)", None, None, None),
+    ("  Native.callback(Compare, &on_change)", "CHECK-TYPE-MISMATCH", (33, 28), (33, 38)),
+    ("  Native.callback(Scale, &by_length)", "CHECK-TYPE-MISMATCH", (33, 26), (33, 36)),
+    ("  Native.callback(Db, &by_length)", "CHECK-TYPE-MISMATCH", (33, 19), (33, 21)),
+    ("  Native.callback(Int, &by_length)", "CHECK-TYPE-MISMATCH", (33, 19), (33, 22)),
+    ("  Native.callback(3, &by_length)", "CHECK-TYPE-MISMATCH", (33, 19), (33, 20)),
+    ("  f = &by_length\n  Native.callback(Compare, f)", "CHECK-NATIVE-CALLBACK", (34, 28), (34, 29)),
+    ("  Native.callback(Hook) do |a, op, d, t, r| puts(t) end", "CHECK-BLOCK-TARGET", (33, 25), (33, 56)),
+    ("  Native.callback(Compare, &sqlite3_create_collation)", "CHECK-NATIVE-CALLBACK", (33, 28), (33, 53)),
+    ("  Native.callback(Hook, &sqlite3_open)", "CHECK-NATIVE-CALLBACK", (33, 25), (33, 38)),
+    ("  Native.callback(Compare, &nothing)", "CHECK-UNKNOWN-NAME", (33, 28), (33, 36)),
+    ("  Native.callback(Compare, &pass)", "CHECK-ENUM-TYPE-INFERENCE", (33, 28), (33, 33)),
+    ("  sqlite3_update_hook(db, Native.null(), Native.null())", "CHECK-TYPE-MISMATCH", (33, 27), (33, 40)),
+])
+def test_native_callback_makes_a_callback_of_a_named_function(tmp_path, body, code, start, stop):
+    assert_checks(check(source(tmp_path, CALLBACKS % body)), code, start, stop)
+
+
+def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
+    source(tmp_path, CALLBACKS % "  puts(1)", "raw.agc")
+    good = 'import Raw from "./raw"\n\ndef cmp(arg: C.Pointer, a: Int, x: C.Pointer, b: Int, y: C.Pointer) -> Int\n' \
+           '  return a - b\nend\n\ndef main() -> Void\n  Native.close(Native.callback(Raw.Compare, &cmp))\nend\n'
+    assert check(source(tmp_path, good)).code == 0
+
+
+# A callback crosses by value: its parameters are C integer types, C.Double, C.Float, C.Bool, C.String or C.Pointer,
+# and its result one of them but C.String, or Void (else PARSE-EXTERN-TYPE at the type). It has no default, out
+# parameter, `...` or two parameters of one name, takes at most 64 parameters, and is a parameter of a def of its
+# block below it, not a result, an out parameter or a struct field.
+@pytest.mark.parametrize("member, code, start, stop", [
+    ("callback F(a: C.Bytes) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 24)),
+    ("callback F(a: C.Function) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 27)),
+    ("callback F(t: Thing) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 22)),
+    ("callback F(a: Int) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 20)),
+    ("callback F(a: C.Int) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 22)),
+    ("callback F(a: C.Int32) -> C.String", "PARSE-EXTERN-TYPE", (2, 29), (2, 37)),
+    ("callback F(v: Void) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 21)),
+    ("callback F(a: C.Int32 = 1) -> Void", "PARSE-EXTERN-DEFAULT", (2, 14), (2, 28)),
+    ("callback F(n: C.Int32, n: C.Int32) -> Void", "CHECK-REDEFINED-NAME", (2, 26), (2, 36)),
+    ("callback F(out a: C.Int32) -> Void", "PARSE-EXTERN-OUT", (2, 14), (2, 28)),
+    ("callback F(a: C.Int32, ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 26), (2, 29)),
+    ("callback F(a: C.Int32) -> C.Int32\n  def f() -> F", "PARSE-EXTERN-TYPE", (3, 14), (3, 15)),
+    ("callback F(a: C.Int32) -> C.Int32\n  def f(out g: F) -> Void", "PARSE-EXTERN-OUT", (3, 16), (3, 17)),
+    ("def f(g: F) -> Void\n  callback F(a: C.Int32) -> C.Int32", "PARSE-EXTERN-TYPE", (2, 12), (2, 13)),
+    ("callback F(a: C.Int32) -> C.Int32\n  struct S\n    g: F\n  end", "PARSE-EXTERN-TYPE", (4, 8), (4, 9)),
+    ("callback f(a: C.Int32) -> Void", "PARSE-UNEXPECTED-TOKEN", (2, 3), (2, 11)),
+])
+def test_a_callback_takes_c_value_types(tmp_path, member, code, start, stop):
+    text = 'extern "/opt/libx.so"\n  %s\n  resource Thing, free: thing_free\nend\n' % member
+    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+def test_a_callback_takes_at_most_64_parameters(tmp_path):
+    params = ", ".join("p%d: C.Int32" % k for k in range(64))
+    ok = 'extern "libc.so.6"\n  callback F(%s) -> Void\nend\n' % params
+    assert check(source(tmp_path, ok)).code == 0
+    over = 'extern "libc.so.6"\n  callback F(%s, extra: C.Int32) -> Void\nend\n' % params
+    start = len("  callback F(%s, " % params) + 1
+    assert at(problem_of(check(source(tmp_path, over)))) == (
+        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int32")))

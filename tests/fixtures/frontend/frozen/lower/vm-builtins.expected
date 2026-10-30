@@ -176,6 +176,7 @@ Map.put
 Map.size
 Map.values
 Native.address
+Native.callback
 Native.close
 Native.closed?
 Native.free

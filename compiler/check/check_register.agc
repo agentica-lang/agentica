@@ -65,7 +65,8 @@ export def check_main(
   )
 end
 
-# The resources of the extern blocks: nominal types with no structure, which every later pass may name.
+# The resources of the extern blocks: nominal types with no structure, which every later pass may name. A callback is
+# one too, with the Fn type of the function that Native.callback takes for it (its types are builtin ones).
 def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
   st = State.fresh()
   found = cx
@@ -75,13 +76,37 @@ def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
         Ast.Decl.Resource(node) ->
           here = found.with(file: module.file)
           try check_new_name(here, st, node.name, node.name_span)
-          found = here.with(resources: here.resources.add(node.name))
+          found = try register_callback(here.with(resources: here.resources.add(node.name)), st, node)
         _ -> st = st
       end
     end
   end
 
   return ok(found)
+end
+
+# The Fn type of the function of a callback, by its name; any other resource leaves the context as it is. Two
+# parameters of one name are CHECK-REDEFINED-NAME, as in a def.
+def register_callback(cx: State.Cx, st: State.St, node: Ast.ResourceDecl) -> Result[State.Cx]
+  case node.callback
+    some(callback) ->
+      seen: Set[String] = Set.new([])
+      for param in callback.params
+        if seen.include?(param.name)
+          return error(
+            State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
+          )
+        end
+
+        seen = seen.add(param.name)
+      end
+
+      refs = callback.params.map do |param: Ast.Param| param.type end
+      params = try Types.resolve_all(cx, st, refs)
+      result = try Types.resolve_type(cx, st, callback.result, true)
+      return ok(cx.with(callbacks: cx.callbacks.put(node.name, T.Type.Fn(params, result))))
+    none -> return ok(cx)
+  end
 end
 
 def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
@@ -484,7 +509,12 @@ def register_function(
     result: result,
     shape: Defaults.shape(node.params),
   )
-  return ok(cx.with(functions: cx.functions.put(node.name, signature)))
+  natives = cx.natives
+  if node.native.some?
+    natives = natives.add(node.name)
+  end
+
+  return ok(cx.with(functions: cx.functions.put(node.name, signature), natives: natives))
 end
 
 # CHECK-REDEFINED-NAME at a type parameter named like a type the file can write: it would hide that type.

@@ -305,12 +305,18 @@ def resource_item(node: Ast.ResourceDecl, doc: Optional[String], span: Source.Sp
     word = "free_ref"
   end
 
+  signature = "resource #{node.name}, #{word}: #{node.free}"
+  case node.callback
+    some(callback) -> signature = Signature.callback_text(node.name, callback)
+    none -> signature = signature
+  end
+
   return Item(
     kind: "resource",
     name: node.name,
     name_span: node.name_span,
     exported: exported,
-    signature: "resource #{node.name}, #{word}: #{node.free}",
+    signature: signature,
     doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Plain,
