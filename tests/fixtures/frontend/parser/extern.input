@@ -47,4 +47,9 @@ extern "/opt/lib/my peer.so"
   ## Freed by a function that takes the address of the handle.
   resource Handle, free_ref: handle_close
   def handle_open(out handle: Handle) -> C.Int32
+  ## A C function pointer that C calls.
+  export callback Visit(arg: C.Pointer, n: C.UInt32, name: C.String, x: C.Float) -> C.Int32
+  callback Done(arg: C.Pointer) -> Void
+  def peer_walk(visit: Visit, done: Done, arg: C.Pointer) -> C.Int32
+  def peer_log(level: C.Int32, ..., visit: Visit) -> Void
 end

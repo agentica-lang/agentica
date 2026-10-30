@@ -263,6 +263,19 @@ end
     compute def read(fn: C.Function, h: Handle, n: C.Int64) -> C.Int64
   end
   ~~~
+- Callbacks (C calls your function: `qsort`, a SQLite collation; Ruby ffi's
+  `callback`): `callback Name(params) -> result` in the block, then
+  `cb = Native.callback(Name, &fn)` and pass `cb` to a `def` that takes
+  `cmp: Name` (also after `...`). Types: integers, `C.Double`, `C.Float`,
+  `C.Bool`, `C.String` (parameter only), `C.Pointer`, a `Void` result; else
+  `PARSE-EXTERN-TYPE`; no default, `out` or `...`. `fn` is a `def` named with
+  `&` whose types are the Agentica ones (`C.Int32` is `Int`), else
+  `CHECK-TYPE-MISMATCH`; an `Fn` value is `CHECK-NATIVE-CALLBACK` and a block
+  is refused (context goes through C's `void *` user data). `cb` is a resource
+  (`Native.close`). A callback is never a result or `out`; for a pointer that
+  may be NULL, declare the C function again with a `C.Pointer` there. The VM
+  does not make callbacks yet: running is `RUNTIME-NATIVE-UNSUPPORTED` (exit 2)
+  at load; `check` and `compile` work.
 - C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
   `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
   the header in its order, each an integer type, `C.Double`, `C.Float`,

@@ -47,6 +47,7 @@ export enum Rule
   MapPut
   MapSize
   MapValues
+  NativeCallback
   NativeClose
   NativeClosed
   NativeMemoryBlock

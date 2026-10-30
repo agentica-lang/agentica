@@ -9,9 +9,14 @@
 ## out value), and builds its record from it. A struct passed or returned by value gets the index of its record in the
 ## struct table after its {: "{N:CODES}", so the VM reads and makes the record itself (nested structs too); the parser
 ## wrote the field codes in the record's field order.
+##
+## Native.callback(Name, &function) gets the signature of its callback as its first argument: "CODES NAME", the codes
+## of Ast.Callback (the result's first) and the callback's name without its module prefix, which the VM shows for the
+## resource.
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
+import Types from "../syntax/types"
 import Ir from "ir"
 import Lowering from "lower_state"
 
@@ -86,6 +91,14 @@ export def lower(
   body = body.push(Ir.instr("return", [count], index, [span]))
   name = function.name
   return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
+end
+
+## The signature of a callback of an extern block that Native.callback gets: "CODES NAME".
+export def callback_signature(decl: Ast.ResourceDecl) -> String
+  case decl.callback
+    some(callback) -> return "#{callback.codes} #{Types.display_name(decl.name)}"
+    none -> return ""
+  end
 end
 
 ## The layout code of the C struct of this name with the index of each struct after its {, "{N:CODES}" as in a

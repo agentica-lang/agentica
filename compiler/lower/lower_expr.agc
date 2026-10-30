@@ -19,7 +19,7 @@ import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
 import {
-  CODEC_BUILTINS, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_STRUCTS, STRING_OPS, VM_BUILTINS,
+  CODEC_BUILTINS, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -138,8 +138,9 @@ export def lower_call(
   end
 
   total = shape.total
-  # The struct builtins of Native take a type name as their layout code (no defaults: one argument per parameter).
-  laid_out = builtin and NATIVE_STRUCTS.include?(key)
+  # The struct builtins of Native and Native.callback take a type name as its layout code or signature (no defaults:
+  # one argument per parameter).
+  laid_out = builtin and NATIVE_LAYOUTS.include?(key)
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
@@ -378,12 +379,12 @@ end
 # an extern block through, so a missing layout is LOWER-INTERNAL.
 def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, type: Types.Type, span: Source.Span) -> Result[Lowering.Fx]
   layout = ""
-  if Types.is?(type, "Struct")
+  if Types.is?(type, "Struct") or Types.is?(type, "Opaque")
     layout = cx.layouts.get(Types.name(type), "")
   end
 
   if layout == ""
-    return error(Lowering.internal(cx, "lower: no C struct layout for #{Types.to_text(type)}", span))
+    return error(Lowering.internal(cx, "lower: no C struct layout or callback for #{Types.to_text(type)}", span))
   end
 
   return ok(Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(layout), span))

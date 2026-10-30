@@ -42,6 +42,13 @@ export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
   return "#{declaration.name}#{names}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
 end
 
+## `callback Name(a: Int, p: C.Pointer) -> Int`: a callback of an extern block, with the Agentica types its function
+## takes and returns.
+export def callback_text(name: String, callback: Ast.Callback) -> String
+  parameters = callback.params.map do |parameter: Ast.Param| "#{parameter.name}: #{type_text(parameter.type)}" end
+  return "callback #{name}(#{parameters.join(", ")}) -> #{type_text(callback.result)}"
+end
+
 ## `struct Name` or `struct Name[T, U]`.
 export def struct_text(declaration: Ast.StructDecl) -> String
   return "struct #{declaration.name}#{parameters_text(declaration.type_parameters)}"

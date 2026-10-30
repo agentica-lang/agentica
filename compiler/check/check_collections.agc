@@ -34,6 +34,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
       first = site.selected.parameters[0].type
       return check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
     Model.Rule.NativeStruct -> return check_native_struct(cx, st, site)
+    Model.Rule.NativeCallback -> return check_native_callback(cx, st, site)
     _ -> return check_map_rule(cx, st, site, rule)
   end
 end
@@ -261,6 +262,82 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
       return ok(State.Out(st: current, type: type))
     _ -> return error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
   end
+end
+
+# Native.callback(Name, &function): Name is a callback of an extern block (CHECK-TYPE-MISMATCH otherwise), and the
+# function is named with & (CHECK-NATIVE-CALLBACK for any other value: a block or an Fn value may capture values, and
+# C passes its own context through a user data pointer) and takes and returns the Agentica types of the callback
+# (CHECK-TYPE-MISMATCH). The call gives the callback, a resource.
+def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  callback_help = "declare the C function type with callback Name(params) -> result in an extern block"
+  first = site.args[0]
+  wanted = T.Type.Unknown
+  current = st
+  case first
+    Ast.Expr.TypeName(node) ->
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
+      type = try CheckTypes.resolve_type(cx, current, ref, false)
+      if !T.is?(type, "Opaque") or !cx.callbacks.has_key?(T.name(type))
+        return error(
+          State.fail_help(
+            cx,
+            current,
+            "CHECK-TYPE-MISMATCH",
+            "Native.callback requires a callback of an extern block, found #{T.to_text(type)}",
+            node.span,
+            callback_help,
+          ),
+        )
+      end
+
+      # The lowering reads the signature from the type name's own type, so an alias gives the callback it names.
+      current = State.record_type(current, node.id, type)
+      wanted = type
+    _ ->
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-TYPE-MISMATCH",
+          "Native.callback requires a callback of an extern block, found a value",
+          Ast.expr_span(first),
+          callback_help,
+        ),
+      )
+  end
+
+  target = site.args[1]
+  expected = cx.callbacks[T.name(wanted)]
+  case target
+    Ast.Expr.FunctionRef(node) -> current = current
+    _ ->
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-NATIVE-CALLBACK",
+          "Native.callback takes a function named with &, not a block or a function value",
+          Ast.expr_span(target),
+          "write a def that takes #{T.to_text(expected)} and pass &name; C's user data pointer carries any context",
+        ),
+      )
+  end
+
+  given = try State.expr(cx, current, target, expected)
+  if !T.same?(given.type, expected)
+    return error(
+      State.fail_help(
+        cx,
+        given.st,
+        "CHECK-TYPE-MISMATCH",
+        "the callback #{T.to_text(wanted)} calls #{T.to_text(expected)}, found #{T.to_text(given.type)}",
+        Ast.expr_span(target),
+        "a C integer type is Int, C.Double and C.Float are Float, C.Bool is Bool, C.String is String",
+      ),
+    )
+  end
+
+  return ok(State.Out(st: given.st, type: wanted))
 end
 
 def type_name?(expr: Ast.Expr) -> Bool

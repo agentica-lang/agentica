@@ -28,6 +28,8 @@ extern "/opt/lib/my peer.so"
   end
   def box_make(n: C.Int64) -> Box
   compute def box_area(fn: C.Function, b: Box, p: Pair, out area: C.Double) -> Box
+  callback Visit(arg: C.Pointer, n: C.Int32, name: C.String) -> C.Double
+  def peer_walk(visit: Visit, arg: C.Pointer) -> C.Int32
 end
 
 extern "libm.so.6"
@@ -59,4 +61,11 @@ def main() -> Void
   box = box_make(3)
   boxed = box_area(Native.get_pointer(table, 0), box.with(on: true), Pair(x: 1))
   puts(boxed.area + boxed.result.at.y.to_f)
+  visit = Native.callback(Visit, &visit_one)
+  puts(peer_walk(visit, table))
+  Native.close(visit)
+end
+
+def visit_one(arg: C.Pointer, n: Int, name: String) -> Float
+  return n.to_f
 end

@@ -228,15 +228,27 @@ end
 ## A resource of an extern block (`resource Db, free: db_close`): a nominal type for the C pointers that the block's
 ## functions return, and the C name of the function of the same library that frees one, or "C.Function" when each
 ## value has its own free function, a C function pointer that the call which makes it takes. by_ref is true for
-## `free_ref: db_close`, a free function that takes the address of the pointer (void f(T **)).
+## `free_ref: db_close`, a free function that takes the address of the pointer (void f(T **)). A callback of the block
+## (`callback Compare(a: C.Int32) -> C.Int32`) is a resource too, made by Native.callback and freed by the VM: free
+## is "" and callback holds its C function type; it is `none` for every other resource.
 export struct ResourceDecl
   id: Int
   name: String
   name_span: Source.Span
   free: String
   by_ref: Bool
+  callback: Optional[Callback]
   doc: Optional[String]
   span: Source.Span
+end
+
+## The C function type of a callback of an extern block: its parameters and result with the Agentica types that the
+## function given to Native.callback takes and returns (C.Int32 is Int, Void stays Void), and the codes of the C
+## types, the result's first, as in Native.codes (an integer code, d, f, b, p, s for a parameter, v for a result).
+export struct Callback
+  params: List[Param]
+  result: TypeRef
+  codes: String
 end
 
 ## One variant of an enum, with the types of its payload.

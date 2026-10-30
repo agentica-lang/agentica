@@ -114,6 +114,15 @@ VARIADIC_HELP = (
 )
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
+# The codes of the C types of a callback: what C passes in and the Agentica function returns must cross by value, so a
+# C.String is a parameter only (C keeps the memory), Void a result only, and C.Bytes (no length), C.Function, structs,
+# resources and callbacks are refused.
+CALLBACK_PARAM_CODES = Set.new(["g", "h", "i", "l", "u", "w", "j", "n", "d", "f", "b", "s", "p"])
+CALLBACK_RESULT_CODES = Set.new(["g", "h", "i", "l", "u", "w", "j", "n", "d", "f", "b", "p", "v"])
+CALLBACK_TYPES_HELP = (
+  "a callback takes #{INT_NAMES}, C.Double, C.Float, C.Bool, C.String or C.Pointer, and returns one of them but " +
+  "C.String, or Void; take anything else as a C.Pointer"
+)
 
 # A declaration with the next position and the next free node id.
 struct DeclAt
@@ -214,12 +223,14 @@ struct ExternAt
 end
 
 # What the members of an extern block see of the block: its library, the free function of each resource declared so
-# far, by name, the layout code of each struct declared so far, by name, the C names of the functions declared so far,
-# and whether the block declares a resource or a struct anywhere (Ast.Native.with_types).
+# far, by name, the layout code of each struct declared so far, by name, the callbacks declared so far, the C names of
+# the functions declared so far, and whether the block declares a resource, a callback or a struct anywhere
+# (Ast.Native.with_types).
 struct ExternBlock
   library: String
   resources: Map[String, String]
   structs: Map[String, String]
+  callbacks: Set[String]
   symbols: Set[String]
   with_types: Bool
 end
@@ -2135,7 +2146,12 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
 
   cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
   block = ExternBlock(
-    library: name, resources: {}, structs: {}, symbols: Set.new([]), with_types: declares_types?(e, cursor),
+    library: name,
+    resources: {},
+    structs: {},
+    callbacks: Set.new([]),
+    symbols: Set.new([]),
+    with_types: declares_types?(e, cursor),
   )
   nodes: List[Ast.Decl] = []
   next_id = ids
@@ -2184,12 +2200,12 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
 
-# Whether a member of the extern block that starts at pos is a resource or a struct. Only a struct has an `end` of its
-# own, so the first `end` closes the block or comes after a struct.
+# Whether a member of the extern block that starts at pos is a resource, a callback or a struct. Only a struct has an
+# `end` of its own, so the first `end` closes the block or comes after a struct.
 def declares_types?(e: Base.Env, pos: Int) -> Bool
   at = pos
   while at < e.size and e.tokens[at].kind != "end"
-    if resource_start?(e, at) or e.tokens[at].kind == "struct"
+    if resource_start?(e, at) or callback_start?(e, at) or e.tokens[at].kind == "struct"
       return true
     end
 
@@ -2213,6 +2229,12 @@ def parse_extern_member(
     return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
 
+  if callback_start?(e, pos)
+    member = try parse_callback(e, pos, ids, doc)
+    named = block.callbacks.add(e.tokens[pos + 1].lexeme)
+    return ok(MemberAt(decl: member, block: block.with(callbacks: named), records: []))
+  end
+
   if e.tokens[pos].kind == "struct"
     made = try parse_extern_struct(e, pos, ids, doc, block)
     laid_out = block.structs.put(e.tokens[pos + 1].lexeme, made.layout)
@@ -2225,7 +2247,7 @@ def parse_extern_member(
   end
 
   if e.tokens[at].kind != "def"
-    return error(Base.found(e, at, "def, compute def, resource, struct or end in an extern block"))
+    return error(Base.found(e, at, "def, compute def, resource, callback, struct or end in an extern block"))
   end
 
   member = try parse_extern_function(e, pos, at, ids, doc, block)
@@ -2312,6 +2334,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
       name_span: e.tokens[pos + 1].span,
       free: free,
       by_ref: by_ref,
+      callback: none,
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -2376,11 +2399,132 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Optional[Str
       name_span: e.tokens[pos + 1].span,
       free: FUNCTION_TYPE,
       by_ref: false,
+      callback: none,
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
   )
   return decl_at(node, stop, ids)
+end
+
+# `callback` is a plain name: inside an extern block, before a type name, it declares a callback.
+def callback_start?(e: Base.Env, at: Int) -> Bool
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "callback" and Base.kind_at(e, at + 1) == "type-name"
+end
+
+# callback Name(params) -> result NL in an extern block at pos (the word callback): the type of a C function pointer
+# that C calls, Ruby ffi's `callback`. Native.callback(Name, &function) makes one, a resource, and a def of the block
+# takes it as a parameter of that type. The parameters and the result are C types of CALLBACK_PARAM_CODES and
+# CALLBACK_RESULT_CODES (else PARSE-EXTERN-TYPE), with no default (PARSE-EXTERN-DEFAULT), no out parameter
+# (PARSE-EXTERN-OUT), no `...` (PARSE-EXTERN-VARIADIC: libffi cannot make a variadic closure) and at most
+# EXTERN_MAX_PARAMS of them (PARSE-EXTERN-ARITY). The tree keeps the Agentica types, which the function must take.
+def parse_callback(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "type-name", "a callback name", false)
+  after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
+  params = try parse_parameters(e, after_open, ids, true)
+  after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
+  after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
+  result = try Base.parse_type(e, after_arrow, params.ids)
+  stop = try expect_statement_end(e, result.pos, "a newline after the callback")
+  if params.fixed >= 0
+    return error(
+      Base.bail(
+        e,
+        params.mark,
+        "PARSE-EXTERN-VARIADIC",
+        "a callback has no variadic part",
+        Base.hint("declare the arguments that C passes, each with its C type"),
+      ),
+    )
+  end
+
+  if params.nodes.size > EXTERN_MAX_PARAMS
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-ARITY",
+        "a callback takes at most #{EXTERN_MAX_PARAMS} parameters",
+        params.nodes[EXTERN_MAX_PARAMS].span,
+        Base.hint("C passes at most #{EXTERN_MAX_PARAMS} arguments to a callback"),
+      ),
+    )
+  end
+
+  returned = try callback_type(result.node, true)
+  codes = [returned.code]
+  typed: List[Ast.Param] = []
+  index = 0
+  for param in params.nodes
+    if params.outs[index]
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-OUT",
+          "a callback has no out parameters",
+          param.span,
+          Base.hint("take a pointer that C passes as a C.Pointer and write through it with Native.put_*"),
+        ),
+      )
+    end
+
+    if param.default.some?
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-DEFAULT",
+          "the callback parameter \"#{param.name}\" has a default value",
+          param.span,
+          Base.hint("C passes every argument: write the parameter without = value"),
+        ),
+      )
+    end
+
+    taken = try callback_type(param.type, false)
+    codes = codes.push(taken.code)
+    typed = typed.push(param.with(type: taken.type))
+    index += 1
+  end
+
+  node = Ast.Decl.Resource(
+    Ast.ResourceDecl(
+      id: result.ids,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      free: "",
+      by_ref: false,
+      callback: some(Ast.Callback(params: typed, result: returned.type, codes: codes.join(""))),
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, result.ids)
+end
+
+# The code and the Agentica type of a C type of a callback, or PARSE-EXTERN-TYPE at it (CALLBACK_PARAM_CODES and
+# CALLBACK_RESULT_CODES).
+def callback_type(ref: Ast.TypeRef, result: Bool) -> Result[ExternType]
+  code = ""
+  if ref.args.size == 0
+    code = EXTERN_CODES.get(ref.name, "")
+    if result and ref.name == "Void"
+      code = "v"
+    end
+  end
+
+  allowed = CALLBACK_PARAM_CODES
+  if result
+    allowed = CALLBACK_RESULT_CODES
+  end
+
+  if !allowed.include?(code)
+    help = CALLBACK_TYPES_HELP
+    if TYPE_NAME_HELP.has_key?(ref.name) and ref.args.size == 0
+      help = TYPE_NAME_HELP[ref.name]
+    end
+
+    return error(
+      Base.bail_span("PARSE-EXTERN-TYPE", "#{ref.name} is not a C type of a callback", ref.span, Base.hint(help)),
+    )
+  end
+
+  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: 0))
 end
 
 # struct Name NL fields end NL in an extern block at pos: a C struct that extern functions take and return by value,
@@ -2618,6 +2762,17 @@ def parse_extern_function(
           "the parameter \"#{param.name}\" is declared twice",
           param.name_span,
           Base.hint("give one of them another name"),
+        ),
+      )
+    end
+
+    if params.outs[index] and block.callbacks.include?(param.type.name)
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-OUT",
+          "the callback #{param.type.name} cannot be an out parameter",
+          param.type.span,
+          Base.hint(EXTERN_OUT_HELP),
         ),
       )
     end
@@ -2981,6 +3136,9 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       code = "v"
     elsif block.resources.has_key?(ref.name)
       code = "r"
+    elsif block.callbacks.include?(ref.name) and !result
+      # A callback goes to C as the resource it is: the VM passes its function pointer.
+      code = "r"
     elsif block.structs.has_key?(ref.name)
       code = block.structs[ref.name]
     end
@@ -2992,6 +3150,8 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       help = TYPE_NAME_HELP[ref.name]
     elsif ref.name == FUNCTION_TYPE and ref.args.size == 0
       help = FUNCTION_RESULT_HELP
+    elsif block.callbacks.include?(ref.name)
+      help = "a callback is a parameter only; declare a function that returns a function pointer -> C.Pointer"
     end
 
     return error(
@@ -3087,7 +3247,9 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   end
 
   if member == "extern"
-    return kind == "def" or kind == "export" or compute_start?(e, pos) or resource_start?(e, pos)
+    return (
+      kind == "def" or kind == "export" or compute_start?(e, pos) or resource_start?(e, pos) or callback_start?(e, pos)
+    )
   end
 
   return (

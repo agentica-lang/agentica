@@ -25,13 +25,16 @@ parameter        = NAME, ":", type, [ "=", expression ] ;
 
 extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL ;
 extern_member    = [ DOC, NL ], [ "export" ],
-                   ( extern_function | resource_decl | c_struct_decl ) ;
+                   ( extern_function | resource_decl | callback_decl
+                   | c_struct_decl ) ;
 extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
                    "->", ( c_type | TYPE_NAME | "Void" ), [ "=", STRING ], NL ;
 c_parameters     = c_parameter, { ",", c_parameter },
                    [ ",", "...", { ",", c_parameter } ], [ "," ] ;
 resource_decl    = "resource", TYPE_NAME, ",", "free", ":",
                    ( NAME | TYPE_NAME | "C", ".", "Function" ), NL ;
+callback_decl    = "callback", TYPE_NAME, "(", [ c_parameters ], ")",
+                   "->", ( c_type | "Void" ), NL ;
 c_parameter      = [ "out" ], NAME, ":",
                    ( c_type | "C", ".", ( "Bytes" | "Function" ) | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
@@ -153,6 +156,20 @@ and so is a `free:` type other than `C.Function`. A `C.Function` result is
 `PARSE-EXTERN-TYPE`, an out one `PARSE-EXTERN-OUT` and a variadic one
 `PARSE-EXTERN-VARIADIC-TYPE`; a variadic part needs a C parameter before the
 `...` besides the `C.Function` ones (`PARSE-EXTERN-VARIADIC-FIXED`).
+
+`callback Name(params) -> result` in an extern block declares the type of a C
+function pointer that C calls (section 6d). It takes the C types of a `def`
+that cross by value: an integer type, `C.Double`, `C.Float`, `C.Bool`,
+`C.String` (a parameter only) or `C.Pointer`, and returns one of them but
+`C.String`, or `Void`; any other type is `PARSE-EXTERN-TYPE` at the type. It
+has no default (`PARSE-EXTERN-DEFAULT`), no out parameter (`PARSE-EXTERN-OUT`
+at the parameter), no `...` (`PARSE-EXTERN-VARIADIC`) and at most 64
+parameters (`PARSE-EXTERN-ARITY`). For the rest of the language it is a
+resource: a type, with `export` and the place of a type in the declaration
+order (a block that declares one goes with the types). A `def` of the block
+below it takes it as a parameter, also in the variadic part; a callback result
+is `PARSE-EXTERN-TYPE` and an out one `PARSE-EXTERN-OUT`. `callback` is a
+keyword only at the start of a member of an extern block, before a type name.
 
 `struct Name ... end` in an extern block declares a C struct that the block's
 functions take and return by value (section 6d). Its fields come in the order of

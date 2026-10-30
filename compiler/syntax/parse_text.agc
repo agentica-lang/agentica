@@ -163,7 +163,18 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         attrs += " by_ref=true"
       end
 
-      attrs += doc_attr(node.doc)
+      case node.callback
+        some(callback) ->
+          attrs = "#{name_attr(node.name)} codes=#{Text.quote(callback.codes)}#{doc_attr(node.doc)}"
+          lines = out.push(head(at, role, "callback-decl", node.id, node.span, attrs))
+          for param in callback.params
+            lines = print_param(lines, deeper(at), param)
+          end
+
+          return print_type(lines, deeper(at), "result", callback.result)
+        none -> attrs += doc_attr(node.doc)
+      end
+
       return out.push(head(at, role, "resource-decl", node.id, node.span, attrs))
     Ast.Decl.TypeAlias(node) ->
       attrs = name_attr(node.name)
