@@ -280,17 +280,22 @@ agc_value agc_result_value(bool ok, agc_value value) {
   return v;
 }
 
-/* some(value) or none of the builtin Optional. A program whose lowering calls a builtin that returns an Optional has
-   the enum (its type is an expression type there), so only hand-made bytecode lacks it. */
+/* some(value) or none of the builtin Optional, for a caller that knows p has the enum (the loader rejects a Types
+   section with an Optional and no enum). */
+agc_value agc_optional_make(const agc_program *p, bool some, agc_value value) {
+  if (!some) return agc_enum_value(p->variants[p->optional].shared);
+  agc_enum *e = agc_new_enum(p->optional + 1, 1);
+  e->payload[0] = value;
+  return agc_enum_value(e);
+}
+
+/* agc_optional_make for a builtin. A program whose lowering calls a builtin that returns an Optional has the enum (its
+   type is an expression type there), so only hand-made bytecode lacks it. */
 agc_value agc_optional_value(agc_vm *vm, bool some, agc_value value, uint32_t span) {
   const agc_program *p = vm->rt->program;
   if (p->optional == UINT32_MAX || p->optional >= p->variant_count)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: no Optional enum", span);
-  uint32_t none = p->optional;
-  if (!some) return agc_enum_value(p->variants[none].shared);
-  agc_enum *e = agc_new_enum(none + 1, 1);
-  e->payload[0] = value;
-  return agc_enum_value(e);
+  return agc_optional_make(p, some, value);
 }
 
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {

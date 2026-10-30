@@ -90,14 +90,6 @@ static agc_value json_field_value(const agc_program *p, uint32_t which, agc_valu
   return agc_enum_value(e);
 }
 
-/* none, or some(v). */
-static agc_value optional_value(const agc_program *p, bool some, agc_value v) {
-  if (!some) return agc_enum_value(p->variants[p->optional].shared);
-  agc_enum *e = agc_new_enum(p->optional + 1, 1);
-  e->payload[0] = v;
-  return agc_enum_value(e);
-}
-
 static void store_child(agc_vm *vm, decode_frame *f, agc_value v) {
   if (f->kind == AGC_TYPE_LIST)
     agc_list_builder_push(&f->list, v);
@@ -113,7 +105,7 @@ static agc_value frame_value(const agc_program *p, decode_frame *f) {
   if (f->kind == AGC_TYPE_LIST) return agc_list_value(agc_list_builder_finish(&f->list));
   if (f->kind == AGC_TYPE_MAP) return agc_map_value(f->map);
   if (f->kind == AGC_TYPE_JSON_FIELD) return json_field_value(p, AGC_JSON_FIELD_VALUE, f->value);
-  if (f->kind == AGC_TYPE_OPTIONAL) return optional_value(p, true, f->value);
+  if (f->kind == AGC_TYPE_OPTIONAL) return agc_optional_make(p, true, f->value);
   return agc_struct_value(f->record);
 }
 
@@ -172,11 +164,11 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
     agc_charge(vm, 1);
     const agc_json *j = kind == ABSENT_FIELD ? NULL : agc_as_json(vm, item);
     if (kind == ABSENT_FIELD && arg == AGC_TYPE_OPTIONAL) {
-      v = optional_value(p, false, agc_void());
+      v = agc_optional_make(p, false, agc_void());
     } else if (kind == ABSENT_FIELD) {
       v = json_field_value(p, AGC_JSON_FIELD_ABSENT, agc_void());
     } else if (kind == AGC_TYPE_OPTIONAL && j->kind == AGC_JSON_NULL) {
-      v = optional_value(p, false, agc_void());
+      v = agc_optional_make(p, false, agc_void());
     } else if (kind == AGC_TYPE_JSON_FIELD && j->kind == AGC_JSON_NULL) {
       v = json_field_value(p, AGC_JSON_FIELD_NULL, agc_void());
     } else if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
