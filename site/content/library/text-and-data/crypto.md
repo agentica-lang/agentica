@@ -1,10 +1,10 @@
 ---
 title: Digest, HMAC and SecureRandom
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, and SecureRandom, which draws secure random bytes, hex and UUIDs.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, Triple DES CBC and CMAC for payment formats, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, and the secure random draws of `SecureRandom`, as Ruby names them.
+The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, Triple DES CBC (`Cipher`, named after Ruby's `OpenSSL::Cipher.new("des-ede3-cbc")`) and `CMAC` for payment formats, and the secure random draws of `SecureRandom`, as Ruby names them.
 
 ## Digests
 
@@ -112,6 +112,67 @@ false
 - Values of other lengths give `false`. The time grows with both lengths, so it shows how long the values are, never what they hold.
 - To check a hex MAC, such as the one in a webhook header, decode it first with [`Digest.hexdecode`](/library/text-and-data/base64/#hex); an `error` there means a bad MAC.
 - It needs no effect label.
+
+## Triple DES and CMAC
+
+```text
+Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
+Cipher.des_ede3_cbc_decrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
+CMAC.aes(key: Bytes, data: Bytes) -> Result[Bytes]
+CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes]
+```
+
+Payment messages use Triple DES and CMAC: PIN blocks, key check values and the MACs of ISO 8583 messages. These builtins are for such formats, not for new designs; Triple DES CBC is not authenticated, and its 8-byte blocks are small. They give only what OpenSSL gives: the message formats, BCD and the ISO 9797-1 MAC algorithms belong to a package.
+
+`Cipher.des_ede3_cbc_encrypt` encrypts `data` with Triple DES in CBC mode and no padding, as Ruby's `OpenSSL::Cipher.new("des-ede3-cbc")` with `padding = 0` does, and `Cipher.des_ede3_cbc_decrypt` decrypts it. The key has 24 bytes, or 16 for a two-key key (K1 K2, which runs as K1 K2 K1); the IV has 8 bytes; the data is whole blocks of 8 bytes, and the result has the same size. Pad the data as your format says before you encrypt it.
+
+```agentica
+def main() -> Void
+  key = Digest.hexdecode("0123456789abcdeffedcba9876543210").unwrap!
+  iv = Bytes.from_list(List.repeat(0, 8)).unwrap!
+  sealed = Cipher.des_ede3_cbc_encrypt(key, iv, "PIN 1234".bytes).unwrap!
+  puts(Digest.hexencode(sealed))
+  opened = Cipher.des_ede3_cbc_decrypt(key, iv, sealed).unwrap!
+  puts(String.from_bytes(opened).unwrap!)
+  check_value = Cipher.des_ede3_cbc_encrypt(key, iv, iv).unwrap!.take(3)
+  puts(Digest.hexencode(check_value))
+  puts(Cipher.des_ede3_cbc_encrypt(key, iv, "PIN".bytes).ok?)
+end
+```
+
+```output
+1a3be5be6098e0d3
+PIN 1234
+08d7b4
+false
+```
+
+`CMAC.aes` gives the CMAC (NIST SP 800-38B, RFC 4493) of `data` with AES: the key has 16, 24 or 32 bytes, for AES-128, AES-192 or AES-256, and the tag has 16 bytes. `CMAC.des_ede3` gives it with Triple DES, under a key of 24 or 16 bytes, and the tag has 8 bytes. Both give the full tag; when a format sends a shorter MAC, take its first bytes and check it with [`HMAC.secure_compare`](#checking-a-mac).
+
+```agentica
+def main() -> Void
+  key = Digest.hexdecode("2b7e151628aed2a6abf7158809cf4f3c").unwrap!
+  message = "0200 payment message".bytes
+  tag = CMAC.aes(key, message).unwrap!
+  puts(Digest.hexencode(tag))
+  mac = tag.take(8)
+  puts(HMAC.secure_compare(CMAC.aes(key, message).unwrap!.take(8), mac))
+  tdes_key = Digest.hexdecode("0123456789abcdeffedcba9876543210").unwrap!
+  puts(CMAC.des_ede3(tdes_key, message).unwrap!.size)
+  puts(CMAC.aes(key.take(10), message).ok?)
+end
+```
+
+```output
+384be8227f8ea73df2a5fe3da6056b99
+true
+8
+false
+```
+
+- A key, IV or data of another size gives an `error`, before any work: there is never partial output.
+- The time grows with the data, and they need no effect label.
+- `Cipher` and `CMAC` are reserved type names.
 
 ## SecureRandom
 

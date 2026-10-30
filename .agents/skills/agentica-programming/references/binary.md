@@ -90,6 +90,22 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
   time (Ruby's `OpenSSL.secure_compare`): check a received MAC, signature or
   token with it, never with `==`, which is not constant time. Other lengths
   give `false`.
+- Triple DES CBC and CMAC are for payment formats (PIN blocks, key check
+  values, ISO 8583 MACs), not for new designs. Each gives an `error(...)` for a
+  wrong key, IV or data size, never partial output:
+
+```text
+Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
+Cipher.des_ede3_cbc_decrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
+CMAC.aes(key: Bytes, data: Bytes) -> Result[Bytes]       # 16-byte tag
+CMAC.des_ede3(key: Bytes, data: Bytes) -> Result[Bytes]  # 8-byte tag
+```
+
+- The Triple DES key is 24 bytes, or 16 (K1 K2, run as K1 K2 K1); the IV 8
+  bytes; the data whole 8-byte blocks, with no padding: pad it as the format
+  says. The AES key of `CMAC.aes` is 16, 24 or 32 bytes. A shorter MAC is
+  `tag.take(n)`; check it with `HMAC.secure_compare`. `Cipher` and `CMAC` are
+  reserved type names.
 
 ```text
 Base64.strict_encode64(data: Bytes) -> String     # padded, one line

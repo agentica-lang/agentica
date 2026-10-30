@@ -1,6 +1,7 @@
 """The Digest hashes against Python's hashlib, the HMACs and HMAC.secure_compare
-against Python's hmac, Base64 and hex against Python's base64 and binascii, and the SecureRandom
-formats against Python's uuid and re, on every system.
+against Python's hmac, Base64 and hex against Python's base64 and binascii, the SecureRandom
+formats against Python's uuid and re, and Triple DES CBC and CMAC against a Node peer, on
+every system.
 
 The peer program (tests/fixtures/digest-peer.agc) hashes all of its stdin with
 MD5, SHA-1, SHA-256 and SHA-512; the inputs cover the padding boundaries of the
@@ -17,6 +18,10 @@ as lists of Ints. SecureRandom gives new bytes on every run, so
 tests/fixtures/secure-random-peer.agc is checked on properties only: sizes, the
 byte range, the hex and uuid forms, and that draws differ. A bad count checks
 the code and the span of the diagnostic.
+tests/fixtures/cipher-peer.agc runs Cipher.des_ede3_cbc_encrypt and _decrypt, CMAC.aes and
+CMAC.des_ede3 on generated keys and data; Python's standard library has neither DES nor CMAC, so
+tests/fixtures/cipher-peer.js (Node's crypto, with CMAC written from RFC 4493) is the peer. The
+known-answer vectors and the error Results are the VM fixtures triple-des-cbc and cmac.
 """
 import base64
 import binascii
@@ -30,7 +35,7 @@ import uuid
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm
+from tests.agentica_test import FIXTURES, compile_agc, run, run_vm
 
 SIZES = [0, 1, 3, 55, 56, 63, 64, 65, 111, 112, 119, 120, 127, 128, 129, 1000, 4096 + 7, 1024 * 1024]
 DIGESTS = ["md5", "sha1", "sha256", "sha512"]
@@ -299,3 +304,29 @@ BAD_COUNTS = [(call, count) for call in ("SecureRandom.random_bytes", "SecureRan
 @pytest.mark.parametrize("call, argument", BAD_COUNTS)
 def test_a_bad_secure_random_count_halts_at_the_argument(tmp_path, call, argument):
     assert_halts_at_the_argument(tmp_path, call, [argument], 0, "RUNTIME-INVALID-COUNT")
+
+
+# Whole blocks for the cipher (none to 8 KiB and 64 KiB) and any length for CMAC, on both sides of the 8- and
+# 16-byte blocks, with every key size.
+CIPHER_BLOCKS = [0, 1, 2, 3, 15, 1024, 8192]
+CMAC_SIZES = [0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 1000, 4096 + 7, 65536]
+
+
+def test_triple_des_and_cmac_match_a_node_peer(tmp_path, node):
+    # The seed keeps a failure reproducible.
+    rng = random.Random(825)
+    cases = []
+    for blocks in CIPHER_BLOCKS:
+        for size in CMAC_SIZES:
+            cases.append({"des_key": rng.randbytes(rng.choice([16, 24])).hex(), "iv": rng.randbytes(8).hex(),
+                          "aes_key": rng.randbytes(rng.choice([16, 24, 32])).hex(),
+                          "blocks": rng.randbytes(8 * blocks).hex(), "data": rng.randbytes(size).hex()})
+    stdin = json.dumps({"cases": cases})
+    peer = compile_agc(FIXTURES / "cipher-peer.agc", tmp_path / "cipher-peer.agcb")
+    result = run_vm(peer, stdin=stdin)
+    assert result.code == 0, result.stderr
+    expected = run([node, FIXTURES / "cipher-peer.js"], stdin=stdin)
+    assert expected.code == 0, expected.stderr
+    for case, got, want in zip(cases, json.loads(result.stdout), json.loads(expected.stdout), strict=True):
+        sizes = (len(case["des_key"]) // 2, len(case["aes_key"]) // 2, len(case["blocks"]) // 2, len(case["data"]) // 2)
+        assert got == want, sizes

@@ -1,12 +1,12 @@
 /*
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
  * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
- * the constant-time HMAC.secure_compare, the SecureRandom draws, and the
- * Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. The
- * hashes, HMACs, random bytes and compare come from the OpenSSL adapter
- * (digest.h). Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
- * Base64 and hex follow RFC 4648 and Ruby's Base64 module, SecureRandom.uuid
- * RFC 9562 §5.4.
+ * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
+ * CBC (Cipher) and CMAC, and the Base64 and Digest.hexencode/hexdecode text
+ * forms of bytes in plain C. The hashes, HMACs, random bytes, compare, cipher
+ * and CMAC come from the OpenSSL adapter (digest.h). Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
+ * Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
 #include "services.h"
 #include "digest.h"
@@ -262,12 +262,12 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, byte_value(out, n));
 }
 
-/* The calls into libcrypto (digest_compute, hmac_compute and secure_draw below) each have their own out-of-line
-   function whose only callees are the adapter and agc_fail. vm/tools/tsan.supp names these three and nothing else, so
-   a TSan report about OpenSSL's fetch caches is suppressed while a race in the VM code around them (such as reading a
-   list another task holds) is still reported. TSan unwinds by frame pointers, which libcrypto does not keep, so a
-   report skips the adapter function and shows its caller first: these must stay real frames (noinline, and not a tail
-   call). */
+/* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute and cmac_compute below) each
+   have their own out-of-line function whose only callees are the adapter, memset and agc_fail. vm/tools/tsan.supp
+   names these five and nothing else, so a TSan report about OpenSSL's fetch caches is suppressed while a race in the
+   VM code around them (such as reading a list another task holds) is still reported. TSan unwinds by frame pointers,
+   which libcrypto does not keep, so a report skips the adapter function and shows its caller first: these must stay
+   real frames (noinline, and not a tail call). */
 static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
                                                        unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
   size_t len = agc_digest(kind, bytes, n, out);
@@ -383,6 +383,80 @@ static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_bool(same && a_n == b_n && agc_secure_equal(a, b, a_n));
 }
 
+/* Runs Triple DES CBC over the n bytes at data into out, whose bytes the caller checked (agc_des_ede3_cbc). A library
+   failure stops the run and leaves no partial output: out is cleared first. One of the libcrypto wrappers that
+   vm/tools/tsan.supp names (see digest_compute). */
+static __attribute__((noinline)) void cipher_compute(agc_vm *vm, bool encrypt, const uint8_t *key, size_t key_n,
+                                                     const uint8_t *iv, const uint8_t *data, size_t n, uint8_t *out,
+                                                     uint32_t span) {
+  if (!agc_des_ede3_cbc(encrypt, key, key_n, iv, data, n, out)) {
+    memset(out, 0, n);
+    agc_fail(vm, "RUNTIME-INTERNAL", "Triple DES is not available", span);
+  }
+}
+
+/* Writes the CMAC tag of the n bytes at data into out and returns its length (agc_cmac); the caller checked the key
+   size. A library failure stops the run. One of the libcrypto wrappers that vm/tools/tsan.supp names (see
+   digest_compute). */
+static __attribute__((noinline)) size_t cmac_compute(agc_vm *vm, agc_cmac_cipher cipher, const uint8_t *key,
+                                                     size_t key_n, const uint8_t *data, size_t n,
+                                                     unsigned char out[AGC_CMAC_MAX_BYTES], uint32_t span) {
+  size_t len = agc_cmac(cipher, key, key_n, data, n, out);
+  if (!len) agc_fail(vm, "RUNTIME-INTERNAL", "CMAC is not available", span);
+  return len;
+}
+
+/* Cipher.des_ede3_cbc_encrypt(key, iv, data) and _decrypt: Triple DES (OpenSSL's des-ede3-cbc) with no padding, for
+   payment formats that need it, never for new designs. A key that is not 16 (two-key) or 24 bytes, an IV that is not
+   8 bytes or data that is not whole 8-byte blocks is an error Result, checked before any work, so there is never
+   partial output; a caller pads the data as its scheme says. Cost and lock as digest_value. */
+static agc_value des_ede3_cbc_value(agc_vm *vm, agc_value *args, uint32_t span, bool encrypt) {
+  size_t key_n, iv_n, n;
+  const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
+  const uint8_t *iv = agc_bytes_data(vm, args[1], &iv_n);
+  const uint8_t *data = agc_bytes_data(vm, args[2], &n);
+  if (key_n != 16 && key_n != 24) return agc_error_value("Triple DES needs a key of 16 or 24 bytes");
+  if (iv_n != AGC_DES_BLOCK_BYTES) return agc_error_value("Triple DES CBC needs an iv of 8 bytes");
+  if (n % AGC_DES_BLOCK_BYTES != 0) return agc_error_value("Triple DES CBC needs data in whole blocks of 8 bytes");
+  if (n == 0) return agc_result_value(true, agc_bytes_value(agc_empty_bytes()));
+  agc_bytes *out = agc_new_bytes(n);
+  cipher_compute(vm, encrypt, key, key_n, iv, data, n, out->data, span);
+  return agc_result_value(true, agc_bytes_value(out));
+}
+
+static agc_value builtin_des_ede3_cbc_encrypt(agc_vm *vm, agc_value *args, uint32_t span) {
+  return des_ede3_cbc_value(vm, args, span, true);
+}
+
+static agc_value builtin_des_ede3_cbc_decrypt(agc_vm *vm, agc_value *args, uint32_t span) {
+  return des_ede3_cbc_value(vm, args, span, false);
+}
+
+/* CMAC.aes(key, data) and CMAC.des_ede3(key, data): the full CMAC tag (NIST SP 800-38B) of the data, 16 bytes for AES
+   (the key size picks AES-128, -192 or -256) and 8 for Triple DES; a caller that needs a shorter MAC takes the first
+   bytes, and checks a received tag with HMAC.secure_compare. A wrong key length is an error Result. Cost and lock as
+   digest_value. */
+static agc_value cmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_cmac_cipher cipher) {
+  size_t key_n, n;
+  const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
+  const uint8_t *data = agc_bytes_data(vm, args[1], &n);
+  if (cipher == AGC_CMAC_AES && key_n != 16 && key_n != 24 && key_n != 32)
+    return agc_error_value("AES needs a key of 16, 24 or 32 bytes");
+  if (cipher == AGC_CMAC_DES_EDE3 && key_n != 16 && key_n != 24)
+    return agc_error_value("Triple DES needs a key of 16 or 24 bytes");
+  unsigned char tag[AGC_CMAC_MAX_BYTES];
+  size_t len = cmac_compute(vm, cipher, key, key_n, data, n, tag, span);
+  return agc_result_value(true, byte_value(tag, len));
+}
+
+static agc_value builtin_cmac_aes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return cmac_value(vm, args, span, AGC_CMAC_AES);
+}
+
+static agc_value builtin_cmac_des_ede3(agc_vm *vm, agc_value *args, uint32_t span) {
+  return cmac_value(vm, args, span, AGC_CMAC_DES_EDE3);
+}
+
 /* The Digest and HMAC entries: one thin function per kind and output (bytes or hex) over digest_value and
    hmac_value. */
 static agc_value builtin_md5(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -458,6 +532,10 @@ const agc_builtin agc_crypto_builtins[] = {
   {"HMAC.sha512_hexdigest.bytes", 2, builtin_hmac_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"SecureRandom.random_bytes.bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"HMAC.secure_compare.bytes", 2, builtin_secure_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Cipher.des_ede3_cbc_encrypt", 3, builtin_des_ede3_cbc_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"Cipher.des_ede3_cbc_decrypt", 3, builtin_des_ede3_cbc_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"CMAC.aes", 2, builtin_cmac_aes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"CMAC.des_ede3", 2, builtin_cmac_des_ede3, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

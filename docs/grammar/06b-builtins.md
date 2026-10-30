@@ -311,6 +311,25 @@ Expected types flow into these operations for empty collections and Results.
   digests match. Values of other lengths give `false`; the time grows with both
   lengths, which it does not hide. It is for checking a received MAC, signature
   or token against the expected one, and it has no effect label.
+- `Cipher.des_ede3_cbc_encrypt(key, iv, data)` and
+  `Cipher.des_ede3_cbc_decrypt(key, iv, data)` encrypt and decrypt the `Bytes`
+  in `data` with Triple DES in CBC mode and no padding, as Ruby's
+  `OpenSSL::Cipher.new("des-ede3-cbc")` with `padding = 0` does, and give
+  `ok(bytes)` of the same size. The key has 24 bytes, or 16 for a two-key
+  key (K1 K2, run as K1 K2 K1); the IV has 8 bytes; `data` is whole blocks of
+  8 bytes (none included). Anything else gives an `error(...)` before any
+  work, never partial output; a caller pads the data as its format says.
+  Triple DES is for payment formats that need it (PIN blocks, key check
+  values), not for new designs.
+- `CMAC.aes(key, data)` and `CMAC.des_ede3(key, data)` give `ok(tag)`: the full
+  CMAC (NIST SP 800-38B; RFC 4493 for AES) of the `Bytes` in `data`, 16 bytes
+  with AES and 8 with Triple DES. The AES key has 16, 24 or 32 bytes (AES-128,
+  -192 or -256), the Triple DES key 24 or 16 (two-key); another size gives an
+  `error(...)`. A shorter MAC is the first bytes of the tag
+  (`tag.take(4)`); check a received one with `HMAC.secure_compare`.
+- The `Cipher` and `CMAC` calls are built on OpenSSL, take time in proportion
+  to their data and have no effect label. `Cipher` and `CMAC` are reserved
+  type names.
 - `Base64` reads and writes RFC 4648 text as Ruby's `Base64` does.
   `strict_encode64(data)` gives padded base64 of a `Bytes` on one line,
   `encode64(data)` the same in lines of 60 characters that each end in a
