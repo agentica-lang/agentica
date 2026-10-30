@@ -140,8 +140,6 @@ def prepare(work: Path, task: str, arm: str) -> None:
         # pages too, next to grammar.md; the other links out of the grammar lead nowhere in the work folder.
         text = re.sub(r"\]\((?:\.\./){2}site/content/library/", "](library/", text)
         text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
-        text = re.sub(r"\[([^\]]*)\]\[agentica-link-\d+\]", r"\1", text)
-        text = re.sub(r"^\[agentica-link-\d+\]: .*\n", "", text, flags=re.MULTILINE)
         (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
         copy_library(ROOT / "site" / "content" / "library", work / "docs" / "library")
         shutil.copytree(ROOT / "examples", work / "examples")

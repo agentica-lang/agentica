@@ -6,8 +6,11 @@ description: Send values from one task to another through a bounded queue.
 
 A channel is a bounded queue: one task sends values, another receives them. See also [Tasks](/tour/tasks/).
 
-- `Channel[T]` holds values of one type, any type a variable can have except `Void`.
-- A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name.
+- `Channel[T]` holds values of one type, any type a variable can have: a task handle, a socket, a file or another channel is allowed, and `Channel[Void]` is `CHECK-VOID-TYPE`.
+- A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name: a user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
+- `puts`, `print`, interpolation and `==` on a channel are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a channel field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<Channel>`.
+- `send`, `recv` and `close` carry the `concurrency` effect; `new` and `closed?` carry none.
+- There is no `select`, no `for x in channel`, and no unbounded or unbuffered channel.
 - `send`, `recv`, `close` and `closed?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
 
 ## Channel.new
@@ -68,7 +71,7 @@ channel: timed out
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 ```
 
-Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting, and a sent value goes straight to the first waiting receiver. Errors:
+Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting, and so are waiting senders, with no barging: a sent value goes straight to the first waiting receiver. A waiter that leaves before it runs, because it was cancelled or its timeout came first, passes what it was given to the next waiter. A receiver that was given a value returns it even if its deadline passes before it runs. No value is lost or added twice. Errors:
 
 - `error("channel: closed")` once closed and every value was taken, or `error("channel: timed out")`.
 
@@ -95,7 +98,7 @@ channel: timed out
 Channel.close(channel: Channel[T]) -> Void
 ```
 
-Closing again does nothing. Waiting senders get the closed error. Receivers get the values left, then the closed error.
+Closing again does nothing. Waiting senders get the closed error, and so do woken senders that have not run yet. Receivers get the values left, then the closed error.
 
 - The sending side should close on every path, receivers should not. If nobody closes it, a receive loop never ends.
 - An owned channel also closes when its owner ends ([A producer that owns the channel](#a-producer-that-owns-the-channel)).
@@ -123,7 +126,7 @@ channel: closed
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-`true` once the channel is closed and every value was taken, and it stays `true`. A closed channel that still holds values gives `false`. After a `recv` error it tells the end of the stream (`true`) from a timeout (`false`).
+`true` once the channel is closed, its buffer is empty and no value is reserved for a woken receiver, and it stays `true`. A closed channel that still holds values gives `false`. After a `recv` error it tells the end of the stream (`true`) from a timeout (`false`).
 
 ## A producer and a consumer
 

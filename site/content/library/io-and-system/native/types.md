@@ -52,7 +52,7 @@ end
 - `...` comes after at least one C parameter, not counting a `C.Function` (`PARSE-EXTERN-VARIADIC-FIXED`). It appears once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty; the 64 parameters count both parts.
 - A variadic parameter is `C.Int32`, `C.Int64`, `C.UInt32`, `C.Long`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
 - The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
-- The call follows each system's variadic C ABI, which differs from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
+- The call follows each system's variadic C ABI, which differs from a fixed signature: on Apple arm64 the variadic arguments go on the stack, and on Windows x64 a variadic `double` goes in an integer register too (libffi's `ffi_prep_cif_var`). Declare a variadic function with `...`, never as a fixed one.
 
 ## Reading memory that C returns
 
@@ -104,7 +104,7 @@ end
 - The block form, `Native.memory_pointer(size) do |buf| ... end`, gives the buffer to the block and frees it when the block ends, also when the block ends early with an error that `try` returns. The call returns the block's value. A runtime error in the block stops the task, and the task's end frees the buffer. A buffer that the block hands to another task with `Task.spawn_owning` is not freed at the block's end: its new owner frees it.
 - The plain form, `buf = Native.memory_pointer(size)`, is for a buffer that outlives one block, such as one that C keeps between calls. A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
 - The calling task owns a plain buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. The end of the run frees a buffer still open, as it frees a resource (below).
-- `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
+- `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A negative size, a size the system cannot give and any size above 256 TiB (2^48 bytes) fail with `RUNTIME-INVALID-COUNT`.
 - A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
 - A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`, and `Native.closed?(buf)` is `true`. A `C.Pointer` that C gave is never closed (NULL included: test it with `Native.null?`). `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
 - The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `MemoryPointer.from_string(text)`, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
@@ -170,7 +170,7 @@ end
 `Native.offset(p, n)` is the pointer `n` bytes past `p`, for C structs whose fields point into one block, such as the `length`, `is_null` and `buffer` cells of a MySQL bind:
 
 - For a pointer that C returned it is the plain sum (wrapping on overflow), trusted like `p`.
-- For an owned buffer it is a view of the same memory from byte `n` to the buffer's end. `n` outside 0 to the size fails with `RUNTIME-NATIVE-BOUNDS`, and reads and writes through the view are checked against its range.
+- For an owned buffer it is a view of the same memory from byte `n` to the buffer's end. `n` outside 0 to the size fails with `RUNTIME-NATIVE-BOUNDS`, and reads and writes through the view are checked against its range. A view of a view takes its offset from the view and ends where the buffer ends.
 - The view belongs to its buffer: freeing the buffer closes it (`RUNTIME-NATIVE-CLOSED`, `Native.closed?` is `true`). A `compute def` call that takes the view keeps the buffer until it returns. `Native.free` of a view fails with `RUNTIME-NATIVE-NOT-OWNED`, and `Task.spawn_owning` hands over the buffer, not a view.
 
 ```agentica {mode="check"}
@@ -210,7 +210,7 @@ end
 ```
 
 - A function declared `-> Stream` gives a `Result[Stream]`: a NULL result is `error("fopen returned NULL")`, anything else is `ok` with a resource that the calling task owns.
-- `Native.close(stream)` runs the free function once and closes the resource; closing it again does nothing. A call that takes a closed resource fails with `RUNTIME-NATIVE-CLOSED`.
+- `Native.close(stream)` runs the free function once and closes the resource; closing it again does nothing. A call that takes a closed resource fails with `RUNTIME-NATIVE-CLOSED`, before any argument is copied.
 - `Native.closed?(stream)` never stops the task, so a wrapper can return an `error` instead. It is `true` after `Native.close` (in any task), after the end of the task that owned the resource (also a task that returned it), and for a NULL out resource. It is `false` for a live one, also while a `compute def` call holds it; closed during that call, it is `true` at once. `true` is final; `false` can be out of date at once if another task may close the resource.
 - A resource the task did not close is freed when the task ends (return, crash or cancel), like a file. `Task.spawn_owning(&work, stream)` hands it to the new task.
 - A `compute def` call keeps its resource arguments until it returns: if the resource is closed meanwhile, or its task is cancelled, the free runs when the call ends.
