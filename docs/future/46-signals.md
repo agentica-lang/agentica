@@ -34,7 +34,7 @@ The VM has one stop path. A program cannot take part in it.
   signal only the child's pid: SIGKILL for `spawn`; for `spawn_captured`
   SIGTERM, then SIGKILL one second later (`signal_child` and `shut` in
   `vm/process.c`). Descendants are not reached
-  (`docs/grammar/06d-io-and-network.md`).
+  (`site/content/library/io-and-system/process.md`).
 - **Exit status of a child.** `Process.wait` returns the exit code. A child
   killed by a signal returns 128 + signal (`finished` in `vm/process.c`). So a
   child that exits with 143 and a child killed by SIGTERM look the same.
@@ -247,7 +247,8 @@ Process.signal_group(p: Process, sig: Signal) -> Result[Void]
 - **Start.** `spawn_group` starts the child in a new session (`setsid`), so its
   pid is the group id, as `start_new_session=True` does in Python. It takes
   `dir`, as `spawn_captured` does. The command still resolves against the
-  program's working directory, not `dir` (`docs/grammar/06d-io-and-network.md`).
+  program's working directory, not `dir`
+  (`site/content/library/io-and-system/process.md`).
   So a program uses an absolute path.
 - **Streams: the child inherits them.** The child inherits the VM's stdin,
   stdout and stderr, as Python's `Popen` does with no arguments. The VM makes no

@@ -128,8 +128,8 @@ systems get none.
     start.
 
 **Captured processes (21a).** `Process.spawn_captured` and
-`Process.output` (specified in `docs/grammar/06d-io-and-network.md`) share the
-code above.
+`Process.output` (specified in
+`site/content/library/io-and-system/process.md`) share the code above.
 
 - **Spawn.** The checks keep the order above, with `dir` (nonempty, no NUL)
   checked after the arguments and before the timeout. `dir` must be a directory,
@@ -160,8 +160,8 @@ and stderr (a socket pair, or on Windows two pipes) carry the protocol of
 stdin and stdout. The builtins are in `vm/process.c`; the child side and the
 shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`),
 with the system part in `vm/duplex_os.h`. The signatures are in
-`docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket pair; Windows
-uses a pipe per direction (below).
+`site/content/library/io-and-system/process.md`. Linux and macOS use a socket
+pair; Windows uses a pipe per direction (below).
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as two libuv pipe handles, one to read and one to write, on two

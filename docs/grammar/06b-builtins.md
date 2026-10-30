@@ -269,7 +269,9 @@ the limit can trip a little late; `--schedulers 1` keeps the exact count.
 
 At the end of a run the VM waits for the buffered writes of every open file, for
 the output of stdout and stderr that a pipe has not taken yet, and then for the
-frees of what native code still owns (section 6d). The wait is always bounded:
+frees of what native code still owns (see
+[How a run ends](../../site/content/library/concurrency/task.md#how-a-run-ends)).
+The wait is always bounded:
 30000 milliseconds by default. `agentica --flush-timeout MS program.agc` or the
 environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it (an integer from 0 to
 86400000; the flag wins, a bad value exits 2, and there is no way to turn the

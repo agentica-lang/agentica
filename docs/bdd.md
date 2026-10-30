@@ -494,7 +494,7 @@ that calls them can break the protocol, and nothing stops it.
 
 The order in which a failed test reports its failure is part of the `Test`
 builtin: see
-[`grammar/06c-tasks-and-tests.md`][agentica-link-1].
+[`library/testing/test.md`](../site/content/library/testing/test.md).
 
 ## Decided against
 
@@ -551,6 +551,4 @@ builtin: see
 
 - **Code:** `RUNTIME-TEST-*`
   - **Meaning:** The unit test codes, reported per test: see
-    [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md)
-
-[agentica-link-1]: grammar/06c-tasks-and-tests.md#unit-tests-test
+    [`library/testing/test.md`](../site/content/library/testing/test.md)

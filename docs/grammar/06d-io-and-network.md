@@ -51,7 +51,8 @@ captured output and the channel to a child are in the
 An `extern` block (section 5) declares C functions of a native library, which a
 program then calls like any `def`. The calls that read and write memory, the
 resources, the out parameters, the structs, the compute calls and the waits are
-in the [`Native code` pages](../../site/content/library/io-and-system/native/_index.md).
+in the
+[`Native code` pages](../../site/content/library/io-and-system/native/_index.md).
 
 ```ruby
 extern "libm.so.6"

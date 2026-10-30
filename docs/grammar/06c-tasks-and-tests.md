@@ -22,6 +22,8 @@ language and the checker:
   type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` otherwise; the same
   holds for a cancelled task (`error("task: cancelled")`,
   `RUNTIME-TASK-CANCELLED`).
+- `Task.cancel(task)` takes a `Task[R]`; any other argument type is
+  `CHECK-TYPE-MISMATCH` at the argument.
 - `Task.await(task, timeout_ms)` returns `Await[T]`, a builtin generic enum with
   the variants `Await.Done(value)` and `Await.TimedOut` (no payload, written
   without parentheses). `Await` is reserved: a struct, enum, type parameter or
@@ -80,6 +82,8 @@ functions, atomicity, costs and lifetime are in the
 - `puts`, `print`, interpolation and `==` on a table are `CHECK-TYPE-MISMATCH`,
   `.to_s` is `CHECK-UNKNOWN-METHOD`, and a JSON encoding of a struct with a
   table field is `CHECK-NOT-ENCODABLE`.
+- `ATS.put`, `put_new`, `delete` and `add` carry the `concurrency` effect, so
+  an ignored `put_new` or `add` is not `CHECK-UNUSED-VALUE`.
 
 ### Unit tests (`Test`)
 
