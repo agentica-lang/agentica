@@ -137,11 +137,11 @@ jobs:
           tools: 'false'
       - name: Build the binary, the first binary of the bootstrap and the C tests (the shards run them)
         run: make -j"$(nproc)" dist/agentica build/vm/release/bootstrap/agentica vm-test-binaries
-      - run: tar -czf "$RUNNER_TEMP/build.tar.gz" dist build
-      - uses: actions/upload-artifact@v4
+      - run: GZIP=-1 tar -czf "$RUNNER_TEMP/release-build.tar.gz" dist build
+      - uses: actions/upload-artifact@v7
         with:
           name: release-build
-          path: ${{ runner.temp }}/build.tar.gz
+          path: ${{ runner.temp }}/release-build.tar.gz
           retention-days: 1
           compression-level: 0
           overwrite: true
@@ -346,10 +346,12 @@ jobs:
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           printf '%s\n' "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
 
-  # The sanitizer half, only when C changed (the `changes` job). One build of the sanitizer binary (dist/agentica with
-  # SANITIZE=1, its C tests and fixed point), the ThreadSanitizer binary and C tests, and the GC stress binary, so the
-  # shards below compile nothing. The sanitizer mode comes last: build/vm/flags (shared by the modes) then names it, which
-  # is what the shards that use the artifact as it is (use-build) check.
+  # The sanitizer half, only when C changed (the `changes` job). It builds in two jobs at once, so the shards below compile
+  # nothing. `sanitizer-build` makes the sanitizer binary (dist/agentica with SANITIZE=1, its C tests, the fixed point);
+  # `tsan-build` makes the ThreadSanitizer and GC stress binaries and C tests. Their folders do not overlap, so a shard unpacks
+  # both. Neither job switches mode after its first build: build/vm/flags (shared by the modes) then keeps the content that
+  # its binaries were linked with, and make takes them as current (a switch would relink them and, through the first binary of
+  # the bootstrap, run the stages again).
   sanitizer-build:
     needs: changes
     if: ${{ needs.changes.outputs.c != 'false' }}
@@ -368,20 +370,49 @@ jobs:
           sanitizers: 'true'
       - name: make vm-sanitize-build, the sanitizer binary and the front end stages it needs
         run: make -j"$(nproc)" vm-sanitize-build
+      - run: make -j"$(nproc)" vm-test
+      - name: Fixed point of the front end on the sanitizer binary (builds the dist/agentica that the next step tests)
+        run: make fixed-point
+      - run: GZIP=-1 tar -czf "$RUNNER_TEMP/sanitizer-build.tar.gz" dist build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-build
+          path: ${{ runner.temp }}/sanitizer-build.tar.gz
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  # The ThreadSanitizer binary and C tests and the GC stress binary and C tests, linked with the front end stages of a release
+  # build (the stages are the same bytes in every mode; these two modes link the ones that exist, as mk/bootstrap.mk says).
+  tsan-build:
+    name: ThreadSanitizer and GC stress builds
+    needs: changes
+    if: ${{ needs.changes.outputs.c != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+        with:
+          tools: 'false'
+          sanitizers: 'true'
+      - name: The front end stages that the TSan and GC stress binaries link
+        run: make -j"$(nproc)" build/stage/stage2.agcb build/stage/runner.agcb build/stage/steps.agcb
       - name: vm-tsan, the threaded C tests under ThreadSanitizer (no libgc)
-        run: make vm-tsan
+        run: make -j"$(nproc)" vm-tsan
       - name: Build the ThreadSanitizer binary of vm-tsan-run and the GC stress binary and C tests of vm-gc-stress (the shards run them)
         run: |
           make -j"$(nproc)" build/vm/tsan/agentica TSAN=1 SANITIZE=0 GC_STRESS=0
           make -j"$(nproc)" build/vm/gcstress/agentica vm-test-binaries GC_STRESS=1 SANITIZE=0
-      - run: make -j"$(nproc)" vm-test
-      - name: Fixed point of the front end on the sanitizer binary (builds the dist/agentica that the next step tests)
-        run: make fixed-point
-      - run: tar -czf "$RUNNER_TEMP/build.tar.gz" dist build
-      - uses: actions/upload-artifact@v4
+      - run: GZIP=-1 tar -czf "$RUNNER_TEMP/tsan-build.tar.gz" build/vm/tsan build/vm/gcstress
+      - uses: actions/upload-artifact@v7
         with:
-          name: sanitizer-build
-          path: ${{ runner.temp }}/build.tar.gz
+          name: tsan-build
+          path: ${{ runner.temp }}/tsan-build.tar.gz
           retention-days: 1
           compression-level: 0
           overwrite: true
@@ -423,7 +454,7 @@ jobs:
   # artifact).
   sanitizer-tests:
     name: vm-sanitize-test (${{ matrix.shard }}/2)
-    needs: [changes, sanitizer-build]
+    needs: [changes, sanitizer-build, tsan-build]
     if: ${{ needs.changes.outputs.c != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -445,17 +476,21 @@ jobs:
       - uses: ./.github/actions/use-build
         with:
           artifact: sanitizer-build
+          extra: tsan-build
           targets: dist/agentica vm-test-binaries
       - name: vm-sanitize-test, with tests/test_single_binary.py (the hand-off and run) on the sanitizer binary
         run: make vm-sanitize-test SHARD=${{ matrix.shard }}/2
       - if: matrix.shard == 2
         run: make -j"$(nproc)" vm-gc-stress JOBS=4
+      - name: Processes left after the tests (temporary diagnostic of a job that did not end)
+        if: ${{ always() }}
+        run: ps -eo pid,ppid,pgid,etimes,stat,args --forest | tail -40
 
   # vm-tsan-run, the modules split in three (SHARD=I/N of mk/vm-test.mk). The ThreadSanitizer binary is linked again here,
   # because the sanitizer mode of the artifact and this mode share build/vm/flags; no object is compiled.
   tsan-run:
     name: vm-tsan-run (${{ matrix.shard }}/3)
-    needs: [changes, sanitizer-build]
+    needs: [changes, sanitizer-build, tsan-build]
     if: ${{ needs.changes.outputs.c != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -477,9 +512,13 @@ jobs:
       - uses: ./.github/actions/use-build
         with:
           artifact: sanitizer-build
+          extra: tsan-build
           targets: dist/agentica vm-test-binaries
       - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP, TLS, HTTP, process and BDD modules on four schedulers under ThreadSanitizer
         run: make vm-tsan-run SHARD=${{ matrix.shard }}/3
+      - name: Processes left after the tests (temporary diagnostic of a job that did not end)
+        if: ${{ always() }}
+        run: ps -eo pid,ppid,pgid,etimes,stat,args --forest | tail -40
 
   vm-layers:
     needs: [changes, sanitizer-build]
@@ -506,7 +545,7 @@ jobs:
   # The check that branch protection names for the C half. It passes when C did not change (every job above is skipped then)
   # and fails when a job of the half failed or was cancelled.
   vm-sanitizers:
-    needs: [changes, sanitizer-build, lint-fuzz, sanitizer-tests, tsan-run, vm-layers]
+    needs: [changes, sanitizer-build, tsan-build, lint-fuzz, sanitizer-tests, tsan-run, vm-layers]
     if: ${{ always() && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

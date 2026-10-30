@@ -4,17 +4,25 @@ description: >-
   Run it after checkout. The tests then run on the binary that was built once.
 inputs:
   artifact:
-    description: Name of the artifact (one tar.gz with dist/ and build/)
+    description: Name of the artifact (one tar.gz, named like the artifact, with dist/ and build/)
     required: true
+  extra:
+    description: Name of a second artifact whose folders of build/ are added (the TSan and GC stress builds), or empty
+    default: ''
   targets:
     description: The make targets that must not be rebuilt (the binary and the C test programs of the build job)
     required: true
 runs:
   using: composite
   steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.artifact }}
+        path: ${{ runner.temp }}/build-artifact
+    - uses: actions/download-artifact@v8
+      if: ${{ inputs.extra != '' }}
+      with:
+        name: ${{ inputs.extra }}
         path: ${{ runner.temp }}/build-artifact
     # An artifact keeps the permission bits (tar), but not the order of the times: make rebuilds a target that is older than a
     # source, and the checkout of this job is newer than the files of the build job. So every unpacked file gets one time,
@@ -23,7 +31,7 @@ runs:
     - name: Unpack the build and date it after the checkout
       shell: bash
       run: |
-        tar -xzf "$RUNNER_TEMP/build-artifact/build.tar.gz"
+        for archive in "$RUNNER_TEMP"/build-artifact/*.tar.gz; do tar -xzf "$archive"; done
         sleep 1
         stamp=$(date +%s)
         find dist build -exec touch -h -d "@$stamp" {} +
