@@ -271,10 +271,10 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
 
 /* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute, cmac_compute, gcm_compute and
    kdf_compute below) each have their own out-of-line function whose only callees are the adapter, memset and
-   agc_fail. vm/tools/tsan.supp names these seven and nothing else, so a TSan report about OpenSSL's fetch caches is suppressed while a race in the
-   VM code around them (such as reading a list another task holds) is still reported. TSan unwinds by frame pointers,
-   which libcrypto does not keep, so a report skips the adapter function and shows its caller first: these must stay
-   real frames (noinline, and not a tail call). */
+   agc_fail. vm/tools/tsan.supp names these seven and nothing else, so a TSan report about OpenSSL's fetch caches is
+   suppressed while a race in the VM code around them (such as reading a list another task holds) is still reported.
+   TSan unwinds by frame pointers, which libcrypto does not keep, so a report skips the adapter function and shows its
+   caller first: these must stay real frames (noinline, and not a tail call). */
 static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
                                                        unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
   size_t len = agc_digest(kind, bytes, n, out);
@@ -531,7 +531,8 @@ static __attribute__((noinline)) void kdf_compute(agc_vm *vm, const kdf_params *
   bool done = kdf->scrypt ? agc_scrypt(password, password_n, salt, salt_n, kdf->n, kdf->r, kdf->p, SCRYPT_MAX_MEMORY,
                                        out, out_n)
                           : agc_pbkdf2_hmac_sha256(password, password_n, salt, salt_n, kdf->iterations, out, out_n);
-  if (!done) agc_fail(vm, "RUNTIME-INTERNAL", kdf->scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
+  if (!done)
+    agc_fail(vm, "RUNTIME-INTERNAL", kdf->scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
 }
 
 /* The shared end of the KDF builtins: checks the password, salt and length (args 0, 1 and the last, at length_at),
