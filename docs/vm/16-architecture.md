@@ -585,22 +585,22 @@ one exit path are as in §16.1 to §16.6. What differs:
   it when it pops it. A PARKED task is claimed by a CAS from PARKED to READY
   (`agc_task_claim`), the same race as a waker's, and the winner ends it. The
   ending (`end_cancelled`) walks the task's lists with `rt->sync` held.
-- **One coarse lock, not per-channel locks.** The plan of §16.1 to §16.8 puts a
-  lock on each channel, waiter list and task. As built there is one mutex,
-  `rt->sync` (`vm/sync.c`, an `agc_lock`). It covers the task tree (parent,
-  children, waiters, awaiting), the channels, the `Task.map` groups, the logger
-  table, the stdin buffer, and the FIFOs of the handles and of the jobs. Why one
-  lock: the code that touches these structures calls into each other. A cancel
-  ends a task, which wakes its awaiters, which ends a `Task.map` item, which
-  cancels its siblings. Many small locks would need one fixed order across the
-  whole task code and would still be taken in long chains. The coarse lock is
-  held for a short stretch of pointer work and never across a park or a turn. So
-  the long work (the Agentica code of the turns, strings, numbers, JSON, lists
-  and maps) runs in parallel. It is held across the libuv calls that a locked
-  path makes inline at N = 1 (a job start, a close). At N > 1 those are requests
-  to the I/O thread, and the lock is not held while the scheduler waits for one.
-  It is cheap to split later, when a measurement shows the contention (the
-  `prints`, `ping-pong` and `files` benchmarks, with the locks on). The pieces:
+- **One coarse lock, not per-channel locks.** There is one mutex, not a lock on
+  each channel, waiter list and task: `rt->sync` (`vm/sync.c`, an `agc_lock`).
+  It covers the task tree (parent, children, waiters, awaiting), the channels,
+  the `Task.map` groups, the logger table, the stdin buffer, and the FIFOs of
+  the handles and of the jobs. Why one lock: the code that touches these
+  structures calls into each other. A cancel ends a task, which wakes its
+  awaiters, which ends a `Task.map` item, which cancels its siblings. Many small
+  locks would need one fixed order across the whole task code and would still be
+  taken in long chains. The coarse lock is held for a short stretch of pointer
+  work and never across a park or a turn. So the long work (the Agentica code of
+  the turns, strings, numbers, JSON, lists and maps) runs in parallel. It is
+  held across the libuv calls that a locked path makes inline at N = 1 (a job
+  start, a close). At N > 1 those are requests to the I/O thread, and the lock
+  is not held while the scheduler waits for one. It is cheap to split later,
+  when a measurement shows the contention (the `prints`, `ping-pong` and `files`
+  benchmarks, with the locks on). The pieces:
   - What takes the lock is marked per builtin: `agc_builtin.shared`, a flag in
     each row of the builtin tables, so a new row must say `true` or `false`.
     `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared.
@@ -656,7 +656,7 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
   the global run queue.
 - **Per-scheduler local queues with work stealing.** Wakes then go to a global
   inject queue.
-- **TLS crypto on the schedulers.** As built it runs on the I/O thread with the
+- **TLS crypto on the schedulers.** It runs on the I/O thread with the
   socket state (§16.2), so a TLS-heavy server can make the loop its limit.
 
 ### 16.11 Open

@@ -7,8 +7,7 @@ their head. The rule is **one way for each job**. A reviewer checks every core
 PR against 14.1 to 14.5 and the entry rule of 14.6. A PR that breaks one either
 changes the rule here first, with the reason, or does not merge.
 
-Each rule says what is **as built** today and what is **being built** or is a
-**target**. The mechanisms are in §10.2.1 and §10.2.2
+The mechanisms are in §10.2.1 and §10.2.2
 ([`10-io-scheduler.md`](10-io-scheduler.md)), §10.4
 ([`10-io-processes.md`](10-io-processes.md)), §10.7.2
 ([`10-io-http.md`](10-io-http.md)) and [task rules][task-rules].
@@ -29,11 +28,11 @@ joins the pool, and the pool would wait for a FIFO that never writes.
 - **Regular files** (and directories) use the libuv thread pool, since a read or
   write on them ends in bounded time. The other bounded pool work is DNS
   (`getaddrinfo`) and the TLS setup jobs that load CA, certificate and key files
-  (§10.2.2, pool size). As built.
+  (§10.2.2, pool size).
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits
-  forever cannot be cancelled or joined. As built: sockets (`vm/tcp.c`), process
+  forever cannot be cancelled or joined. They are sockets (`vm/tcp.c`), process
   pipes (`vm/process.c`), stdin (`vm/input.c`), stdout and stderr
   (`vm/output.c`), the `File` calls (`vm/files.c`) and the waits of
   `Native.wait_readable` and `wait_writable` on a descriptor of native code
@@ -52,9 +51,9 @@ joins the pool, and the pool would wait for a FIFO that never writes.
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
   never takes a libuv pool thread. What the end of the run does with compute
-  calls is in §14.4 (steps 0 and 3). As built.
+  calls is in §14.4 (steps 0 and 3).
 
-Known exceptions, as built (the mechanisms are in §10.2.2):
+Known exceptions (the mechanisms are in §10.2.2):
 
 - **Windows `File` calls.** `probe` and `path_string` in `vm/files.c` refuse a
   named pipe or a device at once, so no `File` call waits on a stream.
@@ -114,7 +113,7 @@ Known exceptions, as built (the mechanisms are in §10.2.2):
   has no I/O, so it needs no job, no registry slot and no request to the I/O
   thread. §16.9, "Timers", lists the waits that use it.
 
-No builtin starts its own timer for a timeout. As built, a few timers are not
+No builtin starts its own timer for a timeout. A few timers are not
 job timeouts and stay: a captured child's grace period (§10.4), the `HttpClient`
 pool's idle timer, the end-of-run flush deadline (§14.4), the 3-second stop
 grace timer (`STOP_GRACE_SECONDS` in `vm/loop.c`, §10.2.2, Stop signals), and
@@ -223,7 +222,7 @@ flush (a FIFO nobody reads, or a test child that gets the SIGTERM of
 flush limit. A second signal that comes before the children are stopped waits
 for step 1, so children are never left behind.
 
-As built, `agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
+`agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
 run" and "Stop signals", which also say how a second signal and the stop grace
 timer bound it). `main`'s return, `System.exit`, a diagnostic, the step limit
 and the first stop signal all reach it. `agc_io_close` serves only the
@@ -258,7 +257,7 @@ and `HttpClient` stays exempt (handle ownership). An `ATS` table (the grammar's
 "Shared tables") is exempt too. It is not an OS resource, so no task owns it,
 and a task's end never closes it.
 
-As built, the owner is a field of the resource (`agc_own` in `vm/loop.c`), and
+The owner is a field of the resource (`agc_own` in `vm/loop.c`), and
 each task keeps the list of the handles it owns, so a task's end costs the
 number of its handles, not the size of the registry. `Task.spawn` moves nothing,
 and nothing goes back to the parent when a task returns, so a handle that a

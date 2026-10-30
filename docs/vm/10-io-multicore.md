@@ -93,7 +93,7 @@ that still apply.
     rank and an array of (name, rank, handler) in the GC heap, reached only by
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
-    needs a lock; as built it is `rt->sync`, the one coarse lock (§16.9), taken
+    needs a lock: `rt->sync`, the one coarse lock (§16.9), taken
     around each `LogRegistry` builtin (its rows are marked `shared`).
     `install_default` is one native call, so the check for level -1 and the
     writes cannot interleave with another task.
@@ -136,7 +136,7 @@ that still apply.
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
   or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
-  `THREAD_LOCAL_ALLOC`; as built, this holds for the vendored `gc.o` and the
+  `THREAD_LOCAL_ALLOC`; this holds for the vendored `gc.o` and the
   distro's libgc, and `vm/value.c` defines `GC_THREADS` before it includes
   `gc.h`. The threads libuv starts (the schedulers) register with
   `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with

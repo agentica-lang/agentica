@@ -283,7 +283,7 @@ section says how the scheduler and the loop keep them.
      handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1). Each
      TCP socket and listener still open is then closed the way a close from a
      task closes it, so the peer reads the end of input: Windows resets a
-     socket left to the exit while a read is pending (#489);
+     socket left to the exit while a read is pending;
   3. flush the blocking stdout and stderr (`fflush`, retried on `EINTR`), then
      queue the diagnostic of a failed run as a kept notice (10.2.2), so the wait
      below covers it. Close every open file, and wait for their flush jobs and
