@@ -140,22 +140,14 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")`. Either entry marks the crash observed. If `main`
   returns with a crash that no await observed, the run prints one summary line
   and exits with code 1.
-- **Owners (phase 24, 24b).** The task that makes a user-visible handle owns it.
-  The resource records the owner and its kind's close, and the task keeps the
-  list of what it owns (`agc_own`). `finish_task` calls `agc_close_owned` for
-  every task that ends, whether it returns, crashes or is cancelled. A socket,
-  listener or TLS socket is disowned. A process closes with `shut`, which only
-  signals (§10.4 Close), never with the release that kills every child. A file
-  closes by an `OP_CLOSE` job, and a server by `close_server`. The process
-  guard, job resources, stream locks and `HttpClient` have no owner.
-  `Task.spawn` moves nothing, so a handle that a helper returns is closed when
-  the helper ends. The one hand-off is `Task.spawn_owning(&f, handle)` ([handle
-  ownership][task-rules]). `agc_task_spawn_owning` walks the argument without
-  `rt->sync` for the handles in it (a struct, enum, List, Map or Result may hold
-  several), then, under the lock, checks that the caller owns every one, open,
-  else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument, before any task is
-  made. Then it moves all of them to the new task. `HttpWire.spawn`
-  does the same (10.7.2).
+- **Owners (phase 24, 24b).** The rule, the owner record, the one close path and
+  the one hand-off, `Task.spawn_owning` (with `HttpWire.spawn`, 10.7.2), are in
+  §14.5. What each kind does at the close: a socket, listener or TLS socket is
+  disowned. A process closes with `shut`, which only signals (§10.4 Close),
+  never with the release that kills every child. A file closes by an `OP_CLOSE`
+  job, and a server by `close_server`. The process guard, job resources, stream
+  locks and `HttpClient` have no owner. `agc_task_spawn_owning` walks its
+  argument without `rt->sync` (§16.9, "One coarse lock").
   - A file's close is an `OP_CLOSE` job with no task. It waits while another job
     holds the file, also a detached one (`agc_io_finish` and `end_detached` pass
     the lock on first). A file that is closing gives every caller the closed
@@ -169,10 +161,8 @@ section says how the scheduler and the loop keep them.
     bounds it. A close that waits behind a job that can wait for ever (a FIFO or
     pipe read) keeps the descriptor open until that job ends or times out. The
     awaiters do not wait for it.
-  - A cancelled task's handles close too, also those of a task parked in a
-    stepper (`File.each_line`). A file that a detached job still holds closes
-    when that job ends. A handle made outside a turn has no owner, and is closed
-    when its result is dropped.
+  - A file that a detached job still holds closes when that job ends. A handle
+    made outside a turn has no owner, and is closed when its result is dropped.
 - **Cancellation (20b).** A program cancels tasks only through a crash (which
   cancels the crashed task's descendants), `HTTP.close_server`, and the deadline
   of a `Task.map` item. Each task records its parent and its running children,
@@ -389,10 +379,7 @@ section says how the scheduler and the loop keep them.
     then get the closed error. `closed?` is true when the channel is closed, the
     ring is empty and nothing is reserved, and it stays true.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
-    (`agc_channel_claim`). When the owner ends in any way, `finish_task` runs
-    `agc_close_owned`, which calls the same close. A `close` from any task drops
-    the entry first. A channel never handed over has no entry (§14.5 of
-    `docs/vm/14-core-invariants.md`).
+    (`agc_channel_claim`); §14.5 has the rules.
   - **Choices.** Mid-FIFO removal is O(n), as for the lock FIFO. A waiter whose
     timer fired before any wake still takes a value that reached the ring before
     it re-ran, instead of failing at once.

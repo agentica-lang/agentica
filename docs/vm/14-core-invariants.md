@@ -277,9 +277,7 @@ tasks close their handles too: those parked in a stepper (`File.each_line`), a
 handler that `close_server` cancels, the leftovers of `Test.run`, and an
 `HttpServer` whose owner is cancelled, which frees its port. A closed handle
 leaves its owner's list (`agc_unregister`). A regular file's close is a pool job
-that the ending task's awaiters wait for, so what a helper wrote is on disk when
-the parent's await returns. A flush to a FIFO or a pipe, and a close behind a
-job that holds the file, are not waited for.
+that the ending task's awaiters wait for (§10.2.1, Owners).
 
 When the end of a task is observed (its `Task.await` returns, or `Task.map`
 takes its result into a slot), the handles it owned, and those of the
@@ -293,7 +291,8 @@ scheduler holds the task that the cancel reached it through until that turn ends
 already is counted through the top of its holder chain. `HttpWire.server` takes
 the listener off its owner's list, so ending the owner closes both, and a
 hand-off moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED`
-when the caller does not own a handle of its argument or it is closed, before it
+at the handle argument when the caller does not own a handle of its argument (a
+struct, enum, List, Map or Result may hold several) or it is closed, before it
 makes a task and before any handle of the argument moves (all or none).
 
 A resource of native code (`vm/ffi.c`) closes by running its C `free` once,
