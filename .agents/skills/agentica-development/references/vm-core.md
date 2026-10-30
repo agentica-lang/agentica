@@ -130,10 +130,13 @@ rules those comments do not carry.
   trampoline table on Apple arm64). A callback parameter of an extern function
   is code `r`, passed as its resource; `Optional[Name]` is code `o`, `none` for
   NULL. A fast call sets the thread's `native_site`; the closure runs the
-  function with `agc_task_run_nested` (`interp.c`: new frame and register
-  arrays over a barrier native frame, rt->sync let go, `t->callbacks` counted,
-  which makes `agc_task_parking` fail) and keeps a failure for `agc_raise` once
-  C has returned.
+  function with `agc_task_run_nested` (`interp.c`: the frame and register
+  arrays of its level, reused, over a barrier native frame; the outer frames
+  linked for stack traces by `agc_frame_segment`; rt->sync let go;
+  `t->callbacks` counted, which makes `agc_task_parking` fail; timers and the
+  runnext slot handed on at each turn boundary) and keeps a failure for
+  `agc_raise` once C has returned. A free function gets a refusing site. The
+  nested run is `cold`, so `plain_turn` keeps its place (`make layout-check`).
 - A signature that starts with `compute ` runs on the compute pool
   (`vm/compute.c`, `agc_io_compute` in `vm/loop.c`), and the task parks.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a

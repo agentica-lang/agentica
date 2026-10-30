@@ -3084,6 +3084,122 @@ def test_native_callback_failures_end_the_native_call(tmp_path, peer, mode, flag
         assert diagnostic(result, status) == (code, start)
 
 
+CALLBACK_EDGES = """extern "%s"
+  resource Hook, free: peer_hook_free
+  resource Res, free: peer_res_free
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_hook_open() -> Hook
+  def peer_store_fn(fn: Step) -> Void
+  def peer_hook_result() -> C.Int32
+  def peer_call_maybe(fn: Optional[Step], x: C.Int32) -> C.Int32
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_res_after(res: Res, fn: Step) -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_bump() -> Void
+  def peer_bumps() -> C.Int32
+  def peer_flag() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+def destroy(x: Int) -> Int
+  puts("destroy ran")
+  return x
+end
+
+# Opens a Hook and closes it inside the callback: its free calls the stored callback.
+def opens_and_closes(x: Int) -> Int
+  Native.close(peer_hook_open().unwrap!)
+  return peer_hook_result()
+end
+
+def deeper(x: Int) -> Int
+  return peer_call_maybe(some(Native.callback(Step, &deeper)), x + 1)
+end
+
+def spins(x: Int) -> Int
+  while true
+    peer_bump()
+  end
+
+  return x
+end
+
+def waits(x: Int) -> Int
+  peer_bump()
+  turns = 0
+  while peer_flag() == 0
+    turns = turns + 1
+  end
+
+  return x
+end
+
+def main() -> Void
+  case System.args().first()
+    "hook" ->
+      peer_store_fn(Native.callback(Step, &destroy))
+      puts(peer_call_maybe(some(Native.callback(Step, &opens_and_closes)), 1))
+      Native.close(peer_hook_open().unwrap!)
+      puts(peer_hook_result())
+    "deep" -> puts(peer_call_maybe(some(Native.callback(Step, &deeper)), 0))
+    "over" ->
+      Task.spawn do peer_call_maybe(some(Native.callback(Step, &spins)), 1) end
+      Task.sleep(100)
+      puts("main returns")
+    "cancel" ->
+      task = Task.spawn do peer_call_maybe(some(Native.callback(Step, &spins)), 1) end
+      Task.sleep(100)
+      Task.cancel(task)
+      Task.sleep(200)
+      before = peer_bumps()
+      Task.sleep(200)
+      puts(peer_bumps() == before)
+    _ ->
+      res = peer_res_open(5).unwrap!
+      cb = Native.callback(Step, &waits)
+      closer = Task.spawn do
+        while peer_bumps() == 0
+          Task.sleep(1)
+        end
+
+        Native.close(cb)
+        Native.close(res)
+        peer_set_flag()
+      end
+
+      puts(peer_res_after(res, cb))
+      Task.await(closer)
+      puts("#{Native.closed?(cb)} #{Native.closed?(res)} #{peer_res_frees()}")
+  end
+end
+"""
+
+
+# The edges of callbacks. A free function that calls a callback (sqlite3_close_v2 and xDestroy) runs nothing and gets
+# zero, inside a callback or not. Callbacks nest at most 128 deep (RUNTIME-STACK-OVERFLOW at the innermost call). A
+# callback that never returns stops at a turn boundary once the run is over or its task is cancelled, and lets the
+# scheduler fire the timers of the tasks parked on it meanwhile. A callback, and a resource that its native call
+# takes, closed by another task while the callback runs are freed once C has returned: C reads the resource after
+# the close, and a later call of the closed callback gives zero (510 = 5 * 100 + 1 * 10 + 0).
+@NATIVE_CALLS
+@pytest.mark.parametrize("mode, schedulers, status, code, start, out", [
+    ("hook", "1", 0, None, None, "0\n0\n"),
+    ("hook", "4", 0, None, None, "0\n0\n"),
+    ("deep", "1", 1, "RUNTIME-STACK-OVERFLOW", (8, 3), ""),
+    ("over", "4", 0, None, None, "main returns\n"),
+    ("cancel", "4", 0, None, None, "true\n"),
+    ("close", "4", 0, None, None, "510\ntrue true 1\n"),
+])
+def test_native_callback_edges(tmp_path, peer, mode, schedulers, status, code, start, out):
+    path = program(tmp_path, CALLBACK_EDGES % literal(peer))
+    result = agentica("--json", "--schedulers", schedulers, path, mode, timeout=scaled(30))
+    assert result.stdout == out
+    if code is None:
+        assert (result.code, result.stderr) == (status, "")
+    else:
+        assert diagnostic(result, status) == (code, start)
+
+
 EXTERN_TEST = """extern "%s"
   def abs(n: C.Int32) -> C.Int32
 end

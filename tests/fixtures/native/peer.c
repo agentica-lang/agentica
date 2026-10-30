@@ -863,6 +863,28 @@ int32_t peer_call_maybe(peer_int_fn fn, int32_t x) { return fn ? fn(x) : -1; }
 /* The second call shows what C got after the first: zero once that one failed. */
 int32_t peer_call_twice(peer_int_fn fn, int32_t x) { return fn(x) * 1000 + fn(x + 1); }
 
+/* For a free inside a callback: a resource whose free function calls a stored callback, as sqlite3_close_v2 calls a
+   collation's xDestroy, and keeps what it gave (zero when the VM ran nothing). */
+static peer_int_fn stored_fn;
+static int32_t hook_result = -1;
+
+void peer_store_fn(peer_int_fn fn) { stored_fn = fn; }
+void *peer_hook_open(void) { return malloc(1); }
+void peer_hook_free(void *p) {
+  hook_result = stored_fn ? stored_fn(7) : -2;
+  free(p);
+}
+int32_t peer_hook_result(void) { return hook_result; }
+
+/* For a close by another task while a callback runs: RES is read after both callbacks. */
+int32_t peer_res_after(void *res, peer_int_fn fn) {
+  int32_t a = fn(1);
+  int32_t b = fn(2);
+  return peer_res_get(res) * 100 + a * 10 + b;
+}
+
+int32_t peer_flag(void) { return atomic_load(&flag); }
+
 typedef struct {
   peer_int_fn fn;
   int32_t x, got;

@@ -172,7 +172,11 @@ that still apply.
     gets no context (10.2.2, Stop signals);
   - the system trust store in `vm/tls_trust.c` (a `CRYPTO_ONCE` and the list
     it fills once, read-only after; 10.3 Trust), which every TLS setup job of
-    every runtime shares, so one load serves the process.
+    every runtime shares, so one load serves the process;
+  - the native call of the running thread in `vm/ffi.c` (`current_site`, a
+    `_Thread_local` pointer to a record on that call's C stack), since a
+    callback that C makes gets no context but its own data and must know
+    whether this thread is inside a native call that may run it.
 
   `setenv("UV_USE_IO_URING", "0", 0)` runs once at start-up (`agc_io_init`,
   before any loop exists), since `setenv` is not thread-safe. `agc_io_init`

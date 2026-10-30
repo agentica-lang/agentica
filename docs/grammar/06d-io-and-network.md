@@ -105,9 +105,12 @@ end
   included) is `RUNTIME-NATIVE-CALLBACK` at it. A failure or an exit in the
   callback gives C zero, and zero from every later callback of that call
   without running it; the native call then fails or exits the same way once C
-  returns. A callback that C calls from a thread of its own runs nothing and
-  gives zero; one from a `compute def` on the pool does too, and that call is
-  then `RUNTIME-NATIVE-CALLBACK`. C must not call a callback after its close.
+  returns. A callback that C calls from a thread of its own, or from the free
+  function of a resource, runs nothing and gives zero; one from a `compute def`
+  on the pool does too, and that call is then `RUNTIME-NATIVE-CALLBACK`. A
+  callback stops, giving zero, when its task is cancelled or the run ends, and
+  callbacks nest at most 128 deep (`RUNTIME-STACK-OVERFLOW`). C must not call a
+  callback after its close.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses a program that declares any extern

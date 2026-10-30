@@ -27,9 +27,16 @@ typedef struct {
 
 typedef struct {
   const agc_program *program;
-  const agc_task *task;
   uint32_t error_span;
 } frame_walk;
+
+/* Where a walk of the frames is: below frame `at` of `frames`, then in the segments below (agc_frame_segment, the outer
+   frames of the callbacks of native code that run now). */
+typedef struct {
+  const agc_frame *frames;
+  uint32_t at;
+  const agc_frame_segment *below;
+} frame_cursor;
 
 static source_line line_of(const agc_source *source, uint32_t line) {
   source_line l;
@@ -153,10 +160,15 @@ static bool same_place(const agc_program *p, uint32_t a, uint32_t b) {
   return x->source == y->source && x->start_line == y->start_line && x->start_column == y->start_column;
 }
 
-static bool take_frame(const frame_walk *w, uint32_t *cursor, bool innermost, agc_stack_line *line) {
+static bool take_frame(const frame_walk *w, frame_cursor *cursor, bool innermost, agc_stack_line *line) {
   const agc_program *p = w->program;
-  while (*cursor > 0) {
-    const agc_frame *frame = &w->task->frames[--*cursor];
+  for (;;) {
+    if (cursor->at == 0) {
+      if (!cursor->below) return false;
+      *cursor = (frame_cursor){cursor->below->frames, cursor->below->count, cursor->below->below};
+      continue;
+    }
+    const agc_frame *frame = &cursor->frames[--cursor->at];
     /* A prelude frame is skipped like a native one: the user's code called it, and an error in it is reported at the
        user's call (agc_fail), so the line of the user's frame is the place to look at. */
     if (frame->native || frame->function >= p->function_count || p->functions[frame->function].prelude) continue;
@@ -167,13 +179,12 @@ static bool take_frame(const frame_walk *w, uint32_t *cursor, bool innermost, ag
     line->tail = frame->tail;
     return true;
   }
-  return false;
 }
 
-static bool take_entry(const frame_walk *w, uint32_t *cursor, bool innermost, agc_stack_line *line) {
+static bool take_entry(const frame_walk *w, frame_cursor *cursor, bool innermost, agc_stack_line *line) {
   if (!take_frame(w, cursor, innermost, line)) return false;
   for (;;) {
-    uint32_t mark = *cursor;
+    frame_cursor mark = *cursor;
     agc_stack_line more;
     if (!take_frame(w, cursor, false, &more)) return true;
     if (more.function != line->function || more.tail != line->tail || !same_place(w->program, more.span, line->span)) {
@@ -190,9 +201,10 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   stack->shown = false;
   if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return;
   const agc_program *p = vm->rt->program;
-  frame_walk w = {p, t, outcome->span < p->span_count ? outcome->span : 0};
+  frame_walk w = {p, outcome->span < p->span_count ? outcome->span : 0};
   agc_stack_line line;
-  uint32_t entries = 0, cursor = t->frame_count;
+  uint32_t entries = 0;
+  frame_cursor cursor = {t->frames, t->frame_count, t->below};
   uint64_t frames = 0;
   while (take_entry(&w, &cursor, entries == 0, &line)) {
     entries++;
@@ -202,7 +214,7 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
   bool cut = entries > AGC_STACK_HEAD + AGC_STACK_TAIL;
   stack->count = 0;
   stack->omitted = 0;
-  cursor = t->frame_count;
+  cursor = (frame_cursor){t->frames, t->frame_count, t->below};
   for (uint32_t index = 0; take_entry(&w, &cursor, index == 0, &line); index++) {
     if (!cut || index < AGC_STACK_HEAD || index >= entries - AGC_STACK_TAIL)
       stack->lines[stack->count++] = line;

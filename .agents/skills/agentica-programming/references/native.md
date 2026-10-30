@@ -278,8 +278,9 @@ end
   while C waits: no wait inside it (`Task.sleep`, channels, a `compute def`, a
   print into a full output buffer): `RUNTIME-NATIVE-CALLBACK`. A failure in
   `fn` gives C zero, skips the call's later callbacks and fails the extern
-  call when C returns. A callback from C's own thread, or from a `compute def`,
-  gives zero (the compute call then fails).
+  call when C returns. A callback from C's own thread, a free function or a
+  `compute def` gives zero (the compute call then fails); a cancel or the end
+  of the run stops one; at most 128 nested (`RUNTIME-STACK-OVERFLOW`).
 - C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
   `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
   the header in its order, each an integer type, `C.Double`, `C.Float`,
