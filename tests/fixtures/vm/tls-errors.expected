@@ -1,13 +1,18 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 95,
+  "steps": 204,
   "stdout": [
     "error(\"network: timeout must be positive milliseconds\")",
     "error(\"network: path cannot contain NUL\")",
     "ssl-load-certificate-chain!: load failed from: \"<tls>/missing.pem\"",
     "ssl-load-private-key!: load failed from: \"<tls>/wrong-host-key.pem\"",
     "ssl-load-verify-source!: load failed from: \"<tls>/make-certs.sh\"",
+    "error(\"network: cert_file and key_file go together\")",
+    "error(\"network: cert_file and key_file go together\")",
+    "ssl-load-certificate-chain!: load failed from: \"<tls>/missing.pem\"",
+    "ssl-load-private-key!: load failed from: \"<tls>/missing.pem\"",
+    "ssl-load-private-key!: load failed from: \"<tls>/server-key.pem\"",
     ""
   ],
   "stderr": []

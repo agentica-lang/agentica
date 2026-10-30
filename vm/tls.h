@@ -44,7 +44,10 @@ typedef struct {
 
 const char *agc_tls_version(void);
 const char *agc_tls_error_name(agc_tls_error code);
-agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *failure);
+/* A client config: an empty CA_FILE is the system trust; CERT_FILE and KEY_FILE (PEM) are the client's certificate
+   chain and key, both NULL for none. */
+agc_tls_config *agc_tls_client_config(const char *ca_file, const char *cert_file, const char *key_file,
+                                      agc_tls_failure *failure);
 agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_file, agc_tls_failure *failure);
 void agc_tls_config_free(agc_tls_config *config);
 /* The config's OpenSSL X509_STORE, for the C tests that check which certificates a config trusts. */

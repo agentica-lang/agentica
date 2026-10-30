@@ -191,7 +191,25 @@ const char *agc_tls_error_name(agc_tls_error code) {
   return k < sizeof error_names / sizeof error_names[0] ? error_names[k] : "internal";
 }
 
-agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *failure) {
+/* Loads a PEM certificate chain and its private key into CTX, the server's identity or the client's: false with the
+   failure (bad cert, bad key or key mismatch) and CTX freed. */
+static bool use_identity(SSL_CTX *ctx, const char *cert_file, const char *key_file, agc_tls_failure *f) {
+  if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) != 1) {
+    take_errors(f, AGC_TLS_ERR_BAD_CERT);
+    SSL_CTX_free(ctx);
+    return false;
+  }
+  if (SSL_CTX_use_PrivateKey_file(ctx, key_file, SSL_FILETYPE_PEM) != 1 || SSL_CTX_check_private_key(ctx) != 1) {
+    queued q = drain();
+    fail_queued(f, q.mismatch ? AGC_TLS_ERR_KEY_MISMATCH : AGC_TLS_ERR_BAD_KEY, &q);
+    SSL_CTX_free(ctx);
+    return false;
+  }
+  return true;
+}
+
+agc_tls_config *agc_tls_client_config(const char *ca_file, const char *cert_file, const char *key_file,
+                                      agc_tls_failure *failure) {
   SSL_CTX *ctx = new_ctx(TLS_client_method(), failure);
   if (!ctx) return NULL;
   SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, agc_tls_trust_verify);
@@ -202,23 +220,13 @@ agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *fail
     SSL_CTX_free(ctx);
     return NULL;
   }
+  if (cert_file && !use_identity(ctx, cert_file, key_file, failure)) return NULL;
   return wrap(ctx, failure);
 }
 
 agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_file, agc_tls_failure *failure) {
   SSL_CTX *ctx = new_ctx(TLS_server_method(), failure);
-  if (!ctx) return NULL;
-  if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) != 1) {
-    take_errors(failure, AGC_TLS_ERR_BAD_CERT);
-    SSL_CTX_free(ctx);
-    return NULL;
-  }
-  if (SSL_CTX_use_PrivateKey_file(ctx, key_file, SSL_FILETYPE_PEM) != 1 || SSL_CTX_check_private_key(ctx) != 1) {
-    queued q = drain();
-    fail_queued(failure, q.mismatch ? AGC_TLS_ERR_KEY_MISMATCH : AGC_TLS_ERR_BAD_KEY, &q);
-    SSL_CTX_free(ctx);
-    return NULL;
-  }
+  if (!ctx || !use_identity(ctx, cert_file, key_file, failure)) return NULL;
   return wrap(ctx, failure);
 }
 

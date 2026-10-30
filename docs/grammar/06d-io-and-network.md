@@ -12,9 +12,10 @@ the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
   assigned port, which `TCP.local_port` returns. A host with NUL is an error.
 - TLS checks certificates and host names, with TLS 1.2 or later; verification
   cannot be turned off. An empty CA file means system trust; a nonempty one
-  replaces it, and a missing or empty file fails the connect. A peer that closes
-  without TLS's close message ends the stream like EOF, so the protocol must
-  detect a cut message.
+  replaces it, and a missing or empty file fails the connect. `TLS.connect`
+  sends a client certificate when its `cert_file` and `key_file` (PEM) are both
+  set; only one of them is an error. A peer that closes without TLS's close
+  message ends the stream like EOF, so the protocol must detect a cut message.
 - Timeouts are positive milliseconds and cover the whole operation, lock waits
   included. A timeout during active I/O closes that socket, and later calls fail
   with `network: socket is closed`. A timeout while only waiting for a lock

@@ -332,7 +332,9 @@ static void test_cancelled_tls_connect_past_its_deadline(void) {
   agc_runq_share(vm.rt->runq);
   int64_t port = 0;
   int silent = raw_listen(&port);
-  calling dial = call("TLS.connect", 4, text("127.0.0.1"), agc_int(port), text(CERTS "ca.pem"), agc_int(1000));
+  calling dial = call("TLS.connect", 6, text("127.0.0.1"), agc_int(port), text(CERTS "ca.pem"), agc_int(1000));
+  dial.args[4] = text("");
+  dial.args[5] = text("");
   assert(start(&dial));
   /* The loop runs the setup and the connect until the peer has the connection; the deadline is far enough off. */
   struct pollfd p = {silent, POLLIN, 0};

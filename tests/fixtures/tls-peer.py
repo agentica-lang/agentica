@@ -93,6 +93,36 @@ def serve_close() -> None:
             threading.Thread(target=answer_once, args=(context, conn), daemon=True).start()
 
 
+def serve_mtls() -> None:
+    """A TLS server that requires a client certificate from client-ca.pem: two connections, one line each.
+
+    For each it prints the client certificate's common name, or "refused" when the client sent none.
+    """
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(os.path.join(CERTS, "server.pem"), os.path.join(CERTS, "server-key.pem"))
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.load_verify_locations(os.path.join(CERTS, "client-ca.pem"))
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        print(listener.getsockname()[1], flush=True)
+        for _ in range(2):
+            conn, _ = listener.accept()
+            conn.settimeout(20)
+            try:
+                with context.wrap_socket(conn, server_side=True) as tls:
+                    subject = dict(item for field in tls.getpeercert()["subject"] for item in field)
+                    data = b""
+                    while not data.endswith(b"\n"):
+                        chunk = tls.recv(4096)
+                        if not chunk:
+                            break
+                        data += chunk
+                    tls.sendall(b"hello " + subject["commonName"].encode() + b"\n")
+                    print("client " + subject["commonName"], flush=True)
+            except (ssl.SSLError, OSError):
+                conn.close()
+                print("refused", flush=True)
+
+
 def connect(port: int) -> None:
     context = ssl.create_default_context(cafile=os.path.join(CERTS, "ca.pem"))
     with socket.create_connection(("127.0.0.1", port)) as raw:
@@ -115,5 +145,7 @@ if __name__ == "__main__":
         serve_http()
     elif sys.argv[1] == "close":
         serve_close()
+    elif sys.argv[1] == "mtls":
+        serve_mtls()
     else:
         connect(int(sys.argv[2]))
