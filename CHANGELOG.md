@@ -11,6 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Linux ARM64 builds and CI, with native calls; the JIT stays x86-64 only.
+- A `linux-arm64` release archive (glibc 2.28), which runs on the interpreter:
+  no JIT on ARM64 yet.
 
 ## [0.18.0] - 2026-10-30
 

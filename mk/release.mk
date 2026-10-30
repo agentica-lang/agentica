@@ -1,10 +1,10 @@
 # The release steps of the host platform (release-check, release-package, release-smoke) and the RELEASE_* variables
-# that name the archive. release.yml runs them on each of the four systems.
+# that name the archive. release.yml runs them on each of the five systems.
 
 .PHONY: release-check release-package release-smoke
 
-# The release steps of the host's platform (release.yml runs them on each of the four). RELEASE_PLATFORM names the archive
-# (linux-x86_64, windows-x86_64, macos-x86_64, macos-arm64); release-check wants VM_GLIBC (Linux) or MACOSX_DEPLOYMENT_TARGET
+# The release steps of the host's platform (release.yml runs them on each of the five). RELEASE_PLATFORM names the archive
+# (linux-x86_64, linux-arm64, windows-x86_64, macos-x86_64, macos-arm64); release-check wants VM_GLIBC (Linux) or MACOSX_DEPLOYMENT_TARGET
 # (macOS) in the environment, the floor the binary was built for.
 RELEASE_PLATFORM ?= $(if $(filter Windows_NT,$(VM_OS)),windows,$(if $(filter Darwin,$(shell uname -s)),macos,linux))-$(if $(filter arm64 aarch64,$(shell uname -m)),arm64,x86_64)
 RELEASE_OS := $(firstword $(subst -, ,$(RELEASE_PLATFORM)))

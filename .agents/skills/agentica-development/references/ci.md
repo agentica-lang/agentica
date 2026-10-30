@@ -278,13 +278,14 @@ Skip rules, checked by the report:
 
 ## Release (`release.yml`)
 
-Four packages, one job each, built from stage0 (`make vm-test fixed-point`) with
-vendored libgc, OpenSSL and zlib: `linux-x86_64` (`.tar.gz`, pinned `zig cc`
-against glibc 2.28), `windows-x86_64` (`.zip`, MSYS2 UCRT64), and `macos-x86_64`
-and `macos-arm64` (`.tar.gz`, `MACOSX_DEPLOYMENT_TARGET=12.0`). Per package:
+Five packages, one job each, built from stage0 (`make vm-test fixed-point`) with
+vendored libgc, OpenSSL and zlib: `linux-x86_64` and `linux-arm64` (`.tar.gz`,
+pinned `zig cc` against glibc 2.28, on `ubuntu-latest` and `ubuntu-24.04-arm`),
+`windows-x86_64` (`.zip`, MSYS2 UCRT64), and `macos-x86_64` and `macos-arm64`
+(`.tar.gz`, `MACOSX_DEPLOYMENT_TARGET=12.0`). Per package:
 build, strip (macOS adds an ad hoc `codesign`; no Developer ID or notarization),
 `make release-check`, `release-package`, `release-smoke`, upload.
-`RELEASE_PLATFORM` names the package. The Linux job also runs the full golden
+`RELEASE_PLATFORM` names the package. The Linux jobs also run the full golden
 sweep, `test-distribution` and the examples.
 
 - `tools/release-check.sh elf|macho|pe BINARY ARCH FLOOR` checks the format,
@@ -298,7 +299,7 @@ sweep, `test-distribution` and the examples.
 - `tools/release.py smoke` (`python -I`) runs the extracted binary from a path
   with spaces and non-ASCII letters, with a system-only `PATH`. TLS is covered
   by the OpenSSL version line only.
-- `collect` (every run) checks that there are exactly the four archives of
+- `collect` (every run) checks that there are exactly the five archives of
   `VERSION` and writes `SHA256SUMS`. `publish` runs only for a tag push equal to
   `VERSION`, and creates the GitHub Release with empty notes. A manual
   `workflow_dispatch` only uploads artifacts.

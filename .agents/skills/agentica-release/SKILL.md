@@ -3,7 +3,7 @@ name: agentica-release
 description: >-
   Cut an Agentica release end to end. Covers the version bump PR (VERSION,
   CHANGELOG, compare links, stage0 refresh), the annotated tag, the release
-  workflow that publishes the four native archives, the hand-written GitHub
+  workflow that publishes the five native archives, the hand-written GitHub
   release notes, the GitHub Pages rebuild, and the post-release checks. Use
   when asked to make, tag, publish or announce a release or beta (for example
   "release 0.5.0-beta.1"). Not for building or testing packages locally without
@@ -79,7 +79,7 @@ git push origin <version>
 ```
 
 - The tag push starts `release.yml`: it checks the tag against `VERSION`,
-  builds, checks and smoke-tests the four archives, writes `SHA256SUMS`, and
+  builds, checks and smoke-tests the five archives, writes `SHA256SUMS`, and
   `publish` creates the release with empty notes. The job chain is described
   under "Release" in `.agents/skills/agentica-development/references/ci.md`.
 - Watch the run with one background loop: `gh run list --workflow
@@ -119,9 +119,9 @@ that its release link opens the release.
 
 ## 5. Post-release checks
 
-- The release page has the four archives (`linux-x86_64.tar.gz`,
-  `macos-x86_64.tar.gz`, `macos-arm64.tar.gz`, `windows-x86_64.zip`, each
-  `agentica-<version>-…`) and `SHA256SUMS`. A beta is Pre-release; a final
+- The release page has the five archives (`linux-x86_64.tar.gz`,
+  `linux-arm64.tar.gz`, `macos-x86_64.tar.gz`, `macos-arm64.tar.gz`,
+  `windows-x86_64.zip`, each `agentica-<version>-…`) and `SHA256SUMS`. A beta is Pre-release; a final
   release is Latest.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.

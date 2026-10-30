@@ -43,9 +43,13 @@ vendored_openssl() {
 
 case "$kind" in
   elf)
-    [ "$arch" = x86_64 ] || die "the ELF check knows x86_64 only"
+    case "$arch" in
+      x86_64) machine='Advanced Micro Devices X86-64' ;;
+      arm64) machine='AArch64' ;;
+      *) die "the ELF check knows x86_64 and arm64 only" ;;
+    esac
     header=$(readelf -h "$binary")
-    grep -q 'Machine:[[:space:]]*Advanced Micro Devices X86-64' <<< "$header" || die "$name is not an x86_64 ELF"
+    grep -q "Machine:[[:space:]]*$machine" <<< "$header" || die "$name is not an $arch ELF"
     grep -q 'Class:[[:space:]]*ELF64' <<< "$header" || die "$name is not a 64-bit ELF"
     sections=$(readelf -SW "$binary")
     if grep -qE '[.](debug_info|symtab)[[:space:]]' <<< "$sections"; then
