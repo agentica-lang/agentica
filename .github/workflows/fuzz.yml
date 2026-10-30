@@ -29,7 +29,7 @@ jobs:
       - run: test "$SECONDS_TO_FUZZ" -le 6000 || { echo "seconds must be at most 6000 (timeout-minutes is 120)" >&2; exit 1; }
       - run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME="$SECONDS_TO_FUZZ" LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS="-seed=$LIBFUZZ_SEED"
       - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: libfuzz-crashes
           path: build/vm/libfuzz/crashes/
