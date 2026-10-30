@@ -4,7 +4,14 @@ weight: 6
 description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, AES-256-GCM encryption, PBKDF2 and scrypt password hashing, Triple DES CBC and CMAC for payment formats, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
-The cryptographic builtins are computed by the VM with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. Today they are the hashes of the `Digest` namespace, in the forms of Ruby's `Digest::SHA256.digest` and `hexdigest`, the `HMAC` namespace, in the forms of Ruby's `OpenSSL::HMAC.digest` and `hexdigest`, with the constant-time `HMAC.secure_compare` of Ruby's `OpenSSL.secure_compare`, AES-256-GCM (`Cipher`, named after Ruby's `OpenSSL::Cipher.new("aes-256-gcm")`), the password hashes of `KDF`, as Ruby's `OpenSSL::KDF` names them, Triple DES CBC and `CMAC` for payment formats, and the secure random draws of `SecureRandom`, as Ruby names them.
+The VM computes these builtins with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. The names and forms follow Ruby:
+
+- `Digest`: the hashes, as `Digest::SHA256.digest` and `hexdigest`.
+- `HMAC`: the MACs, as `OpenSSL::HMAC`, and the constant-time `HMAC.secure_compare`, as `OpenSSL.secure_compare`.
+- `Cipher`: AES-256-GCM, as `OpenSSL::Cipher.new("aes-256-gcm")`.
+- `KDF`: the password hashes, as `OpenSSL::KDF`.
+- Triple DES CBC and `CMAC`, for payment formats.
+- `SecureRandom`: the secure random draws.
 
 ## Digests
 
