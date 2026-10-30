@@ -124,33 +124,30 @@ other: Event.Quit
 
 ## Generic enums
 
-An enum can take a type parameter. `Option` is not built in, but it is easy to write:
+An enum can take a type parameter. For a value that may be missing, use the built-in [Optional](/library/data-structures/optional/), not your own enum.
 
 ```agentica
-enum Option[T]
-  Some(T)
-  None
+enum Change[T]
+  Added(T)
+  Removed(T)
 end
 
-def find_even(xs: List[Int]) -> Option[Int]
-  for x in xs
-    if x % 2 == 0
-      return Option.Some(x)
-    end
+def describe(change: Change[Int]) -> String
+  case change
+    Change.Added(n) -> return "+#{n}"
+    Change.Removed(n) -> return "-#{n}"
   end
-  return Option.None
 end
 
 def main() -> Void
-  case find_even([1, 3, 4])
-    Option.Some(n) -> puts("found #{n}")
-    Option.None -> puts("none")
-  end
+  puts(describe(Change.Added(4)))
+  puts(describe(Change.Removed(2)))
 end
 ```
 
 ```output
-found 4
++4
+-2
 ```
 
 ## Enums are recursive
@@ -224,19 +221,14 @@ end
 
 ## Patterns inside patterns
 
-In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)` or `error(...)`, at any depth.
+In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)`, `error(...)`, `some(...)` or `none`, at any depth.
 
 ```agentica
-enum Option[T]
-  Some(T)
-  None
-end
-
-def describe(r: Result[Option[Int]]) -> String
+def describe(r: Result[Optional[Int]]) -> String
   case r
-    ok(Option.Some(0)) -> return "zero"
-    ok(Option.Some(n)) if n < 0 -> return "negative #{n}"
-    ok(Option.Some(n)) -> return "value #{n}"
+    ok(some(0)) -> return "zero"
+    ok(some(n)) if n < 0 -> return "negative #{n}"
+    ok(some(n)) -> return "value #{n}"
     ok(_) -> return "none"
     error("timeout") -> return "timed out"
     error(_) -> return "failed"
@@ -244,8 +236,8 @@ def describe(r: Result[Option[Int]]) -> String
 end
 
 def main() -> Void
-  puts(describe(ok(Option.Some(-3))))
-  puts(describe(ok(Option.None)))
+  puts(describe(ok(some(-3))))
+  puts(describe(ok(none)))
   puts(describe(error("timeout")))
 end
 ```
