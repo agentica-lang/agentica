@@ -31,7 +31,7 @@ def main() -> Void
 end
 ```
 
-`Test` and `TestCase` are reserved names.
+`Test` and `TestCase` are reserved names. `IO.inspect` of a `TestCase` shows `<TestCase>`.
 
 ## Test.test
 
@@ -65,7 +65,7 @@ A test fails with the first of these that applies:
 - tasks it started and left running (`RUNTIME-TEST-PENDING-TASKS`), which are stopped before the next test;
 - a crash of a task it started that no await observed (`RUNTIME-TASK-CRASHED`).
 
-A crash outside every test, such as one in a task that `main` started and nothing awaited, fails the whole file.
+A crash outside every test, such as one in a task that `main` started and nothing awaited, fails the whole file. After the record, every crash of the test's tasks counts as observed, and its running tasks are cancelled before the next test. The run-ending errors (a runtime error in `main`, `RUNTIME-STEP-LIMIT`, an internal VM error, `System.exit`) still end the whole run, from a test too.
 
 Each test gets its own random generator, seeded from the run's seed and the test's name, so a test sees the same `Random` values alone or with the others.
 
@@ -75,9 +75,9 @@ Each test gets its own random generator, seeded from the run's seed and the test
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
-Compares two values of the same type. The type comes from the first argument, so put the actual value first: `Test.eq(r, error("x"))` works, but `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` does not say what its `ok` type is. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys.
+Compares two values of the same type. The type comes from the first argument, so put the actual value first: `Test.eq(r, error("x"))` works, but `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` does not say what its `ok` type is. The type must have equality: `Int`, `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, and lists, maps, sets, Results (`Result[Void]` too), structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Lists compare in order; maps by key and sets by element, in any order; structs and enums by type, variant and fields, and Floats by IEEE 754. A `Json` compares by its canonical text at any depth.
 
-When the values differ, the test reports `values are not equal`, and the error shows both values in the `inspect` form (a `Json` as its JSON text).
+When the values differ, the test reports `values are not equal`, and the error text is `expected E; actual A`, with both values in the `inspect` form (a `Json` as its JSON text). `Test.ok?` gives `expected ok; actual A`, `Test.error?` gives `expected an error; actual A`, and `Test.assert` gives its message. The first recorded failure of a test is the one reported, and `RUNTIME-TEST-ASSERTION` carries `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and `Test.error?`, and neither for `Test.assert`.
 
 ```agentica
 struct Point
@@ -98,7 +98,7 @@ ok()
 error("expected [1, 3]; actual [1, 2]")
 ```
 
-A failed assertion counts against the test it runs in, even when its result is not used, so `Test.eq(a, b)` as a statement still fails the test. Outside a test, an assertion only returns its result.
+A failed assertion counts against the test it runs in (its own task, or a task spawned inside it), even when its result is not used, so `Test.eq(a, b)` as a statement still fails the test. Outside a test, an assertion only returns its result.
 
 ## Test.ok?
 

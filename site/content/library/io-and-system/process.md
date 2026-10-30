@@ -4,12 +4,13 @@ weight: 3
 description: Start other programs, talk to them through their input and output, and wait for them.
 ---
 
-A program can start other programs unless it runs with `--deny-run` (or `--sandbox`). Then every start returns an error that begins with `denied: --deny-run`, and extern blocks are refused as with `--deny-native`:
+A `Process` is an opaque handle, with no constructor, fields, equality or JSON encoding; `IO.inspect` prints `<Process>`. A program can start other programs unless it runs with `--deny-run` (or `--sandbox`, or `agentica run --deny-run`). Then every start returns an error that begins with `denied: --deny-run`, in every task, and extern blocks are refused as with `--deny-native`. The flag goes before the source file; later arguments reach `System.args`. Under `agentica test`, a step program cannot start a program under test:
 
 ```sh
 agentica --deny-run tool.agc
 ```
 
+- Timeouts are positive milliseconds and include the wait for the handle's lock. A timeout during stream I/O kills and closes the program; a timeout while waiting for the lock keeps it; a timed-out wait for exit does not terminate it.
 - Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds, and the spawn functions default it to 30000. `Process.spawn_captured` and `Process.spawn_channel` also default `dir` to `"."`; arguments fill from the left, so a timeout cannot be given without `dir`.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 
@@ -23,7 +24,7 @@ Starts a program with your program's environment.
 
 - A name with no `/` (`"echo"`) is looked up in each `PATH` folder, in order. The current folder is never added and empty entries are skipped; a relative entry such as `bin` is looked up under the current folder, as in the shell.
 - A command with `/` is a path (on Windows `\` and a drive such as `C:` too), relative to the current folder: run a local program as `"./tool"`.
-- A name not found gives `error("process: executable is unavailable")`. A file that cannot run (no execute permission) is an error from `spawn`.
+- A name not found, or one that names a directory, gives `error("process: executable is unavailable")`. A file that cannot run (no execute permission) is an error from `spawn`.
 - An empty command, or a NUL byte in the command or an argument, gives `error("process: command must be nonempty and arguments cannot contain NUL")`.
 - Windows: only `.exe` and `.com` run (`PATHEXT` is not read; a suffixless name tries `.exe` first; use `cmd.exe` by name for a shell). These fail: a name ending in a dot, a space, `.cmd` or `.bat`; one starting with `\\?\` or `\\.\`; a `:` that is not a drive.
 
@@ -47,7 +48,7 @@ Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 ```
 
-Write to the program's standard input, and flush.
+Write to the program's standard input, and flush. A send takes at most 1048576 bytes, UTF-8 text or a `Bytes`; invalid data consumes nothing.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -71,8 +72,8 @@ Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 
 Read from the program's standard output.
 
-- `read_line` removes the line ending. At the end of output it gives an error.
-- `read_bytes` gives up to `count` bytes as [`Bytes`](/library/data-structures/bytes/). At the end of output they are empty.
+- `read_line` removes the line ending (LF or CRLF), takes at most 1 MiB and decodes strictly. At the end of output it gives an error, and a line over 1 MiB closes the program.
+- `read_bytes` takes `count` from 0 to 1048576, waits for that many bytes or the end of output, and gives them as [`Bytes`](/library/data-structures/bytes/). At the end of output they are empty.
 
 ## Process.close_stdin
 
@@ -80,7 +81,7 @@ Read from the program's standard output.
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 ```
 
-Closes the program's input, so it sees the end of input.
+Closes the program's input, so it sees the end of input. It flushes first, and closing twice is fine.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -101,7 +102,7 @@ end
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 ```
 
-Gives the exit code (`false` gives `ok(1)`). A timeout leaves the program running. Unread output stays readable after `wait`.
+Gives the exit code, nonzero codes included (`false` gives `ok(1)`), and can be repeated. A timeout leaves the program running. Unread output stays readable after `wait`. A program blocks when its standard output pipe is full, so read it in a task while you send or wait.
 
 ## Process.close
 
@@ -109,7 +110,9 @@ Gives the exit code (`false` gives `ok(1)`). A timeout leaves the program runnin
 Process.close(p: Process) -> Void
 ```
 
-Stops the program if it still runs and frees it. Closing twice is fine.
+Stops the program if it still runs and frees it. Closing twice is fine. A running program is killed, the call waits for it to exit (other tasks run meanwhile) and closes the ports it owns; a timeout closes the program too, but does not wait for it. A failed explicit cleanup is `RUNTIME-PROCESS-CLOSE` at the call.
+
+Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion and an external interruption clean up the programs started directly; their descendants are not covered. On Windows a stop is always immediate (no `SIGTERM` grace). Where libuv can assign its job object, the direct children of the VM die when the VM ends, and a child that is itself an Agentica program stops its own children the same way.
 
 For a `Process.spawn` program, the closing task waits up to one second for it to end; other tasks keep running.
 
@@ -121,11 +124,11 @@ Its standard error goes to yours, unless started with `Process.spawn_captured`. 
 Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
 ```
 
-Starts a program in the folder `dir` (`"."`, the default, is the current one) and keeps its output. The command is found as for `Process.spawn`, from the current folder, not from `dir`.
+Starts a program in the folder `dir` (`"."`, the default, is the current one; an empty, NUL or non-directory `dir` is an error) and keeps its output. The command is found as for `Process.spawn`, from the current folder, not from `dir`.
 
 - Standard output and error are read all the time into buffers of 1 MiB each, so the program never blocks on a full pipe and its standard error is never printed. `read_line` and `read_bytes` read standard output as usual.
 - Past 1 MiB of waiting standard output, or of standard error, the rest is dropped and every read of standard output gives `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0, timeout)` gives it at once, to check without waiting.
-- `close` sends `SIGTERM` and kills the program one second later if it still runs, so an Agentica program can stop its own children. Windows has no `SIGTERM`: the program ends at once, and where libuv can assign its job object, programs the VM started die when the VM ends (other descendants are not covered).
+- `close` sends `SIGTERM` and kills the program one second later if it still runs, so an Agentica program can stop its own children. `close` and a timeout never wait, and at the end of a run a captured program gets about one second, while a `Process.spawn` program is killed at once. Windows has no `SIGTERM`: the program ends at once, and where libuv can assign its job object, programs the VM started die when the VM ends (other descendants are not covered).
 
 ## Process.output
 
@@ -133,7 +136,7 @@ Starts a program in the folder `dir` (`"."`, the default, is the current one) an
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 ```
 
-Waits until a captured program has closed its standard output and error, then gives `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped. It consumes nothing, so call it again if needed. A `Process.spawn` program gives `error("process: output is not captured")`.
+Waits until a captured program has closed its standard output and error, then gives `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("network: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
 
 ```agentica {mode="check"}
 def main() -> Void

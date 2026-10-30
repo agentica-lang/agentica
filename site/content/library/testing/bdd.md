@@ -74,7 +74,7 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 
 ## Your own steps
 
-A step program builds a list with `BDD.step` in `main` and passes it to `BDD.run`. Load it with `--steps`:
+A step program builds a list with `BDD.step` in `main` and passes it to `BDD.run`. Most `BDD.*` functions take the context first and return it. `BDD.Context` can be named but not built: a context exists only inside a step, so use the context that a call returns. The modules `std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`, `std/test/report` and `std/test/runner` are internal to `agentica test` and unsupported. Load the steps with `--steps`:
 
 ```sh
 agentica test specs/ --steps steps.agc
