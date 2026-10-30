@@ -99,8 +99,8 @@ end
   function or calls a `Native.*` builtin before anything runs:
   `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica test` such a test file is a
   file error with that code.
-- Elsewhere than Linux, macOS and Windows x64, such a program is refused at
-  load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2; `check`, `compile` and the
-  queries work on every system.
+- Elsewhere than Linux and macOS (x86_64 and arm64) and Windows x64, such a
+  program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2;
+  `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.

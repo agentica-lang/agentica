@@ -3,11 +3,11 @@
 Each demo runs from a fresh project folder holding a copy of the real example
 file and the real agentica.toml, with the freshly built library placed where
 the manifest points; nothing is edited to fake a pass. Native calls need
-libffi (Linux, macOS and Windows x64), like tests/test_vm_native.py; the
-system C compiler builds the library (a missing compiler skips locally and
-fails in CI, as tests/agentica_test.py requires). Expectations are computed in
-Python; only exit codes and exact known outputs are asserted, never diagnostic
-text (AGENTS.md).
+libffi (Linux and macOS on x86_64 and arm64, Windows x64), like
+tests/test_vm_native.py; the system C compiler builds the library (a missing
+compiler skips locally and fails in CI, as tests/agentica_test.py requires).
+Expectations are computed in Python; only exit codes and exact known outputs
+are asserted, never diagnostic text (AGENTS.md).
 """
 import shutil
 

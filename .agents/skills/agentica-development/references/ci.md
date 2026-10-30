@@ -220,8 +220,9 @@ and on `master` pushes. Each job runs `vm-test`, `vendored-check`,
 of `tools/conformance.py`, then `make conformance-report` (a job summary and
 `summary.json`; exit 1 when a module did not finish, a case failed, an area has
 no passed case, or a skip is not allowed). `conformance all-systems` merges the
-reports and fails when a system is missing or a case ran on none. Not in the matrix: the Docker and Wine
-groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`).
+reports and fails when a system is missing or a case ran on none. Not in the
+matrix: the Docker and Wine groups, the slow tier, sanitizers, fuzz and
+gc-stress (`ci.yml`, `fuzz.yml`).
 
 A new `tests/test_*.py` must be in an area or in `EXCLUDED` with a reason
 (`tests/test_conformance.py`). Run one system by hand with `make conformance`.

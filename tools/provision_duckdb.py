@@ -2,11 +2,12 @@
 """Stage the pinned DuckDB shared library for examples/ffi/duckdb.
 
 Downloads (or takes with --asset) exactly one pinned v2.0.0 archive for this
-system (and, on Linux, this architecture), checks its SHA-256 before unpacking anything, extracts only the shared
-library to OUT/native/<os>/<name> (the layout agentica.toml points at), and
-prints the absolute path of the staged library. Python's standard library
-only; used by the README and by CI, never by the ordinary test run (tests read
-DUCKDB_LIB and never fetch anything themselves).
+system (and, on Linux, this architecture), checks its SHA-256 before unpacking
+anything, extracts only the shared library to OUT/native/<os>/<name> (the
+layout agentica.toml points at), and prints the absolute path of the staged
+library. Python's standard library only; used by the README and by CI, never by
+the ordinary test run (tests read DUCKDB_LIB and never fetch anything
+themselves).
 """
 from __future__ import annotations
 

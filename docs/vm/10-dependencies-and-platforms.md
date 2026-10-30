@@ -62,10 +62,10 @@ architecture, a library outside that list or missing hardening.
 
 - **Dependency:** libffi
   - **Choice:** Vendored submodule `vm/third_party/libffi` (MIT), tag v3.8.0.
-    It calls the C functions of `extern` blocks. Built on Linux (x86_64; arm64
-    with the `AARCH64` target, plus the `closures.c` and `tramp.c` that its
-    closure setup links against), Windows x64 (MinGW gcc, the `X86_WIN64`
-    target: `ffiw64.c` and `win64.S`) and macOS (Apple clang; x86_64 as on
+    It calls the C functions of `extern` blocks. Built on Linux x86_64, Linux
+    arm64 (little-endian, the `AARCH64` target, plus the `closures.c` and
+    `tramp.c` that its closure setup links against), Windows x64 (MinGW gcc,
+    the `X86_WIN64` target: `ffiw64.c` and `win64.S`) and macOS (Apple clang; x86_64 as on
     Linux, arm64 with the `AARCH64` target and the trampoline table that libffi
     turns on for Apple arm64): the sources that libffi's `configure.host`
     lists for the target are compiled per mode into `$(VM_BUILD)/ffi/`, with

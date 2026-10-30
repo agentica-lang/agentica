@@ -198,7 +198,9 @@ FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv
 else ifneq ($(findstring -linux,$(FFI_MACHINE)),)
 # Without the trampoline table, the closure setup of aarch64/ffi.c calls ffi_data_to_code_pointer (closures.c), which
 # calls the trampoline functions of tramp.c (stubs without FFI_EXEC_STATIC_TRAMP). The VM makes no closure, but the
-# static link of aarch64/ffi.o needs the symbols.
+# static link of aarch64/ffi.o needs the symbols. closures.c is linked only for that: its closure memory is not chosen
+# yet (as built, a first ffi_closure_alloc would map writable and executable pages); FFI callbacks (#851) choose static
+# trampolines or a W^X mapping on purpose.
 FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv closures tramp
 endif
 ifneq ($(FFI_NAMES),)
@@ -460,11 +462,13 @@ else ifneq ($(FFI_APPLE),)
 	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define SYMBOL_UNDERSCORE 1' '#define FFI_NO_RAW_API 1' \
 	  $(if $(filter X86_64,$(FFI_TARGET)),'#define HAVE_LONG_DOUBLE 1' '#define HAVE_AS_X86_PCREL 1') \
 	  $(if $(filter 1,$(FFI_TRAMPOLINE_TABLE)),'#define FFI_EXEC_TRAMPOLINE_TABLE 1') \
+	  $(if $(filter AARCH64,$(FFI_TARGET)),'#define HAVE_AS_CFI_PSEUDO_OP 1') \
 	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .private_extern name' '#else' \
 	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@
 else
 	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define HAVE_LONG_DOUBLE 1' \
 	  $(if $(filter X86_64,$(FFI_TARGET)),'#define HAVE_AS_X86_PCREL 1') \
+	  $(if $(filter AARCH64,$(FFI_TARGET)),'#define HAVE_AS_CFI_PSEUDO_OP 1') \
 	  '#define HAVE_RO_EH_FRAME 1' '#define EH_FRAME_FLAGS "a"' '#define FFI_NO_RAW_API 1' \
 	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .hidden name' '#else' \
 	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@

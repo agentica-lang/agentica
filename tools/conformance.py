@@ -11,8 +11,8 @@
     conformance.py merge DIR               read DIR/*/summary.json of every system and exit 1 when a system is
                                            missing or a case ran on none of them
 
-The platform names are those of the release packages (release.py): linux-x86_64, linux-arm64, windows-x86_64,
-macos-x86_64 and macos-arm64. A module that is not in an area is in EXCLUDED with the reason, and
+The platform names are system and architecture, as the release packages are named: linux-x86_64, linux-arm64,
+windows-x86_64, macos-x86_64 and macos-arm64. A module that is not in an area is in EXCLUDED with the reason, and
 tests/test_conformance.py checks that every tests/test_*.py file is in one or the other, so a new test cannot stay out
 of the matrix by accident. Python's standard library only.
 

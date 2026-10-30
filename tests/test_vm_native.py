@@ -26,7 +26,7 @@ MACOS = TARGET_OS == "darwin"
 # The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() in ("x86_64", "aarch64")) or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
-NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux, macOS and Windows x64 only")
+NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux and macOS (x86_64 and arm64) and Windows x64 only")
 # Keep native non-Linux platforms in the test body to report #616 as an open gap, not host-only.
 NATIVE_STDIO_CASES = host_only(not NATIVE, "native calls are unsupported on this system")
 

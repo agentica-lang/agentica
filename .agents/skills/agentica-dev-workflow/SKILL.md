@@ -105,8 +105,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   Intel and ARM) runs on a PR only with the `platforms` label, and always on
   pushes to master. Add the label when the PR touches platform code (`vm/`,
   `#if` branches, processes, files, the child channel, threads, the Makefile)
-  and wait for all five systems. A master run that fails after a merge without the label is fixed
-  in a new PR at once.
+  and wait for all five systems. A master run that fails after a merge
+  without the label is fixed in a new PR at once.
 - **Portable Agentica code** (`compiler/`, `stdlib/`, their Python tests,
   docs, the site) gets no label: do not wait for the macOS and Windows jobs.
   Merge when `test` is green (plus `build` and Site examples when they run);
