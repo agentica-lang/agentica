@@ -18,8 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   arrive, for Server-Sent Events, tokens or files; `HTTP.whole(data)` is the
   channel of a route with one whole body.
 - `callback Name(params) -> result` in an extern block and
-  `Native.callback(Name, &fn)` are checked and compiled; running them is
-  refused at load until the VM makes callbacks.
+  `Native.callback(Name, &fn)`: C calls an Agentica function back (`qsort`, a
+  SQLite collation); `Optional[Name]` parameters pass NULL for `none`.
 
 ## [0.18.0] - 2026-10-30
 

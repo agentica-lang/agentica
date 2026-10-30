@@ -488,6 +488,9 @@ struct agc_task {
      cancel walk (rt->cancel_walks) that last held it, so the walk does not climb its chain again (cancel_tree). */
   agc_task *holder;
   uint64_t held_walk;
+  /* How many callbacks of native code run in this task now, one inside the other (agc_task_run_nested): while it is
+     not 0, a wait (agc_task_parking) is RUNTIME-NATIVE-CALLBACK, since C waits on the scheduler's stack. */
+  uint32_t callbacks;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c), so that
@@ -674,6 +677,17 @@ void agc_task_call_block(agc_vm *vm);
 bool agc_step_turn(agc_vm *vm, uint32_t span);
 /* Applies the turn cost charged so far (agc_charge); true when that ended the turn. */
 bool agc_turn_charge(agc_vm *vm);
+/* Runs the function value FN with the ARGC arguments ARGS to its end, inside the builtin that the running task's turn
+   calls: a callback that C makes during a native call (vm/ffi.c), with C's frames on this thread's stack. The function
+   runs in the task, on stacks of its own (the turn loop below keeps pointers into the task's), with the frames below
+   copied for stack traces; its steps count as the task's and against --max-steps, and a turn that ends meanwhile
+   starts again at once. It may not wait (agc_task_parking). True with its value in *RESULT; false when it failed or
+   exited, with that outcome in *FAILED (code, message, span and stack), for agc_raise once C has returned. SPAN is the
+   place of the call that started C. */
+bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span,
+                         agc_value *result, agc_outcome *failed);
+/* Raises again an outcome that agc_task_run_nested kept, as it was: the same failure and stack, or the same exit. */
+_Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 /* Spawns the body of one test of Test.run as a child of the caller: the task is its own test, with its own stream. */

@@ -278,13 +278,17 @@ struct agc_ffi_call;
    write NULL.
    A view of a buffer (Native.offset) is a buffer too, with `parent` set to the owned buffer whose memory it shows:
    `pointer` and `size` are the bytes from its offset to the parent's end, and it has no state, no owner and no
-   `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others. Changes under rt->sync. */
+   `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others.
+   A callback (Native.callback) has `callback` set to its data in GC memory, which this keeps alive while C may call
+   it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
+   and `free` is NULL. NULL for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;
   void *free_at;
+  void *callback;
   const char *name;
   size_t size;
   uint32_t jobs;

@@ -194,13 +194,14 @@ FFI_NAMES := prep_cif types x86/ffi64 x86/ffiw64 x86/unix64 x86/win64
 endif
 else ifneq ($(filter arm64-% aarch64-%,$(FFI_MACHINE)),)
 ifneq ($(FFI_APPLE),)
-FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv
+# closures.c holds the trampoline table that the callbacks of vm/ffi_libffi.c use there (ffi_closure_alloc).
+FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv closures
 else ifneq ($(findstring -linux,$(FFI_MACHINE)),)
 # Without the trampoline table, the closure setup of aarch64/ffi.c calls ffi_data_to_code_pointer (closures.c), which
-# calls the trampoline functions of tramp.c (stubs without FFI_EXEC_STATIC_TRAMP). The VM makes no closure, but the
-# static link of aarch64/ffi.o needs the symbols. closures.c is linked only for that: its closure memory is not chosen
-# yet (as built, a first ffi_closure_alloc would map writable and executable pages); FFI callbacks (#851) choose static
-# trampolines or a W^X mapping on purpose.
+# calls the trampoline functions of tramp.c (stubs without FFI_EXEC_STATIC_TRAMP). closures.c is linked only for those
+# symbols: the callbacks of vm/ffi_libffi.c map their own read-write page and seal it read-execute, and never call its
+# ffi_closure_alloc, which would map writable and executable pages (ffi_data_to_code_pointer gives such a page back
+# as it is).
 FFI_NAMES := prep_cif types aarch64/ffi aarch64/sysv closures tramp
 endif
 ifneq ($(FFI_NAMES),)

@@ -272,11 +272,14 @@ end
   `&` whose types are the Agentica ones (`C.Int32` is `Int`), else
   `CHECK-TYPE-MISMATCH`; an `Fn` value or an extern `def` is
   `CHECK-NATIVE-CALLBACK` and a block is refused (context goes through C's
-  `void *` user data). `cb` is a resource (`Native.close`). A callback is
-  never a result or `out`; for a pointer that may be NULL, declare the C
-  function again with a `C.Pointer` there. The VM does not make callbacks
-  yet: running is `RUNTIME-NATIVE-UNSUPPORTED` (exit 2) at load; `check` and
-  `compile` work.
+  `void *` user data). `cb` is a resource (`Native.close`; C must not call it
+  after). A callback is never a result or `out`; a parameter
+  `cmp: Optional[Name]` takes `none` for NULL. `fn` runs in the calling task
+  while C waits: no wait inside it (`Task.sleep`, channels, a `compute def`, a
+  print into a full output buffer): `RUNTIME-NATIVE-CALLBACK`. A failure in
+  `fn` gives C zero, skips the call's later callbacks and fails the extern
+  call when C returns. A callback from C's own thread, or from a `compute def`,
+  gives zero (the compute call then fails).
 - C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
   `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
   the header in its order, each an integer type, `C.Double`, `C.Float`,

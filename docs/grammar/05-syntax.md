@@ -168,8 +168,10 @@ parameters (`PARSE-EXTERN-ARITY`); a parameter name used twice is
 `CHECK-REDEFINED-NAME` at the second. For the rest of the language it is a
 resource: a type, with `export` and the place of a type in the declaration
 order (a block that declares one goes with the types). A `def` of the block
-below it takes it as a parameter, also in the variadic part; a callback result
-is `PARSE-EXTERN-TYPE` and an out one `PARSE-EXTERN-OUT`. `callback` is a
+below it takes it as a parameter, also in the variadic part, and so is
+`Optional[Name]`, which C gets as NULL for `none`; a callback result, or an
+`Optional` of anything else, is `PARSE-EXTERN-TYPE` and an out one
+`PARSE-EXTERN-OUT`. `callback` is a
 keyword only at the start of a member of an extern block, before a type name.
 
 `struct Name ... end` in an extern block declares a C struct that the block's

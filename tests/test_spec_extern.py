@@ -949,7 +949,8 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
 # A callback crosses by value: its parameters are C integer types, C.Double, C.Float, C.Bool, C.String or C.Pointer,
 # and its result one of them but C.String, or Void (else PARSE-EXTERN-TYPE at the type). It has no default, out
 # parameter, `...` or two parameters of one name, takes at most 64 parameters, and is a parameter of a def of its
-# block below it, not a result, an out parameter or a struct field.
+# block below it, not a result, an out parameter or a struct field; so is an Optional of it, and an Optional of
+# anything else is no C type.
 @pytest.mark.parametrize("member, code, start, stop", [
     ("callback F(a: C.Bytes) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 24)),
     ("callback F(a: C.Function) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 27)),
@@ -967,10 +968,23 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
     ("def f(g: F) -> Void\n  callback F(a: C.Int32) -> C.Int32", "PARSE-EXTERN-TYPE", (2, 12), (2, 13)),
     ("callback F(a: C.Int32) -> C.Int32\n  struct S\n    g: F\n  end", "PARSE-EXTERN-TYPE", (4, 8), (4, 9)),
     ("callback f(a: C.Int32) -> Void", "PARSE-UNEXPECTED-TOKEN", (2, 3), (2, 11)),
+    ("callback F(a: C.Int32) -> C.Int32\n  def f() -> Optional[F]", "PARSE-EXTERN-TYPE", (3, 14), (3, 25)),
+    ("callback F(a: C.Int32) -> C.Int32\n  def f(out g: Optional[F]) -> Void", "PARSE-EXTERN-OUT", (3, 16), (3, 27)),
+    ("def f(g: Optional[C.Int32]) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 29)),
+    ("def f(g: Optional[Thing]) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 27)),
 ])
 def test_a_callback_takes_c_value_types(tmp_path, member, code, start, stop):
     text = 'extern "/opt/libx.so"\n  %s\n  resource Thing, free: thing_free\nend\n' % member
     assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+# An Optional of a callback is a parameter that C may get as NULL: none passes NULL, also in the variadic part.
+def test_an_optional_callback_parameter_takes_none(tmp_path):
+    text = 'extern "/opt/libx.so"\n  callback F(a: C.Int32) -> C.Int32\n' \
+           '  def f(g: Optional[F], ..., h: Optional[F]) -> Void\nend\n\n' \
+           'def twice(a: Int) -> Int\n  return a * 2\nend\n\n' \
+           'def main() -> Void\n  f(none, some(Native.callback(F, &twice)))\nend\n'
+    assert_checks(check(source(tmp_path, text)), None, None, None)
 
 
 def test_a_callback_takes_at_most_64_parameters(tmp_path):

@@ -1,12 +1,10 @@
 /*
  * Native calls (docs/grammar/06d-io-and-network.md, "Native code"): Native.call, which every extern function lowers
- * to, Native.load, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per
- * signature, converts values to C and back, calls a C function by name or through a function pointer, runs a fast call
- * on the scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
- * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
- * null?, Native.pointer and address, the owned buffers of Native.memory_pointer and from_string (with block forms),
- * their views (Native.offset) and Native.free, the reads and writes of memory (Native.get_string, get_bytes, get_*,
- * put_*, the array and struct forms, Native.size_of), and Native.wait_readable and wait_writable. Service layer.
+ * to, Native.load and agc_ffi_refusal. It prepares one call per signature, converts values both ways, and runs a fast
+ * call on the scheduler and a compute call on the compute pool; dlopen and libffi are the adapter's (ffi_os.h). Also
+ * the resources of extern functions (agc_c_resource) and Native.close, null, pointer and address, the owned buffers
+ * and their views, the memory reads and writes (Native.get_*, put_*, size_of), Native.wait_readable and wait_writable,
+ * and Native.callback, which runs a function in the task of the native call that C calls it from. Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -65,7 +63,7 @@ typedef struct {
 typedef struct {
   agc_ffi_call *free;
   void *at, *pointer;
-  bool buffer, by_ref;
+  bool buffer, by_ref, callback;
 } end_free;
 
 typedef struct {
@@ -83,7 +81,8 @@ typedef struct {
 } made_kind;
 
 /* A prepared signature. An out parameter (out[k]) is not an argument of Native.call: C gets a pointer to a zeroed slot
-   of type params[k] and writes its value there. For the others, arg[k] is the index of the argument in the List of
+   of type params[k] and writes its value there. An optional one (optional[k], an Optional of a callback) is a resource
+   given as an Optional: none passes NULL. For the others, arg[k] is the index of the argument in the List of
    Native.call (`inputs` of them). For a function that returns a resource, `free` is the prepared call of the resource's
    free function (`free_by_ref` when it takes the pointer's address), `resource` the resource's name and `symbol`
    the C name of the function, which the error of a NULL result names; all three are NULL otherwise. `made` holds the
@@ -104,6 +103,7 @@ typedef struct {
   agc_ffi_call *call;
   agc_c_type params[AGC_FFI_MAX_PARAMS];
   bool out[AGC_FFI_MAX_PARAMS];
+  bool optional[AGC_FFI_MAX_PARAMS];
   uint8_t arg[AGC_FFI_MAX_PARAMS];
   agc_c_type result;
   agc_c_struct *structs[AGC_FFI_MAX_PARAMS];
@@ -136,7 +136,8 @@ typedef struct {
   agc_c_value *slots;
   agc_c_resource **held;
   uint8_t *structs;
-  bool ran;
+  uint32_t span;
+  bool ran, refused;
   _Atomic int phase;
   agc_c_value out;
   agc_c_value in[];
@@ -146,6 +147,45 @@ typedef struct {
    end of the run moves every queued call to ABANDONED (agc_ffi_stop_queued) and a pool thread then skips it: one CAS
    decides, so a call is either made in full or never. */
 enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
+
+/* The native call that runs on this thread now (current_site), which a callback that C makes runs in. A fast call sets
+   it around its C call and puts back the one it found, so a call that a callback makes nests. A compute call sets one
+   with no `vm` on its pool thread, where no callback can run: a callback there only sets `refused`, and C gets zero. A
+   thread that C started has none, and C gets zero there too. Once a callback has failed (`failed`) every later one of
+   the call gives zero at once, and the call raises the failure when C returns: the outcome that the callback's run
+   kept, or CODE and MESSAGE when its value could not go back to C. */
+typedef struct native_site {
+  agc_vm *vm;
+  uint32_t span;
+  bool failed, refused;
+  const char *code, *message;
+  agc_outcome outcome;
+  struct native_site *outer;
+} native_site;
+
+static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/* What a callback runs (Native.callback): the function value, the C types of its signature and its resource. In GC
+   memory, kept alive by the resource (agc_c_resource.callback) while C may call it. */
+typedef struct {
+  agc_c_resource *res;
+  agc_value fn;
+  agc_c_type result;
+  agc_c_type params[AGC_FFI_MAX_PARAMS];
+  uint32_t count;
+} callback_data;
+
+/* Set once the process has made a callback. From then on a fast call holds its resources, as a compute call does: a
+   callback lets rt->sync go while it runs, and it, or another task, may close them while C uses them. */
+static _Atomic bool callbacks_made; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/* The callbacks closed while they ran, whose last run has ended: libffi's frames of that run were still on the stack,
+   so the free waits until C has returned from the native call (free_dying). Under rt->sync; the registry keeps each
+   one alive. */
+static struct {
+  agc_c_resource **items;
+  size_t count, cap;
+} dying; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
    out resource's, as named by the signature (without the & of a free_ref: kind, which sets by_ref). */
@@ -541,7 +581,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
     k += len;
   }
   agc_c_type result, params[AGC_FFI_MAX_PARAMS], c_params[AGC_FFI_MAX_PARAMS];
-  bool out[AGC_FFI_MAX_PARAMS], result_out;
+  bool out[AGC_FFI_MAX_PARAMS], optional[AGC_FFI_MAX_PARAMS] = {false}, result_out;
   uint8_t arg[AGC_FFI_MAX_PARAMS];
   /* The item of each C parameter, for the layout of a struct. */
   uint32_t item_of[AGC_FFI_MAX_PARAMS];
@@ -566,7 +606,14 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
       free_input = (int32_t)inputs++;
       continue;
     }
-    if (!c_type_of(code, false, &params[count], &out[count])) bad_signature(vm, span);
+    /* An Optional of a callback (code o): a resource, or none for NULL. */
+    optional[count] = code == 'o';
+    if (optional[count]) {
+      params[count] = AGC_C_RESOURCE;
+      out[count] = false;
+    } else if (!c_type_of(code, false, &params[count], &out[count])) {
+      bad_signature(vm, span);
+    }
     bool promoted = params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT ||
                     (int_bits(params[count]) && int_bits(params[count]) < 32);
     if (k >= before && (out[count] || promoted || params[count] == AGC_C_STRUCT)) bad_signature(vm, span);
@@ -652,6 +699,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   e->outs = outs;
   memcpy(e->params, params, count * sizeof(agc_c_type));
   memcpy(e->out, out, count * sizeof(bool));
+  memcpy(e->optional, optional, count * sizeof(bool));
   memcpy(e->structs, structs, count * sizeof(agc_c_struct *));
   e->result_struct = result_struct;
   e->holds = count;
@@ -764,11 +812,14 @@ static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **
   agc_ffi_invoke(free_call, at, &arg, &unused);
 }
 
-/* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, a resource goes to FREE_CALL as in
-   free_pointer. */
-static void free_native(bool buffer, agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
+/* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, a callback (CALLBACK) gives back its
+   closure, which AT is, and a resource goes to FREE_CALL as in free_pointer. */
+static void free_native(bool buffer, bool callback, agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (buffer) {
     free(*slot);
+  } else if (callback) {
+    agc_ffi_closure_free(at);
+    *slot = NULL;
   } else {
     free_pointer(free_call, at, by_ref, slot);
   }
@@ -777,7 +828,7 @@ static void free_native(bool buffer, agc_ffi_call *free_call, void *at, bool by_
 /* Calls the free function of the resource, once. */
 static void call_free(agc_c_resource *res) {
   res->closed = res->freed = true;
-  free_native(res->buffer, res->free, res->free_at, res->by_ref, &res->pointer);
+  free_native(res->buffer, res->callback != NULL, res->free, res->free_at, res->by_ref, &res->pointer);
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
@@ -816,7 +867,7 @@ static void make_end_frees(void *data) {
   end_frees *batch = data;
   for (size_t k = 0; k < batch->count; k++) {
     end_free *f = &batch->items[k];
-    free_native(f->buffer, f->free, f->at, f->by_ref, &f->pointer);
+    free_native(f->buffer, f->callback, f->free, f->at, f->by_ref, &f->pointer);
   }
 }
 
@@ -898,7 +949,8 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
     /* Marked freed now: on a timeout or a failure below the free never runs, which the exit that follows does not
        mind. */
     res->closed = res->freed = true;
-    batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref};
+    batch->items[batch->count++] =
+        (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref, res->callback != NULL};
   }
   free(busy.items);
   if (!batch->count) {
@@ -978,6 +1030,13 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
   }
 }
 
+/* Frees the callbacks of `dying`, once C has returned from a native call: none of them runs any more. */
+static void free_dying(agc_vm *vm) {
+  agc_sync_assert(vm);
+  for (size_t k = 0; k < dying.count; k++) free_resource(vm, dying.items[k]);
+  dying.count = 0;
+}
+
 /* The owned buffer that V is, or NULL when V is a plain C.Pointer: both are a C.Pointer to the program. Anything else
    (only hand-made bytecode passes it) is a wrong tag. */
 static agc_c_resource *buffer_of(agc_vm *vm, agc_value v) {
@@ -990,6 +1049,19 @@ static agc_c_resource *buffer_of(agc_vm *vm, agc_value v) {
 /* The buffer of Native.memory_pointer that RES shows: its parent for a view (Native.offset), else RES itself. Its
    `closed` and `jobs` stand for every view of it. */
 static agc_c_resource *root_of(agc_c_resource *res) { return res && res->parent ? res->parent : res; }
+
+/* The resource of an optional argument V (ffi_entry.optional), or NULL for none. Any other value, or an owned buffer
+   in it, is a wrong tag: only hand-made bytecode passes one. */
+static agc_c_resource *optional_resource(agc_vm *vm, agc_value v) {
+  const agc_program *p = vm->rt->program;
+  const agc_enum *o = agc_as_enum(vm, v);
+  if (p->optional == UINT32_MAX || o->variant < p->optional || o->variant > p->optional + 1) agc_wrong_tag(vm);
+  if (o->variant == p->optional) return NULL;
+  if (o->n != 1) agc_wrong_tag(vm);
+  agc_c_resource *res = agc_as_c_resource(vm, o->payload[0]);
+  if (res->buffer) agc_wrong_tag(vm);
+  return res;
+}
 
 /* The C pointer of a C.Pointer value: an owned buffer gives its memory. Whether a buffer is closed is checked apart. */
 static void *pointer_of(agc_vm *vm, agc_value v) {
@@ -1136,6 +1208,18 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *l
   return out;
 }
 
+/* The C value of the checked argument K of E (not an out one), as c_argument gives it; an optional one is its
+   resource's pointer, or NULL for none. */
+static agc_c_value entry_argument(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint32_t k, uint8_t *bytes,
+                                  uint8_t *memory) {
+  agc_value v = agc_list_get(values, e->arg[k]);
+  if (e->optional[k]) {
+    const agc_c_resource *res = optional_resource(vm, v);
+    return (agc_c_value){.p = res ? res->pointer : NULL};
+  }
+  return c_argument(vm, e->params[k], e->structs[k], v, bytes, memory);
+}
+
 /* A malloc'd copy of the Bytes argument V into *OUT. It runs without rt->sync (a Bytes is immutable) and adds the
    bytes to *DATA, which the caller charges. */
 static void copy_bytes(agc_vm *vm, agc_value v, uint8_t **out, size_t *data) {
@@ -1176,6 +1260,7 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
    NULL. A view gives its parent: the call holds the memory through it. */
 static agc_c_resource *held_by(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint32_t k) {
   if (e->out[k]) return NULL;
+  if (e->optional[k]) return optional_resource(vm, agc_list_get(values, e->arg[k]));
   if (e->params[k] == AGC_C_RESOURCE) return agc_as_c_resource(vm, agc_list_get(values, e->arg[k]));
   if (e->params[k] == AGC_C_POINTER) return root_of(buffer_of(vm, agc_list_get(values, e->arg[k])));
   return NULL;
@@ -1318,7 +1403,11 @@ static void compute_work(void *data) {
   compute_call *c = data;
   int queued = CALL_QUEUED;
   if (!atomic_compare_exchange_strong(&c->phase, &queued, CALL_RUNNING)) return;
+  native_site site = {.outer = current_site};
+  current_site = &site;
   agc_ffi_invoke(c->entry->call, c->fn, c->in, &c->out);
+  current_site = site.outer;
+  c->refused = site.refused;
   if (c->entry->result == AGC_C_STRING && c->out.s) {
     size_t n = strlen(c->out.s);
     char *copy = malloc(n + 1);
@@ -1347,11 +1436,17 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
      vm->in_turn set exactly when a task takes the value (agc_io_finish, from resume in the task's turn); a detached
      job's `done` runs from end_detached, which the drain and agc_io_service call only between turns. The job's own
      `detached` flag is private to vm/loop.c and reaches no half. */
-  if (c->ran && e->outs && !vm->in_turn)
+  bool refused = c->refused && vm->in_turn;
+  if (c->ran && (refused || (e->outs && !vm->in_turn)))
     drop_made(e, &c->out, c->slots, c->free_at);
   else if (c->ran)
     v = call_value(vm, e, &c->out, c->slots, c->free_at);
+  uint32_t span = c->span;
   compute_free(c);
+  /* C called a callback on the pool thread, where it gave zero: the call's result may be wrong, so the task fails. */
+  if (refused)
+    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a compute def ran a callback on the compute pool, where none can run",
+             span);
   return v;
 }
 
@@ -1378,6 +1473,18 @@ static void *function_at(agc_vm *vm, agc_value v, uint32_t span) {
   return fn;
 }
 
+/* Fills HELD (e->holds entries) with what a call holds, in order: the resource or owned buffer of each parameter
+   (held_by), then those in the C.Pointer fields of the struct arguments, and counts the call in the `jobs` of each. */
+static void hold_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *values, agc_c_resource **held) {
+  uint32_t holds = e->count;
+  for (uint32_t k = 0; k < e->count; k++) {
+    held[k] = held_by(vm, e, values, k);
+    if (e->structs[k]) struct_held(vm, e->structs[k], agc_list_get(values, e->arg[k]), held, &holds);
+  }
+  for (uint32_t k = 0; k < e->holds; k++)
+    if (held[k]) held[k]->jobs++;
+}
+
 /* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
    compute pool while the task waits. The arguments are a List with one value per parameter, of the Agentica type the
    checker gave it. Every argument is checked before the first copy is made; then the C.Bytes arguments are copied,
@@ -1393,8 +1500,15 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
   void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
   void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
-  for (uint32_t k = 0; k < e->count; k++)
-    if (!e->out[k]) check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
+  for (uint32_t k = 0; k < e->count; k++) {
+    if (e->optional[k])
+      (void)optional_resource(vm, agc_list_get(values, e->arg[k]));
+    else if (!e->out[k])
+      check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
+  }
+  /* A compute call parks, which a callback cannot (agc_task_parking): refused before the copies exist. */
+  if (e->compute && vm->task->callbacks)
+    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a compute call", span);
   /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
   if (e->compute) (void)agc_io_loop(vm);
   check_open(vm, e, values, NULL, span);
@@ -1422,25 +1536,20 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     atomic_init(&c->phase, CALL_QUEUED);
     memset(&c->out, 0, sizeof c->out);
     memset(c->structs, 0, e->struct_bytes);
+    c->span = span;
+    c->refused = false;
     size_t used = 0;
-    uint32_t holds = e->count;
     for (uint32_t k = 0; k < e->count; k++) {
-      c->held[k] = NULL;
       memset(&c->slots[k], 0, sizeof c->slots[k]);
       if (e->out[k]) {
         c->in[k].p = &c->slots[k];
         continue;
       }
-      agc_value v = agc_list_get(values, e->arg[k]);
-      c->in[k] = c_argument(vm, e->params[k], e->structs[k], v, bytes[k], c->structs + used);
-      c->held[k] = held_by(vm, e, values, k);
-      if (e->structs[k]) {
-        struct_held(vm, e->structs[k], v, c->held, &holds);
-        used += STRUCT_ROUND(e->structs[k]->size);
-      }
+      uint8_t *memory = e->structs[k] ? c->structs + used : NULL;
+      c->in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
+      if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
-    for (uint32_t k = 0; k < e->holds; k++)
-      if (c->held[k]) c->held[k]->jobs++;
+    hold_arguments(vm, e, values, c->held);
     if (e->result_struct) c->out.p = c->structs + used;
     agc_io_compute(vm, &compute_io, c);
     return agc_void();
@@ -1456,14 +1565,35 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
       in[k].p = &slots[k];
     } else {
       uint8_t *memory = e->structs[k] ? structs + used : NULL;
-      in[k] = c_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), bytes[k], memory);
+      in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
       if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
   }
   agc_c_value out = {0};
   if (e->result_struct) out.p = structs + used;
+  agc_c_resource **held = NULL;
+  if (e->holds && atomic_load_explicit(&callbacks_made, memory_order_relaxed)) {
+    held = malloc(agc_size_mul(e->holds, sizeof *held));
+    if (!held) agc_out_of_memory();
+    hold_arguments(vm, e, values, held);
+  }
+  native_site site = {.vm = vm, .span = span, .outer = current_site};
+  current_site = &site;
   agc_ffi_invoke(e->call, fn, in, &out);
+  current_site = site.outer;
+  if (held) {
+    release_held(vm, e, held);
+    free(held);
+  }
+  if (dying.count) free_dying(vm);
   free_copies(e, in);
+  if (site.failed) {
+    /* The call fails as the callback did: what it made is freed and no value is made. */
+    drop_made(e, &out, slots, free_at);
+    free(structs);
+    if (site.code) agc_fail(vm, site.code, site.message, span);
+    agc_raise(vm, &site.outcome);
+  }
   agc_value v = call_value(vm, e, &out, slots, free_at);
   free(structs);
   return v;
@@ -2092,19 +2222,173 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_result_value(false, agc_string_value(loader_text(error)));
 }
 
-/* Native.callback(signature, function): the front end lowers it ("CODES NAME", compiler/lower/lower_native.agc), but
-   the VM cannot make the closure yet, so a program that calls it is refused at load (agc_ffi_refusal) and this row only
-   lets the loader resolve the key. */
-static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  agc_fail(vm, "RUNTIME-NATIVE-UNSUPPORTED", "Native.callback is not supported yet", span);
+/* Keeps the failure CODE and MESSAGE of a callback whose value cannot go back to C, for the native call to raise once C
+   has returned: nothing can jump out while C's frames are on the stack. */
+static void site_fail(native_site *site, const char *code, const char *message) {
+  site->failed = true;
+  site->code = code;
+  site->message = message;
 }
 
-/* Whether the program imports Native.callback, which agc_ffi_refusal refuses until the VM makes callbacks. */
-static bool imports_callback(const agc_program *program) {
-  for (uint32_t i = 0; i < program->builtin_count; i++)
-    if (program->builtins[i]->fn == builtin_native_callback) return true;
-  return false;
+/* The Agentica value of a callback's argument of TYPE: a C.String is copied, and NULL reads as "", as for a result. */
+static agc_value callback_argument(agc_c_type type, const agc_c_value *v) {
+  switch (type) {
+    INT_CASES: return int_load(type, v);
+    case AGC_C_DOUBLE: return agc_float(v->d);
+    case AGC_C_FLOAT: return agc_float(v->f);
+    case AGC_C_BOOL: return agc_bool(v->b);
+    case AGC_C_STRING: {
+      const char *s = v->s ? v->s : "";
+      return text_value((const uint8_t *)s, strlen(s));
+    }
+    default: return agc_c_pointer_value(v->p);
+  }
+}
+
+/* Writes V, the value of a callback's function, as its C result of TYPE. The checker gave the function the Agentica
+   type, so only hand-made bytecode returns another tag (RUNTIME-INTERNAL); an integer outside fits_bits is
+   RUNTIME-INTEGER-OVERFLOW, as for an argument, and a closed owned buffer RUNTIME-NATIVE-CLOSED. The tags are tested
+   first, so no accessor fails here. */
+static void callback_result(native_site *site, agc_c_type type, agc_value v, agc_c_value *out) {
+  agc_vm *vm = site->vm;
+  switch (type) {
+    INT_CASES:
+      if (!agc_is(v, AGC_T_INT)) break;
+      if (!fits_bits(agc_as_int(vm, v), int_bits(type))) {
+        site_fail(site, "RUNTIME-INTEGER-OVERFLOW", "a callback's result does not fit in the bits of its C type");
+        return;
+      }
+      int_store(type, agc_as_int(vm, v), out);
+      return;
+    case AGC_C_DOUBLE:
+      if (!agc_is(v, AGC_T_FLOAT)) break;
+      out->d = agc_as_float(vm, v);
+      return;
+    case AGC_C_FLOAT:
+      if (!agc_is(v, AGC_T_FLOAT)) break;
+      out->f = (float)agc_as_float(vm, v);
+      return;
+    case AGC_C_BOOL:
+      if (!agc_is(v, AGC_T_BOOL)) break;
+      out->b = agc_as_bool(vm, v);
+      return;
+    case AGC_C_POINTER: {
+      if (agc_is(v, AGC_T_C_POINTER)) {
+        out->p = agc_as_c_pointer(vm, v);
+        return;
+      }
+      if (!agc_is(v, AGC_T_C_RESOURCE) || !agc_as_c_resource(vm, v)->buffer) break;
+      agc_c_resource *res = agc_as_c_resource(vm, v);
+      if (root_of(res)->closed) {
+        site_fail(site, "RUNTIME-NATIVE-CLOSED", "a callback returned an owned buffer that is closed");
+        return;
+      }
+      out->p = res->pointer;
+      return;
+    }
+    case AGC_C_VOID: return;
+    default: break;
+  }
+  site_fail(site, "RUNTIME-INTERNAL", "invalid bytecode: a callback returned a value of another type");
+}
+
+/* Queues the free of a callback that was closed while it ran, now that its last run is over (`dying`). */
+static void dying_add(agc_c_resource *res) {
+  if (dying.count == dying.cap) {
+    dying.cap = dying.cap ? agc_size_mul(dying.cap, 2) : 8;
+    dying.items = realloc(dying.items, agc_size_mul(dying.cap, sizeof *dying.items));
+    if (!dying.items) agc_out_of_memory();
+  }
+  dying.items[dying.count++] = res;
+}
+
+/* What C runs when it calls a callback (agc_ffi_handler): the function runs in the task of the native call on this
+   thread (native_site), and its value goes back to C. C gets zero when no call can run it, the callback is closed or
+   one of the call's callbacks has failed already. The native call holds rt->sync here (a shared builtin), which the
+   run lets go and takes again. The run counts in the resource's `jobs`, so a close meanwhile, by the callback or by
+   another task, leaves the closure to the end of the last run, and its free to the native call (dying_add). */
+static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
+  const callback_data *cb = data;
+  native_site *site = current_site;
+  if (!site || site->failed) return;
+  if (!site->vm) {
+    site->refused = true;
+    return;
+  }
+  agc_c_resource *res = cb->res;
+  if (res->closed) return;
+  agc_value values[AGC_FFI_MAX_PARAMS];
+  for (uint32_t k = 0; k < cb->count; k++) values[k] = callback_argument(cb->params[k], &args[k]);
+  agc_value got;
+  res->jobs++;
+  bool ran = agc_task_run_nested(site->vm, cb->fn, values, cb->count, site->span, &got, &site->outcome);
+  if (--res->jobs == 0 && res->closed && !res->freed) dying_add(res);
+  if (!ran) {
+    site->failed = true;
+    return;
+  }
+  callback_result(site, cb->result, got, result);
+}
+
+/* The C types that a callback takes and returns (compiler/syntax/parser.agc, CALLBACK_PARAM_CODES and
+   CALLBACK_RESULT_CODES): the integers, C.Double, C.Float, C.Bool, C.Pointer, C.String as a parameter and Void as the
+   result. */
+static bool callback_type(agc_c_type type, bool result) {
+  switch (type) {
+    INT_CASES:
+    case AGC_C_DOUBLE:
+    case AGC_C_FLOAT:
+    case AGC_C_BOOL:
+    case AGC_C_POINTER: return true;
+    case AGC_C_STRING: return !result;
+    case AGC_C_VOID: return result;
+    default: return false;
+  }
+}
+
+/* Native.callback(signature, function): a callback of an extern block that runs FUNCTION, a resource that the calling
+   task owns, whose pointer is the code that C calls. The signature is "CODES NAME" (compiler/lower/lower_native.agc),
+   the result's code first. The front end checked that the function takes and returns the Agentica types of the codes;
+   the VM checks the codes and the number of parameters, so hand-made bytecode cannot make the closure read past them.
+   A shared builtin: the resource joins the registry. */
+static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  const agc_string *text = agc_as_string(vm, args[0]);
+  const agc_fn *fn = agc_as_fn(vm, args[1]);
+  const char *at = text->data, *codes;
+  size_t left = text->bytes, codes_len;
+  if (!next_word(&at, &left, &codes, &codes_len) || codes_len > AGC_FFI_MAX_PARAMS + 1 || !identifier(at, left))
+    bad_signature(vm, span);
+  callback_data *cb = agc_alloc(sizeof *cb);
+  bool out;
+  if (!c_type_of(codes[0], true, &cb->result, &out) || !callback_type(cb->result, true)) bad_signature(vm, span);
+  cb->count = (uint32_t)codes_len - 1;
+  for (uint32_t k = 0; k < cb->count; k++)
+    if (!c_type_of(codes[k + 1], false, &cb->params[k], &out) || out || !callback_type(cb->params[k], false))
+      bad_signature(vm, span);
+  const agc_program *p = vm->rt->program;
+  if (fn->function >= p->function_count || p->functions[fn->function].params != cb->count ||
+      p->functions[fn->function].captures != fn->n)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: the function of a callback does not take its parameters", span);
+  cb->fn = args[1];
+  char *name = agc_alloc_atomic(left + 1);
+  memcpy(name, at, left);
+  name[left] = '\0';
+  char error[256];
+  agc_ffi_closure *closure =
+      agc_ffi_closure_new(cb->result, cb->params, cb->count, callback_entry, cb, error, sizeof error);
+  if (!closure) agc_fail_text(vm, "RUNTIME-NATIVE-CALLBACK", loader_text(error), span);
+  agc_c_resource *res = agc_alloc(sizeof *res);
+  res->pointer = agc_ffi_closure_code(closure);
+  res->free_at = closure;
+  res->callback = cb;
+  cb->res = res;
+  res->name = name;
+  res->state = agc_register(vm, res, release_resource);
+  agc_own(vm, res->state, close_owned);
+  atomic_store_explicit(&callbacks_made, true, memory_order_relaxed);
+  agc_charge(vm, FFI_CALL_COST);
+  return agc_c_resource_value(res);
 }
 
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {
@@ -2119,10 +2403,6 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
     *message = "this program uses native code (extern functions or Native.* builtins), and --deny-native (or any "
                "--deny-* flag) refuses it";
     return "RUNTIME-NATIVE-DENIED";
-  }
-  if (imports_callback(program)) {
-    *message = "this program calls Native.callback, which is not supported yet";
-    return "RUNTIME-NATIVE-UNSUPPORTED";
   }
   return NULL;
 }
@@ -2177,7 +2457,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Native.callback", 2, builtin_native_callback, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.callback", 2, builtin_native_callback, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

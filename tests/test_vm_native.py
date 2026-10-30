@@ -80,7 +80,7 @@ def literal(path):
 @pytest.fixture(scope="module")
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
-    return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else []))
+    return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else ["-pthread"]))
 
 
 def tsan_stdio_fixture_enabled():
@@ -2912,27 +2912,176 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
         assert diagnostic(result, 2) == ("RUNTIME-NATIVE-UNSUPPORTED", (7, 3))
 
 
-# The VM cannot make a callback yet: a program that calls Native.callback is refused at load on every system, before
-# anything runs (with --deny-native, by that flag first).
-def test_native_callback_is_refused_at_load(tmp_path):
-    text = """extern "%s"
-  callback Compare(a: C.Pointer, b: C.Pointer) -> C.Int32
+CALLBACKS = """extern "%s"
+  callback Mix(
+    a: C.Int8, b: C.UInt8, c: C.Int16, d: C.UInt16, e: C.UInt32, f: C.Int64, g: C.Long, x: C.Double, y: C.Float,
+    odd: C.Bool, name: C.String, p: C.Pointer,
+  ) -> C.Double
+  callback Small() -> C.Int8
+  callback Wide() -> C.UInt16
+  callback Flag() -> C.Bool
+  callback Real() -> C.Float
+  callback Word() -> C.UInt32
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_mix(fn: Mix, n: C.Int32) -> C.Double
+  def peer_call_narrow(s: Small, u: Wide, b: Flag, f: Real, w: Word) -> C.Int64
+  def peer_call_maybe(fn: Optional[Step], x: C.Int32) -> C.Int32
+  def peer_call_on_thread(fn: Step, x: C.Int32) -> C.Int32
 end
 
-def by_address(a: C.Pointer, b: C.Pointer) -> Int
-  return Native.address(a) - Native.address(b)
+def mix(a: Int, b: Int, c: Int, d: Int, e: Int, f: Int, g: Int, x: Float, y: Float, odd: Bool, name: String,
+        p: C.Pointer) -> Float
+  puts("#{a} #{b} #{c} #{d} #{e} #{f} #{g} #{x} #{y} #{odd} [#{name}] #{Native.address(p)}")
+  return x + y
+end
+
+def small() -> Int
+  return -5
+end
+
+def wide() -> Int
+  return 65_535
+end
+
+def flag() -> Bool
+  return true
+end
+
+def real() -> Float
+  return 2.5
+end
+
+def word() -> Int
+  return 4_294_967_295
+end
+
+# A callback inside a callback, after enough steps that turns end meanwhile.
+def deep(x: Int) -> Int
+  total = 0
+  for i in 0...30_000
+    total = total + i
+  end
+
+  return peer_call_maybe(some(Native.callback(Step, &twice)), x) + total - total
+end
+
+def twice(x: Int) -> Int
+  puts("twice #{x}")
+  return x * 2
 end
 
 def main() -> Void
-  puts("started")
-  Native.close(Native.callback(Compare, &by_address))
+  puts(peer_call_mix(Native.callback(Mix, &mix), 2))
+  narrow = peer_call_narrow(
+    Native.callback(Small, &small),
+    Native.callback(Wide, &wide),
+    Native.callback(Flag, &flag),
+    Native.callback(Real, &real),
+    Native.callback(Word, &word),
+  )
+  puts(narrow)
+  step = Native.callback(Step, &deep)
+  puts(peer_call_maybe(some(step), 4))
+  puts(peer_call_maybe(none, 4))
+  puts(peer_call_on_thread(step, 4))
+  IO.inspect(step)
+  Native.close(step)
+  puts(Native.closed?(step))
 end
-""" % LIBC
-    result = agentica("--json", program(tmp_path, text))
-    assert result.stdout == ""
-    assert diagnostic(result, 2)[0] == "RUNTIME-NATIVE-UNSUPPORTED"
-    result = agentica("--json", "--deny-native", program(tmp_path, text))
-    assert diagnostic(result, 2)[0] == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED")
+"""
+
+
+# Native.callback makes a C function that runs an Agentica function in the task of the native call that C makes it
+# from: every by-value type crosses the peer's ABI both ways (a NULL C.String is ""), a narrow result keeps its type
+# in C, a callback runs one inside another and across ended turns, an Optional of a callback passes NULL for none, and
+# a call from a thread of C's own runs nothing and gives C zero. The same output with several schedulers.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_native_callbacks_run_in_the_calling_task(tmp_path, peer, schedulers):
+    result = agentica("--schedulers", schedulers, program(tmp_path, CALLBACKS % literal(peer)))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == textwrap.dedent("""\
+        0 250 -30000 65000 4294967295 1099511627776 -7 0.0 0.25 false [] 1
+        -1 251 -30000 65000 4294967294 1099511627776 -7 0.5 0.25 true [odd] 2
+        1.0
+        4296032835
+        twice 4
+        8
+        -1
+        0
+        <Step>
+        true
+        """)
+
+
+CALLBACK_FAILURES = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_twice(fn: Step, x: C.Int32) -> C.Int32
+  compute def peer_call_maybe(fn: Optional[Step], x: C.Int32) -> C.Int32
+end
+
+def divide(x: Int) -> Int
+  puts("divide #{x}")
+  return 10 / (x - x)
+end
+
+def waits(x: Int) -> Int
+  Task.sleep(1)
+  return x
+end
+
+def huge(x: Int) -> Int
+  return 4_294_967_296
+end
+
+def leaves(x: Int) -> Int
+  System.exit(3)
+  return x
+end
+
+def spins(x: Int) -> Int
+  total = 0
+  for i in 0...1_000_000
+    total = total + i
+  end
+
+  return total
+end
+
+def main() -> Void
+  case System.args().first()
+    "divide" -> puts(peer_call_twice(Native.callback(Step, &divide), 1))
+    "wait" -> puts(peer_call_twice(Native.callback(Step, &waits), 1))
+    "huge" -> puts(peer_call_twice(Native.callback(Step, &huge), 1))
+    "exit" -> puts(peer_call_twice(Native.callback(Step, &leaves), 1))
+    "steps" -> puts(peer_call_twice(Native.callback(Step, &spins), 1))
+    _ -> puts(peer_call_maybe(some(Native.callback(Step, &divide)), 1))
+  end
+end
+"""
+
+
+# A callback that fails fails the native call once C returns, with its own code, place and stack; C gets zero from it
+# and from every later callback of the call, which run nothing (one "divide" line for two calls). A wait in a callback
+# is RUNTIME-NATIVE-CALLBACK at the wait, a result outside its C type RUNTIME-INTEGER-OVERFLOW at the extern def,
+# --max-steps counts the callback's steps, and an exit in a callback ends the run. A compute def runs C on the pool,
+# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK.
+@NATIVE_CALLS
+@pytest.mark.parametrize("mode, flags, status, code, start, out", [
+    ("divide", [], 1, "RUNTIME-DIVISION-BY-ZERO", (9, 13), "divide 1\n"),
+    ("wait", [], 1, "RUNTIME-NATIVE-CALLBACK", (13, 3), ""),
+    ("huge", [], 1, "RUNTIME-INTEGER-OVERFLOW", (3, 3), ""),
+    ("steps", ["--max-steps", "100000"], 1, "RUNTIME-STEP-LIMIT", (29, 21), ""),
+    ("pool", [], 1, "RUNTIME-NATIVE-CALLBACK", (4, 3), ""),
+    ("exit", [], 3, None, None, ""),
+])
+def test_native_callback_failures_end_the_native_call(tmp_path, peer, mode, flags, status, code, start, out):
+    result = agentica("--json", *flags, program(tmp_path, CALLBACK_FAILURES % literal(peer)), mode)
+    assert result.stdout == out
+    if code is None:
+        assert (result.code, result.stderr) == (status, "")
+    else:
+        assert diagnostic(result, status) == (code, start)
 
 
 EXTERN_TEST = """extern "%s"

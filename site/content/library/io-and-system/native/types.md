@@ -302,8 +302,12 @@ end
 - A callback takes an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.String` or `C.Pointer`, and returns one of them but `C.String`, or `Void`. Anything else is `PARSE-EXTERN-TYPE`: take a struct, an array or bytes as a `C.Pointer` and read it with `Native.get_*`. It has no default, no `out` parameter and no `...`.
 - The function is named with `&` and takes and returns the Agentica types of the callback (`C.Int32` is `Int`); anything else is `CHECK-TYPE-MISMATCH`. An `Fn` value is `CHECK-NATIVE-CALLBACK`, and a block is refused too, because they may hold values of their scope; so is a function of an extern block, since a callback may not wait. Pass the context through the `void *` user data argument that C libraries give for it.
 - The callback is a resource of its type: `Native.close`, `Native.closed?` and `Task.spawn_owning` take it, and it does not convert to or from a `C.Pointer`.
-- A `def` of the block takes the callback as a parameter of its type, also in the variadic part. It is not a result or an `out` parameter. For a function pointer that may be NULL, such as the step function of a scalar SQLite function, declare the C function a second time under another name with a `C.Pointer` parameter there, and pass `Native.null()`.
-- The VM does not make callbacks yet: a program that calls `Native.callback` is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2, on every system. `check` and `compile` accept it.
+- A `def` of the block takes the callback as a parameter of its type, also in the variadic part. It is not a result or an `out` parameter. For a function pointer that may be NULL, such as the step function of a scalar SQLite function, declare the parameter `Optional[Name]` and pass `none` for NULL or `some(cb)`.
+- C calls the callback during a native call: the function runs then, in the task that made the call, and C waits for its value. A `C.String` argument is copied, and NULL reads as `""`. A result outside its C type is `RUNTIME-INTEGER-OVERFLOW`.
+- The function cannot wait while C waits for it: `Task.sleep`, a channel, a file or network call, a `compute def` call, or a print that must wait for room in a full output buffer is `RUNTIME-NATIVE-CALLBACK`.
+- When the function fails or exits, C gets zero from it, and zero from the later callbacks of that native call, which do not run; the native call then fails or exits the same way once C returns.
+- A callback that C calls from a thread of its own runs nothing and gives zero. A `compute def` runs on the compute pool, where a callback gives zero too, and that call then fails with `RUNTIME-NATIVE-CALLBACK`.
+- C must not call a callback after `Native.close` or the end of the task that owns it: its code is freed.
 
 ## C structs
 
