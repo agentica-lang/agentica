@@ -229,8 +229,9 @@ in a PR that rewrites the goldens.
 
 - `JSON.decode(s, T)` parses `s` like `JSON.parse`, then walks `T` in field
   order and stops at the first problem. A `Json` source skips the parse and is
-  walked the same way. Every field is required except a `JsonField` one; extra
-  keys are ignored. A decoded map is built in sorted key order.
+  walked the same way. Every field is required except a `JsonField` or an
+  `Optional` one; extra keys are ignored. A decoded map is built in sorted key
+  order.
 - A `JsonField[T]` field (type kind 7) is `Absent` when its key is missing and
   `Null` for JSON `null`. Otherwise the value must have the top kind of `T`
   (`object` for a struct or map, `array` for a list), else the error is the
@@ -240,18 +241,27 @@ in a PR that rewrites the goldens.
   field, write `null` for `Null` and the payload for `Value`; they know the
   variants by the ids of the `JsonField` enum, which the loader finds and checks
   (Absent, Null, Value with arities 0, 0, 1).
+- An `Optional[T]` (type kind 8) may be any type of the table, not only a
+  field: `none` for JSON `null` or for the missing key of a struct field, else
+  `some` of `T`, decoded as for a `JsonField` (the ` or null` error, a frame
+  with no path step). An `Optional` `T` makes its own kind check. The encoders
+  write `none` as `null` and `some(x)` as `x`, at any depth and for the root,
+  so `some(none)` is `null`. The loader finds the builtin `Optional` enum by
+  its name and shape (None, Some with arities 0, 1); an enum named `Optional`
+  of another shape, from an older file, is an ordinary enum.
 - Errors are values `"<path>: expected <what>"`. The path is `$`, `a.b` for
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
   outside int64), `finite Float` (a big integer that rounds to infinity fails),
   `Bool` or `String`.
 - `JSON.schema(T)` is `{type, properties, required}`, plus `$defs` when the
-  fields reach a struct. `required` leaves out the `JsonField` fields and is
-  left out itself when it would be empty. A `JsonField[T]` field is `{"anyOf":
-  [<T>, {"type": "null"}]}`. Each struct reached appears once in `$defs` under
-  its linked name (`@2::Point` for an imported one). A struct field is `{"$ref":
-  "#/$defs/<name>"}`, with `~` written `~0` and `/` written `~1`. Int is
-  `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
+  fields reach a struct. `required` leaves out the `JsonField` and `Optional`
+  fields and is left out itself when it would be empty. A `JsonField[T]` field
+  and an `Optional[T]` are `{"anyOf": [<T>, {"type": "null"}]}`. Each struct
+  reached appears once in `$defs` under its linked name (`@2::Point` for an
+  imported one). A struct field is `{"$ref": "#/$defs/<name>"}`, with `~`
+  written `~0` and `/` written `~1`. Int is `{"type": "integer", "minimum":
+  -2^63, "maximum": 2^63-1}`.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

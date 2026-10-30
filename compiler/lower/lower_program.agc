@@ -54,6 +54,11 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
     wanted = used.add("JsonField")
   end
 
+  if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| optional_in?(type) end end
+    # The same for the Optional values that JSON.decode builds.
+    wanted = wanted.add("Optional")
+  end
+
   structs: List[Ir.StructDef] = []
   for decl in struct_decls
     fields = decl.fields.map do |field: Ast.FieldDecl| field.name end
@@ -238,11 +243,12 @@ def references_known?(types: List[Types.Type], table: Map[String, List[Types.Typ
   return true
 end
 
-# The struct a field type is made of, under any List, Map or JsonField around it.
+# The struct a field type is made of, under any List, Map, Optional or JsonField around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
     Types.Type.Struct(name, args) -> return [name]
     Types.Type.List(item) -> return struct_names_in(item)
+    Types.Type.Optional(item) -> return struct_names_in(item)
     Types.Type.Map(key, value) -> return struct_names_in(value)
     Types.Type.Enum(name, args) -> return struct_names_in(args[0])
     _ -> return []
@@ -254,11 +260,24 @@ def json_field?(type: Types.Type) -> Bool
   return Types.is?(type, "Enum") and Types.name(type) == "JsonField"
 end
 
-# The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JsonField of a JSON type, or a JSON
-# type. JsonField is only allowed here, as the direct type of the field.
+# True when an Optional sits in a field type, under any List, Map or JsonField around it.
+def optional_in?(type: Types.Type) -> Bool
+  case type
+    Types.Type.Optional(item) -> return true
+    Types.Type.List(item) -> return optional_in?(item)
+    Types.Type.Map(key, value) -> return optional_in?(value)
+    Types.Type.Enum(name, args) -> return optional_in?(args[0])
+    _ -> return false
+  end
+end
+
+# The type of a struct field as JSON.decode builds it, or `none` when it cannot: a JsonField of a JSON type other than
+# an Optional, or a JSON type. JsonField is only allowed here, as the direct type of the field.
 def field_type(ref: Ast.TypeRef, names: Set[String]) -> Optional[Types.Type]
   if ref.name != "JsonField" or ref.args.size != 1
     return json_field_inner(ref, names)
+  elsif ref.args[0].name == "Optional"
+    return none
   end
 
   value = json_field_inner(ref.args[0], names)
@@ -284,6 +303,12 @@ def json_field_inner(ref: Ast.TypeRef, names: Set[String]) -> Optional[Types.Typ
     item = json_field_inner(args[0], names)
     case item
       some(type) -> return some(Types.Type.List(type))
+      none -> return none
+    end
+  elsif ref.name == "Optional" and args.size == 1
+    item = json_field_inner(args[0], names)
+    case item
+      some(type) -> return some(Types.Type.Optional(type))
       none -> return none
     end
   elsif ref.name == "Map" and args.size == 2 and args[0].name == "String" and args[0].args.size == 0

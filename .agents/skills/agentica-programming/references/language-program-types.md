@@ -194,10 +194,11 @@ end
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a
-  number is fine; `#{...}` is not), `true`, `false`, `nil`, `[]`, `{}` (built
-  again at each call, typed by the parameter) or a payload-less enum variant
-  (`Level.Info`, or `Models.Level.Info` from another module). Anything else is
-  `CHECK-DEFAULT-VALUE`; a wrong type is `CHECK-TYPE-MISMATCH` at the default.
+  number is fine; `#{...}` is not), `true`, `false`, `nil`, `none`, `[]`, `{}`
+  (built again at each call, typed by the parameter) or a payload-less enum
+  variant (`Level.Info`, or `Models.Level.Info` from another module). Anything
+  else (`some(1)` too) is `CHECK-DEFAULT-VALUE`; a wrong type is
+  `CHECK-TYPE-MISMATCH` at the default.
 - After a defaulted parameter every parameter needs a default
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` parameter, which a block or the
   last argument always fills: with `def each_line(path: String, timeout_ms: Int

@@ -28,7 +28,7 @@ Ana is 31
 Bo gave no age
 ```
 
-A `case` needs both arms, `some(n) ->` and `none ->`, or a final `_`. `==` compares two Optionals whose items have `==`: `age == none`, `age == some(31)`. An Optional prints as `some(31)` or `none`. A struct with an `Optional` field cannot be written as JSON.
+A `case` needs both arms, `some(n) ->` and `none ->`, or a final `_`. `==` compares two Optionals whose items have `==`: `age == none`, `age == some(31)`. An Optional prints as `some(31)` or `none`. A field or parameter may default to `none`: `port: Optional[Int] = none`. In [JSON](/library/text-and-data/json/#optional-values), `none` is `null` and `some(x)` is `x`.
 
 ## some
 
