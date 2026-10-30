@@ -16,12 +16,14 @@ reads no `openssl.cnf`, so both builds behave the same.
   that closed during the handshake, and `PROTOCOL` is an error after the
   handshake.
 - **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
-  does, and rejects a NUL in `ca_file`. `TLS.listen` checks as `TCP.listen`
-  does, and rejects a NUL in either path. One pool job then reads the CA,
-  certificate and key files, off the scheduler thread, and only then does the VM
-  resolve and connect or listen. So a bad certificate or key fails `TLS.listen`
-  before the port is bound. The connect timeout covers the setup, lookup,
-  connect and handshake.
+  does, rejects a NUL in any path, and rejects a `cert_file` without a
+  `key_file` or the reverse. `TLS.listen` checks as `TCP.listen` does, and
+  rejects a NUL in either path. One pool job then reads the CA, certificate and
+  key files, off the scheduler thread, and only then does the VM resolve and
+  connect or listen. So a bad certificate or key fails `TLS.listen` before the
+  port is bound, and `TLS.connect` before it connects. Both load the chain and
+  key the same way (`use_identity` in `vm/tls_openssl.c`). The connect timeout
+  covers the setup, lookup, connect and handshake.
 - **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048 bits) on
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A

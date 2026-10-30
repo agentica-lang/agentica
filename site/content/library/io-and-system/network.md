@@ -105,7 +105,7 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ## TLS
 
 ```text
-TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket]
+TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
 ```
 
@@ -121,6 +121,7 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
 - `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
+- `TLS.connect` sends a client certificate when `cert_file` and `key_file` name PEM files, checked as `TLS.listen` checks them. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
 ```agentica {mode="check"}

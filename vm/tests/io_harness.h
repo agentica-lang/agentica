@@ -34,13 +34,14 @@ static inline void agc_test_on_thread(void (*fn)(void *arg), void *arg) {
   assert(uv_thread_join(&thread) == 0);
 }
 
-/* A builtin call made on the scheduler thread for one task. */
+/* A builtin call made on the scheduler thread for one task. agc_test_call_of fills the first four arguments; a call of
+   more sets the others itself. */
 typedef struct {
   agc_vm *vm;
   agc_task *task;
   const char *name;
   uint32_t arity;
-  agc_value args[4];
+  agc_value args[6];
   agc_value result;
   bool parked;
 } agc_test_call;

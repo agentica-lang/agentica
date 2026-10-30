@@ -633,7 +633,7 @@ builtin TCP.send forms=1
 builtin TCP.send_bytes forms=1
   TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void] shape=(Opaque(Socket), Bytes, Int) -> Result(Void) rule=Plain impl="TCP.send_bytes.bytes" effects=["network"] desc="Send bytes and flush, at most 1 MiB per call."
 builtin TLS.connect forms=1
-  TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket] shape=(String, Int, String, Int) -> Result(Opaque(Socket)) rule=Plain impl="TLS.connect" effects=["network"] desc="Connect with certificate and hostname verification; empty CA uses system trust."
+  TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket] shape=(String, Int, String, Int, String = "", String = "") -> Result(Opaque(Socket)) rule=Plain impl="TLS.connect" effects=["network"] desc="Connect with certificate and hostname verification; empty CA uses system trust. cert_file and key_file (PEM) send a client certificate."
 builtin TLS.listen forms=1
   TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener] shape=(String, Int, String, String) -> Result(Opaque(Listener)) rule=Plain impl="TLS.listen" effects=["network"] desc="Listen with a PEM certificate chain and private key."
 builtin Task.await forms=2

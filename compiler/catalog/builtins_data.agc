@@ -4551,12 +4551,17 @@ ROWS_49: List[Model.Builtin] = [
         Model.Named(name: "port", type: Types.Type.Int),
         Model.Named(name: "ca_file", type: Types.Type.String),
         Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "cert_file", type: Types.Type.String, default: Model.Default.Text("")),
+        Model.Named(name: "key_file", type: Types.Type.String, default: Model.Default.Text("")),
       ],
       result: Types.Type.Result(Types.Type.Opaque("Socket")),
       rule: Model.Rule.Plain,
       implementation: "TLS.connect",
       effects: ["network"],
-      description: "Connect with certificate and hostname verification; empty CA uses system trust.",
+      description: (
+        "Connect with certificate and hostname verification; empty CA uses system trust. " +
+        "cert_file and key_file (PEM) send a client certificate."
+      ),
       alternatives: [],
     ),
     Model.Builtin(

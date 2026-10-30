@@ -8,6 +8,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `TLS.connect` takes an optional client certificate and key (`cert_file`,
+  `key_file`) for servers that require one (mTLS).
+
+### Changed
+
+- **Breaking:** rebuild `.agcb` files compiled by 0.17.x that call
+  `TLS.connect`.
+
 ## [0.17.0] - 2026-10-30
 
 ### Added
