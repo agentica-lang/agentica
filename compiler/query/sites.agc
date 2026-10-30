@@ -130,14 +130,14 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target
         for entry in node.names
           on_name = holds?(entry.span, offset) or holds?(entry.local_span, offset)
           linked = module.named.get(entry.local)
-          if on_name and linked.ok?
+          if on_name and linked.some?
             return some(named(linked.unwrap!))
           end
         end
 
       Ast.Decl.Reexport(node) ->
         linked = module.reexported.get(node.name)
-        if holds?(node.name_span, offset) and linked.ok?
+        if holds?(node.name_span, offset) and linked.some?
           return some(named(linked.unwrap!))
         end
 
@@ -373,7 +373,7 @@ end
 
 def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Site]
   found = scan.resolved.get(id)
-  if !found.ok?
+  if found.none?
     return []
   end
 

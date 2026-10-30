@@ -84,7 +84,7 @@ def notes_of(checked: Checker.Checked) -> Map[Int, String]
   for id in checked.resolved.keys
     before = notes.get(id)
     text = ""
-    if before.ok?
+    if before.some?
       text = before.unwrap!
     end
 

@@ -125,7 +125,7 @@ def constants_of(module: Linker.LinkedModule, old_constants: Map[String, T.Type]
   for decl in module.declarations
     case decl
       Ast.Decl.Constant(node) ->
-        type = try old_constants.get(node.name)
+        type = try old_constants.get(node.name).to_result("constant #{node.name} is new")
         found = found.put(node.name, type)
       _ -> found = found
     end

@@ -402,7 +402,7 @@ def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String
   end
 
   found = cx.me.text.slice(after, size).index_of(member)
-  if !found.ok?
+  if found.none?
     return node.span
   end
 

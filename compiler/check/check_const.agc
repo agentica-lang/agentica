@@ -259,7 +259,7 @@ end
 
 def entry_named(cx: State.Cx, name: String) -> Optional[Model.Builtin]
   found = ENTRIES.get(name)
-  if found.ok?
+  if found.some?
     return some(found.unwrap!)
   end
 
@@ -268,7 +268,7 @@ end
 
 def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builtin]
   resolved = st.resolved.get(id)
-  if !resolved.ok?
+  if resolved.none?
     return none
   end
 

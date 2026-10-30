@@ -194,21 +194,21 @@ ica
 ## index_of
 
 ```text
-String.index_of(s: String, part: String) -> Result[Int]
+String.index_of(s: String, part: String) -> Optional[Int]
 ```
 
-Finds the first match. Missing text gives an error Result.
+Finds the first match as `some(index)`, counted in characters. Missing text gives `none`.
 
 ```agentica
 def main() -> Void
   puts("banana".index_of("na"))
-  puts("banana".index_of("x").ok?)
+  puts("banana".index_of("x").none?)
 end
 ```
 
 ```output
-ok(2)
-false
+some(2)
+true
 ```
 
 ## at

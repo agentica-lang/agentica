@@ -308,10 +308,10 @@ def test_help_reads_the_catalog_without_a_source_file():
     assert get_help.stderr == ""
     variants = json.loads(get_help.stdout)["overloads"]
     assert [variant["arity"] for variant in variants] == [2, 3]
-    assert [variant["result"] for variant in variants] == ["Result[V]", "V"]
+    assert [variant["result"] for variant in variants] == ["Optional[V]", "V"]
     get_text = cli_run("help", "Map.get")
     assert get_text.code == 0
-    assert "map.get(key: K) -> Result[V]\nmap.get(key: K, default: V) -> V\n" in get_text.stdout
+    assert "map.get(key: K) -> Optional[V]\nmap.get(key: K, default: V) -> V\n" in get_text.stdout
     unknown = cli_run("help", "String.to_it", "--json")
     assert unknown.code == 2
     assert "s.to_i" in unknown.stderr
@@ -354,7 +354,7 @@ def test_help_shows_the_ruby_method_form_and_keeps_the_builtin_name_in_json():
     assert json.loads(cli_run("help", "puts", "--json").stdout)["ruby"] is None
     # Each form of an overloaded builtin has its own.
     forms = json.loads(cli_run("help", "Map.get", "--json").stdout)["overloads"]
-    assert [form["ruby"] for form in forms] == ["map.get(key: K) -> Result[V]", "map.get(key: K, default: V) -> V"]
+    assert [form["ruby"] for form in forms] == ["map.get(key: K) -> Optional[V]", "map.get(key: K, default: V) -> V"]
     every = json.loads(cli_run("help", "--json").stdout)
     assert all("ruby" in form for form in every if "overloads" not in form)
 

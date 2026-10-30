@@ -54,8 +54,8 @@ export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name| name.split(".").size < 3 e
 
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
 
-## The builtin of that name, or an error when there is none (builtin-ref without an arity).
-export def lookup(name: String) -> Result[Model.Builtin]
+## The builtin of that name, or none when there is none (builtin-ref without an arity).
+export def lookup(name: String) -> Optional[Model.Builtin]
   return ENTRIES.get(name)
 end
 
@@ -115,7 +115,7 @@ end
 
 ## The form of the builtin name that takes that many arguments (builtin-ref with an arity).
 export def ref(name: String, arity: Int) -> Result[Model.Builtin]
-  entry = try lookup(name)
+  entry = try lookup(name).to_result("unknown builtin")
   return form_for(entry, arity)
 end
 
@@ -292,7 +292,7 @@ end
 
 def module_of(name: String) -> String
   dot = name.index_of(".")
-  if dot.ok?
+  if dot.some?
     return name.slice(0, dot.unwrap!)
   end
 

@@ -345,8 +345,8 @@ builtin Map.empty? forms=1
 builtin Map.filter forms=1
   Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V] shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Bool)) -> Map(Var(K), Var(V)) rule=Prelude impl="" effects=[] desc="Keep the entries f accepts, in insertion order; O(n)."
 builtin Map.get forms=2
-  Map.get(map: Map[K, V], key: K) -> Result[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=MapGet impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
-  Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
+  Map.get(map: Map[K, V], key: K) -> Optional[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Optional(Var(V)) rule=MapGet impl="Map.get.optional" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
+  Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
 builtin Map.has_key? forms=1
   Map.has_key?(map: Map[K, V], key: K) -> Bool shape=(Map(Var(K), Var(V)), Var(K)) -> Bool rule=MapHas impl="Map.has_key?" effects=[] desc="Check whether a key exists."
 builtin Map.keys forms=1
@@ -575,7 +575,7 @@ builtin String.from_float forms=1
 builtin String.from_int forms=1
   String.from_int(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
 builtin String.index_of forms=1
-  String.index_of(s: String, part: String) -> Result[Int] shape=(String, String) -> Result(Int) rule=Plain impl="String.index_of" effects=[] desc="Find the first character index of part; absent text returns an error."
+  String.index_of(s: String, part: String) -> Optional[Int] shape=(String, String) -> Optional(Int) rule=Plain impl="String.index_of.optional" effects=[] desc="Find the first character index of part as some(index), or none when part is absent."
 builtin String.join forms=1
   String.join(parts: List[String], separator: String) -> String shape=(List(String), String) -> String rule=Plain impl="String.join" effects=[] desc="Join text elements."
 builtin String.length forms=1
@@ -913,8 +913,8 @@ ref:ok/2 -> -
 ref:Task.await/1 -> Task.await(task: Task[R]) -> R shape=(Task(Var(R))) -> Var(R) rule=TaskAwait impl="Task.await" effects=["concurrency"] desc="Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED."
 ref:Task.await/2 -> Task.await(task: Task[R], timeout_ms: Int) -> Await[R] shape=(Task(Var(R)), Int) -> Enum(Await, [Var(R)]) rule=TaskAwaitTimeout impl="Task.await" effects=["concurrency"] desc="Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive."
 ref:Task.await/3 -> -
-ref:Map.get/2 -> Map.get(map: Map[K, V], key: K) -> Result[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=MapGet impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
-ref:Map.get/3 -> Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
+ref:Map.get/2 -> Map.get(map: Map[K, V], key: K) -> Optional[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Optional(Var(V)) rule=MapGet impl="Map.get.optional" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
+ref:Map.get/3 -> Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as some(value) or none, or supply an eagerly evaluated default as a third argument."
 ref:Map.get/4 -> -
 ref:Nope/1 -> -
 ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[HttpClient, Void]) -> HttpClient shape=(Channel(Struct(HttpWire.Job)), Struct(HttpClientOptions), Fn([Opaque(HttpClient)], Void)) -> Opaque(HttpClient) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
@@ -935,7 +935,7 @@ type:@3::Hedaer -> -
 type:Socet -> "did you mean \"Socket\"?"
 sig:puts -> "puts(value: T) -> Void"
 sig:Task.await -> "Task.await(task: Task[R]) -> R\nTask.await(task: Task[R], timeout_ms: Int) -> Await[R]"
-sig:Map.get -> "Map.get(map: Map[K, V], key: K) -> Result[V]\nMap.get(map: Map[K, V], key: K, default: V) -> V"
+sig:Map.get -> "Map.get(map: Map[K, V], key: K) -> Optional[V]\nMap.get(map: Map[K, V], key: K, default: V) -> V"
 sig:Nope -> -
 disp:@12::Point -> "Point"
 disp:@x -> "@x"

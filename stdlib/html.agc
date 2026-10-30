@@ -46,7 +46,7 @@ end
 # The text after one `&` up to the next one: the decoded entity followed by the rest, or the `&` and the piece again.
 def unescape_piece(piece: String) -> String
   end_at = piece.index_of(";")
-  if !end_at.ok?
+  if end_at.none?
     return "&#{piece}"
   end
   at = end_at.unwrap!

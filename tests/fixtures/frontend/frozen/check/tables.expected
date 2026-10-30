@@ -182,6 +182,9 @@ export def foreign_kind_methods() -> Map[String, String]
     "Map.contains?": "use m.key?(key)",
     "Map.includes?": "use m.key?(key)",
     "Map.count": "use m.size",
+    "Optional.error?": "an Optional has some? and none?; o.none? tests for a missing value",
+    "Optional.message": "an Optional has no message; o.to_result(\"message\") gives a Result that has one",
+    "Optional.ok?": "an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)",
     "Range.collect": "a range has no map; use (1..5).to_a.map do |x| ... end",
     "Range.detect": "a range has no find; use (1..5).to_a.find do |x| ... end",
     "Range.drop": "a range has no drop; use (1..5).to_a.drop(n)",
@@ -212,7 +215,7 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.each_char": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
     "String.error?": "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)",
     "String.gsub": "use s.replace(old, new)",
-    "String.index": "use s.index_of(part), which gives a Result[Int]",
+    "String.index": "use s.index_of(part), which gives an Optional[Int]",
     "String.is_numeric": (
       "test it with s.to_i (a Result): s.to_i.ok? is true for a whole number, s.to_f.ok? for a decimal"
     ),

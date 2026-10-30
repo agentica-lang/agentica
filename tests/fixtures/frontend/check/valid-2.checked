@@ -1,6 +1,6 @@
-program #132 0:1:1-841:24:1
+program #132 0:1:1-845:24:1
   module "valid-2.agc"
-    declaration: function-decl #131 0:1:1-840:23:1 name="main"
+    declaration: function-decl #131 0:1:1-844:23:1 name="main"
       result: type-ref #0 14:1:15-18:1:19 name="Void"
       body: binding #7 21:2:3-63:3:1 name="xs"
         type: type-ref #3 25:2:7-40:2:22 name="List"
@@ -86,49 +86,49 @@ program #132 0:1:1-841:24:1
           arg: type-ref #81 516:14:18-525:14:27 name="List"
             arg: type-ref #80 521:14:23-524:14:26 name="Int"
         value: map-lit #83 529:14:31-531:14:33 type=Map(String, List(Int))
-      body: binding #91 534:15:3-573:16:1 name="r"
-        type: type-ref #87 537:15:6-554:15:23 name="Result"
-          arg: type-ref #86 544:15:13-553:15:22 name="List"
-            arg: type-ref #85 549:15:18-552:15:21 name="Int"
-        value: call #90 557:15:26-572:15:41 name="Map.get" piped=false type=Result(List(Int))
-          arg: name-ref #88 565:15:34-566:15:35 name="m" type=Map(String, List(Int))
-          arg: literal #89 568:15:37-571:15:40 value=string:"x" type=String
-      body: binding #98 575:16:3-614:17:1 name="value"
-        type: type-ref #93 582:16:10-591:16:19 name="List"
-          arg: type-ref #92 587:16:15-590:16:18 name="Int"
-        value: call #97 594:16:22-613:16:41 name="Map.get" piped=false type=List(Int)
-          arg: name-ref #94 602:16:30-603:16:31 name="m" type=Map(String, List(Int))
-          arg: literal #95 605:16:33-608:16:36 value=string:"x" type=String
-          arg: list-lit #96 610:16:38-612:16:40 type=List(Int)
-      body: binding #103 616:17:3-647:18:1 name="inferred"
-        value: call #102 627:17:14-646:17:33 name="Map.get" piped=false type=Int
-          arg: map-lit #99 635:17:22-637:17:24 type=Map(String, Int)
-          arg: literal #100 639:17:26-642:17:29 value=string:"x" type=String
-          arg: literal #101 644:17:31-645:17:32 value=int:1 type=Int
-      body: binding #109 649:18:3-689:19:1 name="missing"
-        type: type-ref #105 658:18:12-669:18:23 name="Result"
-          arg: type-ref #104 665:18:19-668:18:22 name="Int"
-        value: call #108 672:18:26-688:18:42 name="Map.get" piped=false type=Result(Int)
-          arg: map-lit #106 680:18:34-682:18:36 type=Map(String, Int)
-          arg: literal #107 684:18:38-687:18:41 value=string:"x" type=String
-      body: binding #117 691:19:3-744:20:1 name="nested"
-        type: type-ref #111 699:19:11-710:19:22 name="Result"
-          arg: type-ref #110 706:19:18-709:19:21 name="Int"
-        value: call #116 713:19:25-743:19:55 name="Map.get" piped=false type=Result(Int)
-          arg: map-lit #112 721:19:33-723:19:35 type=Map(String, Result(Int))
-          arg: literal #113 725:19:37-728:19:40 value=string:"x" type=String
-          arg: call #115 730:19:42-742:19:54 name="error" piped=false type=Result(Int)
-            arg: literal #114 736:19:48-741:19:53 value=string:"bad" type=String
-      body: binding #124 746:20:3-794:21:1 name="deleted"
-        type: type-ref #120 755:20:12-771:20:28 name="Map"
-          arg: type-ref #118 759:20:16-765:20:22 name="String"
-          arg: type-ref #119 767:20:24-770:20:27 name="Int"
-        value: call #123 774:20:31-793:20:50 name="Map.delete" piped=false type=Map(String, Int)
-          arg: map-lit #121 785:20:42-787:20:44 type=Map(String, Int)
-          arg: literal #122 789:20:46-792:20:49 value=string:"x" type=String
-      body: binding #130 796:21:3-836:22:1 name="values"
-        type: type-ref #127 804:21:11-819:21:26 name="List"
-          arg: type-ref #126 809:21:16-818:21:25 name="List"
-            arg: type-ref #125 814:21:21-817:21:24 name="Int"
-        value: call #129 822:21:29-835:21:42 name="Map.values" piped=false type=List(List(Int))
-          arg: name-ref #128 833:21:40-834:21:41 name="m" type=Map(String, List(Int))
+      body: binding #91 534:15:3-575:16:1 name="r"
+        type: type-ref #87 537:15:6-556:15:25 name="Optional"
+          arg: type-ref #86 546:15:15-555:15:24 name="List"
+            arg: type-ref #85 551:15:20-554:15:23 name="Int"
+        value: call #90 559:15:28-574:15:43 name="Map.get" piped=false type=Optional(List(Int))
+          arg: name-ref #88 567:15:36-568:15:37 name="m" type=Map(String, List(Int))
+          arg: literal #89 570:15:39-573:15:42 value=string:"x" type=String
+      body: binding #98 577:16:3-616:17:1 name="value"
+        type: type-ref #93 584:16:10-593:16:19 name="List"
+          arg: type-ref #92 589:16:15-592:16:18 name="Int"
+        value: call #97 596:16:22-615:16:41 name="Map.get" piped=false type=List(Int)
+          arg: name-ref #94 604:16:30-605:16:31 name="m" type=Map(String, List(Int))
+          arg: literal #95 607:16:33-610:16:36 value=string:"x" type=String
+          arg: list-lit #96 612:16:38-614:16:40 type=List(Int)
+      body: binding #103 618:17:3-649:18:1 name="inferred"
+        value: call #102 629:17:14-648:17:33 name="Map.get" piped=false type=Int
+          arg: map-lit #99 637:17:22-639:17:24 type=Map(String, Int)
+          arg: literal #100 641:17:26-644:17:29 value=string:"x" type=String
+          arg: literal #101 646:17:31-647:17:32 value=int:1 type=Int
+      body: binding #109 651:18:3-693:19:1 name="missing"
+        type: type-ref #105 660:18:12-673:18:25 name="Optional"
+          arg: type-ref #104 669:18:21-672:18:24 name="Int"
+        value: call #108 676:18:28-692:18:44 name="Map.get" piped=false type=Optional(Int)
+          arg: map-lit #106 684:18:36-686:18:38 type=Map(String, Int)
+          arg: literal #107 688:18:40-691:18:43 value=string:"x" type=String
+      body: binding #117 695:19:3-748:20:1 name="nested"
+        type: type-ref #111 703:19:11-714:19:22 name="Result"
+          arg: type-ref #110 710:19:18-713:19:21 name="Int"
+        value: call #116 717:19:25-747:19:55 name="Map.get" piped=false type=Result(Int)
+          arg: map-lit #112 725:19:33-727:19:35 type=Map(String, Result(Int))
+          arg: literal #113 729:19:37-732:19:40 value=string:"x" type=String
+          arg: call #115 734:19:42-746:19:54 name="error" piped=false type=Result(Int)
+            arg: literal #114 740:19:48-745:19:53 value=string:"bad" type=String
+      body: binding #124 750:20:3-798:21:1 name="deleted"
+        type: type-ref #120 759:20:12-775:20:28 name="Map"
+          arg: type-ref #118 763:20:16-769:20:22 name="String"
+          arg: type-ref #119 771:20:24-774:20:27 name="Int"
+        value: call #123 778:20:31-797:20:50 name="Map.delete" piped=false type=Map(String, Int)
+          arg: map-lit #121 789:20:42-791:20:44 type=Map(String, Int)
+          arg: literal #122 793:20:46-796:20:49 value=string:"x" type=String
+      body: binding #130 800:21:3-840:22:1 name="values"
+        type: type-ref #127 808:21:11-823:21:26 name="List"
+          arg: type-ref #126 813:21:16-822:21:25 name="List"
+            arg: type-ref #125 818:21:21-821:21:24 name="Int"
+        value: call #129 826:21:29-839:21:42 name="Map.values" piped=false type=List(List(Int))
+          arg: name-ref #128 837:21:40-838:21:41 name="m" type=Map(String, List(Int))

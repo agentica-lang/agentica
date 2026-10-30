@@ -54,7 +54,7 @@ export def parse(header: String) -> Map[String, String]
   for piece in header.split(";")
     pair = piece.strip
     eq_at = pair.index_of("=")
-    if !eq_at.ok?
+    if eq_at.none?
       next
     end
     at = eq_at.unwrap!

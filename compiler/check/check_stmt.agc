@@ -255,7 +255,7 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
   end
 
   existing = State.lookup(st, node.name)
-  if existing.ok?
+  if existing.some?
     return check_assignment(cx, st, node, existing.unwrap!)
   end
 
@@ -639,7 +639,7 @@ def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type)
     T.Type.Optional(_) if pattern.enum_name == "Optional" and pattern.variant_name == "None" -> return ok([])
     T.Type.Enum(name, args) if pattern.enum_name == name ->
       definition = cx.enums.get(name)
-      if definition.ok?
+      if definition.some?
         return variant_payload(definition.unwrap!, pattern.variant_name, args)
       end
 
@@ -694,13 +694,20 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
   end
 
   variant = pattern_text(pattern)
-  return State.fail(
-    cx,
-    st,
-    "CHECK-PATTERN-TYPE",
-    "variant pattern \"#{variant}\" does not match #{T.to_text(value_type)}",
-    pattern.span,
-  )
+  message = "variant pattern \"#{variant}\" does not match #{T.to_text(value_type)}"
+  # The Result arms on an Optional (m.get(k) and s.index_of(part) gave a Result before 0.18) and the other way round.
+  help = ""
+  if T.is?(value_type, "Optional") and pattern.enum_name == "Result"
+    help = "match an Optional with some(x) and none"
+  elsif T.is?(value_type, "Result") and pattern.enum_name == "Optional"
+    help = "match a Result with ok(x) and error(e)"
+  end
+
+  if help != ""
+    return State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help)
+  end
+
+  return State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span)
 end
 
 # A variant pattern as the program writes it: some(...), none, ok(...) and error(...) for the builtin enums,
@@ -724,7 +731,7 @@ def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
     return ok(["Some", "None"])
   elsif T.is?(value_type, "Enum")
     definition = cx.enums.get(T.name(value_type))
-    if definition.ok?
+    if definition.some?
       return ok(definition.unwrap!.variants.map do |variant: Model.Variant| variant.name end)
     end
   end

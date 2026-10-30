@@ -157,7 +157,7 @@ end
 # One `name=value` piece. The first `=` splits it; a piece without one is a name with the value "".
 def decode_pair(piece: String) -> Result[Pair]
   split = piece.index_of("=")
-  if !split.ok?
+  if split.none?
     return ok(Pair(name: try decode_www_form_component(piece), value: ""))
   end
   at = split.unwrap!

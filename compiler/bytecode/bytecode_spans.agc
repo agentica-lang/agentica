@@ -27,7 +27,7 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
 
   key = keys.join(";")
   found = Pool.find(pool, key)
-  if found.ok?
+  if found.some?
     return Pool.Interned(pool: pool, id: found.unwrap!)
   end
 
@@ -38,7 +38,7 @@ end
 export def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Interned
   key = span_key(file, span)
   found = Pool.find(pool, key)
-  if found.ok?
+  if found.some?
     return Pool.Interned(pool: pool, id: found.unwrap!)
   end
 

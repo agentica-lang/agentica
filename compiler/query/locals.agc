@@ -253,7 +253,7 @@ end
 # The local of a binding: the one in scope when the binding assigns an existing name, else a new one.
 def introduced(ask: Query, scope: Map[String, Local], node: Ast.Binding) -> Local
   existing = scope.get(node.name)
-  if existing.ok?
+  if existing.some?
     return existing.unwrap!
   end
 
@@ -282,7 +282,7 @@ end
 # The type the checker recorded for the `index`th name the node `id` introduced; Unknown when there is none.
 def bound_type(ask: Query, id: Int, index: Int) -> T.Type
   found = ask.bound.get(id)
-  if !found.ok?
+  if found.none?
     return T.Type.Unknown
   end
 
@@ -594,7 +594,7 @@ def into_expression(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Mo
   case expr
     Ast.Expr.Name(node) ->
       found = scope.get(node.name)
-      if found.ok? and At.holds?(node.span, ask.offset)
+      if found.some? and At.holds?(node.span, ask.offset)
         return hit(scope, found.unwrap!, node.span)
       end
 

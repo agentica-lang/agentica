@@ -145,7 +145,7 @@ end
 # `PLACE:LINE:COLUMN error[CODE]` and nothing after it.
 def diagnostic_header?(line: String) -> Bool
   marker = line.index_of(" error[")
-  if !marker.ok? or !line.ends_with?("]")
+  if marker.none? or !line.ends_with?("]")
     return false
   end
 

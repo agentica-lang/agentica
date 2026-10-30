@@ -92,7 +92,7 @@ def compile_one(text: String) -> Result[Pattern]
   tails = parts.drop(1)
   for tail in tails
     close = tail.index_of("}")
-    if close.ok? and not placeholder?(tail.slice(0, close.unwrap!))
+    if close.some? and not placeholder?(tail.slice(0, close.unwrap!))
       return error("only {string} and {int} are supported")
     end
   end
@@ -101,7 +101,7 @@ def compile_one(text: String) -> Result[Pattern]
   end
   for tail in tails
     close = tail.index_of("}")
-    if not close.ok? or after(tail, close.unwrap!).include?("}")
+    if close.none? or after(tail, close.unwrap!).include?("}")
       return error("unmatched pattern braces")
     end
   end

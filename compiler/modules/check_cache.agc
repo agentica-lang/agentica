@@ -200,7 +200,7 @@ def decode(raw: String, digest: String) -> Optional[Entry]
 
   after = rest.slice(STYLED_STUB.length, rest.length - STYLED_STUB.length)
   at = after.index_of("\n")
-  if !at.ok? or at.unwrap! > STUB_LINE_CHARS
+  if at.none? or at.unwrap! > STUB_LINE_CHARS
     return none
   end
 
@@ -254,7 +254,7 @@ def decode_constants(tail: String) -> Result[Map[String, String]]
     # The name ends at the first space; the type is the rest, which may hold spaces (the key of a file).
     rest = line.slice(prefix.length, line.length - prefix.length)
     space = rest.index_of(" ")
-    if !space.ok? or space.unwrap! == 0 or space.unwrap! + 1 >= rest.length
+    if space.none? or space.unwrap! == 0 or space.unwrap! + 1 >= rest.length
       return error("a constant line of the entry is wrong")
     end
 
@@ -369,7 +369,7 @@ def end_offset(text: String, floor: Int, stop: Int) -> Int
   end
 
   mark = text.slice(line, at - line).index_of("#")
-  if mark.ok?
+  if mark.some?
     return trimmed(text, floor, line + mark.unwrap!)
   end
 

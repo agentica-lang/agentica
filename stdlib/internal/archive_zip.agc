@@ -839,7 +839,7 @@ def consume_entry(
   st = local.stream
   cursor = local.cursor
   case Map.get(ctx.by_name, entry.canon)
-    ok(index) ->
+    some(index) ->
       canon = try check_relative(entry.canon, "entry name", " at entry #{entry.index}")
       if ctx.matched[index]
         return error("archive: the same archive holds #{canon} twice")
@@ -852,7 +852,7 @@ def consume_entry(
       end
       written = try write_selected(st, cursor, entry, index, next_offset, ctx, src)
       return ok(StepOut(stream: written.stream, cursor: written.cursor, ctx: written.ctx))
-    error(_) ->
+    none ->
       st = try stream_skip(st, entry.csize, INPUT_BYTES, deadline, src, "entry data of #{entry.canon}")
       cursor = try add_cap(cursor, entry.csize, ctx.size, "archive: entry data runs past the central directory")
       if local.descriptor

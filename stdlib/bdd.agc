@@ -123,10 +123,7 @@ end
 
 ## Returns the value saved under `name`, or an error when there is none.
 export def get(ctx: Context, name: String) -> Result[Json]
-  if ctx.scenario.state.has_key?(name)
-    return ctx.scenario.state.get(name)
-  end
-  return error("missing scenario state")
+  return ctx.scenario.state.get(name).to_result("missing scenario state")
 end
 
 ## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
@@ -139,7 +136,7 @@ end
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
 export def call(ctx: Context, name: String, request: Json) -> Result[Json]
   found = ctx.scenario.services.get(name)
-  if not found.ok?
+  if found.none?
     return error("missing scenario service")
   end
   return found.unwrap!.call(request)

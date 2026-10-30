@@ -49,7 +49,7 @@ def of_linked(linked: Linker.Linked) -> Map[String, Model.Item]
     end
 
     found = built[prefix].get(own)
-    if found.ok?
+    if found.some?
       origins = origins.put(name, found.unwrap!)
     end
   end

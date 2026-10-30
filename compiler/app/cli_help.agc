@@ -131,11 +131,11 @@ end
 # mean "NAME"?` when a public name is close, else nothing.
 def suggestion(name: String) -> String
   hint = Tables.foreign_names().get(name)
-  if !hint.ok?
+  if hint.none?
     hint = Tables.foreign_kind_methods().get(name)
   end
 
-  if hint.ok?
+  if hint.some?
     return "; #{hint.unwrap!}"
   end
 
@@ -158,7 +158,7 @@ def namespaces_text() -> String
   bare: List[String] = []
   for name in names
     dot = name.index_of(".")
-    if !dot.ok?
+    if dot.none?
       bare = bare.push(name)
     elsif spaces.size == 0 or spaces[spaces.size - 1] != name.slice(0, dot.unwrap!)
       spaces = spaces.push(name.slice(0, dot.unwrap!))

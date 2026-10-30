@@ -14,24 +14,24 @@ import Tables from "check_tables"
 ## none.
 export def method_key(name: String) -> String
   aliased = by_builtin().get(name)
-  if aliased.ok?
+  if aliased.some?
     return aliased.unwrap!
   end
 
   entry = ENTRIES.get(name)
-  if !entry.ok? or entry.unwrap!.parameters.size == 0
+  if entry.none? or entry.unwrap!.parameters.size == 0
     return ""
   end
 
   kind = Types.tag(entry.unwrap!.parameters[0].type)
   module = Tables.method_modules().get(kind)
-  if !module.ok? or !name.starts_with?("#{module.unwrap!}.")
+  if module.none? or !name.starts_with?("#{module.unwrap!}.")
     return ""
   end
 
   key = "#{kind}.#{name.slice(module.unwrap!.length + 1, name.length - module.unwrap!.length - 1)}"
   taken = Tables.method_aliases().get(key)
-  if taken.ok? and taken.unwrap! != name
+  if taken.some? and taken.unwrap! != name
     return ""
   end
 
@@ -82,7 +82,7 @@ export def written_as?(name: String, method: String) -> Bool
   for key in Tables.ruby_synonyms()
     # A synonym that `method_aliases` lacks is skipped (a test keeps the two lists in step).
     target = aliases.get(key)
-    if key.ends_with?(".#{method}") and target.ok? and target.unwrap! == name
+    if key.ends_with?(".#{method}") and target.some? and target.unwrap! == name
       return true
     end
   end
@@ -94,7 +94,7 @@ end
 export def shown(name: String) -> String
   method = method_name(name)
   entry = ENTRIES.get(name)
-  if method == "" or !entry.ok?
+  if method == "" or entry.none?
     return name
   end
 

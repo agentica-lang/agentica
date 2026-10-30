@@ -33,7 +33,7 @@ end
 ## function of the program.
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = ENTRIES.get(node.name)
-  if !entry.ok? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
+  if entry.none? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
     return check_plain_call(cx, st, node, expected)
   end
 
@@ -58,7 +58,7 @@ export def check_enum_constructor(
   expected: T.Type,
 ) -> Result[State.Out]
   definition = cx.enums.get(enum_name)
-  if !definition.ok?
+  if definition.none?
     if cx.aliases.has_key?(enum_name)
       underlying = try Types.alias_target_text(cx, st, enum_name)
       variant = "#{T.display_name(enum_name)}.#{variant_name}"
@@ -184,7 +184,7 @@ end
 # The text of the source between the start of an expression, including a piped receiver, and its end.
 def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text = cx.texts.get(cx.file)
-  if !text.ok?
+  if text.none?
     return ""
   end
 
@@ -304,7 +304,7 @@ end
 # first (check_generic_call).
 def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = cx.functions.get(node.name)
-  if !entry.ok?
+  if entry.none?
     return error(
       State.fail_maybe(
         cx,
@@ -446,10 +446,10 @@ def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
       return call.name == "error" or call.name == "none" or set_of_empty
     Ast.Expr.EnumConstructor(variant) ->
       definition = cx.enums.get(variant.enum_name)
-      return variant.args.size == 0 and definition.ok? and definition.unwrap!.parameters.size > 0
+      return variant.args.size == 0 and definition.some? and definition.unwrap!.parameters.size > 0
     Ast.Expr.FunctionRef(ref) ->
       signature = cx.functions.get(ref.name)
-      return signature.ok? and signature.unwrap!.type_parameters.size > 0
+      return signature.some? and signature.unwrap!.type_parameters.size > 0
     _ -> return false
   end
 end
@@ -715,7 +715,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   end
 
   fields = cx.structs.get(name)
-  if !fields.ok?
+  if fields.none?
     return error(
       State.fail_maybe(
         cx,

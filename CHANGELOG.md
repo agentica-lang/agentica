@@ -39,6 +39,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   function named `some` or `none` is now `CHECK-REDEFINED-NAME`, and a pattern
   binding named `none` is `CHECK-PATTERN-TYPE`. Rebuild `.agcb` files compiled
   by 0.17.x that declare their own `enum Optional`.
+- **Breaking:** `map.get(key)` and `text.index_of(part)` give an `Optional`
+  (`some(x)` or `none`) instead of a `Result`: `try` on them is
+  `CHECK-TYPE-MISMATCH` (use `.to_result("message")`), an `ok(...)` or
+  `error(...)` arm is `CHECK-PATTERN-TYPE` (use `some(x)` and `none`), and
+  `.ok?` or `.message` is `CHECK-UNKNOWN-METHOD` (use `.some?` or `.none?`).
 
 ## [0.17.0] - 2026-10-30
 

@@ -215,7 +215,7 @@ def generic_reference?(cx: State.Cx, node: Ast.Expr) -> Bool
   case node
     Ast.Expr.FunctionRef(ref) ->
       signature = cx.functions.get(ref.name)
-      return signature.ok? and signature.unwrap!.type_parameters.size > 0
+      return signature.some? and signature.unwrap!.type_parameters.size > 0
     _ -> return false
   end
 end

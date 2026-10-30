@@ -380,7 +380,7 @@ def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
 end
 
 def first_of(text: String, part: String) -> Int
-  return Result.unwrap_or(String.index_of(text, part), String.length(text))
+  return text.index_of(part).unwrap_or(text.length)
 end
 
 def rest_of(text: String, start: Int) -> String
@@ -839,12 +839,12 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
     id = List.at(origin.idle, last)
     origin = origin.with(idle: List.take(origin.idle, last))
     case Map.get(pool.inboxes, id)
-      ok(inbox) ->
+      some(inbox) ->
         if Result.ok?(inbox.send(job, 0))
           pool = with_origin(pool, job.origin, origin).with(busy: Map.put(pool.busy, id, job.reply))
           return Placed(pool: pool, placed: true)
         end
-      error(_) -> origin = origin
+      none -> origin = origin
     end
   end
   pool = with_origin(pool, job.origin, origin)
@@ -882,8 +882,8 @@ end
 def gone(pool: Pool, message: HttpWire.Job) -> Pool
   id = message.worker
   case Map.get(pool.busy, id)
-    ok(reply) -> reply.send(error(FAILED), 0)
-    error(_) -> id = id
+    some(reply) -> reply.send(error(FAILED), 0)
+    none -> id = id
   end
   origin = origin_of(pool, message.origin)
   idle = List.filter(origin.idle) do |k| k != id end
