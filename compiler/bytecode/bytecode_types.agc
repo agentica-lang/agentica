@@ -16,7 +16,7 @@ import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
 ## section after its count, with the count.
 export struct Section
   types: Pool.Pool
-  decodable: List[List[Int]]
+  decodable: Wire.Chunks
   decodable_count: Int
 end
 
@@ -29,7 +29,7 @@ export def build(program: Ir.Program, struct_index: Map[String, Int]) -> Result[
   for entry in program.structs
     if entry.decodable
       chunks = Wire.add(chunks, Wire.u32(index))
-      chunks = Wire.add(chunks, Wire.string(entry.name))
+      chunks = Wire.add_text(chunks, entry.name)
       for type in entry.types
         found = try type_id(program, struct_index, pool, type)
         pool = found.pool

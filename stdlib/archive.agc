@@ -39,7 +39,7 @@ GZIP_FIRST = 31
 GZIP_SECOND = 139
 
 # The bytes of "sparse", which no PAX key may hold.
-SPARSE_KEY = [115, 112, 97, 114, 115, 101]
+SPARSE_KEY = "sparse".bytes
 
 # A run of zero bytes. The padding after the archive end is compared with it piece by piece: `==` on Bytes is one
 # memcmp, where a loop over each byte took about 0.34 s per 8 MiB.
@@ -61,7 +61,7 @@ end
 
 # One parsed header: the raw name bytes, the size and the type flag.
 struct TarHeader
-  name: List[Int]
+  name: Bytes
   size: Int
   typeflag: Int
 end
@@ -69,7 +69,7 @@ end
 # The pending one-entry overrides from a local PAX header. The global PAX state lives in Ctx.
 struct Local
   has_path: Bool
-  path: List[Int]
+  path: Bytes
   has_size: Bool
   size: Int
 end
@@ -86,9 +86,9 @@ struct Ctx
   entries: Int
   meta_used: Int
   local: Local
-  gnu_name: List[Int]
+  gnu_name: Bytes
   has_gnu_name: Bool
-  global_path: List[Int]
+  global_path: Bytes
   has_global_path: Bool
   global_size: Int
   has_global_size: Bool
@@ -210,10 +210,10 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
     extracted: 0,
     entries: 0,
     meta_used: 0,
-    local: Local(has_path: false, path: [], has_size: false, size: 0),
-    gnu_name: [],
+    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0),
+    gnu_name: "".bytes,
     has_gnu_name: false,
-    global_path: [],
+    global_path: "".bytes,
     has_global_path: false,
     global_size: 0,
     has_global_size: false,
@@ -310,17 +310,11 @@ def strip_slashes(path: String) -> String
   return out
 end
 
-def is_zero_block(block: List[Int]) -> Bool
-  stop = HEADER_BYTES - 1
-  for i in 0..stop
-    if block[i] != 0
-      return false
-    end
-  end
-  return true
+def is_zero_block(block: Bytes) -> Bool
+  return block == ZERO_RUN.take(HEADER_BYTES)
 end
 
-def parse_octal(block: List[Int], offset: Int, length: Int, what: String, entry: Int) -> Result[Int]
+def parse_octal(block: Bytes, offset: Int, length: Int, what: String, entry: Int) -> Result[Int]
   value = 0
   seen = false
   ended = false
@@ -349,7 +343,7 @@ def parse_octal(block: List[Int], offset: Int, length: Int, what: String, entry:
   return ok(value)
 end
 
-def parse_decimal(text: List[Int], what: String, entry: Int) -> Result[Int]
+def parse_decimal(text: Bytes, what: String, entry: Int) -> Result[Int]
   if text.size == 0
     return error("archive: bad decimal #{what} at entry #{entry}")
   end
@@ -369,24 +363,20 @@ def parse_decimal(text: List[Int], what: String, entry: Int) -> Result[Int]
   return ok(value)
 end
 
-def trim_nul(bytes: List[Int]) -> List[Int]
-  if bytes.size == 0
-    return []
-  end
-  stop = bytes.size - 1
-  for i in 0..stop
+def trim_nul(bytes: Bytes) -> Bytes
+  for i in 0...bytes.size
     if bytes[i] == 0
-      return List.take(bytes, i)
+      return bytes.take(i)
     end
   end
   return bytes
 end
 
-def slice_range(bytes: List[Int], from: Int, to: Int) -> List[Int]
-  return List.take(List.drop(bytes, from), to - from)
+def slice_range(bytes: Bytes, from: Int, to: Int) -> Bytes
+  return bytes.drop(from).take(to - from)
 end
 
-def read_header(block: List[Int], entry: Int) -> Result[TarHeader]
+def read_header(block: Bytes, entry: Int) -> Result[TarHeader]
   stored = try parse_octal(block, 148, 8, "checksum", entry)
   total = 0
   stop = HEADER_BYTES - 1
@@ -412,13 +402,13 @@ def read_header(block: List[Int], entry: Int) -> Result[TarHeader]
   end
   full = name_field
   if prefix.size > 0
-    full = List.concat(List.concat(prefix, [47]), name_field)
+    full = Bytes.concat([prefix, "/".bytes, name_field])
   end
   return ok(TarHeader(name: full, size: size, typeflag: block[156]))
 end
 
 # True when `hay` holds `needle` anywhere.
-def bytes_have(hay: List[Int], needle: List[Int]) -> Bool
+def bytes_have(hay: Bytes, needle: Bytes) -> Bool
   if needle.size == 0
     return true
   end
@@ -443,7 +433,7 @@ def bytes_have(hay: List[Int], needle: List[Int]) -> Bool
 end
 
 # Applies one PAX record to the local or the global overrides.
-def apply_record(ctx: Ctx, key: List[Int], value: List[Int], entry: Int, is_global: Bool) -> Result[Ctx]
+def apply_record(ctx: Ctx, key: Bytes, value: Bytes, entry: Int, is_global: Bool) -> Result[Ctx]
   if bytes_have(key, SPARSE_KEY)
     return error("archive: sparse entries are not supported at entry #{entry}")
   end
@@ -470,11 +460,11 @@ def apply_record(ctx: Ctx, key: List[Int], value: List[Int], entry: Int, is_glob
 end
 
 # Parses PAX records, replacing the local or the global overrides. Other keys are ignored.
-def parse_pax(data: List[Int], entry: Int, is_global: Bool, ctx: Ctx) -> Result[Ctx]
+def parse_pax(data: Bytes, entry: Int, is_global: Bool, ctx: Ctx) -> Result[Ctx]
   if is_global
-    ctx = ctx.with(has_global_path: false, global_path: [], has_global_size: false, global_size: 0)
+    ctx = ctx.with(has_global_path: false, global_path: "".bytes, has_global_size: false, global_size: 0)
   else
-    ctx = ctx.with(local: Local(has_path: false, path: [], has_size: false, size: 0))
+    ctx = ctx.with(local: Local(has_path: false, path: "".bytes, has_size: false, size: 0))
   end
   pos = 0
   while pos < data.size
@@ -567,7 +557,7 @@ end
 # Decodes entry name bytes for matching: one leading `./` and any trailing `/` characters are removed, and anything
 # undecodable, over-long or empty becomes `""`, which never matches a selector. Unmatched entries skip on this alone;
 # only a matched entry faces the strict `check_relative` of `consume_entry`.
-def match_name_of(raw: List[Int]) -> String
+def match_name_of(raw: Bytes) -> String
   if raw.size == 0 or raw.size > NAME_BYTES
     return ""
   end
@@ -619,23 +609,18 @@ def find_match(wanted: List[Wanted], canon: String) -> Int
   return -1
 end
 
-def key_text_of(key: List[Int], entry: Int) -> Result[String]
-  case utf8_of(key)
+def key_text_of(key: Bytes, entry: Int) -> Result[String]
+  case String.from_bytes(key)
     ok(text) -> return ok(text)
     error(_) -> return error("archive: bad PAX key at entry #{entry}")
   end
 end
 
-def decode_or_empty(raw: List[Int]) -> String
-  case utf8_of(raw)
+def decode_or_empty(raw: Bytes) -> String
+  case String.from_bytes(raw)
     ok(decoded) -> return decoded
     error(_) -> return ""
   end
-end
-
-# The bytes as strict UTF-8. Headers and records are parsed as a List[Int] (feed); its items are bytes.
-def utf8_of(data: List[Int]) -> Result[String]
-  return String.from_bytes(try Bytes.from_list(data))
 end
 
 def join_one(parts: List[String]) -> Result[String]
@@ -784,7 +769,7 @@ end
 
 # Takes one chunk of the TAR stream: each phase takes what it needs of the bytes held so far, from `at` on, and what
 # a phase still needs more of waits in `carry` for the next chunk. Each phase copies only the bytes it takes (a slice),
-# never the rest of the chunk. Headers and records are parsed as lists; file data stays Bytes.
+# never the rest of the chunk.
 def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
   if Time.monotonic_ms() >= sc.ctx.deadline
     return error("archive: operation timed out")
@@ -806,14 +791,14 @@ def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
         if left < HEADER_BYTES
           return ok(sc.with(carry: buf.drop(at)))
         end
-        sc = try take_header(sc, buf.slice(at, HEADER_BYTES).to_a)
+        sc = try take_header(sc, buf.slice(at, HEADER_BYTES))
         at = at + HEADER_BYTES
       Phase.Meta ->
         if left < sc.rest
           return ok(sc.with(carry: buf.drop(at)))
         end
         n = sc.rest
-        sc = try take_meta(sc, buf.slice(at, n).to_a)
+        sc = try take_meta(sc, buf.slice(at, n))
         at = at + n
       Phase.Data ->
         n = smaller(sc.rest, left)
@@ -837,7 +822,7 @@ def feed(sc: Scan, chunk: Bytes, gzip: Bool) -> Result[Scan]
 end
 
 # One header block: a zero block counts toward the end, any other one starts an entry.
-def take_header(sc: Scan, block: List[Int]) -> Result[Scan]
+def take_header(sc: Scan, block: Bytes) -> Result[Scan]
   if is_zero_block(block)
     if sc.zeros + 1 == 2
       return ok(sc.with(zeros: 2, phase: Phase.Trailer))
@@ -868,7 +853,7 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
     end
     sc = sc.with(phase: Phase.Meta, rest: header.size, size: header.size, what: what, typeflag: header.typeflag)
     if header.size == 0
-      return take_meta(sc, [])
+      return take_meta(sc, "".bytes)
     end
     return ok(sc)
   end
@@ -893,7 +878,7 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
     end
   end
   ctx = ctx.with(
-    local: Local(has_path: false, path: [], has_size: false, size: 0), has_gnu_name: false, gnu_name: [],
+    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0), has_gnu_name: false, gnu_name: "".bytes,
   )
   canon = match_name_of(raw)
   if size > SCAN_BYTES
@@ -939,7 +924,7 @@ def open_selected(sc: Scan, index: Int, size: Int) -> Result[Scan]
 end
 
 # The data of a PAX or GNU record, then its padding.
-def take_meta(sc: Scan, data: List[Int]) -> Result[Scan]
+def take_meta(sc: Scan, data: Bytes) -> Result[Scan]
   ctx = sc.ctx.with(meta_used: sc.ctx.meta_used + sc.size)
   if sc.typeflag == 120 or sc.typeflag == 103
     ctx = try parse_pax(data, sc.entry, sc.typeflag == 103, ctx)

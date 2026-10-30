@@ -8,7 +8,7 @@ import Wire from "bytecode_bytes"
 ## is one item, except a run of spans, which is one item for each span.
 export struct Pool
   index: Map[String, Int]
-  chunks: List[List[Int]]
+  chunks: Wire.Chunks
   count: Int
 end
 

@@ -23,7 +23,7 @@ end
 ## the tables after it.
 export struct Encoded
   tables: Tables
-  parts: List[List[Int]]
+  parts: Wire.Chunks
 end
 
 # The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
@@ -82,7 +82,8 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   head = Wire.string(function.name).concat(Wire.u32(function.params)).concat(Wire.u32(function.captures))
   head = head.concat(Wire.u32(function.slots)).concat(Wire.u32(own.id))
   head = head.concat(Wire.u32(prelude_flag(program, function))).concat(Wire.u32(count))
-  return ok(Encoded(tables: state.with(spans: own.pool), parts: [head, code, refs]))
+  parts = Wire.add(Wire.add(Wire.add(Wire.start(), head), code), refs)
+  return ok(Encoded(tables: state.with(spans: own.pool), parts: parts))
 end
 
 # 1 for a function lowered from a file of the prelude, else 0: the VM reports an error in it at the user's call.

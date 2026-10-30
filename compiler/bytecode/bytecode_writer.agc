@@ -21,7 +21,7 @@ import JsonTypes from "bytecode_types"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
 export enum Written
-  Done(List[Int])
+  Done(Bytes)
   Failed(Problems.Problem)
 end
 
@@ -40,7 +40,7 @@ export def write(program: Ir.Program, version: String) -> Written
   return Written.Failed(Problems.unpack(result.message))
 end
 
-def build(program: Ir.Program, version: String) -> Result[List[Int]]
+def build(program: Ir.Program, version: String) -> Result[Bytes]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
@@ -77,7 +77,12 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
     |> Wire.add_all(functions)
     |> Wire.add(Wire.u32(program.entry))
   )
-  return ok(Wire.join(out))
+  joined = Wire.join(out)
+  if !joined.ok?
+    return error(Failure.internal(program, joined.message))
+  end
+
+  return joined
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met
@@ -119,36 +124,36 @@ def check_limits(program: Ir.Program) -> Result[Void]
 end
 
 # The magic, the format version and the Agentica version.
-def header(version: String) -> List[List[Int]]
+def header(version: String) -> Wire.Chunks
   out = Wire.add(Wire.start(), [65, 71, 67, 66])
   out = Wire.add(out, Wire.u32(FORMAT_VERSION))
-  return Wire.add(out, Wire.string(version))
+  return Wire.add_text(out, version)
 end
 
 # The count of a table of entries, then its entries.
-def pool_section(out: List[List[Int]], pool: Pool.Pool) -> List[List[Int]]
+def pool_section(out: Wire.Chunks, pool: Pool.Pool) -> Wire.Chunks
   return Wire.add_all(Wire.add(out, Wire.u32(pool.count)), pool.chunks)
 end
 
 # The sources: the stored name of each file and its text.
-def sources(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
+def sources(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks = Wire.add(out, Wire.u32(program.sources.size))
   for source in program.sources
-    chunks = Wire.add(chunks, Wire.string(source.name))
-    chunks = Wire.add(chunks, Wire.string(source.text))
+    chunks = Wire.add_text(chunks, source.name)
+    chunks = Wire.add_text(chunks, source.text)
   end
 
   return chunks
 end
 
 # The structs: the name as the user wrote it, and the fields.
-def structs(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
+def structs(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks = Wire.add(out, Wire.u32(program.structs.size))
   for entry in program.structs
-    chunks = Wire.add(chunks, Wire.string(Types.display_name(entry.name)))
+    chunks = Wire.add_text(chunks, Types.display_name(entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.fields.size))
     for field in entry.fields
-      chunks = Wire.add(chunks, Wire.string(field))
+      chunks = Wire.add_text(chunks, field)
     end
   end
 
@@ -156,13 +161,13 @@ def structs(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
 end
 
 # The enums: the name as the user wrote it, and the variants with their payload sizes.
-def enums(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
+def enums(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
   chunks = Wire.add(out, Wire.u32(program.enums.size))
   for entry in program.enums
-    chunks = Wire.add(chunks, Wire.string(Types.display_name(entry.name)))
+    chunks = Wire.add_text(chunks, Types.display_name(entry.name))
     chunks = Wire.add(chunks, Wire.u32(entry.variants.size))
     for variant in entry.variants
-      chunks = Wire.add(chunks, Wire.string(variant.name))
+      chunks = Wire.add_text(chunks, variant.name)
       chunks = Wire.add(chunks, Wire.u32(variant.size))
     end
   end
