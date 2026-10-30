@@ -78,6 +78,7 @@ phase 13).
 | docs, a site page, a skill, a CHANGELOG entry, a doc comment or a PR body | `.agents/skills/documentation-writing/` |
 | an audit of builtin or std/ signatures (defaults, simpler APIs) | `.agents/skills/api-simplification-audit/` |
 | language rules | `docs/grammar/` |
+| builtin functions and `std/` modules | `site/content/library/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
 | writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` (`site/content/style.md` is its page for people) |
 | what is planned or done | `docs/roadmap/README.md` |
@@ -137,8 +138,10 @@ phase 13).
   in CI. Sanitizers, gc-stress, fuzz and full sweeps are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
-- When the language or a builtin changes, update `docs/grammar/`, the site
-  page and the programming skill together. Keep
+- When the language changes, update `docs/grammar/`, the site page and the
+  programming skill together. When a builtin or a `std/` module changes,
+  update its page in `site/content/library/`, the only home of the library
+  reference, and the programming skill. Keep
   `.agents/skills/agentica-programming/SKILL.md` as short as possible (the
   table of references and what nearly every task needs): language rules go in
   its `references/language-*.md`, library detail in `references/<area>.md`.
