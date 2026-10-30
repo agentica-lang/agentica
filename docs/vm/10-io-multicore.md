@@ -40,8 +40,9 @@ that still apply.
   task sees WOKEN and re-checks at once. On PARKED it CASes to READY and pushes
   the task on the run queue. A wake that finds any other state is stale and
   dropped. A scheduler that finds WOKEN at the end of the turn queues the task
-  itself. A resumed task re-checks its condition, so a wake is only a hint. No
-  wake is lost, and a task is queued at most once. Which waker wins is in §16.5.
+  itself, and `run_task` sets RUNNING when a turn starts. A resumed task
+  re-checks its condition, so a wake is only a hint. No wake is lost, and a task
+  is queued at most once. Which waker wins is in §16.5.
   As built (`vm/task.c`):
   - `agc_task_parking` marks the running task PARKING before the builtin
     registers anything: before it joins a waiter list or the FIFO of a stream,
