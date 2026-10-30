@@ -1,11 +1,11 @@
 name: Platforms
 
-# The conformance matrix: the same areas on Linux x86_64, Windows x86_64, macOS Intel and macOS ARM, one job per system,
-# named by platform and architecture (the names of the release packages). Each job builds from bootstrap/stage0.agcb,
+# The conformance matrix: the same areas on Linux x86_64, Linux ARM64, Windows x86_64, macOS Intel and macOS ARM, one job
+# per system, named by platform and architecture (the names of the release packages). Each job builds from bootstrap/stage0.agcb,
 # runs the C tests, the fixed point and then every area of tools/conformance.py, and ends with a report in the job
 # summary that fails when an area has no passed case, a module did not finish, or a case was skipped for a reason that is
 # not on the reviewed list (host-only: pairs in HOST_ONLY_ALLOWED; known-issue: numbers in KNOWN_ISSUES). A last job,
-# `conformance all-systems`, puts the four summaries side by side and fails when a case ran on no system.
+# `conformance all-systems`, puts the five summaries side by side and fails when a case ran on no system.
 # Pull requests run these jobs only with the `platforms` label (adding it starts a run); pushes to master and manual
 # runs always do.
 on:
@@ -31,7 +31,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The runners can be slow: every deadline of the tests is multiplied by this, as in ci.yml (references/ci.md). Linux
-# keeps the 4 as well, so that one number holds on the four systems and a test that needs a longer deadline on a slow
+# keeps the 4 as well, so that one number holds on every system and a test that needs a longer deadline on a slow
 # macOS or Windows runner is not hidden by a quicker Linux one.
 env:
   AGENTICA_TEST_TIMEOUT_SCALE: '4'
@@ -46,6 +46,12 @@ jobs:
         include:
           - platform: linux-x86_64
             runner: ubuntu-latest
+            make: make
+            python: python3
+            shell: bash
+          # The interpreter only: the JIT has no aarch64 emitter (#756).
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
             make: make
             python: python3
             shell: bash
@@ -70,9 +76,9 @@ jobs:
       AGENTICA_REQUIRE_VM: '1'
       # Linux builds with the system libgc and OpenSSL, as ci.yml does (ci.yml and the release check the vendored link
       # there); the other systems link the vendored OpenSSL, as the release does.
-      AGENTICA_OPENSSL: ${{ matrix.platform == 'linux-x86_64' && 'system' || github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
+      AGENTICA_OPENSSL: ${{ startsWith(matrix.platform, 'linux-') && 'system' || github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
       # Linux links the system zlib, the others the vendored one, as the release does.
-      AGENTICA_ZLIB: ${{ matrix.platform == 'linux-x86_64' && 'system' || 'vendored' }}
+      AGENTICA_ZLIB: ${{ startsWith(matrix.platform, 'linux-') && 'system' || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
       PYTHON: ${{ matrix.python }}
       PLATFORM: ${{ matrix.platform }}
@@ -200,9 +206,9 @@ jobs:
       - name: "Area multicore: programs on four schedulers (tests/test_vm_multicore.py)"
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ${{ matrix.make }} conformance-area/multicore PYTHON=${{ matrix.python }}
-      # ci.yml runs this step on Linux.
+      # ci.yml runs this step on Linux x86_64.
       - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os != 'Linux' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform != 'linux-x86_64' }}
         run: ${{ matrix.make }} test-multicore-modules PYTHON=${{ matrix.python }}
       - name: Evidence report (fails when an area has no passed case or a skip has no host-only reason)
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -235,8 +241,8 @@ jobs:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
 
-  # The four summaries side by side: a case that no system ran (host-only or open gap on all four) proves nothing, and
-  # one job cannot see that.
+  # The five summaries side by side: a case that no system ran (host-only or open gap on all of them) proves nothing,
+  # and one job cannot see that.
   summary:
     name: conformance all-systems
     needs: conformance

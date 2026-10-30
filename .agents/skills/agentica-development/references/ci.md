@@ -279,16 +279,18 @@ stress binary and C tests (`sanitizer-build`).
 
 ## Conformance matrix (`platforms.yml`)
 
-One job per system: `linux-x86_64`, `windows-x86_64` (MSYS2 UCRT64),
-`macos-x86_64` and `macos-arm64`; the last three link the vendored OpenSSL and
-zlib. It runs on PRs with the `platforms` label and on `master` pushes. Each job
-runs `vm-test`, `vendored-check`, `bootstrap-smoke`, `fixed-point`, then
-`make conformance-area/<area>` per area of `tools/conformance.py`, then
-`make conformance-report` (a job summary and `summary.json`; exit 1 when a
-module did not finish, a case failed, an area has no passed case, or a skip is
-not allowed). `conformance all-systems` merges the four reports and fails when a
-system is missing or a case ran on none. Not in the matrix: the Docker and Wine
-groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`).
+One job per system: `linux-x86_64`, `linux-arm64` (`ubuntu-24.04-arm`, the
+interpreter only: no JIT emitter), `windows-x86_64` (MSYS2 UCRT64),
+`macos-x86_64` and `macos-arm64`; the Linux jobs use the system OpenSSL and
+zlib, the others the vendored ones. It runs on PRs with the `platforms` label
+and on `master` pushes. Each job runs `vm-test`, `vendored-check`,
+`bootstrap-smoke`, `fixed-point`, then `make conformance-area/<area>` per area
+of `tools/conformance.py`, then `make conformance-report` (a job summary and
+`summary.json`; exit 1 when a module did not finish, a case failed, an area has
+no passed case, or a skip is not allowed). `conformance all-systems` merges the
+reports and fails when a system is missing or a case ran on none. Not in the
+matrix: the Docker and Wine groups, the slow tier, sanitizers, fuzz and
+gc-stress (`ci.yml`, `fuzz.yml`).
 
 A new `tests/test_*.py` must be in an area or in `EXCLUDED` with a reason
 (`tests/test_conformance.py`). Run one system by hand with `make conformance`.

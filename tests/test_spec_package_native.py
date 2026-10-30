@@ -3,8 +3,8 @@
 The package is a bare git repository in a temporary folder (tests/package_support.py, `Remotes`) that ships a small
 library, built here from tests/fixtures/native/pkgdemo.c with the system C compiler, in its native/ folder. `install`
 fetches it, and a build opens it by its path in deps/. The cases that only check or fail need no compiler or libffi and
-run everywhere; the ones that call the library need libffi (Linux x86_64, Windows x64, macOS). Cases assert codes and
-the file and key path, never message text (AGENTS.md).
+run everywhere; the ones that call the library need libffi (Linux and macOS on x86_64 and arm64, Windows x64). Cases
+assert codes and the file and key path, never message text (AGENTS.md).
 """
 import json
 import shutil

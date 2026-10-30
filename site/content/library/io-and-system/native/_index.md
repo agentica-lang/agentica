@@ -20,7 +20,7 @@ def main() -> Void
 end
 ```
 
-- Native calls work on Linux x86_64, Windows x64 and macOS (x86_64 and arm64), and `Native.wait_*` on Linux x86_64, macOS and Windows (sockets only on Windows). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
+- Native calls work on Linux and macOS (x86_64 and arm64) and on Windows x64, and `Native.wait_*` on Linux, macOS and Windows (sockets only on Windows). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does. A variadic function (`printf`) is declared with `...` ([variadic functions](/library/io-and-system/native/types/#variadic-functions-and-c-names)).
 - Put `##` docs on the `def` lines inside the block.
 

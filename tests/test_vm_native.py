@@ -3,8 +3,8 @@
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows, a
 dylib on macOS) for each module run, so every C type crosses a real ABI; four cases also call the system SQLite
 (libsqlite3.so.0 on Linux, which CI installs; libsqlite3.dylib on macOS; winsqlite3.dll on Windows). Native calls
-exist on Linux x86_64, Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load
-with RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. On Windows Native.wait_* polls
+exist on Linux and macOS (x86_64 and arm64) and Windows x64: elsewhere a program that declares extern functions is
+refused at load with RUNTIME-NATIVE-UNSUPPORTED. On Windows Native.wait_* polls
 only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never messages
 (AGENTS.md).
 """
@@ -24,9 +24,9 @@ from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, re
 
 MACOS = TARGET_OS == "darwin"
 # The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
-NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
+NATIVE = (TARGET_OS.startswith("linux") and platform.machine() in ("x86_64", "aarch64")) or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
-NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
+NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux and macOS (x86_64 and arm64) and Windows x64 only")
 # Keep native non-Linux platforms in the test body to report #616 as an open gap, not host-only.
 NATIVE_STDIO_CASES = host_only(not NATIVE, "native calls are unsupported on this system")
 
@@ -1996,8 +1996,8 @@ end
 # One variadic C function declared in five shapes with `= "peer_vmix"`: ints, doubles, none, a mix with more
 # arguments than registers (so some go on the stack on every ABI), and a compute def; and a sixth with an out
 # parameter before `...`, which counts in the fixed part. Only Apple arm64, where every variadic argument goes on the
-# stack, tells a variadic call from a fixed one: on x86-64 and Windows x64 libffi makes the two calls the same, so CI
-# on those systems does not test the fixed count.
+# stack, tells a variadic call from a fixed one: on x86-64, Windows x64 and Linux arm64 libffi makes the two calls the
+# same, so CI on those systems does not test the fixed count.
 @NATIVE_CALLS
 def test_a_variadic_function_gets_the_arguments_of_its_declared_shape(tmp_path, peer):
     main = """def main() -> Void
@@ -2071,7 +2071,8 @@ end
 
 
 # fcntl in two shapes of one C function (= "fcntl"): F_GETFD and F_GETFL take no variadic argument, F_SETFD takes an
-# int. The constants are the same on Linux and macOS. On Linux x86_64 syscall(SYS_getpid = 39) gives the process id.
+# int. The constants are the same on Linux and macOS. On Linux syscall(SYS_getpid) gives the process id: 39 on x86_64,
+# 172 on arm64 (the generic table).
 @NATIVE_CALLS
 @host_only(WINDOWS, "Windows has no fcntl or syscall")
 def test_fcntl_in_two_shapes_and_syscall(tmp_path):
@@ -2093,12 +2094,12 @@ def main() -> Void
   puts(fcntl_get(fd, 3) %% 4)
   puts(close(fd))
   if System.os == "linux"
-    puts(syscall(39) == System.pid)
+    puts(syscall(%d) == System.pid)
   else
     puts(true)
   end
 end
-""" % (LIBC, literal(made), flags)
+""" % (LIBC, literal(made), flags, 172 if platform.machine() == "aarch64" else 39)
     result = agentica(program(tmp_path, main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ["0", "0", "1", "1", "0", "true", ""]
