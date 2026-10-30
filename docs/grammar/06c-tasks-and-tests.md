@@ -1,510 +1,98 @@
 ### Lightweight tasks
 
-`Task` is reserved. Tasks are cooperative: a task yields when it waits for I/O,
-a timer, a channel or another task, and at the end of each turn. They run on
-the VM's schedulers, one per logical core unless `--schedulers N` sets the count
-(section 6b), so tasks may run in parallel and the order of output between
-tasks is not fixed. With `--schedulers 1` one task runs at a time: I/O
-concurrency without CPU parallelism, in the order of a single run queue.
-Signatures are in
-[`library/concurrency/task.md`](../../site/content/library/concurrency/task.md).
+`Task` is reserved. Tasks are cooperative and run on the VM's schedulers, so
+tasks may run in parallel (`--schedulers N`, section 6b). Every `Task` function,
+its timing, cancellation and crash behaviour, and its runtime errors are in the
+[`Task` page](../../site/content/library/concurrency/task.md). The rules of the
+language and the checker:
 
-`Task.spawn` starts a function at once, with one argument or none:
-`Task.spawn(&f)` starts a function of no parameter, and `Task.spawn(&f, x)` one
-of one parameter; use a struct for several values. A block is a function too:
-`Task.spawn do ... end` runs the block as a task, like Ruby's
-`Thread.new { }`, and it may capture locals. `Task.spawn(&f) do ... end` is
-`CHECK-BLOCK-TARGET`: give a block or a function reference, not both. A block
-that takes the argument works when it is passed through an `Fn` variable or
-parameter. Each task has its own scopes, call depth and return handling.
-`Task.await` returns the cached result and may be repeated; `false`, `nil` and
-`error` are normal results. Tasks have no constructor, equality, fields,
-indexing or JSON encoding.
-
-A runtime error in a task other than `main` is a crash. It ends only that task.
-This is sound because values are immutable, so a crashed task cannot leave a
-shared value half-updated, and the only mutable state lives in handles, whose
-ownership is described below. Its diagnostic goes to stderr at once, with
-` in a task` after the code
-(`--json` adds `"task": true`), and its running descendants are cancelled. The
-handles it owns close: see the next paragraph.
-
-A handle (a file, a socket, a listener, a process or a `std/http` server)
-belongs to the task that opened it, and it is closed when that task ends, in any
-way: it returns, it crashes or it is cancelled. Nothing is given to the parent:
-a handle opened in a helper task and returned through `Task.await` is closed
-when the helper ends, so open a long-lived handle in the task that keeps it. A
-regular file is closed with its output written, and `Task.await` of the ended
-task returns only after that, so what a helper wrote to a regular file is on
-disk when the parent's await returns; the await does not wait for a flush to a
-FIFO or a pipe. Ownership decides who closes a handle, not who may use it:
-`Task.spawn(&f, handle)` passes the handle like any other argument and the
-caller still owns it, and any task that holds the handle can use it until its
-owner closes it. `Task.spawn_owning(&f, handle)` is the one way to hand a handle
-over. It starts the task as `Task.spawn` does and gives it a handle that the
-caller owns, so the new task closes it when it ends. A server handed over this
-way takes its listener with it. The argument must be a handle type, a
-resource of native code (section 6d), a `C.Pointer` or a `Channel[T]`, or a
-struct, enum, `List[T]`, `Map[K, V]` or `Result[T]` whose type holds one of
-them (through fields, variant payloads and type arguments), or the checker gives
-`CHECK-NOT-A-HANDLE`. The new task gets the value as its argument and owns every
-handle in it, each once; a value that holds none at run time (an enum variant
-without one) hands over nothing. At run time a handle that the caller does not
-own, that was already handed over or that is closed is
-`RUNTIME-HANDLE-NOT-OWNED` in the caller, and then no handle of the value moves:
-all of them or none. Of the `C.Pointer` values only an
-owned buffer (`Native.memory_pointer`) can be handed over; one that C gave, or a
-view of a buffer (`Native.offset`), is `RUNTIME-HANDLE-NOT-OWNED`. A crash or an
-end never closes an `HttpClient`. A `Channel` has no opener: it is unowned until
-`Task.spawn_owning(&f, channel)` gives it to the new task, and then it is
-closed when that task ends, as in [Channels](#channels). The first hand-off of
-an unowned channel is open to any task; after that only the owner can hand it
-on.
-
-`Task.await` on a crashed task returns `error(text)` when the result type is a
-Result, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`. For
-any other type, the awaiter halts with `RUNTIME-TASK-CRASHED` at its await, with
-that text, so the crash moves up. Each await gives the same outcome.
-A task is cancelled, with its running descendants, by `Task.cancel`, by a crash
-of one of its ancestors, by the timeout of its `Task.map` item, and by
-`HTTP.close_server` (the handler tasks). An await of a cancelled task gives
-`error("task: cancelled")` when the result type is a Result, and halts with
-`RUNTIME-TASK-CANCELLED` otherwise.
-
-`Task.cancel(task: Task[R]) -> Void` cancels a task and its running descendants
-and returns at once; it never waits. A cancelled task runs at most the rest of
-its current turn: a task parked on a sleep, a channel, an await or I/O ends at
-once, and a task in the middle of a turn (on another scheduler) keeps running
-until that turn ends. So a task in its last turn on another scheduler may end as
-cancelled even though it reached its return. Its handles close as at any task
-end, so a channel it owns is closed and its receivers see the close. A task that
-has ended (returned, crashed or cancelled) is left as it is, so a second cancel
-does nothing, and an await after the cancel gives the cancelled outcome above.
-Any task that holds the handle may cancel it, whatever scheduler it runs on. A
-task that cancels itself, or one of its ancestors, is a descendant of the task
-it cancels, so it is cancelled too and stops right after the call. No handle
-reaches `main`, so `main` cannot be cancelled. A cancel is not a crash: it gives
-no crash report and does not change the exit code. A wrong argument type is
-`CHECK-TYPE-MISMATCH` at the argument.
-
-Some errors end the whole run, whichever task raises them: a runtime error in
-`main`, `RUNTIME-STEP-LIMIT`, an internal VM error, and `System.exit` in any
-task. The first of these wins.
-
-A crash is observed when an await returns its error or halts, or when `Test.run`
-reports it. If `main` returns with a crash never observed, the run exits 1 and
-prints one line on stderr: `2 task crashes were not observed; first: task
-crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed:
-..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first unobserved
-crash, or `error("no unobserved crash")`; calling it does not observe the crash.
-
-Returning from the entrypoint ends the run, and pending tasks never run again.
-At the end of any run the VM flushes and closes open files and waits for the
-buffered output of stdout and stderr to reach the pipe or file (bounded by the
-flush limit, 30 seconds by default, `--flush-timeout`), frees what native code
-still owns within the same limit (section 6d), closes sockets and listeners, and
-stops and reaps the child processes it started. Standard streams stay open.
-
-`Task.sleep` takes nonnegative milliseconds; zero yields. A negative duration is
-`RUNTIME-INVALID-DURATION`. Tasks inherit ports, arguments and builtin services.
-Shared streams have no ordering guarantee across tasks. All tasks share the
-`--max-steps` counter.
-
-`Task.pending_count()` counts the tasks of this run that have not ended, not
-counting `main`: tasks waiting to run, the caller (unless it is `main`), and
-tasks waiting on a sleep, an await, a channel or I/O. A task that has returned
-or crashed is not counted. The tasks `std/http` starts for an `HttpClient` are
-not counted either, and `Test.test` does not see them as leftovers.
-
-`Task.await` halts with `RUNTIME-TASK-AWAIT-CYCLE` at the await when the awaited
-task, or a task it awaits in turn, is waiting for the caller. A task that awaits
-its own handle is the shortest cycle. A task can reach its own handle through a
-channel, or through a closure that captures it.
-
-`Task.await(task, timeout_ms)` waits for at most `timeout_ms` milliseconds and
-returns `Await[T]`, a builtin generic enum with two variants:
-`Await.Done(value)` carries the task's result, and `Await.TimedOut` has no
-payload and is written without parentheses. `Await` is reserved: a struct, enum,
-type parameter or import alias with that name is `CHECK-REDEFINED-NAME`. The
-result is matched with `case` and checked for exhaustiveness like a user enum,
-and it can be annotated (`outcome: Await[Int]`), printed and interpolated:
-`IO.inspect` shows `Await.Done(42)` or `Await.TimedOut`. `try` does not apply to
-it (`CHECK-TYPE-MISMATCH` at the call). `timeout_ms` must be positive: zero or a
-negative value is `RUNTIME-INVALID-DURATION` at the argument. A timeout does not
-cancel the task and does not stop the caller: the task keeps running, and a
-later await, with or without a timeout, returns its outcome. A task that has
-already ended never times out, however short the timeout. When the task crashes
-or is cancelled before the timeout, the outcome is the one of the plain await:
-`Await.Done(error(text))` for a `Result` task, a halt with
-`RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED` otherwise. A crash or a
-cancel after `Await.TimedOut` does not reach the caller. For a `Task[Void]` the
-result is `Await[Void]`, and the payload is matched as `Await.Done(_)`, as
-`Result.Ok(_)` is; a named binding there is `CHECK-VOID-TYPE`. The timed form
-takes no part in the cycle check: a task that awaits its own handle with a
-timeout, or two tasks that await each other with timeouts, get `Await.TimedOut`
-after the timeout, and a plain `Task.await` that reaches a task waiting with a
-timeout does not halt. A nested result is two cases: for a `Result` task,
-`Await.Done(r)` holds the `Result` to match in turn.
-
-`Task.map(items, limit, timeout_ms) do |item| ... end` runs the block for each
-item of a list in its own task, at most `limit` at a time, and gives a
-`List[Result[R]]`: one `Result` per item, in the order of `items`, whatever
-order the items end in. It is always written `Task.map(...)`, not as a method,
-so `xs.map` stays the sequential `List.map`. The block gives a `Result[R]`,
-since the work it is for (HTTP, files, processes) already returns `Result`;
-`try` works in it, and a block that cannot fail ends with `ok(x)`. `R` comes
-from the expected type of the call (`r: List[Result[Int]] = Task.map(...)`) or
-else from the first `ok(...)` the block gives, so a block that gives only
-`error(...)` needs the annotation (`CHECK-RESULT-TYPE` otherwise). A block whose
-last expression is not a `Result` is `CHECK-TYPE-MISMATCH`, with a help that
-shows `ok(...)`. A function value works as the last argument: `Task.map(ids, 8,
-5000, &fetch)`. An empty list needs a type like any empty list
-(`CHECK-EMPTY-LIST-TYPE`).
-
-```agentica
-def slow_double(n: Int) -> Result[Int]
-  Task.sleep(100)
-  return ok(n * 2)
-end
-
-def main() -> Void
-  results = Task.map([1, 2, 3, 4], 2, 1000) do |n|
-    slow_double(n)
-  end
-  puts(results)
-end
-```
-
-This prints `[ok(2), ok(4), ok(6), ok(8)]` in about 200 ms, not 400. Items start
-in input order, and when one ends the next starts (a sliding window, not
-batches). `timeout_ms` counts for each item from the moment its task starts
-until it ends, so it includes the time the item waits in the run queue; there is
-no total timeout. An item that runs out of time is cancelled and its slot is
-`error("task: timed out")`; a block that returns that same error itself looks
-the same. An item's own `error(...)` does not stop the others. An item that
-crashes gives `error("task crashed: ...")` in its slot (the crash counts as
-observed) and the others go on. The caller waits until every item has ended, and
-items are children of the caller. An item that ends after its deadline but
-before the caller looks at the clock keeps its result.
-
-A cancelled item runs no more user code. Its running descendants are cancelled
-with it, including a grandchild whose parent already ended, since a task that
-ends hands its running children to its parent. The handles the item opened are
-closed (see the paragraph on handles above), and an item counts as ended, as a
-task does for `Task.await`, only after the regular files it opened are written
-and closed, so a file an item wrote is on disk, and its lock released, when the
-call returns. An item that ran out of time is the exception: it is settled at
-its deadline and the call does not wait for its files, which are closed a little
-later. A `Task.map` it called stops: no pending item starts and the items in
-flight are cancelled. An I/O operation in flight is detached, not abandoned: it
-finishes or times out on its own, its result is dropped, and it never closes the
-handle, so a timed-out item cannot close a handle that other items share. The
-pooled connection of a timed-out `HTTP.get` is closed when the detached request
-ends, not put back in the pool. A `Task.await` of a task cancelled this way is
-the cancelled await described above (`RUNTIME-TASK-CANCELLED` unless the result
-type is a `Result`).
-
-`limit` is 1 to 1024, otherwise `RUNTIME-INVALID-COUNT` at the argument.
-`timeout_ms` must be positive, otherwise `RUNTIME-INVALID-DURATION` at the
-argument. Both are checked before any item starts and before the empty-list
-shortcut, so `Task.map(empty, 0, 1000)` is `RUNTIME-INVALID-COUNT`; an empty
-list with valid arguments gives `[]`, and a `limit` larger than the list starts
-every item at once. CPU work runs on at most one item per scheduler at a time,
-and since the clock of an item includes its time in the run queue, a `limit`
-above the number of schedulers over CPU work makes timeouts more likely, not
-the work faster. Items,
-captured variables and results are immutable and shared without copies. A block
-may capture a handle, and a handle keeps its per-handle lock, but do not share a
-handle across items; give a handle that many tasks need to one owner task.
-Starting an item costs one step on the `--max-steps` counter and the block costs
-its own, so a call where no item times out has a fixed step count; the caller
-spends no steps while it waits, and building the result list costs one unit of
-turn budget per item. Each item has its own random generator, split from the
-caller's in input order, so a run with `--seed` gives the same numbers whatever
-order the items end in. The effect is `concurrency`, like `Task.spawn`.
-
-A BDD step handler must finish its tasks before it returns
-(`RUNTIME-BDD-PENDING-TASKS`), and a crash nothing awaited fails the step with
-`RUNTIME-TASK-CRASHED`. See [`bdd.md`](../bdd.md).
+- A `Task[R]` has no constructor, equality, fields, indexing or JSON encoding.
+  `Task.spawn(&f)` starts a function of no parameter and `Task.spawn(&f, x)` one
+  of one parameter. A block is a function too (`Task.spawn do ... end`), and
+  `Task.spawn(&f) do ... end` is `CHECK-BLOCK-TARGET`.
+- A handle (a file, a socket, a listener, a process or a `std/http` server)
+  belongs to the task that opened it, and it is closed when that task ends, in
+  any way. `Task.spawn_owning(&f, handle)` is the one way to hand a handle over;
+  its argument must be a handle type, a resource of native code (section 6d), a
+  `C.Pointer` or a `Channel[T]`, or a struct, enum, `List[T]`, `Map[K, V]` or
+  `Result[T]` whose type holds one of them, or the checker gives
+  `CHECK-NOT-A-HANDLE`.
+- A runtime error in a task other than `main` is a crash that ends only that
+  task. `Task.await` of a crashed task returns `error(text)` when the result
+  type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` otherwise; the same
+  holds for a cancelled task (`error("task: cancelled")`,
+  `RUNTIME-TASK-CANCELLED`).
+- `Task.await(task, timeout_ms)` returns `Await[T]`, a builtin generic enum with
+  the variants `Await.Done(value)` and `Await.TimedOut` (no payload, written
+  without parentheses). `Await` is reserved: a struct, enum, type parameter or
+  import alias with that name is `CHECK-REDEFINED-NAME`. It is matched with
+  `case` and checked for exhaustiveness like a user enum. `try` does not apply
+  to it (`CHECK-TYPE-MISMATCH` at the call). For a `Task[Void]` the payload is
+  matched as `Await.Done(_)`; a named binding there is `CHECK-VOID-TYPE`.
+- `Task.map(items, limit, timeout_ms) do |item| ... end` is always written
+  `Task.map(...)`, not as a method, so `xs.map` stays the sequential
+  `List.map`. The block gives a `Result[R]`; `try` works in it. `R` comes from
+  the expected type of the call, else from the first `ok(...)` the block gives,
+  so a block that gives only `error(...)` needs the annotation
+  (`CHECK-RESULT-TYPE` otherwise). A block whose last expression is not a
+  `Result` is `CHECK-TYPE-MISMATCH`, and an empty list needs a type
+  (`CHECK-EMPTY-LIST-TYPE`). The result is a `List[Result[R]]`, one `Result` per
+  item in the order of `items`.
+- A BDD step handler must finish its tasks before it returns
+  (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](../bdd.md).
 
 ### Channels
 
 `Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values
-into and receive values from. It is a handle: assigning or passing it shares the
-same channel.
+into and receive values from, and a handle: assigning or passing it shares the
+same channel. The functions (`new`, `send`, `recv`, `close`, `closed?`), the
+timeouts, the order of waiters and the ownership of a channel are in the
+[`Channel` page](../../site/content/library/concurrency/channel.md).
 
-```agentica
-def send_all(jobs: Channel[Int]) -> Result[Void]
-  for n in 1..5
-    try jobs.send(n, 1000)
-  end
-  return ok()
-end
-
-def produce(jobs: Channel[Int]) -> Result[Void]
-  result = send_all(jobs)
-  jobs.close
-  return result
-end
-
-def main() -> Void
-  jobs: Channel[Int] = Channel.new(2)
-  producer = Task.spawn(&produce, jobs)
-  total = 0
-  while true
-    case jobs.recv(1000)
-      ok(n) -> total += n
-      error(_) ->
-        if jobs.closed?
-          break
-        end
-    end
-  end
-  puts(total)
-  puts(Task.await(producer))
-end
-```
-
-```text
-Channel.new(capacity: Int) -> Channel[T]
-Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
-Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
-Channel.close(channel: Channel[T]) -> Void
-Channel.closed?(channel: Channel[T]) -> Bool
-```
-
-All but `new` are also methods: `jobs.send(v, 1000)`, `jobs.recv(1000)`,
-`jobs.close`, `jobs.closed?`. Signatures are in
-[`library/concurrency/channel.md`][agentica-link-1].
-
-- **Type.** `T` is any type a variable can have, so `Channel[Void]` is
-  `CHECK-VOID-TYPE`. A task handle, a socket, a file or another channel is
-  allowed. A user `struct`, `enum` or import alias named `Channel` is
+- `T` is any type a variable can have, so `Channel[Void]` is `CHECK-VOID-TYPE`.
+  A user `struct`, `enum` or import alias named `Channel` is
   `CHECK-REDEFINED-NAME`.
-- **`Channel.new`** needs an expected type, from an annotation, a parameter, a
-  field or a return type: `jobs: Channel[String] = Channel.new(16)`. Without one
-  it is `CHECK-EXPECTED-TYPE` at the call, with a help that shows the annotated
-  form. The capacity is 1 to 1,048,576, else `RUNTIME-INVALID-COUNT` at the
-  argument. A channel is always bounded.
-- **`send`** adds the value at the back and returns `ok()`. When the channel is
-  full, the task waits for a free slot, for a close, or for the timeout. It
-  returns `error("channel: closed")` if the channel is closed before or during
-  the wait, and `error("channel: timed out")` at the timeout. In both cases the
-  value is not added.
-- **`recv`** returns the oldest value as `ok(v)`. When the channel is empty, the
-  task waits for a value, for a close, or for the timeout. It returns
-  `error("channel: closed")` once the channel is closed and drained, and
-  `error("channel: timed out")` at the timeout. Values sent before `close` are
-  still received after it.
-- **Timeouts are required.** `timeout_ms` is 0 or more. Zero never waits: the
-  call tries once. A negative value is `RUNTIME-INVALID-DURATION` at the
-  argument. There is no wait-forever value, so tasks that wait for each other
-  get timeout errors, not a hang.
-- **`close`** returns `Void`, and closing again does nothing. Waiting senders
-  get the closed error, and so do woken senders that have not run yet. Waiting
-  receivers get the values left, then the closed error. The producer closes, on
-  every path, and consumers do not. With several producers, one coordinator
-  awaits all of them and then closes.
-- **An owner.** `Task.spawn_owning(&produce, jobs)` makes the new task the owner
-  of the channel. When that task ends in any way (it returns, crashes or is
-  cancelled), the channel is closed as by `close`: receivers get the values
-  already sent, then the closed error at once, and parked senders get the closed
-  error. So a consumer does not wait for a timeout when its producer died. Any
-  task can still call `close` on an owned channel, and the owner's end then does
-  nothing more. A channel that is never handed over has no owner and is closed
-  only by `close`. Plain `Task.spawn(&f, jobs)` gives no ownership, and a
-  channel with several producers has no owner.
-- **`closed?`** is `true` when the channel is closed, its buffer is empty and no
-  value is reserved for a woken receiver. Once `true` it stays `true`. After a
-  `recv` error it tells the end of the stream from a timeout.
-- **Order.** Values come out in the order they went in. Waiting receivers are
-  served in the order they started waiting, and so are waiting senders, with no
-  barging: a value is handed straight to the first waiting receiver. A waiter
-  that leaves before it runs, because it was cancelled or its timeout came
-  first, passes what it was given to the next waiter. A receiver that was given
-  a value returns it even if its deadline passes before it runs. No value is
-  lost or added twice.
-- **No data operations.** `puts`, `print`, interpolation and `==` on a channel
-  are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, a JSON encoding
-  of a struct with a channel field is `CHECK-NOT-ENCODABLE`, and `IO.inspect`
-  prints `<Channel>`.
-- **Effects.** `send`, `recv` and `close` carry `concurrency`. `new` and
-  `closed?` carry none.
-
-There is no `select`, no `for x in channel`, and no unbounded or unbuffered
-channel. To merge several sources, send them into one `Channel[Event]` of an
-enum type.
+- `Channel.new` needs an expected type, from an annotation, a parameter, a field
+  or a return type, else `CHECK-EXPECTED-TYPE` at the call.
+- `puts`, `print`, interpolation and `==` on a channel are
+  `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a JSON encoding
+  of a struct with a channel field is `CHECK-NOT-ENCODABLE`.
 
 ### Shared tables (ATS)
 
 `ATS` (Agentica Table Storage) is reserved: a user `struct`, `enum` or import
 alias named `ATS` is `CHECK-REDEFINED-NAME`. An `ATS[K, V]` is a mutable table
-that tasks share through a handle, the role of Erlang's ETS. Values stay
-immutable; a table is the one place where shared data changes in place, so the
-name and the type say so. A `Channel` passes messages; a table is state that
-many tasks read and update, such as a counter or a cache.
+that tasks share through a handle, the role of Erlang's ETS: values stay
+immutable, and a table is the one place where shared data changes in place. The
+functions, atomicity, costs and lifetime are in the
+[`ATS` page](../../site/content/library/concurrency/ats.md).
 
-```agentica
-def count_visit(hits: ATS[String, Int]) -> Void
-  hits.add("home", 1)
-end
-
-def main() -> Void
-  hits: ATS[String, Int] = ATS.new()
-  a = Task.spawn(&count_visit, hits)
-  b = Task.spawn(&count_visit, hits)
-  Task.await(a)
-  Task.await(b)
-  IO.inspect(hits.get("home"))   # ok(2)
-end
-```
-
-```text
-ATS.new() -> ATS[K, V]
-ATS.put(table: ATS[K, V], key: K, value: V) -> Void
-ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool
-ATS.get(table: ATS[K, V], key: K) -> Result[V]
-ATS.has_key?(table: ATS[K, V], key: K) -> Bool
-ATS.delete(table: ATS[K, V], key: K) -> Void
-ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int
-ATS.size(table: ATS[K, V]) -> Int
-ATS.keys(table: ATS[K, V]) -> List[K]
-ATS.to_map(table: ATS[K, V]) -> Map[K, V]
-```
-
-All but `new` are also methods, with the table first: `hits.add("home", 1)`.
-Signatures are in [`library/concurrency/ats.md`][agentica-link-2].
-
-- **A handle.** Assigning or passing a table shares the same table; it is never
-  copied. A table may be a struct field, a list element, a `Map` value, or a
-  `Task.spawn` argument or result, but not a value inside a table. A table is
-  not data, so a constant cannot hold one (`CHECK-CONSTANT-TYPE`).
-- **Keys and values.** Keys are `Int` or `String`; any other key type is
-  `CHECK-MAP-KEY-TYPE`, as for `Map`. `V` must be a data type that is not
-  `Nil`, else `CHECK-ATS-VALUE` at the value type. The test is deep: it looks
-  through struct fields, list elements, enum payloads, `Map` values and
-  `Result`, and refuses `Fn` (a block can capture a handle), `Task`, `Channel`,
-  every handle, `Lazy` and `ATS` itself, so no table holds a table. A nested
-  `Result[Void]` is allowed; `V` itself as `Void` is `CHECK-VOID-TYPE`. A type
-  parameter is refused as `V` (a generic enum payload `ATS[String, T]`), since
-  its uses would not be checked; a generic alias is checked where it is used.
-- **`ATS.new`** needs an expected type, like `Channel.new`:
-  `hits: ATS[String, Int] = ATS.new()`; without one it is
-  `CHECK-EXPECTED-TYPE`.
-- **`put`** inserts or replaces. **`put_new`** inserts only when the key is
-  absent and returns `true`; `false` leaves the table unchanged (ETS
-  `insert_new`). **`get`** returns `ok(value)`, or an error when the key is
-  absent. **`delete`** ignores an absent key.
-- **`add`** works only on a table whose values are `Int` (any other value type
-  is `CHECK-TYPE-MISMATCH`): it adds `n` to the value of the key, an absent key
-  counting as 0, and returns the new value (ETS `update_counter`). A result
-  outside the 64-bit range halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the
-  table unchanged.
-- **Snapshots.** `size`, `keys` and `to_map` read the table as it is at the
-  call. `keys` and `to_map` list the keys in first-insertion order; a key that
-  is deleted and put again goes to the end, as in `Map`. `get` with a default
-  and `values` are left out on purpose: use `Result.unwrap_or` and `to_map`.
-- **Atomic calls.** Each call is atomic on its own, on any scheduler: a reader
-  sees the table before or after a write, never half of it. No user code runs
-  inside a call, so a call cannot deadlock or re-enter the table. There are no
-  transactions over several keys. `add` is the one atomic update and `put_new`
-  the one conditional insert; to update any other value safely, let one owner
-  task do the writes.
-- **Costs.** `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take
-  O(log n) in the table size, and `size` O(1). `keys` and `to_map` take their
-  snapshot in O(1) without holding back other tasks, and build their list or
-  map in O(n). A write that loses a race to another task builds its change
-  again; each retry is charged to the task's step budget, so a task under heavy
-  contention yields and cannot spin forever.
-- **Lifetime.** A table lives while any value refers to it, and the garbage
-  collector frees it then. It is not an OS resource, so the owner rule of handle
-  ownership does not apply: the task that made it does not own it, its end does
-  not close it, and `Task.spawn_owning` is not needed. There is no named global
-  table: a task reaches a table only through a handle it was given. A table
-  belongs to the run that made it; a call from another run halts with
-  `RUNTIME-ATS-CONTEXT`. One run is one execution on the VM, so no handle
-  reaches another run.
-- **In BDD.** Each scenario runs in its own child VM and runs the step
-  program's `main` again, so a table made in `main` and captured by step blocks
-  is shared by the steps of one scenario and starts fresh in the next. A table
-  cannot go in the JSON state of `BDD.set`.
-- **No data operations.** `puts`, `print`, interpolation and `==` on a table
-  are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, a JSON encoding
-  of a struct with a table field is `CHECK-NOT-ENCODABLE`, and `IO.inspect`
-  prints `<ATS>` without the contents; use `to_map` to see them.
-- **No eviction.** A table has no size limit and no expiry. A bounded or
-  expiring cache belongs in a `std/` module on top of `ATS`.
-- **Effects.** `put`, `put_new`, `delete` and `add` carry `concurrency`, which
-  also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
-
-Not supported: ordered tables, duplicate keys, a block-based `update`, a
-compare-and-swap `replace`, and tables shared between OS processes.
+- A table is a handle, never copied. It may be a struct field, a list element, a
+  `Map` value, or a `Task.spawn` argument or result, but not a value inside a
+  table. A constant cannot hold one (`CHECK-CONSTANT-TYPE`).
+- Keys are `Int` or `String`, else `CHECK-MAP-KEY-TYPE`. `V` must be a data type
+  that is not `Nil`, else `CHECK-ATS-VALUE` at the value type; the test is deep
+  and refuses `Fn`, `Task`, `Channel`, every handle, `Lazy` and `ATS` itself.
+  `V` as `Void` is `CHECK-VOID-TYPE`, and a type parameter is refused as `V`.
+- `ATS.new` needs an expected type, like `Channel.new` (`CHECK-EXPECTED-TYPE`).
+  `ATS.add` works only on a table whose values are `Int`
+  (`CHECK-TYPE-MISMATCH`).
+- `puts`, `print`, interpolation and `==` on a table are `CHECK-TYPE-MISMATCH`,
+  `.to_s` is `CHECK-UNKNOWN-METHOD`, and a JSON encoding of a struct with a
+  table field is `CHECK-NOT-ENCODABLE`.
 
 ### Unit tests (`Test`)
 
 `Test` and `TestCase` are reserved. `Test` is a builtin module that needs no
 import. A test file is a program whose `main` calls `Test.run` with a list of
-`Test.test(name) do ... end` blocks. Signatures are in
-[`library/testing/test.md`](../../site/content/library/testing/test.md).
+`Test.test(name) do ... end` blocks, and the block returns `Result[Void]`. The
+assertions, the report, `Test.run` and the order in which a test fails are in
+the [`Test` page](../../site/content/library/testing/test.md).
 
-`Test.test` builds an opaque `TestCase` with the name, block and span of the
-call; `IO.inspect` shows `<TestCase>`. The block returns `Result[Void]`, so
-`try` works inside it and its last assertion can be its result.
-
-An assertion returns `ok()` when it holds and `error(text)` when it does not.
-`Test.eq` compares by value. Both arguments must have one data type: `Int`,
-`Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, or lists, maps, sets,
-Results, structs and enums of them (`Result[Void]` too). Other types, such as
-`Fn`, `Task`, handles and `TestCase`, are `CHECK-TYPE-MISMATCH`. Lists compare
-in order, maps by key and sets by element in any order, structs and enums by
-type, variant and fields, and Floats by IEEE 754. A `Json` compares by its
-canonical text at any depth. A failed `Test.eq` records `values are not equal`,
-and its error text is `expected E; actual A`. `Test.ok?` gives `expected ok;
-actual A`, `Test.error?` gives `expected an error; actual A`, and `Test.assert`
-gives its message.
-
-A failed assertion is also recorded on the test it runs in, which is its own
-task or a task spawned inside it. So a dropped `Test.eq` still fails the test,
-and the first recorded failure is reported. Outside a test, an assertion only
-returns its Result.
-
-`Test.run` never returns; it ends the run with an exit code. It must be called
-from `main`'s own task: a call in a test or in any other task is
-`RUNTIME-TEST-RUN` at the call ("call Test.run from main, outside every test").
-It then checks the names: an empty name, or one used by an earlier test, is
-`RUNTIME-TEST-NAME` at that `Test.test`. Run directly as `agentica file.agc`, it
-prints `run this file with agentica test` on stderr and exits 2. Under `agentica
-test` it talks to the runner on the child channel (`Process.parent_read_line`
-and `Process.parent_send`, see [`06d`](06d-io-and-network.md#processes) and
-[`bdd.md`](../bdd.md#unit-test-files-testrun)); a VM started with the
-`--agentica-test` arguments but without that channel fails with
-`RUNTIME-TEST-RUN`. The channel belongs to `Test.run`: a test or step that calls
-`Process.parent_read_line` or `Process.parent_send` can break the protocol, and
-nothing stops it (the same trust level as the
-[`agentica test`](#agentica-test) rules). The test's own stdin and stdout are
-free:
-the runner shows what a test printed only when it fails.
-
-A test fails with the first of these that applies:
-
-1. The crash of its own task: its code, message and span. Reporting it observes
-   the crash.
-2. Its first recorded assertion: `RUNTIME-TEST-ASSERTION` at the assertion, with
-   `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and
-   `Test.error?`, and neither for `Test.assert`.
-3. The `error(m)` its block returned: `RUNTIME-TEST-ERROR` with `m`, at the
-   test.
-4. Tasks spawned in the test that still run when its task ends:
-   `RUNTIME-TEST-PENDING-TASKS`, at the test.
-5. The first crash of such a task that no await observed: `RUNTIME-TASK-CRASHED`
-   at the test.
-
-After the record, every crash of the test's tasks counts as observed, and its
-running tasks are cancelled before the next test. The run-ending errors above
-still end the whole run, from a test too.
-
-Each test's task has its own `Random` generator, seeded from the run's seed and
-the test's name, so a test sees the same values alone or after other tests.
+- `Test.eq` compares by value. Both arguments must have one data type: `Int`,
+  `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, or lists, maps, sets,
+  Results, structs and enums of them (`Result[Void]` too). Other types, such as
+  `Fn`, `Task`, handles and `TestCase`, are `CHECK-TYPE-MISMATCH`.
 
 ### `agentica test`
 
@@ -521,6 +109,3 @@ exceptions; `try` is the one way to stop early); running tests in the runner's
 own VM; a child VM per test (a task per test is enough); and `describe`, `setup`
 and tags (a helper function does what `setup` does). Doctests, running the
 fenced `agentica` examples of `std/` docs, are an option to evaluate later.
-
-[agentica-link-1]: ../../site/content/library/concurrency/channel.md
-[agentica-link-2]: ../../site/content/library/concurrency/ats.md

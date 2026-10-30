@@ -216,11 +216,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## ATS (`vm/ats.c`)
 
-- Tag `AGC_T_ATS`, service layer; the rules are the grammar's "Shared tables". A
-  table is an `_Atomic` pointer to an immutable `state` (two persistent AVL
-  trees over the same entries, by key and by insertion number, plus the size). A
-  writer builds the next state from the one it loaded and installs it with a
-  strong CAS, building again if another writer won.
+- Tag `AGC_T_ATS`, service layer; the rules are in
+  `site/content/library/concurrency/ats.md`. A table is an `_Atomic` pointer to
+  an immutable `state` (two persistent AVL trees over the same entries, by key
+  and by insertion number, plus the size). A writer builds the next state from
+  the one it loaded and installs it with a strong CAS, building again if another
+  writer won.
 - No row is `shared`: a call takes neither `rt->sync` nor a lock. A failure (an
   `add` overflow, a wrong tag from forged bytecode) happens before the CAS, so
   the table keeps its state. Keys compare Int before String. Tree depth is
@@ -233,8 +234,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - `Test.test` makes an `agc_test_case` (tag `AGC_T_TEST`). Assertions return
   `ok()` or `error(text)`, and record their first failure (`agc_test_note`) on
-  `vm->task->test`, the test the task was spawned under. The grammar's "Unit
-  tests (Test)" section holds the rules.
+  `vm->task->test`, the test the task was spawned under.
+  `site/content/library/testing/test.md` holds the rules.
 - `Test.run` fails with `RUNTIME-TEST-RUN` when the caller is not `main`. It
   checks the names, then the arguments (`--agentica-test list|run`; run directly
   it prints `run this file with agentica test` and exits 2), then the channel

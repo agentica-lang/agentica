@@ -570,4 +570,4 @@ section says how the scheduler and the loop keep them.
   - **Tests:** `tests/test_vm_stdout.py` (peer `tests/fixtures/stdout-peer.py`),
     `tests/test_vm_stop.py` and `vm/tests/output_test.c`.
 
-[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
+[task-rules]: ../../site/content/library/concurrency/task.md

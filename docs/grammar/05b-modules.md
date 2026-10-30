@@ -609,112 +609,24 @@ import Sqlite from "pkg/sqlite/db"
 
 #### String queue (`std/queue`)
 
-`std/queue` is written in Agentica; its signatures are in
-[`library/data-structures/queue.md`][agentica-link-1].
-Push adds at the back and pop removes the oldest value. Pop and peek on an empty
-queue return an error Result. Inputs are never changed: continue with the
-returned queue or `Popped.remaining`. Empty strings and duplicates are valid.
-The queue holds only `String` values, and there are no blocking cross-task
-operations. `push`, `pop`, `peek`, `size` and `empty?` are O(n) with the
-current list operations; no constant-time FIFO is promised.
+`std/queue` is written in Agentica: a first-in, first-out queue of `String`
+values. Its functions are in the
+[`Queue` page](../../site/content/library/data-structures/queue.md).
 
 #### Binary data (`std/binary`)
 
-`std/binary` reads and writes binary numbers in a `Bytes` (such as one from
-`File.read_bytes`). It is written in Agentica on the `Int` and `Float` bit
-builtins; its signatures are in
-[`library/text-and-data/binary.md`][agentica-link-2].
-With the alias `Binary`:
-
-- `Binary.read_u8`, `read_i8`, and `read_{u16,i16,u32,i32,u64,i64}_{be,le}` take
-  `(data: Bytes, offset: Int)` and return `Result[Int]`.
-  `Binary.read_f32_{be,le}` and `read_f64_{be,le}` return `Result[Float]`. `_be`
-  is big-endian (network order), `_le` is little-endian, and signed types use
-  two's complement. A reader never halts: a bad `offset` or a `u64` with the top
-  bit set is an `error(...)`. The `offset` is zero-based and may be any `Int`.
-- `Binary.write_u8`, `write_i8`, and `write_{u16,i16,u32,i32,u64}_{be,le}` take
-  a value and return `Result[Bytes]`, an error when the value is outside the
-  type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and
-  `write_f64_{be,le}` cannot fail and return a plain `Bytes`. `write_f32_*`
-  rounds to binary32; every NaN is written as the canonical NaN
-  (`Float.to_bits`, `Float.to_bits32`). Bit operations
-  and the `Float` bit conversions are `Int` and `Float` builtins, because in
-  Agentica each one is a 64-bit loop or an exact scaling by powers of two with
-  special cases for `-0.0`, NaN and subnormals.
-- To join writer results, use `Bytes.concat(parts)` (§6b): one copy for any
-  number of parts. `Binary.frame(payload: Bytes) -> Result[Bytes]` puts the
-  payload's 4-byte big-endian length in front of it (an error above
-  `4294967295` bytes).
-  `Binary.read_frame_length(data, offset, max) -> Result[Int]` reads that length
-  and returns an error above `max`, so a reader can reject a hostile length
-  before it reads the body.
-- `Int` is signed, so a `u64` above `9223372036854775807` is not an `Int`:
-  `read_u64_*` returns an error for it and `write_u64_*` rejects a negative
-  value. Use `read_i64_*` and `write_i64_*` for all 64 bits. Every `ok` of an
-  integer reader writes back to the same bytes; a float reader does too, except
-  that a NaN pattern other than the canonical one comes back canonical.
-- Errors are checked in this order and the first that applies is returned: a
-  negative `max` (`read_frame_length` only), an `offset` below zero or above
-  `data.size - n`, the `u64` top bit, a writer's value outside its type, a
-  payload over `4294967295` bytes, a frame length above `max`. Messages are
-  lowercase with no final period; the examples are in
-  [`binary.md`](../../site/content/library/text-and-data/binary.md).
-- Writers return new values and no buffer is ever changed. Offset writers into
-  an existing `Bytes` are not part of the module. Half floats (f16) and varints
-  (LEB128) are not supported; hex and Base64 are the `Digest` and `Base64`
-  builtins (§6b).
+`std/binary` reads and writes binary numbers in a `Bytes`. It is written in
+Agentica on the `Int` and `Float` bit builtins; its functions and errors are in
+the [`Binary` page](../../site/content/library/text-and-data/binary.md).
 
 #### TOML (`std/toml`)
 
 `std/toml` reads and writes TOML 1.0 documents. It is written in Agentica; its
-signatures and examples are in
-[`library/text-and-data/toml.md`][agentica-link-3].
-With the alias `Toml`:
-
-- `export enum Value` models TOML's own values: `Str(String)`, `Int(Int)`,
-  `Float(Float)`, `Bool(Bool)`, `DateTime(String)`, `Array(List[Value])` and
-  `Table(Map[String, Value])`. The enum names itself in its payloads. A
-  `DateTime` keeps the text as written (offset date-time, local date-time, local
-  date, local time) and the module checks that it is a valid date-time; a leap
-  second (`:60`) is accepted and every fractional digit is kept. A float whose
-  magnitude is above the largest float reads as `inf`. An `Int` is a signed
-  64-bit integer, and a value outside that range is a parse error.
-- `Toml.parse(text: String) -> Result[Value]` accepts all of TOML 1.0 and
-  nothing else. The root is always a `Table`, which keeps the first-insertion
-  order of its keys. A CRLF counts as one LF. The redefinition rules of the
-  specification are errors: a duplicate key, a table defined twice, extending an
-  inline table or a static array, a dotted key against a `[header]`, and `[[a]]`
-  against a static array or a table.
-- A parse error is `line L, column C: ` followed by lowercase text with no final
-  period. Lines and columns count from 1 and a column counts characters. Arrays
-  and inline tables nest at most 256 levels and a key has at most 256 parts; a
-  deeper input is an error at the opening bracket or the key. No input halts the
-  program.
-- `Toml.encode(value: Value) -> Result[String]` writes a `Table` as a document
-  with a final newline, and any other root is an error. In each table the plain
-  `key = value` lines come first, then `[a.b]` sections, then arrays that hold
-  only tables as `[[a.b]]` sections, each group in `Map` insertion order. Keys
-  that are not bare keys are quoted, and a `DateTime` that is not a valid
-  date-time is an error. `Toml.parse` of the output gives back the same values,
-  but the key order of a `Map` may be regrouped (plain entries first). A table
-  path over 256 parts or an inline value nested over 256 levels is an error, as
-  for `parse`, and so is a `to_json` value nested over 2,048 levels; none halts.
-- `Toml.to_json(value: Value) -> Result[Json]` converts a value for
-  `JSON.decode(json, T)`. A `DateTime` becomes its string, an integer stays an
-  integer and a float stays a float, and `inf` or `nan` is an error.
-- `Toml.get(value: Value, path: String) -> Result[Value]` reads a dotted path of
-  keys; a segment of plain digits (no sign, no leading zero) indexes an array.
+functions and errors are in the
+[`Toml` page](../../site/content/library/text-and-data/toml.md).
 
 #### BDD steps (`std/bdd`)
 
-`std/bdd` is the step API of `agentica test`, written in Agentica. Most `BDD.*`
-functions take the context first and return it; see
+`std/bdd` is the step API of `agentica test`, written in Agentica. See
 [`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and
-[`bdd.md`](../bdd.md). `BDD.Context` can be named but not built: a context
-exists only inside a step, so use the context that a call returns. The modules
-`std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`, `std/test/report` and
-`std/test/runner` are internal to `agentica test` and unsupported.
-
-[agentica-link-1]: ../../site/content/library/data-structures/queue.md
-[agentica-link-2]: ../../site/content/library/text-and-data/binary.md
-[agentica-link-3]: ../../site/content/library/text-and-data/toml.md
+[`bdd.md`](../bdd.md).

@@ -453,4 +453,4 @@ and a body that is not UTF-8. A connection that fails is never pooled.
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
   `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md`.
 
-[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
+[task-rules]: ../../site/content/library/concurrency/task.md
