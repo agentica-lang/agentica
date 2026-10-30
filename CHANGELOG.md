@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Linux ARM64 builds and CI, with native calls; the JIT stays x86-64 only.
 - `HTTP.listen_stream` and `HTTP.listen_stream_tls`: a handler returns an
   `HTTP.StreamResponse` whose body is a `Channel[Bytes]`, sent as chunks as they
   arrive, for Server-Sent Events, tokens or files; `HTTP.whole(data)` is the

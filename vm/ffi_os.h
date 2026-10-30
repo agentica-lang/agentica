@@ -2,8 +2,8 @@
  * The platform half of the native calls (docs/grammar/06d-io-and-network.md,
  * "Native code"): open a library, find a symbol and call it with C values.
  * ffi_libffi.c does it with the system loader and libffi where the build has
- * libffi (AGC_FFI: Linux x86_64, Windows x64 and macOS); ffi_none.c says no
- * elsewhere. No VM values.
+ * libffi (AGC_FFI: Linux and macOS on x86_64 and arm64, Windows x64);
+ * ffi_none.c says no elsewhere. No VM values.
  */
 #ifndef AGC_FFI_OS_H
 #define AGC_FFI_OS_H

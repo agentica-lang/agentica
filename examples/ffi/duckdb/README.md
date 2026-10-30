@@ -31,6 +31,7 @@ check its SHA-256 against the table below, and unpack only the library:
 | system | asset | SHA-256 | member to keep |
 | --- | --- | --- | --- |
 | Linux x86_64 | `duckdb-shared-libs-linux-amd64.tar.gz` | `993ad89e7dfca66cd6da994c2cad090c2fc160ddf9f550498a098ab4bb13cfb1` | `libduckdb.so` |
+| Linux arm64 | `duckdb-shared-libs-linux-arm64.tar.gz` | `c60eecf91143ca6bbac55c4f4d40dc22520488b0ac257c86e0fe9a2b451cf2b7` | `libduckdb.so` |
 | Windows x86_64 | `duckdb-shared-libs-windows-amd64.tar.gz` | `2b83169128239de5f45fe21de80f99bf436e53aa4bb24020dd951a1ba8d4b95f` | `duckdb.dll` |
 | macOS x86_64 and arm64 | `duckdb-shared-libs-osx-universal.tar.gz` | `14cd63180614cfd961f7959146ecd9087527ff20b67311efdc3fa1c29c18204d` | `libduckdb.dylib` |
 

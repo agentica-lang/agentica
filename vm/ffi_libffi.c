@@ -1,8 +1,8 @@
 /*
- * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64 and macOS): the loader (dlopen and
- * dlsym, or LoadLibraryExW and GetProcAddress) finds the function, ffi_prep_cif (ffi_prep_cif_var for a variadic one)
- * describes its signature once and ffi_call calls it, or the function at the address of a C function pointer.
- * Adapter layer; ffi.c converts the values and ffi_none.c is the other half. Design:
+ * The native calls of a build with libffi (AGC_FFI: Linux and macOS on x86_64 and arm64, Windows x64): the loader
+ * (dlopen and dlsym, or LoadLibraryExW and GetProcAddress) finds the function, ffi_prep_cif (ffi_prep_cif_var for a
+ * variadic one) describes its signature once and ffi_call calls it, or the function at the address of a C function
+ * pointer. Adapter layer; ffi.c converts the values and ffi_none.c is the other half. Design:
  * docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI

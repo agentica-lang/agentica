@@ -138,7 +138,7 @@ def test_the_destructive_group_must_have_run_in_ci_and_every_module_of_it_passed
     assert conformance.report(tmp_path, "linux-x86_64")[1]
 
 
-def test_a_case_that_ran_on_no_system_fails_the_merge_of_the_four_summaries(tmp_path):
+def test_a_case_that_ran_on_no_system_fails_the_merge_of_the_summaries(tmp_path):
     cases = {"tests/a.py::t::ok": "pass", "tests/a.py::t::posix": "pass"}
     for platform_name in conformance.PLATFORMS:
         found = dict(cases)
