@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A parameter may default to a struct built with no arguments, `options:
+  Options = Options()`, when every field of the struct has a default.
 - `HTTP.text(body, headers)` decodes a body as UTF-8 only: the `charset` of
   `Content-Type` must be `utf-8` or absent, and any other charset is an error
   that names it.
