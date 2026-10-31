@@ -7,8 +7,8 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM and KDF
-## rows and then the Optional rows are appended last, in contract order, so the positions of the existing rows never
-## shift.
+## rows, the Optional rows and then the text codec rows are appended last, in contract order, so the positions of the
+## existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -22,7 +22,7 @@ BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(R
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
-BUILTIN_GROUP_14 = ROWS_66
+BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67)
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -6091,6 +6091,36 @@ ROWS_66: List[Model.Builtin] = [
       implementation: "",
       effects: [],
       description: "Construct a present Optional value.",
+      alternatives: [],
+    ),
+  ]
+
+## The text codec rows; appended last so the positions of the existing rows never shift.
+ROWS_67: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Bytes.decode",
+      parameters: [
+        Model.Named(name: "bytes", type: Types.Type.Bytes),
+        Model.Named(name: "encoding", type: Types.Type.String),
+      ],
+      result: Types.Type.Result(Types.Type.String),
+      rule: Model.Rule.Plain,
+      implementation: "Bytes.decode",
+      effects: [],
+      description: "Read the bytes as text in an encoding; invalid bytes or an unknown encoding give an error.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "String.encode",
+      parameters: [
+        Model.Named(name: "s", type: Types.Type.String),
+        Model.Named(name: "encoding", type: Types.Type.String),
+      ],
+      result: Types.Type.Result(Types.Type.Bytes),
+      rule: Model.Rule.Plain,
+      implementation: "String.encode",
+      effects: [],
+      description: "Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error.",
       alternatives: [],
     ),
   ]

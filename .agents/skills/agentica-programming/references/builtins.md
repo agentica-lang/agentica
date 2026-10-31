@@ -82,6 +82,7 @@ String.from_code(n: Int) -> String                       # Unicode scalar value;
 n.to_s() -> String                                       # Int
 x.to_s() -> String                                       # Float
 String.from_bytes(data: Bytes) -> Result[String]         # strict UTF-8; binary.md
+s.encode(encoding: String) -> Result[Bytes]              # b.decode(encoding) back; bytes.md
 s.to_i() -> Result[Int]                                  # signed decimal; overflow is an error
 s.to_f() -> Result[Float]                                # 1.5, 1e+20, +inf.0: reads x.to_s back
 s.to_i!() -> Int                                         # halts on bad text (RUNTIME-INVALID-NUMBER)

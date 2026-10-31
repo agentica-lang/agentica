@@ -16,6 +16,7 @@ Base64.urlsafe_decode64.bytes
 Base64.urlsafe_encode64.bytes
 Bytes.at
 Bytes.concat
+Bytes.decode
 Bytes.drop
 Bytes.equal
 Bytes.from_list
@@ -280,6 +281,7 @@ String.code
 String.compare
 String.contains?
 String.downcase
+String.encode
 String.ends_with?
 String.from_bytes.bytes
 String.from_code
