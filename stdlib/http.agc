@@ -41,7 +41,8 @@ READ_FAILED = "error reading from stream port"
 FAILED = "http: connection failed"
 # No bytes: the empty rest of a read and the empty body.
 NO_BYTES = "".bytes
-# The length of a streamed body that has none: it is chunked.
+# The length of a streamed body that has none: it is chunked. No real length is -1, since a negative `length` is a 500
+# before the stream starts (`length_problem`).
 UNSIZED = -1
 # The longest a streamed response may wait for its body channel before it looks again. A close of the channel wakes the
 # wait at once, so this only bounds a task that is never woken.
@@ -861,12 +862,15 @@ def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, 
   case HttpWire.encode_response(request, head_only, Time.now_ms())
     ok(reply) ->
       bodyless = response.status == 204 or response.status == 304
-      problem = length_problem(response, ready, bodyless)
+      data = NO_BYTES
+      if ready.ended
+        data = Bytes.concat(ready.pieces)
+      end
+      problem = length_problem(response, ready.ended, data.size, bodyless)
       if not problem.empty?
         return invalid_stream(socket, request, response.body, problem, timeout)
       end
       if ready.ended
-        data = Bytes.concat(ready.pieces)
         if bodyless and not data.empty?
           return invalid_stream(socket, request, response.body, NO_BODY, timeout)
         end
@@ -882,7 +886,7 @@ end
 
 # Why the length of a streamed response cannot be used, or "" when it can (or there is none). A body that is closed
 # already is sent whole, so its size must be the length: nothing has gone out, so the answer can still be a 500.
-def length_problem(response: StreamResponse, ready: Ready, bodyless: Bool) -> String
+def length_problem(response: StreamResponse, ended: Bool, size: Int, bodyless: Bool) -> String
   case response.length
     some(length) ->
       if length < 0
@@ -891,7 +895,7 @@ def length_problem(response: StreamResponse, ready: Ready, bodyless: Bool) -> St
       if bodyless
         return NO_BODY
       end
-      if ready.ended and Bytes.concat(ready.pieces).size != length
+      if ended and size != length
         return "the body is not the length it was given"
       end
       return ""
@@ -1053,25 +1057,14 @@ def watched(left: Channel[Bool], sent: Channel[Bool]) -> Int
   return STREAM_DONE
 end
 
-# Whether the producer has sent a piece past a body that is full. The channel is closed either way, so a producer that
-# sends more learns that the body is over; an empty piece is no data.
-def overrun?(body: Channel[Bytes]) -> Bool
-  more = body.recv(0)
-  body.close
-  if Result.ok?(more) and not more.unwrap!.empty?
-    return true
-  end
-  return false
-end
-
 # Sends the pieces as they come, then the last chunk (a body with a length has none). The wait for a piece has no
 # deadline of its own: a slow producer is not an error, and the client leaving, the producer closing or the server
 # closing all wake it. A piece gets `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT
 # when the body was cut: a send failed (the channel is closed for the producer), the watcher saw the client leave
-# (left has a value), a body with a length ended short, or a piece came after it was full. Only a producer's close
-# ends the body, or its length when it has one. STREAM_EARLY when the client sent bytes during the stream (sent has a
-# value, read before the last chunk or the last byte of a body with a length goes out: after it the client may send
-# its next request), STREAM_DONE otherwise.
+# (left has a value), or a body with a length ended short or a piece would pass it. Only a producer's close ends the
+# body, or its length when it has one. STREAM_EARLY when the client sent bytes during the stream (sent has a value,
+# read before the last chunk or the last byte of a body with a length goes out: after it the client may send its next
+# request), STREAM_DONE otherwise.
 def pump(
   socket: Socket,
   body: Channel[Bytes],
@@ -1085,16 +1078,18 @@ def pump(
   early = STREAM_DONE
   if length == 0
     early = watched(left, sent)
+    body.close
     if early == STREAM_CUT
-      body.close
       return STREAM_CUT
     end
   end
   for piece in first
     if length != UNSIZED and count + piece.size == length
       early = watched(left, sent)
+      # Closed before the last byte goes out: a request that the watcher reads after the client has the body is then
+      # the next request, not a dropped pipelined one (the watcher tells them apart by `body.closed?`).
+      body.close
       if early == STREAM_CUT
-        body.close
         return STREAM_CUT
       end
     end
@@ -1108,18 +1103,16 @@ def pump(
   while true
     if length != UNSIZED and count == length
       # The client has the whole body and may already send its next request, so the stream ends now and does not wait
-      # for the producer to close the channel. A piece that is already waiting is more than the length.
-      if overrun?(body)
-        return STREAM_CUT
-      end
+      # for the producer to close the channel (closed above, before the last byte went out: the producer's next `send`
+      # fails, and a piece that it sent after the length is not read).
       break
     end
     case body.recv(STREAM_POLL_MS)
       ok(piece) ->
         if length != UNSIZED and count + piece.size == length
           early = watched(left, sent)
+          body.close
           if early == STREAM_CUT
-            body.close
             return STREAM_CUT
           end
         end

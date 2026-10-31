@@ -96,8 +96,7 @@ def sized_cut(label, path):
 
 def sized_extra():
     """A producer that sends more after the length is full: the client has its whole body and never a byte more. The
-    server ends the body when it is full, so the extra piece is dropped or, if it was already queued, cuts the
-    connection: which of the two depends on timing, so the line does not say."""
+    server ends the body when it is full and closes the channel, so the extra piece is dropped."""
     s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
     s.sendall(b"GET /sized-extra HTTP/1.1\r\nHost: x\r\n\r\n")
     got = b""
@@ -123,6 +122,27 @@ def sized_whole():
     wrong = conn.getresponse()
     wrong.read()
     print("sized-wrong", wrong.status)
+    conn.close()
+    for label, path in (("sized-negative", "/sized-negative"), ("sized-204", "/sized-204")):
+        conn = plain()
+        conn.request("GET", path)
+        response = conn.getresponse()
+        response.read()
+        print(label, response.status)
+        conn.close()
+
+
+def sized_next(label, path):
+    """The client has the whole body when the length is full, though the producer closes the channel much later, and
+    sends its next request at once: the server must end the stream at the length and answer it on the same connection."""
+    conn = plain()
+    conn.request("GET", path)
+    response = conn.getresponse()
+    body = response.read()
+    sock = conn.sock
+    conn.request("GET", "/whole")
+    whole = conn.getresponse()
+    print(label, response.status, response.getheader("Content-Length"), body, whole.read().decode(), conn.sock is sock)
     conn.close()
 
 
@@ -214,6 +234,8 @@ def main():
     sized_cut("sized-short", "/sized-short")
     sized_cut("sized-long", "/sized-long")
     sized_extra()
+    sized_next("sized-late", "/sized-late")
+    sized_next("sized-zero", "/sized-zero")
     sized_whole()
     binary("binary", plain())
     binary("tls-binary", secure())
