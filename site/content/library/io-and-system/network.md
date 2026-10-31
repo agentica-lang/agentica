@@ -164,7 +164,7 @@ Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
 | `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
 | `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
 
-Build each context once and share it. `HttpClientOptions` holds a `TlsContext`, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it.
+Build each context once and share it. `HttpClientOptions` holds a `TlsContext`, so `==` no longer compares two of them, and `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it.
 
 ## HTTP client
 

@@ -42,7 +42,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `TLS.connect`, `TLS.listen`, the `HTTP.listen_*_tls` forms and
   `HttpClientOptions` (`tls` replaces `ca_file`) take a `TlsContext` in place
   of PEM paths. The network page's "Moving to contexts" lists each old form
-  and its new one.
+  and its new one. `HttpClientOptions` holds a `TlsContext`, so `==` no longer
+  compares it, and JSON refuses it.
 - **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
