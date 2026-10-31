@@ -15,7 +15,7 @@
 #include <string.h>
 
 /* The UTF-16 kinds come before the UTF-32 ones, and the one-byte encodings come last: reader_of and encode_units tell
-   the unit width by that order, and byte_codec? the encodings of one byte per character. */
+   the unit width by that order, and byte_codec tells the encodings of one byte per character. */
 typedef enum {
   CODEC_UTF8,
   CODEC_UTF16,
