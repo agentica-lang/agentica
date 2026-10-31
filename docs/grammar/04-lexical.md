@@ -171,8 +171,9 @@ in Ruby: `0xFF`, `0b1010`, `0o755`. It is the same `Int` as the decimal one
 only between two digits. Every letter, digit and `_` after the prefix belongs
 to the literal, so a prefix with no digit (`0x`), a digit outside the base
 (`0b102`, `0o8`, `0xFG`) and a misplaced `_` (`0x_FF`, `0xFF_`, `0b1__0`) are
-`LEX-INVALID-NUMBER`, with the literal as the span. A leading zero alone is
-still decimal (`0755` is `755`), and a Float has no other base.
+`LEX-INVALID-NUMBER`, with the literal as the span. Unlike Ruby, a leading
+zero alone is decimal, not octal (`0755` is `755`), and a Float has no other
+base.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

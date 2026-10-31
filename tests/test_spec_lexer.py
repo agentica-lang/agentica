@@ -88,6 +88,9 @@ DIAGNOSTICS = [
     ("hex letter above f", "x = 0xFG", "LEX-INVALID-NUMBER", (1, 5, 1, 9), None),
     ("hex literal above the Int range", program(MAIN, "  x = 0x8000_0000_0000_0000", "end"), "CHECK-INT-RANGE",
      (2, 7, 2, 28), None),
+    # A very long literal lexes in linear time: it is out of range without its decimal value being worked out.
+    ("hex literal of 20000 digits", program(MAIN, "  x = 0x" + "F" * 20000, "end"), "CHECK-INT-RANGE",
+     (2, 7, 2, 20009), None),
     # Characters and delimiters, with the C-style habits that get a help.
     ("unexpected character", "x @", "LEX-UNEXPECTED-CHAR", (1, 3), False),
     ("semicolon", "x = 1;\ny = 2", "LEX-UNEXPECTED-CHAR", (1, 6), True),

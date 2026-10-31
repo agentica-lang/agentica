@@ -48,6 +48,11 @@ HEX_DIGITS = "0123456789abcdef"
 ## The largest Int, the bound of a radix literal that fits.
 INT_MAX = 9223372036854775807
 
+## The most significant digits a radix literal may have for its exact decimal value to be worked out, by base: enough
+## for every value up to 2^64, so the least Int and the range check see the digits a decimal literal gives. A longer
+## literal is far outside the range and keeps its own text (radix_value), so lexing stays linear.
+RADIX_EXACT_DIGITS = {16: 17, 2: 65, 8: 22}
+
 ## Where a comment or a doc line ends: a line break, or the sentinel that follows the last character of the text.
 LINE_ENDS = Set.new(["\n", "\r", ""])
 
@@ -733,7 +738,8 @@ def scan_radix(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
     )
   end
 
-  return Diag.Outcome.Done(token(input.text, "integer", radix_value(digits, base), start, end_at))
+  prefix = input.text.slice(first, 2).downcase
+  return Diag.Outcome.Done(token(input.text, "integer", radix_value(digits, base, prefix), start, end_at))
 end
 
 # Scans one piece of a string literal. It starts after the opening `"`, or
@@ -1587,12 +1593,20 @@ def integer_value(digits: String) -> Tokens.Value
 end
 
 # The value of the digits of a radix literal: a Whole when it fits an Int, else the Huge of its decimal digits, the
-# value a decimal literal gives, so the range check and the least Int (`-0x8000_0000_0000_0000`) work the same way.
-def radix_value(digits: List[Int], base: Int) -> Tokens.Value
+# value a decimal literal gives, so the range check and the least Int (`-0x8000_0000_0000_0000`) work the same way. A
+# literal with more significant digits than RADIX_EXACT_DIGITS is the Huge of its prefix and those digits (`0x1ff...`):
+# still out of range, still distinct from every other literal for the duplicate case arms, and found without the
+# decimal conversion, whose cost grows with the square of the length.
+def radix_value(digits: List[Int], base: Int, prefix: String) -> Tokens.Value
   value = 0
   for digit in digits
     if value > (INT_MAX - digit) / base
-      return Tokens.Value.Huge(decimal_text(digits, base))
+      significant = digits.drop_while do |d: Int| d == 0 end
+      if significant.size > RADIX_EXACT_DIGITS[base]
+        return Tokens.Value.Huge(prefix + significant.map do |d: Int| HEX_DIGITS.slice(d, 1) end.join(""))
+      end
+
+      return Tokens.Value.Huge(decimal_text(significant, base))
     end
 
     value = value * base + digit
