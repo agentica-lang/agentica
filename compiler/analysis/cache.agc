@@ -314,7 +314,7 @@ end
 def describe(module: Modules.Module) -> String
   origin = module.origin
   pieces = [module.key, module.file, module.name, module.prefix, origin.package, origin.root, origin.label]
-  pieces = pieces.push("#{origin.blank_line_after_end}")
+  pieces = pieces.push("#{origin.blank_line_after_end}").push("#{origin.max_line_width}")
   pieces = pieces.push("#{module.aliases.size}")
   for alias in module.aliases.keys.sort
     pieces = pieces.push(alias).push(module.aliases[alias])

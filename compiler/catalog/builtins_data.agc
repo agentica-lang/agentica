@@ -621,6 +621,23 @@ ROWS_6: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "File.replace",
+    parameters: [
+      Model.Named(name: "path", type: Types.Type.String),
+      Model.Named(name: "data", type: Types.Type.Bytes),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "File.replace",
+    effects: ["filesystem"],
+    description: (
+      "Replace the existing regular file at path, after its symbolic links, with at most 16 MiB of data in one " +
+      "step; the file keeps its permission bits and a link stays a link; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "File.sha256",
     parameters: [
       Model.Named(name: "path", type: Types.Type.String),

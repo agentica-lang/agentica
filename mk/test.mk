@@ -1,8 +1,8 @@
 # The Python tests: the pytest runner (test, test-slow, test-py, py-test/%), the test groups (tests, KIND, DOCKER, WINE),
-# conformance, goldens, smoke, fmt-check, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
+# conformance, goldens, smoke, fmt-check, check-compiler, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
-  test-bdd smoke fmt-check goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
+  test-bdd smoke fmt-check check-compiler goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
@@ -221,6 +221,12 @@ smoke: $(PRODUCT)
 # (docs/future/47-formatter.md).
 fmt-check: $(PRODUCT)
 	$(PRODUCT) fmt --check compiler stdlib
+
+# Every file of compiler/ checks as a root, with the [style] of compiler/agentica.toml: CHECK-LINE-TOO-LONG and
+# CHECK-BLANK-LINE-AFTER-END included. The width of stdlib/ is tests/test_style_line_width.py's, since std/ files are
+# library files that no style rule covers.
+check-compiler: $(PRODUCT)
+	$(PRODUCT) check compiler
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
 
 # The built binary, copied away from the checkout, still imports its std/ modules

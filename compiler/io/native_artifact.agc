@@ -278,12 +278,7 @@ end
 
 def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HttpClient]
   left = try time_left(deadline, context)
-  options = HttpClientOptions(
-    timeout_ms: left,
-    idle_timeout_ms: 30000,
-    max_connections: 1,
-    max_body_bytes: 1048576,
-  )
+  options = HttpClientOptions(timeout_ms: left, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 1048576)
   case HTTP.client(options)
     ok(pool) -> return ok(pool)
     error(_) -> return error(fail(context, "PKG-FETCH", "url", "cannot open the download client", ""))

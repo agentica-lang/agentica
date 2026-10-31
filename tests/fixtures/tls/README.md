@@ -42,11 +42,11 @@ use the checked-in files; nothing regenerates them during a test run.
 - **File:** `client-ca.pem`, `client.pem`, `client-key.pem`
   - **What it is:** a client CA (CN "Agentica Test Client CA", no key kept)
     and a client certificate it signs (CN "Agentica Test Client",
-    `clientAuth`) for `TLS.connect` with a client certificate. Added on
+    `clientAuth`) for a client context with a client certificate. Added on
     2026-10-30 with OpenSSL 3.5.7
 
 The other certificates are valid for 36,500 days, so they do not expire
 during the project's life. They test verified TLS both ways, rejection
 without explicit trust, a wrong host name, an expired and a self-signed
-certificate, client certificates, and the load errors of `TLS.listen` and
-`TLS.connect`.
+certificate, client certificates, and the load errors of
+`TLS.server_context` and `TLS.client_context`.

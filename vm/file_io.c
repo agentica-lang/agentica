@@ -11,6 +11,8 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -157,6 +159,86 @@ int agc_fs_unlink(const char *path) {
   }
   uv_fs_t req;
   int result = uv_fs_unlink(NULL, &req, path, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
+/* The length of the folder part of PATH, its last separator included (0 for a bare name). */
+static size_t folder_length(const char *path) {
+  size_t cut = 0;
+  for (size_t k = 0; path[k]; k++) {
+#ifdef _WIN32
+    if (path[k] == '\\') cut = k + 1;
+#endif
+    if (path[k] == '/') cut = k + 1;
+  }
+  return cut;
+}
+
+int agc_fs_open_beside(const char *path, char **name) {
+  static atomic_uint counter;
+  *name = NULL;
+  if (!path || !*path) {
+    errno = EINVAL;
+    return -1;
+  }
+  size_t folder = folder_length(path);
+  size_t cap = folder + 48;
+  char *candidate = malloc(cap);
+  if (!candidate) {
+    errno = ENOMEM;
+    return -1;
+  }
+  /* The name does not repeat the file's own, so a long file name cannot make it too long. Only the owner may open it
+     (0600) until the caller sets the final mode, so nobody else reads the data while it is written. Another process
+     holds a name of this pid's sequence only after a pid reuse; a few tries step past it. */
+  int fd = -1;
+  for (int attempt = 0; attempt < 16; attempt++) {
+    snprintf(candidate, cap, "%.*s.agc-%lu-%u.tmp", (int)folder, path, (unsigned long)uv_os_getpid(),
+             atomic_fetch_add(&counter, 1));
+    uv_fs_t req;
+    int result = uv_fs_open(NULL, &req, candidate,
+                            UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL | UV_FS_O_NOFOLLOW, 0600, NULL);
+    uv_fs_req_cleanup(&req);
+    fd = os_result(result);
+    if (fd >= 0 || errno != EEXIST) break;
+  }
+  *name = candidate;
+  return fd;
+}
+
+int agc_fs_fsync(int fd) {
+  uv_fs_t req;
+  int result = uv_fs_fsync(NULL, &req, fd, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
+void agc_fs_sync_folder(const char *path) {
+#ifdef _WIN32
+  (void)path;
+#else
+  size_t folder = folder_length(path);
+  char *copy = folder ? strndup(path, folder) : strdup(".");
+  if (!copy) return;
+  int fd = open(copy, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  free(copy);
+  if (fd < 0) return;
+  (void)fsync(fd);
+  close(fd);
+#endif
+}
+
+int agc_fs_fchmod(int fd, int mode) {
+  uv_fs_t req;
+  int result = uv_fs_fchmod(NULL, &req, fd, mode, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
+int agc_fs_replace(const char *from, const char *to) {
+  uv_fs_t req;
+  int result = uv_fs_rename(NULL, &req, from, to, NULL);
   uv_fs_req_cleanup(&req);
   return os_result(result);
 }

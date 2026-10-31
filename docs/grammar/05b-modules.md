@@ -208,6 +208,14 @@ import Sqlite from "pkg/sqlite/db"
   and follows the rule of a dependency name below. `max_line_width` is an
   integer of 1 or more. `blank_line_after_end` is a boolean, false by default;
   any other value is `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
+- With `max_line_width = N`, `agentica check` and every command that checks a
+  program report a line of more than N characters (Unicode code points; a CR
+  before the line feed does not count; comments count) as
+  `CHECK-LINE-TOO-LONG`, from its first character past N to its end, after the
+  type check passes. It covers the same files as `blank_line_after_end`
+  (below), and in a file it comes before that rule. `agentica fmt` lays out in
+  N columns (119 without the key) and, with `blank_line_after_end`, adds the
+  empty lines that rule asks for.
 - With `blank_line_after_end = true`, `agentica check` and every command that
   checks a program require an empty line (only spaces or tabs) after each line
   whose code is only `end`, in the files below the folder of that manifest

@@ -13,8 +13,8 @@ import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
 
-# The names of the two files, beside each other in the folder of the project.
-MANIFEST_FILE = "agentica.toml"
+## The names of the two files, beside each other in the folder of the project.
+export MANIFEST_FILE = "agentica.toml"
 LOCK_FILE = "agentica.lock"
 
 ## A manifest, the folder that holds it, the lock that goes with it (empty when the manifest declares no dependency)
@@ -35,7 +35,7 @@ end
 ## Finds the project of a root file in the folder root_dir (a canonical path). A failure is a packed failure:
 ## PKG-MANIFEST-INVALID, PKG-LOCK-MISSING, PKG-LOCK-INVALID or PKG-LOCK-STALE.
 export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
-  dir = nearest(workspace, root_dir)
+  dir = nearest_manifest(workspace, root_dir)
   if dir == ""
     return ok(Project.Bare)
   end
@@ -78,7 +78,7 @@ end
 ## but the lock is not checked against it: those commands are what makes a missing, stale or partial lock right. A lock
 ## that is there must be a good one (PKG-LOCK-INVALID); a lock that is not there is an empty one.
 export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
-  dir = nearest(workspace, root_dir)
+  dir = nearest_manifest(workspace, root_dir)
   if dir == ""
     return ok(Project.Bare)
   end
@@ -176,8 +176,8 @@ export def styled?(workspace: Workspace.Workspace, style_dir: String, key: Strin
   return true
 end
 
-# The folder with an agentica.toml that is the nearest to dir, going up; "" when there is none.
-def nearest(workspace: Workspace.Workspace, dir: String) -> String
+## The folder with an agentica.toml that is the nearest to dir, going up; "" when there is none.
+export def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> String
   here = dir
   while here != ""
     if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))

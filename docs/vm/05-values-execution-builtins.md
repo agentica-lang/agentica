@@ -134,7 +134,10 @@ so zeroed registers are valid values.
   `_Thread_local`: Boehm does not scan them. Pointers are never tagged. The
   exception is `handle->data` and `SSL_set_app_data`, which may point to a GC
   object only while the resource registry also roots it (10.2).
-- No GC finalizers for OS resources. Closing is explicit (10.2).
+- No GC finalizers for OS resources. Closing is explicit (10.2). The one
+  finalizer is a `TlsContext`'s, which only gives back its count on a
+  `malloc`'d TLS config (10.3). `GC_set_finalize_on_demand(1)` keeps it out of
+  allocations: it runs at the start of a scheduler's next task.
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable from
   the runtime struct, never in mutable static storage (10.2.3).
 

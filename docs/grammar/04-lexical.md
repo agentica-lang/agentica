@@ -81,7 +81,7 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `Nil`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Profile`, `Random`,
 `Range`, `Result`, `SecureRandom`, `Set`, `Socket`, `Std`, `String`,
 `StructMember`, `System`, `TCP`, `TLS`, `Task`, `Test`, `TestCase`, `Time`,
-`Void` and `Zlib`. `HTTP` is not reserved: it is the usual alias of `std/http`.
+`TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. `HTTP` is not reserved: it is the usual alias of `std/http`.
 `ok`, `error`, `some` and `none` are names, but cannot be declared as functions,
 variables, parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The
 same holds for `puts`, `print`, `gets` and `gets!` as variables, parameters,
