@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
+  requests through a forward proxy in absolute form (`https://` with a proxy is
+  an error until `CONNECT`).
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
   formatter would change and exits 1 if there are any (it keeps a short `do`
   block or case arm on one line); `agentica fmt --tree FILE` prints the tree

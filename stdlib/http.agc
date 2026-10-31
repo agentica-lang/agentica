@@ -85,6 +85,7 @@ STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
+BAD_PROXY = "http: the proxy must be an http:// origin such as http://host:8080, with no user info, path or query"
 NO_BODY = "a 204 or 304 response cannot have a body"
 WRONG_SIZE = "the body is not the length it was given"
 CRLF = "\r\n".bytes
@@ -451,14 +452,18 @@ struct Feed
 end
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates. Every number
-## in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is
-## an error. Close the client with `close_client`.
+## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy.
+## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
+## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
+## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
+## connections are pooled by the proxy, and an `https://` request is an error (a `CONNECT` tunnel is not built yet);
+## a `proxy` that is not an `http://` origin is an error here. Close the client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   if String.contains?(options.ca_file, String.from_code(0))
     return error("http: ca_file cannot contain NUL")
   end
+  try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
@@ -512,12 +517,14 @@ export def request(
 ) -> Result[HttpResponse]
   where = try parse_url(url)
   options = HttpWire.options(pool)
+  # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
+  via = try connect_target(where, options)
   head = try HttpWire.encode_request(
     where.scheme,
     where.host,
     where.port,
     method,
-    where.target,
+    request_target(options, where),
     headers,
     body,
     options.max_body_bytes,
@@ -525,10 +532,10 @@ export def request(
   deadline = Time.monotonic_ms() + options.timeout_ms
   reply: Channel[Result[HttpResponse]] = Channel.new(1)
   job = HttpWire.Job(
-    origin: "#{where.scheme}://#{where.host}:#{where.port}",
-    scheme: where.scheme,
-    host: where.host,
-    port: where.port,
+    origin: "#{via.scheme}://#{via.host}:#{via.port}",
+    scheme: via.scheme,
+    host: via.host,
+    port: via.port,
     method: method,
     head: head,
     body: body,
@@ -571,18 +578,19 @@ export def download(
   end
   where = try parse_url(url)
   client_options = HttpWire.options(pool)
+  via = try connect_target(where, client_options)
   head = try HttpWire.encode_request(
     where.scheme,
     where.host,
     where.port,
     "GET",
-    where.target,
+    request_target(client_options, where),
     [],
     NO_BYTES,
     client_options.max_body_bytes,
   )
   deadline = Time.monotonic_ms() + options.timeout_ms
-  socket = try connect_download(pool, where, deadline)
+  socket = try connect_download(pool, via, deadline)
   case TCP.send(socket, head, try time_left(socket, deadline))
     ok(_) -> return finish_download(socket, path, options, deadline)
     error(message) ->
@@ -594,7 +602,8 @@ end
 ## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
 ## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with
 ## `options.ca_file` (the system's by default). Only `timeout_ms` (the time of each call: this one, each
-## `send_request` and each `read_body`) and `max_body_bytes` (the largest request body) of `options` apply: nothing is
+## `send_request` and each `read_body`), `max_body_bytes` (the largest request body) and `proxy` (an `http` origin is
+## then reached through the proxy, which each `send_request` addresses in absolute form) of `options` apply: nothing is
 ## pooled. The connection is for one request at a time and stays open for the next one when the response had a body
 ## that was read to its end (`read_body` gave an empty piece) and the server did not close it. A response body is at
 ## most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with `finish`. For whole requests use
@@ -639,7 +648,7 @@ export def send_request(
     conn.host,
     conn.port,
     method,
-    target,
+    connection_target(conn, target),
     headers,
     body,
     conn.options.max_body_bytes,
@@ -1043,9 +1052,76 @@ def settled(phase: Int, closes: Bool) -> Exchange
   return Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
 end
 
+# What the request line says of the target: the path with its query, or, through a proxy, the whole URL (RFC 9112
+# 3.2.2, absolute-form), whose authority is the one the `Host` header has.
+def request_target(options: HttpClientOptions, where: Target) -> String
+  if options.proxy == ""
+    return where.target
+  end
+
+  return "http://#{host_authority(where.host, where.port)}#{where.target}"
+end
+
+# The target of a request on `conn`, in the form `request_target` gives.
+def connection_target(conn: Connection, target: String) -> String
+  return request_target(conn.options, Target(scheme: conn.scheme, host: conn.host, port: conn.port, target: target))
+end
+
+# The host and port as the `Host` header of `encode_request` writes them: an IPv6 literal in brackets, the default port
+# of `http` left out.
+def host_authority(host: String, port: Int) -> String
+  name = host
+  if String.contains?(host, ":")
+    name = "[#{host}]"
+  end
+
+  if port == 80
+    return name
+  end
+
+  return "#{name}:#{port}"
+end
+
+# Where a request to `where` connects: the host itself, or the proxy of the options. An `https` request through a proxy
+# needs a CONNECT tunnel, which does not exist yet, so it is refused rather than sent in the clear.
+def connect_target(where: Target, options: HttpClientOptions) -> Result[Target]
+  if options.proxy == ""
+    return ok(where)
+  end
+
+  if where.scheme == "https"
+    return error("http: https through a proxy is not supported yet")
+  end
+
+  return proxy_target(options)
+end
+
+# The proxy of the options: an `http://host:port` origin.
+def proxy_target(options: HttpClientOptions) -> Result[Target]
+  case parse_url(options.proxy)
+    ok(proxy) ->
+      if proxy.scheme == "http" and proxy.target == "/"
+        return ok(proxy)
+      end
+    error(_) -> return error(BAD_PROXY)
+  end
+
+  return error(BAD_PROXY)
+end
+
+def check_proxy(options: HttpClientOptions) -> Result[Void]
+  if options.proxy == ""
+    return ok()
+  end
+
+  try proxy_target(options)
+  return ok()
+end
+
 # The connection to the host of `where`, idle and with no request yet.
 def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
-  socket = try open_socket(where, options)
+  via = try connect_target(where, options)
+  socket = try open_socket(via, options)
   cell: Channel[Exchange] = Channel.new(1)
   cell.send(settled(IDLE, false), 0)
   return ok(
@@ -1297,7 +1373,7 @@ def uploaded(
     conn.host,
     conn.port,
     method,
-    target,
+    connection_target(conn, target),
     headers,
     NO_BYTES,
     conn.options.max_body_bytes,
