@@ -355,8 +355,11 @@ Properties of the client that no test checks:
   status and headers with an empty body, its `Content-Length: 0` swapped for
   `Transfer-Encoding: chunked` (so the head checks and the C code are the
   same), and the connection task sends the pieces
-  as it takes them from the channel. A watcher task, spawned in the group,
-  loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
+  as it takes them from the channel. With `length: some(n)` the head carries
+  `Content-Length: n` in place of the chunked header and the pieces go out raw;
+  the pump counts the bytes, cuts the connection when the body ends short or a
+  piece would pass `n`, and sends no last chunk. A watcher task, spawned in
+  the group, loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
   (or a read error) sets a one-slot `left` channel and closes the body channel,
   which wakes the connection task and fails the producer's next `send`, with no
   write needed; the pump then sees `left` and does not send the last chunk, so

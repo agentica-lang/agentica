@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.StreamResponse` takes `length: some(n)`: a streamed body of known
+  size goes out with `Content-Length` and no chunk framing, and a body that
+  ends short or runs over closes the connection.
 - Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
   the values of `HTTP.client_options()` and `HTTP.server_options()`, so
   `HttpClientOptions(timeout_ms: 5000)` changes one field.

@@ -41,6 +41,8 @@ READ_FAILED = "error reading from stream port"
 FAILED = "http: connection failed"
 # No bytes: the empty rest of a read and the empty body.
 NO_BYTES = "".bytes
+# The length of a streamed body that has none: it is chunked.
+UNSIZED = -1
 # The longest a streamed response may wait for its body channel before it looks again. A close of the channel wakes the
 # wait at once, so this only bounds a task that is never woken.
 STREAM_POLL_MS = 60000
@@ -210,6 +212,13 @@ export struct StreamResponse
   headers: List[Header]
   ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
   body: Channel[Bytes]
+  ## The size of the whole body in bytes, when the handler knows it (a file). The head then says `Content-Length` and
+  ## the pieces go out as they are, with no chunk framing, so a client can show progress and a range answer can
+  ## stream. The producer must send exactly that many bytes and then close the channel: a body that ends short, or
+  ## a piece that would pass the length, cuts the connection (the client sees an incomplete body), and a body that is
+  ## closed when the handler returns and has another size is a 500. Not for a 204 or a 304. `none` is the default: the
+  ## body is chunked.
+  length: Optional[Int] = none
 end
 
 struct Whole
@@ -857,15 +866,21 @@ def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, ti
 end
 
 # A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for
-# listen. Otherwise the head goes now, with chunked framing, and each piece follows as it arrives.
+# listen. Otherwise the head goes now, with chunked framing (or with the Content-Length of `length` and no framing),
+# and each piece follows as it arrives.
 def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, options: HttpServerOptions) -> Sent
   request = incoming.request
   timeout = options.request_timeout_ms
   ready = take_ready(response.body)
   head_only = HttpResponse(status: response.status, headers: response.headers, body: NO_BYTES)
+  length = response.length.unwrap_or(UNSIZED)
   case HttpWire.encode_response(request, head_only, Time.now_ms())
     ok(reply) ->
       bodyless = response.status == 204 or response.status == 304
+      problem = length_problem(response, ready, bodyless)
+      if not problem.empty?
+        return invalid_stream(socket, request, response.body, problem, timeout)
+      end
       if ready.ended
         data = Bytes.concat(ready.pieces)
         if bodyless and not data.empty?
@@ -876,8 +891,27 @@ def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, 
       if bodyless
         return invalid_stream(socket, request, response.body, NO_BODY, timeout)
       end
-      return stream_out(socket, incoming, response.body, ready.pieces, reply, options)
+      return stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
     error(reason) -> return invalid_stream(socket, request, response.body, reason, timeout)
+  end
+end
+
+# Why the length of a streamed response cannot be used, or "" when it can (or there is none). A body that is closed
+# already is sent whole, so its size must be the length: nothing has gone out, so the answer can still be a 500.
+def length_problem(response: StreamResponse, ready: Ready, bodyless: Bool) -> String
+  case response.length
+    some(length) ->
+      if length < 0
+        return "the length of a streamed body cannot be negative"
+      end
+      if bodyless
+        return NO_BODY
+      end
+      if ready.ended and Bytes.concat(ready.pieces).size != length
+        return "the body is not the length it was given"
+      end
+      return ""
+    none -> return ""
   end
 end
 
@@ -938,26 +972,32 @@ def take_ready(body: Channel[Bytes]) -> Ready
   return Ready(pieces: pieces, ended: ended)
 end
 
-# The encoded head says Content-Length: 0 (the body there is empty); a stream has no length, so it says chunked.
-def chunked_head(head: String) -> String
-  return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nTransfer-Encoding: chunked\r\n")
+# The encoded head says Content-Length: 0 (the body there is empty): a stream with no known length says chunked, and
+# one with a length says it.
+def stream_head(head: String, length: Int) -> String
+  if length == UNSIZED
+    return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nTransfer-Encoding: chunked\r\n")
+  end
+  return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{length}\r\n")
 end
 
-# Sends the head and then the body as chunks. A HEAD request gets the head and the channel closes, so the producer
-# stops. A task watches the socket for the whole stream, so a client that leaves is noticed even when the producer is
-# idle: the end of its input closes the body, and the body is then cut, without the last chunk, so the client sees an
-# incomplete body. Bytes the client sends during the stream (a pipelined request) are dropped, and the connection
-# closes when the stream ends. Otherwise the watcher's read is the wait for the next request.
+# Sends the head and then the body, as chunks or (with a `length`) as it is. A HEAD request gets the head and the
+# channel closes, so the producer stops. A task watches the socket for the whole stream, so a client that leaves is
+# noticed even when the producer is idle: the end of its input closes the body, and the body is then cut, without the
+# last chunk, so the client sees an incomplete body. Bytes the client sends during the stream (a pipelined request)
+# are dropped, and the connection closes when the stream ends. Otherwise the watcher's read is the wait for the next
+# request.
 def stream_out(
   socket: Socket,
   incoming: Incoming,
   body: Channel[Bytes],
   first: List[Bytes],
   reply: HttpWire.Reply,
+  length: Int,
   options: HttpServerOptions,
 ) -> Sent
   timeout = options.request_timeout_ms
-  if not Result.ok?(TCP.send(socket, chunked_head(reply.head), timeout))
+  if not Result.ok?(TCP.send(socket, stream_head(reply.head, length), timeout))
     body.close
     return Sent(keep: false, rest: NO_BYTES)
   end
@@ -968,7 +1008,7 @@ def stream_out(
   left: Channel[Bool] = Channel.new(1)
   sent: Channel[Bool] = Channel.new(1)
   watcher = Task.spawn(&watch, Watch(socket: socket, body: body, left: left, sent: sent))
-  ended = pump(socket, body, first, left, sent, timeout)
+  ended = pump(socket, body, first, length, left, sent, timeout)
   if ended == STREAM_CUT
     TCP.close(socket)
     return Sent(keep: false, rest: NO_BYTES)
@@ -1016,32 +1056,39 @@ def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> 
   return Sent(keep: false, rest: NO_BYTES)
 end
 
-# Sends the pieces as they come, then the last chunk. The wait for a piece has no deadline of its own: a slow producer
-# is not an error, and the client leaving, the producer closing or the server closing all wake it. A piece gets
-# `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT when the body was cut: a send failed
-# (the channel is closed for the producer) or the watcher saw the client leave (left has a value). Only a producer's
-# close sends the last chunk. STREAM_EARLY when the client sent bytes during the stream (sent has a value, read before
-# the last chunk goes out: after it the client may send its next request), STREAM_DONE otherwise.
+# Sends the pieces as they come, then the last chunk (a body with a length has none). The wait for a piece has no
+# deadline of its own: a slow producer is not an error, and the client leaving, the producer closing or the server
+# closing all wake it. A piece gets `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT
+# when the body was cut: a send failed (the channel is closed for the producer), the watcher saw the client leave
+# (left has a value), or a body with a length ended short. Only a producer's close ends the body. STREAM_EARLY when
+# the client sent bytes during the stream (sent has a value, read before the last chunk goes out: after it the client
+# may send its next request), STREAM_DONE otherwise.
 def pump(
   socket: Socket,
   body: Channel[Bytes],
   first: List[Bytes],
+  length: Int,
   left: Channel[Bool],
   sent: Channel[Bool],
   timeout: Int,
 ) -> Int
+  count = 0
   for piece in first
-    if not Result.ok?(send_piece(socket, piece, timeout))
-      body.close
-      return STREAM_CUT
+    case emit(socket, piece, timeout, length, count)
+      ok(total) -> count = total
+      error(_) ->
+        body.close
+        return STREAM_CUT
     end
   end
   while true
     case body.recv(STREAM_POLL_MS)
       ok(piece) ->
-        if not Result.ok?(send_piece(socket, piece, timeout))
-          body.close
-          return STREAM_CUT
+        case emit(socket, piece, timeout, length, count)
+          ok(total) -> count = total
+          error(_) ->
+            body.close
+            return STREAM_CUT
         end
       error(message) ->
         if message == CHANNEL_CLOSED
@@ -1049,17 +1096,34 @@ def pump(
         end
     end
   end
+  if length != UNSIZED and count != length
+    return STREAM_CUT
+  end
   if Result.ok?(left.recv(0))
     return STREAM_CUT
   end
   early = Result.ok?(sent.recv(0))
-  if not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
+  if length == UNSIZED and not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
     return STREAM_CUT
   end
   if early
     return STREAM_EARLY
   end
   return STREAM_DONE
+end
+
+# Sends one piece and gives the bytes sent so far: as chunks, or with a `length`, as they are and only while they fit
+# in it (a piece that would pass it is not sent: an error, so the body is cut).
+def emit(socket: Socket, piece: Bytes, timeout: Int, length: Int, count: Int) -> Result[Int]
+  if length == UNSIZED
+    try send_piece(socket, piece, timeout)
+    return ok(count)
+  end
+  if count + piece.size > length
+    return error("longer than its length")
+  end
+  try send_all(socket, piece, timeout)
+  return ok(count + piece.size)
 end
 
 # The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over

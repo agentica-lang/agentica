@@ -41,19 +41,87 @@ def read_pieces(response):
         pieces.append((time.monotonic(), data.decode()))
 
 
-def ticks(label, conn):
-    conn.request("GET", "/ticks")
+def stream_twice(label, conn, path, with_type):
+    """Read a streamed answer piece by piece, then a whole one on the same connection to see it stays usable."""
+    conn.request("GET", path)
     response = conn.getresponse()
     pieces = read_pieces(response)
     gaps = [later[0] - earlier[0] for earlier, later in zip(pieces, pieces[1:])]
-    print(label, response.status, response.getheader("Transfer-Encoding"), response.getheader("Content-Length"),
-          response.getheader("Content-Type"), [text for _, text in pieces])
+    head = [response.status, response.getheader("Transfer-Encoding"), response.getheader("Content-Length")]
+    if with_type:
+        head.append(response.getheader("Content-Type"))
+    print(label, *head, [text for _, text in pieces])
     print(label + "-timing", "apart" if gaps and min(gaps) >= APART else "held back %s" % gaps)
     sock = conn.sock
     conn.request("GET", "/whole")
     whole = conn.getresponse()
     print(label + "-keep-alive", whole.status, whole.getheader("Content-Length"), whole.read().decode(),
           conn.sock is sock)
+
+
+def ticks(label, conn):
+    stream_twice(label, conn, "/ticks", True)
+
+
+def sized(label, conn):
+    """A body with a length: Content-Length and no Transfer-Encoding, the pieces as they were sent, apart in time."""
+    stream_twice(label, conn, "/sized", False)
+
+
+def sized_head():
+    conn = plain()
+    conn.request("HEAD", "/sized")
+    response = conn.getresponse()
+    body = response.read()
+    sock = conn.sock
+    conn.request("GET", "/whole")
+    whole = conn.getresponse()
+    print("sized-head", response.status, response.getheader("Content-Length"), response.getheader("Transfer-Encoding"),
+          body, whole.read().decode(), conn.sock is sock)
+
+
+def sized_cut(label, path):
+    """A body that ends short, or whose next piece would pass the length: the connection closes, the body is
+    incomplete."""
+    conn = plain()
+    conn.request("GET", path)
+    response = conn.getresponse()
+    try:
+        response.read()
+        print(label, response.status, response.getheader("Content-Length"), "complete")
+    except http.client.IncompleteRead as error:
+        print(label, response.status, response.getheader("Content-Length"), "incomplete", error.partial)
+    conn.close()
+
+
+def sized_extra():
+    """A producer that sends more after the length is full: the client has its whole body, and the connection closes
+    instead of waiting for another request."""
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s.sendall(b"GET /sized-extra HTTP/1.1\r\nHost: x\r\n\r\n")
+    got = b""
+    while not got.endswith(b"abcde"):
+        got += s.recv(4096)
+    try:
+        end = "closed" if s.recv(4096) == b"" else "open"
+    except OSError:
+        end = "closed"
+    print("sized-extra", got.split(b" ")[1].decode(), got.split(b"Content-Length: ")[1].split(b"\r\n")[0].decode(),
+          got.split(b"\r\n\r\n")[1], end)
+    s.close()
+
+
+def sized_whole():
+    """A closed body is sent whole whatever the route, but its size must be the length it was given."""
+    conn = plain()
+    conn.request("GET", "/sized-whole")
+    response = conn.getresponse()
+    print("sized-whole", response.status, response.getheader("Content-Length"), response.read())
+    conn.request("GET", "/sized-wrong")
+    wrong = conn.getresponse()
+    wrong.read()
+    print("sized-wrong", wrong.status)
+    conn.close()
 
 
 def head(conn):
@@ -138,6 +206,13 @@ def main():
     ticks("plain", plain())
     ticks("tls", secure())
     head(plain())
+    sized("plain-sized", plain())
+    sized("tls-sized", secure())
+    sized_head()
+    sized_cut("sized-short", "/sized-short")
+    sized_cut("sized-long", "/sized-long")
+    sized_extra()
+    sized_whole()
     binary("binary", plain())
     binary("tls-binary", secure())
     leave("plain-leave", plain())
