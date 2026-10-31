@@ -503,7 +503,9 @@ header and the entry.
 
 - **Section:** Constants
   - **Entry:** `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6
-    String), then `i64`, `f64` bits or `str`
+    String, 7 Bytes), then `i64`, `f64` bits or `str`. A Bytes is written as a
+    `str` but its bytes need not be UTF-8; the front end writes one for
+    `"text".bytes` on a literal without interpolation
 
 - **Section:** Structs
   - **Entry:** `str` display name, `u32` field count, each field's `str` name
@@ -570,7 +572,9 @@ header and the entry.
   reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not bump
   it: an older VM rejects the file as an unknown opcode. Type kinds 7
   (`JsonField`) and 8 (`Optional`) did not either: the layout of an entry is
-  unchanged, and an older VM rejects the file as an unknown type kind. A call
+  unchanged, and an older VM rejects the file as an unknown type kind. Constant
+  kind 7 (Bytes) did not either, for the same reason: an older VM rejects the
+  file as an unknown constant kind. A call
   `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a file
   and the call fails at run time with a wrong value type.
 - The C loader is the only reader of this format and has no compatibility

@@ -11,7 +11,8 @@ import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
 
-## The value of a `const` instruction. Void and Nil are the values of those types.
+## The value of a `const` instruction. Void and Nil are the values of those types; Bytes is the UTF-8 bytes of its
+## text (`"text".bytes` on a literal), a Bytes constant that the VM makes once when it loads the program.
 export enum Imm
   Void
   Nil
@@ -19,6 +20,7 @@ export enum Imm
   Int(Int)
   Float(Float)
   Text(String)
+  Bytes(String)
 end
 
 ## One instruction, or a label. file is the index in Program.sources of the file the spans are in: a Span has no file

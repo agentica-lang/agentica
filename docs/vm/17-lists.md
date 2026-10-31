@@ -217,7 +217,7 @@ must still pass its 250 ms limit.
 
 ### 17.7 Loader and untrusted input
 
-- A `.agcb` has no list constants: constant kinds 0 to 6 are none of them lists
+- A `.agcb` has no list constants: constant kinds 0 to 7 are none of them lists
   (§4.6). Lists exist only as the result of `LIST`, a builtin or the runtime.
   The loader checks the registers of `LIST_LEN`, `LIST_GET` and the window of
   `LIST`.

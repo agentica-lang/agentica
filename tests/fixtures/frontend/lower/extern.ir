@@ -208,9 +208,7 @@ fn17 "main" params=0 captures=0 slots=13 entry @ 0:39:1-68:1
     move r4 r1 @ 0:46:26-46:30
     step @ 0:46:32-46:42
     step @ 0:46:32-46:36
-    const r6 "ab" @ 0:46:32-46:36
-    call-builtin r6 "String.bytes" 1 @ 0:46:32-46:42 0:46:32-46:36
-    move r5 r6 @ 0:46:32-46:42
+    const r5 bytes:"ab" @ 0:46:32-46:42
     step @ 0:46:44-46:45
     const r6 int:2 @ 0:46:44-46:45
     call r4 fn2 @ 0:46:21-46:46

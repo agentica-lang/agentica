@@ -211,6 +211,7 @@ def imm_text(imm: Ir.Imm) -> String
     Ir.Imm.Int(number) -> return "int:#{number}"
     Ir.Imm.Float(number) -> return "float:bits:#{Float.to_bits(number)}"
     Ir.Imm.Text(text) -> return Text.quote(text)
+    Ir.Imm.Bytes(text) -> return "bytes:#{Text.quote(text)}"
   end
 end
 
