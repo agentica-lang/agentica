@@ -101,7 +101,7 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
   phase adds no setting for them (29.7).
 - **No defaults needed.** No call here would be better with a default parameter:
   the system-trust case is `TLS.client_context(TLS.client_options())`, as an
-  HTTP client is `HTTP.client(HTTP.client_options())`. If 15a later allows a
+  HTTP client is `HTTP.client()`. If 15a later allows a
   call as a default value, a follow-up may give `options` that default in both;
   it is not planned here.
 - **No close.** A context has no `close`: it holds no socket and no descriptor,
