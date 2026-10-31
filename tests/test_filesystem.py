@@ -985,3 +985,19 @@ def test_file_replace_keeps_the_mode_writes_through_a_link_and_a_reader_never_se
     assert (target.stat().st_mode & 0o777, locked.stat().st_mode & 0o777) == (0o751, 0o444)
     assert locked.read_text() == "still read-only"
     assert sorted(path.name for path in root.iterdir()) == ["alias.txt", "locked.txt", "target.txt", "watched.txt"]
+    if os.geteuid() == 0:
+        return
+    # A folder without write permission: an error that names the new file, the old file as it was, nothing left.
+    sealed = new_dir()
+    kept = sealed / "kept.txt"
+    kept.write_text("kept")
+    sealed.chmod(0o555)
+    try:
+        output = run_program("""def main() -> Void
+  puts(File.replace(System.args()[0], "lost".bytes).message.contains?(".agc-"))
+end
+""", args=[kept])
+        assert output == "true\n"
+        assert kept.read_text() == "kept" and [path.name for path in sealed.iterdir()] == ["kept.txt"]
+    finally:
+        sealed.chmod(0o755)

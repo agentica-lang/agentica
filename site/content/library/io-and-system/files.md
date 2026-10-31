@@ -46,10 +46,10 @@ def main() -> Void
 end
 ```
 
-- The bytes go to a new file beside the file, which takes its permission bits and is then renamed over it. A failure removes the new file and leaves the old one as it was.
+- The bytes go to a new file in the same folder, which only the owner can read while it is written; it then takes the old file's permission bits, is flushed to the disk and is renamed over it. A failure removes the new file and leaves the old one as it was. Writing needs write permission on the folder.
 - A symbolic link is followed and stays a link: the file it points to is replaced. The new file belongs to the user who runs the program, and a hard link to the old file keeps the old bytes.
 - The file must exist and be a regular file: a missing path is `error("filesystem: cannot resolve path ...")`, a directory or a FIFO `error("filesystem: path does not refer to a regular file")`. Use `File.write_text` to create a file.
-- On Windows a read-only file is an error, and nothing is written.
+- On Windows a read-only file is an error, and nothing is written. Of the old file's attributes only the read-only bit is kept: the access list and the hidden and system attributes come from the folder.
 
 ## File.append_text
 

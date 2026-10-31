@@ -1016,16 +1016,22 @@ static void work_replace(op *o) {
   char *fresh = NULL;
   int fd = agc_fs_open_beside(target, &fresh);
   if (fd < 0) {
+    /* The error names the new file that could not be made (too long a path, a folder without write permission). */
     int err = errno;
     free(target);
+    if (fresh) {
+      free(o->path);
+      o->path = fresh;
+    }
     fail_op(o, FS_OPEN, err);
     return;
   }
-  blocking(fd);
+  /* The data is written while the file is still 0600, and gets the target's bits only once it is whole; the fsync
+     before the rename keeps a power loss from leaving an empty file in the target's place. */
   int err = 0;
   if (!write_all(fd, o->in, o->in_len, &err)) {
     o->status = FS_WRITE;
-  } else if (agc_fs_fchmod(fd, (int)(info.mode & 0777)) != 0) {
+  } else if (agc_fs_fchmod(fd, (int)(info.mode & 0777)) != 0 || agc_fs_fsync(fd) != 0) {
     err = errno;
     o->status = FS_WRITE;
   }
@@ -1033,9 +1039,13 @@ static void work_replace(op *o) {
     err = errno;
     o->status = FS_WRITE;
   }
-  if (o->status == FS_OK && agc_fs_replace(fresh, target) != 0) {
-    err = errno;
-    o->status = FS_RENAME;
+  if (o->status == FS_OK) {
+    if (agc_fs_replace(fresh, target) != 0) {
+      err = errno;
+      o->status = FS_RENAME;
+    } else {
+      agc_fs_sync_folder(target);
+    }
   }
   o->err = err;
   if (o->status != FS_OK) agc_fs_unlink(fresh);

@@ -40,9 +40,13 @@ int agc_fs_stat(const char *path, agc_fs_info *info, bool follow);
 int agc_fs_fstat(int fd, agc_fs_info *info);
 int agc_fs_mkdir(const char *path, bool private);
 int agc_fs_unlink(const char *path);
-/* A new file beside PATH, named PATH.new-<pid>-<n> and opened for writing (exclusive, no link followed); the name is
-   malloc'd into *NAME. -1 with errno, and *NAME NULL, on failure. */
+/* A new file in the folder of PATH, named .agc-<pid>-<n>.tmp, opened for writing (exclusive, no link followed) with
+   mode 0600. *NAME is the malloc'd name, also on failure (the last name tried, for the error text; NULL only when the
+   name could not be made); -1 with errno on failure. */
 int agc_fs_open_beside(const char *path, char **name);
+int agc_fs_fsync(int fd);
+/* Flushes the folder of PATH to the disk, so a rename in it lasts; best effort, nothing on Windows. */
+void agc_fs_sync_folder(const char *path);
 /* The permission bits of the open file FD; on Windows only the owner write bit counts (read-only or not). */
 int agc_fs_fchmod(int fd, int mode);
 /* Renames FROM to TO, replacing a file at TO in one step (rename on POSIX, MoveFileExW REPLACE_EXISTING on Windows). */
