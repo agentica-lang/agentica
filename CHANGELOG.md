@@ -26,6 +26,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `headers`, `body` and a `done` task) for a download too big to hold or that
   never ends, and `HTTP.upload` sends a body that another task feeds through a
   channel, chunked or with an exact `length`.
+- `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
+  `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
+  `Handler`.
 
 ### Changed
 
