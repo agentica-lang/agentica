@@ -827,7 +827,7 @@ def test_a_dropped_context_stays_valid_for_its_listener_and_sockets(tmp_path):
      'TLS.upgrade(TCP.connect("127.0.0.1", TCP.local_port(TCP.listen("127.0.0.1", 0).unwrap!), 1000).unwrap!, '
      'server, "h", 1000)', "main.agc", '"h"'),
 ])
-def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_the_context(tmp_path, name, call, file, covers):
+def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument(tmp_path, name, call, file, covers):
     program = tmp_path / "main.agc"
     program.write_text(
         'import HTTP from "std/http"\n\ndef main() -> Void\n  dir = System.args()[0]\n'

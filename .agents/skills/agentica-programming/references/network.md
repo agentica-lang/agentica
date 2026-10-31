@@ -40,7 +40,8 @@ TlsServerOptions(cert_file: String, key_file: String)
   `RUNTIME-TLS-CONTEXT-ROLE`.
 - TLS listeners and sockets use the same TCP calls (`TCP.accept`, `TCP.send`,
   `TCP.recv_bytes`, `TCP.read_line`, `TCP.close`, `TCP.close_listener`,
-  `TCP.local_port`); only `TLS.connect` and `TLS.listen` differ.
+  `TCP.local_port`); only `TLS.connect`, `TLS.listen` and `TLS.upgrade`
+  differ.
 - `TLS.upgrade` starts TLS on an open TCP socket (STARTTLS) and returns a new
   TLS socket: a client context checks `host`, a server context takes `""`
   (another host is `RUNTIME-TLS-CONTEXT-ROLE`). After its argument checks the

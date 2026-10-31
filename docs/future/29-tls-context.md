@@ -147,8 +147,10 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
 ```
 
 Some protocols start in plain text and switch to TLS on the same connection
-(SMTP and IMAP `STARTTLS`, PostgreSQL's `SSLRequest`). `TLS.upgrade` runs the
-handshake over an open TCP socket and returns a new TLS socket.
+(SMTP and IMAP `STARTTLS`, PostgreSQL's `SSLRequest`). The status at the top
+records two additions as built (19b): the argument checks leave the socket open,
+and a send in progress fails the upgrade. `TLS.upgrade` runs the handshake over
+an open TCP socket and returns a new TLS socket.
 
 - **Role from the context.** With a client context it is the client side and
   checks `host` as `TLS.connect` does. With a server context it is the server

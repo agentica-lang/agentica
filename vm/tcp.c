@@ -1399,10 +1399,9 @@ static net *live(const agc_socket *sk) {
 
 /* Whether the plain net OLD can hand its connection to TLS.upgrade: -1 when it can, else why not. Bytes it read that
    nobody took would be the start of the TLS stream (STARTTLS forbids them), and a send still in flight writes from
-   the plain net's own request. A socket that std/http watches or half-closed is not the program's to upgrade. I/O
-   thread only. */
+   the plain net's own request. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
 static int upgrade_refusal(const net *old) {
-  if (!old || old->closed || !old->conn || old->half_closed || old->watch) return UPGRADE_CLOSED;
+  if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
   if (old->writer || old->write_data) return UPGRADE_SENDING;
   if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
   if (old->in.eof || old->in.error) return UPGRADE_ENDED;

@@ -151,13 +151,28 @@ A `TlsContext` is the TLS setup of one role, built once and shared by every sock
 - Bytes that arrived and were not read yet fail the upgrade (`network: data came before the TLS handshake`): STARTTLS forbids them. A send still in progress on the socket fails it too.
 - The handshake runs within `timeout_ms`; a timeout closes the connection. A TLS socket cannot be upgraded again.
 
+An SMTP client reads each reply to its last line, so no byte is left before the handshake:
+
 ```agentica {mode="check"}
+# An SMTP reply, up to its last line: "250-" goes on, "250 " ends it.
+def reply(socket: Socket) -> Result[String]
+  line = try TCP.read_line(socket, 5000)
+  while line.slice(3, 1) == "-"
+    line = try TCP.read_line(socket, 5000)
+  end
+  return ok(line)
+end
+
 def starttls(host: String, context: TlsContext) -> Result[Socket]
   plain = try TCP.connect(host, 587, 5000)
-  try TCP.read_line(plain, 5000)
-  try TCP.send(plain, "EHLO client.example\r\nSTARTTLS\r\n", 5000)
-  try TCP.read_line(plain, 5000)
-  try TCP.read_line(plain, 5000)
+  try reply(plain)
+  try TCP.send(plain, "EHLO client.example\r\n", 5000)
+  try reply(plain)
+  try TCP.send(plain, "STARTTLS\r\n", 5000)
+  ready = try reply(plain)
+  if !ready.start_with?("220")
+    return error(ready)
+  end
   return TLS.upgrade(plain, context, host, 5000)
 end
 ```

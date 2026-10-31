@@ -4642,7 +4642,7 @@ ROWS_49: List[Model.Builtin] = [
     effects: ["network"],
     description: (
       "Start TLS on an open TCP socket (STARTTLS), on the side the context's role names; a server context takes " +
-      "the host \"\". The plain socket is closed after the call."
+      "the host \"\". The plain socket is closed once the arguments pass their checks."
     ),
     alternatives: [],
   ),
