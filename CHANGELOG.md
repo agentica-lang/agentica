@@ -14,6 +14,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   one HTTP/1.1 connection that the program drives: read the response head,
   then the body piece by piece, and send a second request on the same socket
   once the body has been read to its end (after Ruby's `Net::HTTP`).
+- `HTTP.open` gives a response body on a channel (`HTTP.Stream`: `status`,
+  `headers`, `body` and a `done` task) for a download too big to hold or that
+  never ends, and `HTTP.upload` sends a body that another task feeds through a
+  channel, chunked or with an exact `length`.
 
 ## [0.19.0-beta.3] - 2026-10-31
 

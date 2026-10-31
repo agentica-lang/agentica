@@ -1,3 +1,4 @@
+import hashlib
 import http.server
 import json
 import os
@@ -107,19 +108,54 @@ class Web(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
         elif self.path == "/held":
             self.reply(200, str(len(HELD)))
+        elif self.path == "/endless":
+            # A body that never ends: a chunk every 50 ms until the client leaves.
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            try:
+                while True:
+                    self.wfile.write(b"5\r\ntick\n\r\n")
+                    self.wfile.flush()
+                    time.sleep(0.05)
+            except OSError:
+                pass
+            self.close_connection = True
+        elif self.path == "/megabytes":
+            self.reply(200, b"x" * 3 * 1048576)
         elif self.path == "/slow":
             threading.Event().wait(3)
             self.close_connection = True
         else:
             self.reply(404, "missing")
 
+    def read_request_body(self):
+        """The request body and how it was framed. The chunked decoder is the peer's own, not the client's."""
+        if self.headers.get("Transfer-Encoding") != "chunked":
+            length = int(self.headers["Content-Length"])
+            return self.rfile.read(length), "length %d" % length
+        parts = []
+        while True:
+            size = int(self.rfile.readline().split(b";")[0], 16)
+            if size == 0:
+                while self.rfile.readline() not in (b"\r\n", b""):
+                    pass
+                return b"".join(parts), "chunked %d" % len(parts)
+            parts.append(self.rfile.read(size))
+            self.rfile.readline()
+
     def do_POST(self):
-        body = self.rfile.read(int(self.headers["Content-Length"]))
+        body, framing = self.read_request_body()
+        if self.path == "/upload":
+            self.reply(200, "%s %s %d %s" % (self.command, framing, len(body), hashlib.sha256(body).hexdigest()[:8]))
+            return
         if self.path == "/echo":
             # The request bytes as the peer received them: their count and hex, so non-UTF-8 and CRLF show.
             self.reply(200, "%d %s" % (len(body), body.hex()))
             return
         self.reply(200, "%s %d %s" % (self.headers.get("X-Kind"), len(body), body[:8].decode()))
+
+    do_PUT = do_PATCH = do_POST
 
     def do_HEAD(self):
         # The head of a 5-byte body, and no body: the length is only announced.
