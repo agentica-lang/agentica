@@ -8,6 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `channel.empty?` is `true` when no value is left to receive.
+
+### Changed
+
+- **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
+  even with values still buffered (as Ruby's `Queue#closed?`), so a producer
+  sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
+  the old meaning, closed and drained.
+
 ## [0.19.0] - 2026-10-31
 
 The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
@@ -31,14 +42,9 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
   `headers`, `body` and a `done` task) for a download too big to hold or that
   never ends, and `HTTP.upload` sends a body that another task feeds through a
   channel, chunked or with an exact `length`.
-- `channel.empty?` is `true` when no value is left to receive.
 
 ### Changed
 
-- **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
-  even with values still buffered (as Ruby's `Queue#closed?`), so a producer
-  sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
-  the old meaning, closed and drained.
 - `HTTP.text` decodes the `charset` of `Content-Type` with `bytes.decode`: a
   Latin-1, Windows-1252 or UTF-16 body that was an error now decodes, and a
   `us-ascii` body with a non-ASCII byte is now an error.
