@@ -82,7 +82,7 @@ def main() -> Void
   IO.inspect(server)
   port = HTTP.local_port(server)
   base = "http://127.0.0.1:#{port}"
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64, ca_file: "")).unwrap!
+  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   show(HTTP.get(pool, base + "/hello?x=1"))
   show(HTTP.get(pool, base + "/again"))
   show(HTTP.post(pool, base + "/form", "ñandú".bytes, [Header(name: "X-Kind", value: "a"), Header(name: "x-kind", value: "b")]))
@@ -103,7 +103,7 @@ def main() -> Void
   show(HTTP.get(pool, base + "/fail"))
   show(HTTP.get(pool, base + "/unsendable"))
   show(HTTP.post(pool, base + "/over", "0123456789abcdefg".bytes))
-  small = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16, ca_file: "")).unwrap!
+  small = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)).unwrap!
   show(HTTP.get(small, base + "/large"))
   HTTP.close_client(small)
   show(HTTP.get(pool, base + "/still"))

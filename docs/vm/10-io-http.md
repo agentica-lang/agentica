@@ -143,8 +143,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **Options.** `HTTP.client` and `HTTP.listen` check every number first:
   positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB. A
   bad record is an `error` result.
-- **TLS** keeps the file paths (`ca_file`, `cert_file`, `key_file`) until
-  `TlsContext`.
+- **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
+  (`none`: system trust), and the `listen_*_tls` forms a server one.
 
 #### 10.7.1 As built: the client (20a)
 
@@ -197,17 +197,18 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   service task awaits the owner the same way: after an owner crash it closes
   `jobs`, so later calls get `http: client is closed`; the workers are
   cancelled with the owner and calls in flight return their timeout.
-- A worker owns one connection, made with `TCP.connect` or
-  `HttpWire.connect_tls`, so DNS, connect, TLS and the close rules stay in
-  tcp.c. `HttpWire.connect_tls` is `TLS.connect` with the client's TLS context:
-  tcp.c builds one `SSL_CTX` from the client's `ca_file` on a pool thread at the
-  first `https://` connection, and every later connection makes its `SSL` from
-  it. Each connection, and the build, holds a reference, so `HttpWire.drop_tls`
-  (run by the service task after `close_client`) frees the context only after
-  the last handshake and connection let it go. A failed build is not kept: the
-  next connection tries again. The client's CA file is read once, so a change to
-  it reaches new clients only. Its first job waits in its inbox, so no task
-  keeps that job's body for the worker's life; the owner keeps only each
+- A worker owns one connection, made with `TCP.connect`, `TLS.connect` (a
+  client with `tls: some(context)`) or `HttpWire.connect_tls`, so DNS, connect,
+  TLS and the close rules stay in tcp.c. `HttpWire.connect_tls` is
+  `TLS.connect` with the client's own system-trust context: tcp.c builds one
+  `SSL_CTX` on a pool thread at the first `https://` connection, and every
+  later connection makes its `SSL` from it. Each connection, and the build,
+  holds a reference, so `HttpWire.drop_tls` (run by the service task after
+  `close_client`) frees the context only after the last handshake and
+  connection let it go. A failed build is not kept: the next connection tries
+  again. A `TlsContext` reads its CA file once, so a change to it reaches new
+  contexts only. Its first job waits in its inbox, so no task keeps that job's
+  body for the worker's life; the owner keeps only each
   worker's last reply channel. It runs a job, answers on the job's reply
   channel, tells the owner on `jobs` whether it keeps the connection, then waits
   on its inbox for `idle_timeout_ms`. The timeout closes the connection and ends

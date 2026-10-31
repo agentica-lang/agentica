@@ -80,8 +80,27 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
 
   expected = counts.join(" or ")
   message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
-  base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
+  base = Failure.problem(
+    cx.file,
+    st.signature,
+    "CHECK-ARITY",
+    message,
+    node.span,
+    State.hint_of(old_form_help(name, node)),
+  )
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
+end
+
+# The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a), or "".
+def old_form_help(name: String, node: Ast.Call) -> String
+  if name == "TLS.listen" and node.args.size == 4
+    return (
+      "a TlsContext holds the PEM files: build one with " +
+      "TLS.server_context(TlsServerOptions(cert_file: c, key_file: k))"
+    )
+  end
+
+  return ""
 end
 
 # True for a call that a method call became: its first argument is the typed receiver.

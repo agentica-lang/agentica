@@ -628,6 +628,7 @@ agc_task *agc_task_next(agc_vm *vm) {
      task with vm->task only in the states of a turn (RUNNING, PARKING, WOKEN), which a DONE task never has again. */
   /* A scheduler holds rt->sync only inside a builtin or an ending, never between turns. */
   if (vm->sync_depth) agc_fail(vm, "RUNTIME-INTERNAL", "rt->sync held between turns", 0);
+  agc_gc_finalize_pending();
   for (;;) {
     agc_task *t = next_ready(vm);
     if (!t) return NULL;

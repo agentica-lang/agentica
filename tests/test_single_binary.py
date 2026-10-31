@@ -323,11 +323,14 @@ GATED = (
     ("Path.join", 'Path.join(["a", "b"])', None),
     ("TCP.connect", 'TCP.connect("127.0.0.1", 1, 1000)', "--deny-net"),
     ("TCP.listen", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
-    ("TLS.connect", 'TLS.connect("127.0.0.1", 1, "ca.pem", 1000)', "files"),
-    ("TLS.connect.client_cert", 'TLS.connect("127.0.0.1", 1, "", 1000, "cert.pem", "key.pem")', "files"),
-    ("TLS.listen", 'TLS.listen("127.0.0.1", 0, "cert.pem", "key.pem")', "files"),
-    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HttpClientOptions(ca_file: "ca.pem"))), '
-                             '"https://127.0.0.1:1/")', "files"),
+    ("TLS.client_context", 'TLS.client_context(TlsClientOptions(ca_file: "ca.pem"))', "files"),
+    ("TLS.client_context.client_cert",
+     'TLS.client_context(TlsClientOptions(cert_file: "cert.pem", key_file: "key.pem"))', "files"),
+    ("TLS.client_context.system", "TLS.client_context(TlsClientOptions())", "--deny-net"),
+    ("TLS.server_context", 'TLS.server_context(TlsServerOptions(cert_file: "cert.pem", key_file: "key.pem"))',
+     "files"),
+    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HttpClientOptions())), "https://127.0.0.1:1/")',
+     "--deny-net"),
 )
 
 

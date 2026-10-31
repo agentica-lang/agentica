@@ -48,7 +48,7 @@ def main() -> Void
   args = System.args()
   connections = args[1].to_i!
   each = args[2].to_i!
-  options = HttpClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: connections, max_body_bytes: 1048576, ca_file: "")
+  options = HttpClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: connections, max_body_bytes: 1048576)
   pool = HTTP.client(options).unwrap!
   tasks: List[Task[Int]] = []
   for k in 0...connections

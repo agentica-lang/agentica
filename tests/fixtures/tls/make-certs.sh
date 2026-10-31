@@ -73,8 +73,8 @@ openssl x509 -req -in "$work/chain-root-cross.csr" -CA "$dir/chain-cross-signer.
   -CAkey "$work/chain-cross-signer-key.pem" -set_serial "0x$(openssl rand -hex 16)" -extfile "$work/chain-root-cross.ext" \
   -days "$days" -out "$dir/chain-root-cross.pem"
 
-# A client CA and a client certificate it signs, for TLS.connect with a client certificate (mTLS); the client CA's key
-# stays in the temporary directory.
+# A client CA and a client certificate it signs, for a client context with a client certificate (mTLS); the client
+# CA's key stays in the temporary directory.
 key "$work/client-ca-key.pem"
 openssl req -x509 -new -key "$work/client-ca-key.pem" -subj "/CN=Agentica Test Client CA" -days "$days" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" -out "$dir/client-ca.pem"

@@ -1594,7 +1594,7 @@ def open(d: Dial) -> Result[Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 10000)
   end
-  return TLS.connect("localhost", d.port, d.ca, 10000)
+  return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 10000)
 end
 
 def serve(socket: Socket) -> Int
@@ -1649,7 +1649,7 @@ def main() -> Void
     dir = args[2]
     ca = "#{dir}/ca.pem"
     TCP.close_listener(listener)
-    listener = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+    listener = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   end
   acceptor = Task.spawn(&accept_all, listener)
   d = Dial(port: TCP.local_port(listener), ca: ca, lines: lines)
@@ -1703,7 +1703,7 @@ def wait(w: Wait) -> Result[String]
     return ok("accepted")
   end
   if w.kind == "handshake"
-    socket = try TLS.connect("localhost", w.port, w.ca, 60000)
+    socket = try TLS.connect("localhost", w.port, TLS.client_context(TlsClientOptions(ca_file: w.ca)).unwrap!, 60000)
     TCP.close(socket)
     return ok("handshaken")
   end
@@ -1812,7 +1812,7 @@ def race(socket: Socket) -> String
 end
 
 def dial(d: Dial) -> String
-  case TLS.connect("localhost", d.port, d.ca, d.deadline)
+  case TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, d.deadline)
     ok(socket) ->
       TCP.close(socket)
       return "ok"
@@ -1856,7 +1856,7 @@ def main() -> Void
   end
   puts("--")
   dir = System.args()[0]
-  secure = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   server = Task.spawn(&serve_tls, secure)
   dials: Map[String, Int] = {}
   k = 1
@@ -1920,7 +1920,7 @@ def open(d: Dial) -> Result[Socket]
   if d.ca == ""
     return TCP.connect("127.0.0.1", d.port, 5000)
   end
-  return TLS.connect("localhost", d.port, d.ca, 5000)
+  return TLS.connect("localhost", d.port, TLS.client_context(TlsClientOptions(ca_file: d.ca)).unwrap!, 5000)
 end
 
 def own(listener: Listener) -> Result[Int]
@@ -1946,7 +1946,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   parked(TCP.listen("127.0.0.1", 0).unwrap!, "")
-  parked(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!, "#{dir}/ca.pem")
+  parked(TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!, "#{dir}/ca.pem")
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   port = TCP.local_port(listener)
   case Task.await(Task.spawn_owning(&own, listener))
@@ -2336,7 +2336,7 @@ end
 def main() -> Void
   dir = System.args()[0]
   plain = TCP.listen("127.0.0.1", 0).unwrap!
-  secure = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+  secure = TLS.listen("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem")).unwrap!).unwrap!
   puts("#{TCP.local_port(plain)} #{TCP.local_port(secure)}")
   one = TCP.accept(plain, 10000).unwrap!
   two = TCP.accept(secure, 10000).unwrap!
@@ -2394,7 +2394,7 @@ end
 
 def main() -> Void
   dir = System.args()[0]
-  socket = TLS.connect("localhost", System.args()[1].to_i!, "#{dir}/ca.pem", 5000).unwrap!
+  socket = TLS.connect("localhost", System.args()[1].to_i!, TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!, 5000).unwrap!
   Task.spawn(&churn, "#{dir}/ca.pem")
   Task.spawn(&churn, "#{dir}/ca.pem")
   TCP.send(socket, "hello\n", 5000).unwrap!
@@ -2661,8 +2661,8 @@ end
 
 # CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
 # requests wait on the server; every request of the load tasks gets its own path back.
-def phase(base: String, ca: String, clients: Int, requests: Int) -> Int
-  pool = HTTP.client(HttpClientOptions(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+def phase(base: String, clients: Int, requests: Int) -> Int
+  pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: base, requests: requests)
   tasks = (1..clients).to_a.map do |k|
     Task.spawn(&load, l)
@@ -2686,15 +2686,14 @@ def main() -> Void
   certs = args[0]
   clients = args[1].to_i!
   requests = args[2].to_i!
-  ca = certs + "/ca.pem"
   options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
   plain = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
-  secure = HTTP.listen_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options).unwrap!
-  puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", ca, clients, requests))
-  puts(phase("https://localhost:#{HTTP.local_port(secure)}", ca, clients, requests))
+  secure = HTTP.listen_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options).unwrap!
+  puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", clients, requests))
+  puts(phase("https://localhost:#{HTTP.local_port(secure)}", clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
   # during the load), every caller then gets an error (none hangs), and wait returns.
-  pool = HTTP.client(HttpClientOptions(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+  pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
   callers = (1..clients).to_a.map do |k|
     Task.spawn(&until_closed, l)
@@ -2724,12 +2723,14 @@ end
 @pytest.mark.parametrize("schedulers", ["4", "8"])
 def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_a_close(tmp_path, repeats, schedulers):
     # Many client tasks on one HTTP and one HTTPS server, with cancelled callers and the server closed under load.
-    # Each HTTPS client builds its TLS context once, whichever schedulers its connections start on.
+    # Each HTTPS client without a context builds its system-trust context once (SSL_CERT_FILE is the test CA),
+    # whichever schedulers its connections start on.
     bytecode = program(tmp_path, "http_load", HTTP_LOAD)
     clients, requests = 24, 10
     for k in range(repeats):
         trace = tmp_path / ("trace-%d" % k)
-        env = {"AGENTICA_VM_TRACE": "tls", "AGENTICA_VM_TRACE_FILE": str(trace)}
+        env = {"AGENTICA_VM_TRACE": "tls", "AGENTICA_VM_TRACE_FILE": str(trace),
+               "SSL_CERT_FILE": os.path.join(TLS_DIR, "ca.pem")}
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode, TLS_DIR, str(clients),
                       str(requests)], env=vm_environment(env), timeout=120)
         total = clients * requests

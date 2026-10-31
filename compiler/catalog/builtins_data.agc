@@ -49,8 +49,8 @@ export RECORDS: List[Model.Record] = [
     name: "Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
-  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_CA_FILE and
-  # AGC_HTTP_OPTION_PROXY): keep them in step.
+  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY and AGC_HTTP_OPTION_TLS):
+  # keep them in step.
   Model.Record(
     name: "HttpClientOptions",
     fields: [
@@ -58,8 +58,12 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(name: "max_connections", type: Types.Type.Int, default: Model.Default.Whole(4)),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
-      Model.Named(name: "ca_file", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(name: "proxy", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(
+        name: "tls",
+        type: Types.Type.Optional(Types.Type.Opaque("TlsContext")),
+        default: Model.Default.None,
+      ),
     ],
   ),
   Model.Record(
@@ -177,6 +181,22 @@ export RECORDS: List[Model.Record] = [
     name: "StructMember",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "type", type: Types.Type.String)],
   ),
+  # vm/tls_context.c reads these fields by position: keep them in step.
+  Model.Record(
+    name: "TlsClientOptions",
+    fields: [
+      Model.Named(name: "ca_file", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "cert_file", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "key_file", type: Types.Type.String, default: Model.Default.Text("")),
+    ],
+  ),
+  Model.Record(
+    name: "TlsServerOptions",
+    fields: [
+      Model.Named(name: "cert_file", type: Types.Type.String),
+      Model.Named(name: "key_file", type: Types.Type.String),
+    ],
+  ),
 ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -213,9 +233,9 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
-## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
+## The builtin types with no structure: handles, TestCase, TlsContext and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
+  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "TlsContext", "C.Pointer",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -280,6 +300,9 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Test",
   "TestCase",
   "Time",
+  "TlsClientOptions",
+  "TlsContext",
+  "TlsServerOptions",
   "Void",
   "Zlib",
 ]
@@ -941,7 +964,22 @@ ROWS_10: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "HttpWire.connect_tls",
     effects: ["network"],
-    description: "Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context.",
+    description: "Internal to std/http: a TLS connection with the system trust, on the client's shared context.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "HttpWire.connect_context",
+    parameters: [
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "port", type: Types.Type.Int),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.connect_context",
+    effects: ["network"],
+    description: "Internal to std/http: TLS.connect, on a client TlsContext.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4536,23 +4574,31 @@ ROWS_48: List[Model.Builtin] = [
 
 ROWS_49: List[Model.Builtin] = [
   Model.Builtin(
+    name: "TLS.client_context",
+    parameters: [Model.Named(name: "options", type: Types.Type.Struct("TlsClientOptions", []))],
+    result: Types.Type.Result(Types.Type.Opaque("TlsContext")),
+    rule: Model.Rule.Plain,
+    implementation: "TLS.client_context",
+    effects: ["network"],
+    description: (
+      "Build a client TlsContext once, for many connections: the PEM CA file (empty: system trust) and an " +
+      "optional client certificate and key are read and checked now; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "TLS.connect",
     parameters: [
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "port", type: Types.Type.Int),
-      Model.Named(name: "ca_file", type: Types.Type.String),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
-      Model.Named(name: "cert_file", type: Types.Type.String, default: Model.Default.Text("")),
-      Model.Named(name: "key_file", type: Types.Type.String, default: Model.Default.Text("")),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Socket")),
     rule: Model.Rule.Plain,
     implementation: "TLS.connect",
     effects: ["network"],
-    description: (
-      "Connect with certificate and hostname verification; empty CA uses system trust. " +
-      "cert_file and key_file (PEM) send a client certificate."
-    ),
+    description: "Connect with a client TlsContext; the certificate and the hostname are always verified.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -4560,14 +4606,26 @@ ROWS_49: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "port", type: Types.Type.Int),
-      Model.Named(name: "cert_file", type: Types.Type.String),
-      Model.Named(name: "key_file", type: Types.Type.String),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Listener")),
     rule: Model.Rule.Plain,
     implementation: "TLS.listen",
     effects: ["network"],
-    description: "Listen with a PEM certificate chain and private key.",
+    description: "Listen with a server TlsContext, its certificate chain and key.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "TLS.server_context",
+    parameters: [Model.Named(name: "options", type: Types.Type.Struct("TlsServerOptions", []))],
+    result: Types.Type.Result(Types.Type.Opaque("TlsContext")),
+    rule: Model.Rule.Plain,
+    implementation: "TLS.server_context",
+    effects: ["network"],
+    description: (
+      "Build a server TlsContext once, for many listeners: the PEM certificate chain and the key are read and " +
+      "checked now; VM only."
+    ),
     alternatives: [],
   ),
 ]

@@ -1,13 +1,24 @@
 ## 29. TLS contexts
 
-**Status:** planned (roadmap phase 19), decided by the user on 2026-10-12. It is
-part of order step 7.4: after phase 17 (`Task.map` and channels, §27) and right
-after the HTTP streaming items 20e to 20g ([section
+**Status:** 19a built; 19b and 19c planned (roadmap phase 19), decided by the
+user on 2026-10-12. It is part of order step 7.4: after phase 17 (`Task.map` and
+channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)). `with` (15c) is built, so
 `TLS.client_options().with(...)` is available; the API needs neither it nor
 default parameter values: every call has a fixed argument list, and options live
 in records (29.1). It changes `TLS` and `HTTP` together in one breaking step,
 with one CHANGELOG entry and one migration (29.5).
+
+**Built (19a):** `TlsContext`, `TLS.client_context`, `TLS.server_context`, the
+context forms of `TLS.connect`, `TLS.listen`, the `listen_*_tls` forms and
+`HttpClientOptions.tls`. It differs from this section in three points, decided
+by the owner: the options are the records
+`TlsClientOptions(ca_file = "", cert_file = "", key_file = "")` (the client
+certificate of mTLS stays) and `TlsServerOptions(cert_file, key_file)`, with
+no `TLS.client_options()` helper; `HttpClientOptions.tls` is an
+`Optional[TlsContext] = none` in place of `ca_file`, and with `none` each client
+builds its own system-trust context lazily; the `listen_*_tls` forms take a
+server context. 19b (`TLS.upgrade`) and 19c (ALPN) are still planned.
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS
@@ -200,9 +211,8 @@ Phase 19a changes, in one PR:
   - **After:** `HTTP.listen_stream_tls(host, port, tls, handler, options)`
 
 - The old calls are `CHECK-TYPE-MISMATCH` or `CHECK-ARITY` at their arguments,
-  with a help that shows the context form
-  (`TLS.client_context(TlsClientOptions(ca_file: path))`), through the hint
-  table of `grammar.md` §7.
+  with a help that names the context forms (`TLS.client_context` to connect,
+  `TLS.server_context` to listen), through the hint table of `grammar.md` §7.
 - `TlsContext`, `TlsClientOptions` and `TlsServerOptions` become reserved names
   (`CHECK-REDEFINED-NAME` for a user type with one of these names; the CHANGELOG
   says so).

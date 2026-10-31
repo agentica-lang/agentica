@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A proxy URL with user info (`http://user:password@host:8080`) logs in to the
   proxy with `Proxy-Authorization: Basic`, sent to the proxy only; a `407` is an
   error that names the proxy and never the credentials.
+- `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
+  its PEM files, for `TLS.listen(host, port, context)` and
+  `HttpClientOptions(tls: some(context))`, which many clients can share.
 - `File.replace(path, data)` replaces an existing file in one step, keeping its
   permission bits and any symbolic link to it.
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
@@ -45,6 +48,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `TLS.connect`, `TLS.listen`, the `HTTP.listen_*_tls` forms and
+  `HttpClientOptions` (`tls` replaces `ca_file`) take a `TlsContext` in place
+  of PEM paths. The network page's "Moving to contexts" lists each old form
+  and its new one.
+- **Breaking:** `HttpClientOptions` holds a `TlsContext` (`tls`), so
+  `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. `TlsClientOptions`,
+  `TlsContext` and `TlsServerOptions` are reserved type names.
 - **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
