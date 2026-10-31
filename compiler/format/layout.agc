@@ -294,9 +294,10 @@ def decl_doc(c: Context, decl: Ast.Decl) -> Docs.Doc
     Ast.Decl.Struct(node) -> return struct_doc(c, node)
     Ast.Decl.Enum(node) -> return enum_doc(c, node)
     Ast.Decl.TypeAlias(node) ->
-      return Docs.Doc.Concat(
-        [text("type #{node.name}#{type_parameters(node.type_parameters)} = "), type_doc(c, node.target)],
-      )
+      return Docs.Doc.Concat([
+        text("type #{node.name}#{type_parameters(node.type_parameters)} = "),
+        type_doc(c, node.target),
+      ])
     Ast.Decl.Resource(node) -> return text(source(c, node.span))
     Ast.Decl.Constant(node) -> return constant_doc(c, node)
   end
@@ -915,9 +916,12 @@ def operand(c: Context, expr: Ast.Expr, minimum: Int) -> Docs.Doc
     return expr_doc(c, expr, true)
   end
 
-  return Docs.Doc.Group(
-    [text("("), Docs.Doc.Indent([Docs.Doc.SoftLine, expr_doc(c, expr, true)]), Docs.Doc.SoftLine, text(")")],
-  )
+  return Docs.Doc.Group([
+    text("("),
+    Docs.Doc.Indent([Docs.Doc.SoftLine, expr_doc(c, expr, true)]),
+    Docs.Doc.SoftLine,
+    text(")"),
+  ])
 end
 
 # A broken expression: as it is inside brackets, else in parentheses of its own that only a broken layout shows,
@@ -927,14 +931,12 @@ def wrapped(parts: List[Docs.Doc], bracketed: Bool) -> Docs.Doc
     return Docs.Doc.Group(parts)
   end
 
-  return Docs.Doc.Group(
-    [
-      Docs.Doc.IfBreak([text("(")], []),
-      Docs.Doc.Indent([Docs.Doc.SoftLine].concat(parts)),
-      Docs.Doc.SoftLine,
-      Docs.Doc.IfBreak([text(")")], []),
-    ],
-  )
+  return Docs.Doc.Group([
+    Docs.Doc.IfBreak([text("(")], []),
+    Docs.Doc.Indent([Docs.Doc.SoftLine].concat(parts)),
+    Docs.Doc.SoftLine,
+    Docs.Doc.IfBreak([text(")")], []),
+  ])
 end
 
 # A chain of one binary level, such as `a + b - c`, with each operator at the end of its line when it breaks (47.5
@@ -943,9 +945,11 @@ def binary_doc(c: Context, node: Ast.Binary, bracketed: Bool) -> Docs.Doc
   operator = source(c, node.op_span)
   this = LEVELS.get(node.op, 0)
   if this == 0
-    return Docs.Doc.Concat(
-      [clear(c, node.left, 1, binary?(node.left)), text(operator), clear(c, node.right, 1, binary?(node.right))],
-    )
+    return Docs.Doc.Concat([
+      clear(c, node.left, 1, binary?(node.left)),
+      text(operator),
+      clear(c, node.right, 1, binary?(node.right)),
+    ])
   end
 
   # The left spine of the same level: `a + b - c` is (a + b) - c.
@@ -1067,9 +1071,28 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
   return Docs.Doc.Concat([text(node.name + " "), join(shown, [text(", ")])].concat(block))
 end
 
+# The arguments of a call. A sole argument that is a list or map literal hugs the parentheses, `Set.new([`, and
+# breaks inside its own brackets.
 def arguments(c: Context, args: List[Ast.Expr], key: String) -> Docs.Doc
   shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
+  if args.size == 1 and huggable?(c, args[0])
+    return Docs.Doc.Concat([text("("), shown[0], text(")")])
+  end
+
   return listed(text("("), shown, text(")"), dangling_comments(c, key))
+end
+
+def huggable?(c: Context, expr: Ast.Expr) -> Bool
+  key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
+  if c.leading.get(key, []).size > 0 or c.trailing.get(key, []).size > 0
+    return false
+  end
+
+  case expr
+    Ast.Expr.ListLit(node) -> return node.elements.size > 0
+    Ast.Expr.MapLit(node) -> return node.entries.size > 0
+    _ -> return false
+  end
 end
 
 def named_doc(c: Context, arg: Ast.NamedArg) -> Docs.Doc
@@ -1083,8 +1106,8 @@ def entry_doc(c: Context, entry: Ast.MapEntry) -> Docs.Doc
 end
 
 # A method chain: the receiver, then each `.name(args)`, `.name`, `.call(args)`, `.with(...)` or `[index]`. A chain
-# with two calls or more after its first line breaks before each `.` when it does not fit (47.5 rule 10): the first
-# call stays with a receiver that is a plain name.
+# with two calls or more breaks before each `.` when it does not fit (47.5 rule 10): the first call stays with a
+# receiver that is a plain name.
 def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
   links: List[Link] = []
   current = expr
@@ -1129,8 +1152,8 @@ def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     tail = links[links.size - 1].block
   end
 
-  calls = links.drop(first).select do |link: Link| link.call end
-  if calls.size < 2
+  calls = links.select do |link: Link| link.call end
+  if calls.size < 2 or first >= links.size
     return Docs.Doc.Concat([head].concat(links.map do |link: Link| link.doc end).concat(tail))
   end
 
@@ -1146,7 +1169,16 @@ def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
 
   if tail.size > 0
     # A block cannot follow a closing parenthesis, so this chain breaks with leading dots alone, which continue a line.
-    return Docs.Doc.Concat([wrapped(start.push(Docs.Doc.Indent(rest)), true)].concat(tail))
+    # The block sits in the chain's group, a level deeper when the chain breaks so that its body and `end` follow the
+    # line of its call; the break its body asks for goes before the group, for the groups around the chain only.
+    lifted = tail.map do |part: Docs.Doc| unbroken(part) end
+    parts = start.concat([Docs.Doc.Indent(rest), Docs.Doc.IfBreak([Docs.Doc.Indent(lifted)], lifted)])
+    before: List[Docs.Doc] = []
+    if tail.any? do |part: Docs.Doc| broken?(part) end
+      before = [Docs.Doc.BreakParent]
+    end
+
+    return Docs.Doc.Concat(before.push(Docs.Doc.Group(parts)))
   end
 
   return wrapped(start.push(Docs.Doc.Indent(rest)), bracketed)
@@ -1163,9 +1195,12 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
       named = node.args.map do |arg: Ast.NamedArg| named_doc(c, arg) end
       return some(Link(doc: listed(text(".with("), named, text(")"), []), block: [], call: true, breaks: true))
     Ast.Expr.Index(node) ->
-      inner = Docs.Doc.Group(
-        [text("["), Docs.Doc.Indent([Docs.Doc.SoftLine, expr_doc(c, node.index, true)]), Docs.Doc.SoftLine, text("]")],
-      )
+      inner = Docs.Doc.Group([
+        text("["),
+        Docs.Doc.Indent([Docs.Doc.SoftLine, expr_doc(c, node.index, true)]),
+        Docs.Doc.SoftLine,
+        text("]"),
+      ])
       return some(Link(doc: inner, block: [], call: false, breaks: false))
     _ -> return none
   end
@@ -1243,16 +1278,42 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
     stmt = node.body[0]
     stmt_key = Comments.key_of(Comments.stmt_kind(stmt), Ast.stmt_span(stmt))
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0
-      return Docs.Doc.Group(
-        [text(head), Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)]), Docs.Doc.Line, text("end")],
-      )
+      return Docs.Doc.Group([
+        text(head),
+        Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)]),
+        Docs.Doc.Line,
+        text("end"),
+      ])
     end
   end
 
   # A body on its own lines breaks every group around the block, so the items next to it go on lines of their own.
   items = above.concat(statement_items(c, node.body)).concat(dangling_items(c, key))
-  parts = [text(head), Docs.Doc.BreakParent].concat(suffixes)
+  parts = [Docs.Doc.BreakParent, text(head)].concat(suffixes)
   return Docs.Doc.Concat(parts.concat([body(c, items), Docs.Doc.HardLine, text("end")]))
+end
+
+# Whether a document starts with the break of a multi-line block body (`block_doc`).
+def broken?(doc: Docs.Doc) -> Bool
+  case doc
+    Docs.Doc.BreakParent -> return true
+    Docs.Doc.Concat(parts) -> return parts.size > 0 and broken?(parts[0])
+    _ -> return false
+  end
+end
+
+# The document without the break it starts with.
+def unbroken(doc: Docs.Doc) -> Docs.Doc
+  case doc
+    Docs.Doc.BreakParent -> return Docs.Doc.Concat([])
+    Docs.Doc.Concat(parts) ->
+      if parts.size == 0
+        return doc
+      end
+
+      return Docs.Doc.Concat([unbroken(parts[0])].concat(parts.drop(1)))
+    _ -> return doc
+  end
 end
 
 # A block parameter as text; it has no layout of its own.
