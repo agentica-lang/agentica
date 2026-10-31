@@ -8,6 +8,7 @@ def parens(a: Int, b: Int, c: Bool, d: Bool) -> Void
   t = a * (b / 2)
   r = 0...(a - 1)
   s = (a == b) == c
+  l = (a > b) == (b > a)
   q = not (c and d)
   p = (a |> double()).to_s
   o = (try parse(a)).size

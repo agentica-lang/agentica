@@ -57,6 +57,25 @@ def body_rules(xs: List[Int], name: String) -> Void
     total -= 1
   end
 
+  while total < 0 do
+    total += 1
+  end
+
+  for x in xs do
+    puts(x)
+  end
+
+  case total do
+    0 -> puts("zero")
+    _ -> puts("more")
+  end
+
+  written = Result.Ok(total)
+  failed = Result.Err("no")
+  short_form = ok(total)
+  fields = [point.x, point.y, moved.x, moved.y, point.x, point.y, moved.x, moved.y, point.x, point.y, moved.x, moved.y,
+    point.x, moved.y]
+
   for x in xs
     next
   end

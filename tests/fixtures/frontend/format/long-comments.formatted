@@ -3,5 +3,7 @@ def main() -> Void
   # keeping every word in order.
   # a trailing comment that does not fit
   x = compute_a_value_with_a_long_function_name(first_argument, second_argument, third)
+  # One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen
+  # seventeen eighteen.
   puts(x)
 end

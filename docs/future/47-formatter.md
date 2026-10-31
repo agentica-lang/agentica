@@ -2,8 +2,9 @@
 
 **Status:** In progress: roadmap row 7.9, decided by the owner on 2026-10-15,
 who also asked for this plan on the same day. Phases 47a and 47b are done
-(47.10). The owner answered the open questions of 47.9 on 2026-10-31. Phase 47d
-waits for the language server (§43), which is not scheduled.
+(47.10); the printer also honors `blank_line_after_end` (47c). The owner
+answered the open questions of 47.9 on 2026-10-31. Phase 47d waits for the
+language server (§43), which is not scheduled.
 
 In short: `agentica fmt` rewrites `.agc` files in place with one printer. It is
 written in Agentica in `compiler/`, on the self-hosted lexer and parser.
@@ -246,21 +247,28 @@ proposal, to be confirmed by the goldens of phase 47b.
    author's other grouping parentheses, because the tree does not record them.
    It never adds or removes the parentheses of a call: `f()` and `puts x` keep
    their form, and a pipe target keeps the parentheses it needs. A pipe chain
-   broken over lines goes in parentheses, with the `|>` at the end of the line,
-   as the grammar requires (`docs/grammar/04-lexical.md`).
+   broken over lines goes in parentheses, with each `|>` at the start of its
+   line, as the repo writes it. 47b also keeps clarity parentheses that
+   precedence does not need: an `and` inside an `or`, a comparison inside
+   another (`(a > b) == (b > n)`), two different operators of `*`, `/`, `%`,
+   and a binary operand of a range (`0...(n - 1)`).
 5. **Long strings.** A string that fits stays whole. Otherwise it becomes `(`,
    then pieces, one per line, joined by ` +` at the line ends, then `)`. The
    pieces come from a `fill` (below): whole words, packed up to the width. The
    printer copies the source text of the string, so the escapes stay as the
    author wrote them. It splits only at spaces of text parts, never inside an
    escape or an interpolation, and nested quotes stay (`"#{xs.join(", ")}"`,
-   PR #284). Never one piece per line.
+   PR #284). Never one piece per line. 47b does not split strings yet: a lone
+   string that does not fit after `x =` or `return` moves into `(` ... `)` on
+   its own line, and a longer one stays one word.
 6. **Blank lines and comments.** The rule of 47.4 for blank lines. A plain
    comment is kept word for word. A `#` line longer than the width is wrapped at
    words into more `#` lines (question 6 in 47.9).
 7. **Long boolean and arithmetic.** Wrap the expression in parentheses and break
    after each operator, with the operator at the end of the line. The next
-   operand goes on the next line, indented two spaces.
+   operand goes on the next line, indented two spaces. Inside brackets (a
+   positional argument, a list element) there are no added parentheses and no
+   extra indent; a named argument or a map value counts as outside brackets.
 8. **Doc comments.** A `##` block keeps its lines as written. Only a paragraph
    that has a line over the width is re-flowed, and only that paragraph.
    Paragraphs are separated by empty `##` lines. The room is `max_line_width`
@@ -276,13 +284,17 @@ proposal, to be confirmed by the goldens of phase 47b.
 10. **Method chains.** A chain that fits stays on one line. Otherwise the whole
     chain goes in parentheses, the first receiver on the first line, and each
     following call on its own line, starting with `.` and indented two spaces.
-    That form is the one the repo uses. 47b checks it against the parser before
-    the golden is fixed.
+    That form is the one the repo uses. A chain breaks so only with two calls
+    or more, and the first call stays on the first line when the receiver is a
+    plain name (`text.replace(...)`). A trailing `do` block goes on the last
+    call's line.
 11. **Calls with a `do` block.** The block is the last argument. The header
     `call(args) do |params|` is one line when it fits, and the header counts in
     the fit. When the arguments break, the closing line is `) do |params|`. The
     body is indented two spaces, and `end` sits at the indent of the line where
-    the call starts.
+    the call starts. A body of one simple statement that fits stays on the
+    header line (`do |x| x + 1 end`), and so does the body of a case arm
+    (`pattern -> statement`, 47.6).
 12. **`if`, `elsif` and `while` conditions.** On one line if they fit. Otherwise
     `if (` on its own line, one operand per line with each operator at the end
     of its line, `)` on its own line at the indent of `if`, and the body
@@ -294,7 +306,10 @@ proposal, to be confirmed by the goldens of phase 47b.
 14. **Map and struct literals.** `{` or `Type(` ends the line. Each entry or
     argument goes on its own line, indented two spaces, with a trailing comma.
     The closing `}` or `)` sits at the indent of the line that starts the
-    literal.
+    literal. A list or map that is the only argument of a call hugs its
+    parentheses (`Set.new([` ... `])`). A table of atoms (literals, names,
+    dotted names) that the author packed several to a line is refilled up to
+    the width; one written one item per line stays so.
 15. **Struct and enum declarations.** The header is one line. Each field or
     variant goes on its own line, indented two spaces, with no comma, since the
     grammar has none there. A doc block sits directly above its field or
@@ -409,7 +424,7 @@ Each question has options and a recommendation.
 
 **Answered** by the owner on 2026-10-31: every recommendation, so 1(a), 2(a),
 3(a), 4(a) with the grammar note in 47b, 5(a), 6(b), 8(a) and 9(a). The printer
-also honors `[style] blank_line_after_end` (47.2).
+also honors `[style] blank_line_after_end` (47.2) from 47c.
 
 1. **Width when there is no `[style]`.** Options: (a) 119, the width of
    `compiler/` and `stdlib/`; (b) 100, the rustfmt default; (c) 80, the Prettier
@@ -477,8 +492,13 @@ and is outside this order.
 - [x] 47b: the printer, `fmt --check` and `make fmt-check`, in
   `compiler/format/` (`doc.agc`, `layout.agc`, `format.agc`), with the one-time
   reformat of `compiler/` and `stdlib/`; the `.formatted` goldens of
-  `tests/fixtures/frontend/format/`.
-- [ ] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`.
+  `tests/fixtures/frontend/format/`. Where it differs from the first text of
+  47.5: `|>` at the start of the line, clarity parentheses, lone strings in
+  parentheses instead of split strings, refilled tables, hugged sole
+  arguments, and one-line `do` blocks and case arms.
+- [ ] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`;
+  with `blank_line_after_end`, the empty line after every `end`, including an
+  `end` the printer creates when it breaks a one-line `do ... end`.
 
 Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes in CI
 over `compiler/` and `stdlib/`, `agentica check` reports the width, and the

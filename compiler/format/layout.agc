@@ -513,12 +513,17 @@ def statement_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
     Ast.Stmt.While(node) ->
       key = Comments.key_of("WhileStmt", node.span)
       items = statement_items(c, node.body).concat(dangling_items(c, key))
-      head = Docs.Doc.Concat([text("while "), expr_doc(c, node.condition, false)])
+      head = Docs.Doc.Concat([
+        text("while "),
+        expr_doc(c, node.condition, false),
+        text(optional_do(c, node.condition)),
+      ])
       return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.For(node) ->
       key = Comments.key_of("ForStmt", node.span)
       items = statement_items(c, node.body).concat(dangling_items(c, key))
-      head = Docs.Doc.Concat([text("for #{node.variable} in "), expr_doc(c, node.iterable, false)])
+      iterable = expr_doc(c, node.iterable, false)
+      head = Docs.Doc.Concat([text("for #{node.variable} in "), iterable, text(optional_do(c, node.iterable))])
       return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.Control(node) -> return text(node.kind)
     Ast.Stmt.Case(node) -> return case_doc(c, node)
@@ -653,8 +658,18 @@ def case_doc(c: Context, node: Ast.CaseStmt) -> Docs.Doc
   end
 
   items = items.concat(dangling_items(c, key))
-  head = Docs.Doc.Concat([text("case "), expr_doc(c, node.value, false)])
+  head = Docs.Doc.Concat([text("case "), expr_doc(c, node.value, false), text(optional_do(c, node.value))])
   return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+end
+
+# " do" when the source writes the optional `do` after the header expression of a `while`, `for` or `case`.
+def optional_do(c: Context, header: Ast.Expr) -> String
+  at = token_index(c, tight(c, Ast.expr_span(header)).stop.offset)
+  if at < c.tokens.size and c.tokens[at].kind == "do"
+    return " do"
+  end
+
+  return ""
 end
 
 # An arm: `pattern -> statement` on one line when its body is one simple statement that fits, else the body on the
@@ -791,8 +806,8 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
   end
 end
 
-# Whether an element is a short atom that a table packs: a literal, a name, a negative number or a variant without
-# arguments, with no comment.
+# Whether an element is a short atom that a table packs: a literal, a name, a dotted name (`options.style`), a negative
+# number or a variant without arguments, with no comment.
 def atomic?(c: Context, expr: Ast.Expr) -> Bool
   key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
   if c.leading.get(key, []).size > 0 or c.trailing.get(key, []).size > 0
@@ -804,6 +819,7 @@ def atomic?(c: Context, expr: Ast.Expr) -> Bool
     Ast.Expr.Name(_) -> return true
     Ast.Expr.TypeName(_) -> return true
     Ast.Expr.FunctionRef(_) -> return true
+    Ast.Expr.FieldAccess(node) -> return atomic?(c, node.target)
     Ast.Expr.Unary(node) -> return atomic?(c, node.operand)
     Ast.Expr.EnumConstructor(node) -> return node.args.size == 0
     _ -> return false
@@ -880,7 +896,7 @@ def piped?(expr: Ast.Expr) -> Bool
 end
 
 # Whether an operand of `op` keeps parentheses that the precedence does not need, for the reader: an `and` inside an
-# `or`, and a `*`, `/` or `%` inside another of them.
+# `or`, a comparison inside another (`(a > b) == (b > n)`), and a `*`, `/` or `%` inside another of them.
 def clarify?(op: String, child: Ast.Expr) -> Bool
   case child
     Ast.Expr.Binary(node) ->
@@ -888,9 +904,17 @@ def clarify?(op: String, child: Ast.Expr) -> Bool
         return true
       end
 
+      if comparison?(op) and comparison?(node.op)
+        return true
+      end
+
       return LEVELS.get(op, 0) == 7 and LEVELS.get(node.op, 0) == 7 and op != node.op
     _ -> return false
   end
+end
+
+def comparison?(op: String) -> Bool
+  return LEVELS.get(op, 0) == 3 or LEVELS.get(op, 0) == 4
 end
 
 def binary?(expr: Ast.Expr) -> Bool
@@ -1060,7 +1084,9 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
   end
 
   if node.parenthesized
-    return Docs.Doc.Concat([text(node.name), arguments(c, args, Comments.key_of("Call", node.span))].concat(block))
+    return Docs.Doc.Concat(
+      [text(call_name(c, node)), arguments(c, args, Comments.key_of("Call", node.span))].concat(block),
+    )
   end
 
   if args.size == 0
@@ -1069,6 +1095,25 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
 
   shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
   return Docs.Doc.Concat([text(node.name + " "), join(shown, [text(", ")])].concat(block))
+end
+
+# The name of a call as the source wrote it: the parser reads `Result.Ok(x)` and `Result.Err(x)` as the calls `ok`
+# and `error`, and the formatter keeps either form.
+def call_name(c: Context, node: Ast.Call) -> String
+  if node.piped or (node.name != "ok" and node.name != "error")
+    return node.name
+  end
+
+  at = token_index(c, node.span.start.offset)
+  if at < c.tokens.size and c.tokens[at].lexeme == "Result"
+    if node.name == "ok"
+      return "Result.Ok"
+    end
+
+    return "Result.Err"
+  end
+
+  return node.name
 end
 
 # The arguments of a call. A sole argument that is a list or map literal hugs the parentheses, `Set.new([`, and

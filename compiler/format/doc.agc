@@ -322,7 +322,7 @@ def comment(out: Output, text: String, indent: Int, width: Int) -> Output
 end
 
 # The lines of a comment that fit in `room` columns, each with the marker of the comment (`#` and the spaces after it).
-# A comment that fits, or that has a single word, is one line.
+# A comment that fits, or that has a single word, is one line. The last line has two words when they fit.
 def wrap(text: String, room: Int) -> List[String]
   if text.length <= room
     return [text]
@@ -334,18 +334,28 @@ def wrap(text: String, room: Int) -> List[String]
     return [text]
   end
 
-  lines: List[String] = []
-  line = marker + words[0]
+  rows: List[List[String]] = []
+  row = [words[0]]
   for word in words.drop(1)
-    if line.length + 1 + word.length <= room
-      line = line + " " + word
+    if marker.length + row.join(" ").length + 1 + word.length <= room
+      row = row.push(word)
     else
-      lines = lines.push(line)
-      line = marker + word
+      rows = rows.push(row)
+      row = [word]
     end
   end
 
-  return lines.push(line)
+  # No one-word widow: the last line takes the last word of the line before when both still fit.
+  if row.size == 1 and rows.size > 0 and rows[rows.size - 1].size >= 2
+    before = rows[rows.size - 1]
+    moved = List.concat([before[before.size - 1]], row)
+    if marker.length + moved.join(" ").length <= room
+      rows = rows.take(rows.size - 1).push(before.take(before.size - 1))
+      row = moved
+    end
+  end
+
+  return rows.push(row).map do |words_of: List[String]| marker + words_of.join(" ") end
 end
 
 # The `#` that starts a comment and the spaces after it.

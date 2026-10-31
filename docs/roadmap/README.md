@@ -173,9 +173,9 @@ Weighed later (no fixed order):
     [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)):
     `agentica fmt`, written in Agentica on the self-hosted lexer and parser
     (parts 47a to 47c; 47a, the comment side list and its attachment, and 47b,
-    the printer with `fmt --check` and `make fmt-check`, are done; 47c adds `CHECK-LINE-TOO-LONG`, which replaces
-    `tests/test_style_line_width.py`). 47d, the LSP hook, waits for the
-    language server (§43, not scheduled).
+    the printer with `fmt --check` and `make fmt-check`, are done; 47c adds
+    `CHECK-LINE-TOO-LONG`, which replaces `tests/test_style_line_width.py`).
+    47d, the LSP hook, waits for the language server (§43, not scheduled).
   - **Outcome:** Every `.agc` file has one layout, checked in CI
 
 - **Order:** 7.10
