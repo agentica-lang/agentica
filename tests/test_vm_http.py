@@ -98,6 +98,12 @@ def main() -> Void
   show(HTTP.post(pool, plain + "/post", "".bytes))
   show(HTTP.request(pool, "DELETE", plain + "/item", "".bytes))
   HTTP.close_client(pool)
+  show(HTTP.get_response(plain + "/chunked"))
+  show(HTTP.post_response(plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")]))
+  show(HTTP.get_response(plain + "/slow", HttpClientOptions(timeout_ms: 200)))
+  show(HTTP.get_response("ftp://127.0.0.1/"))
+  show(HTTP.get_response(plain + "/nothing", HttpClientOptions(max_body_bytes: 0)))
+  puts(Task.pending_count())
   slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
   show(HTTP.get(slow, plain + "/slow"))
   one = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
@@ -509,6 +515,12 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "404 missing 7",
         "200 None 0  7",
         "200 deleted /item None 18",
+        "200 ñandú chunks 12",
+        "200 form 8 a=1&b=ñ 14",
+        "network: operation timed out",
+        "http: the URL must be http:// or https:// with a host, and without user info",
+        "http: every option must be positive",
+        "0",
         "network: operation timed out",
         "true",
         "true",

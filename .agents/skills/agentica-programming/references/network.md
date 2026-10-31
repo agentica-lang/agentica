@@ -73,6 +73,8 @@ HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
 HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
 HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+HTTP.get_response(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
+HTTP.post_response(url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
@@ -90,6 +92,10 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   body limit and system CA trust. Options must be positive; `max_connections` is
   at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
   whole call.
+- One request: `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make
+  a client of their own, send it and close it before they return (Ruby's
+  `Net::HTTP.get_response`). Many requests: one `HTTP.client()` with `get`,
+  `post` and `request`.
 - The client keeps idle keep-alive connections per scheme, host and port. URLs
   are `http://` or `https://`; the fragment is dropped, user info is rejected
   and IPv6 hosts go in brackets. It adds `Host` and `Content-Length`; a request

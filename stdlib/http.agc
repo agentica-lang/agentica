@@ -258,6 +258,26 @@ export def post(pool: HttpClient, url: String, body: Bytes, headers: List[Header
   return request(pool, "POST", url, body, headers)
 end
 
+## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
+## `Net::HTTP.get_response(uri)`. It is the call for one request: it makes a client with `options` (default
+## `HttpClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
+## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
+export def get_response(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
+  return request_once("GET", url, NO_BYTES, [], options)
+end
+
+## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
+## (default none) and `options` (default `HttpClientOptions()`), then the client is closed. Like Ruby's
+## `Net::HTTP.post(uri, data, header)`, and the pooled `post` for many requests.
+export def post_response(
+  url: String,
+  body: Bytes,
+  headers: List[Header] = [],
+  options: HttpClientOptions = HttpClientOptions(),
+) -> Result[HttpResponse]
+  return request_once("POST", url, body, headers, options)
+end
+
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
 ## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
 ## `Connection`. The `body` is `Bytes` of at most `max_body_bytes` (`"".bytes` sends none); `headers` default to none.
@@ -485,6 +505,21 @@ end
 ## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
 export def close_server(server: HttpServer) -> Void
   HttpWire.close_server(server)
+end
+
+# One request on a client that lives for it alone. The client is closed after the reply, whatever it was, so no
+# connection or task of it outlives the call.
+def request_once(
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[Header],
+  options: HttpClientOptions,
+) -> Result[HttpResponse]
+  pool = try client(options)
+  response = request(pool, method, url, body, headers)
+  close_client(pool)
+  return response
 end
 
 def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
