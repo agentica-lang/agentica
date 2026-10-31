@@ -323,8 +323,7 @@ def droppable?(wrapped: Ast.Decl, node: Ast.FunctionDecl) -> Bool
 
   case node.native
     some(_) -> return false
-    none ->
-      return node.doc.none?
+    none -> return node.doc.none?
   end
 end
 

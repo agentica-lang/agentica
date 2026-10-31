@@ -269,9 +269,10 @@ end
 
 # Whether `file` is one that the walk parsed from a stub: a problem there could come from the stub, so it is not given.
 def stand_in?(loaded: Modules.Loaded, file: String) -> Bool
-  return loaded.stubs > 0 and loaded.modules.values.any? do |module: Modules.Module|
-    module.stubbed and module.file == file
-  end
+  return (
+    loaded.stubs > 0 and
+    loaded.modules.values.any? do |module: Modules.Module| module.stubbed and module.file == file end
+  )
 end
 
 # Enters in the cache every module of a program that checked, but the root, whose entry does not vouch for its tree
@@ -346,11 +347,7 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
 end
 
 # A program that checked still has to follow the style rules of its project (check_style.agc).
-def checked_outcome(
-  linked: Linker.Linked,
-  checking: Checker.Checking,
-  styled: Set[String],
-) -> Outcome
+def checked_outcome(linked: Linker.Linked, checking: Checker.Checking, styled: Set[String]) -> Outcome
   return finished(linked, checking, style_after(checking, linked, styled))
 end
 
@@ -361,11 +358,7 @@ def stored_outcome(root: Cache.Root) -> Outcome
 end
 
 # The style problem of `linked`, looked for only when it checked: a type error is reported first.
-def style_after(
-  checking: Checker.Checking,
-  linked: Linker.Linked,
-  styled: Set[String],
-) -> Optional[Problems.Problem]
+def style_after(checking: Checker.Checking, linked: Linker.Linked, styled: Set[String]) -> Optional[Problems.Problem]
   case checking
     Checker.Checking.Failed(_) -> return none
     Checker.Checking.Done(_) -> return Style.blank_line_after_end(linked, styled)

@@ -186,7 +186,9 @@ end
 # List or a Map from String of such a type or of a struct that can be built itself. Only looked for when some function
 # uses a type name as a value.
 def user_decodable(
-  structs: List[Ast.StructDecl], builtin: Map[String, List[Types.Type]], type_value: Bool
+  structs: List[Ast.StructDecl],
+  builtin: Map[String, List[Types.Type]],
+  type_value: Bool,
 ) -> Map[String, List[Types.Type]]
   if !type_value
     return {}

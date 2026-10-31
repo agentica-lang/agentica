@@ -335,18 +335,12 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
     Types.Type.Codec(item) -> return Types.Type.Codec(substitute(item, substitutions))
     Types.Type.List(item) -> return Types.Type.List(substitute(item, substitutions))
     Types.Type.Set(item) -> return Types.Type.Set(substitute(item, substitutions))
-    Types.Type.Map(key, value) -> return Types.Type.Map(
-      substitute(key, substitutions),
-      substitute(value, substitutions),
-    )
-    Types.Type.ATS(key, value) -> return Types.Type.ATS(
-      substitute(key, substitutions),
-      substitute(value, substitutions),
-    )
-    Types.Type.Fn(params, result) -> return Types.Type.Fn(
-      substitute_all(params, substitutions),
-      substitute(result, substitutions),
-    )
+    Types.Type.Map(key, value) ->
+      return Types.Type.Map(substitute(key, substitutions), substitute(value, substitutions))
+    Types.Type.ATS(key, value) ->
+      return Types.Type.ATS(substitute(key, substitutions), substitute(value, substitutions))
+    Types.Type.Fn(params, result) ->
+      return Types.Type.Fn(substitute_all(params, substitutions), substitute(result, substitutions))
     Types.Type.Struct(name, args) -> return Types.Type.Struct(name, substitute_all(args, substitutions))
     Types.Type.Enum(name, args) -> return Types.Type.Enum(name, substitute_all(args, substitutions))
     _ -> return type
@@ -453,14 +447,7 @@ def expand_alias(
     if seen.any? do |entry: String| entry == name end
       cycle = cycle_text(seen, name)
       return error(
-        State.fail_help(
-          cx,
-          st,
-          "CHECK-TYPE-ALIAS-CYCLE",
-          "type alias has a cycle",
-          ref.span,
-          "the cycle is #{cycle}",
-        ),
+        State.fail_help(cx, st, "CHECK-TYPE-ALIAS-CYCLE", "type alias has a cycle", ref.span, "the cycle is #{cycle}"),
       )
     end
 
@@ -772,13 +759,7 @@ def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   map = try resolve_map(cx, st, args)
   if Types.is?(Types.key(map), "Bytes")
     return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-MAP-KEY-TYPE",
-        "an ATS key must be Int or String, found Bytes",
-        args[0].span,
-      ),
+      State.fail(cx, st, "CHECK-MAP-KEY-TYPE", "an ATS key must be Int or String, found Bytes", args[0].span),
     )
   end
 
@@ -844,14 +825,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
   end
 
   return error(
-    State.fail_maybe(
-      cx,
-      st,
-      "CHECK-UNKNOWN-TYPE",
-      "unknown type \"#{Types.display_name(name)}\"",
-      ref.span,
-      help,
-    ),
+    State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "unknown type \"#{Types.display_name(name)}\"", ref.span, help),
   )
 end
 
@@ -942,7 +916,12 @@ end
 # A JsonField that is the argument of a struct is placed by the fields of the struct with the argument put in
 # (place_fields): Box[JsonField[Int]] has a direct JsonField field `value`, and a list item for `items: List[T]`.
 def place_walk(
-  cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String, seen: Map[String, Bool]
+  cx: State.Cx,
+  type: ResolvedType,
+  direct: Bool,
+  kind: String,
+  owner: String,
+  seen: Map[String, Bool],
 ) -> Placed
   if json_field?(type)
     if !direct
@@ -1369,7 +1348,10 @@ end
 
 # The span of the first argument whose parameter type has a variable of the need, else span.
 def binding_span(
-  need: ResolvedType, templates: List[ResolvedType], spans: List[Source.Span], span: Source.Span
+  need: ResolvedType,
+  templates: List[ResolvedType],
+  spans: List[Source.Span],
+  span: Source.Span,
 ) -> Source.Span
   names = Set.new(variable_names(need))
   index = 0

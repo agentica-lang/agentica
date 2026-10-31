@@ -1,0 +1,17 @@
+def parens(a: Int, b: Int, c: Bool, d: Bool) -> Void
+  x = (a + b) * a
+  y = a - (b - a)
+  z = a * b + a
+  w = (c and d) or c
+  v = c or (d and c)
+  u = (a / b) % 2
+  t = a * (b / 2)
+  r = 0...(a - 1)
+  s = (a == b) == c
+  l = (a > b) == (b > a)
+  q = not (c and d)
+  p = (a |> double()).to_s
+  o = (try parse(a)).size
+  n = -(a + b)
+  m = (0..a).to_a
+end

@@ -8,8 +8,8 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
 import {
-  BARE_NAMES, CALLABLE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE,
-  PRELUDE_ONLY, PUBLIC_NAMES, RECORDS, RESERVED, STD_ONLY,
+  BARE_NAMES, CALLABLE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS,
+  RESERVED, STD_ONLY,
 } from "builtins"
 
 ## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help

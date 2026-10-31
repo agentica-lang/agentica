@@ -59,9 +59,7 @@ end
 ## Joins pairs into a query string, `a=1&a=2&b=`, encoding each name and value with `encode_www_form_component`. Names
 ## may repeat and the order is kept.
 export def encode_www_form(pairs: List[Pair]) -> String
-  parts = pairs.map do |pair|
-    "#{encode_www_form_component(pair.name)}=#{encode_www_form_component(pair.value)}"
-  end
+  parts = pairs.map do |pair| "#{encode_www_form_component(pair.name)}=#{encode_www_form_component(pair.value)}" end
   return parts.join("&")
 end
 

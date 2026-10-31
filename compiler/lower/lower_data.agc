@@ -67,7 +67,11 @@ end
 ## Like a list literal, one `list` instruction gathers at most MAX_CHUNK items and a struct with more fields is built
 ## in chunks joined with List.concat.
 export def lower_members(
-  cx: State.Cx, fx: State.Fx, fields: List[Model.Named], span: Source.Span, want: Int
+  cx: State.Cx,
+  fx: State.Fx,
+  fields: List[Model.Named],
+  span: Source.Span,
+  want: Int,
 ) -> Result[State.Out]
   index = cx.structs["StructMember"].index
   fx = State.step(fx, span)
@@ -155,8 +159,14 @@ end
 ## An enum value: the payload items in consecutive registers and an `enum` instruction with the id of the variant.
 ## known skips the type check of the items, which the type of the enum value covered (an Optional's item).
 export def lower_enum(
-  cx: State.Cx, fx: State.Fx, enum_name: String, variant_name: String, args: List[Ast.Expr], span: Source.Span,
-  want: Int, known: Bool
+  cx: State.Cx,
+  fx: State.Fx,
+  enum_name: String,
+  variant_name: String,
+  args: List[Ast.Expr],
+  span: Source.Span,
+  want: Int,
+  known: Bool,
 ) -> Result[State.Out]
   fx = State.step(fx, span)
   saved = fx.next
@@ -229,7 +239,12 @@ end
 ## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, or a
 ## variant without a payload. id and span are the ones of the node that the default stands in for.
 export def lower_catalog_default(
-  cx: State.Cx, fx: State.Fx, value: Model.Default, id: Int, span: Source.Span, want: Int
+  cx: State.Cx,
+  fx: State.Fx,
+  value: Model.Default,
+  id: Int,
+  span: Source.Span,
+  want: Int,
 ) -> Result[State.Out]
   literal = Ast.LitValue.Nothing
   case value
@@ -288,7 +303,12 @@ end
 # The StructMember of fields[from, to) in consecutive registers: a register for each, then two scratch registers
 # above them for the name and the type, which the `struct` instruction reads as consecutive fields.
 def member_items(
-  fx: State.Fx, fields: List[Model.Named], from: Int, to: Int, index: Int, span: Source.Span
+  fx: State.Fx,
+  fields: List[Model.Named],
+  from: Int,
+  to: Int,
+  index: Int,
+  span: Source.Span,
 ) -> State.Fx
   start = fx.next
   at = from
@@ -312,7 +332,12 @@ end
 
 # A literal that the catalog gives: its type is the one of the parameter or field it fills, so it has no check.
 def lower_known_literal(
-  cx: State.Cx, fx: State.Fx, value: Ast.LitValue, id: Int, span: Source.Span, want: Int
+  cx: State.Cx,
+  fx: State.Fx,
+  value: Ast.LitValue,
+  id: Int,
+  span: Source.Span,
+  want: Int,
 ) -> Result[State.Out]
   literal = Ast.Expr.Literal(Ast.Literal(id: id, value: value, span: span))
   return cx.expression.call(cx, fx, literal, want, false, true)
@@ -321,7 +346,12 @@ end
 # The fields of a builtin record that a construction leaves out, from the defaults of the catalog (the checker let
 # only those be left out), each in the register of its field.
 def lower_record_defaults(
-  cx: State.Cx, fx: State.Fx, node: Ast.Construct, info: State.StructInfo, start: Int, after: Int
+  cx: State.Cx,
+  fx: State.Fx,
+  node: Ast.Construct,
+  info: State.StructInfo,
+  start: Int,
+  after: Int,
 ) -> Result[State.Fx]
   given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
   for field in Builtins.RECORDS[node.type_name]
@@ -338,7 +368,11 @@ end
 # of its instructions point into that file), as the default of a parameter is, and the file of the construction comes
 # back after it.
 def lower_field_default(
-  cx: State.Cx, fx: State.Fx, fills: State.FieldFill, value: Ast.Expr, slot: Int
+  cx: State.Cx,
+  fx: State.Fx,
+  fills: State.FieldFill,
+  value: Ast.Expr,
+  slot: Int,
 ) -> Result[State.Fx]
   here = cx.with(file: fills.file, index: fills.index)
   out = try cx.expression.call(here, fx.with(file: fills.index), value, slot, false, false)

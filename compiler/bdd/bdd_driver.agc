@@ -127,7 +127,10 @@ end
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
 # is a failure of the driver itself, and a failure of the runner is part of the ending.
 def prepare_and_run(
-  directory: String, options: Opts.Options, settings: Env.Settings, runner: Runner.Program
+  directory: String,
+  options: Opts.Options,
+  settings: Env.Settings,
+  runner: Runner.Program,
 ) -> Result[Report.Ending]
   given = options.paths
   if given.size == 0
@@ -293,7 +296,10 @@ end
 # `front_end` for the runner to report, and writes nothing. The other entries (feature files and problems) are not
 # compiled.
 def compile_tests(
-  entries: List[Discover.Entry], directory: String, settings: Env.Settings, cached: Bool
+  entries: List[Discover.Entry],
+  directory: String,
+  settings: Env.Settings,
+  cached: Bool,
 ) -> Result[List[Discover.Entry]]
   out: List[Discover.Entry] = []
   index = 0

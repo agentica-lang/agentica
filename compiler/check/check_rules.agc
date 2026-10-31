@@ -49,10 +49,8 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
         "CHECK-TYPE-MISMATCH",
         "#{T.to_text(type)} has no to_s, so it cannot be printed or interpolated",
         span,
-        (
-          "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, " +
-          "structs and enums of those"
-        ),
+        "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, " +
+        "structs and enums of those",
       ),
     )
   end
@@ -374,15 +372,10 @@ end
 def json_struct(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
   case target
     Ast.Expr.TypeName(node) -> return json_target(cx, st, node)
-    _ -> return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-TYPE-MISMATCH",
-        "JSON type argument requires a struct name",
-        Ast.expr_span(target),
-      ),
-    )
+    _ ->
+      return error(
+        State.fail(cx, st, "CHECK-TYPE-MISMATCH", "JSON type argument requires a struct name", Ast.expr_span(target)),
+      )
   end
 end
 
@@ -513,10 +506,8 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         "CHECK-TYPE-MISMATCH",
         "Test.eq needs a type with equality, found #{T.to_text(actual.type)}",
         Ast.expr_span(site.args[0]),
-        (
-          "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, " +
-          "structs and enums of those"
-        ),
+        "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, " +
+        "structs and enums of those",
       ),
     )
   end

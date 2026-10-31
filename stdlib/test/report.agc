@@ -90,8 +90,15 @@ end
 
 ## Builds an `Error` at `span` with no expected or actual value.
 export def error_at(code: String, message: String, span: Span) -> Error
-  return Error(code: code, message: message, span: span, end_line: span.line, expected: Detail.Unknown,
-               actual: Detail.Unknown, original: JSON.null())
+  return Error(
+    code: code,
+    message: message,
+    span: span,
+    end_line: span.line,
+    expected: Detail.Unknown,
+    actual: Detail.Unknown,
+    original: JSON.null(),
+  )
 end
 
 ## Reads a diagnostic as `--json` writes it. Keeps the whole object, so the report writes every key unchanged
@@ -126,8 +133,15 @@ export def with_actual(problem: Error, actual: String) -> Error
   if not JSON.null?(problem.original)
     return problem
   end
-  return Error(code: problem.code, message: problem.message, span: problem.span, end_line: problem.end_line,
-               expected: problem.expected, actual: Detail.Known(actual), original: problem.original)
+  return Error(
+    code: problem.code,
+    message: problem.message,
+    span: problem.span,
+    end_line: problem.end_line,
+    expected: problem.expected,
+    actual: Detail.Known(actual),
+    original: problem.original,
+  )
 end
 
 ## Builds a file result with no scenarios that fails with `problem`.
@@ -190,17 +204,21 @@ def totals(files: List[FileResult]) -> Totals
     n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size
   end
   file_errors = files.filter do |file| failed?(file.verdict) end.size
-  severe = files.any? do |file|
-    severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end
-  end
+  severe = files.any? do |file| severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end end
   code = 1
   if scenarios > 0 and passed + skipped == scenarios and file_errors == 0
     code = 0
   elsif severe
     code = 2
   end
-  return Totals(passed: passed, failed: scenarios - passed - skipped - not_run, skipped: skipped,
-                not_executed: not_run, file_errors: file_errors, exit_code: code)
+  return Totals(
+    passed: passed,
+    failed: scenarios - passed - skipped - not_run,
+    skipped: skipped,
+    not_executed: not_run,
+    file_errors: file_errors,
+    exit_code: code,
+  )
 end
 
 def failed?(verdict: Verdict) -> Bool
@@ -338,9 +356,8 @@ end
 def file_text(file: FileResult, ai: Bool) -> String
   head: List[String] = []
   case file.verdict
-    Verdict.Fail(problem) -> head = [
-      "FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}",
-    ]
+    Verdict.Fail(problem) ->
+      head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}"]
     Verdict.Pass -> head = []
     Verdict.Skipped(_) -> head = []
     Verdict.NotExecuted -> head = []

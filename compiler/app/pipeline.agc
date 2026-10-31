@@ -19,8 +19,7 @@ end
 export def build(front: Front.Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) ->
-      return written(Writer.write(program, settings.version))
+    Lowering.Lowered.Done(program) -> return written(Writer.write(program, settings.version))
   end
 end
 

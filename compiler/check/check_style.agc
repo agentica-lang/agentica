@@ -20,10 +20,7 @@ FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "ri
 ## The first `end` of `linked` that breaks the rule, among the files whose project asks for it, as a problem at that
 ## `end` (there is no empty line to point at). The files are taken in program order. `none` when none does. A file of
 ## `styled`, which an earlier check found to follow the rule in this very text (modules/check_cache.agc), is not lexed.
-export def blank_line_after_end(
-  linked: Linker.Linked,
-  styled: Set[String],
-) -> Optional[Failure.Problem]
+export def blank_line_after_end(linked: Linker.Linked, styled: Set[String]) -> Optional[Failure.Problem]
   for module in linked.modules
     if module.blank_line_after_end and !styled.include?(module.file)
       case problem_in(module.file, module.text)
@@ -54,7 +51,7 @@ end
 # no line break after it, so neither makes it less bare. The kind of a token is checked before its neighbours, so the
 # many other tokens cost one comparison.
 def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Optional[Failure.Problem]
-  for index in 1...tokens.size - 1
+  for index in 1...(tokens.size - 1)
     token = tokens[index]
     if token.kind == "end" and tokens[index - 1].kind == "NL" and tokens[index + 1].kind == "NL"
       if needs_empty_line?(text, tokens, index + 1)

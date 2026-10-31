@@ -114,9 +114,11 @@ export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT)})
   if tables.size > 0 and artifact_tables.size > 0
     version = Toml.Value.Int(LOCK_FORMAT)
-    root = Toml.Value.Table(
-      {"version": version, "package": Toml.Value.Array(tables), "native-artifact": Toml.Value.Array(artifact_tables)},
-    )
+    root = Toml.Value.Table({
+      "version": version,
+      "package": Toml.Value.Array(tables),
+      "native-artifact": Toml.Value.Array(artifact_tables),
+    })
   elsif tables.size > 0
     root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT), "package": Toml.Value.Array(tables)})
   elsif artifact_tables.size > 0

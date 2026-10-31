@@ -1,0 +1,10 @@
+# before the block
+extern "libm.so.6"
+  def cos(x: C.Double) -> C.Double
+    # inside the block, kept as written
+  def   sin(x: C.Double) -> C.Double
+end # after the block
+
+def main() -> Void
+  puts(cos(1.0).to_s)
+end

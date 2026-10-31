@@ -442,13 +442,7 @@ end
 
 # `Shape.Circle` (or `Models.Shape.Circle`) written from the start of `span`: the enum is the part before the last, the
 # variant the last. A position on the module alias or the enum selects the enum.
-def enum_part_sites(
-  scan: Scan,
-  enum_name: String,
-  variant_name: String,
-  span: Source.Span,
-  kind: String,
-) -> List[Site]
+def enum_part_sites(scan: Scan, enum_name: String, variant_name: String, span: Source.Span, kind: String) -> List[Site]
   parts = written(scan.text, span.start)
   if !scan.declared.include?(enum_name) or parts.size < 2
     return []

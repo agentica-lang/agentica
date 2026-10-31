@@ -137,3 +137,19 @@ def test_only_a_skip_for_another_reason_than_the_tier_is_a_missing_tool():
     )
     assert refreeze.count_skips(report) == (4, 2, 0)
     assert refreeze.count_skips("<testsuite tests=\"2\"><testcase/><testcase/></testsuite>") == (2, 0, 0)
+
+
+def test_a_full_run_freezes_the_fast_tier_and_then_the_slow_tier():
+    # With AGENTICA_TEST_SLOW=1 the fast cases are skipped, so a stage without slow cases needs its own fast run.
+    tiers = []
+
+    def run_tier(stage, slow):
+        tiers.append(slow)
+        return 0, "", [{"file": stage}], (4, 4 if slow else 0, 0)
+
+    with mock.patch.object(refreeze, "run_tier", run_tier):
+        code, _, records, counts = refreeze.run_stage("format", False)
+        assert (tiers, code, len(records), counts) == ([False, True], 0, 2, (8, 4, 0))
+        tiers.clear()
+        refreeze.run_stage("format", True)
+        assert tiers == [False]

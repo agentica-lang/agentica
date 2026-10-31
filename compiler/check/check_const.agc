@@ -39,12 +39,7 @@ end
 ## Orders and checks the constants of the program (the declarations of the linked modules, in order). A program without
 ## constants gives its context and state back. The modules of `kept` were checked by an earlier run that the context
 ## and the state already hold (their constants are not read again, but they take their place in the order).
-export def check_all(
-  cx: State.Cx,
-  st: State.St,
-  modules: List[Linker.LinkedModule],
-  kept: Set[String],
-) -> Result[Done]
+export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule], kept: Set[String]) -> Result[Done]
   entries = collect(modules, kept)
   if entries.size == 0
     return ok(Done(cx: cx, st: st, order: []))
@@ -205,15 +200,16 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
   case node
     ConstWalk.Node.Stmt(stmt) ->
       case stmt
-        Ast.Stmt.While(found) -> return error(
-          refuse(
-            cx,
-            st,
-            found.span,
-            "a constant cannot use a while loop",
-            "loop with for over a range or a collection, or use a builtin such as reduce",
-          ),
-        )
+        Ast.Stmt.While(found) ->
+          return error(
+            refuse(
+              cx,
+              st,
+              found.span,
+              "a constant cannot use a while loop",
+              "loop with for over a range or a collection, or use a builtin such as reduce",
+            ),
+          )
         _ -> return ok(true)
       end
 
@@ -288,24 +284,26 @@ end
 def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Model.Builtin]) -> Result[Bool]
   span = Ast.expr_span(expr)
   case expr
-    Ast.Expr.FunctionRef(found) -> return error(
-      refuse(
-        cx,
-        st,
-        span,
-        "a constant cannot hold a function value",
-        "a constant is built from literals, constructors and builtins",
-      ),
-    )
-    Ast.Expr.Invoke(found) -> return error(
-      refuse(
-        cx,
-        st,
-        span,
-        "a constant cannot call a function value",
-        "a constant is built from literals, constructors and builtins",
-      ),
-    )
+    Ast.Expr.FunctionRef(found) ->
+      return error(
+        refuse(
+          cx,
+          st,
+          span,
+          "a constant cannot hold a function value",
+          "a constant is built from literals, constructors and builtins",
+        ),
+      )
+    Ast.Expr.Invoke(found) ->
+      return error(
+        refuse(
+          cx,
+          st,
+          span,
+          "a constant cannot call a function value",
+          "a constant is built from literals, constructors and builtins",
+        ),
+      )
     Ast.Expr.Call(found) ->
       if cx.functions.has_key?(found.name)
         return error(

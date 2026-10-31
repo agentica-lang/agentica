@@ -82,10 +82,7 @@ export def needs_types?(found: Answer) -> Bool
 end
 
 ## The definition of the declaration `target` names, or `none` for a builtin.
-export def definition_of(
-  modules: List[Linker.LinkedModule],
-  target: Sites.Target,
-) -> Optional[Definitions.Definition]
+export def definition_of(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optional[Definitions.Definition]
   if target.kind == "field"
     return Definitions.of_field(modules, target.owner, target.name)
   elsif target.kind == "variant"

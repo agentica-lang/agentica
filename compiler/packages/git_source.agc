@@ -12,13 +12,10 @@ TAG_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01
 HEX = Set.new("0123456789abcdef".split(""))
 # The names Windows keeps for devices, with or without an extension. The owner and the repository are folders of the
 # cache, so such a name could not be made there.
-WINDOWS_DEVICES = Set.new(
-  [
-    "con", "prn", "aux", "nul",
-    "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
-  ],
-)
+WINDOWS_DEVICES = Set.new([
+  "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1", "lpt2",
+  "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+])
 
 MAX_NAME = 64
 MAX_TAG = 128

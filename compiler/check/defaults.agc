@@ -23,11 +23,7 @@ end
 ## first unless the last parameter is an Fn (Builtins.default_problem), so the shape is the one a function of the
 ## program with those defaults would have.
 export def builtin_shape(form: Model.Builtin) -> Shape
-  return Shape(
-    required: Builtins.required_count(form),
-    total: form.parameters.size,
-    fn_last: Builtins.fn_last?(form),
-  )
+  return Shape(required: Builtins.required_count(form), total: form.parameters.size, fn_last: Builtins.fn_last?(form))
 end
 
 ## The shape of a function, read from its parameters. The order of the defaults was checked before

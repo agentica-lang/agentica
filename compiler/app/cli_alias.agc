@@ -26,9 +26,11 @@ export def targets(name: String) -> List[String]
     return []
   end
 
-  found = from_aliases(method, kind)
-    .concat(from_renamed(method, kind, modules))
-    .concat(from_method_names(method, kind, modules))
+  found = (
+    from_aliases(method, kind)
+      .concat(from_renamed(method, kind, modules))
+      .concat(from_method_names(method, kind, modules))
+  )
   public = found.uniq.sort.filter do |target: String| CatalogJson.public(target).ok? end
   if public.size > MAX_TARGETS
     return []
