@@ -22,6 +22,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   request on a channel as it arrives (`HTTP.RequestBody`: `pieces` and a `done`
   task), for uploads too big to hold; `HTTP.UploadHandler` names its type, and
   `HTTP.read_all` collects a body for a small route.
+- `HTTP.listen_websocket` (and `listen_websocket_tls`) upgrades a request to a
+  WebSocket (RFC 6455): `HTTP.accept_websocket` checks the handshake and runs a
+  session that gets `HTTP.Message`s (text, binary, ping, pong, close) on two
+  channels, and `HTTP.upgrade_only` wraps an ordinary `Handler` for the other
+  routes. Unmasking is slow (about 7 MB/s); the other `listen` forms still
+  answer an `Upgrade` 501.
 
 ### Changed
 

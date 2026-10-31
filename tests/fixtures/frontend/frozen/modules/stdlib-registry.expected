@@ -9,6 +9,7 @@ std/cookie.agc
 std/html.agc
 std/http.agc
 std/internal/archive_zip.agc
+std/internal/websocket.agc
 std/logger.agc
 std/mime.agc
 std/prelude/bytes.agc

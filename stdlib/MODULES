@@ -24,3 +24,4 @@ test/units.agc
 toml.agc
 uri.agc
 internal/archive_zip.agc
+internal/websocket.agc

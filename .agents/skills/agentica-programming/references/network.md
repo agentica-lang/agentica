@@ -176,6 +176,13 @@ HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: Str
 HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
+HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_websocket_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
+HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
+HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
+HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
+HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [])
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
@@ -336,3 +343,48 @@ end
   `max_bytes`, or when `done` is an error), so one `listen_upload` server can
   serve its small routes simply.
 - The response is whole. `HTTP.upload` is the client that streams to it.
+
+### WebSocket (RFC 6455) on the server
+
+`listen_websocket` is `listen` plus upgrades: the handler is
+`HTTP.UpgradeHandler`, `Fn[HttpRequest, Result[HTTP.Upgrade]]`. It returns
+`HTTP.accept_websocket(request, &session)` for a route that upgrades, and
+`HTTP.upgrade_only(&handler).call(request)` for a plain one
+(`Upgrade.Reply(response)`).
+
+```ruby
+def echo(ws: HTTP.WebSocket) -> Result[Void]
+  while true
+    case ws.incoming.recv(60000)
+      ok(message) ->
+        case message
+          HTTP.Message.Text(text) -> try ws.outgoing.send(HTTP.Message.Text(text), 5000)
+          HTTP.Message.Close(_, _) -> return ok()
+          _ -> puts("ignored")
+        end
+      error(_) -> return ok()
+    end
+  end
+
+  return ok()
+end
+```
+
+- The session `Fn[HTTP.WebSocket, Result[Void]]` runs in the connection's task.
+  `incoming` and `outgoing` hold 8 messages (backpressure), and a session that
+  stops draining `incoming` stops the server reading the socket (no pong, no
+  close answer): keep receiving, or end. `incoming` ends with
+  one `Close(code, reason)`, whatever ended the connection (code 1006: no close
+  frame came); then it closes. Receive until `Close`, or until the closed error.
+- Messages are whole: fragments are joined, text is UTF-8 checked, pings are
+  answered by the server (not handed on), a `Pong` is handed on. Sending
+  `Close(code, reason)` starts the close handshake. When the session returns the
+  server sends `Close(1000)` (1011 for an `error`), waits for the peer, closes.
+- Frames that break RFC 6455 close the connection with 1002, 1007 or 1009; the
+  cap is `max_message_bytes`. `idle_ms`, `ping_ms`, `close_ms` and `protocols`
+  are in `HTTP.WebSocketOptions`.
+- `accept_websocket` answers a bad handshake itself (400, or 426 for another
+  version). It does not check `Origin`: compare
+  `HTTP.header_values(request.headers, "origin")` before accepting when the
+  server serves pages. The other `listen` forms answer an `Upgrade` 501.
+- Unmasking runs at about 7 MB/s: keep `max_message_bytes` small.

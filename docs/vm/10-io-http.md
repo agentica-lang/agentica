@@ -122,11 +122,12 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   back to the pool only when the response was complete and neither side asked to
   close.
 - **Server.** One task per connection, and requests on one connection run one at
-  a time. `Upgrade` and `CONNECT` get 501, and `HTTP/1.1` only is accepted. At
-  most `max_connections` connections are open at once, and an extra one waits in
-  the kernel's backlog. `HTTP.wait` returns only after `HTTP.close_server`. When
-  `main` returns or the run fails, every server and client is closed and every
-  handler task stops.
+  a time. `Upgrade` and `CONNECT` get 501 (a WebSocket handshake is the one
+  `Upgrade` a `listen_websocket` server takes, 10.7.2), and `HTTP/1.1` only is
+  accepted. At most `max_connections` connections are open at once, and an
+  extra one waits in the kernel's backlog. `HTTP.wait` returns only after
+  `HTTP.close_server`. When `main` returns or the run fails, every server and
+  client is closed and every handler task stops.
 - **Exposure.** `std/http` is reached by an explicit import,
   `import HTTP from "std/http"`, like `std/queue`. `HTTP` is a free alias. The
   record and handle types (`HttpRequest`, `HttpResponse`, `HttpClientOptions`,
@@ -286,7 +287,10 @@ Properties of the client that no test checks:
   request) or `idle_timeout_ms` (later ones) for the first byte. On TLS that
   wait covers the handshake too. Then `request_timeout_ms`
   bounds the rest of the request. The checks run in this order: the parse
-  errors of 10.6; an `Upgrade` header (501); an `Expect` other than
+  errors of 10.6; an `Upgrade` header (501, unless the request is a `GET` with
+  one `Upgrade: websocket`, which `std/http` then answers 501 itself on a route
+  that does not upgrade, after the checks below: the `Expect` (417) and size
+  (413) refusals of a handshake head come first there); an `Expect` other than
   `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
   `100 Continue` if `Expect` asked and no body byte is buffered; then the body,
   which is kept as it comes. The head goes through `read_head`, chunk framing
@@ -395,6 +399,28 @@ Properties of the client that no test checks:
   `Connection: close`, the feeder is cancelled, the input is drained for at most
   the answer time and the connection closes. `HTTP.read_all` is a receive loop
   over `pieces` with a byte limit that awaits `done`.
+- A `listen_websocket` server reads the request whole, as `listen` does, and
+  calls the handler, which answers (`Upgrade.Reply`, served as a `listen`
+  answer, the connection kept) or upgrades. An upgrade writes the 101 head
+  by hand (`Sec-WebSocket-Accept` is the base64 of `Digest.sha1` of the key and
+  the GUID of RFC 6455), then runs the session in the connection task with
+  three tasks around it. The reader is the only task that reads the socket: it
+  takes the frame head (two bytes, then the length and mask), checks it before
+  it reads the payload (masked, no reserved bits, known opcode, control frames
+  whole and at most 125 bytes, the length against `max_message_bytes`), unmasks
+  the payload in a loop over its bytes (about 7 MB/s), joins fragments, checks
+  UTF-8 and close codes, and sends whole messages to `incoming`. The
+  forwarder turns the handler's `outgoing` messages into frames for the writer.
+  The writer is the only task that writes the socket and the one that ends the
+  connection: its channel holds frames and four verdicts (our close frame, the
+  answer to the peer's, a failure frame, the loss of the peer), and it
+  finishes when the handshake is done, on a failed write, or `close_ms` after
+  our close frame. The reader answers a close frame (the echo goes to the writer
+  before the handler hears the `Close`). Every path ends with one `Close` on
+  `incoming`: the peer's, the code of the failure, or 1006. The pure part (the
+  frame codec, the checks and the accept key) is `std/internal/websocket`; a
+  read timeout closes the socket, so `idle_ms` is the timeout of each read and
+  `ping_ms` is the timeout of the writer's wait.
 
 #### 10.7.3 Errors and status codes
 
@@ -420,7 +446,8 @@ Properties of the client that no test checks:
   - **Who:** C
   - **Answer:** 505, then close
 
-- **Case:** `CONNECT`, `Upgrade`, a `Transfer-Encoding` other than one `chunked`
+- **Case:** `CONNECT`, `Upgrade` (except a `GET` with one `Upgrade: websocket`
+  on a `listen_websocket` route), a `Transfer-Encoding` other than one `chunked`
   - **Who:** C
   - **Answer:** 501, then close
 

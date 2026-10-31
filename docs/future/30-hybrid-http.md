@@ -94,6 +94,11 @@ closes the connection (never back to the pool) and ends with an error.
   - **The one form:** `HTTP.listen_upload`, with `HTTP.read_all(body, max)` for
     its small routes (built)
 
+- **Job:** A server whose routes upgrade to a WebSocket
+  - **The one form:** `HTTP.listen_websocket`, with `HTTP.accept_websocket` for
+    the routes that upgrade and `HTTP.upgrade_only(handler)` for the others
+    (built)
+
 The checker cannot stop `HTTP.open` on a small response, so these pass the
 one-way test by job, as `Task.map` and channels do (§27): each form exists for
 something the others cannot do (a body that does not fit the limit or never
