@@ -146,9 +146,10 @@ export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[Resol
 end
 
 ## CHECK-NOT-ENCODABLE when the type arguments that a call or a reference of the generic function callee binds (found)
-## do not meet what callee needs (Cx.json_needs). The span is the one of the first argument whose parameter type
-## (templates, beside spans) has a variable of the failed need, else span. In a generic body the call is recorded
-## (State.JsonUse.Pass), so the body's own needs include the callee's.
+## do not meet what callee needs (Cx.json_needs); the help names the need in the callee's type parameters and as
+## bound. The span is the one of the first argument whose parameter type (templates, beside spans) has a variable of
+## the failed need, else span. In a generic body the call is recorded (State.JsonUse.Pass), so the body's own needs
+## include the callee's.
 export def check_json_needs(
   cx: State.Cx,
   st: State.St,
@@ -166,6 +167,8 @@ export def check_json_needs(
   for need in cx.json_needs.get(callee).unwrap_or([])
     bound = substitute(need, found)
     if encode_needs(cx, bound).none?
+      name = Types.display_name(callee)
+      help = "#{name} gives #{Types.to_text(need)} (here #{Types.to_text(bound)}) to JSON.encode or JSON.from"
       return error(
         State.fail_help(
           cx,
@@ -173,7 +176,7 @@ export def check_json_needs(
           "CHECK-NOT-ENCODABLE",
           "cannot JSON.encode #{Types.to_text(bound)} or its nested types",
           binding_span(need, templates, spans, span),
-          "#{Types.display_name(callee)} gives this value to JSON.encode or JSON.from",
+          help,
         ),
       )
     end
