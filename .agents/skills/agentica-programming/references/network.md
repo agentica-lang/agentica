@@ -148,9 +148,10 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   status and written body, without redirect follow; the connection is not
   pooled. `DownloadOptions()`, the default, gives 30 s and 256 MiB.
 - A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
-  it with `HTTP.text(response.body, response.headers)`, which decodes UTF-8
-  only: a `charset` in `Content-Type` other than `utf-8`, or a body that is not
-  valid UTF-8, is an error (`us-ascii` counts as `utf-8`; other charsets: the
+  it with `HTTP.text(response.body, response.headers)`, which decodes the
+  `charset` of `Content-Type` (UTF-8 without one) when `b.decode` knows it
+  (UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15, Windows-1252); a body
+  invalid in its charset, or another charset, is an error (other charsets: the
   planned `agentica-lang/charset` package). `HttpResponse` is not JSON
   encodable. The body of a request in a server handler is `Bytes` too:
   `HTTP.text(request.body, request.headers)`.

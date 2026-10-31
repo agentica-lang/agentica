@@ -27,6 +27,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   never ends, and `HTTP.upload` sends a body that another task feeds through a
   channel, chunked or with an exact `length`.
 
+### Changed
+
+- `HTTP.text` decodes the `charset` of `Content-Type` with `bytes.decode`: a
+  Latin-1, Windows-1252 or UTF-16 body that was an error now decodes, and a
+  `us-ascii` body with a non-ASCII byte is now an error.
+
 ## [0.19.0-beta.3] - 2026-10-31
 
 ### Added

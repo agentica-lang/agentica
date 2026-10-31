@@ -789,7 +789,7 @@ def test_client_against_threading_http_server_keep_alive_chunked_close_delimited
         "200 3 255 128 false",
         "5 [255, 0, 128, 13, 10]",
         "200 5 ff00800d0a 12",
-        "4 233 false",
+        "4 233 true",
         "200 form 8 a=1&b=ñ 14",
         "true",
         "200 until the end 13",
