@@ -17,6 +17,7 @@ import select
 import signal
 import subprocess
 import textwrap
+import threading
 import time
 
 import pytest
@@ -3117,6 +3118,50 @@ def test_a_callback_prints_more_than_the_output_buffer(tmp_path, peer, scheduler
     assert (result.code, result.stderr) == (0, "")
     lines = ["%d %d %s" % (x, k, "x" * 80) for x in (1, 2) for k in range(2000)]
     assert (out.read_text() if to_file else result.stdout) == "\n".join(lines + ["1002"]) + "\n"
+
+
+CALLBACK_STALLED = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_twice(fn: Step, x: C.Int32) -> C.Int32
+end
+
+def noisy(x: Int) -> Int
+  100_000.times do |k|
+    puts("#{x} #{k}")
+  end
+
+  return x
+end
+
+def main() -> Void
+  task = Task.spawn do peer_call_twice(Native.callback(Step, &noisy), 1) end
+  Task.sleep(300)
+  IO.warn("woke")
+  puts(Task.await(task))
+end
+"""
+
+
+# While a callback waits for a reader that does not read, the scheduler it holds still fires its timers: `main`, which
+# sleeps on that scheduler, wakes on time and goes on on another one.
+@NATIVE_CALLS
+def test_a_callback_waiting_for_a_stalled_reader_lets_timers_fire(tmp_path, peer):
+    source = program(tmp_path, CALLBACK_STALLED % literal(peer))
+    process = subprocess.Popen(cli() + ["--schedulers", "2", str(source)], stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, env=vm_environment(None))
+    try:
+        woke = []
+        reader = threading.Thread(target=lambda: woke.append(process.stderr.readline()), daemon=True)
+        reader.start()
+        reader.join(scaled(3))
+        assert woke == [b"woke\n"]
+        out, _ = process.communicate(timeout=scaled(30))
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
+    assert process.returncode == 0
+    assert out.decode() == "".join("%d %d\n" % (x, k) for x in (1, 2) for k in range(100_000)) + "1002\n"
 
 
 CALLBACK_EDGES = """extern "%s"

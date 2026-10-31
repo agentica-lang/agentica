@@ -457,12 +457,17 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
 
 /* One wait of callback_turn, with the stream's lock given back for it: false when the print is dropped instead, for
    the end of the run, a stop signal or a cancel of the task, which the callback's own turn loop then acts on
-   (run_nested in vm/interp.c). */
+   (run_nested in vm/interp.c). The wait may last as long as the reader stalls, so each pass does the work of a turn
+   boundary that the tasks of this scheduler wait on: their timers fire, and a task woken onto it moves to the shared
+   queue. */
 static bool callback_wait(agc_vm *vm, agc_output *s) {
   bool go = !atomic_load_explicit(&vm->rt->over, memory_order_acquire) &&
             !atomic_load_explicit(&vm->task->cancelled, memory_order_acquire) && !agc_io_stop_signal();
   stream_drop(vm, s->lock);
-  if (go) agc_io_pause(vm, CALLBACK_WAIT_MS);
+  if (go) {
+    agc_io_pause(vm, CALLBACK_WAIT_MS);
+    agc_task_nested_boundary(vm);
+  }
   stream_take(vm, s->lock);
   return go;
 }

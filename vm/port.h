@@ -707,6 +707,9 @@ bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args, uint32
 /* Clears the registers and frames of the callbacks that the native call of T that returns now ran, so that their
    values do not stay alive with the task. */
 void agc_task_clear_nested(agc_task *t);
+/* What the scheduler does between turns while a callback holds it: due timers fire, and the task in its runnext slot
+   goes to the shared queue. */
+void agc_task_nested_boundary(agc_vm *vm);
 /* Raises again an outcome that agc_task_run_nested kept, as it was: the same failure and stack, or the same exit. */
 _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
