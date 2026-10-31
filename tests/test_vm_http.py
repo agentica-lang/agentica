@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, host_only, optional_tool,
-                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, optional_tool, output_lines, run,
+                                 run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -915,11 +915,11 @@ def test_upload_sends_a_body_from_a_channel_chunked_or_with_its_length(tmp_path,
 
 
 # The server closes with the upload unread. Whether its answer is still readable after the reset depends on the system:
-# Windows drops the input of a reset connection, so there the write failure is all the client has.
-@host_only(WINDOWS, "a reset connection drops the answer that was in its input")
+# Windows drops the input of a reset connection, so there the write failure is all the client may have.
 def test_upload_returns_the_answer_of_a_server_that_refuses_it_and_closes(tmp_path, adopt):
     _, ports = start_peer(adopt)
-    check_lines(run_program(tmp_path, "stream-refuse", STREAM_REFUSE_PROGRAM, ports), ["413 big!"], "stream-refuse")
+    first = output_lines(run_program(tmp_path, "stream-refuse", STREAM_REFUSE_PROGRAM, ports))[0]
+    assert first == "413 big!" or (WINDOWS and first.startswith("error: http: ")), first
 
 
 def test_public_connection_over_tls_verifies_the_certificate_and_ends_a_body_that_runs_to_the_close(tmp_path, adopt):
