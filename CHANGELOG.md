@@ -11,6 +11,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `channel.empty?` is `true` when no value is left to receive.
+- `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
+  `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
+  `Handler`.
 
 ### Changed
 

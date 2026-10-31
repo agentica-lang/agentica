@@ -386,8 +386,8 @@ The server is in `std/http` too: a handler takes the whole request and returns t
 ### HTTP.listen
 
 ```text
-HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
 ```
 
@@ -426,6 +426,65 @@ end
 
 The server adds `Content-Length` (not on 204 and 304, whose body must be empty), a `Date` header unless the handler set one, and `Connection: close` when the request or response asked for it. `HEAD` gets the headers without the body.
 
+#### Handler and middleware
+
+`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
+
+A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result.
+
+```agentica
+import HTTP from "std/http"
+
+def handler(f: HTTP.Handler) -> HTTP.Handler
+  return f
+end
+
+def hello(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
+end
+
+def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  response = next.call(request)
+  case response
+    ok(answer) -> puts("#{request.method} #{request.path} #{answer.status}")
+    error(_) -> puts("#{request.method} #{request.path} failed")
+  end
+
+  return response
+end
+
+# Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
+def logged(next: HTTP.Handler) -> HTTP.Handler
+  return handler() do |request| log_answer(next, request) end
+end
+
+def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  if HTTP.header_values(request.headers, "authorization").empty?
+    return ok(HttpResponse(status: 401, headers: [], body: "".bytes))
+  end
+
+  return next.call(request)
+end
+
+# Answers 401 to a request without an Authorization header, and does not call the next handler.
+def guarded(next: HTTP.Handler) -> HTTP.Handler
+  return handler() do |request| authorized(next, request) end
+end
+
+def main() -> Void
+  app = logged(guarded(&hello))
+  open = HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes)
+  signed = HttpRequest(method: "GET", target: "/", path: "/", headers: [Header(name: "authorization", value: "token")], body: "".bytes)
+  app.call(open)
+  app.call(signed)
+end
+```
+
+```output
+GET / 401
+GET / 200
+```
+
 Handler errors:
 
 - A handler returning `error(message)` gives the client a 500 with an empty body and closes the connection. stderr gets `http: handler error: <message>`.
@@ -457,8 +516,8 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 ### HTTP.listen_stream and Server-Sent Events
 
 ```text
-HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
