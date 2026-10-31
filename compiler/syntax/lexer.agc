@@ -7,13 +7,11 @@ import Unicode from "unicode"
 
 ## The token kind of each operator and bracket.
 OPERATOR_KINDS = {
-  "->": "arrow", "==": "equal", "!=": "not-equal", "<=": "less-equal", ">=": "greater-equal",
-  "&&": "and", "||": "or", "!": "not", "+=": "plus-assign", "-=": "minus-assign",
-  "*=": "multiply-assign", "/=": "divide-assign", "%=": "modulo-assign",
-  "(": "left-paren", ")": "right-paren", "[": "left-bracket", "]": "right-bracket",
-  "{": "left-brace", "}": "right-brace", ",": "comma", ":": "colon", ".": "dot",
-  "..": "dot-dot", "...": "dot-dot-dot", "=": "assign", "+": "plus", "-": "minus",
-  "*": "multiply", "/": "divide", "%": "modulo", "<": "less", ">": "greater",
+  "->": "arrow", "==": "equal", "!=": "not-equal", "<=": "less-equal", ">=": "greater-equal", "&&": "and", "||": "or",
+  "!": "not", "+=": "plus-assign", "-=": "minus-assign", "*=": "multiply-assign", "/=": "divide-assign",
+  "%=": "modulo-assign", "(": "left-paren", ")": "right-paren", "[": "left-bracket", "]": "right-bracket",
+  "{": "left-brace", "}": "right-brace", ",": "comma", ":": "colon", ".": "dot", "..": "dot-dot", "...": "dot-dot-dot",
+  "=": "assign", "+": "plus", "-": "minus", "*": "multiply", "/": "divide", "%": "modulo", "<": "less", ">": "greater",
   "&": "ampersand", "|": "pipe", "|>": "pipe-forward",
 }
 
@@ -21,8 +19,8 @@ OPERATOR_KINDS = {
 ## not in the map (0).
 WORD_ACTIONS = {
   "import": 1, "export": 1, "def": 2, "struct": 2, "enum": 2, "case": 1, "do": 2, "end": 3, "if": 2, "elsif": 1,
-  "else": 1, "while": 2, "for": 2, "in": 1, "return": 1, "try": 1, "true": 1, "false": 1, "nil": 1, "and": 1,
-  "or": 1, "not": 1,
+  "else": 1, "while": 2, "for": 2, "in": 1, "return": 1, "try": 1, "true": 1, "false": 1, "nil": 1, "and": 1, "or": 1,
+  "not": 1,
 }
 
 ## The characters of a name after its first one: letters, digits and `_`. Never the sentinel `""`: a name scan stops at
@@ -130,12 +128,10 @@ PAIR_SECONDS = Set.new(["=", ">", "&", "|", "."])
 ELLIPSIS = Op(kind: "dot-dot-dot", lexeme: "...", value: Tokens.Value.Text("..."), width: 3)
 
 ## The token kinds that can end an expression: a line that starts with `.name` continues a line that ends in one.
-ENDS_EXPRESSION = Set.new(
-  [
-    "name", "type-name", "integer", "float", "string", "interp-end", "right-paren", "right-bracket", "right-brace",
-    "end", "true", "false", "nil",
-  ],
-)
+ENDS_EXPRESSION = Set.new([
+  "name", "type-name", "integer", "float", "string", "interp-end", "right-paren", "right-bracket", "right-brace",
+  "end", "true", "false", "nil",
+])
 
 ## The keywords that start the head of a block: a leading dot on the line after one is not a continuation.
 BLOCK_HEADS = Set.new(["if", "elsif", "while", "case", "for"])
@@ -1269,10 +1265,8 @@ def heredoc_form(at: Source.Span) -> Diag.Diagnostic
     "only the squiggly heredoc <<~NAME exists",
     at,
     Diag.Help.Hint(
-      (
-        "write <<~NAME, the text on the lines below it and a line that holds only NAME; \\# writes a # that starts " +
-        "no interpolation"
-      ),
+      "write <<~NAME, the text on the lines below it and a line that holds only NAME; \\# writes a # that starts " +
+      "no interpolation",
     ),
   )
 end
@@ -1447,10 +1441,8 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   help = Diag.Help.NoHelp
   if frame.kind == "{"
     help = Diag.Help.Hint(
-      (
-        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
-        "blocks have no braces and end with \"end\""
-      ),
+      "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
+      "blocks have no braces and end with \"end\"",
     )
   end
 

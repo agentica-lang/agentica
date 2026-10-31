@@ -293,10 +293,13 @@ end
 
 def right_kind?(kind: Declarations.Kind, want: Want) -> Bool
   case want
-    Want.Type -> return (
-      Declarations.struct?(kind) or Declarations.enum?(kind) or Declarations.type_alias?(kind) or
-      Declarations.resource?(kind)
-    )
+    Want.Type ->
+      return (
+        Declarations.struct?(kind) or
+        Declarations.enum?(kind) or
+        Declarations.type_alias?(kind) or
+        Declarations.resource?(kind)
+      )
     Want.Enum -> return Declarations.enum?(kind)
     Want.Function -> return Declarations.function?(kind)
   end

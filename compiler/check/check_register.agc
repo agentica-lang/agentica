@@ -93,9 +93,7 @@ def register_callback(cx: State.Cx, st: State.St, node: Ast.ResourceDecl) -> Res
       seen: Set[String] = Set.new([])
       for param in callback.params
         if seen.include?(param.name)
-          return error(
-            State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
-          )
+          return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span))
         end
 
         seen = seen.add(param.name)
@@ -270,9 +268,7 @@ def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) 
     cx.resources.include?(name) or
     cx.functions.has_key?(name)
   )
-    return error(
-      State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(name)}\" is already defined", span),
-    )
+    return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(name)}\" is already defined", span))
   end
 
   return ok(true)
@@ -452,12 +448,7 @@ def type_names(cx: State.Cx, module: Linker.LinkedModule) -> Set[String]
   return names
 end
 
-def register_function(
-  cx: State.Cx,
-  st: State.St,
-  node: Ast.FunctionDecl,
-  types: Set[String],
-) -> Result[State.Cx]
+def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: Set[String]) -> Result[State.Cx]
   taken = (
     ENTRIES.has_key?(node.name) or
     cx.functions.has_key?(node.name) or
@@ -467,13 +458,7 @@ def register_function(
   )
   if taken
     return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-REDEFINED-NAME",
-        "\"#{T.display_name(node.name)}\" is already defined",
-        node.span,
-      ),
+      State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(node.name)}\" is already defined", node.span),
     )
   end
 
@@ -489,9 +474,7 @@ def register_function(
   params: List[T.Type] = []
   for param in node.params
     if param.name != "_" and seen.include?(param.name)
-      return error(
-        State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
-      )
+      return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span))
     end
 
     seen = seen.add(param.name)
@@ -517,12 +500,7 @@ def register_function(
 end
 
 # CHECK-REDEFINED-NAME at a type parameter named like a type the file can write: it would hide that type.
-def check_hidden_types(
-  cx: State.Cx,
-  st: State.St,
-  node: Ast.FunctionDecl,
-  types: Set[String],
-) -> Result[Bool]
+def check_hidden_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: Set[String]) -> Result[Bool]
   index = 0
   while index < node.type_parameters.size
     if types.include?(node.type_parameters[index])

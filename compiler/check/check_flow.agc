@@ -37,9 +37,8 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
     Ast.Stmt.If(node) -> return if_help(node, type_name)
     Ast.Stmt.While(node) -> return loop_help(type_name)
     Ast.Stmt.For(node) -> return loop_help(type_name)
-    Ast.Stmt.Case(node) -> return (
-      "every arm of the last \"case\" must end with return, or return #{type_name} after it"
-    )
+    Ast.Stmt.Case(node) ->
+      return "every arm of the last \"case\" must end with return, or return #{type_name} after it"
     _ -> return ""
   end
 end
@@ -118,12 +117,8 @@ end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   case node.else_body
-    some(body) -> return (
-      "every branch of the last \"if\" must end with return, or return #{type_name} after it"
-    )
-    none -> return (
-      "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
-    )
+    some(body) -> return "every branch of the last \"if\" must end with return, or return #{type_name} after it"
+    none -> return "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
   end
 end
 

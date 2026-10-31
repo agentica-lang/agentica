@@ -21,9 +21,7 @@ export def read_text(workspace: Workspace.Workspace, reading: Reading) -> Result
   case workspace.read_text.call(reading.file)
     SourceFile.Read.Text(text) -> return ok(text)
     SourceFile.Read.Invalid(at) ->
-      return error(
-        located(reading, at, "the file is not valid UTF-8", Failure.hint("save the file as UTF-8 text")),
-      )
+      return error(located(reading, at, "the file is not valid UTF-8", Failure.hint("save the file as UTF-8 text")))
     SourceFile.Read.Unreadable(message) -> return error(fail(reading, "", "cannot read the file: #{message}"))
   end
 end

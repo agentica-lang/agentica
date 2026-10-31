@@ -30,8 +30,7 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
   path = rest[0]
   case QueryFiles.read(settings, path, false)
     SourceFile.Read.Unreadable(_) -> return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
-    SourceFile.Read.Invalid(at) ->
-      return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Invalid(at) -> return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(text) -> return documented(settings, path, text, as_json)
   end
 end

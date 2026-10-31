@@ -305,7 +305,13 @@ def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Voi
   end
 
   arguments = [
-    "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--", locked.source.git,
+    "fetch",
+    "--quiet",
+    "--depth=1",
+    "--no-tags",
+    "--no-recurse-submodules",
+    "--",
+    locked.source.git,
     "+#{wanted}:#{PINNED}",
   ]
   try git(place, scratch, inside(scratch, arguments))

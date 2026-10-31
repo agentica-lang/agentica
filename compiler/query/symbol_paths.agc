@@ -43,12 +43,7 @@ end
 ## `--stdin` ("" without it): the buffer is a root of its own, and the first one, since it is the file being edited. A
 ## path that is neither a file nor a folder, a folder that cannot be listed and a folder with no `*.agc` file are
 ## QUERY-USAGE, with `usage` as the help.
-export def expand(
-  workspace: Workspace.Workspace,
-  paths: List[String],
-  buffer: String,
-  usage: String,
-) -> Expanded
+export def expand(workspace: Workspace.Workspace, paths: List[String], buffer: String, usage: String) -> Expanded
   asked = paths
   if asked.size == 0
     asked = [DEFAULT_PATH]

@@ -44,9 +44,7 @@ export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Jso
 end
 
 def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
-  parameters = form.parameters.map do |parameter: Model.Named|
-    parameter_json(parameter)
-  end
+  parameters = form.parameters.map do |parameter: Model.Named| parameter_json(parameter) end
 
   return JSON.object({
     "name": JSON.from(form.name),

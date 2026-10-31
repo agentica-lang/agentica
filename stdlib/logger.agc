@@ -172,8 +172,8 @@ export def time_text(ms: Int) -> String
     year = 0 - year
   end
   hour = rest / 3600000
-  minute = rest % 3600000 / 60000
-  second = rest % 60000 / 1000
+  minute = (rest % 3600000) / 60000
+  second = (rest % 60000) / 1000
   milli = rest % 1000
   date = "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}"
   clock = "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}"

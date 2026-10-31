@@ -174,8 +174,7 @@ end
 
 def placed(detail: Detail, at: Source.Span) -> Detail
   case detail
-    Detail.Struct(fields) ->
-      return Detail.Struct(fields.map do |field: Field| field.with(span: at, name_span: at) end)
+    Detail.Struct(fields) -> return Detail.Struct(fields.map do |field: Field| field.with(span: at, name_span: at) end)
     Detail.Enum(variants) ->
       return Detail.Enum(variants.map do |variant: Variant| variant.with(span: at, name_span: at) end)
     Detail.Function(_, _) -> return detail
@@ -233,13 +232,7 @@ def function_item(
   )
 end
 
-def struct_item(
-  node: Ast.StructDecl,
-  doc: Optional[String],
-  span: Source.Span,
-  exported: Bool,
-  text: String,
-) -> Item
+def struct_item(node: Ast.StructDecl, doc: Optional[String], span: Source.Span, exported: Bool, text: String) -> Item
   fields = node.fields.map do |field: Ast.FieldDecl|
     Field(
       name: field.name,

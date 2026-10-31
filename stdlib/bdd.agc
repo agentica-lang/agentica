@@ -283,8 +283,9 @@ def serve(all: List[Step]) -> Void
     has_table: false,
     table: empty,
   )
-  ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, services: {}, step: blank,
-                                   program: Program.NotStarted))
+  ctx = Context(
+    scenario: Scenario(settings: settings.unwrap!, state: {}, services: {}, step: blank, program: Program.NotStarted),
+  )
   line = Process.parent_read_line(idle_ms())
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
@@ -363,8 +364,15 @@ def start(ctx: Context, path: String) -> Context
     end
     halt("RUNTIME-BDD-IO", spawned.message)
   end
-  return Context(scenario: Scenario(settings: settings, state: ctx.scenario.state, services: ctx.scenario.services,
-                                    step: ctx.scenario.step, program: Program.Running(spawned.unwrap!)))
+  return Context(
+    scenario: Scenario(
+      settings: settings,
+      state: ctx.scenario.state,
+      services: ctx.scenario.services,
+      step: ctx.scenario.step,
+      program: Program.Running(spawned.unwrap!),
+    ),
+  )
 end
 
 def program(ctx: Context) -> Process
@@ -462,18 +470,39 @@ def clip(text: String) -> String
 end
 
 def with_state(ctx: Context, state: Map[String, Json]) -> Context
-  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: state, services: ctx.scenario.services,
-                                    step: ctx.scenario.step, program: ctx.scenario.program))
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: state,
+      services: ctx.scenario.services,
+      step: ctx.scenario.step,
+      program: ctx.scenario.program,
+    ),
+  )
 end
 
 def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -> Context
-  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: ctx.scenario.state, services: services,
-                                    step: ctx.scenario.step, program: ctx.scenario.program))
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: ctx.scenario.state,
+      services: services,
+      step: ctx.scenario.step,
+      program: ctx.scenario.program,
+    ),
+  )
 end
 
 def with_step(ctx: Context, current: StepLine) -> Context
-  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: ctx.scenario.state,
-                                    services: ctx.scenario.services, step: current, program: ctx.scenario.program))
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: ctx.scenario.state,
+      services: ctx.scenario.services,
+      step: current,
+      program: ctx.scenario.program,
+    ),
+  )
 end
 
 def halt(code: String, message: String) -> Void

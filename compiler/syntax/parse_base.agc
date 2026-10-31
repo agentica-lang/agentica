@@ -459,10 +459,8 @@ def detached_doc(token: Tokens.Token) -> String
     "a doc comment must be followed by a declaration, field or variant on the next line",
     token.span,
     hint(
-      (
-        "put the doc block directly above the declaration, field or variant it documents; " +
-        "use # for a note that documents nothing"
-      ),
+      "put the doc block directly above the declaration, field or variant it documents; " +
+      "use # for a note that documents nothing",
     ),
   )
 end

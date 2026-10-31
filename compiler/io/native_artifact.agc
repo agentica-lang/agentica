@@ -241,12 +241,7 @@ def probe_member(
   end
 end
 
-def archive_state(
-  archive: String,
-  sha: String,
-  deadline: Int,
-  context: NativeArtifact.Context,
-) -> ArchiveSeen
+def archive_state(archive: String, sha: String, deadline: Int, context: NativeArtifact.Context) -> ArchiveSeen
   left = deadline - Time.monotonic_ms()
   if left <= 0
     return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))

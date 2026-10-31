@@ -67,14 +67,12 @@ end
 export def json_text(entries: List[Entry]) -> String
   failed = failures(entries)
   files = entries.map do |entry: Entry| JSON.object(json_entry(entry)) end
-  document = JSON.object(
-    {
-      "ok": JSON.from(failed == 0),
-      "checked": JSON.from(entries.size),
-      "failed": JSON.from(failed),
-      "files": JSON.array(files),
-    },
-  )
+  document = JSON.object({
+    "ok": JSON.from(failed == 0),
+    "checked": JSON.from(entries.size),
+    "failed": JSON.from(failed),
+    "files": JSON.array(files),
+  })
   return "#{JSON.encode(document)}\n"
 end
 

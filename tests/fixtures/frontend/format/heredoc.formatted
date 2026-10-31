@@ -1,0 +1,25 @@
+def main() -> Void
+  text = <<~TEXT
+    first line
+      indented line
+
+    after a blank line
+  TEXT
+  puts(text)
+  both = join(
+    <<~ONE,
+    one
+    more
+  ONE
+    <<~TWO,
+    two
+    more
+  TWO
+  )
+  name = "x"
+  shown = <<~SHOWN
+    hello #{name}
+    and more
+  SHOWN
+  puts(shown)
+end

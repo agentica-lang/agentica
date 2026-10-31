@@ -32,22 +32,38 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGES = ["lexer", "parser", "format", "modules", "check", "lower", "catalog", "bytecode"]
+STAGES = ["lexer", "parser", "format", "fmt", "modules", "check", "lower", "catalog", "bytecode"]
 
 # One stage with the whole slow tier can take many minutes; a stage that runs longer than this is stopped.
 STAGE_TIMEOUT = 3600
 
 
 def run_stage(stage, fast_only):
-    """Run one stage in refreeze mode. Gives (return code, tail of the output, list of logged records)."""
+    """Run one stage in refreeze mode, the fast tier and then, unless `fast_only`, the slow tier. Gives (return code,
+    output, list of logged records, (collected cases, skipped cases, unexpected skips)) summed over the tiers.
+
+    With AGENTICA_TEST_SLOW=1 the fast cases are skipped (tests/conftest.py), so one slow run alone would skip every
+    case of a stage that has no slow ones and freeze none of its fast goldens."""
+    runs = [run_tier(stage, False)]
+    if not fast_only:
+        runs.append(run_tier(stage, True))
+    code = max(run[0] for run in runs)
+    output = "".join(run[1] for run in runs)
+    records = [record for run in runs for record in run[2]]
+    counts = tuple(sum(run[3][at] for run in runs) for at in range(3))
+    return code, output, records, counts
+
+
+def run_tier(stage, slow):
+    """Run one tier of a stage in refreeze mode. Gives (return code, output, logged records, skip counts)."""
     with tempfile.TemporaryDirectory(prefix="agentica-refreeze-") as directory:
         log = Path(directory) / "log.jsonl"
         junit = Path(directory) / "junit.xml"
         env = dict(os.environ, AGENTICA_REFREEZE="1", AGENTICA_REFREEZE_LOG=str(log), TMPDIR=directory)
-        if fast_only:
-            env.pop("AGENTICA_TEST_SLOW", None)
-        else:
+        if slow:
             env["AGENTICA_TEST_SLOW"] = "1"
+        else:
+            env.pop("AGENTICA_TEST_SLOW", None)
         try:
             result = subprocess.run(
                 [

@@ -105,8 +105,17 @@ end
 ## The state at the start of a function in file index: nothing emitted, no names, no registers.
 export def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> Fx
   return Fx(
-    code: [], next: 0, high: 0, vars: {}, labels: 0, loop_next: -1, loop_exit: -1, pending: [], file: file,
-    blocks: blocks, block_count: block_count
+    code: [],
+    next: 0,
+    high: 0,
+    vars: {},
+    labels: 0,
+    loop_next: -1,
+    loop_exit: -1,
+    pending: [],
+    file: file,
+    blocks: blocks,
+    block_count: block_count,
   )
 end
 

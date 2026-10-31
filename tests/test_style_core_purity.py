@@ -80,6 +80,7 @@ ENTRY_PROGRAMS = {
     "compiler/syntax/lex.agc": {"System.args"},
     "compiler/syntax/parse.agc": {"System.args"},
     "compiler/format/attach.agc": {"System.args"},
+    "compiler/format/fmt.agc": {"System.args"},
     "compiler/modules/link.agc": {"System.args"},
     "compiler/check/check.agc": {"System.args"},
     "compiler/lower/lower.agc": {"System.args"},

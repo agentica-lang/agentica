@@ -33,9 +33,7 @@ end
 
 ## The bytes (each 0 to 255) as two lowercase hex digits each.
 export def hex_of(bytes: List[Int]) -> String
-  digits = bytes.map do |byte: Int|
-    "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}"
-  end
+  digits = bytes.map do |byte: Int| "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}" end
 
   return digits.join("")
 end

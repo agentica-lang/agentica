@@ -167,9 +167,7 @@ def target_of(
 
   message = "the library #{library.name} is not declared for #{os}"
   help = "add [#{here}.#{os}] to the manifest of the package"
-  return Target.Unusable(
-    Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)),
-  )
+  return Target.Unusable(Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)))
 end
 
 # The downloaded row on this system: the lock row it matches, verified from the cache alone. A lock the manifest

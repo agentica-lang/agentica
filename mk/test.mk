@@ -1,8 +1,8 @@
 # The Python tests: the pytest runner (test, test-slow, test-py, py-test/%), the test groups (tests, KIND, DOCKER, WINE),
-# conformance, goldens, smoke, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
+# conformance, goldens, smoke, fmt-check, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
-  test-bdd smoke goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
+  test-bdd smoke fmt-check goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
@@ -95,7 +95,7 @@ py-test/%: FORCE
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
-CLI_TESTS ?= tests/test_cli_forms.py tests/test_cli_check.py tests/test_check_stdin.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_process_bdd.py tests/test_source_paths.py \
+CLI_TESTS ?= tests/test_cli_forms.py tests/test_cli_check.py tests/test_cli_fmt.py tests/test_check_stdin.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_process_bdd.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
 test-cli: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
@@ -216,6 +216,11 @@ test-bdd: $(if $(filter true,$(GITHUB_ACTIONS)),$(PRODUCT))
 # Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
 smoke: $(PRODUCT)
 	tests/smoke.sh
+
+# The layout of compiler/ and stdlib/: `agentica fmt --check` lists every file that the formatter would change
+# (docs/future/47-formatter.md).
+fmt-check: $(PRODUCT)
+	$(PRODUCT) fmt --check compiler stdlib
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
 
 # The built binary, copied away from the checkout, still imports its std/ modules

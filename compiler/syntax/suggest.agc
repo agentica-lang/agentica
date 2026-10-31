@@ -12,11 +12,7 @@ end
 ## did_you_mean for the names of a linked program. A linked name starts with "@N::",
 ## the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra
 ## candidates that have no prefix, such as the builtin names.
-export def did_you_mean_among(
-  full_name: String,
-  candidates: List[String],
-  shared: List[String],
-) -> Optional[String]
+export def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
   case closest_among(full_name, candidates, shared)
     some(name) -> return some("did you mean \"#{name}\"?")
     none -> return none

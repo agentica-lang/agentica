@@ -42,10 +42,8 @@ export def print_from(text: String, first_id: Int) -> Printed
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
         Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
-        Diag.Outcome.Done(program) -> return Printed(
-          text: print_program(program).join("\n"),
-          next_id: Ast.next_free_id(program),
-        )
+        Diag.Outcome.Done(program) ->
+          return Printed(text: print_program(program).join("\n"), next_id: Ast.next_free_id(program))
       end
   end
 end
@@ -79,6 +77,26 @@ export def text_attr(label: String, doc: Optional[String]) -> String
     some(text) -> return label + Text.quote(text)
     none -> return ""
   end
+end
+
+## The text form of a parsed tree, one line per node: `role: kind #id span attributes`, children indented by two
+## spaces.
+export def print_program(program: Ast.Program) -> List[String]
+  lines: List[String] = [
+    head(
+      Margin(indent: "", base: 0, notes: {}),
+      "",
+      "program",
+      program.id,
+      program.span,
+      text_attr(" module-doc=", program.module_doc),
+    ),
+  ]
+  for decl in program.declarations
+    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
+  end
+
+  return lines
 end
 
 ## Prints a declaration and everything under it, one line per node, after the lines already in out.
@@ -340,27 +358,25 @@ end
 def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> List[String]
   child = deeper(at)
   case expr
-    Ast.Expr.Literal(node) -> return out.push(
-      head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"),
-    )
+    Ast.Expr.Literal(node) ->
+      return out.push(head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"))
     Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.TypeName(node) -> return out.push(
-      head(at, role, "type-expression", node.id, node.span, name_attr(node.name)),
-    )
+    Ast.Expr.TypeName(node) ->
+      return out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
     Ast.Expr.ConstRef(node) -> return out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.FunctionRef(node) -> return out.push(
-      head(at, role, "function-ref", node.id, node.span, name_attr(node.name)),
-    )
-    Ast.Expr.Call(node) -> return print_call_like(
-      out,
-      at,
-      role,
-      "call",
-      node.id,
-      node.span,
-      "#{name_attr(node.name)} piped=#{node.piped}",
-      node.args,
-    )
+    Ast.Expr.FunctionRef(node) ->
+      return out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
+    Ast.Expr.Call(node) ->
+      return print_call_like(
+        out,
+        at,
+        role,
+        "call",
+        node.id,
+        node.span,
+        "#{name_attr(node.name)} piped=#{node.piped}",
+        node.args,
+      )
     Ast.Expr.EnumConstructor(node) ->
       lines = print_call_like(
         out,
@@ -444,9 +460,8 @@ end
 def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Pattern) -> List[String]
   case pattern
     Ast.Pattern.Wildcard(node) -> return out.push(head(at, role, "wildcard-pattern", node.id, node.span, ""))
-    Ast.Pattern.Literal(node) -> return out.push(
-      head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"),
-    )
+    Ast.Pattern.Literal(node) ->
+      return out.push(head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"))
     Ast.Pattern.Variant(node) ->
       names = node.slots.map do |slot| slot_text(slot) end
       lines = out.push(
@@ -569,24 +584,6 @@ def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> Li
     head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)),
   )
   return print_types(lines, deeper(at), "payload", variant.payload_types)
-end
-
-def print_program(program: Ast.Program) -> List[String]
-  lines: List[String] = [
-    head(
-      Margin(indent: "", base: 0, notes: {}),
-      "",
-      "program",
-      program.id,
-      program.span,
-      text_attr(" module-doc=", program.module_doc),
-    ),
-  ]
-  for decl in program.declarations
-    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
-  end
-
-  return lines
 end
 
 # ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a

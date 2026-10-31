@@ -287,6 +287,8 @@ jobs:
         run: make vm-jit-test
       - name: Example smoke runs
         run: make smoke
+      - name: The layout of compiler/ and stdlib/ (agentica fmt --check)
+        run: make fmt-check
       # A PR that changes bootstrap/stage0.agcb must carry the stage2 that the base branch's stage0 builds from the PR's
       # compiler/. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip. The sums go to the job summary.
       # It runs before the vendored check, which rebuilds the objects with other flags. When only this check failed, the

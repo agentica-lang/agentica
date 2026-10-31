@@ -49,9 +49,9 @@ end
 ## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
 export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
-  return shape.put("partial", JSON.from(true)).put(
-    "diagnostics",
-    JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end),
+  return (
+    shape.put("partial", JSON.from(true))
+      .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
   )
 end
 

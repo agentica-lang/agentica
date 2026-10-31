@@ -223,10 +223,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
       rewritten = rewrite_module(loaded, settings, ids, file)
       if !rewritten.ok?
         failure = Failure.unpack_failure(rewritten.message)
-        return Admission(
-          pool: pool.with(made: made, failed: failed.put(file, failure)),
-          failure: some(failure),
-        )
+        return Admission(pool: pool.with(made: made, failed: failed.put(file, failure)), failure: some(failure))
       end
 
       made = made.put(file, rewritten.unwrap!)
@@ -239,10 +236,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
     held = held.put(module.key, true)
   end
 
-  return Admission(
-    pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed),
-    failure: none,
-  )
+  return Admission(pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed), failure: none)
 end
 
 # The ids of the parser end at the highest next_free_id of the files. The files are numbered one after the other in the

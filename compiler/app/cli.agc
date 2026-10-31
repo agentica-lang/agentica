@@ -1,8 +1,8 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
-## `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, list the
-## references to a name with `refs`, write the packages of the lock to deps/ with `install`, change the packages with
-## `add` and `update`, or start the tests.
+## `doc`, check the layout of files with `fmt --check`, list the declarations of a file with `outline`, give the type
+## at a position with `type-at`, list the references to a name with `refs`, write the packages of the lock to deps/
+## with `install`, change the packages with `add` and `update`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -29,6 +29,7 @@ import Report from "../bdd/bdd_report"
 import SourceRoot from "../bdd/bdd_source_root"
 import CheckText from "../check/check_text"
 import Ai from "../diagnostics/diagnostic_ai"
+import Diag from "../diagnostics/diagnostic"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import Problems from "../diagnostics/problem"
@@ -49,6 +50,7 @@ import SourceFile from "../syntax/source_file"
 import Add from "cli_add"
 import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
+import CliFmt from "cli_fmt"
 import Help from "cli_help"
 import Install from "cli_install"
 import Launch from "cli_launch"
@@ -98,6 +100,8 @@ def dispatch(session: Session) -> Int
     return emit(Help.help(words, session.options.style))
   elsif first == "doc"
     return doc(session, words)
+  elsif first == "fmt"
+    return fmt(session, words.drop(1))
   elsif first == "install"
     return install(session, words.drop(1))
   elsif first == "add"
@@ -293,6 +297,61 @@ def check(session: Session, words: List[String]) -> Int
   end
 end
 
+# `fmt --check [PATH...]` and `fmt --tree FILE` (cli_fmt.agc). Any other form is a usage error.
+def fmt(session: Session, words: List[String]) -> Int
+  if words.size == 2 and words[0] == "--tree"
+    file = words[1]
+    case SourceReader.read(file)
+      SourceFile.Read.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{file}\n"))
+      SourceFile.Read.Invalid(at) ->
+        return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
+      SourceFile.Read.Text(text) ->
+        case CliFmt.tree(text)
+          Diag.Outcome.Done(tree) -> return emit(Reply.printed(tree + "\n"))
+          Diag.Outcome.Failed(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
+        end
+    end
+  end
+
+  if words.size == 0 or words[0] != "--check"
+    return emit(Reply.failed(2, CliFmt.usage() + "\n"))
+  end
+
+  case SymbolPaths.expand(session.settings.workspace, words.drop(1), "", CliFmt.usage())
+    SymbolPaths.Expanded.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    SymbolPaths.Expanded.Files(roots) ->
+      status = 0
+      for root in roots
+        found = fmt_check(session, root.typed)
+        if found > status
+          status = found
+        end
+      end
+
+      return status
+  end
+end
+
+# Checks the layout of one file: prints its path when formatting would change it, or its problem. Gives the status of
+# the file: 0 for no change, 1 for a change or a problem, 2 for a file that cannot be read.
+def fmt_check(session: Session, file: String) -> Int
+  case SourceReader.read(file)
+    SourceFile.Read.Unreadable(_) ->
+      IO.warn("agentica: cannot read #{file}")
+      return 2
+    SourceFile.Read.Invalid(at) ->
+      return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
+    SourceFile.Read.Text(text) ->
+      case CliFmt.verdict(text)
+        CliFmt.Verdict.Same -> return 0
+        CliFmt.Verdict.Changed ->
+          puts(file)
+          return 1
+        CliFmt.Verdict.Refused(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
+      end
+  end
+end
+
 # Checks every file of `paths`, prints the problem of each file that fails (the first one of each, as for one file) and
 # the count, and gives 1 when any failed. A path that names no file or folder, or a folder with no `.agc` file, is a
 # usage error before any file is checked.
@@ -435,13 +494,7 @@ def linked(session: Session, verb: String, rest: List[String], plan: BytecodeCac
 end
 
 # What is done with a program that checked, in a fixed order.
-def checked(
-  session: Session,
-  verb: String,
-  rest: List[String],
-  front: Front.Checked,
-  plan: BytecodeCache.Plan,
-) -> Int
+def checked(session: Session, verb: String, rest: List[String], front: Front.Checked, plan: BytecodeCache.Plan) -> Int
   source = rest[0]
   if session.options.dump
     return emit(Reply.printed("#{CheckText.program_text(front.linked, front.checked)}\n"))
@@ -606,8 +659,14 @@ def test(session: Session, words: List[String]) -> Int
   end
 
   driver: List[String] = [
-    "--vm", binary, "--version", session.settings.version, "--style", options.style,
-    "--test-timeout-ms", "30000",
+    "--vm",
+    binary,
+    "--version",
+    session.settings.version,
+    "--style",
+    options.style,
+    "--test-timeout-ms",
+    "30000",
   ]
   if options.seed != ""
     driver = driver.concat(["--seed", options.seed])

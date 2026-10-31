@@ -22,8 +22,14 @@ end
 ## registers and the captured names of a block the ones after them. A block gives its last expression statement as its
 ## value; any other function ends with a Void return.
 export def lower_function(
-  cx: Lowering.Cx, fx: Lowering.Fx, name: String, params: List[String], captures: List[String],
-  statements: List[Ast.Stmt], span: Source.Span, block: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  name: String,
+  params: List[String],
+  captures: List[String],
+  statements: List[Ast.Stmt],
+  span: Source.Span,
+  block: Bool,
 ) -> Result[Built]
   for param in params
     fx = Lowering.alloc(fx)
@@ -70,7 +76,10 @@ end
 ## body is lowered, so the blocks inside it come after it. The state it gives back is the
 ## caller's, with the blocks and the index count updated.
 export def lower_block_function(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.BlockLit, captured: List[String]
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.BlockLit,
+  captured: List[String],
 ) -> Result[Lowering.Fx]
   index = fx.block_count
   name = "block@#{Paths.last_part(cx.file)}:#{node.span.start.line}:#{node.span.start.column}"
@@ -443,9 +452,7 @@ end
 # The instructions that jump to skip when the value in the register does not match the pattern: the tag of a variant,
 # then each nested pattern on the payload position it sits at, in order. A Result is `ok` or `error` by its own
 # instructions, and the checker has made sure that a pattern of enum "Result" is matched against a Result.
-def lower_test(
-  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int, skip: Int
-) -> Result[Lowering.Fx]
+def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int, skip: Int) -> Result[Lowering.Fx]
   span = Ast.pattern_span(pattern)
   case pattern
     Ast.Pattern.Wildcard(node) -> return ok(fx)
@@ -474,7 +481,11 @@ end
 # Tests the nested patterns of a variant: each is read from its payload position into a register and tested there. The
 # registers stay in use until the arm is done with its tests.
 def test_nested(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.VariantPattern, value: Int, skip: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.VariantPattern,
+  value: Int,
+  skip: Int,
 ) -> Result[Lowering.Fx]
   item = 0
   for slot in node.slots
@@ -504,7 +515,11 @@ end
 
 # A literal pattern compares with `same`. An integer that is not an Int never matches, so its arm is skipped at once.
 def lower_literal_test(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LiteralPattern, value: Int, skip: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.LiteralPattern,
+  value: Int,
+  skip: Int,
 ) -> Result[Lowering.Fx]
   imm = Ir.Imm.Nil
   case node.value
@@ -530,9 +545,7 @@ end
 
 # The names of a variant pattern get a register each, filled from the payload of the scrutinee (a `_` takes none). A
 # nested pattern that binds names is read into a register of its own first, and its names come from that register.
-def bind_payload(
-  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int
-) -> Result[Lowering.Fx]
+def bind_payload(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int) -> Result[Lowering.Fx]
   case pattern
     Ast.Pattern.Variant(node) ->
       item = 0
@@ -566,8 +579,7 @@ end
 # Whether a pattern binds a name anywhere in it.
 def binds?(pattern: Ast.Pattern) -> Bool
   case pattern
-    Ast.Pattern.Variant(node) ->
-      return node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
+    Ast.Pattern.Variant(node) -> return node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
     _ -> return false
   end
 end
@@ -582,9 +594,7 @@ end
 
 # The guard of an arm, after its names are bound: the next arm is tried when it is false. Its registers are free after
 # the jump, but the names stay.
-def lower_guard(
-  cx: Lowering.Cx, fx: Lowering.Fx, guard: Optional[Ast.Expr], skip: Int
-) -> Result[Lowering.Fx]
+def lower_guard(cx: Lowering.Cx, fx: Lowering.Fx, guard: Optional[Ast.Expr], skip: Int) -> Result[Lowering.Fx]
   case guard
     some(condition) ->
       kept = fx.next

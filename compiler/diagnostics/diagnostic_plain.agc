@@ -34,9 +34,7 @@ export def format(problem: Problems.Problem, text: String) -> String
 
   numbers = Set.new(marks.map do |m: Mark| m.line end).to_a.sort
   width = numbers[numbers.size - 1].to_s.length
-  body = numbers.map do |number: Int|
-    render(number, marks.filter do |m: Mark| m.line == number end, lines, width)
-  end
+  body = numbers.map do |number: Int| render(number, marks.filter do |m: Mark| m.line == number end, lines, width) end
 
   start = problem.span.start
   head = "#{problem.file}:#{start.line}:#{start.column} error[#{problem.code}]"

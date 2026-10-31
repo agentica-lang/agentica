@@ -149,11 +149,7 @@ def aliases_for(aliases: Map[String, List[String]], key: String) -> List[String]
   return []
 end
 
-def declared(
-  modules: List[Linker.LinkedModule],
-  aliases: Map[String, List[String]],
-  name: String,
-) -> List[Match]
+def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[String]], name: String) -> List[Match]
   found: List[Match] = []
   for module in modules
     for item in Model.declared(module.parsed, module.text)
@@ -197,14 +193,12 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
   member = name.slice(written.length + 1, name.length - written.length - 1)
   case item.detail
     Model.Detail.Struct(fields) ->
-      return fields.filter do |field: Model.Field| field.name == member end.map do |field: Model.Field|
-        field_match(file, item, field)
-      end
+      return fields.filter do |field: Model.Field| field.name == member end
+        .map do |field: Model.Field| field_match(file, item, field) end
 
     Model.Detail.Enum(variants) ->
-      return variants.filter do |variant: Model.Variant| variant.name == member end.map do |variant: Model.Variant|
-        variant_match(file, item, variant)
-      end
+      return variants.filter do |variant: Model.Variant| variant.name == member end
+        .map do |variant: Model.Variant| variant_match(file, item, variant) end
 
     Model.Detail.Function(_, _) -> return []
     Model.Detail.Plain -> return []

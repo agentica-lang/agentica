@@ -64,8 +64,7 @@ end
 # left (Cache.reusing).
 def recovered(cache: Cache.Cache, loaded: Modules.Loaded, program: Linker.Linked, settings: Env.Settings) -> Outcome
   case Cache.reusing(cache, loaded)
-    some(reusing) ->
-      return answered(program, Checker.check_recovering_reusing(program, settings, reusing))
+    some(reusing) -> return answered(program, Checker.check_recovering_reusing(program, settings, reusing))
     none -> return answered(program, Checker.check_recovering(program, settings))
   end
 end

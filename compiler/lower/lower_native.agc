@@ -117,7 +117,10 @@ end
 # result's (the field result of the record of a function with out parameters), then each parameter's, each one before
 # the structs of its fields. LOWER-INTERNAL when they do not match the codes.
 def indexed_codes(
-  cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native, structs: Map[String, Ast.StructDecl],
+  cx: Lowering.Cx,
+  function: Ast.FunctionDecl,
+  native: Ast.Native,
+  structs: Map[String, Ast.StructDecl],
 ) -> Result[String]
   pieces = native.codes.split("{")
   if pieces.size == 1

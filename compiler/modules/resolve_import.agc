@@ -201,12 +201,7 @@ def std_exists?(settings: Env.Settings, file: String) -> Bool
   end
 end
 
-def library(
-  settings: Env.Settings,
-  libs_dir: String,
-  file: String,
-  site: Failure.Site,
-) -> Result[String]
+def library(settings: Env.Settings, libs_dir: String, file: String, site: Failure.Site) -> Result[String]
   roots = try library_roots(settings, libs_dir, site)
   rest = file.slice(4, file.length - 4)
   for root in roots
@@ -223,11 +218,7 @@ end
 # user data folder, then the system folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or
 # not it is used. The Windows rules of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC
 # roots, and %LOCALAPPDATA%.
-def library_roots(
-  settings: Env.Settings,
-  libs_dir: String,
-  site: Failure.Site,
-) -> Result[List[String]]
+def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) -> Result[List[String]]
   on_windows = settings.env.windows
   separator = ":"
   if on_windows

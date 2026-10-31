@@ -14,6 +14,8 @@ program, the bytecode cache and the sandbox flags.
   A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and
   symbolic links to files, as `symbol` does; `build/` is not skipped.
   `check --stdin FILE.agc` reads the text from standard input.
+- `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
+  formatter would change (exit 1 if any, 0 if none); it writes nothing.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);

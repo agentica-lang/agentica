@@ -64,7 +64,10 @@ end
 # 3 String, 4 List, 5 Map from String, 6 struct, 7 JsonField, 8 Optional) and, for the last five, the number of the
 # item type, the struct or the type inside the JsonField or the Optional.
 def type_id(
-  program: Ir.Program, struct_index: Map[String, Int], pool: Pool.Pool, type: Types.Type
+  program: Ir.Program,
+  struct_index: Map[String, Int],
+  pool: Pool.Pool,
+  type: Types.Type,
 ) -> Result[Pool.Interned]
   case type
     Types.Type.Int -> return ok(Pool.intern(pool, "0", [0]))
