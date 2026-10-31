@@ -70,6 +70,8 @@ typedef struct {
   const char *builtin2;
   uint32_t builtin2_arity;
   int64_t second_int;
+  /* Added to the length a Bytes constant (extra_kind 7) declares, for a length past the end of the file. */
+  uint32_t extra_bytes_over;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -131,7 +133,7 @@ static size_t function(buffer *b, const char *name, uint32_t params, uint32_t ca
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0, NULL, 0, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0, NULL, 0, 0, 0};
   return s;
 }
 
@@ -167,6 +169,11 @@ static buffer build(spec s) {
   if (s.extra_kind >= 0) u8(&b, (uint8_t)s.extra_kind);
   if (s.extra_kind == 5) float_bits(&b, s.extra_float);
   if (s.extra_kind == 6) str(&b, s.extra_string);
+  if (s.extra_kind == 7) {
+    u32(&b, (uint32_t)strlen(s.extra_string) + s.extra_bytes_over);
+    memcpy(b.data + b.len, s.extra_string, strlen(s.extra_string));
+    b.len += strlen(s.extra_string);
+  }
   if (s.second_float != 0) {
     u8(&b, 5);
     float_bits(&b, s.second_float);
@@ -628,6 +635,36 @@ static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_in
   s.funcs[0] = (fn_spec){"first", 0, 4, first, zero_spans, first_count, 0};
   s.funcs[1] = (fn_spec){"second", 0, 4, second, zero_spans, second_count, 0};
   return s;
+}
+
+/* The constant 2 that a file with SPEC's extra constant loads to. */
+static agc_value loaded_constant(spec s) {
+  buffer b = build(s);
+  agc_program *p;
+  char error[160] = "";
+  bool ok = agc_load(b.data, b.len, &p, error, sizeof error);
+  free(b.data);
+  if (!ok) fprintf(stderr, "unexpected rejection: %s\n", error);
+  assert(ok);
+  return p->constants[2];
+}
+
+/* Constant kind 7 is a Bytes of any content (here not UTF-8), the shared empty Bytes when it has none; a length
+   past the end of the file is refused before anything is allocated for it. */
+static void bytes_constant_tests(void) {
+  spec s = base();
+  s.extra_kind = 7;
+  s.extra_string = "\xE2\x82";
+  agc_value k = loaded_constant(s);
+  assert(k.tag == AGC_T_BYTES);
+  const agc_bytes *bytes = k.as.p;
+  assert(bytes->len == 2 && memcmp(bytes->data, "\xE2\x82", 2) == 0);
+  s.extra_string = "";
+  k = loaded_constant(s);
+  assert(k.tag == AGC_T_BYTES && k.as.p == agc_empty_bytes());
+  s.extra_string = "ab";
+  s.extra_bytes_over = UINT32_MAX - 2;
+  assert(!loads(s, "truncated file"));
 }
 
 /* TRY_STEP in the block (function 1) of the builtin that main calls: the block makes error(K[2]) and fails through
@@ -1438,8 +1475,9 @@ int main(void) {
   agc_outcome wrong = agc_vm_run(&vm);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   s = base();
-  s.extra_kind = 7;
+  s.extra_kind = 8;
   assert(!loads(s, "unsupported constant kind"));
+  bytes_constant_tests();
 
   static const agc_instr bad_float_op[] = {{AGC_OP_ADD_F, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_code(bad_float_op, two_spans, 2, "register out of range"));

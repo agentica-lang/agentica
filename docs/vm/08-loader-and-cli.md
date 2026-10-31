@@ -31,10 +31,11 @@ branch.
 - **Prelude**: the flag of each function is 0 or 1. A `CALL` of a function with
   the flag has its argument spans in range, and a call of a prelude-only builtin
   (`__fail_arg`) is in a function with the flag (03, 4.7).
-- **Tables**: constant kinds 0 to 6 only. Field counts and variant arities are
-  at most 65535. The loader does not check builtin records: a builtin finds its
-  record by exact name and fields at run time (5.2). Every builtin `(name,
-  arity)` pair exists.
+- **Tables**: constant kinds 0 to 7 only. A String constant (6) is valid
+  UTF-8; a Bytes constant (7) is any bytes, at most what is left of the file.
+  Field counts and variant arities are at most 65535. The loader does not check
+  builtin records: a builtin finds its record by exact name and fields at run
+  time (5.2). Every builtin `(name, arity)` pair exists.
 - **Types**: at most 65535 types with known kinds. A List or Map entry names an
   earlier type and nests at most 1024 levels (the writer gives `BYTECODE-LIMIT`
   past that). A Struct entry names a struct in range that has a decodable

@@ -819,6 +819,11 @@ def lower_resolved(
     State.Resolved.Inspect(type) -> return lower_inspect(cx, fx, receiver, type, span, want)
     State.Resolved.Members(fields) -> return Data.lower_members(cx, fx, fields, span, want)
     State.Resolved.Call(name, type) ->
+      literal = literal_text(receiver)
+      if name == "String.bytes" and args.empty? and literal.some?
+        return lower_literal_bytes(fx, span, literal.unwrap!, want)
+      end
+
       target = Ast.TypedTarget(id: Ast.expr_id(receiver), target: receiver, type: type, span: Ast.expr_span(receiver))
       call = Ast.Call(
         id: id,
@@ -830,6 +835,33 @@ def lower_resolved(
       )
       return lower_call(cx, fx, call, want, void, true, false)
   end
+end
+
+# The literal node when the expression is a string literal with no interpolation, whose text lowering knows.
+def literal_text(expr: Ast.Expr) -> Optional[Ast.Literal]
+  case expr
+    Ast.Expr.Literal(node) ->
+      case node.value
+        Ast.LitValue.Text(_) -> return some(node)
+        _ -> return none
+      end
+
+    _ -> return none
+  end
+end
+
+# `"text".bytes` on a literal: one Bytes constant, which the VM makes once when it loads the program, in place of a
+# String constant and a String.bytes call that copies it on each run. The call and the literal keep their steps.
+def lower_literal_bytes(fx: Lowering.Fx, span: Source.Span, literal: Ast.Literal, want: Int) -> Result[Lowering.Out]
+  text = ""
+  case literal.value
+    Ast.LitValue.Text(value) -> text = value
+    _ -> text = ""
+  end
+
+  fx = Lowering.step(Lowering.step(fx, span), literal.span)
+  made = Lowering.target(fx, want)
+  return ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Bytes(text), span), slot: made.slot))
 end
 
 # to_s on a value: the interpolation of one part.

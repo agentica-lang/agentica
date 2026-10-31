@@ -66,6 +66,10 @@ up by name.
   call). So a lowering that emits them must put every `GLOBAL_SET` in straight
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
+- `"text".bytes` on a string literal without interpolation lowers to one
+  `const` of `Ir.Imm.Bytes` (constant kind 7, made once at load) in
+  `lower_resolved` (`compiler/lower/lower_expr.agc`), with the steps of the call
+  and the literal; an interpolated string keeps the `String.bytes` call.
 - How the lowering handles constants. The linked program is flat, so
   `compiler/lower/lower_const.agc` decides from the call graph: the functions
   reachable from `main` (calls, `&f`, blocks) keep the constants they read, and

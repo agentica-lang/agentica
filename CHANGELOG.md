@@ -19,6 +19,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   and `Archive.extract_tar` / `extract_zip` take their options last with a
   default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
 
+### Changed
+
+- `"text".bytes` on a string literal without interpolation is a constant made
+  once when the program loads, not a copy on each evaluation.
+
 ### Removed
 
 - **Breaking:** `HTTP.client_options()`, `HTTP.server_options()`,

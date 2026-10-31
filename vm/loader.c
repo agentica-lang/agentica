@@ -103,6 +103,18 @@ static agc_string *read_string(reader *r) {
   return s;
 }
 
+/* A Bytes constant: a u32 length and that many bytes, any content. The bytes must be in the file (take) and the copy
+   fits the load budget; no bytes is the shared empty Bytes, as every Bytes builtin gives. */
+static const agc_bytes *read_bytes(reader *r) {
+  uint32_t len = read_u32(r);
+  const uint8_t *bytes = take(r, len);
+  if (len == 0) return agc_empty_bytes();
+  agc_bytes *b = load_alloc(r, agc_size_add(sizeof(agc_bytes), len), true);
+  b->len = len;
+  memcpy(b->data, bytes, len);
+  return b;
+}
+
 static bool same_text(const agc_string *s, const char *text) {
   size_t n = strlen(text);
   return s->bytes == n && memcmp(s->data, text, n) == 0;
@@ -652,6 +664,7 @@ static void load(reader *r, agc_program *p) {
         break;
       }
       case 6: p->constants[i] = agc_string_value(read_string(r)); break;
+      case 7: p->constants[i] = agc_bytes_value(read_bytes(r)); break;
       default: reject(r, "unsupported constant kind %u", (unsigned)kind);
     }
   }

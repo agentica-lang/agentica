@@ -6,7 +6,7 @@ description: Bytes, a compact immutable byte string, and the methods that read, 
 
 `Bytes` holds data that is not text: digests, file contents, wire formats. It stores one byte for each item, where a `List[Int]` of the same data takes eight. A byte is read as an `Int` from 0 to 255. `Bytes` is immutable, like every value: a method gives a new value. `Bytes` is a reserved name, so a struct, an enum or an import alias cannot be called `Bytes`.
 
-There is no literal. Make a value with `s.bytes` (the UTF-8 bytes of a `String`), [`Digest.hexdecode`](/library/text-and-data/base64/#hex) or `Bytes.from_list`.
+There is no literal. Make a value with `s.bytes` (the UTF-8 bytes of a `String`), [`Digest.hexdecode`](/library/text-and-data/base64/#hex) or `Bytes.from_list`. `"text".bytes` on a string literal without interpolation is a constant, made once when the program loads, so writing it inside a loop costs nothing more than a named constant. Binary data that is not UTF-8 text comes from `Bytes.from_list` or `Digest.hexdecode`.
 
 ```agentica
 def main() -> Void
