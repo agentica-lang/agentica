@@ -136,9 +136,7 @@ Agentica can build what it needs:
    is the first form of it; its design should keep the connection usable for
    a second request when the body was read to the end, so a program can drive
    one connection itself. `HTTP.get` and the pooled client stay the easy layer
-   on top, and `HTTP.get_response(url, options)` and `HTTP.post_response(url,
-   body, headers, options)` are the one-request calls (a client made and closed
-   for each). `HttpWire` itself stays private to `std/http`.
+   on top. `HttpWire` itself stays private to `std/http`.
 
 Redirects and cookies, if a program needs them, are a loop over a request in
 Agentica code, not a C feature.
