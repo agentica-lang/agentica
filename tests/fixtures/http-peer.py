@@ -35,6 +35,11 @@ RAW = {
     "/gzip": b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n0\r\n\r\n",
     "/badtrailer": b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\nContent-Length: 2\r\n\r\n",
     "/after": b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok",
+    # Two responses in one write, and bytes after the last chunk: what follows the first body must not become the
+    # answer of the next request.
+    "/two": b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none" + b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nEVIL",
+    "/tail": b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n"
+             b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nEVIL",
     "/truncated": b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc",
     "/headerless": b"",
 }

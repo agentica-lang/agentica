@@ -76,7 +76,7 @@ HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, heade
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
-HTTP.start(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
+HTTP.start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
 HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
 HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
 HTTP.finish(conn: HTTP.Connection) -> Void
@@ -99,8 +99,9 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   `HTTP.send_request(conn, method, target, body)` returns at the response head
   (`status`, `headers`), `HTTP.read_body(conn, max_bytes)` gives the body
   piece by piece and an empty `Bytes` at its end, `HTTP.finish(conn)` closes.
-  After a body read to its end the same connection takes the next request,
-  unless the server closed it. Use it for a body read as it arrives (up to 256
+  After a body read to its end (a response with no body is at its end at once)
+  the same connection takes the next request, unless the server closed it or
+  sent input after the body. Use it for a body read as it arrives (up to 256
   MiB) or for control of the socket; whole responses use `get` or the client.
   `timeout_ms` of the options is the time of each call and nothing is retried.
   One call at a time, in the task that opened it.

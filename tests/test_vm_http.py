@@ -183,6 +183,8 @@ def main() -> Void
   puts(answer(conn, "POST", "/post", "a=1&b=ñ", 1000))
   puts(answer(conn, "HEAD", "/hello", "", 1000))
   puts(first == answer(conn, "GET", "/port", "", 1000))
+  Result.unwrap!(HTTP.send_request(conn, "HEAD", "/hello", "".bytes))
+  puts(first == answer(conn, "GET", "/port", "", 1000))
   binary = Result.unwrap!(HTTP.send_request(conn, "GET", "/binary", "".bytes))
   one = Result.unwrap!(HTTP.read_body(conn, 2))
   two = Result.unwrap!(HTTP.read_body(conn, 2))
@@ -203,6 +205,7 @@ def main() -> Void
   puts(why(HTTP.start("ftp://127.0.0.1", options(5000, 1, 1000, ""))))
   small = Result.unwrap!(HTTP.start(origin, options(5000, 1, 4, "")))
   puts(answer(small, "POST", "/post", "12345", 1000))
+  puts(answer(small, "BAD METHOD", "/hello", "", 1000))
   puts(answer(small, "GET", "/hello", "", 1000))
   HTTP.finish(small)
   slow = Result.unwrap!(HTTP.start(origin, options(300, 1, 1000, "")))
@@ -230,7 +233,7 @@ end
 
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
-  for path in ["/truncated", "/badchunk", "/http10", "/atlimit", "/bigchunks", "/after", "/headerless", "/nocontent"]
+  for path in ["/truncated", "/badchunk", "/http10", "/atlimit", "/bigchunks", "/after", "/headerless", "/nocontent", "/two", "/tail"]
     conn = Result.unwrap!(HTTP.start(raw, options(5000, 1, 8, "")))
     case HTTP.send_request(conn, "GET", path, "".bytes)
       ok(head) -> puts("#{path} #{head.status} #{drain(conn)} #{HTTP.send_request(conn, "GET", path, "".bytes).ok?}")
@@ -668,6 +671,7 @@ def test_public_connection_reads_bodies_in_pieces_and_serves_a_second_request_on
         "200 conn 8 a=1&b=ñ in 1",
         "200  in 0",
         "true",
+        "true",
         "200 [255, 0] [128] 0",
         "true",
         "error: http: the body of the last response is not read to its end",
@@ -681,7 +685,8 @@ def test_public_connection_reads_bodies_in_pieces_and_serves_a_second_request_on
         "http: start takes an origin such as http://host:8080, with no path or query",
         "http: the URL must be http:// or https:// with a host, and without user info",
         "error: http: request body exceeds max_body_bytes",
-        "error: http: the connection is closed",
+        "error: http: invalid method",
+        "200 hello 127.0.0.1 in 1",
         "error: network: operation timed out",
         "error: http: the connection is closed",
         "0"], "connection")
@@ -697,7 +702,9 @@ def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
         "/bigchunks 200 1024 bytes false",
         "/after 200 2 bytes false",
         "/headerless error: network: end of input",
-        "/nocontent 204 0 bytes false"], "connection-raw")
+        "/nocontent 204 0 bytes false",
+        "/two 200 3 bytes false",
+        "/tail 200 3 bytes false"], "connection-raw")
 
 
 def test_public_connection_over_tls_verifies_the_certificate_and_ends_a_body_that_runs_to_the_close(tmp_path, adopt):

@@ -263,8 +263,9 @@ export struct StreamResponse
 end
 
 # Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
-# `left` is what a body with a length still owes, `chunks` is the decoder of a chunked body, and `closes` whether the
-# connection ends with the body (`Connection: close`, HTTP/1.0 or a body that runs to the end of input).
+# `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
+# `chunks` is the decoder of a chunked body, and `closes` whether the connection ends with the body
+# (`Connection: close`, HTTP/1.0 or a body that runs to the end of input).
 struct Exchange
   phase: Int
   framing: Int
@@ -405,7 +406,7 @@ export def download(
   end
 end
 
-## Opens a connection to the origin `url` (`http://host` or `https://host:8443`, with no path) and returns it, as
+## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
 ## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with
 ## `options.ca_file` (the system's by default). Only `timeout_ms` (the time of each call: this one, each
 ## `send_request` and each `read_body`) and `max_body_bytes` (the largest request body) of `options` apply: nothing is
@@ -413,9 +414,9 @@ end
 ## that was read to its end (`read_body` gave an empty piece) and the server did not close it. A response body is at
 ## most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with `finish`. For whole requests use
 ## `get_response` or the pooled client instead.
-export def start(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
+export def start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
-  where = try parse_url(url)
+  where = try parse_url(origin)
   if where.target != "/"
     return error("http: start takes an origin such as http://host:8080, with no path or query")
   end
@@ -436,9 +437,10 @@ end
 ## `Net::HTTP#send_request` does. `target` is the path with its query (`/items?page=2`); `method`, `body` (`Bytes`, at
 ## most `max_body_bytes`; `"".bytes` sends none) and `headers` (default none) are as for `request`, and the client
 ## adds `Host` and `Content-Length`. The body of the response is not read: call `read_body` until it gives an empty
-## piece. An `error` is a request that cannot be sent, a connection that is closed or has a response still to be read,
-## or a failure of the connection, which then ends. A server that closed an idle connection shows as an `error` here:
-## `start` a new one.
+## piece (a response with no body, such as one to `HEAD` or a `204`, leaves the connection ready at once). An `error`
+## is a request refused before it was written, which leaves the connection as it was, a connection that is closed or
+## has a response still to be read, or a failure of the connection, which then ends. A server that closed an idle
+## connection shows as an `error` here: `start` a new one.
 export def send_request(
   conn: Connection,
   method: String,
@@ -455,12 +457,22 @@ export def send_request(
     put_exchange(conn, exchange)
     return error(CONNECTION_OVER)
   end
-  case sent_request(conn, method, target, body, headers)
-    ok(head) ->
-      put_exchange(conn, exchange_of(head))
-      return ok(ResponseHead(status: head.status, headers: head.headers))
+  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
+  # the connection is as healthy as before. Only a failure after the first byte ends it.
+  encoded = HttpWire.encode_request(
+    conn.scheme,
+    conn.host,
+    conn.port,
+    method,
+    target,
+    headers,
+    body,
+    conn.options.max_body_bytes,
+  )
+  case encoded
+    ok(request) -> return send_encoded(conn, request, method == "HEAD", body)
     error(message) ->
-      end_connection(conn)
+      put_exchange(conn, exchange)
       return error(message)
   end
 end
@@ -672,25 +684,21 @@ def end_connection(conn: Connection) -> Void
   conn.cell.send(settled(OVER, true), 0)
 end
 
+# The request head and body written and the response head read: the connection is now in the response, or ended.
+def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes) -> Result[ResponseHead]
+  case sent_request(conn, request, head_only, body)
+    ok(head) ->
+      put_exchange(conn, finished_exchange(conn, exchange_of(head)))
+      return ok(ResponseHead(status: head.status, headers: head.headers))
+    error(message) ->
+      end_connection(conn)
+      return error(message)
+  end
+end
+
 # The head sent, the body after it, and the response head read (a HEAD request has no body in its answer).
-def sent_request(
-  conn: Connection,
-  method: String,
-  target: String,
-  body: Bytes,
-  headers: List[Header],
-) -> Result[HttpWire.Response]
+def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.Response]
   deadline = Time.monotonic_ms() + conn.options.timeout_ms
-  head = try HttpWire.encode_request(
-    conn.scheme,
-    conn.host,
-    conn.port,
-    method,
-    target,
-    headers,
-    body,
-    conn.options.max_body_bytes,
-  )
   try TCP.send(conn.socket, head, try time_left(conn.socket, deadline))
   at = 0
   while at < body.size
@@ -698,11 +706,11 @@ def sent_request(
     try TCP.send_bytes(conn.socket, piece, try time_left(conn.socket, deadline))
     at = at + piece.size
   end
-  return read_head_of(conn.socket, method == "HEAD", DOWNLOAD_MAX_BYTES, deadline)
+  return read_head_of(conn.socket, head_only, DOWNLOAD_MAX_BYTES, deadline)
 end
 
-# Where the connection stands after a head: reading its body, which a response with no body makes an empty one, and
-# not reusable unless the server kept it and nothing came after the head.
+# Where the connection stands after a head: reading its body, which a response with no body makes an empty one that
+# `finished_exchange` settles at once.
 def exchange_of(head: HttpWire.Response) -> Exchange
   framing = BY_LENGTH
   if head.chunked
@@ -711,20 +719,18 @@ def exchange_of(head: HttpWire.Response) -> Exchange
   if head.until_close
     framing = BY_CLOSE
   end
-  closes = head.closes
-  if framing == BY_LENGTH and head.length == 0 and (head.buffered > 0 or head.ended)
-    closes = true
-  end
   chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
-  return Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: closes)
+  return Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: head.closes)
 end
 
-# A body that has been read to its end leaves the connection idle, or over when the server closed it.
+# A body that has been read to its end leaves the connection idle. It is closed instead when the server said so or
+# when input is left after the body (a second response sent at once, or bytes after the last chunk): the next request
+# would read that stale input as its answer.
 def finished_exchange(conn: Connection, exchange: Exchange) -> Exchange
   if exchange.phase != READING or not body_ended?(exchange)
     return exchange
   end
-  if exchange.closes
+  if exchange.closes or not Result.unwrap_or(HttpWire.idle?(conn.socket, conn.options.timeout_ms), false)
     TCP.close(conn.socket)
     return settled(SPENT, true)
   end
@@ -788,6 +794,16 @@ def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -
     case HttpWire.chunk(state, data, 0)
       ok(after) ->
         state = after
+        if state.done and state.next != data.size
+          # The framing read went past the last chunk: those bytes were taken from the input and are lost.
+          exchange = Exchange(
+            phase: READING,
+            framing: BY_CHUNKS,
+            left: 0,
+            chunks: exchange.chunks,
+            closes: true,
+          )
+        end
         pieces = run_pieces(data, state.runs)
         if not pieces.empty?
           return ok(Step(piece: Bytes.concat(pieces), exchange: with_chunks(exchange, state)))
@@ -821,6 +837,7 @@ end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify, else it was cut. The end
 # is a body of length 0 that closes the connection, which `finished_exchange` does.
+# `left` counts the bytes given so far, for the cap that every framing has.
 def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
   data = try recv_body(socket, most, deadline)
   if data.empty?
@@ -830,7 +847,12 @@ def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: In
     done = Exchange(phase: READING, framing: BY_LENGTH, left: 0, chunks: exchange.chunks, closes: true)
     return ok(Step(piece: NO_BYTES, exchange: done))
   end
-  return ok(Step(piece: data, exchange: exchange))
+  given = exchange.left + data.size
+  if given > DOWNLOAD_MAX_BYTES
+    return error(TOO_LARGE)
+  end
+  next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
+  return ok(Step(piece: data, exchange: next))
 end
 
 def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
