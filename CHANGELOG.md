@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
+  requests through a forward proxy in absolute form (`https://` with a proxy is
+  an error until `CONNECT`).
 - `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
   its PEM files, for `TLS.listen(host, port, context)` and
   `HttpClientOptions(tls: some(context))`, which many clients can share.
