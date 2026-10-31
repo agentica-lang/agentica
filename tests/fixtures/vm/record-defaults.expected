@@ -1,12 +1,13 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 61,
+  "steps": 78,
   "stdout": [
-    "30000 30000 4 1048576 []",
-    "30000 2 ca.pem",
+    "30000 30000 4 1048576 true",
+    "30000 2 true",
     "5 30000 128 1048576",
     "HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)",
+    "TlsClientOptions(ca_file: \"ca.pem\", cert_file: \"\", key_file: \"\")",
     ""
   ],
   "stderr": []

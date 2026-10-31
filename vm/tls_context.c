@@ -56,7 +56,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   build *b = data;
   agc_value result;
   if (b->config) {
-    AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tls_context role=%s ca=%s", b->server ? "server" : "client",
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_TLS, "tls_context role=%s ca=%s", b->server ? "server" : "client",
               b->server ? "none" : b->ca ? "file" : "system");
     result = agc_result_value(true, agc_tls_context_value(b->config, release_config, b->server));
     b->config = NULL;

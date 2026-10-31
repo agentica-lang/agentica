@@ -2,7 +2,7 @@ import HTTP from "std/http"
 
 def options(timeout_ms: Int, max_connections: Int) -> HttpClientOptions
   return HttpClientOptions(timeout_ms: timeout_ms, idle_timeout_ms: 30000, max_connections: max_connections,
-                           max_body_bytes: 1048576, ca_file: "")
+                           max_body_bytes: 1048576)
 end
 
 def answer(request: HttpRequest) -> Result[HttpResponse]
@@ -38,7 +38,7 @@ def main() -> Void
       bad = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 0, max_connections: 1, max_body_bytes: 16)
       try Test.eq(HTTP.listen("127.0.0.1", 0, &answer, bad).message, "http: every option must be positive")
       wide = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)
-      Test.eq(HTTP.listen_tls("127.0.0.1", 0, "none.pem", "none.pem", &answer, wide).message, "http: max_connections must be at most 65536")
+      Test.eq(HTTP.listen("127.0.0.1", 0, &answer, wide).message, "http: max_connections must be at most 65536")
     end,
     Test.test("a live server answers and closes inside a test") do
       server = try HTTP.listen("127.0.0.1", 0, &answer)

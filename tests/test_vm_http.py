@@ -36,7 +36,7 @@ struct Producer
 end
 
 def options(timeout: Int, connections: Int, body: Int, ca: String) -> HttpClientOptions
-  return HttpClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, ca_file: ca)
+  return HttpClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!))
 end
 
 # A body as text; one that is not UTF-8 says so, since these shows print text.
@@ -145,7 +145,8 @@ def main() -> Void
   show(HTTP.get(secure, "https://localhost:#{port}/close"))
   show(HTTP.get(secure, "http://localhost:#{port}/hello"))
   show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
-  show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/missing.pem"))), "https://localhost:#{port}/hello"))
+  # A context reads its CA file when it is built, so a missing one fails there, before any client.
+  puts(TLS.client_context(TlsClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
 end
 """
 
@@ -478,7 +479,7 @@ def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.listen("127.0.0.1", 0, &handle, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options))
+  secure = Result.unwrap!(HTTP.listen_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -566,7 +567,7 @@ def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.listen_upload("127.0.0.1", 0, &handle, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_upload_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options))
+  secure = Result.unwrap!(HTTP.listen_upload_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -738,7 +739,7 @@ def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.listen_stream("127.0.0.1", 0, routes(said), options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_stream_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", routes(said), options))
+  secure = Result.unwrap!(HTTP.listen_stream_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, routes(said), options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()

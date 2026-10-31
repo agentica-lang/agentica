@@ -105,14 +105,31 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ## TLS
 
 ```text
-TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
-TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
+TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
+TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
+TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
+TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
 ```
 
-TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+```text
+struct TlsClientOptions
+  ca_file: String = ""
+  cert_file: String = ""
+  key_file: String = ""
+end
 
+struct TlsServerOptions
+  cert_file: String
+  key_file: String
+end
+```
+
+A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+
+- `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run, so a bad file fails there, not at each connect. A file that changes later does not change the context: build a new one.
+- `TLS.connect` takes a client context and `TLS.listen` a server context; the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`. A context stays valid while a socket or listener made from it is open.
 - `TLS.connect` uses TLS 1.2 or later and always checks the certificate and the host name (an IP address host against the certificate's IP addresses).
-- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails the connect.
+- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails `TLS.client_context`.
 
   | System | Store |
   |---|---|
@@ -120,13 +137,14 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
   | macOS | the system roots and Keychain trust settings |
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
-- `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
-- `TLS.connect` sends a client certificate when `cert_file` and `key_file` name PEM files, checked as `TLS.listen` checks them. Leave both empty to send none; giving only one is an error.
+- A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
+- A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
 ```agentica {mode="check"}
 def main() -> Void
-  socket = TLS.connect("example.com", 443, "", 5000).unwrap!
+  context = TLS.client_context(TlsClientOptions()).unwrap!
+  socket = TLS.connect("example.com", 443, context, 5000).unwrap!
   sent = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
   puts(TCP.read_line(socket, 5000))
   TCP.close(socket)
@@ -157,7 +175,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `idle_timeout_ms` | 30 s, for kept connections | positive |
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
-| `ca_file` | `""`: the system's CA certificates | |
+| `tls` | `none`: the system's CA certificates | a client `TlsContext` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - The client runs as Agentica code in its own tasks, so it spends the run's `--max-steps` budget.
