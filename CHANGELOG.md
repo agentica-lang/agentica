@@ -22,6 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make one
   request with no client to open or close, as Ruby's `Net::HTTP.get_response`
   does. Many requests still use `HTTP.client()` with `get` and `post`.
+- `HTTP.open` gives a response body on a channel (`HTTP.Stream`: `status`,
+  `headers`, `body` and a `done` task) for a download too big to hold or that
+  never ends, and `HTTP.upload` sends a body that another task feeds through a
+  channel, chunked or with an exact `length`.
 
 ### Changed
 

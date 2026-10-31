@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_agc, optional_tool, output_lines, run, run_vm,
-                                 scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, optional_tool, output_lines, run,
+                                 run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -27,6 +27,12 @@ import HTTP from "std/http"
 struct Fetch
   pool: HttpClient
   url: String
+end
+
+struct Producer
+  pieces: List[Bytes]
+  into: Channel[Bytes]
+  close: Bool
 end
 
 def options(timeout: Int, connections: Int, body: Int, ca: String) -> HttpClientOptions
@@ -273,6 +279,158 @@ def main() -> Void
   puts(HTTP.send_request(conn, "GET", "/hello", "".bytes).ok?)
   puts(why(HTTP.start(origin, options(5000, 1, 1000, certs + "/self-signed.pem"))))
   puts(why(HTTP.start("http://localhost:#{port}", options(5000, 1, 1000, ""))))
+end
+"""
+
+STREAM_OPEN_PROGRAM = """\
+# The bytes the channel gives; with a stop, the reader closes the channel after that many pieces (as a reader that has
+# seen enough does). The pieces are not counted: how the reads cut a body is up to the connection.
+def count(stream: HTTP.Stream, stop: Int, pause: Int) -> Int
+  Task.sleep(pause)
+  pieces = 0
+  total = 0
+  while true
+    case stream.body.recv(5000)
+      ok(piece) ->
+        pieces = pieces + 1
+        total = total + piece.size
+        if pieces == stop
+          stream.body.close
+        end
+      error(_) -> break
+    end
+  end
+  return total
+end
+
+def text_of(stream: HTTP.Stream) -> String
+  all: List[Bytes] = []
+  while true
+    case stream.body.recv(5000)
+      ok(piece) -> all = all.push(piece)
+      error(_) -> break
+    end
+  end
+  return decoded(Bytes.concat(all))
+end
+
+def ended(stream: HTTP.Stream) -> String
+  case Task.await(stream.done)
+    ok(_) -> return "done ok"
+    error(message) -> return "done error: #{message}"
+  end
+end
+
+def refused(opened: Result[HTTP.Stream]) -> String
+  case opened
+    ok(stream) -> return "opened #{stream.status}"
+    error(message) -> return "error: #{message}"
+  end
+end
+
+# Whether the peer saw the client of /quiet close its socket, within about two seconds.
+def peer_saw_close(plain: String) -> Bool
+  for _ in 1..40
+    case HTTP.get_response(plain + "/quiet-closed")
+      ok(response) ->
+        if decoded(response.body) == "1"
+          return true
+        end
+      error(_) -> return false
+    end
+
+    Task.sleep(50)
+  end
+  return false
+end
+
+def main() -> Void
+  plain = "http://127.0.0.1:#{System.args()[1]}"
+  raw = "http://127.0.0.1:#{System.args()[3]}"
+  fast = options(5000, 1, 1000, "")
+  chunked = Result.unwrap!(HTTP.open("GET", plain + "/chunked", "".bytes, [], fast))
+  puts("#{chunked.status} #{HTTP.header_values(chunked.headers, "transfer-encoding")} #{text_of(chunked)} #{ended(chunked)}")
+  form = Result.unwrap!(HTTP.open("POST", plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")], fast))
+  puts("#{form.status} #{text_of(form)} #{ended(form)}")
+  missing = Result.unwrap!(HTTP.open("GET", plain + "/nothing", "".bytes))
+  puts("#{missing.status} #{text_of(missing)} #{ended(missing)}")
+  head = Result.unwrap!(HTTP.open("HEAD", plain + "/hello", "".bytes))
+  puts("#{head.status} #{count(head, 0, 0)} #{ended(head)}")
+  big = Result.unwrap!(HTTP.open("GET", plain + "/megabytes", "".bytes, [], options(10000, 1, 1000, "")))
+  puts("#{count(big, 0, 300)} #{ended(big)}")
+  endless = Result.unwrap!(HTTP.open("GET", plain + "/endless", "".bytes))
+  puts("#{count(endless, 3, 0) >= 15} #{ended(endless)}")
+  cut = Result.unwrap!(HTTP.open("GET", raw + "/truncated", "".bytes))
+  puts("#{count(cut, 0, 0)} #{ended(cut)}")
+  puts(refused(HTTP.open("GET", plain + "/slow", "".bytes, [], options(300, 1, 1000, ""))))
+  puts(refused(HTTP.open("GET", "ftp://127.0.0.1/", "".bytes)))
+  puts(refused(HTTP.open("BAD METHOD", plain + "/hello", "".bytes)))
+  quiet = Result.unwrap!(HTTP.open("GET", plain + "/quiet", "".bytes, [], options(20000, 1, 1000, "")))
+  puts(decoded(Result.unwrap!(quiet.body.recv(5000))))
+  Task.cancel(quiet.done)
+  puts(Result.ok?(Task.await(quiet.done)))
+  puts(peer_saw_close(plain))
+  puts(Task.pending_count())
+end
+"""
+
+UPLOAD_HELPERS = """\
+def produce(producer: Producer) -> Void
+  for piece in producer.pieces
+    producer.into.send(piece, 5000)
+  end
+  if producer.close
+    producer.into.close
+  end
+end
+
+def doubled(unit: Bytes, times: Int) -> Bytes
+  data = unit
+  for _ in 1..times
+    data = Bytes.concat([data, data])
+  end
+  return data
+end
+
+def upload(method: String, pieces: List[Bytes], length: Int, timeout: Int, close: Bool) -> String
+  return upload_to("/upload", method, pieces, length, timeout, close)
+end
+
+def upload_to(path: String, method: String, pieces: List[Bytes], length: Int, timeout: Int, close: Bool) -> String
+  plain = "http://127.0.0.1:#{System.args()[1]}"
+  into: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&produce, Producer(pieces: pieces, into: into, close: close))
+  case HTTP.upload(method, plain + path, into, length, [Header(name: "X-Kind", value: "up")], options(timeout, 1, 1000, ""))
+    ok(response) -> return "#{response.status} #{decoded(response.body)}"
+    error(message) -> return "error: #{message}"
+  end
+end
+
+"""
+
+STREAM_UPLOAD_PROGRAM = UPLOAD_HELPERS + """\
+def main() -> Void
+  small = ["ab".bytes, "".bytes, "cd".bytes, "é".bytes]
+  puts(upload("POST", small, -1, 5000, true))
+  puts(upload("POST", small, 6, 5000, true))
+  puts(upload("PUT", [], -1, 5000, true))
+  puts(upload("PATCH", [], 0, 5000, true))
+  mega = doubled("x".bytes, 20)
+  puts(upload("PUT", [mega, "z".bytes], -1, 5000, true))
+  puts(upload("POST", [mega, mega], 2097152, 5000, true))
+  puts(upload("POST", small, 3, 5000, true))
+  puts(upload("POST", small, 8, 5000, true))
+  puts(upload("POST", small, -1, 300, false))
+  puts(upload("POST", small, 6, 300, false))
+  puts(upload("PATCH", [], 0, 300, false))
+  puts(upload("GET", small, -1, 5000, true))
+  puts(upload("POST", small, -2, 5000, true))
+end
+"""
+STREAM_REFUSE_PROGRAM = UPLOAD_HELPERS + """\
+def main() -> Void
+  mega = doubled("x".bytes, 20)
+  puts(upload_to("/refuse", "POST", [mega, mega, mega, mega, mega, mega, mega, mega, mega, mega, mega, mega], -1, 5000, true))
 end
 """
 
@@ -717,6 +875,51 @@ def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
         "/nocontent 204 0 bytes false",
         "/two 200 3 bytes false",
         "/tail 200 3 bytes false"], "connection-raw")
+
+
+def test_open_streams_a_response_body_on_a_channel_with_backpressure_and_an_early_stop(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "stream-open", STREAM_OPEN_PROGRAM, ports), [
+        '200 ["chunked"] ñandú chunks done ok',
+        "200 form 8 a=1&b=ñ done ok",
+        "404 missing done ok",
+        "200 0 done ok",
+        "3145728 done ok",
+        "true done error: channel: closed",
+        "3 done error: http: truncated HTTP body",
+        "error: network: operation timed out",
+        "error: http: the URL must be http:// or https:// with a host, and without user info",
+        "error: http: invalid method",
+        "hi",
+        "false",
+        "true",
+        "0"], "stream-open")
+
+
+def test_upload_sends_a_body_from_a_channel_chunked_or_with_its_length(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "stream-upload", STREAM_UPLOAD_PROGRAM, ports), [
+        "200 POST chunked 3 6 bef7c249",
+        "200 POST length 6 6 bef7c249",
+        "200 PUT chunked 0 0 e3b0c442",
+        "200 PATCH length 0 0 e3b0c442",
+        "200 PUT chunked 3 1048577 235d78ad",
+        "200 POST length 2097152 2097152 6932fd31",
+        "error: http: the upload body is longer than its length",
+        "error: http: the upload body is shorter than its length",
+        "error: channel: timed out",
+        "200 POST length 6 6 bef7c249",
+        "200 PATCH length 0 0 e3b0c442",
+        "error: http: upload takes POST, PUT or PATCH",
+        "error: http: length must be -1 (chunked) or the number of bytes"], "stream-upload")
+
+
+# The server closes with the upload unread. Whether its answer is still readable after the reset depends on the system:
+# Windows drops the input of a reset connection, so there the write failure is all the client may have.
+def test_upload_returns_the_answer_of_a_server_that_refuses_it_and_closes(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    first = output_lines(run_program(tmp_path, "stream-refuse", STREAM_REFUSE_PROGRAM, ports))[0]
+    assert first == "413 big!" or (WINDOWS and first.startswith("error: http: ")), first
 
 
 def test_public_connection_over_tls_verifies_the_certificate_and_ends_a_body_that_runs_to_the_close(tmp_path, adopt):

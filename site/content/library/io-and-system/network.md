@@ -137,7 +137,7 @@ end
 
 HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
-- Every call of the client is whole: it returns after the whole response arrived (for a body read piece by piece, see [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish)). The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it in its charset.
+- Every call of the client is whole: it returns after the whole response arrived (for a body read piece by piece, see [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish), and for a body on a channel, [`HTTP.open`](#httpopen-and-httpupload)). The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it in its charset.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
@@ -331,6 +331,51 @@ def main() -> Void
   next_head = HTTP.send_request(conn, "GET", "/other", "".bytes)
   puts(next_head.ok?)
   HTTP.finish(conn)
+end
+```
+
+### HTTP.open and HTTP.upload
+
+```text
+HTTP.open(method: String, url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Stream]
+HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
+```
+
+The two forms for a body that goes through a channel, so that another task can use it as it comes: a download that is too big to hold, an endless one (events, the lines of a log), or an upload that is produced as it goes. Each call uses a connection of its own, outside the pool, built on [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish). A call whose whole body fits in memory is simpler with `get`, `post` and `request`.
+
+- `open` sends the request and returns at the head of the response: `HTTP.Stream` has `status`, `headers`, `body` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task feeds `body` with the pieces of the response (at most 64 KiB, never empty, a chunked body already decoded) and closes it on every path. `url` has a path and a query; `method`, `body` and `headers` are those of `request`.
+- The reader runs the usual receive loop until the closed error, then awaits `done`: `ok` means the body ended cleanly, and an `error` says why it did not (a cut body, a timeout, a body over 256 MiB). A channel can only end, so `done` is the only way to tell a complete body from a cut one: always await it.
+- To stop early, close `body`: the feeding task's next `send` fails, it closes the connection and `done` is `error("channel: closed")`. That works only while data flows. On a quiet stream (a server that has nothing to say) the task waits in its read until `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`: it closes the connection at once and `done` is an error.
+- `options.timeout_ms` is the time of each wait of `open`: the connect, the head, each read of the body and each `send` to the channel. A reader that takes longer than that to ask for the next piece ends the stream, and so does a server that is silent for that long: raise it for events that come rarely. The channel holds 8 pieces, so a slow reader makes the task wait and the server's data wait in the socket.
+- `upload` sends the pieces that another task puts in `body`, until it closes the channel, and returns the whole response (as `request`: up to `max_body_bytes`). `method` is `POST`, `PUT` or `PATCH`. `length` is the exact number of bytes, said as `Content-Length`: the body ends when that many bytes were sent, and the producer need not close the channel. `-1` is a chunked body, whose pieces become chunks (a piece over 512 KiB is several) and which ends when the channel closes. A body that is longer than `length`, or a channel that closes short of it, is an `error`, and so is a channel that is silent for longer than `timeout_ms`.
+- A channel that closes ends the body, also when its producer died: a producer that can fail should set `length`, so that a short body is an `error`. `upload` closes the channel when it returns, so a producer that is still sending finds the closed error and stops.
+- A server that answers and closes before the upload ends (a `413`) does not hide its answer: when a write fails, `upload` reads the head of the response that is waiting (for at most `timeout_ms`) and returns that response, as Python's `http.client` and Go do. Only when there is none is the write failure the `error` (`http: ` and the reason): on Windows a reset connection can drop the server's early answer, so `upload` returns the write error there. Nothing is retried, and neither call follows redirects.
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def produce(into: Channel[Bytes]) -> Void
+  into.send("line 1\n".bytes, 1000)
+  into.send("line 2\n".bytes, 1000)
+  into.close
+end
+
+def main() -> Void
+  stream = HTTP.open("GET", "http://localhost:8080/log", "".bytes).unwrap!
+  total = 0
+  while true
+    case stream.body.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  puts(total)
+  puts(Task.await(stream.done).ok?)
+  lines: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&produce, lines)
+  response = HTTP.upload("PUT", "http://localhost:8080/log", lines).unwrap!
+  puts(response.status)
 end
 ```
 

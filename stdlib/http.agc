@@ -33,6 +33,8 @@ OVER = 3
 BY_LENGTH = 0
 BY_CHUNKS = 1
 BY_CLOSE = 2
+# How many pieces a Stream holds before its task waits for the reader.
+STREAM_PIECES = 8
 CLIENT_CLOSED = "http: client is closed"
 CONNECTION_OVER = "http: the connection is closed"
 TIMED_OUT = "network: operation timed out"
@@ -243,6 +245,21 @@ export struct ResponseHead
   headers: List[Header]
 end
 
+## A response whose body arrives on a channel, from `open`: the `status` and `headers` of the head, the `body` channel
+## and the `done` task that feeds it. The task reads the connection and sends each piece (up to 64 KiB, never empty),
+## and it closes the channel on every path, so the reader runs the usual receive loop until the closed error and then
+## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
+## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
+## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
+## `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`, which closes the connection at once. The connection
+## belongs to the task and is never reused.
+export struct Stream
+  status: Int
+  headers: List[Header]
+  body: Channel[Bytes]
+  done: Task[Result[Void]]
+end
+
 ## A response whose body is sent as it is produced: the `status` and `headers` of the head, and a `body` channel of
 ## pieces. The handler returns it at once and a task it spawned sends the pieces and closes the channel at the end. The
 ## server sends each piece as soon as it arrives and ends the body when the channel closes. When the client leaves, the
@@ -284,6 +301,12 @@ end
 struct Whole
   body: Bytes
   kept: Bool
+end
+
+# What the task of a Stream owns: the connection it reads and the channel it feeds.
+struct Feed
+  conn: Connection
+  pieces: Channel[Bytes]
 end
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
@@ -441,17 +464,7 @@ export def start(origin: String, options: HttpClientOptions = HttpClientOptions(
   if where.target != "/"
     return error("http: start takes an origin such as http://host:8080, with no path or query")
   end
-  socket = try open_socket(where, options)
-  cell: Channel[Exchange] = Channel.new(1)
-  cell.send(settled(IDLE, false), 0)
-  return ok(Connection(
-    socket: socket,
-    scheme: where.scheme,
-    host: where.host,
-    port: where.port,
-    options: options,
-    cell: cell,
-  ))
+  return connect_to(where, options)
 end
 
 ## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
@@ -532,6 +545,60 @@ end
 ## dropped. It is safe to call twice.
 export def finish(conn: Connection) -> Void
   end_connection(conn)
+end
+
+## Sends a request on a connection of its own and returns at the head of the response, whose body arrives on a channel
+## (`Stream`), for a body that is too big to hold, that never ends (events, lines of a log) or that another task reads
+## as it comes. `url` has a path and query; `method`, `body` (`Bytes`, at most `max_body_bytes`) and `headers` are as
+## for `request`. `options.timeout_ms` is the time of each wait: the connect, the head, each read of the body and each
+## `send` to the channel, so a reader that takes longer than that to ask for the next piece ends the stream. The body
+## is at most 256 MiB, whatever its framing. The connection is not pooled and ends with the body. For whole responses
+## use `get`.
+export def open(
+  method: String,
+  url: String,
+  body: Bytes,
+  headers: List[Header] = [],
+  options: HttpClientOptions = HttpClientOptions(),
+) -> Result[Stream]
+  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  where = try parse_url(url)
+  conn = try connect_to(where, options)
+  case send_request(conn, method, where.target, body, headers)
+    ok(head) ->
+      pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
+      done = Task.spawn_owning(&feed_stream, Feed(conn: conn, pieces: pieces))
+      return ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
+    error(message) ->
+      end_connection(conn)
+      return error(message)
+  end
+end
+
+## Sends a request whose body comes from a channel, and returns the whole response. The caller's other task sends the
+## pieces (`Bytes` of any content) and closes the channel at the end. `length` is the exact byte count, which the
+## request then says as `Content-Length` and which ends the body as soon as that many bytes were sent (the producer
+## need not close the channel), or -1 (the default) for a chunked body, which ends when the channel closes. `method` is
+## `POST`, `PUT` or `PATCH`; `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the
+## response body, not the upload. `options.timeout_ms` is the time of each wait: the connect, each piece from the
+## channel, each send and the head of the response. A body that is longer or shorter than `length`, or a channel that
+## stays silent for longer than the timeout, is an `error` and ends the connection. A channel that closes ends the
+## body, also when its producer died, so a producer that can fail should set `length`. A server that answers and closes
+## before the upload ends (a 413) does not hide its answer: when a write fails, the head of the response that is
+## waiting is read and returned, and the write failure is the `error` only when there is none. The connection is not
+## pooled. The channel is closed when the call returns, so a producer that is still sending finds the closed error and
+## stops.
+export def upload(
+  method: String,
+  url: String,
+  body: Channel[Bytes],
+  length: Int = -1,
+  headers: List[Header] = [],
+  options: HttpClientOptions = HttpClientOptions(),
+) -> Result[HttpResponse]
+  answer = upload_whole(method, url, body, length, headers, options)
+  body.close
+  return answer
 end
 
 ## Returns every value of the header `name`, ignoring case, in order.
@@ -698,6 +765,21 @@ end
 def settled(phase: Int, closes: Bool) -> Exchange
   chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
   return Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
+end
+
+# The connection to the host of `where`, idle and with no request yet.
+def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
+  socket = try open_socket(where, options)
+  cell: Channel[Exchange] = Channel.new(1)
+  cell.send(settled(IDLE, false), 0)
+  return ok(Connection(
+    socket: socket,
+    scheme: where.scheme,
+    host: where.host,
+    port: where.port,
+    options: options,
+    cell: cell,
+  ))
 end
 
 # The socket of `start`: TLS with the verification of `ca_file` for `https`, TCP for `http`.
@@ -897,6 +979,147 @@ def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: In
   end
   next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
   return ok(Step(piece: data, exchange: next))
+end
+
+def upload_whole(
+  method: String,
+  url: String,
+  body: Channel[Bytes],
+  length: Int,
+  headers: List[Header],
+  options: HttpClientOptions,
+) -> Result[HttpResponse]
+  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  if method != "POST" and method != "PUT" and method != "PATCH"
+    return error("http: upload takes POST, PUT or PATCH")
+  end
+  if length < UNSIZED
+    return error("http: length must be -1 (chunked) or the number of bytes")
+  end
+  where = try parse_url(url)
+  conn = try connect_to(where, options)
+  answer = uploaded(conn, where.target, method, body, length, headers)
+  end_connection(conn)
+  return answer
+end
+
+# The task of a Stream: it ends the channel and the connection on every path, so the reader's loop ends.
+def feed_stream(feed: Feed) -> Result[Void]
+  outcome = feed_pieces(feed.conn, feed.pieces)
+  feed.pieces.close
+  end_connection(feed.conn)
+  return outcome
+end
+
+def feed_pieces(conn: Connection, pieces: Channel[Bytes]) -> Result[Void]
+  while true
+    piece = try read_body(conn, READ_BYTES)
+    if piece.empty?
+      return ok()
+    end
+    try pieces.send(piece, conn.options.timeout_ms)
+  end
+  return ok()
+end
+
+# The request head and the body from the channel, then the whole response. The head is encoded with an empty body,
+# which says Content-Length: 0 for a POST, PUT or PATCH: `stream_head` puts the real framing there.
+def uploaded(
+  conn: Connection,
+  target: String,
+  method: String,
+  body: Channel[Bytes],
+  length: Int,
+  headers: List[Header],
+) -> Result[HttpResponse]
+  timeout = conn.options.timeout_ms
+  head = try HttpWire.encode_request(
+    conn.scheme,
+    conn.host,
+    conn.port,
+    method,
+    target,
+    headers,
+    NO_BYTES,
+    conn.options.max_body_bytes,
+  )
+  # A failure to write is not the end: a server that refused the upload (a 413) answers and closes, and its answer is
+  # waiting in the input. It is returned when it can be read; else the failure is.
+  failed = ""
+  case TCP.send(conn.socket, stream_head(head, length), timeout)
+    ok(_) -> failed = try upload_pieces(conn.socket, body, length, timeout)
+    error(message) -> failed = "http: #{message}"
+  end
+  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + timeout)
+    ok(response) -> return upload_answer(conn, response)
+    error(message) ->
+      if failed != ""
+        return error(failed)
+      end
+      return error(message)
+  end
+end
+
+# The response of an upload, whole, from its head on.
+def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpResponse]
+  exchange = try take_exchange(conn)
+  put_exchange(conn, finished_exchange(conn, exchange_of(response)))
+  whole = try read_whole(conn, conn.options.max_body_bytes)
+  return ok(HttpResponse(status: response.status, headers: response.headers, body: whole))
+end
+
+# Sends each piece of the channel as it comes: as chunks, until the channel closes and then the last chunk, or with a
+# `length`, as they are and only while they fit in it, ending at the last byte (the producer need not close the
+# channel). The result is "" when everything was written, the reason when a write failed, and an `error` for a
+# problem of the body itself (too long, too short, a silent channel), which no answer of the server changes.
+def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: Int) -> Result[String]
+  count = 0
+  while length == UNSIZED or count < length
+    case body.recv(timeout)
+      ok(piece) ->
+        if length != UNSIZED and count + piece.size > length
+          return error("http: the upload body is longer than its length")
+        end
+        count = count + piece.size
+        sent = emit(socket, piece, timeout, length, 0)
+        if not Result.ok?(sent)
+          return ok("http: #{sent.message}")
+        end
+      error(message) ->
+        if message != CHANNEL_CLOSED
+          return error(message)
+        end
+        break
+    end
+  end
+  if length == UNSIZED
+    case TCP.send(socket, "0\r\n\r\n", timeout)
+      ok(_) -> return ok("")
+      error(message) -> return ok("http: #{message}")
+    end
+  end
+  if count != length
+    return error("http: the upload body is shorter than its length")
+  end
+  return ok("")
+end
+
+# The rest of the body of the last response, as one value of at most `most` bytes.
+def read_whole(conn: Connection, most: Int) -> Result[Bytes]
+  pieces: List[Bytes] = []
+  total = 0
+  while true
+    piece = try read_body(conn, BODY_READ_BYTES)
+    if piece.empty?
+      return ok(Bytes.concat(pieces))
+    end
+    total = total + piece.size
+    if total > most
+      return error(TOO_LARGE)
+    end
+    pieces = pieces.push(piece)
+  end
+  return error(TRUNCATED)
 end
 
 def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]

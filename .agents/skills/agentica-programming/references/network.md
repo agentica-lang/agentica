@@ -82,6 +82,8 @@ HTTP.start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> 
 HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
 HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
 HTTP.finish(conn: HTTP.Connection) -> Void
+HTTP.open(method: String, url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Stream]
+HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
 
 Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
@@ -112,6 +114,21 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   `Net::HTTP.get_response`). Many requests: one `HTTP.client()` with `get`,
   `post` and `request`. Over HTTPS each `get_response` also builds a new TLS
   context and loads the CA bundle, so many calls belong on one client.
+- A body on a channel, on a connection of its own: `HTTP.open(method, url,
+  body)` returns at the head as `HTTP.Stream(status, headers, body, done)`. Read
+  `stream.body` (a `Channel[Bytes]`, pieces up to 64 KiB) until the closed
+  error, then `Task.await(stream.done)`: only `done` tells a whole body from a
+  cut one (a timeout, a body over 256 MiB). Close `body` to stop early (`done`
+  is then `error("channel: closed")`) while data flows; on a quiet stream the
+  prompt stop is `Task.cancel(stream.done)`. `HTTP.upload(method, url,
+  body_channel, length)` sends the pieces another task puts in the channel, as
+  chunks until it closes (`length` -1, the default) or with an exact `length`,
+  which ends the body at that many bytes, and returns the whole response;
+  `POST`, `PUT` or `PATCH` only. A server that answers 413 and closes mid-upload
+  still gives its response (on Windows a reset can drop it, and the write error
+  is returned). `timeout_ms` is the time of each wait (connect, head, each read,
+  each channel step). A producer that can fail should set `length`, since a
+  closed channel is a clean end.
 - The client keeps idle keep-alive connections per scheme, host and port. URLs
   are `http://` or `https://`; the fragment is dropped, user info is rejected
   and IPv6 hosts go in brackets. It adds `Host` and `Content-Length`; a request
