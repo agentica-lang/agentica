@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
+  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
+
 ## [0.19.0-beta.3] - 2026-10-31
 
 ### Added
