@@ -26,9 +26,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `headers`, `body` and a `done` task) for a download too big to hold or that
   never ends, and `HTTP.upload` sends a body that another task feeds through a
   channel, chunked or with an exact `length`.
+- `channel.empty?` is `true` when no value is left to receive.
 
 ### Changed
 
+- **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
+  even with values still buffered (as Ruby's `Queue#closed?`), so a producer
+  sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
+  the old meaning, closed and drained.
 - `HTTP.text` decodes the `charset` of `Content-Type` with `bytes.decode`: a
   Latin-1, Windows-1252 or UTF-16 body that was an error now decodes, and a
   `us-ascii` body with a non-ASCII byte is now an error.

@@ -1929,8 +1929,8 @@ def run_pool(pool: Pool) -> Result[Void]
         else
           pool = gone(pool, job)
         end
-      error(_) ->
-        if jobs.closed?
+      error(message) ->
+        if message == CHANNEL_CLOSED
           shut_pool(pool)
           return ok()
         end
@@ -2096,8 +2096,8 @@ def work(worker: Worker) -> Result[Void]
   job = try worker.inbox.recv(0)
   socket: Result[Socket] = error("")
   while true
-    # A closed client has answered every job it handed out with CLIENT_CLOSED, this one too, while it could still
-    # wait in the inbox (a receive takes buffered jobs before it reports the close): it is not sent.
+    # Once the client is closed (even while the owner still has jobs to drain), a job is not sent: it is answered
+    # with CLIENT_CLOSED, here or by shut_pool, whichever comes first (the second finds the reply channel full).
     if worker.jobs.closed?
       job.reply.send(error(CLIENT_CLOSED), 0)
       close_socket(socket)

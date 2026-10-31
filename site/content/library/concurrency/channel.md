@@ -9,9 +9,9 @@ A channel is a bounded queue: one task sends values, another receives them. See 
 - `Channel[T]` holds values of one type, any type a variable can have: a task handle, a socket, a file or another channel is allowed, and `Channel[Void]` is `CHECK-VOID-TYPE`.
 - A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name: a user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
 - `puts`, `print`, interpolation and `==` on a channel are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a channel field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<Channel>`.
-- `send`, `recv` and `close` carry the `concurrency` effect; `new` and `closed?` carry none.
+- `send`, `recv` and `close` carry the `concurrency` effect; `new`, `closed?` and `empty?` carry none.
 - There is no `select`, no `for x in channel`, and no unbounded or unbuffered channel.
-- `send`, `recv`, `close` and `closed?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
+- `send`, `recv`, `close`, `closed?` and `empty?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
 
 ## Channel.new
 
@@ -126,11 +126,38 @@ channel: closed
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-`true` once the channel is closed, its buffer is empty and no value is reserved for a woken receiver, and it stays `true`. A closed channel that still holds values gives `false`. After a `recv` error it tells the end of the stream (`true`) from a timeout (`false`).
+`true` once the channel is closed, even while it still holds values, as Ruby's `Queue#closed?`, and it stays `true`. A producer that is busy between sends (decoding the next token, reading the next piece of a file) reads it to learn that the reader has closed the channel before its next `send` fails. A receiver asks [`closed? and empty?`](#channelempty) to learn that the stream ended.
+
+```agentica
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(4)
+  jobs.send(1, 0)
+  jobs.close
+  puts(jobs.closed?)
+  puts(jobs.empty?)
+  puts(jobs.recv(0).unwrap!)
+  puts(jobs.empty?)
+end
+```
+
+```output
+true
+false
+1
+true
+```
+
+## Channel.empty?
+
+```text
+Channel.empty?(channel: Channel[T]) -> Bool
+```
+
+`true` when no value is left to receive: the buffer is empty and no value is reserved for a woken receiver. Once a channel is closed no value arrives, so `closed? and empty?` says the stream ended, and it stays `true`. Ask `closed?` first: a value and the close can both come between an `empty?` that is `true` and a `closed?` after it. After a `recv` error, `closed? and empty?` tells the end of the stream from a timeout.
 
 ## A producer and a consumer
 
-The receive loop: on an error, `closed?` says whether the stream ended, else it was a timeout and the loop receives again. The producer closes on every path: `send_all` holds the `try`s, so `produce` always reaches `jobs.close`.
+The receive loop: on an error, `closed? and empty?` says whether the stream ended, else it was a timeout and the loop receives again. The producer closes on every path: `send_all` holds the `try`s, so `produce` always reaches `jobs.close`.
 
 ```agentica
 def send_all(jobs: Channel[Int]) -> Result[Void]
@@ -155,7 +182,7 @@ def main() -> Void
     case jobs.recv(1000)
       ok(n) -> total += n
       error(_) ->
-        if jobs.closed?
+        if jobs.closed? and jobs.empty?
           break
         end
     end
@@ -274,7 +301,7 @@ def main() -> Void
         end
 
       error(_) ->
-        if events.closed?
+        if events.closed? and events.empty?
           break
         end
     end
@@ -304,7 +331,7 @@ def count(inbox: Channel[Int]) -> Int
     case inbox.recv(1000)
       ok(n) -> total += n
       error(_) ->
-        if inbox.closed?
+        if inbox.closed? and inbox.empty?
           break
         end
     end

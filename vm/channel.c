@@ -277,10 +277,20 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* The close flag, as Ruby's Queue#closed?, whatever is still buffered: a producer reads it between sends to learn
+   that the reader has gone before its next send fails. */
 static agc_value builtin_closed(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
+  return agc_bool(agc_as_channel(vm, args[0])->closed);
+}
+
+/* No value is left to receive: none in the ring and none handed to a woken receiver that has not taken it yet (it may
+   leave and give the value back, agc_channel_leave). Once a channel is closed no value arrives and this count only
+   falls, so `closed?` then `empty?`, in that order, is the closed-and-drained state, and it stays true. */
+static agc_value builtin_empty(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
   const agc_channel *c = agc_as_channel(vm, args[0]);
-  return agc_bool(c->closed && c->count == 0 && c->reserved_values == 0);
+  return agc_bool(c->count == 0 && c->reserved_values == 0);
 }
 
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
@@ -322,6 +332,7 @@ const agc_builtin agc_channel_builtins[] = {
   {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];
