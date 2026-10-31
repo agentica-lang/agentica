@@ -47,9 +47,12 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     return "this is #{Types.to_text(actual)}; wrap it with some(...) for #{Types.to_text(expected)}"
   end
 
-  # The CA file of the TLS.connect before contexts (19a).
+  # A PEM path where a context goes, as in the TLS forms before contexts (19a): a client or a server one.
   if Types.same?(expected, Types.Type.Opaque("TlsContext")) and Types.same?(actual, Types.Type.String)
-    return "a TlsContext holds the PEM files: build one with TLS.client_context(TlsClientOptions(ca_file: path))"
+    return (
+      "a TlsContext holds the PEM files: build one with TLS.client_context(...) to connect " +
+      "or TLS.server_context(...) to listen"
+    )
   end
 
   return convert_help(expected, actual)

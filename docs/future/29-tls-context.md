@@ -211,9 +211,8 @@ Phase 19a changes, in one PR:
   - **After:** `HTTP.listen_stream_tls(host, port, tls, handler, options)`
 
 - The old calls are `CHECK-TYPE-MISMATCH` or `CHECK-ARITY` at their arguments,
-  with a help that shows the context form
-  (`TLS.client_context(TlsClientOptions(ca_file: path))`), through the hint
-  table of `grammar.md` §7.
+  with a help that names the context forms (`TLS.client_context` to connect,
+  `TLS.server_context` to listen), through the hint table of `grammar.md` §7.
 - `TlsContext`, `TlsClientOptions` and `TlsServerOptions` become reserved names
   (`CHECK-REDEFINED-NAME` for a user type with one of these names; the CHANGELOG
   says so).

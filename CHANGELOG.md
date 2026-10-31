@@ -49,10 +49,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HttpClientOptions` (`tls` replaces `ca_file`) take a `TlsContext` in place
   of PEM paths. The network page's "Moving to contexts" lists each old form
   and its new one.
-- **Breaking:** `HttpClientOptions` holds a `TlsContext` (`tls`), so `==` no
-  longer compares it and `JSON.schema`, `JSON.decode` and `JSON.encode` refuse
-  it. `TlsClientOptions`, `TlsContext` and `TlsServerOptions` are reserved type
-  names.
+- **Breaking:** `HttpClientOptions` holds a `TlsContext` (`tls`), so
+  `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. `TlsClientOptions`,
+  `TlsContext` and `TlsServerOptions` are reserved type names.
 - **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
