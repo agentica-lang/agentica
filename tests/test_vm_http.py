@@ -137,6 +137,139 @@ def main() -> Void
 end
 """
 
+# `HTTP.start`: one connection driven by the program, against the Python threading server. `drain` reads a body in pieces
+# of at most `most` bytes and shows the text with the count of pieces (the end is an empty piece).
+CONNECTION_PROGRAM = """\
+def drain(conn: HTTP.Connection, most: Int) -> String
+  all: List[Bytes] = []
+  while true
+    case HTTP.read_body(conn, most)
+      ok(piece) ->
+        if piece.empty?
+          return "#{decoded(Bytes.concat(all))} in #{all.size}"
+        end
+        all = all.push(piece)
+      error(message) -> return "error: #{message}"
+    end
+  end
+  return "unreachable"
+end
+
+def why(started: Result[HTTP.Connection]) -> String
+  case started
+    ok(conn) ->
+      HTTP.finish(conn)
+      return "started"
+    error(message) -> return message
+  end
+end
+
+def answer(conn: HTTP.Connection, method: String, target: String, body: String, most: Int) -> String
+  case HTTP.send_request(conn, method, target, body.bytes, [Header(name: "X-Kind", value: "conn")])
+    ok(head) -> return "#{head.status} #{drain(conn, most)}"
+    error(message) -> return "error: #{message}"
+  end
+end
+
+def main() -> Void
+  origin = "http://127.0.0.1:#{System.args()[1]}"
+  conn = Result.unwrap!(HTTP.start(origin, options(5000, 1, 1000, "")))
+  head = Result.unwrap!(HTTP.send_request(conn, "GET", "/hello", "".bytes))
+  puts("#{head.status} #{HTTP.header_values(head.headers, "x-multi")} #{drain(conn, 4)}")
+  first = answer(conn, "GET", "/port", "", 1000)
+  puts(first == answer(conn, "GET", "/port", "", 1000))
+  puts(answer(conn, "GET", "/chunked", "", 5))
+  puts(first == answer(conn, "GET", "/port", "", 1000))
+  puts(answer(conn, "POST", "/post", "a=1&b=ñ", 1000))
+  puts(answer(conn, "HEAD", "/hello", "", 1000))
+  puts(first == answer(conn, "GET", "/port", "", 1000))
+  Result.unwrap!(HTTP.send_request(conn, "HEAD", "/hello", "".bytes))
+  puts(first == answer(conn, "GET", "/port", "", 1000))
+  binary = Result.unwrap!(HTTP.send_request(conn, "GET", "/binary", "".bytes))
+  one = Result.unwrap!(HTTP.read_body(conn, 2))
+  two = Result.unwrap!(HTTP.read_body(conn, 2))
+  puts("#{binary.status} #{one.to_a} #{two.to_a} #{Result.unwrap!(HTTP.read_body(conn)).size}")
+  puts(first == answer(conn, "GET", "/port", "", 1000))
+  Result.unwrap!(HTTP.send_request(conn, "GET", "/hello", "".bytes))
+  puts(answer(conn, "GET", "/port", "", 1000))
+  puts(drain(conn, 1000))
+  puts(answer(conn, "GET", "/port", "", 1000) == first)
+  puts(HTTP.read_body(conn, 0))
+  puts(answer(conn, "GET", "/close", "", 4))
+  puts(answer(conn, "GET", "/hello", "", 4))
+  HTTP.finish(conn)
+  HTTP.finish(conn)
+  puts(HTTP.read_body(conn))
+  puts(HTTP.send_request(conn, "GET", "/hello", "".bytes))
+  puts(why(HTTP.start(origin + "/path", options(5000, 1, 1000, ""))))
+  puts(why(HTTP.start("ftp://127.0.0.1", options(5000, 1, 1000, ""))))
+  small = Result.unwrap!(HTTP.start(origin, options(5000, 1, 4, "")))
+  puts(answer(small, "POST", "/post", "12345", 1000))
+  puts(answer(small, "BAD METHOD", "/hello", "", 1000))
+  puts(answer(small, "GET", "/hello", "", 1000))
+  HTTP.finish(small)
+  slow = Result.unwrap!(HTTP.start(origin, options(300, 1, 1000, "")))
+  puts(answer(slow, "GET", "/slow", "", 1000))
+  puts(answer(slow, "GET", "/hello", "", 1000))
+  puts(Task.pending_count())
+end
+"""
+
+CONNECTION_RAW_PROGRAM = """\
+def drain(conn: HTTP.Connection) -> String
+  text = ""
+  while true
+    case HTTP.read_body(conn, 1000)
+      ok(piece) ->
+        if piece.empty?
+          return "#{text.size} bytes"
+        end
+        text = text + decoded(piece)
+      error(message) -> return "error: #{message} after #{text.size}"
+    end
+  end
+  return "unreachable"
+end
+
+def main() -> Void
+  raw = "http://127.0.0.1:#{System.args()[3]}"
+  for path in ["/truncated", "/badchunk", "/http10", "/atlimit", "/bigchunks", "/after", "/headerless", "/nocontent", "/two", "/tail"]
+    conn = Result.unwrap!(HTTP.start(raw, options(5000, 1, 8, "")))
+    case HTTP.send_request(conn, "GET", path, "".bytes)
+      ok(head) -> puts("#{path} #{head.status} #{drain(conn)} #{HTTP.send_request(conn, "GET", path, "".bytes).ok?}")
+      error(message) -> puts("#{path} error: #{message}")
+    end
+    HTTP.finish(conn)
+  end
+end
+"""
+
+CONNECTION_TLS_PROGRAM = """\
+def why(started: Result[HTTP.Connection]) -> String
+  case started
+    ok(conn) ->
+      HTTP.finish(conn)
+      return "started"
+    error(message) -> return message
+  end
+end
+
+def main() -> Void
+  certs = System.args()[0]
+  port = System.args()[2]
+  origin = "https://localhost:#{port}"
+  conn = Result.unwrap!(HTTP.start(origin, options(5000, 1, 1000, certs + "/ca.pem")))
+  hello = Result.unwrap!(HTTP.send_request(conn, "GET", "/hello", "".bytes))
+  puts("#{hello.status} #{decoded(Result.unwrap!(HTTP.read_body(conn)))}")
+  puts(Result.unwrap!(HTTP.read_body(conn)).size)
+  notify = Result.unwrap!(HTTP.send_request(conn, "GET", "/notify", "".bytes))
+  puts("#{notify.status} #{decoded(Result.unwrap!(HTTP.read_body(conn)))} #{Result.unwrap!(HTTP.read_body(conn)).size}")
+  puts(HTTP.send_request(conn, "GET", "/hello", "".bytes).ok?)
+  puts(why(HTTP.start(origin, options(5000, 1, 1000, certs + "/self-signed.pem"))))
+  puts(why(HTTP.start("http://localhost:#{port}", options(5000, 1, 1000, ""))))
+end
+"""
+
 RAW_PROGRAM = """\
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
@@ -526,6 +659,63 @@ def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, a
         ("prefix", "error reading from stream port | "),
         ("prefix", "ssl-connect: connect failed (certificate verify failed"),
         ("prefix", "ssl-load-verify-source!: load failed from: ")], "tls")
+
+
+def test_public_connection_reads_bodies_in_pieces_and_serves_a_second_request_on_the_same_socket(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "connection", CONNECTION_PROGRAM, ports), [
+        '200 ["a", "b"] hello 127.0.0.1 in 4',
+        "true",
+        "200 ñandú chunks in 5",
+        "true",
+        "200 conn 8 a=1&b=ñ in 1",
+        "200  in 0",
+        "true",
+        "true",
+        "200 [255, 0] [128] 0",
+        "true",
+        "error: http: the body of the last response is not read to its end",
+        "hello 127.0.0.1 in 1",
+        "true",
+        'error("http: max_bytes must be 1 to 1048576")',
+        "200 until the end in 4",
+        "error: http: the connection is closed",
+        'error("http: the connection is closed")',
+        'error("http: the connection is closed")',
+        "http: start takes an origin such as http://host:8080, with no path or query",
+        "http: the URL must be http:// or https:// with a host, and without user info",
+        "error: http: request body exceeds max_body_bytes",
+        "error: http: invalid method",
+        "200 hello 127.0.0.1 in 1",
+        "error: network: operation timed out",
+        "error: http: the connection is closed",
+        "0"], "connection")
+
+
+def test_public_connection_against_hostile_raw_responses(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "connection-raw", CONNECTION_RAW_PROGRAM, ports), [
+        "/truncated 200 error: http: truncated HTTP body after 3 false",
+        "/badchunk 200 error: http: invalid chunk size after 0 false",
+        "/http10 error: http: HTTP version is unsupported",
+        "/atlimit 200 1000 bytes false",
+        "/bigchunks 200 1024 bytes false",
+        "/after 200 2 bytes false",
+        "/headerless error: network: end of input",
+        "/nocontent 204 0 bytes false",
+        "/two 200 3 bytes false",
+        "/tail 200 3 bytes false"], "connection-raw")
+
+
+def test_public_connection_over_tls_verifies_the_certificate_and_ends_a_body_that_runs_to_the_close(tmp_path, adopt):
+    _, ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "connection-tls", CONNECTION_TLS_PROGRAM, ports), [
+        "200 hello localhost",
+        "0",
+        "200 closed cleanly 0",
+        "false",
+        ("prefix", "ssl-connect: connect failed (certificate verify failed"),
+        "started"], "connection-tls")
 
 
 def test_client_against_hostile_raw_responses_and_a_413_that_comes_before_the_upload_ends(tmp_path, adopt):

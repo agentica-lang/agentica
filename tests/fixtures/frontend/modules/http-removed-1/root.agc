@@ -1,5 +1,5 @@
 import HTTP from "std/http"
 def main() -> Void
-  HTTP.finish(1, [], 1000)
+  HTTP.begin(1, 200, [], 1000)
 end
 
