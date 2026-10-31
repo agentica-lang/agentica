@@ -12,7 +12,7 @@ export def unknown_import_help(
   exports: Map[String, Declarations.Kind],
   member: String,
 ) -> Diag.Help
-  removed = ["respond", "begin", "write", "write_bytes", "finish"].any? do |name| name == member end
+  removed = ["respond", "begin", "write", "write_bytes"].any? do |name| name == member end
   if key == "std/http.agc" and removed
     return Diag.Help.Hint(
       "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text.bytes))",

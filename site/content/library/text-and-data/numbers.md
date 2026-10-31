@@ -13,7 +13,7 @@ Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
 | `x.to_s` on a `Float` | `String.from_float(x)` |
 | `x.to_i`, `x.to_i!` on a `Float` | `Float.to_int(x)`, `Float.to_int!(x)` |
 
-The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. The core has no hex literals, so write masks in decimal (`255`, `65535`).
+The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. Masks read best in hex or binary: `0xFF`, `0b1010` (see [hex, binary and octal](/tour/numbers/#hex-binary-and-octal)).
 
 To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
 

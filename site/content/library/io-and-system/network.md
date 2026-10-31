@@ -137,7 +137,7 @@ end
 
 HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
-- Every call is whole: it returns after the whole response arrived. The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it as UTF-8.
+- Every call of the client is whole: it returns after the whole response arrived (for a body read piece by piece, see [`HTTP.start`](#httpstart-httpsend_request-httpread_body-and-httpfinish)). The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it as UTF-8.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
@@ -269,6 +269,49 @@ def main() -> Void
   end
 
   HTTP.close_client(client)
+end
+```
+
+### HTTP.start, HTTP.send_request, HTTP.read_body and HTTP.finish
+
+```text
+HTTP.start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
+HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
+HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
+HTTP.finish(conn: HTTP.Connection) -> Void
+```
+
+One connection that the program drives itself, outside the pool, as Ruby's `Net::HTTP.start`, `send_request`, `read_body` and `finish` do (and Python's `http.client.HTTPConnection`). Use it to read a body piece by piece, as it arrives (a big file, a log that never ends, lines of a stream), or to control the connection: which requests go on one socket, and when it closes. For whole responses use `get` and the pooled client, which are simpler.
+
+- `start` takes an origin (`http://host`, `https://host:8443`) with no path or query, and connects now. `https` verifies the certificate with `options.ca_file` (the system's by default). Only `timeout_ms` and `max_body_bytes` of the options apply: `timeout_ms` is the time of each call (the connect, each `send_request`, each `read_body`), and `max_body_bytes` the largest request body.
+- `send_request` sends the request and returns when the head of the response has been read: `HTTP.ResponseHead` has `status` and `headers` (names in lowercase). `target` is the path and query (`/items?page=2`). `Host` and `Content-Length` are added; the rules for headers are those of `HTTP.request`. An interim `1xx` head is read past.
+- `read_body` waits for at least one byte and gives at most `max_bytes` (1 to 1 MiB) of the body, decoded (a chunked body has no framing in it). An empty `Bytes` is the end of the body. A `Content-Length` body is held to its length, a chunked one to its framing, and a body that runs to the close of the connection must end with a clean close (over TLS, the peer's `close_notify`). A response body is at most 256 MiB, the limit of `download`, whatever its framing. A response to `HEAD`, a `204`, a `304` and one with `Content-Length: 0` have no body: the connection is ready at once, with no `read_body` needed (a `read_body` gives the empty end piece).
+- After a body has been read to its end, the connection is ready for the next `send_request`, unless the server closed it (`Connection: close`, HTTP/1.0 or a body that ran to the close): then `send_request` is `error("http: the connection is closed")`. The end comes with the last byte, so a program that knows the length may stop reading before the empty piece. The connection is also closed when input is left after the body (a server that sent a second response in the same write, or bytes after the last chunk): reading its answer for the next request would be wrong. A request while the last body is still being read is an `error`, and the connection stays as it was.
+- A failure of the connection (a cut body, a bad chunk, a timeout, a response body over the limit, a write that fails) is an `error` and ends it. A request that is refused before anything is written (a bad method, header or target, a body over `max_body_bytes`) is an `error` too, and the connection stays as it was. A server that closed an idle connection shows as an `error` of the next `send_request`: `start` a new one; nothing is retried.
+- `finish` closes the socket, drops a body not read to its end, and may be called twice. The connection belongs to the task that opened it (as a socket does), and one call at a time uses it: a second call at once is `error("http: the connection is in use by another call")`.
+- There is no redirect follow, cookie or decompression: a program that needs them loops over `send_request`.
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def main() -> Void
+  conn = HTTP.start("http://localhost:8080").unwrap!
+  head = HTTP.send_request(conn, "GET", "/log", "".bytes).unwrap!
+  puts(head.status)
+  total = 0
+  while true
+    piece = HTTP.read_body(conn, 4096).unwrap!
+    if piece.empty?
+      break
+    end
+
+    total = total + piece.size
+  end
+
+  puts(total)
+  next_head = HTTP.send_request(conn, "GET", "/other", "".bytes)
+  puts(next_head.ok?)
+  HTTP.finish(conn)
 end
 ```
 
