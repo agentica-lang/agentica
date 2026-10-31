@@ -281,7 +281,7 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
 end
 
 # The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
-# an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool and a String apart.
+# an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
 def constant_key(imm: Ir.Imm) -> String
   case imm
     Ir.Imm.Void -> return "v"
@@ -290,10 +290,12 @@ def constant_key(imm: Ir.Imm) -> String
     Ir.Imm.Int(number) -> return "i#{number}"
     Ir.Imm.Float(number) -> return "f#{Float.to_bits(number)}"
     Ir.Imm.Text(text) -> return "s#{text}"
+    Ir.Imm.Bytes(text) -> return "y#{text}"
   end
 end
 
-# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String) and its value.
+# A constant in the file: a tag (0 void, 1 nil, 2 false, 3 true, 4 Int, 5 Float, 6 String, 7 Bytes) and its value. A
+# Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as UTF-8.
 def constant_bytes(imm: Ir.Imm) -> List[Int]
   case imm
     Ir.Imm.Void -> return [0]
@@ -302,6 +304,7 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
     Ir.Imm.Int(number) -> return [4].concat(Wire.i64(number))
     Ir.Imm.Float(number) -> return [5].concat(Wire.f64(number))
     Ir.Imm.Text(text) -> return [6].concat(Wire.string(text))
+    Ir.Imm.Bytes(text) -> return [7].concat(Wire.string(text))
   end
 end
 

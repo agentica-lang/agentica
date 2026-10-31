@@ -241,9 +241,9 @@ export def lower_catalog_default(
     Model.Default.EmptyList -> return lower_list(cx, fx, Ast.ListLit(id: id, elements: [], span: span), want)
     Model.Default.EmptyMap -> return lower_map(cx, fx, Ast.MapLit(id: id, entries: [], span: span), want)
     Model.Default.EmptyBytes ->
-      # `"".bytes`: the empty String, then String.bytes in the same register.
-      text = try lower_known_literal(cx, fx, Ast.LitValue.Text(""), id, span, want)
-      return ok(text.with(fx: State.emit_builtin(text.fx, text.slot, "String.bytes", 1, [span, span])))
+      # `"".bytes`: the empty Bytes constant.
+      made = State.target(State.step(fx, span), want)
+      return ok(State.Out(fx: State.emit_const(made.fx, made.slot, Ir.Imm.Bytes(""), span), slot: made.slot))
     Model.Default.Variant(name) ->
       parts = name.split(".")
       return lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)

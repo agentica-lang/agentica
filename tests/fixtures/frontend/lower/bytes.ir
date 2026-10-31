@@ -1,5 +1,5 @@
-program 0:1:1-30:1 entry=4 globals=0
-source 0 "bytes.agc" chars=502
+program 0:1:1-32:1 entry=4 globals=0
+source 0 "bytes.agc" chars=547
 source 1 "<prelude>/bytes.agc" chars=0
 fn0 "joined" params=2 captures=0 slots=5 @ 0:1:1-4:1
     step @ 0:2:3-3:1
@@ -97,15 +97,13 @@ fn3 "total" params=1 captures=0 slots=10 @ 0:13:1-23:1
     return r1 @ 0:21:3-22:1
     const r2 void @ 0:13:1-23:1
     return r2 @ 0:13:1-23:1
-fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-30:1
+fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-32:1
     step @ 0:25:3-26:1
     step @ 0:25:3-25:26
     step @ 0:25:8-25:25
     step @ 0:25:14-25:24
     step @ 0:25:14-25:18
-    const r2 "ab" @ 0:25:14-25:18
-    call-builtin r2 "String.bytes" 1 @ 0:25:14-25:24 0:25:14-25:18
-    move r1 r2 @ 0:25:14-25:24
+    const r1 bytes:"ab" @ 0:25:14-25:24
     call r1 fn3 @ 0:25:8-25:25
     move r0 r1 @ 0:25:8-25:25
     call-builtin r0 "puts" 1 @ 0:25:3-25:26 0:25:8-25:25
@@ -115,21 +113,15 @@ fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-30:1
     step @ 0:26:13-26:41
     step @ 0:26:20-26:29
     step @ 0:26:20-26:23
-    const r3 "a" @ 0:26:20-26:23
-    call-builtin r3 "String.bytes" 1 @ 0:26:20-26:29 0:26:20-26:23
-    move r2 r3 @ 0:26:20-26:29
+    const r2 bytes:"a" @ 0:26:20-26:29
     step @ 0:26:31-26:40
     step @ 0:26:31-26:34
-    const r4 "b" @ 0:26:31-26:34
-    call-builtin r4 "String.bytes" 1 @ 0:26:31-26:40 0:26:31-26:34
-    move r3 r4 @ 0:26:31-26:40
+    const r3 bytes:"b" @ 0:26:31-26:40
     call r2 fn0 @ 0:26:13-26:41
     move r1 r2 @ 0:26:13-26:41
     step @ 0:26:43-26:53
     step @ 0:26:43-26:47
-    const r3 "ab" @ 0:26:43-26:47
-    call-builtin r3 "String.bytes" 1 @ 0:26:43-26:53 0:26:43-26:47
-    move r2 r3 @ 0:26:43-26:53
+    const r2 bytes:"ab" @ 0:26:43-26:53
     call r1 fn1 @ 0:26:8-26:54
     move r0 r1 @ 0:26:8-26:54
     call-builtin r0 "puts" 1 @ 0:26:3-26:55 0:26:8-26:54
@@ -138,14 +130,10 @@ fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-30:1
     step @ 0:27:8-27:36
     step @ 0:27:15-27:24
     step @ 0:27:15-27:18
-    const r2 "a" @ 0:27:15-27:18
-    call-builtin r2 "String.bytes" 1 @ 0:27:15-27:24 0:27:15-27:18
-    move r1 r2 @ 0:27:15-27:24
+    const r1 bytes:"a" @ 0:27:15-27:24
     step @ 0:27:26-27:35
     step @ 0:27:26-27:29
-    const r3 "b" @ 0:27:26-27:29
-    call-builtin r3 "String.bytes" 1 @ 0:27:26-27:35 0:27:26-27:29
-    move r2 r3 @ 0:27:26-27:35
+    const r2 bytes:"b" @ 0:27:26-27:35
     call r1 fn2 @ 0:27:8-27:36
     move r0 r1 @ 0:27:8-27:36
     call-builtin r0 "puts" 1 @ 0:27:3-27:37 0:27:8-27:36
@@ -153,14 +141,29 @@ fn4 "main" params=0 captures=0 slots=5 entry @ 0:24:1-30:1
     step @ 0:28:3-28:43
     step @ 0:28:3-28:13
     step @ 0:28:3-28:7
-    const r1 "ab" @ 0:28:3-28:7
-    call-builtin r1 "String.bytes" 1 @ 0:28:3-28:13 0:28:3-28:7
-    move r0 r1 @ 0:28:3-28:13
+    const r0 bytes:"ab" @ 0:28:3-28:13
     step @ 0:28:19-28:43
     closure r1 fn6 @ 0:28:19-28:43
     call r0 fn5 @ 0:28:3-28:43 0:28:3-28:13 0:28:19-28:43
-    const r0 void @ 0:24:1-30:1
-    return r0 @ 0:24:1-30:1
+    step @ 0:29:3-30:1
+    step @ 0:29:10-29:13
+    const r0 "c" @ 0:29:10-29:13
+    step @ 0:30:3-31:1
+    step @ 0:30:3-30:32
+    step @ 0:30:8-30:31
+    step @ 0:30:8-30:24
+    step @ 0:30:8-30:18
+    step @ 0:30:11-30:15
+    move r3 r0 @ 0:30:11-30:15
+    const r4 "d" @ 0:30:8-30:18
+    concat r3 r3 r4 @ 0:30:8-30:18
+    call-builtin r3 "String.bytes" 1 @ 0:30:8-30:24 0:30:8-30:18
+    move r2 r3 @ 0:30:8-30:24
+    call-builtin r2 "Bytes.length" 1 @ 0:30:8-30:31 0:30:8-30:24
+    move r1 r2 @ 0:30:8-30:31
+    call-builtin r1 "puts" 1 @ 0:30:3-30:32 0:30:8-30:31
+    const r1 void @ 0:24:1-32:1
+    return r1 @ 0:24:1-32:1
 fn5 "@prelude::bytes::each" params=2 captures=0 slots=11 @ 1:1:1-1:1
     step @ 1:1:1-1:1
     step @ 1:1:1-1:1

@@ -6,7 +6,9 @@ takes eight). Use it for data that is not text. An item reads as an `Int` in
 or import alias).
 
 There is no literal: write `"PK".bytes`, `Digest.hexdecode("504b0304").unwrap!`
-or `Bytes.from_list([80, 75, 3, 4]).unwrap!`.
+or `Bytes.from_list([80, 75, 3, 4]).unwrap!`. `"text".bytes` on a literal
+without interpolation is a constant made once at load, so it needs no module
+constant to stay cheap in a loop.
 
 ```text
 s.bytes -> Bytes                          # UTF-8 bytes of a String

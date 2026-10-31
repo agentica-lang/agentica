@@ -26,4 +26,6 @@ def main() -> Void
   puts(same(joined("a".bytes, "b".bytes), "ab".bytes))
   puts(differ("a".bytes, "b".bytes))
   "ab".bytes.each do |byte| puts(byte) end
+  name = "c"
+  puts("#{name}d".bytes.length)
 end
