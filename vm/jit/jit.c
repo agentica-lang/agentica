@@ -80,8 +80,8 @@ static const plain_leaf plain_leaves[] = {
 const char *const agc_jit_parking[] = {
     "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.close",
     "File.flush", "File.lstat", "File.open", "File.read_bytes.bytes", "File.read_line", "File.read_text",
-    "File.sha256.bytes", "File.stat", "File.try_lock", "File.write", "File.write_bytes.bytes", "File.write_text",
-    "FrontEnd.stdin_bytes.bytes", "HttpWire.accept", "HttpWire.connect_tls", "HttpWire.idle?",
+    "File.replace", "File.sha256.bytes", "File.stat", "File.try_lock", "File.write", "File.write_bytes.bytes",
+    "File.write_text", "FrontEnd.stdin_bytes.bytes", "HttpWire.accept", "HttpWire.connect_tls", "HttpWire.idle?",
     "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.wait", "IO.eof?", "IO.gets", "IO.gets!", "IO.read",
     "IO.read_bytes.bytes", "Native.call", "Native.wait_readable", "Native.wait_writable", "Path.real", "Path.remove",
     "Path.rename", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close",
