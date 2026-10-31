@@ -55,14 +55,22 @@ def main() -> Void
       try Test.eq(HTTP.header_values(headers, "SET-COOKIE"), ["a=1", "b=2"])
       Test.eq(HTTP.header_values(headers, "x-missing"), [])
     end,
-    Test.test("text decodes a body as UTF-8 and nothing else") do
+    Test.test("text decodes a body in its charset") do
       latin = [Header(name: "Content-Type", value: "text/plain; Charset=\"ISO-8859-1\"")]
+      windows = [Header(name: "Content-Type", value: "text/html; charset=windows-1252")]
+      utf16 = [Header(name: "Content-Type", value: "text/plain; charset=utf-16")]
+      koi8 = [Header(name: "Content-Type", value: "text/plain; charset=KOI8-R")]
       binary = Bytes.from_list([255, 0, 128]).unwrap!
       try Test.eq(HTTP.text("ñandú".bytes).unwrap!, "ñandú")
       try Test.eq(HTTP.text("ñ".bytes, [Header(name: "content-type", value: "text/html; charset=UTF-8")]).unwrap!, "ñ")
       try Test.eq(HTTP.text(binary).message, "http: body is not valid UTF-8")
-      try Test.eq(HTTP.text("caf".bytes, latin).ok?, false)
-      Test.eq(String.starts_with?(HTTP.text("caf".bytes, latin).message, "http: charset iso-8859-1 is not supported"), true)
+      try Test.eq(HTTP.text("caf".bytes + Bytes.from_list([233]).unwrap!, latin).unwrap!, "café")
+      try Test.eq(HTTP.text(Bytes.from_list([128, 32, 147, 104, 148]).unwrap!, windows).unwrap!, "€ “h”")
+      undefined = Bytes.from_list([97, 129]).unwrap!
+      try Test.eq(HTTP.text(undefined, windows).message, "http: invalid Windows-1252 at byte 1")
+      try Test.eq(HTTP.text(Bytes.from_list([255, 254, 104, 0, 233, 0]).unwrap!, utf16).unwrap!, "hé")
+      try Test.eq(HTTP.text("caf".bytes, koi8).ok?, false)
+      Test.eq(String.starts_with?(HTTP.text("caf".bytes, koi8).message, "http: charset koi8-r is not supported"), true)
     end,
     Test.test("text reads the charset of the first Content-Type header") do
       type = "content-type"
@@ -74,8 +82,8 @@ def main() -> Void
       try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain")]).unwrap!, "é")
       mixed = [Header(name: type, value: "text/plain; charset=utf-8"), Header(name: type, value: "text/plain; charset=latin1")]
       try Test.eq(HTTP.text("é".bytes, mixed).unwrap!, "é")
-      try Test.eq(HTTP.text("é".bytes, mixed.reverse).ok?, false)
-      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=latin1")]).ok?, false)
+      try Test.eq(HTTP.text("é".bytes, mixed.reverse).unwrap!, "Ã©")
+      try Test.eq(HTTP.text("é".bytes, [Header(name: type, value: "text/plain; format=flowed; charset=latin1")]).unwrap!, "Ã©")
       try Test.eq(HTTP.text(binary, [Header(name: type, value: "text/plain; charset=utf-8")]).ok?, false)
       long = [Header(name: type, value: "text/plain; charset=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")]
       Test.eq(HTTP.text("e".bytes, long).message.length < 150, true)

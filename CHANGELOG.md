@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.text` decodes a body in the `charset` of its `Content-Type` when
+  `bytes.decode` knows it (Latin-1, Windows-1252, UTF-16 and the others), and
+  errors only for other charsets.
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
   UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII, Latin-1,
   ISO-8859-15 and Windows-1252.

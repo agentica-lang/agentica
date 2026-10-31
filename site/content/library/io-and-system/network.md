@@ -137,7 +137,7 @@ end
 
 HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
-- Every call is whole: it returns after the whole response arrived. The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it as UTF-8.
+- Every call is whole: it returns after the whole response arrived. The body is `Bytes`, exactly as it came (any content, up to `max_body_bytes`); it is not decompressed. [`HTTP.text`](#httptext) decodes it in its charset.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
@@ -206,7 +206,7 @@ end
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 ```
 
-Decodes a body as UTF-8, and nothing else. Pass the `headers` of the same message: when its `Content-Type` has a `charset`, it must be `utf-8` or `us-ascii` (any case, quoted or not), and without one the body is read as UTF-8. A body that is not valid UTF-8, or a body with any other charset (`iso-8859-1`, `shift_jis`, `utf-16`), is an `error` result: the charset error names the charset. Other charsets belong to the planned `agentica-lang/charset` package.
+Decodes a body as text. Pass the `headers` of the same message: the body is read in the `charset` of its `Content-Type` (any case, quoted or not), and as UTF-8 when there is none. The charsets are the encodings of [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII, Latin-1 (`iso-8859-1`), ISO-8859-15 and Windows-1252, by any of their names; `us-ascii` is read as UTF-8, which contains it. A body that is not valid in its charset is an `error` result (with the byte offset, except for UTF-8), and any other charset (`shift_jis`, `koi8-r`) is an `error` that names it. Other charsets belong to the planned `agentica-lang/charset` package.
 
 ```agentica
 import HTTP from "std/http"
@@ -214,13 +214,16 @@ import HTTP from "std/http"
 def main() -> Void
   utf8 = [Header(name: "content-type", value: "text/plain; charset=UTF-8")]
   latin1 = [Header(name: "content-type", value: "text/plain; charset=iso-8859-1")]
+  koi8 = [Header(name: "content-type", value: "text/plain; charset=koi8-r")]
   puts(HTTP.text("café".bytes, utf8).unwrap!)
-  puts(HTTP.text("caf".bytes + Bytes.from_list([233]).unwrap!, latin1).ok?)
+  puts(HTTP.text("caf".bytes + Bytes.from_list([233]).unwrap!, latin1).unwrap!)
+  puts(HTTP.text("caf".bytes, koi8).ok?)
   puts(HTTP.text(Bytes.from_list([255, 0, 128]).unwrap!).ok?)
 end
 ```
 
 ```output
+café
 café
 false
 false
