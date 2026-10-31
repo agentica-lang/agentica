@@ -29,6 +29,9 @@
 
 typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_IDLE, REQ_HEAD, REQ_RESPONSE, REQ_SEND } req_kind;
 
+/* Why TLS.upgrade did not start, in its TLS net's `error` (libuv errors are negative). */
+enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDING = 3 };
+
 typedef agc_conn net;
 typedef struct tcp_link tcp_link;
 typedef struct request request;
@@ -109,6 +112,8 @@ struct agc_conn {
   uint8_t *cipher, *plain;
   size_t plain_at, plain_len;
   bool secure, setting_up, setup_failed, handshaken, tls_failed, flushing, raw_eof, clean_eof, half_closed;
+  /* Made by TLS.upgrade (set before any other thread sees the net), on the server side when server_side. */
+  bool upgraded, server_side;
   agc_conn_watch watch;
   void *watcher;
 };
@@ -462,13 +467,19 @@ static net *new_net(agc_vm *vm, char *host, int64_t port, bool listener) {
   return make_net(&vm->rt->trace, agc_io_loop(vm), host, port, listener);
 }
 
-/* The scheduler's half of a close (the resource, under rt->sync); the net's half is a step. */
-static void disown(agc_vm *vm, agc_resource *r, const char *why) {
+/* The resource lets its net go, and its count on it with it, to the caller; NULL when it was closed already. */
+static net *let_go(agc_vm *vm, agc_resource *r) {
   net *n = r->native;
-  if (!n) return;
+  if (!n) return NULL;
   r->native = NULL;
   agc_unregister(vm, r);
-  post_release(n, why);
+  return n;
+}
+
+/* The scheduler's half of a close (the resource, under rt->sync); the net's half is a step. */
+static void disown(agc_vm *vm, agc_resource *r, const char *why) {
+  net *n = let_go(vm, r);
+  if (n) post_release(n, why);
 }
 
 static void close_net(agc_vm *vm, agc_resource *r, agc_task *ender) {
@@ -539,6 +550,8 @@ static void drop_request(void *data) {
   free(q->rest);
   agc_inbuf_cut_free(&q->cut);
   if (!q->counted) {
+    /* TLS.upgrade's plain socket came with its count; an accept's child is only set by START. */
+    release_child(q);
     free(q);
     return;
   }
@@ -593,6 +606,14 @@ static agc_value secure_error(agc_vm *vm, const net *n) {
 static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
   if (n->listener) return net_error(vm, n, found ? "tcp-listen: listen failed" : "tcp-listen: host not found", err);
   return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", err);
+}
+
+static agc_value upgrade_error(agc_vm *vm, const request *q) {
+  if (q->tls_failed) return agc_tls_failure_error(vm, "tls-upgrade: handshake failed", &q->n->failure);
+  if (q->open_error == UPGRADE_UNREAD) return agc_error_value("network: data came before the TLS handshake");
+  if (q->open_error == UPGRADE_ENDED) return agc_error_value("network: end of input");
+  if (q->open_error == UPGRADE_SENDING) return agc_error_value("network: a send on the socket is in progress");
+  return agc_error_value(socket_closed);
 }
 
 static void read_port(net *n, const tcp_link *k) {
@@ -1143,7 +1164,9 @@ static agc_value opened(agc_vm *vm, const request *q, agc_value context) {
     lv->port = q->port;
     return ok_value(context);
   }
-  agc_value result = q->tls_failed ? secure_error(vm, n) : open_failure(vm, n, q->resolved, q->open_error);
+  agc_value result = n->upgraded    ? upgrade_error(vm, q)
+                     : q->tls_failed ? secure_error(vm, n)
+                                     : open_failure(vm, n, q->resolved, q->open_error);
   disown(vm, n->listener ? agc_as_listener(vm, context)->state : agc_as_socket(vm, context)->state, "failed");
   return result;
 }
@@ -1369,6 +1392,84 @@ static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t s
   return open_socket(vm, args, span, true);
 }
 
+static net *live(const agc_socket *sk) {
+  net *n = sk->state->native;
+  return n && !n->closed ? n : NULL;
+}
+
+/* Whether the plain net OLD can hand its connection to TLS.upgrade: -1 when it can, else why not. Bytes it read that
+   nobody took would be the start of the TLS stream (STARTTLS forbids them), and a send still in flight writes from
+   the plain net's own request. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
+static int upgrade_refusal(const net *old) {
+  if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
+  if (old->writer || old->write_data) return UPGRADE_SENDING;
+  if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
+  if (old->in.eof || old->in.error) return UPGRADE_ENDED;
+  return -1;
+}
+
+/* The START step of TLS.upgrade, on the I/O thread: the connection (its libuv handle) moves from the plain net, which
+   the request holds as its child, to the TLS net, which then handshakes as a connect or an accept does. The plain net
+   is closed here whatever happens, which ends any read still waiting on it; drop_request gives back its count. */
+static bool begin_upgrade(void *data, agc_io_job *job) {
+  request *q = data;
+  net *n = q->n, *old = q->child;
+  link_request(q, job);
+  n->loop = agc_loop_uv(n->io);
+  int refused = upgrade_refusal(old);
+  if (refused >= 0) {
+    n->error = refused;
+    if (old) shut(old, "upgrade");
+    finish(q);
+    return true;
+  }
+  stop_reading(old);
+  tcp_link *k = old->conn;
+  old->conn = NULL;
+  old->callbacks--;
+  k->owner = n;
+  n->callbacks++;
+  n->conn = k;
+  n->connected = true;
+  shut(old, "upgrade");
+  AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake socket=%" PRIu64 " listener=0 role=%s upgrade=%" PRIu64, n->id,
+            n->server_side ? "server" : "client", old->id);
+  begin_tls(n, n->server_side ? agc_tls_server(n->config, &n->failure) : agc_tls_client(n->config, n->host, &n->failure));
+  return true;
+}
+
+static const char upgrade_role[] = "TLS.upgrade with a server TlsContext takes the host \"\"";
+
+/* TLS.upgrade(socket, context, host, timeout_ms): the TLS handshake over an open TCP socket (STARTTLS), on the side
+   that the context's role names. A server context with a host is a bug in the program, reported first. The checks of
+   the arguments leave the socket as it was; after them the plain socket is the request's (its resource is gone, so the
+   program sees it closed), and the handshake runs on a new TLS socket under the timeout, which closes it. */
+static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_socket *sk = agc_as_socket(vm, args[0]);
+  bool server = agc_as_tls_context(vm, args[1])->server;
+  const agc_string *host = agc_as_string(vm, args[2]);
+  int64_t timeout = agc_as_int(vm, args[3]);
+  if (server && host->bytes) agc_fail(vm, "RUNTIME-TLS-CONTEXT-ROLE", upgrade_role, span + 3);
+  const net *plain = live(sk);
+  if (!plain) return agc_error_value(socket_closed);
+  if (plain->secure) return agc_error_value("network: the socket is TLS already");
+  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (!server && !host->bytes) return agc_error_value("network: host cannot be empty");
+  char *name = agc_cstr(host);
+  if (!name) return agc_error_value("network: host cannot contain NUL");
+  net *n = new_net(vm, name, 0, false);
+  n->secure = n->upgraded = true;
+  n->server_side = server;
+  n->config = agc_tls_config_ref(agc_as_tls_context(vm, args[1])->config);
+  agc_socket *tls_socket = new_socket(vm, n, true);
+  request *q = new_request(n, REQ_CONNECT);
+  q->child = let_go(vm, sk->state);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tls_upgrade socket=%" PRIu64 " from=%" PRIu64, tls_socket->state->id,
+            sk->state->id);
+  park(vm, q, agc_socket_value(tls_socket), timeout, begin_upgrade);
+  return agc_void();
+}
+
 static agc_value builtin_listen(agc_vm *vm, agc_value *args, uint32_t span) { return open_listener(vm, args, span, false); }
 
 static agc_value builtin_tls_listen(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1410,11 +1511,6 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   disown(vm, agc_as_socket(vm, args[0])->state, "close");
   return agc_void();
-}
-
-static net *live(const agc_socket *sk) {
-  net *n = sk->state->native;
-  return n && !n->closed ? n : NULL;
 }
 
 static bool begin_read(void *data, agc_io_job *job) {
@@ -1712,6 +1808,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 3, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TLS.upgrade", 4, builtin_tls_upgrade, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.idle?", 2, builtin_idle, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

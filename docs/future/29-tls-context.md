@@ -1,6 +1,6 @@
 ## 29. TLS contexts
 
-**Status:** 19a built; 19b and 19c planned (roadmap phase 19), decided by the
+**Status:** 19a and 19b built; 19c planned (roadmap phase 19), decided by the
 user on 2026-10-12. It is part of order step 7.4: after phase 17 (`Task.map` and
 channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)). `with` (15c) is built, so
@@ -18,7 +18,13 @@ certificate of mTLS stays) and `TlsServerOptions(cert_file, key_file)`, with
 no `TLS.client_options()` helper; `HttpClientOptions.tls` is an
 `Optional[TlsContext] = none` in place of `ca_file`, and with `none` each client
 builds its own system-trust context lazily; the `listen_*_tls` forms take a
-server context. 19b (`TLS.upgrade`) and 19c (ALPN) are still planned.
+server context.
+
+**Built (19b):** `TLS.upgrade` as 29.3 says, with two additions: the checks of
+the arguments (a closed or TLS socket, the timeout, an empty host for a client
+context) are `error` results that leave the socket open, and a send still in
+progress on the plain socket fails the upgrade as unread bytes do. 19c (ALPN)
+is still planned.
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS
@@ -141,8 +147,10 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
 ```
 
 Some protocols start in plain text and switch to TLS on the same connection
-(SMTP and IMAP `STARTTLS`, PostgreSQL's `SSLRequest`). `TLS.upgrade` runs the
-handshake over an open TCP socket and returns a new TLS socket.
+(SMTP and IMAP `STARTTLS`, PostgreSQL's `SSLRequest`). The status at the top
+records two additions as built (19b): the argument checks leave the socket open,
+and a send in progress fails the upgrade. `TLS.upgrade` runs the handshake over
+an open TCP socket and returns a new TLS socket.
 
 - **Role from the context.** With a client context it is the client side and
   checks `host` as `TLS.connect` does. With a server context it is the server
