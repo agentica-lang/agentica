@@ -284,6 +284,49 @@ def main() -> Void
 end
 ```
 
+Give a call a block only for a short body, one expression such as `do |order| order.item end`. A longer body, such as a route handler (`|> Bond.get("/users/:id", &show_user)`) or several statements, is a named function passed with `&name`:
+
+```agentica {mode="check"}
+# bad
+struct Order
+  item: String
+  price: Int
+  count: Int
+end
+
+def main() -> Void
+  orders = [Order(item: "tea", price: 3, count: 2)]
+  lines = orders.map do |order|
+    total = order.price * order.count
+    tax = total / 10
+    "#{order.item}: #{total + tax}"
+  end
+
+  puts(lines)
+end
+```
+
+```agentica {mode="check"}
+# good
+struct Order
+  item: String
+  price: Int
+  count: Int
+end
+
+def line(order: Order) -> String
+  total = order.price * order.count
+  tax = total / 10
+  return "#{order.item}: #{total + tax}"
+end
+
+def main() -> Void
+  orders = [Order(item: "tea", price: 3, count: 2)]
+  puts(orders.map(&line))
+  puts(orders.map do |order| order.item end)
+end
+```
+
 Use a `Bool` as it is, with `and`, `or` and `not`, never compared with `true` or `false`:
 
 ```agentica {mode="check"}

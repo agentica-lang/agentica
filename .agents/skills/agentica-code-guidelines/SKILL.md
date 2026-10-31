@@ -90,6 +90,10 @@ Change style only in code you touch. Restyle untouched code separately.
 - Use `for` for totals/results, collection methods for transforms. Blocks
   cannot assign outer variables (`CHECK-CAPTURED-ASSIGNMENT`). Rebind only
   loop state; a new meaning gets a new name.
+- A block passed to a call holds one short expression
+  (`map do |x| x * 2 end`). A longer body, such as a route handler or several
+  statements, is a named function passed with `&name`:
+  `|> Bond.get("/users/:id", &show_user)`.
 - Test Bools directly (`if done`), not against `true`/`false`. Use `and`,
   `or`, `not`, not `&&` or `||`; name long predicates with a `?` function.
 
