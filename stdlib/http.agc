@@ -89,8 +89,8 @@ end
 
 # What a server's handler returns: a whole response, or one whose body is a channel (listen_stream).
 enum Route
-  Whole(Fn[HttpRequest, Result[HttpResponse]])
-  Streaming(Fn[HttpRequest, Result[StreamResponse]])
+  Whole(Handler)
+  Streaming(StreamHandler)
 end
 
 struct Service
@@ -279,6 +279,14 @@ export struct StreamResponse
   ## body is chunked.
   length: Optional[Int] = none
 end
+
+## The function that `listen` and `listen_tls` call for each request: the request in, the whole response out. A
+## middleware is a function from a `Handler` to a `Handler`.
+export type Handler = Fn[HttpRequest, Result[HttpResponse]]
+
+## The function that `listen_stream` and `listen_stream_tls` call for each request: the request in, a response whose
+## body arrives on a channel out.
+export type StreamHandler = Fn[HttpRequest, Result[StreamResponse]]
 
 # Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
 # `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
@@ -648,7 +656,7 @@ end
 export def listen(
   host: String,
   port: Int,
-  handler: Fn[HttpRequest, Result[HttpResponse]],
+  handler: Handler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
@@ -668,7 +676,7 @@ export def listen_tls(
   port: Int,
   cert_file: String,
   key_file: String,
-  handler: Fn[HttpRequest, Result[HttpResponse]],
+  handler: Handler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
@@ -688,7 +696,7 @@ end
 export def listen_stream(
   host: String,
   port: Int,
-  handler: Fn[HttpRequest, Result[StreamResponse]],
+  handler: StreamHandler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
@@ -708,7 +716,7 @@ export def listen_stream_tls(
   port: Int,
   cert_file: String,
   key_file: String,
-  handler: Fn[HttpRequest, Result[StreamResponse]],
+  handler: StreamHandler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(

@@ -163,14 +163,14 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 ## HTTP server (`std/http`)
 
 ```text
-HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
 HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 
-HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
@@ -199,6 +199,15 @@ def main() -> Void
 end
 ```
 
+- `HTTP.Handler` and `HTTP.StreamHandler` are aliases of the handler types
+  `Fn[HttpRequest, Result[HttpResponse]]` and
+  `Fn[HttpRequest, Result[HTTP.StreamResponse]]`. A middleware is a function
+  `Handler -> Handler` that calls `next.call(request)` or answers itself. A
+  block cannot be returned directly, so a helper
+  `def handler(f: HTTP.Handler) -> HTTP.Handler` turns
+  `handler() do |request| step(next, request) end` into the value; keep the
+  block to one call and put the work in the named `step`. Stack them by calling
+  one with another's result: `logged(guarded(&hello))`.
 - `listen` (TCP) and `listen_tls` (PEM certificate and key files) return at once
   and serve in the background. Port 0 picks a free port, which `local_port`
   returns. Each connection runs in its own task, with keep-alive.
