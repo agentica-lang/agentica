@@ -1,0 +1,23 @@
+def main() -> Void
+  text = <<~DOC
+    # not a comment: the body of a heredoc
+    two
+  DOC
+  puts(text) ## a doc marker after code is a comment
+  total = (
+    1 + # after an operator
+    2
+  )
+  name = "a # not a comment" # after a string
+  piped = (
+    total
+    |> double() # after a pipe step
+  )
+  puts(piped)
+end
+
+# before a doc block
+## A doc.
+def double(n: Int) -> Int
+  return n * 2
+end

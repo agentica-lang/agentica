@@ -1,0 +1,33 @@
+def main() -> Void
+  x = 1 # after a statement
+  # before an if
+  if x > 0 # after a condition
+    puts(x)
+    # before elsif
+  elsif x < 0
+    puts(0)
+    # before else
+  else # after else
+    puts(1)
+    # before the end of an if
+  end
+
+  if x == 2
+    puts(2)
+  else
+    # alone in an empty else
+  end
+
+  case x
+    # before the first arm
+    1 -> # after an arrow
+      puts(1)
+    # between arms
+    _ -> puts(0)
+  end
+
+  while x < 3
+    x += 1
+    # before the end of a while
+  end
+end

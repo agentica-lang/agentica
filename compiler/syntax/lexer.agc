@@ -204,10 +204,17 @@ end
 # The state of the main loop between two runs: the tokens and frames so far, and where scanning goes on.
 struct Lexed
   tokens: List[Tokens.Token]
+  comments: List[Tokens.Comment]
   delimiters: List[Frame]
   index: Int
   line: Int
   line_start: Int
+end
+
+## The tokens of a text and its plain comments, in source order (`lex_with_comments`).
+export struct Scanned
+  tokens: List[Tokens.Token]
+  comments: List[Tokens.Comment]
 end
 
 # One body line of a heredoc: where it starts, where its text starts after the spaces, where it stops (before the
@@ -282,13 +289,25 @@ end
 
 ## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
 export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
+  case lex_with_comments(text)
+    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(scanned) -> return Diag.Outcome.Done(scanned.tokens)
+  end
+end
+
+## Lexes a source text like `lex`, and also gives its plain comments, which `lex` drops: the side list that the
+## formatter attaches to the tree (docs/future/47-formatter.md, 47.4). The tokens are the ones `lex` gives.
+export def lex_with_comments(text: String) -> Diag.Outcome[Scanned]
   input = new_input(text)
-  first = Lexed(tokens: [], delimiters: [], index: 0, line: 1, line_start: 0)
+  first = Lexed(tokens: [], comments: [], delimiters: [], index: 0, line: 1, line_start: 0)
   case lex_from(input, first, -1)
     Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(lexed) ->
       here = Source.position(lexed.index, lexed.line, lexed.line_start)
-      return finish(input, lexed.tokens, lexed.delimiters, here)
+      case finish(input, lexed.tokens, lexed.delimiters, here)
+        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(tokens) -> return Diag.Outcome.Done(Scanned(tokens: tokens, comments: lexed.comments))
+      end
   end
 end
 
@@ -300,6 +319,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   size = input.size
   text = input.text
   tokens = state.tokens
+  comments = state.comments
   delimiters = state.delimiters
   # The size of `delimiters` and its last frame (ROOT when empty), kept beside it so that a bracket or a line break
   # reads them without a call.
@@ -432,6 +452,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
           return Diag.Outcome.Done(
             Lexed(
               tokens: tokens,
+              comments: comments,
               delimiters: delimiters.take(depth - 1),
               index: index + 1,
               line: line,
@@ -526,7 +547,18 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
           line_start = scan.line_start
           column_base = 1 - line_start
         else
-          index = line_end(input, index, line, line_start)
+          stop = line_end(input, index, line, line_start)
+          comments = comments.push(
+            Tokens.Comment(
+              text: text.slice(index, stop - index),
+              own_line: only_blanks?(chars, line_start, index),
+              span: Source.Span(
+                start: Source.Position(offset: index, line: line, column: index + column_base),
+                stop: Source.Position(offset: stop, line: line, column: stop + column_base),
+              ),
+            ),
+          )
+          index = stop
         end
 
       CharClass.Digit ->
@@ -570,7 +602,14 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   end
 
   return Diag.Outcome.Done(
-    Lexed(tokens: tokens, delimiters: delimiters, index: index, line: line, line_start: line_start),
+    Lexed(
+      tokens: tokens,
+      comments: comments,
+      delimiters: delimiters,
+      index: index,
+      line: line,
+      line_start: line_start,
+    ),
   )
 end
 
@@ -1147,7 +1186,15 @@ def heredoc_line(
       parts = []
       pieces += 1
       frames = open_frame(delimiters, "#", Source.position(cursor, body.line, body.start))
-      inner = Lexed(tokens: tokens, delimiters: frames, index: cursor + 2, line: body.line, line_start: body.start)
+      # A `#` in the interpolation would comment out its `}`, so the run finds no comment.
+      inner = Lexed(
+        tokens: tokens,
+        comments: [],
+        delimiters: frames,
+        index: cursor + 2,
+        line: body.line,
+        line_start: body.start,
+      )
       case lex_from(input, inner, frames.size)
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(lexed) ->

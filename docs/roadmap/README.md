@@ -36,9 +36,9 @@ Items 1 to 4 (FFI-a, cached bytecode, packages
 
 5. The formatter
    [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt) (row 7.9).
-   Its needs are the heredoc and the open questions of
-   [§47.9](../future/47-formatter.md#479-open-questions), which the owner
-   answers when the work starts.
+   The owner answered the open questions of
+   [§47.9](../future/47-formatter.md#479-open-questions) on 2026-10-31; 47a is
+   done.
 6. [#396](https://github.com/agentica-lang/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
@@ -172,7 +172,8 @@ Weighed later (no fixed order):
   - **Next work:** Second batch (item 5 above; design and plan:
     [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)):
     `agentica fmt`, written in Agentica on the self-hosted lexer and parser
-    (parts 47a to 47c; 47c adds `CHECK-LINE-TOO-LONG`, which replaces
+    (parts 47a to 47c; 47a, the comment side list and its attachment, is done;
+    47c adds `CHECK-LINE-TOO-LONG`, which replaces
     `tests/test_style_line_width.py`). 47d, the LSP hook, waits for the
     language server (§43, not scheduled).
   - **Outcome:** Every `.agc` file has one layout, checked in CI

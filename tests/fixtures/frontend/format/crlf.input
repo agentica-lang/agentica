@@ -1,0 +1,4 @@
+def main() -> Void
+  # a comment in a CRLF file
+  puts(1) # after code
+end
