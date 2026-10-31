@@ -41,7 +41,10 @@
   where it is at the line break.
 - `;`, backslash continuation and implicit continuation after an operator are
   not supported. Wrap a long expression in parentheses. Inside lists and calls,
-  use several lines and a trailing comma.
+  use several lines and a trailing comma. The parameters of a `def` header, the
+  entries of a map, the names of an import list and the fields of a struct
+  literal take a trailing comma too; the payload types of an enum variant do
+  not.
 
 ```ruby
 total = (

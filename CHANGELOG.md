@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
+  formatter would change and exits 1 if there are any; `agentica fmt --tree
+  FILE` prints the tree that formatting keeps.
 - `channel.empty?` is `true` when no value is left to receive.
 - `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
   `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a

@@ -1,0 +1,14 @@
+MESSAGE = "a short message"
+LONG_MESSAGE = "a message long enough that it does not fit on the line of its name together with the equals sign, so it moves"
+
+def main() -> Void
+  text = (
+    "the first part of a long message that is split by hand into two pieces, " +
+    "and the second part of the same message"
+  )
+  puts(text)
+  report(
+    "a call whose argument is a long concatenation of string pieces that does not fit on one line " +
+    "with the call",
+  )
+end

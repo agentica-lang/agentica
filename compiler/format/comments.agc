@@ -28,12 +28,14 @@ STATEMENT_KINDS = Set.new(
 BODY_END_KINDS = STATEMENT_KINDS.union(Set.new(["FieldDecl", "EnumVariant"]))
 
 ## A node of the outline: the name of its tree node (`FunctionDecl`, `Param`, `IfStmt`, `Call`, ... and `ModuleDoc`
-## for the module doc), its span from its first token to its last token that is not a line break, and the index of
-## its parent in the outline (-1 for the Program, which is always the first entry).
+## for the module doc), its span from its first token to its last token that is not a line break, the index of its
+## parent in the outline (-1 for the Program, which is always the first entry), and its key (`key_of` of its kind and
+## its span as parsed), by which the layout finds the comments of a tree node.
 export struct Node
   kind: String
   span: Source.Span
   parent: Int
+  key: String
 end
 
 ## A comment and its place: the index of its node in the outline, its role, and the keyword a dangling comment comes
@@ -111,12 +113,83 @@ export def attach(program: Ast.Program, tokens: List[Tokens.Token], comments: Li
   return Attachment(nodes: outline.nodes, comments: placed)
 end
 
+## The key of a tree node of kind `kind` (as `Node.kind` names it) with the span `span` as the parser gave it. Two
+## nodes of one tree never share a key: a node and its child of the same kind never have the same span.
+export def key_of(kind: String, span: Source.Span) -> String
+  return "#{kind}:#{span.start.offset}:#{span.stop.offset}"
+end
+
 ## The name of a role, as the text form prints it.
 export def role_name(role: Role) -> String
   case role
     Role.Leading -> return "leading"
     Role.Trailing -> return "trailing"
     Role.Dangling -> return "dangling"
+  end
+end
+
+## The kind of a declaration, as `Node.kind` names it.
+export def decl_kind(decl: Ast.Decl) -> String
+  case decl
+    Ast.Decl.Import(_) -> return "ImportDecl"
+    Ast.Decl.Reexport(_) -> return "ReexportDecl"
+    Ast.Decl.Export(_) -> return "ExportDecl"
+    Ast.Decl.Function(_) -> return "FunctionDecl"
+    Ast.Decl.Struct(_) -> return "StructDecl"
+    Ast.Decl.Enum(_) -> return "EnumDecl"
+    Ast.Decl.TypeAlias(_) -> return "TypeAliasDecl"
+    Ast.Decl.Resource(_) -> return "ResourceDecl"
+    Ast.Decl.Constant(_) -> return "ConstDecl"
+  end
+end
+
+## The kind of a statement, as `Node.kind` names it.
+export def stmt_kind(stmt: Ast.Stmt) -> String
+  case stmt
+    Ast.Stmt.Binding(_) -> return "Binding"
+    Ast.Stmt.Return(_) -> return "Return"
+    Ast.Stmt.Expression(_) -> return "ExprStmt"
+    Ast.Stmt.If(_) -> return "IfStmt"
+    Ast.Stmt.While(_) -> return "WhileStmt"
+    Ast.Stmt.For(_) -> return "ForStmt"
+    Ast.Stmt.Control(_) -> return "LoopControl"
+    Ast.Stmt.Case(_) -> return "CaseStmt"
+  end
+end
+
+## The kind of a pattern, as `Node.kind` names it.
+export def pattern_kind(pattern: Ast.Pattern) -> String
+  case pattern
+    Ast.Pattern.Wildcard(_) -> return "WildcardPattern"
+    Ast.Pattern.Literal(_) -> return "LiteralPattern"
+    Ast.Pattern.Variant(_) -> return "VariantPattern"
+  end
+end
+
+## The kind of a expression, as `Node.kind` names it.
+export def expr_kind(expr: Ast.Expr) -> String
+  case expr
+    Ast.Expr.Literal(_) -> return "Literal"
+    Ast.Expr.Name(_) -> return "NameRef"
+    Ast.Expr.Call(_) -> return "Call"
+    Ast.Expr.EnumConstructor(_) -> return "EnumConstructor"
+    Ast.Expr.FunctionRef(_) -> return "FunctionRef"
+    Ast.Expr.Invoke(_) -> return "Invoke"
+    Ast.Expr.Construct(_) -> return "Construct"
+    Ast.Expr.Update(_) -> return "StructUpdate"
+    Ast.Expr.ListLit(_) -> return "ListLit"
+    Ast.Expr.MapLit(_) -> return "MapLit"
+    Ast.Expr.FieldAccess(_) -> return "FieldAccess"
+    Ast.Expr.MethodCall(_) -> return "MethodCall"
+    Ast.Expr.Interpolation(_) -> return "Interpolation"
+    Ast.Expr.BlockLit(_) -> return "BlockLit"
+    Ast.Expr.Index(_) -> return "IndexAccess"
+    Ast.Expr.Try(_) -> return "TryExpr"
+    Ast.Expr.Unary(_) -> return "Unary"
+    Ast.Expr.Binary(_) -> return "Binary"
+    Ast.Expr.TypeName(_) -> return "TypeName"
+    Ast.Expr.Typed(_) -> return "TypedTarget"
+    Ast.Expr.ConstRef(_) -> return "ConstRef"
   end
 end
 
@@ -136,8 +209,9 @@ def outline_of(program: Ast.Program, marks: Marks) -> Outline
   at = 0
   while at < queue.size
     pending = queue[at]
-    span = tight(span_of(pending.part), marks)
-    nodes = nodes.push(Node(kind: kind_of(pending.part), span: span, parent: pending.parent))
+    raw = span_of(pending.part)
+    kind = kind_of(pending.part)
+    nodes = nodes.push(Node(kind: kind, span: tight(raw, marks), parent: pending.parent, key: key_of(kind, raw)))
     children = children_of(pending.part, marks).select do |part: Part| written?(span_of(part)) end
     first = first.push(queue.size)
     count = count.push(children.size)
@@ -409,67 +483,6 @@ def kind_of(part: Part) -> String
     Part.Named(_) -> return "NamedArg"
     Part.Entry(_) -> return "MapEntry"
     Part.BlockParam(_) -> return "BlockParam"
-  end
-end
-
-def decl_kind(decl: Ast.Decl) -> String
-  case decl
-    Ast.Decl.Import(_) -> return "ImportDecl"
-    Ast.Decl.Reexport(_) -> return "ReexportDecl"
-    Ast.Decl.Export(_) -> return "ExportDecl"
-    Ast.Decl.Function(_) -> return "FunctionDecl"
-    Ast.Decl.Struct(_) -> return "StructDecl"
-    Ast.Decl.Enum(_) -> return "EnumDecl"
-    Ast.Decl.TypeAlias(_) -> return "TypeAliasDecl"
-    Ast.Decl.Resource(_) -> return "ResourceDecl"
-    Ast.Decl.Constant(_) -> return "ConstDecl"
-  end
-end
-
-def stmt_kind(stmt: Ast.Stmt) -> String
-  case stmt
-    Ast.Stmt.Binding(_) -> return "Binding"
-    Ast.Stmt.Return(_) -> return "Return"
-    Ast.Stmt.Expression(_) -> return "ExprStmt"
-    Ast.Stmt.If(_) -> return "IfStmt"
-    Ast.Stmt.While(_) -> return "WhileStmt"
-    Ast.Stmt.For(_) -> return "ForStmt"
-    Ast.Stmt.Control(_) -> return "LoopControl"
-    Ast.Stmt.Case(_) -> return "CaseStmt"
-  end
-end
-
-def pattern_kind(pattern: Ast.Pattern) -> String
-  case pattern
-    Ast.Pattern.Wildcard(_) -> return "WildcardPattern"
-    Ast.Pattern.Literal(_) -> return "LiteralPattern"
-    Ast.Pattern.Variant(_) -> return "VariantPattern"
-  end
-end
-
-def expr_kind(expr: Ast.Expr) -> String
-  case expr
-    Ast.Expr.Literal(_) -> return "Literal"
-    Ast.Expr.Name(_) -> return "NameRef"
-    Ast.Expr.Call(_) -> return "Call"
-    Ast.Expr.EnumConstructor(_) -> return "EnumConstructor"
-    Ast.Expr.FunctionRef(_) -> return "FunctionRef"
-    Ast.Expr.Invoke(_) -> return "Invoke"
-    Ast.Expr.Construct(_) -> return "Construct"
-    Ast.Expr.Update(_) -> return "StructUpdate"
-    Ast.Expr.ListLit(_) -> return "ListLit"
-    Ast.Expr.MapLit(_) -> return "MapLit"
-    Ast.Expr.FieldAccess(_) -> return "FieldAccess"
-    Ast.Expr.MethodCall(_) -> return "MethodCall"
-    Ast.Expr.Interpolation(_) -> return "Interpolation"
-    Ast.Expr.BlockLit(_) -> return "BlockLit"
-    Ast.Expr.Index(_) -> return "IndexAccess"
-    Ast.Expr.Try(_) -> return "TryExpr"
-    Ast.Expr.Unary(_) -> return "Unary"
-    Ast.Expr.Binary(_) -> return "Binary"
-    Ast.Expr.TypeName(_) -> return "TypeName"
-    Ast.Expr.Typed(_) -> return "TypedTarget"
-    Ast.Expr.ConstRef(_) -> return "ConstRef"
   end
 end
 

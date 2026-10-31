@@ -99,7 +99,7 @@ AREAS = {
     "cli": (
         "the command line: options, diagnostics, run, compile, test, modules, the single binary",
         [
-            "tests/test_cli_forms.py", "tests/test_cli_check.py", "tests/test_check_stdin.py",
+            "tests/test_cli_forms.py", "tests/test_cli_check.py", "tests/test_cli_fmt.py", "tests/test_check_stdin.py",
             "tests/test_spec_doc.py", "tests/test_spec_outline.py", "tests/test_spec_symbol.py",
             "tests/test_spec_type_at.py", "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
@@ -204,6 +204,7 @@ EXCLUDED = {
     "tests/test_frontend_bytecode.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_catalog.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_check.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
+    "tests/test_frontend_fmt.py": "the printer of the formatter, pure Agentica, the same on every system",
     "tests/test_frontend_format.py": "the comment attachment of the formatter, pure Agentica, the same on every system",
     "tests/test_frontend_lexer.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_lower.py": "frozen goldens of the front end stages; the spec and golden areas run it live",

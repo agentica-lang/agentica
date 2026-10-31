@@ -81,6 +81,26 @@ export def text_attr(label: String, doc: Optional[String]) -> String
   end
 end
 
+## The text form of a parsed tree, one line per node: `role: kind #id span attributes`, children indented by two
+## spaces.
+export def print_program(program: Ast.Program) -> List[String]
+  lines: List[String] = [
+    head(
+      Margin(indent: "", base: 0, notes: {}),
+      "",
+      "program",
+      program.id,
+      program.span,
+      text_attr(" module-doc=", program.module_doc),
+    ),
+  ]
+  for decl in program.declarations
+    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
+  end
+
+  return lines
+end
+
 ## Prints a declaration and everything under it, one line per node, after the lines already in out.
 export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
@@ -569,24 +589,6 @@ def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> Li
     head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)),
   )
   return print_types(lines, deeper(at), "payload", variant.payload_types)
-end
-
-def print_program(program: Ast.Program) -> List[String]
-  lines: List[String] = [
-    head(
-      Margin(indent: "", base: 0, notes: {}),
-      "",
-      "program",
-      program.id,
-      program.span,
-      text_attr(" module-doc=", program.module_doc),
-    ),
-  ]
-  for decl in program.declarations
-    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
-  end
-
-  return lines
 end
 
 # ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a

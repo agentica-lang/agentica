@@ -1,9 +1,9 @@
 ## 47. Code formatter (`agentica fmt`)
 
 **Status:** In progress: roadmap row 7.9, decided by the owner on 2026-10-15,
-who also asked for this plan on the same day. Phase 47a is done (47.10). The
-owner answered the open questions of 47.9 on 2026-10-31. Phase 47d waits for
-the language server (§43), which is not scheduled.
+who also asked for this plan on the same day. Phases 47a and 47b are done
+(47.10). The owner answered the open questions of 47.9 on 2026-10-31. Phase 47d
+waits for the language server (§43), which is not scheduled.
 
 In short: `agentica fmt` rewrites `.agc` files in place with one printer. It is
 written in Agentica in `compiler/`, on the self-hosted lexer and parser.
@@ -474,7 +474,10 @@ and is outside this order.
   `tests/fixtures/frontend/format/` print each comment's node and role. The
   width test that turns a trailing comment into a leading one needs the flat
   width of a node, so it comes with the printer in 47b.
-- [ ] 47b: the printer, `fmt --check` and `make fmt-check`.
+- [x] 47b: the printer, `fmt --check` and `make fmt-check`, in
+  `compiler/format/` (`doc.agc`, `layout.agc`, `format.agc`), with the one-time
+  reformat of `compiler/` and `stdlib/`; the `.formatted` goldens of
+  `tests/fixtures/frontend/format/`.
 - [ ] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`.
 
 Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes in CI

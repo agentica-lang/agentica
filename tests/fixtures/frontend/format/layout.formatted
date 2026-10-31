@@ -1,0 +1,112 @@
+## A module doc.
+
+import Lib from "lib"
+import {Alpha, Beta as B} from "other"
+import {First, Second} from "third"
+export Lib.helper
+
+## A point.
+export struct Point
+  x: Int
+  ## The second coordinate.
+  y: Int = 0
+end
+
+enum Shape[T]
+  Circle(Int)
+  Pair(T, T)
+  Empty
+end
+
+type Grid[T] = List[List[T]]
+
+LIMIT: Int = 10
+export NAMES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa", "lambda", "mu"]
+TABLE = {
+  "or": 1, "and": 2, "equal": 3, "not-equal": 3, "less": 4, "less-equal": 4, "greater": 4, "greater-equal": 4,
+  "pipe": 5,
+}
+
+def short(a: Int, b: Int) -> Int
+  return a + b
+end
+
+def a_function_with_a_long_header(first_parameter: String, second_parameter: List[Int], third: Map[String, Int]) -> Int
+  return first_parameter.length
+end
+
+def body_rules(xs: List[Int], name: String) -> Void
+  total = 0
+  total += xs.size
+  label: String = "x"
+  result = some_function_name(first_argument_value, second_argument_value, third_argument_value, fourth_value)
+  point = Point(x: compute_the_first_coordinate(xs, name), y: compute_the_second_coordinate(xs, name, total))
+  moved = point.with(x: 1)
+  values = [first_value_in_the_list, second_value_in_the_list, third_value_in_the_list, fourth_value]
+  if (
+    total > 10 and
+    name.starts_with?("prefix") and
+    xs.any? do |x| x > 100 end and
+    label.size > 0 and
+    name != label.upcase
+  )
+    puts(name)
+  elsif total < 0
+    puts("negative")
+  else
+    puts("other")
+  end
+
+  while total > 0
+    total -= 1
+  end
+
+  for x in xs
+    next
+  end
+
+  doubled = xs.map do |x| x * 2 end
+  summed = xs.reduce(0) do |acc: Int, x: Int|
+    step = acc + x
+    step * 2
+  end
+  xs.each do |x| puts(x) end
+  shape = Shape.Circle(3)
+  empty = Shape.Empty
+  callback = &short
+  first = xs[0]
+  negative = -total
+  flag = not xs.empty?
+  piped = xs |> List.reverse() |> List.take(2)
+  chained = (
+    name.strip
+      .downcase
+      .replace("a", "b")
+      .replace("c", "d")
+      .replace("e", "f")
+      .replace("g", "h")
+      .split(",")
+      .size
+      .to_s
+  )
+  long_call = some_function_name(
+    first_argument_value,
+    second_argument_value,
+    nested_call(third_argument, fourth_argument, 5),
+  )
+  long_pipe = (
+    xs
+    |> List.reverse()
+    |> List.take(2)
+    |> List.drop(1)
+    |> List.concat([first_value, second_value, third_value])
+  )
+  sum = (first_operand_with_a_long_name + second_operand_with_a_long_name) * (third_operand_name - fourth_operand)
+  case shape
+    Shape.Circle(radius) -> puts(radius)
+    Shape.Pair(a, _) if a > 0 -> puts(a)
+    _ ->
+      puts("none")
+      puts("really")
+  end
+end
