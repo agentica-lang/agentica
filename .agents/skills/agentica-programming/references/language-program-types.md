@@ -196,9 +196,12 @@ end
   The default is a constant: an Int, Float or String literal (a minus before a
   number is fine; `#{...}` is not), `true`, `false`, `nil`, `none`, `[]`, `{}`
   (built again at each call, typed by the parameter) or a payload-less enum
-  variant (`Level.Info`, or `Models.Level.Info` from another module). Anything
-  else (`some(1)` too) is `CHECK-DEFAULT-VALUE`; a wrong type is
-  `CHECK-TYPE-MISMATCH` at the default.
+  variant (`Level.Info`, or `Models.Level.Info` from another module). A
+  parameter, not a field, may also default to a struct built with no arguments
+  (`options: Options = Options()`), whose fields all need defaults
+  (`CHECK-MISSING-FIELD` at the default). Anything else (`some(1)` too) is
+  `CHECK-DEFAULT-VALUE`; a wrong type is `CHECK-TYPE-MISMATCH` at the
+  default.
 - After a defaulted parameter every parameter needs a default
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` parameter, which a block or the
   last argument always fills: with `def each_line(path: String, timeout_ms: Int

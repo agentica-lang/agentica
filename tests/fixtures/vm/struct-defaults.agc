@@ -11,6 +11,10 @@ struct Box
   depth: Int = 3
 end
 
+def volume(b: Box = Box()) -> Int
+  return b.width * b.height * b.depth
+end
+
 def main() -> Void
   puts(Lib.describe(Lib.Options(name: "plain")))
   puts(Lib.describe(Lib.Options(name: "given", retries: 9, tags: ["a"], level: Lib.Level.Loud)))
@@ -25,4 +29,9 @@ def main() -> Void
   second = first.with(tags: first.tags.push("b"))
   puts(first.tags.size)
   puts(second.tags.size)
+  # A parameter default that builds a struct with no arguments.
+  puts(volume())
+  puts(volume(Box(depth: 1)))
+  puts(Lib.limits_text())
+  puts(Lib.limits_text(Lib.Limits(count: 1)))
 end

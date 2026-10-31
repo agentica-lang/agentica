@@ -265,8 +265,8 @@ is a rule:
 - **Written:** a default that is not a constant, such as `b: Int = make()`, `b:
   Int = a`, `b: Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`)
   - **Help:** a default is a literal, `true`, `false`, `nil`, `none`, `[]`,
-    `{}` or an enum variant without a payload; make the parameter required and
-    pass the value at the call
+    `{}`, an enum variant without a payload or, for a parameter, a struct with
+    no arguments; make the parameter required and pass the value at the call
 
 - **Written:** `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)`
   (`CHECK-ARITY`)
