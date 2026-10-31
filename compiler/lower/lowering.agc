@@ -361,48 +361,49 @@ end
 
 # The watched struct and enum names that the type of some expression mentions.
 def mentioned_in(types: List[Types.Type], watched: Set[String]) -> List[String]
-  found: List[String] = []
+  found: Set[String] = Set.new([])
   for type in types
-    found = found.concat(names_in(type, watched))
+    found = names_in(type, watched, found)
   end
 
-  return found
+  return found.to_a
 end
 
-def names_in(type: Types.Type, watched: Set[String]) -> List[String]
+# found with the watched names in type added. A walk into a type adds to one set: the types of nested expressions
+# (some(some(...)), [[...]]) hold one another, so a list made at each level grows with the depth.
+def names_in(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[String]
   case type
-    Types.Type.Struct(name, args) -> return only(name, watched).concat(names_in_all(args, watched))
-    Types.Type.Enum(name, args) -> return only(name, watched).concat(names_in_all(args, watched))
-    Types.Type.List(item) -> return names_in(item, watched)
-    Types.Type.Set(item) -> return names_in(item, watched)
-    Types.Type.Result(item) -> return names_in(item, watched)
-    Types.Type.Optional(item) -> return only("Optional", watched).concat(names_in(item, watched))
-    Types.Type.Task(item) -> return names_in(item, watched)
-    Types.Type.Channel(item) -> return names_in(item, watched)
-    Types.Type.Lazy(item) -> return names_in(item, watched)
-    Types.Type.Codec(item) -> return names_in(item, watched)
-    Types.Type.Map(key, value) -> return names_in(key, watched).concat(names_in(value, watched))
-    Types.Type.ATS(key, value) -> return names_in(key, watched).concat(names_in(value, watched))
-    Types.Type.Fn(params, result) -> return names_in_all(params, watched).concat(names_in(result, watched))
-    _ -> return []
+    Types.Type.Struct(name, args) -> return names_in_all(args, watched, only(name, watched, found))
+    Types.Type.Enum(name, args) -> return names_in_all(args, watched, only(name, watched, found))
+    Types.Type.List(item) -> return names_in(item, watched, found)
+    Types.Type.Set(item) -> return names_in(item, watched, found)
+    Types.Type.Result(item) -> return names_in(item, watched, found)
+    Types.Type.Optional(item) -> return names_in(item, watched, only("Optional", watched, found))
+    Types.Type.Task(item) -> return names_in(item, watched, found)
+    Types.Type.Channel(item) -> return names_in(item, watched, found)
+    Types.Type.Lazy(item) -> return names_in(item, watched, found)
+    Types.Type.Codec(item) -> return names_in(item, watched, found)
+    Types.Type.Map(key, value) -> return names_in(value, watched, names_in(key, watched, found))
+    Types.Type.ATS(key, value) -> return names_in(value, watched, names_in(key, watched, found))
+    Types.Type.Fn(params, result) -> return names_in(result, watched, names_in_all(params, watched, found))
+    _ -> return found
   end
 end
 
-def names_in_all(types: List[Types.Type], watched: Set[String]) -> List[String]
-  found: List[String] = []
+def names_in_all(types: List[Types.Type], watched: Set[String], found: Set[String]) -> Set[String]
   for type in types
-    found = found.concat(names_in(type, watched))
+    found = names_in(type, watched, found)
   end
 
   return found
 end
 
-def only(name: String, watched: Set[String]) -> List[String]
-  if watched.include?(name)
-    return [name]
+def only(name: String, watched: Set[String], found: Set[String]) -> Set[String]
+  if watched.include?(name) and !found.include?(name)
+    return found.add(name)
   end
 
-  return []
+  return found
 end
 
 # What a read of each constant becomes: the literal of a scalar constant, else its slot.
