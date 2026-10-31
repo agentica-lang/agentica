@@ -355,4 +355,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   request target that is not in absolute form, with two origins. It asserts the
   request line and `Host` the proxy saw for each client call, the one pooled
   proxy connection for two origins, two clients with two proxies, an IPv6
-  literal, a proxy that is down, and the `https` and bad-proxy errors.
+  literal, a proxy that is down, and the `https` and bad-proxy errors. A third,
+  locked proxy answers 407 unless `Proxy-Authorization` is the Basic login of
+  `us@er` and `p:ss/w` (written in percent-encoding in the URL); the second
+  test asserts the header of each call, the 407 errors, and that the password
+  is in no output, error or trace.
