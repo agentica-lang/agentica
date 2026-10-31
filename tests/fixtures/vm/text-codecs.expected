@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 771,
+  "steps": 890,
   "stdout": [
     "utf-8: [97, 195, 169, 226, 130, 172, 240, 159, 152, 128]",
     "utf-8: \"aé€😀\"",
@@ -21,6 +21,10 @@
     "latin-1: \"aéÿ\"",
     "ascii: [97, 98]",
     "ascii: \"ab\"",
+    "iso-8859-15: [164, 166, 189]",
+    "iso-8859-15: \"€Šé\"",
+    "cp1252: [128, 130, 147, 148]",
+    "windows-1252: \"€–Ÿé\"",
     "utf-16: \"a\"",
     "utf-16: \"a\"",
     "utf-32: \"a\"",
@@ -43,6 +47,9 @@
     "ascii: error: invalid ASCII at byte 1",
     "ascii: error: cannot encode U+00E9 in ASCII at index 1",
     "latin-1: error: cannot encode U+20AC in Latin-1 at index 1",
+    "iso-8859-15: error: cannot encode U+00A4 in ISO-8859-15 at index 1",
+    "cp1252: error: invalid Windows-1252 at byte 1",
+    "cp1252: error: cannot encode U+0141 in Windows-1252 at index 1",
     "koi8-r: error: unknown encoding \"koi8-r\"; the agentica-lang/charset package reads the encodings not built in",
     "utf-8-sig: error: unknown encoding \"utf-8-sig\"; the agentica-lang/charset package reads the encodings not built in",
     ""
