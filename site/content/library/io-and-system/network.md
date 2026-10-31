@@ -109,6 +109,7 @@ TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
 TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
 TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
+TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket]
 ```
 
 ```text
@@ -140,6 +141,26 @@ A `TlsContext` is the TLS setup of one role, built once and shared by every sock
 - A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
 - A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
+
+### TLS.upgrade
+
+`TLS.upgrade` starts TLS on an open TCP socket, for protocols that begin in plain text (SMTP and IMAP `STARTTLS`, PostgreSQL's `SSLRequest`). It returns a new TLS socket.
+
+- With a client context it is the client side and checks `host` as `TLS.connect` does. With a server context it is the server side and `host` must be `""`; another host stops the program with `RUNTIME-TLS-CONTEXT-ROLE`.
+- Once its arguments pass their checks, the plain socket is closed for the program, whether the handshake works or not: a later call on it returns `network: socket is closed`.
+- Bytes that arrived and were not read yet fail the upgrade (`network: data came before the TLS handshake`): STARTTLS forbids them. A send still in progress on the socket fails it too.
+- The handshake runs within `timeout_ms`; a timeout closes the connection. A TLS socket cannot be upgraded again.
+
+```agentica {mode="check"}
+def starttls(host: String, context: TlsContext) -> Result[Socket]
+  plain = try TCP.connect(host, 587, 5000)
+  try TCP.read_line(plain, 5000)
+  try TCP.send(plain, "EHLO client.example\r\nSTARTTLS\r\n", 5000)
+  try TCP.read_line(plain, 5000)
+  try TCP.read_line(plain, 5000)
+  return TLS.upgrade(plain, context, host, 5000)
+end
+```
 
 ```agentica {mode="check"}
 def main() -> Void

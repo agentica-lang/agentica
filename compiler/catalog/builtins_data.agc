@@ -4628,6 +4628,24 @@ ROWS_49: List[Model.Builtin] = [
     ),
     alternatives: [],
   ),
+  Model.Builtin(
+    name: "TLS.upgrade",
+    parameters: [
+      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "TLS.upgrade",
+    effects: ["network"],
+    description: (
+      "Start TLS on an open TCP socket (STARTTLS), on the side the context's role names; a server context takes " +
+      "the host \"\". The plain socket is closed after the call."
+    ),
+    alternatives: [],
+  ),
 ]
 
 ROWS_50: List[Model.Builtin] = [

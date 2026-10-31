@@ -37,6 +37,15 @@ reads no `openssl.cnf`, so both builds behave the same.
   without a context (`HttpWire.connect_tls`) builds one system-trust context
   lazily, in a pool job, the first time it connects, and its connections share
   it.
+- **Upgrade.** `TLS.upgrade` (STARTTLS) makes a new TLS socket, whose role is
+  the context's; a server context with a host is `RUNTIME-TLS-CONTEXT-ROLE` at
+  the host. After the argument checks, the plain socket's resource lets its
+  `net` go to the request, so the program sees that socket closed. The
+  request's START step on the I/O thread moves the libuv handle to the new
+  `net` and closes the plain one, then handshakes as a connect or an accept
+  does, under the call's timeout. Bytes the plain `net` read and nobody took,
+  a send in flight (its write request lives in the plain `net`), or an ended
+  input refuse the move; the plain socket is closed anyway.
 - **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048 bits) on
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A
