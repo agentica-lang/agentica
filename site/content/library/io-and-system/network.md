@@ -443,13 +443,19 @@ def hello(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
 end
 
-# Logs the request line and the status of the answer.
-def logged(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request|
-    response = next.call(request)
-    puts("#{request.method} #{request.path} #{response.unwrap!.status}")
-    response
+def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  response = next.call(request)
+  case response
+    ok(answer) -> puts("#{request.method} #{request.path} #{answer.status}")
+    error(_) -> puts("#{request.method} #{request.path} failed")
   end
+
+  return response
+end
+
+# Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
+def logged(next: HTTP.Handler) -> HTTP.Handler
+  return handler() do |request| log_answer(next, request) end
 end
 
 def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]

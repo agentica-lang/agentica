@@ -200,11 +200,13 @@ end
 ```
 
 - `HTTP.Handler` and `HTTP.StreamHandler` are aliases of the handler types
-  (`Fn[HttpRequest, Result[HttpResponse]]` and `Fn[HttpRequest,
-  Result[HTTP.StreamResponse]]`). A middleware is a function `Handler ->
-  Handler` that calls `next.call(request)` or answers itself; a block cannot be
-  returned directly, so a helper `def handler(f: HTTP.Handler) -> HTTP.Handler`
-  turns `handler() do |request| ... end` into the value. Stack them by calling
+  `Fn[HttpRequest, Result[HttpResponse]]` and
+  `Fn[HttpRequest, Result[HTTP.StreamResponse]]`. A middleware is a function
+  `Handler -> Handler` that calls `next.call(request)` or answers itself. A
+  block cannot be returned directly, so a helper
+  `def handler(f: HTTP.Handler) -> HTTP.Handler` turns
+  `handler() do |request| step(next, request) end` into the value; keep the
+  block to one call and put the work in the named `step`. Stack them by calling
   one with another's result: `logged(guarded(&hello))`.
 - `listen` (TCP) and `listen_tls` (PEM certificate and key files) return at once
   and serve in the background. Port 0 picks a free port, which `local_port`
