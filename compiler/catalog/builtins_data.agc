@@ -49,7 +49,8 @@ export RECORDS: List[Model.Record] = [
     name: "Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
-  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_CA_FILE): keep them in step.
+  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_CA_FILE and
+  # AGC_HTTP_OPTION_PROXY): keep them in step.
   Model.Record(
     name: "HttpClientOptions",
     fields: [
@@ -58,6 +59,7 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "max_connections", type: Types.Type.Int, default: Model.Default.Whole(4)),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       Model.Named(name: "ca_file", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "proxy", type: Types.Type.String, default: Model.Default.Text("")),
     ],
   ),
   Model.Record(

@@ -16,6 +16,7 @@ static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
   if (o->n != AGC_HTTP_OPTIONS_FIELDS) agc_wrong_tag(vm);
   for (uint32_t k = 0; k < AGC_HTTP_OPTION_CA_FILE; k++) (void)agc_as_int(vm, o->fields[k]);
   (void)agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]);
+  (void)agc_as_string(vm, o->fields[AGC_HTTP_OPTION_PROXY]);
   agc_http_client *c = agc_alloc(sizeof(agc_http_client));
   c->jobs = args[0];
   c->options = args[1];

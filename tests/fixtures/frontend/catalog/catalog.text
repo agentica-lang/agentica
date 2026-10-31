@@ -869,7 +869,7 @@ builtin String.encode forms=1
   String.encode(s: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
 record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record Header name: String, value: String
-record HttpClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = ""
+record HttpClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "", proxy: String = ""
 record HttpRequest method: String, target: String, path: String, headers: List(Struct(Header)), body: Bytes
 record HttpResponse status: Int, headers: List(Struct(Header)), body: Bytes
 record HttpServerOptions request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576
