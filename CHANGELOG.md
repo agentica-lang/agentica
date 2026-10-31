@@ -16,6 +16,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   formatter would change and exits 1 if there are any (it keeps a short `do`
   block or case arm on one line); `agentica fmt --tree FILE` prints the tree
   that formatting keeps.
+- `agentica fmt [PATH...]` formats the files in place and `agentica fmt -`
+  formats standard input; the `[style]` of the nearest `agentica.toml` sets the
+  width and `blank_line_after_end`, and a wrong call is `FMT-USAGE` (exit 2).
+- **Breaking:** `agentica check` reports a line longer than `[style]
+  max_line_width` as `CHECK-LINE-TOO-LONG`. Heredoc bodies and long strings
+  count too, and `fmt` cannot break them: split them by hand.
 - `channel.empty?` is `true` when no value is left to receive.
 - `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
   `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
