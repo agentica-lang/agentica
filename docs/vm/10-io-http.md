@@ -1,8 +1,8 @@
 ### 10.6 HTTP parsing
 
-HTTP on the VM uses whole messages. The client's request and response bodies
-and a handler's response body are `Bytes` (a request body the server reads is
-still a `String`). Streaming waits for channels (10.7). The rules of this
+HTTP on the VM uses whole messages. Every body is `Bytes`: the client's
+request and response bodies, and the request body and response body of a
+handler. Streaming waits for channels (10.7). The rules of this
 section are fixed by the hostile-case tests (10.7.4).
 
 - Well-formed messages give the status, headers and body, as an ok `Result`.
@@ -66,16 +66,16 @@ Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
 - **C (`HttpWire`)** is VM-only and std-only. It keeps the byte-level,
-  security-critical and shared parts: the parser and decoder (10.6), the UTF-8
-  check, the bytes of the error answers and of the response head, the client's
+  security-critical and shared parts: the parser and decoder (10.6), the bytes
+  of the error answers and of the response head, the client's
   pool and its `SSL_CTX` (one per client, until `TlsContext`,
   `docs/future/29-tls-context.md`), and the server's slots, task group and
   `close_server`. The server's parsing functions hold no state: each takes the
   bytes read so far and returns a record.
 - **`std/http`** keeps the rest: options, URL parsing, request building, the
   accept and connection loops, the server's reads and writes, keep-alive,
-  handler dispatch, and the header helpers. A client body crosses as `Bytes`
-  pieces joined once; a server request body, as `String` pieces joined once.
+  handler dispatch, and the header helpers. A body crosses as `Bytes` pieces
+  joined once, on both sides.
 - **Timeouts.** `get`, `post` and `request` block only the calling task. One
   `timeout_ms` covers the whole call: the wait for a pooled connection, DNS,
   connect, the TLS handshake, the request and the response. 4xx and 5xx are
@@ -85,20 +85,20 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   bounded. `idle_timeout_ms` is the wait for the next request on a kept-alive
   connection (server), and how long an idle pooled connection is kept (client).
 - **Body limit and memory.** `max_body_bytes` defaults to 1 MiB on both sides
-  and may be raised to 64 MiB. A body is held in C once and in its `String`
-  or `Bytes` once, so body memory is at most `max_body_bytes` ×
+  and may be raised to 64 MiB. A body is held in C once and in its `Bytes`
+  once, so body memory is at most `max_body_bytes` ×
   `max_connections` × 4 (512 MiB with the server defaults). A program that
   raises `max_body_bytes` must lower `max_connections`. A body over the limit
   is an `error` on the client, and a 413 on the server, before the handler
   runs. `HttpWire` itself takes up to 256 MiB, which only a file download
-  (`HTTP.download`, streamed in pieces of at most 1 MiB with no `String`) may
+  (`HTTP.download`, streamed in pieces of at most 1 MiB) may
   use: the transfer stops at its `max_total_bytes`, the file never grows past
   it, and a failed download keeps the partial file.
-- **Response bodies are bytes.** The client keeps a response body as it came,
-  and a handler returns `Bytes`; `HTTP.text` decodes UTF-8 only (a `charset`
-  other than `utf-8` is an error). A request body the server reads must still
-  be valid UTF-8, or the server answers 400 without running the handler
-  (#855). `Content-Encoding` stays raw.
+- **Bodies are bytes.** The client keeps a response body as it came, a handler
+  gets the request body as it came and returns `Bytes`; `HTTP.text` decodes
+  UTF-8 only (a `charset` other than `utf-8` is an error). The server never
+  answers 400 for the content of a body, only for its framing.
+  `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).
@@ -223,8 +223,8 @@ The `HttpWire` signatures, for the client and the server, are its rows in
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
   and nothing after the response: `buffered` must be 0 and `ended` false on
-  `HttpWire.Response` (after a head with no body), and after a body on a
-  `read_text` of 0 bytes, which does not wait. Bytes there are a server bug
+  `HttpWire.Response` (after a head with no body), and after a body on
+  `HttpWire.idle?`, which does not wait for input. Bytes there are a server bug
   or a response nobody asked for, and the next call must not read them; an
   input that has already ended (`ended`: the end of input, a TCP FIN under TLS,
   or a read error) would fail the next call. Header names are lowercased and
@@ -260,18 +260,15 @@ Properties of the client that no test checks:
 #### 10.7.2 As built: the server (20c)
 
 - `vm/http_wire.c` holds the functions that take bytes or records and return
-  records (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). These, with
+  records (`HttpWire.Chunk`, `HttpWire.Reply`). These, with
   `HttpWire.Head`, are std-only record types: only a std module can name them,
   and they reserve no user name. A `Chunk` holds the decoder's state between
   reads, and `chunk` checks every field before it decodes. `vm/tcp.c` holds the
   reads: `read_head` (the head stays in the socket's input until it is whole,
   is parsed only when a line ends, and only its bytes are taken; a bad head is a
-  `Head` with the answer's `status` and `reason`), `read_text` (up to
-  `max_bytes` straight into text, with the UTF-8 check and the carry of an
-  unfinished character; `valid` is false for bytes that are not UTF-8, and
-  `buffered` counts the input bytes left and `ended` says the input has ended
-  or failed; `max_bytes` 0 does not wait) and
-  `close_write`.
+  `Head` with the answer's `status` and `reason`), `idle?` (whether the input
+  holds no byte and has not ended or failed; it takes none and never waits for
+  input) and `close_write`.
 - The I/O thread owns the server's state: the listener, the count of open
   connections and the queue of waiting `accept` and `wait` calls. A builtin
   changes it only through a step posted there (`agc_loop_call`, inline at
@@ -291,10 +288,8 @@ Properties of the client that no test checks:
   errors of 10.6; an `Upgrade` header (501); an `Expect` other than
   `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
   `100 Continue` if `Expect` asked and no body byte is buffered; then the body,
-  whose bytes are checked as UTF-8 as they arrive, so bytes that can never be
-  UTF-8 get 400 at once, before a later framing error or the end of input. The
-  head goes through `read_head`, chunk framing through `chunk` on 512-byte
-  reads, and body data through `read_text`.
+  which is kept as it comes. The head goes through `read_head`, chunk framing
+  through `chunk` on 512-byte reads, and body data through `TCP.recv_bytes`.
   Every error answer is `error_answer`: `HTTP/1.1 CODE REASON` with
   `Content-Length: 0` and `Connection: close`. It is sent within the request
   deadline, or within 100 ms when that has passed. The write side is then shut
@@ -412,10 +407,6 @@ Properties of the client that no test checks:
 - **Case:** `Expect: 100-continue` with a `Content-Length` over `max_body_bytes`
   - **Who:** C
   - **Answer:** 413, then close, with no 100 Continue first
-
-- **Case:** A request body that is not UTF-8
-  - **Who:** C
-  - **Answer:** 400, then close
 
 - **Case:** The client is too slow for `request_timeout_ms` (request or
   response), or the idle wait ends

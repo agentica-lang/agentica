@@ -36,7 +36,9 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; format=flowed; charset=\"UTF-8\"")], body: "ñandú".bytes))
   end
   kind = HTTP.header_values(request.headers, "x-kind")
-  return reply(200, "#{request.method} #{request.target} #{request.path} #{kind} [#{request.body}]")
+  # The body is Bytes: text when it is UTF-8, else its byte values.
+  shown = Result.unwrap_or(HTTP.text(request.body, request.headers), "#{request.body.to_a}")
+  return reply(200, "#{request.method} #{request.target} #{request.path} #{kind} [#{shown}]")
 end
 
 def show(r: Result[HttpResponse]) -> Void
@@ -52,6 +54,20 @@ def raw(port: Int, bytes: List[Int]) -> String
   line = TCP.read_line(socket, 5000).unwrap!
   TCP.close(socket)
   return line
+end
+
+# Sends the request bytes and reads the answer to the end (the request says Connection: close); returns its body text.
+def raw_body(port: Int, bytes: List[Int]) -> String
+  socket = TCP.connect("127.0.0.1", port, 5000).unwrap!
+  TCP.send_bytes(socket, Bytes.from_list(bytes).unwrap!, 5000).unwrap!
+  pieces: List[Bytes] = []
+  data = TCP.recv_bytes(socket, 4096, 5000).unwrap!
+  while !data.empty?
+    pieces = List.append(pieces, data)
+    data = TCP.recv_bytes(socket, 4096, 5000).unwrap!
+  end
+  TCP.close(socket)
+  return String.from_bytes(Bytes.concat(pieces)).unwrap!.split("\r\n\r\n")[1]
 end
 
 def main() -> Void
@@ -92,8 +108,13 @@ def main() -> Void
   HTTP.close_client(small)
   show(HTTP.get(pool, base + "/still"))
   HTTP.close_client(pool)
-  head = [80, 79, 83, 84, 32, 47, 32, 72, 84, 84, 80, 47, 49, 46, 49, 13, 10, 72, 111, 115, 116, 58, 32, 120, 13, 10]
-  puts(raw(port, List.concat(head, [67, 111, 110, 116, 101, 110, 116, 45, 76, 101, 110, 103, 116, 104, 58, 32, 50, 13, 10, 13, 10, 255, 254])))
+  # Request bodies that are not UTF-8 reach the handler as they are, with either framing.
+  post = "POST / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n".bytes.to_a
+  length = List.concat(post, List.concat("Content-Length: 2\r\n\r\n".bytes.to_a, [255, 254]))
+  puts(raw_body(port, length))
+  chunks = List.concat([255, 0, 128], List.concat("\r\n2\r\n".bytes.to_a, [254, 10]))
+  chunked = List.concat(post, List.concat("Transfer-Encoding: chunked\r\n\r\n3\r\n".bytes.to_a, chunks))
+  puts(raw_body(port, List.concat(chunked, "\r\n0\r\n\r\n".bytes.to_a)))
   puts(raw(port, [71, 69, 84, 32, 47, 32, 72, 84, 84, 80, 47, 49, 46, 48, 13, 10, 13, 10]))
   HTTP.close_server(server)
   IO.inspect(HTTP.wait(server))

@@ -97,7 +97,10 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     if request.method != "POST"
       return ok(not_allowed("POST"))
     end
-    return ok(stats_response(request.body))
+    case HTTP.text(request.body, request.headers)
+      ok(body) -> return ok(stats_response(body))
+      error(_) -> return ok(failure(400, "invalid json"))
+    end
   elsif path == "/hello"
     if request.method != "GET"
       return ok(not_allowed("GET"))

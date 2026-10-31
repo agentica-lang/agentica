@@ -62,7 +62,6 @@ HOSTILE = [
     ("expect-other", head(b"POST / HTTP/1.1", b"Expect: 200-ok", b"Content-Length: 2") + b"ab"),
     ("over-limit", head(b"POST / HTTP/1.1", b"Content-Length: 1025")),
     ("chunked-over-limit", head(b"POST / HTTP/1.1", CHUNKED) + b"401\r\n" + b"a" * 1025 + b"\r\n0\r\n\r\n"),
-    ("non-utf8", head(b"POST / HTTP/1.1", b"Content-Length: 2") + b"\xff\xfe"),
     ("no-host", b"GET / HTTP/1.1\r\n\r\n"),
     ("two-hosts", head(b"GET / HTTP/1.1", b"Host: y")),
     ("short-505", b"GET / HTTP/1\r\n"),
@@ -161,6 +160,20 @@ def pipelined():
         rest = rest[length:]
     print("pipelined", bodies, end)
     s.close()
+
+
+def binary_bodies():
+    # A request body that is not UTF-8 reaches the handler as it is, whichever the framing.
+    bodies = [
+        ("binary-length", head(b"POST /binary HTTP/1.1", b"Content-Length: 2", CLOSE) + b"\xff\xfe"),
+        ("binary-chunked", head(b"POST /binary HTTP/1.1", CHUNKED, CLOSE) + b"1\r\n\xff\r\n2\r\n\x00\x80\r\n0\r\n\r\n"),
+    ]
+    for name, data in bodies:
+        s = connect()
+        send(s, data)
+        got, end = drain(s)
+        print(name, status(got), got.split(b"\r\n\r\n", 1)[1].decode(), end)
+        s.close()
 
 
 def client():
@@ -285,6 +298,7 @@ def main():
     expect_over_limit()
     expect_continue()
     pipelined()
+    binary_bodies()
     client()
     slots(int(sys.argv[2]))
     secure(int(sys.argv[3]), sys.argv[4])

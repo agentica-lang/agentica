@@ -115,7 +115,8 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   only: a `charset` in `Content-Type` other than `utf-8`, or a body that is not
   valid UTF-8, is an error (`us-ascii` counts as `utf-8`; other charsets: the
   planned `agentica-lang/charset` package). `HttpResponse` is not JSON
-  encodable.
+  encodable. The body of a request in a server handler is `Bytes` too:
+  `HTTP.text(request.body, request.headers)`.
 - Names that do not exist: `HTTP.client()` (write
   `HTTP.client(HTTP.client_options())`), `response.text`, `header_timeout_ms`
   (`request_timeout_ms`), and `read`, `trailers`, `close_body`,
@@ -135,7 +136,7 @@ HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP
 HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
-HttpRequest(method: String, target: String, path: String, headers: List[Header], body: String)
+HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
 HttpServerOptions(request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int)
 ```
@@ -165,8 +166,8 @@ end
   and serve in the background. Port 0 picks a free port, which `local_port`
   returns. Each connection runs in its own task, with keep-alive.
 - `target` is the request target as sent; `path` is the part before `?`. Header
-  names are lowercase and the body is valid UTF-8. A handler gets no other
-  argument: pass data through the request, a file or a socket.
+  names are lowercase and the body is `Bytes`, as the client sent it. A handler
+  gets no other argument: pass data through the request, a file or a socket.
 - The server adds `Content-Length` (not on 204 and 304, which need an empty
   body), `Date` unless the handler set it, and `Connection: close` when asked;
   `HEAD` gets no body.

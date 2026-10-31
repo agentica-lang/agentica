@@ -70,7 +70,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "target", type: Types.Type.String),
         Model.Named(name: "path", type: Types.Type.String),
         Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
-        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "body", type: Types.Type.Bytes),
       ],
     ),
     Model.Record(
@@ -155,17 +155,6 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "chunked", type: Types.Type.Bool),
         Model.Named(name: "until_close", type: Types.Type.Bool),
         Model.Named(name: "closes", type: Types.Type.Bool),
-        Model.Named(name: "buffered", type: Types.Type.Int),
-        Model.Named(name: "ended", type: Types.Type.Bool),
-      ],
-    ),
-    Model.Record(
-      name: "HttpWire.Text",
-      fields: [
-        Model.Named(name: "text", type: Types.Type.String),
-        Model.Named(name: "carry", type: Types.Type.Bytes),
-        Model.Named(name: "bytes", type: Types.Type.Int),
-        Model.Named(name: "valid", type: Types.Type.Bool),
         Model.Named(name: "buffered", type: Types.Type.Int),
         Model.Named(name: "ended", type: Types.Type.Bool),
       ],
@@ -997,6 +986,22 @@ ROWS_10: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "HttpWire.idle?",
+      parameters: [
+        Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Bool),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.idle?",
+      effects: ["network"],
+      description: (
+        "Internal to std/http: whether the socket's input holds no byte now and has not ended or failed; it never " +
+        "waits for input (the timeout covers only the wait for the socket's read lock)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.jobs",
       parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
       result: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", [])),
@@ -1066,25 +1071,6 @@ ROWS_11: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
-      name: "HttpWire.read_text",
-      parameters: [
-        Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-        Model.Named(name: "max_bytes", type: Types.Type.Int),
-        Model.Named(name: "carry", type: Types.Type.Bytes),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
-      ],
-      result: Types.Type.Result(Types.Type.Struct("HttpWire.Text", [])),
-      rule: Model.Rule.Plain,
-      implementation: "HttpWire.read_text.bytes",
-      effects: ["network"],
-      description: (
-        "Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as " +
-        "UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, " +
-        "buffered counts the input bytes left unread, and ended is true once the input has ended or failed."
-      ),
-      alternatives: [],
-    ),
-    Model.Builtin(
       name: "HttpWire.server",
       parameters: [
         Model.Named(name: "listener", type: Types.Type.Opaque("Listener")),
@@ -1132,23 +1118,6 @@ ROWS_11: List[Model.Builtin] = [
   ]
 
 ROWS_12: List[Model.Builtin] = [
-    Model.Builtin(
-      name: "HttpWire.text",
-      parameters: [
-        Model.Named(name: "carry", type: Types.Type.Bytes),
-        Model.Named(name: "data", type: Types.Type.Bytes),
-        Model.Named(name: "runs", type: Types.Type.List(Types.Type.Int)),
-      ],
-      result: Types.Type.Struct("HttpWire.Text", []),
-      rule: Model.Rule.Plain,
-      implementation: "HttpWire.text.bytes",
-      effects: [],
-      description: (
-        "Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an " +
-        "unfinished last character is the new carry, and valid is false for bytes that are not UTF-8."
-      ),
-      alternatives: [],
-    ),
     Model.Builtin(
       name: "HttpWire.wait",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],

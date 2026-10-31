@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A parameter may default to a struct built with no arguments, `options:
+  Options = Options()`, when every field of the struct has a default.
 - `HTTP.text(body, headers)` decodes a body as UTF-8 only: the `charset` of
   `Content-Type` must be `utf-8` or absent, and any other charset is an error
   that names it.
@@ -24,6 +26,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   JSON encodable. `HTTP.post` and `HTTP.request` take a `Bytes` body before
   `headers`, which is `[]` by default and no longer comes first. Rebuild `.agcb`
   files that call them.
+- **Breaking:** the `body` of an `HttpRequest` in a `listen` handler is `Bytes`,
+  as the client sent it (read text with `HTTP.text(request.body,
+  request.headers)`); the server no longer answers 400 for a request body that
+  is not UTF-8. Rebuild `.agcb` files with such a handler.
+
+### Fixed
+
+- Compiling deeply nested `some(...)` calls is much faster (900 levels: from
+  4 s to 0.6 s).
 
 ## [0.19.0-beta.1] - 2026-10-30
 

@@ -68,13 +68,17 @@ def head(conn):
 
 
 def binary(label, conn):
-    """Bytes that are not UTF-8 arrive as they were sent, as chunks and as one body with a length."""
+    """Bytes that are not UTF-8 arrive as they were sent, as a stream and as one body with a length.
+
+    Whether /binary goes out in chunks or whole depends on timing: a producer that has already finished and closed the
+    body when the server looks at it gives a whole body with a Content-Length (a slow machine, or TSan, does that). So
+    the line checks the bytes and that the framing matches them, never the chunk boundaries."""
     conn.request("GET", "/binary")
     response = conn.getresponse()
-    pieces = []
-    while data := response.read1(65536):
-        pieces.append(data)
-    print(label, response.status, response.getheader("Transfer-Encoding"), b"".join(pieces), pieces)
+    body = response.read()
+    chunked = response.getheader("Transfer-Encoding") == "chunked"
+    framed = chunked or response.getheader("Content-Length") == str(len(body))
+    print(label, response.status, body, "framed" if framed else "mis-framed")
     conn.request("GET", "/binary-whole")
     whole = conn.getresponse()
     print(label + "-whole", whole.status, whole.getheader("Content-Length"), whole.read())

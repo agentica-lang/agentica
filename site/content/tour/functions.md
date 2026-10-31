@@ -221,7 +221,7 @@ end
 
 A parameter can end with `= value`. A call may leave it out.
 
-- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]` or `{}`.
+- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. A struct built with no arguments, `options: Options = Options()`, is a default too when every field of `Options` has one. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]`, `{}` or struct.
 - Parameters with a default go last (`CHECK-DEFAULT-ORDER`). The exception is a last `Fn` parameter, which a block fills.
 - Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 

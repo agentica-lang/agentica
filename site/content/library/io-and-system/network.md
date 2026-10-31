@@ -291,7 +291,7 @@ HTTP.local_port(server: HttpServer) -> Int
 ```
 
 - `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a PEM certificate and key. Port 0 picks a free port (`local_port`).
-- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase) and `body` (valid UTF-8).
+- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase) and `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`).
 
 A server that fetches its own page:
 
@@ -344,7 +344,7 @@ Bad requests never reach the handler: the server answers and closes the connecti
 
 | Status | Cause |
 |---|---|
-| 400 | malformed, or a body that is not UTF-8 |
+| 400 | malformed |
 | 413 | a body over `max_body_bytes` |
 | 417 | an `Expect` other than `100-continue` |
 | 431 | headers too long or too many |

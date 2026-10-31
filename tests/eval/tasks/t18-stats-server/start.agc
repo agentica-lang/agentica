@@ -29,7 +29,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   if path == "/health" && request.method == "GET"
     return ok(text_response(200, JSON.encode({"status": "ok"})))
   elsif path == "/stats" && request.method == "POST"
-    return ok(stats_response(request.body))
+    return ok(stats_response(HTTP.text(request.body, request.headers).unwrap!))
   elsif path == "/hello" && request.method == "GET"
     return ok(text_response(200, JSON.encode({"greeting": "hello, world"})))
   elsif path.starts_with?("/double/") && request.method == "GET"

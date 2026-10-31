@@ -275,6 +275,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->reg_capacity = 0;
   t->frames = NULL;
   t->frame_capacity = 0;
+  t->nested = NULL;
   t->cursor = NULL;
   t->turn_cost = 0;
   /* A service task was counted as done when it was spawned (agc_task_spawn_in). */

@@ -91,16 +91,15 @@ HttpWire.drop_tls
 HttpWire.encode_request
 HttpWire.encode_response
 HttpWire.error_answer
+HttpWire.idle?
 HttpWire.jobs
 HttpWire.local_port
 HttpWire.options
 HttpWire.read_head.bytes
 HttpWire.read_response
-HttpWire.read_text.bytes
 HttpWire.server
 HttpWire.service
 HttpWire.spawn
-HttpWire.text.bytes
 HttpWire.wait
 IO.eof?
 IO.flush
