@@ -59,6 +59,7 @@ STREAM_EARLY = 2
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
 NO_BODY = "a 204 or 304 response cannot have a body"
+WRONG_SIZE = "the body is not the length it was given"
 CRLF = "\r\n".bytes
 # The widest body a download may write, in bytes. The client and server bodies stay capped at 64 MiB by
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
@@ -879,6 +880,15 @@ def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, 
       if bodyless
         return invalid_stream(socket, request, response.body, NO_BODY, timeout)
       end
+      if length == 0
+        # Nothing to stream: it goes out like an empty closed body, so that there is no gap between the head (which the
+        # client has complete) and the end of the stream, where its next request could be taken for stream bytes.
+        response.body.close
+        if Bytes.concat(ready.pieces).size > 0
+          return invalid_stream(socket, request, response.body, WRONG_SIZE, timeout)
+        end
+        return send_whole(socket, incoming, reply, NO_BYTES, timeout)
+      end
       return stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
     error(reason) -> return invalid_stream(socket, request, response.body, reason, timeout)
   end
@@ -896,7 +906,7 @@ def length_problem(response: StreamResponse, ended: Bool, size: Int, bodyless: B
         return NO_BODY
       end
       if ended and size != length
-        return "the body is not the length it was given"
+        return WRONG_SIZE
       end
       return ""
     none -> return ""
@@ -1076,13 +1086,6 @@ def pump(
 ) -> Int
   count = 0
   early = STREAM_DONE
-  if length == 0
-    early = watched(left, sent)
-    body.close
-    if early == STREAM_CUT
-      return STREAM_CUT
-    end
-  end
   for piece in first
     if length != UNSIZED and count + piece.size == length
       early = watched(left, sent)
