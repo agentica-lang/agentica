@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
   `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
   `Handler`.
+- `HTTP.listen_upload` (and `listen_upload_tls`) gives a handler the body of the
+  request on a channel as it arrives (`HTTP.RequestBody`: `pieces` and a `done`
+  task), for uploads too big to hold; `HTTP.UploadHandler` names its type.
 
 ## [0.19.0] - 2026-10-31
 

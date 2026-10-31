@@ -428,7 +428,7 @@ The server adds `Content-Length` (not on 204 and 304, whose body must be empty),
 
 #### Handler and middleware
 
-`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
+`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
 
 A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result.
 
@@ -590,6 +590,63 @@ data: tick 3
 ```
 
 `HTTP.get` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
+
+### HTTP.listen_upload
+
+```text
+HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+```
+
+`listen` reads the whole body before the handler runs. For an upload too big to hold, or one the handler stores as it comes (a file), `listen_upload` gives the handler the body on a channel. It is the server side of [`HTTP.upload`](#httpopen-and-httpupload), and it has the shape of `listen_stream`: another kind of handler, not a field of `HttpRequest`, so `HttpRequest`, `HTTP.Handler` and every existing handler stay as they are.
+
+`HTTP.UploadHandler` is `Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]`: it gets the request with an empty `body`, the `HTTP.RequestBody`, and returns the whole response, as a `Handler` does.
+
+- `HTTP.RequestBody` has `pieces` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task of the server feeds `pieces` with the body as it arrives (up to 64 KiB each, never empty, a chunked body already decoded) and closes it on every path. A request with no body gets a closed channel at once.
+- The handler runs the usual receive loop until the closed error, then awaits `done`: `ok` means the whole body arrived, and an `error` says why it did not (the client left, a bad chunk, a timeout). A channel can only end, so `done` is the only way to tell a whole body from a cut one: always await it.
+- The channel holds 8 pieces. A handler that reads slowly makes the server wait, and the client's data waits in the socket, so memory stays bounded.
+- `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the handler has not taken), not the time of the whole upload. `max_body_bytes` does not apply: a streamed body is at most 256 MiB, and a handler that wants less counts the bytes and answers `413`.
+- The connection stays for the next request only when the handler read the body to its end. A handler that answers first (a `413`, a `401`) has its answer sent and the connection closes after it, so a client still sending may see the close before it reads the answer. `Expect: 100-continue` is answered before the handler runs.
+- The handler's `error(message)` is a 500 as for `listen`. Routes that need the whole body in memory are simpler with `listen`.
+
+A server that counts an upload, and the client call that streams one to it:
+
+```agentica
+import HTTP from "std/http"
+
+def count(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  try Task.await(body.done)
+  return ok(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes))
+end
+
+def feed(into: Channel[Bytes]) -> Void
+  into.send("hello ".bytes, 1000)
+  into.send("world".bytes, 1000)
+  into.close
+end
+
+def main() -> Void
+  server = HTTP.listen_upload("127.0.0.1", 0, &count).unwrap!
+  into: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&feed, into)
+  url = "http://127.0.0.1:#{HTTP.local_port(server)}/"
+  response = HTTP.upload("PUT", url, into).unwrap!
+  puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
+  HTTP.close_server(server)
+end
+```
+
+```output
+200 11 bytes
+```
 
 ### HTTP.wait and HTTP.close_server
 
