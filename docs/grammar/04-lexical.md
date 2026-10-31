@@ -125,7 +125,10 @@ documents.
 ```ebnf
 NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
-INTEGER    = DIGIT, { [ "_" ], DIGIT } ;
+INTEGER    = DIGIT, { [ "_" ], DIGIT }
+           | "0", ( "x" | "X" ), HEX_DIGIT, { [ "_" ], HEX_DIGIT }
+           | "0", ( "b" | "B" ), BIN_DIGIT, { [ "_" ], BIN_DIGIT }
+           | "0", ( "o" | "O" ), OCT_DIGIT, { [ "_" ], OCT_DIGIT } ;
 FLOAT      = DIGIT, { [ "_" ], DIGIT }, [ ".", DIGIT, { [ "_" ], DIGIT } ], EXPONENT
            | DIGIT, { [ "_" ], DIGIT }, ".", DIGIT, { [ "_" ], DIGIT } ;
 EXPONENT   = ( "e" | "E" ), [ "+" | "-" ], DIGIT, { [ "_" ], DIGIT } ;
@@ -134,19 +137,19 @@ ESCAPE     = "\\", ( '"' | "\\" | "#" | "n" | "r" | "t" ) ;
 INTERPOLATION = "#{", expression, "}" ;
 ```
 
-`LETTER` is `A`–`Z` or `a`–`z`; `DIGIT` is `0`–`9`; `LOWER_OR_UNDERSCORE` is
-`a`–`z` or `_`; `UPPER` is `A`–`Z`. `STRING_CHAR` is any Unicode character
-except double quotes, backslash, newlines, and a `#` followed by `{`. `NL`,
-`DOC` and `EOF` are lexer tokens.
+`LETTER` is `A`–`Z` or `a`–`z`; `DIGIT` is `0`–`9`; `HEX_DIGIT` is a `DIGIT` or
+`a`–`f` in either case; `OCT_DIGIT` is `0`–`7`; `BIN_DIGIT` is `0` or `1`;
+`LOWER_OR_UNDERSCORE` is `a`–`z` or `_`; `UPPER` is `A`–`Z`. `STRING_CHAR` is
+any Unicode character except double quotes, backslash, newlines, and a `#`
+followed by `{`. `NL`, `DOC` and `EOF` are lexer tokens.
 
-The minus sign is an operator, not part of a literal. The core has no other
-number bases. An exponent follows the digits or the fraction, as in Ruby:
-`1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are Floats, and `Float#to_s` writes
-`1e+300`, which reads back. The `e` needs a digit before it and a digit after
-the optional sign, so `1.e5` is the call `1.e5` and `1e` is the Int `1` next to
-the name `e`. An exponent too large gives infinity (`1e999` is `+inf.0`). A
-string literal cannot span lines; text of two or more lines is a heredoc
-(below).
+The minus sign is an operator, not part of a literal. An exponent follows the
+digits or the fraction, as in Ruby: `1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are
+Floats, and `Float#to_s` writes `1e+300`, which reads back. The `e` needs a
+digit before it and a digit after the optional sign, so `1.e5` is the call
+`1.e5` and `1e` is the Int `1` next to the name `e`. An exponent too large gives
+infinity (`1e999` is `+inf.0`). A string literal cannot span lines; text of two
+or more lines is a heredoc (below).
 
 A `_` may separate digits in `INTEGER` and in both parts of `FLOAT`: `1_000`,
 `1_000.000_5`, `1e1_0`. It is only visual: `1_000` is the same `Int` as `1000`,
@@ -160,6 +163,16 @@ plus an exponent. A `.` followed by a `_` belongs to the number, so
 (`1_000.times`, `1_000..2_000`). `_1` is still a NAME. The text form of a number
 has no separators: `puts(1_000)` prints `1000`, and `String.to_int` and JSON
 still reject `_`.
+
+`0x`, `0b` and `0o`, in either case, start a hex, binary or octal `INTEGER`, as
+in Ruby: `0xFF`, `0b1010`, `0o755`. It is the same `Int` as the decimal one
+(`0xFF == 255`), with the same range: `0x8000_0000_0000_0000` is
+`CHECK-INT-RANGE` and `-0x8000_0000_0000_0000` is the least `Int`. A `_` sits
+only between two digits. Every letter, digit and `_` after the prefix belongs
+to the literal, so a prefix with no digit (`0x`), a digit outside the base
+(`0b102`, `0o8`, `0xFG`) and a misplaced `_` (`0x_FF`, `0xFF_`, `0b1__0`) are
+`LEX-INVALID-NUMBER`, with the literal as the span. A leading zero alone is
+still decimal (`0755` is `755`), and a Float has no other base.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value
 is inserted as its `to_s` (see "Methods on builtin types"). The expression must

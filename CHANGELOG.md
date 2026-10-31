@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Hex, binary and octal integer literals, as in Ruby: `0xFF`, `0b1010`,
+  `0o755`, with `_` between digits.
 - `HTTP.StreamResponse` takes `length: some(n)`: a streamed body of known
   size goes out with `Content-Length` and no chunk framing, and a body that
   ends short or runs over closes the connection.

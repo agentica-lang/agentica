@@ -1,0 +1,1 @@
+ERROR LEX-INVALID-NUMBER 0:1:1-5:1:6 "\"2\" is not a binary digit" "hex digits are 0-9 and a-f, octal 0-7, binary 0 and 1"
