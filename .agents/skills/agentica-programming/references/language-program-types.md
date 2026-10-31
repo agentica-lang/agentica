@@ -153,8 +153,9 @@ end
 - A struct field may have a default: `retries: Int = 3`. A constructor may
   leave it out (`Options(name: "a")`); a field without one must be given
   (`CHECK-MISSING-FIELD`). The default follows the rules of a parameter default
-  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
-  is built again at each construction. `.with(...)` and `JSON.decode` are not
+  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), except a struct built
+  with no arguments (`C()`), with no order rule, and is built again at each
+  construction. `.with(...)` and `JSON.decode` are not
   affected: a decode still needs every key.
 - A generic struct, `struct Box[T]`, is written with all its arguments in a type
   (`Box[Int]`, `M.Box[Int]`); a bare `Box` or a wrong count is
