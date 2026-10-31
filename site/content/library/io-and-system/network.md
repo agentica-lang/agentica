@@ -146,7 +146,7 @@ HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http
 
 ```text
 HTTP.client_options() -> HttpClientOptions
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
+HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 ```
 
@@ -188,7 +188,7 @@ HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, heade
 import HTTP from "std/http"
 
 def main() -> Void
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  client = HTTP.client().unwrap!
   headers = [Header(name: "Content-Type", value: "application/json")]
   case HTTP.post(client, "http://localhost:8080/items", "{\"name\":\"tea\"}".bytes, headers)
     ok(created) -> puts("#{created.status} #{HTTP.text(created.body, created.headers).unwrap!}")
@@ -252,7 +252,7 @@ end
 
 ```text
 HTTP.download_options() -> DownloadOptions
-HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
+HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
 ```
 
 - `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()` gives 30 s and 256 MiB, and so does `download_options()`. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
@@ -264,8 +264,8 @@ HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOp
 import HTTP from "std/http"
 
 def main() -> Void
-  client = HTTP.client(HTTP.client_options()).unwrap!
-  case HTTP.download(client, "http://localhost:8080/asset", "asset.bin", HTTP.download_options())
+  client = HTTP.client().unwrap!
+  case HTTP.download(client, "http://localhost:8080/asset", "asset.bin")
     ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
     error(message) -> IO.warn(message)
   end
@@ -282,8 +282,8 @@ The server is in `std/http` too: a handler takes the whole request and returns t
 
 ```text
 HTTP.server_options() -> HttpServerOptions
-HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
 ```
 
@@ -304,8 +304,8 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
+  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
   puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
@@ -353,8 +353,8 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 ### HTTP.listen_stream and Server-Sent Events
 
 ```text
-HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
@@ -401,8 +401,8 @@ def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen_stream("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  server = HTTP.listen_stream("127.0.0.1", 0, &handle).unwrap!
+  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/events").unwrap!
   puts(HTTP.header_values(response.headers, "transfer-encoding"))

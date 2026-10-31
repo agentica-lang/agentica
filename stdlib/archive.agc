@@ -148,7 +148,12 @@ end
 ## file is still an error. Selected payloads stream within their exact compressed window with their CRC32 and
 ## uncompressed size verified; unselected payloads are skipped by size and offset only, never inflated or
 ## CRC-checked.
-export def extract_zip(src: String, members: List[String], dest_dir: String, options: Options) -> Result[List[Int]]
+export def extract_zip(
+  src: String,
+  members: List[String],
+  dest_dir: String,
+  options: Options = Options(),
+) -> Result[List[Int]]
   if options.timeout_ms <= 0 or options.timeout_ms > 86400000
     return error("archive: options.timeout_ms must be 1..86400000")
   end
@@ -169,7 +174,12 @@ end
 ## long names; other PAX records are ignored, sparse entries are refused, and only `0`, NUL and `7` type flags count
 ## as regular files. A selected link, directory or device is an error, as are a missing member, a repeated member, a
 ## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member.
-export def extract_tar(src: String, members: List[String], dest_dir: String, options: Options) -> Result[List[Int]]
+export def extract_tar(
+  src: String,
+  members: List[String],
+  dest_dir: String,
+  options: Options = Options(),
+) -> Result[List[Int]]
   if options.timeout_ms <= 0 or options.timeout_ms > 86400000
     return error("archive: options.timeout_ms must be 1..86400000")
   end

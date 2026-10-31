@@ -18,7 +18,9 @@ WINDOWS = os.name == "nt"
 
 
 def call_text(src, quoted, dest, options):
-    return 'Archive.extract_tar("%s", [%s], "%s", %s)' % (src, quoted, dest, options)
+    """The extract_tar call; OPTIONS None leaves the argument to its default."""
+    tail = "" if options is None else ", %s" % options
+    return 'Archive.extract_tar("%s", [%s], "%s"%s)' % (src, quoted, dest, tail)
 
 
 SHOW = (
@@ -212,7 +214,7 @@ def test_archive_of_dot_allows_its_root_header(tmp_path):
     (work / "src" / "lib.so").write_bytes(b"hello lib")
     with tarfile.open(work / "dot.tar", "w") as tar:
         tar.add(work / "src", ".")
-    lines = run_driver(work, "dotroot", driver([("root", "dot.tar", q("lib.so"), "out", "Archive.options()")]))
+    lines = run_driver(work, "dotroot", driver([("root", "dot.tar", q("lib.so"), "out", None)]))
     assert lines == ["root ok [9]", ""]
     assert (work / "out" / "lib.so").read_bytes() == b"hello lib"
 
