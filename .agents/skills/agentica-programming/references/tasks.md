@@ -195,15 +195,17 @@ Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 Channel.close(channel: Channel[T]) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
+Channel.empty?(channel: Channel[T]) -> Bool
 Channel.lazy(channel: Channel[T], timeout_ms: Int) -> Lazy[T]   # lazy.md
 ```
 
 A channel is a bounded queue that tasks send into and receive from. All but
 `new` are methods too: `ch.send(v, 1000)`, `ch.recv(1000)`, `ch.close`,
-`ch.closed?`. `Channel[T]` takes any type a variable can have except `Void`
-(`CHECK-VOID-TYPE`; use `Bool` or `Nil` for a signal), including a task handle,
-a socket or another channel. A channel is a handle: passing it shares it. It
-has no equality, text or JSON encoding; inspect prints `<Channel>`.
+`ch.closed?`, `ch.empty?`. `Channel[T]` takes any type a variable can have
+except `Void` (`CHECK-VOID-TYPE`; use `Bool` or `Nil` for a signal), including a
+task handle, a socket or another channel. A channel is a handle: passing it
+shares it. It has no equality, text or JSON encoding; inspect prints
+`<Channel>`.
 
 `Channel.new` needs an expected type (annotation, parameter, field or return
 type): `jobs: Channel[Int] = Channel.new(16)`, else `CHECK-EXPECTED-TYPE`. The
@@ -224,9 +226,12 @@ in order and waiting tasks are served in the order they began waiting.
 drained (`lazy.md`): `jobs.lazy(5000).select do |n| n > 0 end.reduce(0) do |s,
 n| s + n end`.
 
-`closed?` is `true` once the channel is closed and every value was received,
-and stays `true`. After a `recv` error it tells the end of the stream (`true`)
-from a timeout (`false`); do not match the error text.
+`closed?` is `true` once the channel is closed, even with values still
+buffered (Ruby's `Queue#closed?`): a producer reads it between sends to learn
+that the reader closed the channel. `empty?` is `true` when no value is left to
+receive. `closed? and empty?`, in that order, is the end of the stream and stays
+`true`; after a `recv` error it tells the end from a timeout. Do not match the
+error text.
 
 The receive loop retries on a timeout and ends when the producer closed the
 channel:
@@ -254,7 +259,7 @@ def main() -> Void
     case jobs.recv(1000)
       ok(n) -> total += n
       error(_) ->
-        if jobs.closed?
+        if jobs.closed? and jobs.empty?
           break
         end
     end

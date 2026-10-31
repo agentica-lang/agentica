@@ -47,8 +47,9 @@ language and the checker:
 
 `Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values
 into and receive values from, and a handle: assigning or passing it shares the
-same channel. The functions (`new`, `send`, `recv`, `close`, `closed?`), the
-timeouts, the order of waiters and the ownership of a channel are in the
+same channel. The functions (`new`, `send`, `recv`, `close`, `closed?`,
+`empty?`), the timeouts, the order of waiters and the ownership of a channel are
+in the
 [`Channel` page](../../site/content/library/concurrency/channel.md).
 
 - `T` is any type a variable can have, so `Channel[Void]` is `CHECK-VOID-TYPE`.

@@ -40,7 +40,7 @@ export VM_BUILTINS = Set.new([
   "ATS.new", "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.add", "ATS.size", "ATS.keys",
   "ATS.to_map",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
-  "Channel.close", "Channel.closed?", "Process.spawn", "Process.send", "Process.send_bytes.bytes",
+  "Channel.close", "Channel.closed?", "Channel.empty?", "Process.spawn", "Process.send", "Process.send_bytes.bytes",
   "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait", "Process.close",
   "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.close_listener", "TCP.send",
   "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen",

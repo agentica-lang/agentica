@@ -6,7 +6,7 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
       ok(event) ->
         try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
       error(_) ->
-        if events.closed?
+        if events.closed? and events.empty?
           break
         end
     end

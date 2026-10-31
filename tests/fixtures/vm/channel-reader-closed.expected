@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 137,
+  "stdout": [
+    "closed? false, empty? true",
+    "sent two",
+    "1",
+    "closed? true, empty? false",
+    "producer: closed? true",
+    "2",
+    "closed? true, empty? true",
+    "recv: channel: closed",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

@@ -212,10 +212,11 @@ the VM design (waits, reservations, close, owner, fairness) is in
   `jobs.close`, then `return result`), so a `try` that returns early still
   closes. No `Task.done?` is added for consumers to check a producer instead:
   27.3 leaves it out under the one-way rule.
-- **`closed?` is exact.** Once it is `true` it stays `true`, since nothing can
-  be added after a close, so after a `recv` error it tells the end of the
-  stream from a timeout without matching error text. A closed channel that
-  still holds values answers `false`, and the next `recv` returns a value.
+- **`closed? and empty?` is exact.** Once it is `true` it stays `true`, since
+  nothing can be added after a close, so after a `recv` error it tells the end
+  of the stream from a timeout without matching error text. A closed channel
+  that still holds values answers `false` to `empty?`, and the next `recv`
+  returns a value.
 - **Left out**, each until a real program needs it: `select` over several
   channels (fan-in uses one channel of an enum type, `Channel[Event]` with one
   variant per source, and each source sends into it; a coordinator awaits all

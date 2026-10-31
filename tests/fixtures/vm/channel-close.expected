@@ -1,19 +1,19 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 101,
+  "steps": 116,
   "stdout": [
-    "false",
-    "false",
+    "closed? false, empty? false",
+    "closed? true, empty? false",
     "send after close: channel: closed",
     "1",
     "2",
-    "false",
+    "closed? true, empty? false",
     "3",
-    "true",
+    "closed? true, empty? true",
     "recv: channel: closed",
     "send again: channel: closed",
-    "true",
+    "closed? true, empty? true",
     ""
   ],
   "stderr": []

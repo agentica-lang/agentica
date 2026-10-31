@@ -10,21 +10,21 @@ def main() -> Void
   ch.send(1, 100)
   ch.send(2, 100)
   ch.send(3, 100)
-  puts(ch.closed?)
+  puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
   ch.close
   ch.close
-  puts(ch.closed?)
+  puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
   show("send after close", ch.send(4, 100))
   puts(ch.recv(100).unwrap!)
   puts(ch.recv(100).unwrap!)
-  puts(ch.closed?)
+  puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
   puts(ch.recv(100).unwrap!)
-  puts(ch.closed?)
+  puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
   case ch.recv(100)
     ok(n) -> puts(n)
     error(e) -> puts("recv: #{e}")
   end
   show("send again", ch.send(5, 0))
   ch.close
-  puts(ch.closed?)
+  puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
 end
