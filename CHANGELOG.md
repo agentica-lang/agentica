@@ -19,6 +19,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   one HTTP/1.1 connection that the program drives: read the response head,
   then the body piece by piece, and send a second request on the same socket
   once the body has been read to its end (after Ruby's `Net::HTTP`).
+- `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make one
+  request with no client to open or close, as Ruby's `Net::HTTP.get_response`
+  does. Many requests still use `HTTP.client()` with `get` and `post`.
 
 ## [0.19.0-beta.3] - 2026-10-31
 
