@@ -7,5 +7,6 @@ tests/fixtures/vm/*.stdin binary
 tests/eval/tasks/t19-orders-report/hidden/05.in binary
 tests/fixtures/frontend/lexer/*.input -text
 tests/fixtures/frontend/parser/*.input -text
+tests/fixtures/frontend/format/*.input -text
 tests/fixtures/toml/** -text
 tests/fixtures/toml-test/** -text
