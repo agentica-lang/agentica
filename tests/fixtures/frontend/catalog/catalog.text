@@ -91,7 +91,9 @@ builtin HttpWire.close_server forms=1
 builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
 builtin HttpWire.connect_tls forms=1
-  HttpWire.connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpClient), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context."
+  HttpWire.connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpClient), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: a TLS connection with the system trust, on the client's shared context."
+builtin HttpWire.connect_context forms=1
+  HttpWire.connect_context(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket] shape=(String, Int, Opaque(TlsContext), Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_context" effects=["network"] desc="Internal to std/http: TLS.connect, on a client TlsContext."
 builtin HttpWire.drop_tls forms=1
   HttpWire.drop_tls(client: HttpClient) -> Void shape=(Opaque(HttpClient)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
 builtin HttpWire.encode_request forms=1
@@ -873,7 +875,7 @@ builtin String.encode forms=1
   String.encode(s: String, encoding: String) -> Result[Bytes] shape=(String, String) -> Result(Bytes) rule=Plain impl="String.encode" effects=[] desc="Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error."
 record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record Header name: String, value: String
-record HttpClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, tls: Optional(Opaque(TlsContext)) = none
+record HttpClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional(Opaque(TlsContext)) = none
 record HttpRequest method: String, target: String, path: String, headers: List(Struct(Header)), body: Bytes
 record HttpResponse status: Int, headers: List(Struct(Header)), body: Bytes
 record HttpServerOptions request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576

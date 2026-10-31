@@ -252,10 +252,11 @@ typedef struct {
 } agc_http_client;
 
 /* HttpClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
-   max_connections, max_body_bytes, tls (Optional[TlsContext]). HttpWire.service checks the shape, since the std-only
-   rule lives in the front end and bytecode can call the builtin with any struct. */
-#define AGC_HTTP_OPTIONS_FIELDS 5
-#define AGC_HTTP_OPTION_TLS 4
+   max_connections, max_body_bytes, proxy, tls (Optional[TlsContext]). HttpWire.service checks the shape, since the
+   std-only rule lives in the front end and bytecode can call the builtin with any struct. */
+#define AGC_HTTP_OPTIONS_FIELDS 6
+#define AGC_HTTP_OPTION_PROXY 4
+#define AGC_HTTP_OPTION_TLS 5
 
 typedef struct {
   agc_resource *state;

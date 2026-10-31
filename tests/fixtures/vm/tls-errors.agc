@@ -29,4 +29,5 @@ def main() -> Void
   puts(head(dir, client(TlsClientOptions(ca_file: ca, cert_file: certificate, key_file: "#{dir}/missing.pem")).message))
   bad_key = "#{dir}/server-key.pem"
   puts(head(dir, client(TlsClientOptions(ca_file: ca, cert_file: certificate, key_file: bad_key)).message))
+  IO.inspect(TLS.listen("127.0.0.1", 0, server(cert, "#{dir}/server-key.pem").unwrap!).ok?)
 end

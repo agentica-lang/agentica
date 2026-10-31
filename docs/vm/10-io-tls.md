@@ -18,10 +18,11 @@ reads no `openssl.cnf`, so both builds behave the same.
 - **Contexts.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
   one `agc_tls_config` of one role, which counts its owners: the context and
   each socket and listener made from it. So a dropped context stays valid
-  until its last socket closes. A GC finalizer
-  gives the context's count back; the collector runs finalizers only on
-  demand, at the start of a scheduler's next task (`agc_gc_finalize_pending`),
-  never inside an allocation (§5.3). `TLS.client_context` and
+  until its last socket closes. A GC finalizer gives the context's count back;
+  the collector runs finalizers only on demand, at the start of a scheduler's
+  next task (`agc_gc_finalize_pending`), never inside an allocation (§5.3).
+  The GC does not see the native size of an `SSL_CTX`, so a program builds a
+  context once and reuses it. `TLS.client_context` and
   `TLS.server_context` check the options (a NUL in a path, a `cert_file`
   without a `key_file` or the reverse, a server context without both), then
   one pool job with no deadline reads the CA, certificate and key files off the

@@ -137,7 +137,9 @@ so zeroed registers are valid values.
 - No GC finalizers for OS resources. Closing is explicit (10.2). The one
   finalizer is a `TlsContext`'s, which only gives back its count on a
   `malloc`'d TLS config (10.3). `GC_set_finalize_on_demand(1)` keeps it out of
-  allocations: it runs at the start of a scheduler's next task.
+  allocations: it runs at the start of a scheduler's next task. It is
+  registered with `GC_REGISTER_FINALIZER_NO_ORDER`, the macro that matches
+  `GC_MALLOC_ATOMIC` in the GC-debug build.
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable from
   the runtime struct, never in mutable static storage (10.2.3).
 

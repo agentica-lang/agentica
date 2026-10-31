@@ -49,7 +49,8 @@ export RECORDS: List[Model.Record] = [
     name: "Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
-  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_TLS): keep them in step.
+  # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY and AGC_HTTP_OPTION_TLS):
+  # keep them in step.
   Model.Record(
     name: "HttpClientOptions",
     fields: [
@@ -57,6 +58,7 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(name: "max_connections", type: Types.Type.Int, default: Model.Default.Whole(4)),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
+      Model.Named(name: "proxy", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(
         name: "tls",
         type: Types.Type.Optional(Types.Type.Opaque("TlsContext")),
@@ -962,7 +964,22 @@ ROWS_10: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "HttpWire.connect_tls",
     effects: ["network"],
-    description: "Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context.",
+    description: "Internal to std/http: a TLS connection with the system trust, on the client's shared context.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "HttpWire.connect_context",
+    parameters: [
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "port", type: Types.Type.Int),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.connect_context",
+    effects: ["network"],
+    description: "Internal to std/http: TLS.connect, on a client TlsContext.",
     alternatives: [],
   ),
   Model.Builtin(

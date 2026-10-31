@@ -185,7 +185,8 @@ export def record_defaults() -> Map[String, Set[String]]
 end
 
 ## The builtin records with a field whose default is `none`: a program that builds one needs the Optional enum in its
-## tables, since a constructor that leaves the field out builds `none` with no expression that names Optional.
+## tables, since a constructor that leaves the field out builds `none` with no expression that names Optional. Only
+## record fields count: a builtin parameter with a `none` default would need the same, and no builtin has one.
 export def none_default_records() -> Set[String]
   names: List[String] = []
   for record in DATA_RECORDS

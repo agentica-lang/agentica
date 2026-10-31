@@ -25,7 +25,13 @@ end
 def main() -> Void
   Test.run([
     Test.test("default client options") do
-      Test.eq(HttpClientOptions(), options(30000, 4))
+      # The record holds a TlsContext (tls), which has no equality: its fields are compared.
+      given = HttpClientOptions()
+      expected = options(30000, 4)
+      try Test.eq([given.timeout_ms, given.idle_timeout_ms, given.max_connections, given.max_body_bytes],
+                  [expected.timeout_ms, expected.idle_timeout_ms, expected.max_connections, expected.max_body_bytes])
+      try Test.eq(given.proxy, "")
+      Test.assert(given.tls.none?, "tls is none")
     end,
     Test.test("client options are checked") do
       try Test.eq(HTTP.client(options(0, 4)).message, "http: every option must be positive")

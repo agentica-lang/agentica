@@ -167,6 +167,13 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   answer until its deadline, `timeout_ms` after the call, plus 100 ms of grace.
   `close_client` closes `jobs`, and a later call gets `http: client is closed`
   (what still runs: the last item of the differences below).
+- With `proxy` in the options, std/http passes the absolute URL
+  (`http://host:port/path`) as the target of `encode_request`, which still
+  writes the target's `Host`. The job names the proxy as its origin, scheme,
+  host and port, so the owner pools connections by the proxy and the worker
+  connects to it (a failure names the proxy). `open`, `upload`, `download` and
+  `start` do the same on their own connection. An `https` URL is refused
+  before any connection: there is no `CONNECT` yet.
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the

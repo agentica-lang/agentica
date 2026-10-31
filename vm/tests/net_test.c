@@ -312,8 +312,9 @@ static void release_config(void *config) { agc_tls_config_free(config); }
 /* A TLS connect reaches a peer that never answers the handshake; its task is cancelled, then the deadline passes. A
    scheduler finds the job busy and posts its cancel; the I/O thread runs `cancel` (the request leaves its slot and the
    socket is shut, no resource touched), the job comes back dropping and a scheduler ends it with `drop`, which runs on
-   the I/O thread. The owner's end then closes the socket resource, and the peer reads the end of input. */
-static void test_cancelled_tls_connect_past_its_deadline(void) {
+   the I/O thread. The owner's end then closes the socket resource, and the peer reads the end of input. With STD the
+   connect is std/http's name for it, HttpWire.connect_context. */
+static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   assert(agc_io_share(&vm, false));
   agc_runq_share(vm.rt->runq);
   int64_t port = 0;
@@ -321,8 +322,9 @@ static void test_cancelled_tls_connect_past_its_deadline(void) {
   agc_tls_failure f;
   agc_tls_config *config = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &f);
   assert(config);
-  agc_value context = agc_tls_context_value(config, release_config, false);
-  calling dial = call("TLS.connect", 4, text("127.0.0.1"), agc_int(port), context, agc_int(1000));
+  agc_value tls = agc_tls_context_value(config, release_config, false);
+  calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, text("127.0.0.1"), agc_int(port), tls,
+                      agc_int(1000));
   assert(start(&dial));
   /* The loop runs the connect until the peer has the connection; the deadline is far enough off. */
   struct pollfd p = {silent, POLLIN, 0};
@@ -353,7 +355,8 @@ int main(void) {
   test_cancelled_accept_leaves_the_queue();
   test_served_accept_of_a_cancelled_task();
   test_cancelled_read_leaves_the_reader_slot();
-  test_cancelled_tls_connect_past_its_deadline();
+  test_cancelled_tls_connect_past_its_deadline(false);
+  test_cancelled_tls_connect_past_its_deadline(true);
   test_byte_keys();
 #endif
   puts("net tests passed");

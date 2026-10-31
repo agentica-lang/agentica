@@ -13,8 +13,8 @@ import threading
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli, compile_text,
-                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli,
+                                 compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"

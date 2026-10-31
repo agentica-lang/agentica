@@ -375,7 +375,7 @@ agc_value agc_tls_context_value(void *config, void (*release)(void *config), boo
   c->release = release;
   c->server = server;
 #ifndef AGC_NO_GC
-  GC_register_finalizer_no_order(c, finalize_tls_context, NULL, NULL, NULL);
+  GC_REGISTER_FINALIZER_NO_ORDER(c, finalize_tls_context, NULL, NULL, NULL);
 #endif
   agc_value v;
   v.tag = AGC_T_TLS_CONTEXT;
