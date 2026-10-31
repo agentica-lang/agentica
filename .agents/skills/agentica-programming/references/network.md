@@ -125,9 +125,10 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   chunks until it closes (`length` -1, the default) or with an exact `length`,
   which ends the body at that many bytes, and returns the whole response;
   `POST`, `PUT` or `PATCH` only. A server that answers 413 and closes mid-upload
-  still gives its response. `timeout_ms` is the time of each wait (connect,
-  head, each read, each channel step). A producer that can fail should set
-  `length`, since a closed channel is a clean end.
+  still gives its response (on Windows a reset can drop it, and the write error
+  is returned). `timeout_ms` is the time of each wait (connect, head, each read,
+  each channel step). A producer that can fail should set `length`, since a
+  closed channel is a clean end.
 - The client keeps idle keep-alive connections per scheme, host and port. URLs
   are `http://` or `https://`; the fragment is dropped, user info is rejected
   and IPv6 hosts go in brackets. It adds `Host` and `Content-Length`; a request
