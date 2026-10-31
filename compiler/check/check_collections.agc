@@ -735,10 +735,8 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         "CHECK-EMPTY-SET-TYPE",
         "an empty set needs an expected type, for example \"Set[Int]\"",
         span,
-        (
-          "annotate the variable: seen: Set[Int] = Set.new([]); " +
-          "a parameter, a field or a function result also gives the type"
-        ),
+        "annotate the variable: seen: Set[Int] = Set.new([]); " +
+        "a parameter, a field or a function result also gives the type",
       ),
     )
   end

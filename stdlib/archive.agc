@@ -684,9 +684,7 @@ def make_parents(ctx: Ctx, segments: List[String], deadline: Int) -> Result[Ctx]
     if !Map.has_key?(ctx.seen_exact, dir)
       case Dir.mkdir(dir, try time_left(deadline))
         ok(_) ->
-          ctx = ctx.with(
-            seen_fold: Map.put(ctx.seen_fold, fold, true), seen_exact: Map.put(ctx.seen_exact, dir, true),
-          )
+          ctx = ctx.with(seen_fold: Map.put(ctx.seen_fold, fold, true), seen_exact: Map.put(ctx.seen_exact, dir, true))
         error(message) -> return error("archive: cannot create a parent directory: #{message}")
       end
     end
@@ -733,8 +731,7 @@ def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Resu
   deadline = scan.ctx.deadline
   stream = File.chunks(src, CHUNK, try time_left(deadline))
   if gzip
-    stream = stream.with_index do |chunk: Bytes, index: Int| try within_input(chunk, index) end
-      .gunzip(SCAN_BYTES)
+    stream = stream.with_index do |chunk: Bytes, index: Int| try within_input(chunk, index) end.gunzip(SCAN_BYTES)
   end
   outcome = stream.reduce(scan) do |sc: Scan, chunk: Bytes| try feed(sc, chunk, gzip) end
   case outcome
@@ -888,7 +885,9 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
     end
   end
   ctx = ctx.with(
-    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0), has_gnu_name: false, gnu_name: "".bytes,
+    local: Local(has_path: false, path: "".bytes, has_size: false, size: 0),
+    has_gnu_name: false,
+    gnu_name: "".bytes,
   )
   canon = match_name_of(raw)
   if size > SCAN_BYTES
@@ -1002,7 +1001,7 @@ def check_end(sc: Scan) -> Result[Void]
       return error("archive: truncated TAR data, needed 512 bytes for a header")
     Phase.Data ->
       # The bytes the reader of a whole file wanted when the data ran out: what was left of its CHUNK-sized piece.
-      needed = smaller(sc.size - (sc.size - sc.rest) / CHUNK * CHUNK, CHUNK)
+      needed = smaller(sc.size - ((sc.size - sc.rest) / CHUNK) * CHUNK, CHUNK)
       return error("archive: truncated TAR data, needed #{needed} bytes for #{sc.what}")
     Phase.Meta -> return error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}")
     Phase.Pad -> return error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}")

@@ -153,9 +153,7 @@ def check_block_run(
     loops: 0,
     result: slot,
     step: step,
-    capture: some(
-      State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver),
-    ),
+    capture: some(State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver)),
   )
   inside = State.enter(inside)
   index = 0
@@ -291,15 +289,16 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
   end
 
   case node.type
-    some(annotation) -> return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-ANNOTATION-ON-EXISTING",
-        "an annotation is only allowed when \"#{node.name}\" is introduced",
-        node.span,
-      ),
-    )
+    some(annotation) ->
+      return error(
+        State.fail(
+          cx,
+          st,
+          "CHECK-ANNOTATION-ON-EXISTING",
+          "an annotation is only allowed when \"#{node.name}\" is introduced",
+          node.span,
+        ),
+      )
     none -> existing = existing
   end
 
@@ -353,8 +352,7 @@ def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Resu
       end
 
       return ok(out.st.with(result: State.Slot.Known(out.type)))
-    none ->
-      return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
+    none -> return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
   end
 end
 

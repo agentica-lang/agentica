@@ -71,16 +71,17 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Unary(found) -> return check_unary(cx, st, found)
     Ast.Expr.Binary(found) -> return check_binary(cx, st, found)
     Ast.Expr.Call(found) -> return Calls.check_call(cx, st, found, expected)
-    Ast.Expr.EnumConstructor(found) -> return Calls.check_enum_constructor(
-      cx,
-      st,
-      found.enum_name,
-      found.variant_name,
-      found.args,
-      found.named.size,
-      found.span,
-      expected,
-    )
+    Ast.Expr.EnumConstructor(found) ->
+      return Calls.check_enum_constructor(
+        cx,
+        st,
+        found.enum_name,
+        found.variant_name,
+        found.args,
+        found.named.size,
+        found.span,
+        expected,
+      )
     Ast.Expr.FunctionRef(found) -> return check_function_ref(cx, st, found, expected)
     Ast.Expr.Invoke(found) -> return check_invoke(cx, st, found)
     Ast.Expr.Try(found) -> return check_try(cx, st, found, expected)
@@ -102,9 +103,8 @@ end
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State.Out]
   case node.value
     Ast.LitValue.Whole(number) -> return ok(State.Out(st: st, type: T.Type.Int))
-    Ast.LitValue.Huge(digits) -> return error(
-      State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span),
-    )
+    Ast.LitValue.Huge(digits) ->
+      return error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
     Ast.LitValue.Real(number) -> return ok(State.Out(st: st, type: T.Type.Float))
     Ast.LitValue.Text(text) -> return ok(State.Out(st: st, type: T.Type.String))
     Ast.LitValue.Flag(flag) -> return ok(State.Out(st: st, type: T.Type.Bool))
@@ -135,13 +135,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
 
   if cx.functions.has_key?(node.name) or ENTRIES.has_key?(node.name)
     return error(
-      State.fail(
-        cx,
-        st,
-        "CHECK-UNKNOWN-NAME",
-        "\"#{node.name}\" is a function; functions are not values",
-        node.span,
-      ),
+      State.fail(cx, st, "CHECK-UNKNOWN-NAME", "\"#{node.name}\" is a function; functions are not values", node.span),
     )
   end
 
@@ -315,21 +309,12 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
     )
   end
 
-  return Statements.check_block_body(
-    cx,
-    st,
-    node,
-    some(T.params(expected)),
-    T.result(expected),
-    none,
-  )
+  return Statements.check_block_body(cx, st, node, some(T.params(expected)), T.result(expected), none)
 end
 
 def check_list(cx: State.Cx, st: State.St, node: Ast.ListLit, expected: T.Type) -> Result[State.Out]
   if !T.unknown?(expected) and !T.is?(expected, "List")
-    return error(
-      State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a list", node.span),
-    )
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a list", node.span))
   end
 
   wanted = T.Type.Unknown
@@ -373,9 +358,7 @@ end
 
 def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) -> Result[State.Out]
   if !T.unknown?(expected) and !T.is?(expected, "Map")
-    return error(
-      State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a map", node.span),
-    )
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a map", node.span))
   end
 
   if node.entries.size == 0
@@ -387,10 +370,8 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
           "CHECK-EMPTY-MAP-TYPE",
           "an empty map needs an expected type, for example \"Map[String, Int]\"",
           node.span,
-          (
-            "annotate the variable: m: Map[String, Int] = {}; " +
-            "a parameter, a field or a function result also gives the type"
-          ),
+          "annotate the variable: m: Map[String, Int] = {}; " +
+          "a parameter, a field or a function result also gives the type",
         ),
       )
     end
@@ -667,10 +648,7 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
   either_string = T.is?(sides.left, "String") or T.is?(sides.right, "String")
   if either_int and either_float
-    return (
-      "make both sides the same type: n.to_f turns the Int into a Float, " +
-      "x.to_i! truncates the Float"
-    )
+    return "make both sides the same type: n.to_f turns the Int into a Float, " + "x.to_i! truncates the Float"
   elsif either_string and (either_int or either_float)
     if with_to_s
       return (
@@ -777,7 +755,7 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
         sides,
         node,
         "equality is only defined for primitive values, ranges, Bytes and Optionals of those, found " +
-          T.to_text(sides.left),
+        T.to_text(sides.left),
         help,
       ),
     )

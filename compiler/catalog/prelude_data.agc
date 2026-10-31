@@ -48,7 +48,11 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),
   Model.PreludeRow(
-    name: "List.each_with_index", module: "list", limits: [], selector: "", bodies: {"": "each_with_index"},
+    name: "List.each_with_index",
+    module: "list",
+    limits: [],
+    selector: "",
+    bodies: {"": "each_with_index"},
   ),
   Model.PreludeRow(name: "List.empty?", module: "list", limits: [], selector: "", bodies: {"": "empty"}),
   Model.PreludeRow(name: "List.find", module: "list", limits: [], selector: "", bodies: {"": "find"}),
@@ -67,9 +71,7 @@ export ROWS: List[Model.PreludeRow] = [
     name: "List.max_by",
     module: "list",
     limits: [
-      Model.Limit(
-        variable: "O", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "a key",
-      ),
+      Model.Limit(variable: "O", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "a key"),
     ],
     selector: "O",
     bodies: {"Int": "max_by_int", "Float": "max_by_float", "String": "max_by_string"},
@@ -78,9 +80,7 @@ export ROWS: List[Model.PreludeRow] = [
     name: "List.min_by",
     module: "list",
     limits: [
-      Model.Limit(
-        variable: "O", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "a key",
-      ),
+      Model.Limit(variable: "O", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "a key"),
     ],
     selector: "O",
     bodies: {"Int": "min_by_int", "Float": "min_by_float", "String": "min_by_string"},
@@ -115,11 +115,19 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Optional.none?", module: "optional", limits: [], selector: "", bodies: {"": "is_none"}),
   Model.PreludeRow(name: "Optional.some?", module: "optional", limits: [], selector: "", bodies: {"": "is_some"}),
   Model.PreludeRow(
-    name: "Optional.to_result", module: "optional", limits: [], selector: "", bodies: {"": "to_result"},
+    name: "Optional.to_result",
+    module: "optional",
+    limits: [],
+    selector: "",
+    bodies: {"": "to_result"},
   ),
   Model.PreludeRow(name: "Optional.unwrap!", module: "optional", limits: [], selector: "", bodies: {"": "unwrap"}),
   Model.PreludeRow(
-    name: "Optional.unwrap_or", module: "optional", limits: [], selector: "", bodies: {"": "unwrap_or"},
+    name: "Optional.unwrap_or",
+    module: "optional",
+    limits: [],
+    selector: "",
+    bodies: {"": "unwrap_or"},
   ),
   Model.PreludeRow(name: "Range.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_range"}),
   Model.PreludeRow(name: "String.empty?", module: "string", limits: [], selector: "", bodies: {"": "empty"}),

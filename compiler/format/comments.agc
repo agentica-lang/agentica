@@ -21,9 +21,9 @@ import Source from "../syntax/source"
 import Tokens from "../syntax/token"
 
 # The kinds of the statement nodes.
-STATEMENT_KINDS = Set.new(
-  ["Binding", "Return", "ExprStmt", "IfStmt", "WhileStmt", "ForStmt", "LoopControl", "CaseStmt"],
-)
+STATEMENT_KINDS = Set.new([
+  "Binding", "Return", "ExprStmt", "IfStmt", "WhileStmt", "ForStmt", "LoopControl", "CaseStmt",
+])
 # The nodes a comment before `end` trails: a statement, or a field or variant before the `end` of its declaration.
 BODY_END_KINDS = STATEMENT_KINDS.union(Set.new(["FieldDecl", "EnumVariant"]))
 

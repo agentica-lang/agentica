@@ -23,8 +23,11 @@ end
 ## loads. functions and constants are the declarations in program order, with the scan of each body; order is the
 ## initialization order of the constants (their linked names).
 export def plan(
-  functions: List[Ast.FunctionDecl], function_scans: List[Scans.Scan], constants: List[Ast.ConstDecl],
-  constant_scans: List[Scans.Scan], order: List[String]
+  functions: List[Ast.FunctionDecl],
+  function_scans: List[Scans.Scan],
+  constants: List[Ast.ConstDecl],
+  constant_scans: List[Scans.Scan],
+  order: List[String],
 ) -> Plan
   by_name: Map[String, Int] = {}
   literals: Map[String, Ir.Imm] = {}
@@ -93,8 +96,11 @@ end
 
 # The names of the constants to build: those the reachable functions read, then, to a fixed point, those they read.
 def kept_names(
-  function_scans: List[Scans.Scan], by_function: Map[String, Int], constant_scans: List[Scans.Scan],
-  by_name: Map[String, Int], literals: Map[String, Ir.Imm]
+  function_scans: List[Scans.Scan],
+  by_function: Map[String, Int],
+  constant_scans: List[Scans.Scan],
+  by_name: Map[String, Int],
+  literals: Map[String, Ir.Imm],
 ) -> Set[String]
   reached: Set[String] = Set.new([])
   pending: List[String] = ["main"]

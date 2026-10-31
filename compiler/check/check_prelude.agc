@@ -100,14 +100,16 @@ end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.
 def check_limits(
-  cx: State.Cx, bound: Bound, form: Model.Builtin, row: Model.PreludeRow, call: Source.Span
+  cx: State.Cx,
+  bound: Bound,
+  form: Model.Builtin,
+  row: Model.PreludeRow,
+  call: Source.Span,
 ) -> Result[Bool]
   for limit in row.limits
     found = bound.types.get(limit.variable)
     if found.none?
-      return error(
-        State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call),
-      )
+      return error(State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call))
     end
 
     if !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end

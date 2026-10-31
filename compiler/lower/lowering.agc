@@ -144,7 +144,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     file: linked.modules[0].file,
     index: 0,
     expression: &Expr.lower_expression,
-    block: &Stmt.lower_block_function
+    block: &Stmt.lower_block_function,
   )
   table_size = functions.size + plan.kept.size
   if start
@@ -175,7 +175,14 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
         table = table.with(functions: table.functions.push(lowered))
       none ->
         table = try add_function(
-          cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
+          cx,
+          table,
+          entry.file,
+          index_of[entry.file],
+          function.name,
+          params,
+          function.body,
+          function.span,
         )
     end
   end
@@ -206,15 +213,17 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   sources = modules.map do |module: Linker.LinkedModule| source_of(module) end
   kept_sources = used_sources(sources, files)
-  return ok(Ir.Program(
-    sources: kept_sources,
-    structs: tables.structs,
-    enums: tables.enums,
-    functions: pin_prelude_spans(built, kept_sources),
-    entry: entry,
-    globals: plan.slots.size,
-    span: linked.root.span
-  ))
+  return ok(
+    Ir.Program(
+      sources: kept_sources,
+      structs: tables.structs,
+      enums: tables.enums,
+      functions: pin_prelude_spans(built, kept_sources),
+      entry: entry,
+      globals: plan.slots.size,
+      span: linked.root.span,
+    ),
+  )
 end
 
 # A file of the prelude is only a name in the program: no text, so no program can show its lines.
@@ -286,21 +295,28 @@ end
 
 # Lowers one function into a new table whose index is the next to fill, and adds the blocks it made.
 def add_function(
-  cx: Lowering.Cx, table: Table, file: String, index: Int, name: String, params: List[String], body: List[Ast.Stmt],
-  span: Source.Span
+  cx: Lowering.Cx,
+  table: Table,
+  file: String,
+  index: Int,
+  name: String,
+  params: List[String],
+  body: List[Ast.Stmt],
+  span: Source.Span,
 ) -> Result[Table]
   here = cx.with(file: file, index: index)
   inner = Lowering.fresh(index, table.blocks, table.block_count)
   done = try Stmt.lower_function(here, inner, name, params, [], body, span, false)
-  return ok(Table(
-    functions: table.functions.push(done.function),
-    blocks: done.fx.blocks,
-    block_count: done.fx.block_count
-  ))
+  return ok(
+    Table(functions: table.functions.push(done.function), blocks: done.fx.blocks, block_count: done.fx.block_count),
+  )
 end
 
 def scan_all(
-  decls: List[Ast.Decl], functions: List[Ast.FunctionDecl], constants: List[Ast.ConstDecl], watched: Set[String]
+  decls: List[Ast.Decl],
+  functions: List[Ast.FunctionDecl],
+  constants: List[Ast.ConstDecl],
+  watched: Set[String],
 ) -> Scanned
   function_scans: List[Scans.Scan] = []
   constant_scans: List[Scans.Scan] = []
@@ -424,8 +440,11 @@ end
 # then of each kept constant, then of each struct with a field default (a construction lowers the default in the file
 # of its struct, which may have no function).
 def source_order(
-  linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], files_of: Map[String, String],
-  structs: List[LocatedStruct]
+  linked: Linker.Linked,
+  functions: List[Located],
+  kept: List[Ast.ConstDecl],
+  files_of: Map[String, String],
+  structs: List[LocatedStruct],
 ) -> List[String]
   seen: Set[String] = Set.new([linked.modules[0].file])
   files: List[String] = [linked.modules[0].file]
@@ -479,8 +498,12 @@ end
 # tail call of main. The loader wants a function to start with a step and to end with a return, so a `const` and a
 # `return` follow the tail call.
 def start_function(
-  span: Source.Span, plan: Const.Plan, files_of: Map[String, String], index_of: Map[String, Int], declared: Int,
-  main_index: Int
+  span: Source.Span,
+  plan: Const.Plan,
+  files_of: Map[String, String],
+  index_of: Map[String, Int],
+  declared: Int,
+  main_index: Int,
 ) -> Ir.Function
   body: List[Ir.Instr] = [Ir.instr("step", [], 0, [span])]
   offset = 0

@@ -243,12 +243,7 @@ def moved_bodies(
   return found
 end
 
-def moved_tries(
-  linked: Linker.Linked,
-  before: Linker.Linked,
-  old: Set[Int],
-  stretches: List[Stretch],
-) -> Set[Int]
+def moved_tries(linked: Linker.Linked, before: Linker.Linked, old: Set[Int], stretches: List[Stretch]) -> Set[Int]
   found: List[Int] = []
   for id in old.to_a
     at = placed(linked, before, stretches, id)

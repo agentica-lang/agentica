@@ -37,9 +37,10 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
   end
 
   if item.kind == "function"
-    fields = fields.put("parameters", JSON.array(item.parameters.map do |parameter: Model.Parameter|
-      parameter_json(parameter)
-    end))
+    fields = fields.put(
+      "parameters",
+      JSON.array(item.parameters.map do |parameter: Model.Parameter| parameter_json(parameter) end),
+    )
     fields = fields.put("result", JSON.from(item.result))
   elsif item.kind == "struct"
     members_json = item.fields.map do |member: Model.Field| field_json(module, member, located) end

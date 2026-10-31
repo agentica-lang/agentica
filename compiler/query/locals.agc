@@ -76,11 +76,7 @@ end
 
 ## The local that the character at `offset` is on in the root file `module`, or `none`. `bound` is `Checked.bound`. A
 ## local whose type the checker recorded none for is not answered.
-export def find(
-  module: Linker.LinkedModule,
-  bound: Map[Int, List[T.Type]],
-  offset: Int,
-) -> Optional[Found]
+export def find(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], offset: Int) -> Optional[Found]
   ask = Query(offset: offset, bound: bound)
   for declaration in module.declarations
     case declaration

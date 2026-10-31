@@ -358,14 +358,7 @@ def stream_fill(st: Stream, need: Int, cap: Int, deadline: Int, src: String) -> 
 end
 
 # Takes exactly `n` bytes, failing on truncation. Callers keep `n` small except through `stream_skip`.
-def stream_take(
-  st: Stream,
-  n: Int,
-  cap: Int,
-  deadline: Int,
-  src: String,
-  what: String,
-) -> Result[TakeOut]
+def stream_take(st: Stream, n: Int, cap: Int, deadline: Int, src: String, what: String) -> Result[TakeOut]
   if n < 0
     return error("archive: negative read of #{n} bytes for #{what}")
   end
@@ -484,7 +477,8 @@ def validate_members(members: List[String]) -> Result[List[Wanted]]
       end
     end
     wanted = List.append(
-      wanted, Wanted(path: canon, segments: String.split(canon, "/"), text: text, index: wanted.size),
+      wanted,
+      Wanted(path: canon, segments: String.split(canon, "/"), text: text, index: wanted.size),
     )
   end
   return ok(wanted)
@@ -668,18 +662,20 @@ def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
   if offset == ZIP64_SENTINEL
     return error("archive: ZIP64 is not supported at entry #{index}")
   end
-  return ok(Head(
-    method: method,
-    flags: flags,
-    crc: crc,
-    csize: csize,
-    usize: usize,
-    name_len: name_len,
-    extra_len: extra_len,
-    comment_len: comment_len,
-    attrs: attrs,
-    offset: offset,
-  ))
+  return ok(
+    Head(
+      method: method,
+      flags: flags,
+      crc: crc,
+      csize: csize,
+      usize: usize,
+      name_len: name_len,
+      extra_len: extra_len,
+      comment_len: comment_len,
+      attrs: attrs,
+      offset: offset,
+    ),
+  )
 end
 
 # Refuses the ZIP64 extra field wherever it appears: its tag means 32-bit fields cannot hold the sizes.
@@ -771,18 +767,20 @@ def finish_entry(parsed: Head, name: Bytes, index: Int) -> Result[Entry]
   end
   canon = try decode_canon(name, parsed.flags, index)
   regular = classify_regular(name, parsed.attrs)
-  return ok(Entry(
-    index: index,
-    offset: parsed.offset,
-    method: parsed.method,
-    flags: parsed.flags,
-    crc: parsed.crc,
-    csize: parsed.csize,
-    usize: parsed.usize,
-    name: name,
-    canon: canon,
-    regular: regular,
-  ))
+  return ok(
+    Entry(
+      index: index,
+      offset: parsed.offset,
+      method: parsed.method,
+      flags: parsed.flags,
+      crc: parsed.crc,
+      csize: parsed.csize,
+      usize: parsed.usize,
+      name: name,
+      canon: canon,
+      regular: regular,
+    ),
+  )
 end
 
 # The third pass: walks the local headers in physical order, streaming the selected payloads and validating every
@@ -826,14 +824,7 @@ def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Ent
   return ok(ctx.counts)
 end
 
-def consume_entry(
-  st: Stream,
-  cursor: Int,
-  entry: Entry,
-  next_offset: Int,
-  ctx: Zctx,
-  src: String,
-) -> Result[StepOut]
+def consume_entry(st: Stream, cursor: Int, entry: Entry, next_offset: Int, ctx: Zctx, src: String) -> Result[StepOut]
   deadline = ctx.deadline
   local = try read_local(st, cursor, entry, ctx.size, deadline, src)
   st = local.stream
@@ -866,14 +857,7 @@ end
 
 # Parses one local header at `cursor` and checks it against the central directory: magic, version, flags, method,
 # sizes (zero when a descriptor follows), the raw name bytes and the extra field.
-def read_local(
-  st: Stream,
-  cursor: Int,
-  entry: Entry,
-  size: Int,
-  deadline: Int,
-  src: String,
-) -> Result[LocalOut]
+def read_local(st: Stream, cursor: Int, entry: Entry, size: Int, deadline: Int, src: String) -> Result[LocalOut]
   head = try stream_take(st, 30, INPUT_BYTES, deadline, src, "a local header")
   st = head.stream
   buf = head.bytes
@@ -1005,13 +989,14 @@ def write_selected(
     end
   end
   case File.close(handle, close_budget(deadline))
-    ok(_) -> ctx = ctx.with(
-      matched: List.set(ctx.matched, index, true),
-      counts: List.set(ctx.counts, index, entry.usize),
-      extracted: ctx.extracted + entry.usize,
-      seen_fold: Map.put(ctx.seen_fold, fold, true),
-      seen_exact: Map.put(ctx.seen_exact, out, true),
-    )
+    ok(_) ->
+      ctx = ctx.with(
+        matched: List.set(ctx.matched, index, true),
+        counts: List.set(ctx.counts, index, entry.usize),
+        extracted: ctx.extracted + entry.usize,
+        seen_fold: Map.put(ctx.seen_fold, fold, true),
+        seen_exact: Map.put(ctx.seen_exact, out, true),
+      )
     error(message) -> return error("archive: cannot finish #{out}: #{message}")
   end
   return ok(WriteOut(stream: st, cursor: cursor, ctx: ctx))
@@ -1172,9 +1157,7 @@ def make_parents(ctx: Zctx, segments: List[String], deadline: Int) -> Result[Zct
     if !Map.has_key?(ctx.seen_exact, dir)
       case Dir.mkdir(dir, try time_left(deadline))
         ok(_) ->
-          ctx = ctx.with(
-            seen_fold: Map.put(ctx.seen_fold, fold, true), seen_exact: Map.put(ctx.seen_exact, dir, true),
-          )
+          ctx = ctx.with(seen_fold: Map.put(ctx.seen_fold, fold, true), seen_exact: Map.put(ctx.seen_exact, dir, true))
         error(message) -> return error("archive: cannot create a parent directory: #{message}")
       end
     end

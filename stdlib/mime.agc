@@ -63,7 +63,7 @@ TYPES = {
   "m4a": "audio/mp4",
   "flac": "audio/flac",
   "wav": "audio/wav",
-  "ogg": "audio/ogg"
+  "ogg": "audio/ogg",
 }
 
 # The `application/` types that are text, besides `text/*` and any `+json` or `+xml` type.

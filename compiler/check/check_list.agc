@@ -72,14 +72,7 @@ end
 def sort_by_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.BlockLit) -> Result[State.Out]
   annotated = try annotated_parameter(cx, st, block, 0)
   target = try Args.list_argument(cx, st, site, T.list_of(annotated))
-  key = try Stmt.check_block_body(
-    cx,
-    target.st,
-    block,
-    some([T.item(target.type)]),
-    T.Type.Unknown,
-    none,
-  )
+  key = try Stmt.check_block_body(cx, target.st, block, some([T.item(target.type)]), T.Type.Unknown, none)
   try check_sort_key(cx, key.st, key.type, block.span)
   return ok(State.Out(st: key.st, type: target.type))
 end
@@ -262,14 +255,7 @@ def reduce_block(
   end
 
   accumulator = try State.expr(cx, st, site.args[1], start)
-  return Stmt.check_block_body(
-    cx,
-    accumulator.st,
-    block,
-    some([accumulator.type, element]),
-    accumulator.type,
-    none,
-  )
+  return Stmt.check_block_body(cx, accumulator.st, block, some([accumulator.type, element]), accumulator.type, none)
 end
 
 # The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map.

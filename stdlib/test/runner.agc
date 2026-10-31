@@ -194,7 +194,10 @@ end
 
 # A filter (`--only` or `--tags`) that keeps nothing is an error, not a pass.
 def matched(
-  config: Config, tags_text: String, tags: Tags.Expr, files: List[Report.FileResult]
+  config: Config,
+  tags_text: String,
+  tags: Tags.Expr,
+  files: List[Report.FileResult],
 ) -> List[Report.FileResult]
   filtered = config.only != "" or Tags.filters?(tags)
   kept = files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
@@ -305,9 +308,8 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     end
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
-  texts = records.filter do |record|
-    Child.event_of(record) == "step"
-  end.map do |record| Child.text_of(record, "pattern") end
+  texts = records.filter do |record| Child.event_of(record) == "step" end
+    .map do |record| Child.text_of(record, "pattern") end
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
     Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
@@ -331,8 +333,14 @@ def run_file(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], pat
       end
 
       scenarios = chosen.map do |item| run_scenario(config, patterns, base, item) end
-      return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios,
-                               verdict: Report.Verdict.Pass, output: "")
+      return Report.FileResult(
+        path: path,
+        feature: feature.name,
+        kind: "feature",
+        scenarios: scenarios,
+        verdict: Report.Verdict.Pass,
+        output: "",
+      )
   end
 end
 
@@ -382,8 +390,14 @@ end
 
 # One child VM per scenario: the settings line, then one line per step on the child's channel, each answered by records
 # on it.
-def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[Match.Resolved],
-              patterns: List[Match.Pattern], started: Int) -> Run
+def run_child(
+  config: Config,
+  base: String,
+  item: Gherkin.Scenario,
+  found: List[Match.Resolved],
+  patterns: List[Match.Pattern],
+  started: Int,
+) -> Run
   count = item.steps.size
   spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario"), ".", 30000)
   if not spawned.ok?
@@ -593,11 +607,8 @@ end
 def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Error
   case Match.resolve(patterns, step)
     Gherkin.Outcome.Failed(problem) -> return Report.with_actual(from_diagnostic(problem), step.text.inspect)
-    Gherkin.Outcome.Done(_) -> return Report.error_at(
-      "RUNTIME-BDD-INFRA",
-      "the step resolved on the second try",
-      step.span,
-    )
+    Gherkin.Outcome.Done(_) ->
+      return Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
   end
 end
 
@@ -630,4 +641,3 @@ end
 def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Error
   return Report.error_at(problem.code, problem.message, problem.span)
 end
-

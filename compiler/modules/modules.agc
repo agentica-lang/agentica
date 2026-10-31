@@ -232,14 +232,10 @@ export def load_roots(roots: List[String], settings: Env.Settings, parses: Parse
     loaded = load_root(settings, walk, root)
     if loaded.ok?
       walk = loaded.unwrap!
-      entries = entries.push(
-        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: none),
-      )
+      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: none))
     else
       failure = Failure.unpack_failure(loaded.message)
-      entries = entries.push(
-        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: some(failure)),
-      )
+      entries = entries.push(Entry(typed: root, key: key, root_dir: walk.root_dir, failure: some(failure)))
     end
   end
 
@@ -394,11 +390,7 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 end
 
 def finish(walk: Walk, frame: Frame) -> Result[Walk]
-  module = frame.module.with(
-    aliases: frame.aliases,
-    named: frame.named,
-    imports: frame.imported,
-  )
+  module = frame.module.with(aliases: frame.aliases, named: frame.named, imports: frame.imported)
   # The imports are all done: the re-exports can take their kinds and origins from the finished exports.
   module = try bind_reexports(walk, module)
   if module.digest != ""

@@ -135,14 +135,19 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
     return broken(Report.error_at("RUNTIME-TEST-RUN", "the test file did not call Test.run", where), shown)
   end
   empty: Map[Int, UnitTest] = {}
-  listed = records.filter do |record|
-    Child.event_of(record) == "test"
-  end.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
-    line = Child.int_of(record, "line")
-    column = Child.int_of(record, "column")
-    acc.put(acc.size, UnitTest(index: acc.size, name: Child.text_of(record, "name"),
-                               span: Report.Span(file: path, line: line, column: column, end_column: column)))
-  end
+  listed = records.filter do |record| Child.event_of(record) == "test" end
+    .reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
+      line = Child.int_of(record, "line")
+      column = Child.int_of(record, "column")
+      acc.put(
+        acc.size,
+        UnitTest(
+          index: acc.size,
+          name: Child.text_of(record, "name"),
+          span: Report.Span(file: path, line: line, column: column, end_column: column),
+        ),
+      )
+    end
   return Listed.Ready(listed.values)
 end
 
@@ -199,8 +204,14 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
   end
   Process.close(p)
   scenarios = chosen.map do |item| results.get(item.index, scenario(item, 0, Report.Verdict.NotExecuted, "")) end
-  return Report.FileResult(path: path, feature: "", kind: "tests", scenarios: scenarios, verdict: ending.verdict,
-                           output: ending.output)
+  return Report.FileResult(
+    path: path,
+    feature: "",
+    kind: "tests",
+    scenarios: scenarios,
+    verdict: ending.verdict,
+    output: ending.output,
+  )
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd
@@ -353,14 +364,28 @@ def record_error(record: Json) -> Report.Error
   if JSON.get(record, "stack").ok?
     original = Child.diagnostic_of(record)
   end
-  return Report.Error(code: Child.text_of(record, "code"), message: Child.text_of(record, "message"), span: span,
-                      end_line: Child.int_of(stop, "line"), expected: Child.detail_of(record, "expected"),
-                      actual: Child.detail_of(record, "actual"), original: original)
+  return Report.Error(
+    code: Child.text_of(record, "code"),
+    message: Child.text_of(record, "message"),
+    span: span,
+    end_line: Child.int_of(stop, "line"),
+    expected: Child.detail_of(record, "expected"),
+    actual: Child.detail_of(record, "actual"),
+    original: original,
+  )
 end
 
 def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: String) -> Report.ScenarioResult
-  return Report.ScenarioResult(name: item.name, tags: [], location: item.span, example: Report.Example.NoExample,
-                               duration_ms: duration_ms, steps: [], verdict: verdict, output: output)
+  return Report.ScenarioResult(
+    name: item.name,
+    tags: [],
+    location: item.span,
+    example: Report.Example.NoExample,
+    duration_ms: duration_ms,
+    steps: [],
+    verdict: verdict,
+    output: output,
+  )
 end
 
 def joined(output: String, stderr: String) -> String
@@ -368,19 +393,9 @@ def joined(output: String, stderr: String) -> String
 end
 
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
-  return [
-    "run",
-    "--json",
-    "--max-steps",
-    steps.to_s,
-    "--seed",
-    settings.seed.to_s,
-    "--source-root",
-    settings.source_root,
-  ].concat(settings.deny).concat([
-    "--",
-    bytecode,
-    "--agentica-test",
-    mode,
-  ])
+  return (
+    ["run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root]
+      .concat(settings.deny)
+      .concat(["--", bytecode, "--agentica-test", mode])
+  )
 end

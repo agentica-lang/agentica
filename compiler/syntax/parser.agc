@@ -284,12 +284,7 @@ end
 def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) -> Result[Int]
   if e.tokens[pos].kind == "left-brace"
     return error(
-      Base.unexpected_help(
-        e,
-        pos,
-        "expected #{description}, found #{Base.describe(e.tokens[pos])}",
-        brace_help(form),
-      ),
+      Base.unexpected_help(e, pos, "expected #{description}, found #{Base.describe(e.tokens[pos])}", brace_help(form)),
     )
   end
 
@@ -493,8 +488,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       right_start = cursor + 1
       right = try parse_climb(operand_env, right_start, next_id, 6)
       case pipe_insert(left, right.node)
-        some(node) ->
-          left = node
+        some(node) -> left = node
         none ->
           return error(
             Base.bail_span(
@@ -1494,14 +1488,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   next_id = ids
   if e.tokens[cursor].kind == "colon"
     if e.tokens[pos].lexeme == "_"
-      return error(
-        Base.unexpected_help(
-          e,
-          cursor,
-          "a discard \"_\" has no type to declare",
-          "write _ = value",
-        ),
-      )
+      return error(Base.unexpected_help(e, cursor, "a discard \"_\" has no type to declare", "write _ = value"))
     end
 
     parsed = try Base.parse_type(e, cursor + 1, next_id)
@@ -1561,10 +1548,11 @@ end
 
 def assignment_message(node: Ast.Expr) -> String
   case node
-    Ast.Expr.Index(access) -> return (
-      "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, " +
-      "Map.put(map, key, value))"
-    )
+    Ast.Expr.Index(access) ->
+      return (
+        "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, " +
+        "Map.put(map, key, value))"
+      )
     _ -> return "the core only assigns to a plain name"
   end
 end
@@ -1593,12 +1581,10 @@ end
 def keyword_help(name: String) -> String
   case name
     "match" -> return "use case value, then arms pattern -> ..., then end"
-    "break" -> return (
-      "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
-    )
-    "next" -> return (
-      "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
-    )
+    "break" ->
+      return "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
+    "next" ->
+      return "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
     "continue" -> return "write next to skip to the next iteration"
     _ -> return "write x = 5, or x: Int = 5 to give a type"
   end
@@ -1639,12 +1625,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
     name = target_name(value.node)
     if name == "elif" or name == "elseif"
       return error(
-        Base.unexpected_help(
-          e,
-          pos,
-          "\"#{name}\" is not a keyword",
-          "write elsif: if a ... elsif b ... else ... end",
-        ),
+        Base.unexpected_help(e, pos, "\"#{name}\" is not a keyword", "write elsif: if a ... elsif b ... else ... end"),
       )
     end
 
@@ -2216,13 +2197,7 @@ def declares_types?(e: Base.Env, pos: Int) -> Bool
 end
 
 # One member of an extern block at pos (after its doc and export), and the block with it.
-def parse_extern_member(
-  e: Base.Env,
-  pos: Int,
-  ids: Int,
-  doc: Optional[String],
-  block: ExternBlock,
-) -> Result[MemberAt]
+def parse_extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[MemberAt]
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
     named = block.resources.put(e.tokens[pos + 1].lexeme, kept_free(member.node))
@@ -3266,13 +3241,21 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
 
   if member == "extern"
     return (
-      kind == "def" or kind == "export" or compute_start?(e, pos) or resource_start?(e, pos) or callback_start?(e, pos)
+      kind == "def" or
+      kind == "export" or
+      compute_start?(e, pos) or
+      resource_start?(e, pos) or
+      callback_start?(e, pos)
     )
   end
 
   return (
-    kind == "def" or kind == "struct" or kind == "enum" or (kind == "export" and !reexport_start?(e, pos)) or
-    constant_start?(e, pos) or (kind == "name" and e.tokens[pos].lexeme == "type")
+    kind == "def" or
+    kind == "struct" or
+    kind == "enum" or
+    (kind == "export" and !reexport_start?(e, pos)) or
+    constant_start?(e, pos) or
+    (kind == "name" and e.tokens[pos].lexeme == "type")
   )
 end
 
@@ -3605,8 +3588,13 @@ end
 def declaration_start?(e: Base.Env, at: Int) -> Bool
   kind = e.tokens[at].kind
   return (
-    kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at) or
-    (kind == "name" and e.tokens[at].lexeme == "type") or extern_start?(e, at)
+    kind == "def" or
+    kind == "struct" or
+    kind == "enum" or
+    kind == "export" or
+    constant_start?(e, at) or
+    (kind == "name" and e.tokens[at].lexeme == "type") or
+    extern_start?(e, at)
   )
 end
 
@@ -3826,7 +3814,9 @@ end
 # or a constant (a type name and `=` or `:`), so there is no clash.
 def reexport_start?(e: Base.Env, at: Int) -> Bool
   return (
-    Base.kind_at(e, at) == "export" and Base.kind_at(e, at + 1) == "type-name" and Base.kind_at(e, at + 2) == "dot"
+    Base.kind_at(e, at) == "export" and
+    Base.kind_at(e, at + 1) == "type-name" and
+    Base.kind_at(e, at + 2) == "dot"
   )
 end
 
@@ -3926,10 +3916,8 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
           e,
           cursor,
           "PARSE-TOP-LEVEL-STATEMENT",
-          (
-            "expected a top-level declaration (def, struct, enum, type alias, constant, or import), " +
-            "found #{Base.describe(e.tokens[cursor])}"
-          ),
+          "expected a top-level declaration (def, struct, enum, type alias, constant, or import), " +
+          "found #{Base.describe(e.tokens[cursor])}",
           Base.hint(top_level_help(kind)),
         ),
       )

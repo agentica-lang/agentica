@@ -38,12 +38,7 @@ end
 
 ## Checks the default of each parameter against the parameter's type, in order. The types are recorded by node id, and
 ## the lowering reads them when it copies a default to a call site.
-export def check_types(
-  cx: State.Cx,
-  st: State.St,
-  node: Ast.FunctionDecl,
-  types: List[Types.Type],
-) -> Result[State.St]
+export def check_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: List[Types.Type]) -> Result[State.St]
   current = st
   index = 0
   while index < node.params.size

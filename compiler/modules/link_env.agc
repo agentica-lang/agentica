@@ -55,12 +55,7 @@ end
 
 ## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name and whether
 ## it carries the compiled BDD programs.
-export def embedded_settings(
-  workspace: Workspace.Workspace,
-  env: Env,
-  version: String,
-  embedded_bdd: Bool,
-) -> Settings
+export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String, embedded_bdd: Bool) -> Settings
   return Settings(
     std: StdProvider.Embedded,
     embedded_bdd: embedded_bdd,

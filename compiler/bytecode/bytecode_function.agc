@@ -99,7 +99,12 @@ end
 # the entry the instruction names, if it has one. The first case that matches wins, so const and the jumps come
 # before WIDE_OPS, as in the chain this replaced.
 def operands(
-  program: Ir.Program, function: Ir.Function, labels: Map[Int, Int], tables: Tables, instr: Ir.Instr, run: Int
+  program: Ir.Program,
+  function: Ir.Function,
+  labels: Map[Int, Int],
+  tables: Tables,
+  instr: Ir.Instr,
+  run: Int,
 ) -> Result[Operands]
   op = instr.op
   args = instr.args
@@ -202,7 +207,11 @@ end
 # jump, jump-if-false and jump-if-true: the register of the test, if there is one, and the number of the instruction
 # the label stands before.
 def jump_operands(
-  program: Ir.Program, function: Ir.Function, labels: Map[Int, Int], tables: Tables, instr: Ir.Instr
+  program: Ir.Program,
+  function: Ir.Function,
+  labels: Map[Int, Int],
+  tables: Tables,
+  instr: Ir.Instr,
 ) -> Result[Operands]
   args = instr.args
   register = 0

@@ -780,14 +780,9 @@ def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
   socket = try open_socket(where, options)
   cell: Channel[Exchange] = Channel.new(1)
   cell.send(settled(IDLE, false), 0)
-  return ok(Connection(
-    socket: socket,
-    scheme: where.scheme,
-    host: where.host,
-    port: where.port,
-    options: options,
-    cell: cell,
-  ))
+  return ok(
+    Connection(socket: socket, scheme: where.scheme, host: where.host, port: where.port, options: options, cell: cell),
+  )
 end
 
 # The socket of `start`: TLS with the verification of `ca_file` for `https`, TCP for `http`.
@@ -930,13 +925,7 @@ def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -
         state = after
         if state.done and state.next != data.size
           # The framing read went past the last chunk: those bytes were taken from the input and are lost.
-          exchange = Exchange(
-            phase: READING,
-            framing: BY_CHUNKS,
-            left: 0,
-            chunks: exchange.chunks,
-            closes: true,
-          )
+          exchange = Exchange(phase: READING, framing: BY_CHUNKS, left: 0, chunks: exchange.chunks, closes: true)
         end
         pieces = run_pieces(data, state.runs)
         if not pieces.empty?
@@ -949,13 +938,7 @@ def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -
 end
 
 def with_chunks(exchange: Exchange, state: HttpWire.Chunk) -> Exchange
-  return Exchange(
-    phase: READING,
-    framing: BY_CHUNKS,
-    left: 0,
-    chunks: state,
-    closes: exchange.closes,
-  )
+  return Exchange(phase: READING, framing: BY_CHUNKS, left: 0, chunks: state, closes: exchange.closes)
 end
 
 # The pieces of data that the runs (start, length pairs) of the decoder name.
@@ -1372,13 +1355,7 @@ end
 
 def read_done(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
   head = reading.head
-  request = HttpRequest(
-    method: head.method,
-    target: head.target,
-    path: head.path,
-    headers: head.headers,
-    body: body,
-  )
+  request = HttpRequest(method: head.method, target: head.target, path: head.path, headers: head.headers, body: body)
   return ok(Incoming(request: request, rest: rest))
 end
 
@@ -2486,13 +2463,7 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
 end
 
 # Streams the body framing of head into the file and counts its bytes.
-def save_body(
-  socket: Socket,
-  out: FileHandle,
-  head: HttpWire.Response,
-  budget: Int,
-  deadline: Int,
-) -> Result[Int]
+def save_body(socket: Socket, out: FileHandle, head: HttpWire.Response, budget: Int, deadline: Int) -> Result[Int]
   if head.chunked
     return save_chunked(socket, out, budget, deadline)
   end
@@ -2517,13 +2488,7 @@ def write_body(out: FileHandle, data: Bytes, deadline: Int) -> Result[Void]
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
-def write_bounded(
-  out: FileHandle,
-  data: Bytes,
-  written: Int,
-  budget: Int,
-  deadline: Int,
-) -> Result[Int]
+def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadline: Int) -> Result[Int]
   room = budget - written
   if data.size > room
     if room > 0
@@ -2579,14 +2544,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
 end
 
 # Appends the runs of data (start, length pairs) to the download.
-def write_runs(
-  out: FileHandle,
-  data: Bytes,
-  runs: List[Int],
-  written: Int,
-  budget: Int,
-  deadline: Int,
-) -> Result[Int]
+def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budget: Int, deadline: Int) -> Result[Int]
   at = 0
   while at < List.size(runs)
     piece = data.slice(List.at(runs, at), List.at(runs, at + 1))

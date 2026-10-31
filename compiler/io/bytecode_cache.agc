@@ -505,4 +505,3 @@ def head(size: Int) -> String
 
   return "#{HEAD_WORD}#{digits}\n"
 end
-

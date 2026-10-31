@@ -69,8 +69,7 @@ end
 # name it says for this system, or the PKG- failure when it says none; any other library stays as written.
 def rewrite_native(cx: Resolve.Context, native: Optional[Ast.Native]) -> Result[Optional[Ast.Native]]
   case native
-    some(found) ->
-      return ok(some(found.with(library: try native_target(cx, found.library))))
+    some(found) -> return ok(some(found.with(library: try native_target(cx, found.library))))
     none -> return ok(native)
   end
 end

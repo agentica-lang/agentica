@@ -25,7 +25,12 @@ import {
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
 export def lower_expression(
-  cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, want: Int, void: Bool, known: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  expr: Ast.Expr,
+  want: Int,
+  void: Bool,
+  known: Bool,
 ) -> Result[Lowering.Out]
   case expr
     Ast.Expr.Call(node) ->
@@ -90,7 +95,13 @@ end
 ## Lowers a call of a function or builtin by name. checked is set for the call made from a resolved method call, whose
 ## type check was the method call's own; tail makes it a `tail-call` (a return of a call of a function of the program).
 export def lower_call(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, want: Int, void: Bool, checked: Bool, tail: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  want: Int,
+  void: Bool,
+  checked: Bool,
+  tail: Bool,
 ) -> Result[Lowering.Out]
   span = node.span
   count = node.args.size
@@ -204,7 +215,14 @@ end
 # are their JSON builtin of the value alone (the struct of a value names itself). The receiver is computed first, as
 # the first argument of any call is, into the register after the one the builtin takes first.
 def lower_codec(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, want: Int, void: Bool, checked: Bool, tail: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  key: String,
+  want: Int,
+  void: Bool,
+  checked: Bool,
+  tail: Bool,
 ) -> Result[Lowering.Out]
   if !checked
     expr = Ast.Expr.Call(node)
@@ -240,7 +258,13 @@ end
 # of Optional[T] covers T, so the payload is lowered as known: a check at each level of nested some(...) walks the
 # whole type below it, quadratic in the depth.
 def lower_optional(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, want: Int, void: Bool, checked: Bool, tail: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  want: Int,
+  void: Bool,
+  checked: Bool,
+  tail: Bool,
 ) -> Result[Lowering.Out]
   if !checked
     expr = Ast.Expr.Call(node)
@@ -283,7 +307,12 @@ end
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
 # gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
 def lower_argument(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Optional[Lowering.Fill], shape: Defaults.Shape, param: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  fill: Optional[Lowering.Fill],
+  shape: Defaults.Shape,
+  param: Int,
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
   if source >= 0
@@ -295,7 +324,12 @@ end
 
 # The same for a builtin form with defaults: the default is the one of the parameter in its catalog row.
 def lower_builtin_argument(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, form: Model.Builtin, shape: Defaults.Shape, param: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  form: Model.Builtin,
+  shape: Defaults.Shape,
+  param: Int,
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
   if source >= 0
@@ -330,7 +364,10 @@ end
 
 # The default of a builtin parameter, a constant built the way its literal is (an empty Bytes as `"".bytes`).
 def lower_builtin_default(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, value: Model.Default
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  value: Model.Default,
 ) -> Result[Lowering.Out]
   return Data.lower_catalog_default(cx, fx, value, node.id, node.span, fx.next - 1)
 end
@@ -338,7 +375,11 @@ end
 # A default is an expression of the file that declares the function, so it is lowered with that file's index (the
 # spans of its instructions point into that file) and the file of the call comes back after it.
 def lower_default(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Lowering.Fill, param: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Call,
+  fill: Lowering.Fill,
+  param: Int,
 ) -> Result[Lowering.Out]
   case fill.params[param].default
     some(value) ->
@@ -458,7 +499,12 @@ end
 
 # -9223372036854775808 is the only negative literal whose positive part does not fit an Int, so it is one `const`.
 def lower_unary_checked(
-  cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, node: Ast.Unary, want: Int, known: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  expr: Ast.Expr,
+  node: Ast.Unary,
+  want: Int,
+  known: Bool,
 ) -> Result[Lowering.Out]
   case node.operand
     Ast.Expr.Literal(literal) ->
@@ -593,7 +639,12 @@ end
 # The call of a builtin on two operands: both are lowered into consecutive new registers, and the call leaves its
 # result in the first, which is the slot of the Out. span is the span of the call.
 def bytes_call(
-  cx: Lowering.Cx, fx: Lowering.Fx, key: String, first: Ast.Expr, second: Ast.Expr, span: Source.Span
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  key: String,
+  first: Ast.Expr,
+  second: Ast.Expr,
+  span: Source.Span,
 ) -> Result[Lowering.Out]
   fx = Lowering.alloc(fx)
   window = fx.next - 1
@@ -780,7 +831,13 @@ end
 # The resolution of a method call, or of a field access that names a builtin: it takes the type check of the call
 # itself.
 def lower_method_checked(
-  cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, node: Ast.MethodCall, want: Int, void: Bool, known: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  expr: Ast.Expr,
+  node: Ast.MethodCall,
+  want: Int,
+  void: Bool,
+  known: Bool,
 ) -> Result[Lowering.Out]
   resolved = cx.resolved.get(node.id)
   if resolved.some?
@@ -793,7 +850,13 @@ def lower_method_checked(
 end
 
 def lower_field_checked(
-  cx: Lowering.Cx, fx: Lowering.Fx, expr: Ast.Expr, node: Ast.FieldAccess, want: Int, void: Bool, known: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  expr: Ast.Expr,
+  node: Ast.FieldAccess,
+  want: Int,
+  void: Bool,
+  known: Bool,
 ) -> Result[Lowering.Out]
   resolved = cx.resolved.get(node.id)
   if resolved.some?
@@ -808,8 +871,15 @@ end
 # What the synthetic node of the checker becomes. The receiver is checked already, with the type the resolution
 # carries.
 def lower_resolved(
-  cx: Lowering.Cx, fx: Lowering.Fx, receiver: Ast.Expr, args: List[Ast.Expr], span: Source.Span, id: Int,
-  resolved: State.Resolved, want: Int, void: Bool
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  receiver: Ast.Expr,
+  args: List[Ast.Expr],
+  span: Source.Span,
+  id: Int,
+  resolved: State.Resolved,
+  want: Int,
+  void: Bool,
 ) -> Result[Lowering.Out]
   case resolved
     State.Resolved.Self(type) ->
@@ -866,7 +936,12 @@ end
 
 # to_s on a value: the interpolation of one part.
 def lower_text(
-  cx: Lowering.Cx, fx: Lowering.Fx, receiver: Ast.Expr, type: Types.Type, span: Source.Span, want: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  receiver: Ast.Expr,
+  type: Types.Type,
+  span: Source.Span,
+  want: Int,
 ) -> Result[Lowering.Out]
   fx = Lowering.step(fx, span)
   saved = fx.next
@@ -878,7 +953,12 @@ def lower_text(
 end
 
 def lower_inspect(
-  cx: Lowering.Cx, fx: Lowering.Fx, receiver: Ast.Expr, type: Types.Type, span: Source.Span, want: Int
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  receiver: Ast.Expr,
+  type: Types.Type,
+  span: Source.Span,
+  want: Int,
 ) -> Result[Lowering.Out]
   fx = Lowering.step(fx, span)
   saved = fx.next

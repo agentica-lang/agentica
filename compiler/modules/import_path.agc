@@ -52,7 +52,7 @@ export def rooted?(path: String) -> Bool
 
   drive = String.code(path.at(0))
   separator = path.at(2)
-  letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
+  letter = (drive >= 65 and drive <= 90) or (drive >= 97 and drive <= 122)
   return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
 end
 

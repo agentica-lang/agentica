@@ -147,9 +147,10 @@ end
 
 ## Returns the lines of `stderr` that are not diagnostics, cut to their last 65536 characters.
 export def stderr_text(stderr: String) -> String
-  kept = stderr.split("\n").filter do |line|
-    line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
-  end
+  kept = stderr.split("\n")
+    .filter do |line|
+      line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
+    end
   return tail(kept.join("\n"), 65536)
 end
 

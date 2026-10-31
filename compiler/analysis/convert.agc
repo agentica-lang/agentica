@@ -140,8 +140,7 @@ export def refs(
 ) -> Model.Refs
   definition: List[Model.Symbol] = []
   case found.definition
-    some(declared) ->
-      definition = [symbol(declared.with(file: names.get(declared.file, declared.file)))]
+    some(declared) -> definition = [symbol(declared.with(file: names.get(declared.file, declared.file)))]
     none -> definition = definition
   end
 

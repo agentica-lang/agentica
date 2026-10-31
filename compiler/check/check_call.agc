@@ -824,9 +824,7 @@ def check_named_fields(
     end
 
     if seen.include?(arg.name)
-      return error(
-        State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"#{arg.name}\" is given twice", arg.span),
-      )
+      return error(State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"#{arg.name}\" is given twice", arg.span))
     end
 
     seen = seen.add(arg.name)
@@ -869,8 +867,7 @@ end
 # is not linked, every struct is visible.
 def updatable?(cx: State.Cx, visible: Optional[List[String]], name: String) -> Bool
   case visible
-    some(names) ->
-      return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
+    some(names) -> return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
     none -> return true
   end
 end

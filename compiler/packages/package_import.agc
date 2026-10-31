@@ -143,7 +143,15 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
     Project.Project.Bare -> return scope
     Project.Project.Declared(found) ->
       native = NativeLibrary.resolve(
-        workspace, found.manifest, found.dir, scope.os, false, false, "", scope.lock, scope.native_root,
+        workspace,
+        found.manifest,
+        found.dir,
+        scope.os,
+        false,
+        false,
+        "",
+        scope.lock,
+        scope.native_root,
       )
       return scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
   end
@@ -180,7 +188,14 @@ end
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
   return Origin(
-    package: "", root: "", label: "", natives: {}, watched: [], probed: [], blank_line_after_end: false, library: true,
+    package: "",
+    root: "",
+    label: "",
+    natives: {},
+    watched: [],
+    probed: [],
+    blank_line_after_end: false,
+    library: true,
   )
 end
 
@@ -334,12 +349,7 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
 end
 
 # The package from its folder of deps/, with its hash checked against the lock and its manifest read.
-def load(
-  workspace: Workspace.Workspace,
-  scope: Scope,
-  locked: Lock.Locked,
-  site: Failure.Site,
-) -> Result[Opened]
+def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site: Failure.Site) -> Result[Opened]
   if locked.member and !Members.member?(scope.members, locked.source)
     message = "#{locked.name} is a workspace member, but this project is not in that workspace"
     return error(missing(site, message, "run agentica update to lock #{locked.name} as a fetched package"))
@@ -480,7 +490,15 @@ def natives_of(
     Shape.Regular ->
       manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
       found = NativeLibrary.resolve(
-        workspace, manifest, root, scope.os, true, member, package_name, scope.lock, scope.native_root,
+        workspace,
+        manifest,
+        root,
+        scope.os,
+        true,
+        member,
+        package_name,
+        scope.lock,
+        scope.native_root,
       )
       return ok(found)
     _ -> return ok(NativeLibrary.Found(targets: {}, watched: [], probed: []))
