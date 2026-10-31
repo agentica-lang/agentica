@@ -89,6 +89,15 @@ void agc_init(void) {
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);
   GC_set_warn_proc(GC_ignore_warn_proc);
+  /* Finalizers (only the TlsContext's) run when agc_gc_finalize_pending calls them, between turns, so OpenSSL is
+     never entered from inside a collection or in the middle of a builtin. */
+  GC_set_finalize_on_demand(1);
+#endif
+}
+
+void agc_gc_finalize_pending(void) {
+#ifndef AGC_NO_GC
+  if (GC_should_invoke_finalizers()) (void)GC_invoke_finalizers();
 #endif
 }
 
@@ -351,6 +360,29 @@ agc_value agc_http_client_value(agc_http_client *c) {
   return v;
 }
 
+#ifndef AGC_NO_GC
+static void finalize_tls_context(void *object, void *data) {
+  (void)data;
+  agc_tls_context *c = object;
+  c->release(c->config);
+  c->config = NULL;
+}
+#endif
+
+agc_value agc_tls_context_value(void *config, void (*release)(void *config), bool server) {
+  agc_tls_context *c = agc_alloc_atomic(sizeof *c);
+  c->config = config;
+  c->release = release;
+  c->server = server;
+#ifndef AGC_NO_GC
+  GC_register_finalizer_no_order(c, finalize_tls_context, NULL, NULL, NULL);
+#endif
+  agc_value v;
+  v.tag = AGC_T_TLS_CONTEXT;
+  v.as.p = c;
+  return v;
+}
+
 agc_value agc_test_case_value(agc_test_case *c) {
   agc_value v;
   v.tag = AGC_T_TEST;
@@ -517,6 +549,11 @@ agc_listener *agc_as_listener(agc_vm *vm, agc_value v) {
 
 agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_HTTP_CLIENT) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_tls_context *agc_as_tls_context(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_TLS_CONTEXT) agc_wrong_tag(vm);
   return v.as.p;
 }
 

@@ -7,6 +7,7 @@
 #include "tls.h"
 #include "tls_trust.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +26,11 @@
 
 #define SCRATCH 4096
 
+/* A config is shared by counts (agc_tls_config_ref): a TlsContext value, each socket or listener made from it and an
+   HttpClient's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
+   count on the SSL_CTX (SSL_new). */
 struct agc_tls_config {
+  _Atomic size_t refs;
   SSL_CTX *ctx;
 };
 
@@ -169,6 +174,7 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
     SSL_CTX_free(ctx);
     return NULL;
   }
+  atomic_init(&c->refs, 1);
   c->ctx = ctx;
   return c;
 }
@@ -230,8 +236,13 @@ agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_fil
   return wrap(ctx, failure);
 }
 
+agc_tls_config *agc_tls_config_ref(agc_tls_config *config) {
+  if (config) atomic_fetch_add_explicit(&config->refs, 1, memory_order_relaxed);
+  return config;
+}
+
 void agc_tls_config_free(agc_tls_config *config) {
-  if (!config) return;
+  if (!config || atomic_fetch_sub_explicit(&config->refs, 1, memory_order_acq_rel) != 1) return;
   SSL_CTX_free(config->ctx);
   free(config);
 }

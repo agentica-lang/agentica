@@ -208,6 +208,8 @@ extern const agc_builtin agc_tcp_builtins[];
 extern const size_t agc_tcp_builtin_count;
 extern const agc_builtin agc_http_service_builtins[];
 extern const size_t agc_http_service_builtin_count;
+extern const agc_builtin agc_tls_context_builtins[];
+extern const size_t agc_tls_context_builtin_count;
 extern const agc_builtin agc_http_server_builtins[];
 extern const size_t agc_http_server_builtin_count;
 extern const agc_builtin agc_http_wire_builtins[];

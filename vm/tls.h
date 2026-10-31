@@ -49,6 +49,8 @@ const char *agc_tls_error_name(agc_tls_error code);
 agc_tls_config *agc_tls_client_config(const char *ca_file, const char *cert_file, const char *key_file,
                                       agc_tls_failure *failure);
 agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_file, agc_tls_failure *failure);
+/* One more count on CONFIG (NULL stays NULL); agc_tls_config_free gives one back and frees the config with the last. */
+agc_tls_config *agc_tls_config_ref(agc_tls_config *config);
 void agc_tls_config_free(agc_tls_config *config);
 /* The config's OpenSSL X509_STORE, for the C tests that check which certificates a config trusts. */
 struct x509_store_st *agc_tls_config_store(agc_tls_config *config);
