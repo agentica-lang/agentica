@@ -336,3 +336,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   keep-alive, a chunked body with a pipelined request in one write, an early
   answer, a 413, a cut body, a bad chunk, `Expect: 100-continue`, the step
   timeout and `HTTP.read_all`.
+- HTTP WebSocket (`listen_websocket`): `tests/test_vm_websocket.py` runs one VM
+  server program (`SERVER_PROGRAM`, also with four schedulers and over TLS)
+  against `tests/fixtures/websocket_client.py`, a RFC 6455 client of its own
+  that writes frames by hand: messages of every length form, fragments with a
+  ping between them, both close handshakes, a table of broken frames and the
+  close code of each (1002, 1007, 1009), refused handshakes (400, 426, 501),
+  `idle_ms`, `ping_ms`, a peer that leaves and a close that is not answered.
+  `vm/tests/http_wire_test.c` has the head check that lets only a `GET` with one
+  `Upgrade: websocket` through.

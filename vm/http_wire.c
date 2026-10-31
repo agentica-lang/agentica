@@ -132,6 +132,13 @@ static agc_value refused_head(agc_vm *vm, int code, const char *reason) {
   return agc_result_value(true, agc_struct_value(h));
 }
 
+/* A GET with one Upgrade header whose value is the token "websocket": the one upgrade a head may carry on to
+   std/http, which hands it to a route that upgrades and answers 501 on every other route. */
+static bool websocket_upgrade(const agc_http_head *head, size_t upgrades, agc_http_slice value) {
+  return upgrades == 1 && head->method.len == 3 && memcmp(head->method.data, "GET", 3) == 0 &&
+         agc_http_named(value, "websocket");
+}
+
 /* The HttpWire.Head of the request head at the start of buf, with the checks
    of docs/vm/10-io-http.md §10.7.3 in their order: the parse errors, Upgrade,
    Expect, then a Content-Length over the limit; a refused head has the answer's
@@ -145,7 +152,9 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the request was complete");
   if (status == AGC_HTTP_ERROR) return refused_head(vm, agc_http_error_code(error), agc_http_error_text(error));
   agc_http_slice value = {NULL, 0};
-  if (count_named(&head, "upgrade", &value)) return refused_head(vm, 501, "protocol upgrades are unsupported");
+  size_t upgrades = count_named(&head, "upgrade", &value);
+  if (upgrades && !websocket_upgrade(&head, upgrades, value))
+    return refused_head(vm, 501, "protocol upgrades are unsupported");
   size_t expects = count_named(&head, "expect", &value);
   if (expects > 1 || (expects == 1 && !agc_http_named(value, "100-continue")))
     return refused_head(vm, 417, "unsupported expectation");

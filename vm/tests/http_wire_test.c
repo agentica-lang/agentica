@@ -126,6 +126,29 @@ static void test_byte_keys(void) {
   fails("HttpWire.read_head.bytes", 4, head);
 }
 
+/* The status a request head is refused with, 0 when it is let through (HttpWire.Head.status). Only a GET with one
+   Upgrade header whose value is the token "websocket" is let through: std/http hands it to a route that upgrades and
+   answers 501 on every other route. */
+static int64_t head_status(const char *head) {
+  const agc_result *r = agc_as_result(&vm, agc_http_head_value(&vm, (const uint8_t *)head, strlen(head), 1024, 0));
+  assert(r->ok);
+  return agc_as_int(&vm, agc_as_struct(&vm, r->value)->fields[8]);
+}
+
+static void test_upgrade(void) {
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: WebSocket\r\nConnection: upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: h2c\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket, h2c\r\n\r\n") == 501);
+  assert(head_status("POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nUpgrade: websocket\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nUpgrade: websocket\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade:  websocket \t\r\nConnection: Upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nupgrade: websocket\r\nconnection: upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nUpgrade: h2c\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\n , h2c\r\n\r\n") == 400);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\n\r\n") == 0);
+}
+
 /* The structs the calls need, as a program that uses HttpWire.chunk lists them. */
 static const char *const chunk_fields[] = {"done",  "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
@@ -136,13 +159,20 @@ static agc_string **field_names(const char *const *fields, size_t n) {
   return names;
 }
 
+static const char *const head_fields[] = {"method",          "target",   "path",   "headers", "length", "chunked",
+                                          "expect_continue", "buffered", "status", "reason"};
+static const char *const header_fields[] = {"name", "value"};
+
 int main(void) {
   agc_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  agc_struct_def structs[] = {{agc_make_string("HttpWire.Chunk", 14, 14), 13, field_names(chunk_fields, 13), NULL, NULL}};
+  agc_struct_def structs[] = {{agc_make_string("HttpWire.Chunk", 14, 14), 13, field_names(chunk_fields, 13), NULL,
+                               NULL},
+                              {agc_make_string("HttpWire.Head", 13, 13), 10, field_names(head_fields, 10), NULL, NULL},
+                              {agc_make_string("Header", 6, 6), 2, field_names(header_fields, 2), NULL, NULL}};
   agc_program program;
   memset(&program, 0, sizeof program);
-  program.struct_count = 1;
+  program.struct_count = 3;
   program.structs = structs;
   vm.rt->program = &program;
   const agc_result *r = agc_as_result(&vm, chunk(fresh(), "1\r\na\r\n0\r\n\r\n"));
@@ -154,6 +184,7 @@ int main(void) {
   refused(with(12, agc_int(0)));
   test_unread();
   test_byte_keys();
+  test_upgrade();
   return 0;
 }
 #else
