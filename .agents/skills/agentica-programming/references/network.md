@@ -171,6 +171,9 @@ HTTP.close_server(server: HttpServer) -> Void
 
 HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
@@ -292,3 +295,36 @@ end
   piece's send, so a client that stops reading is cut off. `HEAD` gets the head
   and closes the channel. HTTP/1.0 is the 505 of `listen`.
 - The client side does not stream: `HTTP.get` waits for the whole body.
+
+### Reading a request body as it arrives (big uploads)
+
+`listen` reads the whole body first (at most `max_body_bytes`). For an upload
+too big to hold, use `listen_upload`: the handler is
+`Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]` (`HTTP.UploadHandler`),
+`request.body` is empty, and `body.pieces` (a `Channel[Bytes]`, pieces up to 64
+KiB, never empty, chunked bodies decoded) carries the body.
+
+```ruby
+def save(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  try Task.await(body.done)
+  return ok(HttpResponse(status: 200, headers: [], body: "#{total}".bytes))
+end
+```
+
+- Receive until the closed error, then `Task.await(body.done)`: only `done` says
+  whether the whole body arrived (an `error`: the client left, a bad chunk, a
+  timeout). The channel holds 8 pieces, so a slow handler backs up the socket.
+- `max_body_bytes` does not apply; the body is at most 256 MiB, and a handler
+  that wants less counts bytes and answers 413. `request_timeout_ms` is the wait
+  of each step, not of the whole upload.
+- The connection serves the next request only when the body was read to its end;
+  a handler that answers first has its answer sent and the connection closes.
+- The response is whole. `HTTP.upload` is the client that streams to it.

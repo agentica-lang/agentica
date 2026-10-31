@@ -489,6 +489,87 @@ def main() -> Void
 end
 """
 
+# An upload server: the handler of listen_upload reports what it saw of each body on stdout, one line per request
+# ("PATH BYTES DONE"), where DONE is how the feeder ended. /slow waits before it reads, so the channel fills and the
+# socket backs up; /early and /stop answer without reading the whole body.
+UPLOAD_SERVER_PROGRAM = """\
+import HTTP from "std/http"
+
+def outcome(body: HTTP.RequestBody) -> String
+  case Task.await(body.done)
+    ok(_) -> return "done ok"
+    error(message) -> return "done error: #{message}"
+  end
+end
+
+def drained(body: HTTP.RequestBody, pause: Int) -> List[Bytes]
+  Task.sleep(pause)
+  all: List[Bytes] = []
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> all = all.push(piece)
+      error(_) -> break
+    end
+  end
+
+  return all
+end
+
+def answer(status: Int, text: String) -> Result[HttpResponse]
+  return ok(HttpResponse(status: status, headers: [], body: text.bytes))
+end
+
+def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+  if request.path == "/early"
+    puts("/early")
+    IO.flush()
+    return answer(200, "early")
+  end
+
+  if request.path == "/stop"
+    first = Result.unwrap_or(body.pieces.recv(5000), "".bytes)
+    puts("/stop #{first.size}")
+    IO.flush()
+    return answer(413, "stopped")
+  end
+
+  if request.path == "/fail"
+    drained(body, 0)
+    return error("the handler failed")
+  end
+
+  pause = 0
+  if request.path == "/slow"
+    pause = 300
+  end
+
+  data = Bytes.concat(drained(body, pause))
+  shown = Result.unwrap_or(String.from_bytes(data), "<not UTF-8>")
+  done = outcome(body)
+  puts("#{request.method} #{request.path} #{request.body.size} #{data.size} #{done}")
+  IO.flush()
+  if data.size > 40
+    shown = "#{data.size} bytes"
+  end
+
+  return answer(200, "#{request.path} #{shown} #{done}")
+end
+
+def main() -> Void
+  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
+  server = Result.unwrap!(HTTP.listen_upload("127.0.0.1", 0, &handle, options))
+  certs = System.args()[0]
+  secure = Result.unwrap!(HTTP.listen_upload_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options))
+  puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
+  IO.flush()
+  IO.read()
+  HTTP.close_server(server)
+  HTTP.close_server(secure)
+  IO.inspect(HTTP.wait(server))
+  IO.inspect(HTTP.wait(secure))
+end
+"""
+
 # A streaming server: /ticks sends four pieces 500 ms apart, /endless sends until the client leaves and then tells /said,
 # and the timeouts are shorter than the pause, so a live stream that is only slow must not be cut.
 STREAM_SERVER_PROGRAM = """\
@@ -1099,6 +1180,99 @@ def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     assert send_in_pieces(port, [large[k:k + 9000] for k in range(0, len(large), 9000)])[0] == "431"
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
+
+
+def read_answers(conn, count):
+    """The status lines and bodies of `count` answers read from a raw socket, which are Content-Length framed."""
+    got = b""
+    answers = []
+    while len(answers) < count:
+        while b"\r\n\r\n" not in got:
+            more = conn.recv(65536)
+            assert more, "the connection closed before answer %d: %r" % (len(answers), got)
+            got += more
+        head, _, got = got.partition(b"\r\n\r\n")
+        length = [int(line.split(b":")[1]) for line in head.split(b"\r\n") if line.lower().startswith(b"content-length")]
+        while len(got) < length[0]:
+            more = conn.recv(65536)
+            assert more, "the connection closed inside an answer body"
+            got += more
+        answers.append((head.split(b" ")[1].decode(), got[:length[0]].decode()))
+        got = got[length[0]:]
+    return answers
+
+
+@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
+def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt, flags):
+    """listen_upload: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
+    so the socket backs up), the connection stays for the next request, also when it arrived in the same write as the
+    end of a chunked body; a handler that answers first, or a body that is cut or bad, ends the connection; over TLS
+    too."""
+    source = tmp_path / "upload-server.agc"
+    source.write_text(UPLOAD_SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "upload-server.agcb"), CERTS, flags=flags, stdin=True))
+    port, tls_port = vm.next_line().split()
+    port = int(port)
+    big = bytes(range(256)) * (3 * 4096)
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        head = b"POST /slow HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n" % len(big)
+        conn.sendall(head + big)
+        assert read_answers(conn, 1) == [("200", "/slow %d bytes done ok" % len(big))]
+        assert vm.next_line() == "POST /slow 0 %d done ok" % len(big)
+        # The same connection takes a request with no body, which gets a closed channel at once.
+        conn.sendall(b"GET /count HTTP/1.1\r\nHost: x\r\n\r\n")
+        assert read_answers(conn, 1) == [("200", "/count  done ok")]
+        assert vm.next_line() == "GET /count 0 0 done ok"
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        # A chunked body whose last chunk is followed, in the same write, by a whole second request.
+        chunked = (b"POST /count HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+                   b"3\r\nab\xc3\r\n3\r\n\xb1cd\r\n0\r\n\r\n")
+        conn.sendall(chunked + b"POST /count HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\nzz")
+        assert read_answers(conn, 2) == [("200", "/count ab\u00f1cd done ok"), ("200", "/count zz done ok")]
+        assert vm.next_line() == "POST /count 0 6 done ok"
+        assert vm.next_line() == "POST /count 0 2 done ok"
+    # A handler that answers before it read the body: its answer arrives and the connection ends.
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /early HTTP/1.1\r\nHost: x\r\nContent-Length: 1000000\r\n\r\n" + b"x" * 1000)
+        assert read_answers(conn, 1) == [("200", "early")]
+        assert vm.next_line() == "/early"
+        conn.settimeout(scaled(10))
+        try:
+            rest = conn.recv(65536)
+        except OSError:
+            rest = b""
+        assert rest == b"", "the connection ends after an answer that left the body unread"
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /stop HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n")
+        assert read_answers(conn, 1) == [("413", "stopped")]
+        assert vm.next_line() == "/stop 3"
+    # A body cut by the client's close, and a bad chunk: the handler sees the failure in `done`.
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /count HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n0123456789")
+        conn.shutdown(socket.SHUT_WR)
+        assert vm.next_line() == (
+            "POST /count 0 10 done error: http: connection closed before the request was complete")
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /count HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\nabc\r\n0\r\n\r\n")
+        assert read_answers(conn, 1) == [("200", "/count  done error: http: invalid chunk size")]
+        assert vm.next_line() == "POST /count 0 0 done error: http: invalid chunk size"
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /fail HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\nok")
+        assert read_answers(conn, 1)[0][0] == "500"
+    import http.client
+    import ssl
+    context = ssl.create_default_context(cafile=str(CERTS / "ca.pem"))
+    secure = http.client.HTTPSConnection("localhost", int(tls_port), timeout=scaled(20), context=context)
+    secure.request("POST", "/count", body=iter([b"ab", b"cd"]), encode_chunked=True)
+    answer = secure.getresponse()
+    assert (answer.status, answer.read().decode()) == (200, "/count abcd done ok")
+    assert vm.next_line() == "POST /count 0 4 done ok"
+    secure.close()
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+    assert vm.next_line() == "ok()"
+    assert vm.next_line() == "ok()"
+    assert vm.stderr_text() == "http: handler error: the handler failed\n"
 
 
 def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte_limit(tmp_path, adopt):
