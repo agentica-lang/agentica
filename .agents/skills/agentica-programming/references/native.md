@@ -276,7 +276,8 @@ end
   after). A callback is never a result or `out`; a parameter
   `cmp: Optional[Name]` takes `none` for NULL. `fn` runs in the calling task
   while C waits: no wait inside it (`Task.sleep`, channels, a `compute def`, a
-  print into a full output buffer): `RUNTIME-NATIVE-CALLBACK`. A failure in
+  print behind another task's print): `RUNTIME-NATIVE-CALLBACK`; a print into
+  a full output buffer waits for it to drain. A failure in
   `fn` gives C zero, skips the call's later callbacks and fails the extern
   call when C returns. A callback from C's own thread, a free function or a
   `compute def` gives zero (the compute call then fails); a cancel or the end

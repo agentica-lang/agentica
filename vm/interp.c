@@ -1884,8 +1884,9 @@ static NESTED bool nested_stops(const agc_vm *vm, agc_task *t) {
 
 /* What the scheduler does between turns that other tasks wait on, while a callback holds it: the timers that are due
    fire (a task parked on this scheduler waits on them), and a task woken onto this scheduler (its runnext slot) goes to
-   the shared queue, where another scheduler takes it. */
-static NESTED void nested_boundary(agc_vm *vm) {
+   the shared queue, where another scheduler takes it. A print that waits inside a callback does it too
+   (vm/output.c). */
+NESTED void agc_task_nested_boundary(agc_vm *vm) {
   (void)agc_timers_run(vm);
   agc_task *next = vm->runnext;
   if (!next) return;
@@ -1907,7 +1908,7 @@ static NESTED bool run_nested(agc_vm *vm, agc_task *t, nested_barrier *b, agc_va
     t->steps += agc_turn_finish(vm);
     int sig = agc_io_stop_signal();
     if (sig) agc_stop(vm, sig);
-    nested_boundary(vm);
+    agc_task_nested_boundary(vm);
     if (nested_stops(vm, t)) return false;
     agc_turn_begin(vm);
   }

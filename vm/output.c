@@ -452,6 +452,58 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
   return true;
 }
 
+/* How long one wait of a print inside a callback runs the loop at most; a write that ends wakes it sooner. */
+#define CALLBACK_WAIT_MS 100
+
+/* One wait of callback_turn, with the stream's lock given back for it: false when the print is dropped instead, for
+   the end of the run, a stop signal or a cancel of the task, which the callback's own turn loop then acts on
+   (run_nested in vm/interp.c). The wait may last as long as the reader stalls, so each pass does the work of a turn
+   boundary that the tasks of this scheduler wait on: their timers fire, and a task woken onto it moves to the shared
+   queue. */
+static bool callback_wait(agc_vm *vm, agc_output *s) {
+  bool go = !atomic_load_explicit(&vm->rt->over, memory_order_acquire) &&
+            !atomic_load_explicit(&vm->task->cancelled, memory_order_acquire) && !agc_io_stop_signal();
+  stream_drop(vm, s->lock);
+  if (go) {
+    agc_io_pause(vm, CALLBACK_WAIT_MS);
+    agc_task_nested_boundary(vm);
+  }
+  stream_take(vm, s->lock);
+  return go;
+}
+
+/* A print or a flush inside a callback of native code, with no writer ahead of it. C waits on this thread's stack, so
+   the task may not park (agc_task_parking); it joins the FIFO as its head, which keeps later writers behind it as
+   wait_turn would, and waits here for the room that the writes in flight free: this thread runs the loop step that
+   ends them when it runs the loop (one scheduler), the other schedulers end them otherwise. The task stays RUNNING,
+   so the wakes that a drain sends the head do nothing. With a writer ahead the print parks as any other, and the park
+   fails with RUNTIME-NATIVE-CALLBACK: that writer may need this very thread to go on. Called with the task's wait set
+   and returns with the stream's lock held. */
+static void callback_turn(agc_vm *vm, agc_output *out) {
+  agc_output *s = out->base;
+  agc_task *t = vm->task;
+  t->output.queue_mark = s->queue_in;
+  agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
+  const agc_output_wait *mine = &t->output;
+  for (;;) {
+    if (s->failed) {
+      stop_waiting(s, t);
+      fail_locked(vm, out);
+    }
+    if (room(s) >= need(mine)) {
+      if (mine->flush) break;
+      size_t n = smaller(total(mine) - mine->done, room(s));
+      copy_piece(s, mine, n);
+      t->output.done += n;
+      if (mine->done == total(mine)) break;
+    }
+    advance(vm, s);
+    if (!callback_wait(vm, s)) break;
+  }
+  stop_waiting(s, t);
+  advance(vm, s);
+}
+
 /* The start of a print or a flush, with the stream's lock taken: true when the task is not yet in the FIFO (it is a
    new writer; false when it comes back to the call it parked in). */
 static bool enter(agc_vm *vm, agc_output *out) {
@@ -462,9 +514,15 @@ static bool enter(agc_vm *vm, agc_output *out) {
 }
 
 /* The end of a print or a flush that waits its turn: marks the task PARKING before it links itself, looks at its wait
-   once and drops the stream's lock. */
+   once and drops the stream's lock. A new writer inside a native callback with no writer ahead waits in place
+   (callback_turn) instead. */
 static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
   agc_output *s = out->base;
+  if (new_writer && vm->task->callbacks && !s->waiters) {
+    callback_turn(vm, out);
+    stream_drop(vm, s->lock);
+    return true;
+  }
   agc_task_parking(vm);
   if (new_writer) {
     vm->task->output.queue_mark = s->queue_in;
