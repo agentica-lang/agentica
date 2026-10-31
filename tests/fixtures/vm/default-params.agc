@@ -28,7 +28,7 @@ def show(line: String) -> Void
   puts(line)
 end
 
-# A default that does not depend on T may sit on a parameter of a generic function.
+# A generic function may default a parameter whose type has T: `[]`, `{}` or `none`.
 def tally[T](first: T, rest: List[T] = [], extra: Optional[T] = none) -> String
   return "#{rest.size} #{extra.some?}"
 end

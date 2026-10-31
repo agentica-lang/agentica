@@ -524,7 +524,7 @@ is `PARSE-UNEXPECTED-TOKEN`. `main` with type parameters is `CHECK-MAIN`. A type
 parameter that no parameter type and no result type mentions cannot be inferred:
 `CHECK-ENUM-TYPE-INFERENCE` at its name. A parameter whose type mentions a type
 parameter takes a default as any other: `none`, `[]` and `{}` fit `Optional[T]`,
-`List[T]` and `Map[K, T]`, and `x: T = 1` is `CHECK-TYPE-MISMATCH` at the
+`List[T]` and `Map[String, T]`, and `x: T = 1` is `CHECK-TYPE-MISMATCH` at the
 default. A call that leaves out every argument that shows a type parameter
 cannot infer it (`CHECK-ENUM-TYPE-INFERENCE` at the call).
 
