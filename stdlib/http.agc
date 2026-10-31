@@ -600,14 +600,14 @@ export def download(
 end
 
 ## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
-## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with
-## `options.ca_file` (the system's by default). Only `timeout_ms` (the time of each call: this one, each
-## `send_request` and each `read_body`), `max_body_bytes` (the largest request body) and `proxy` (an `http` origin is
-## then reached through the proxy, which each `send_request` addresses in absolute form) of `options` apply: nothing is
-## pooled. The connection is for one request at a time and stays open for the next one when the response had a body
-## that was read to its end (`read_body` gave an empty piece) and the server did not close it. A response body is at
-## most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with `finish`. For whole requests use
-## `get_response` or the pooled client instead.
+## Ruby's `Net::HTTP.start` does. The connection is made now. Only `timeout_ms` (the time of each call: this one, each
+## `send_request` and each `read_body`), `max_body_bytes` (the largest request body), `ca_file` (over `https`, the
+## certificate is verified with it, the system's by default) and `proxy` (an `http` origin is then reached through the
+## proxy, which each `send_request` addresses in absolute form) of `options` apply: nothing is pooled. The connection
+## is for one request at a time and stays open for the next one when the response had a body that was read to its end
+## (`read_body` gave an empty piece) and the server did not close it. A response body is at most 256 MiB, the limit of
+## `download`: a longer one is an `error`. Close it with `finish`. For whole requests use `get_response` or the pooled
+## client instead.
 export def start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   where = try parse_url(origin)
@@ -1134,7 +1134,26 @@ def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
   if where.scheme == "https"
     return TLS.connect(where.host, where.port, options.ca_file, options.timeout_ms)
   end
-  return TCP.connect(where.host, where.port, options.timeout_ms)
+  return reaching(TCP.connect(where.host, where.port, options.timeout_ms), options, where)
+end
+
+# The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
+# caller does not take it for the target being down.
+def reaching(connected: Result[Socket], options: HttpClientOptions, where: Target) -> Result[Socket]
+  case connected
+    ok(socket) -> return ok(socket)
+    error(message) ->
+      if options.proxy == ""
+        return error(message)
+      end
+
+      name = where.host
+      if String.contains?(name, ":")
+        name = "[#{name}]"
+      end
+
+      return error("http: cannot reach the proxy #{name}:#{where.port}: #{message}")
+  end
 end
 
 # The one value of the cell of `conn`, which the call now holds. An empty cell means another call has it.
@@ -3218,7 +3237,8 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
   if job.scheme == "https"
     return HttpWire.connect_tls(worker.client, job.host, job.port, left)
   end
-  return TCP.connect(job.host, job.port, left)
+  where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
+  return reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
 end
 
 def idempotent?(method: String) -> Bool
@@ -3439,7 +3459,7 @@ def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[S
   if where.scheme == "https"
     return HttpWire.connect_tls(pool, where.host, where.port, left)
   end
-  return TCP.connect(where.host, where.port, left)
+  return reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;

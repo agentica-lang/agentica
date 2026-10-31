@@ -97,10 +97,11 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
   body limit and system CA trust. Options must be positive; `max_connections` is
   at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
-  whole call. `proxy: "http://host:port"` sends every `http://` request through a
-  forward proxy in absolute form (pooled by the proxy; also `get_response`,
-  `open`, `upload`, `download`, `start`); `https://` with a proxy is an `error`
-  (no `CONNECT` yet), and there is no proxy auth or environment reading.
+  whole call. `proxy: "http://host:port"` sends every `http://` request
+  through a forward proxy in absolute form (pooled by the proxy; also
+  `get_response`, `open`, `upload`, `download`, `start`); `https://` with a
+  proxy is an `error` (no `CONNECT` yet), a proxy that cannot be reached is an
+  `error` that names it, and there is no proxy auth or environment reading.
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head
