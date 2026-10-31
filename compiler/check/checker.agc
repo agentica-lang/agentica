@@ -3,7 +3,7 @@
 ## variants, functions, main), then the module constants are ordered and checked, then each function is checked in
 ## program order, file by file.
 
-import {ENUMS, RECORDS} from "../catalog/builtins"
+import {ENUMS, RECORDS, record_defaults} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
@@ -157,7 +157,7 @@ def start(linked: Linker.Linked) -> State.Cx
     help: Help.tables(),
     structs: RECORDS,
     struct_params: {},
-    field_defaults: {},
+    field_defaults: record_defaults(),
     enums: ENUMS,
     aliases: {},
     resources: Set.new([]),

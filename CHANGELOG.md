@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
+  the values of `HTTP.client_options()` and `HTTP.server_options()`, so
+  `HttpClientOptions(timeout_ms: 5000)` changes one field.
 - `HTTP.text(body, headers)` decodes a body as UTF-8 only: the `charset` of
   `Content-Type` must be `utf-8` or absent, and any other charset is an error
   that names it.

@@ -392,7 +392,9 @@ declared, even when no constructor leaves the field out. It is built at each
 construction that leaves the field out, so no two values share one, and it is
 resolved in the module that declares the struct, so a constructor in another
 module can leave the field out without importing what the default names.
-`value.with(...)` is not affected, and neither are the builtin records.
+`value.with(...)` is not affected. A builtin record takes the defaults that the
+catalog gives its fields: every field of `HttpClientOptions` and
+`HttpServerOptions` has one, the other records have none.
 
 `value.with(name: expr, ...)` is a copy of a struct with some fields changed;
 the original is unchanged. The receiver must be a struct (any other type is

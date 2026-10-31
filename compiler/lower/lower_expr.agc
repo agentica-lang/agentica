@@ -332,28 +332,7 @@ end
 def lower_builtin_default(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, value: Model.Default
 ) -> Result[Lowering.Out]
-  want = fx.next - 1
-  span = node.span
-  literal = Ast.LitValue.Nothing
-  case value
-    Model.Default.Whole(number) -> literal = Ast.LitValue.Whole(number)
-    Model.Default.Real(number) -> literal = Ast.LitValue.Real(number)
-    Model.Default.Text(text) -> literal = Ast.LitValue.Text(text)
-    Model.Default.Flag(flag) -> literal = Ast.LitValue.Flag(flag)
-    Model.Default.Nothing -> literal = Ast.LitValue.Nothing
-    Model.Default.EmptyList -> return Data.lower_list(cx, fx, Ast.ListLit(id: node.id, elements: [], span: span), want)
-    Model.Default.EmptyMap -> return Data.lower_map(cx, fx, Ast.MapLit(id: node.id, entries: [], span: span), want)
-    Model.Default.EmptyBytes ->
-      # `"".bytes`: the empty String, then String.bytes in the same register.
-      text = try lower_literal(cx, fx, Ast.Literal(id: node.id, value: Ast.LitValue.Text(""), span: span), want)
-      return ok(text.with(fx: Lowering.emit_builtin(text.fx, text.slot, "String.bytes", 1, [span, span])))
-    Model.Default.Variant(name) ->
-      parts = name.split(".")
-      return Data.lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)
-    Model.Default.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", span))
-  end
-
-  return lower_literal(cx, fx, Ast.Literal(id: node.id, value: literal, span: span), want)
+  return Data.lower_catalog_default(cx, fx, value, node.id, node.span, fx.next - 1)
 end
 
 # A default is an expression of the file that declares the function, so it is lowered with that file's index (the

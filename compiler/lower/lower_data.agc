@@ -7,6 +7,7 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Ir from "ir"
 import State from "lower_state"
+import Builtins from "../catalog/builtins"
 import {MAX_CHUNK} from "lower_tables"
 
 ## A list literal. One `list` instruction gathers at most MAX_CHUNK items; a longer literal is built in chunks joined
@@ -201,6 +202,10 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
     fx = out.fx.with(next: after)
   end
 
+  if Builtins.RECORDS.has_key?(node.type_name)
+    fx = try lower_record_defaults(cx, fx, node, info, start, after)
+  end
+
   if cx.field_fills.has_key?(node.type_name)
     fills = cx.field_fills[node.type_name]
     given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
@@ -219,6 +224,33 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
 
   fx = State.emit_at(fx, "struct", [dst, first, info.index], span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
+## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, or a
+## variant without a payload. id and span are the ones of the node that the default stands in for.
+export def lower_catalog_default(
+  cx: State.Cx, fx: State.Fx, value: Model.Default, id: Int, span: Source.Span, want: Int
+) -> Result[State.Out]
+  literal = Ast.LitValue.Nothing
+  case value
+    Model.Default.Whole(number) -> literal = Ast.LitValue.Whole(number)
+    Model.Default.Real(number) -> literal = Ast.LitValue.Real(number)
+    Model.Default.Text(text) -> literal = Ast.LitValue.Text(text)
+    Model.Default.Flag(flag) -> literal = Ast.LitValue.Flag(flag)
+    Model.Default.Nothing -> literal = Ast.LitValue.Nothing
+    Model.Default.EmptyList -> return lower_list(cx, fx, Ast.ListLit(id: id, elements: [], span: span), want)
+    Model.Default.EmptyMap -> return lower_map(cx, fx, Ast.MapLit(id: id, entries: [], span: span), want)
+    Model.Default.EmptyBytes ->
+      # `"".bytes`: the empty String, then String.bytes in the same register.
+      text = try lower_known_literal(cx, fx, Ast.LitValue.Text(""), id, span, want)
+      return ok(text.with(fx: State.emit_builtin(text.fx, text.slot, "String.bytes", 1, [span, span])))
+    Model.Default.Variant(name) ->
+      parts = name.split(".")
+      return lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)
+    Model.Default.Absent -> return error(State.internal(cx, "lower: a missing argument has no default", span))
+  end
+
+  return lower_known_literal(cx, fx, literal, id, span, want)
 end
 
 ## A struct update, `target.with(f: v)`: the receiver goes to the first register of a window and the new values after
@@ -276,6 +308,30 @@ def member_items(
   end
 
   return fx.with(next: start + to - from)
+end
+
+# A literal that the catalog gives: its type is the one of the parameter or field it fills, so it has no check.
+def lower_known_literal(
+  cx: State.Cx, fx: State.Fx, value: Ast.LitValue, id: Int, span: Source.Span, want: Int
+) -> Result[State.Out]
+  literal = Ast.Expr.Literal(Ast.Literal(id: id, value: value, span: span))
+  return cx.expression.call(cx, fx, literal, want, false, true)
+end
+
+# The fields of a builtin record that a construction leaves out, from the defaults of the catalog (the checker let
+# only those be left out), each in the register of its field.
+def lower_record_defaults(
+  cx: State.Cx, fx: State.Fx, node: Ast.Construct, info: State.StructInfo, start: Int, after: Int
+) -> Result[State.Fx]
+  given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
+  for field in Builtins.RECORDS[node.type_name]
+    if !given.include?(field.name) and Builtins.default_present?(field.default)
+      out = try lower_catalog_default(cx, fx, field.default, node.id, node.span, start + info.positions[field.name])
+      fx = out.fx.with(next: after)
+    end
+  end
+
+  return ok(fx)
 end
 
 # A default is an expression of the file that declares the struct, so it is lowered with that file's index (the spans
