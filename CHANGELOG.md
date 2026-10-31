@@ -49,8 +49,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the `HTTP.listen_*_tls` forms take the server context in place of the two
   paths, and `HttpClientOptions(ca_file: path)` becomes
   `HttpClientOptions(tls: some(context))` (`none`, the default, is system
-  trust). `TlsClientOptions`, `TlsContext` and `TlsServerOptions` are reserved
-  type names.
+  trust). `HttpClientOptions` now holds a `TlsContext`, so `JSON.schema`,
+  `JSON.decode` and `JSON.encode` refuse it (`CHECK-NOT-DECODABLE`,
+  `CHECK-NOT-ENCODABLE`). `TlsClientOptions`, `TlsContext` and
+  `TlsServerOptions` are reserved type names.
 - **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
