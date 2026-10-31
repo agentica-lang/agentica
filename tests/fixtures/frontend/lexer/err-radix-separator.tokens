@@ -1,0 +1,1 @@
+ERROR LEX-INVALID-NUMBER 0:1:1-5:1:6 "a \"_\" in a number must sit between two digits" "write digit groups like 0xFFFF_FFFF or 0b1010_1010; remove the extra \"_\""

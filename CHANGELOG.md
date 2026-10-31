@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
   UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
+- Hex, binary and octal integer literals, as in Ruby: `0xFF`, `0b1010`,
+  `0o755`, with `_` between digits.
 
 ## [0.19.0-beta.3] - 2026-10-31
 

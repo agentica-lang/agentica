@@ -36,6 +36,23 @@ NAME_STARTS = Set.new("abcdefghijklmnopqrstuvwxyz_".split(""))
 NUMBER_CHARS = Set.new("0123456789_".split(""))
 DIGITS = Set.new("0123456789".split(""))
 
+## The base of each radix prefix letter after a `0`, in either case: `0x`, `0b`, `0o`.
+RADIX_BASES = {"x": 16, "X": 16, "b": 2, "B": 2, "o": 8, "O": 8}
+
+## The name of each base in messages, with its article.
+RADIX_NAMES = {16: "a hex", 2: "a binary", 8: "an octal"}
+
+## The digits up to base 16 by value; a letter is read in either case.
+HEX_DIGITS = "0123456789abcdef"
+
+## The largest Int, the bound of a radix literal that fits.
+INT_MAX = 9223372036854775807
+
+## The most significant digits a radix literal may have for its exact decimal value to be worked out, by base: enough
+## for every value up to 2^64, so the least Int and the range check see the digits a decimal literal gives. A longer
+## literal is far outside the range and keeps its own text (radix_value), so lexing stays linear.
+RADIX_EXACT_DIGITS = {16: 17, 2: 65, 8: 22}
+
 ## Where a comment or a doc line ends: a line break, or the sentinel that follows the last character of the text.
 LINE_ENDS = Set.new(["\n", "\r", ""])
 
@@ -632,6 +649,10 @@ end
 # An integer or float starting at `first`. A `_` must sit between two digits.
 def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
   chars = input.chars
+  if chars[first] == "0" and RADIX_BASES.has_key?(chars[first + 1])
+    return scan_radix(input, first, line, line_start)
+  end
+
   index = skip_in(chars, first, NUMBER_CHARS)
   fractional = chars[index] == "." and NUMBER_CHARS.include?(chars[index + 1])
   if fractional
@@ -664,6 +685,61 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
   end
 
   return Diag.Outcome.Done(token(input.text, "integer", integer_value(digits), start, stop))
+end
+
+# A hex, binary or octal integer: `0x`, `0b` or `0o` (either case) and digits of that base, with a `_` only between two
+# digits, as in Ruby. Every name character after the prefix belongs to the literal, so `0b102` is one bad literal, not
+# `0b10` and a name. Each problem is LEX-INVALID-NUMBER on the whole literal.
+def scan_radix(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
+  chars = input.chars
+  base = RADIX_BASES[chars[first + 1]]
+  stop = skip_in(chars, first + 2, NAME_CHARS)
+  start = Source.position(first, line, line_start)
+  end_at = Source.position(stop, line, line_start)
+  digits: List[Int] = []
+  for index in (first + 2)...stop
+    char = chars[index]
+    if char == "_"
+      if index == first + 2 or index + 1 == stop or chars[index + 1] == "_"
+        return Diag.Outcome.Failed(
+          Diag.fail(
+            "LEX-INVALID-NUMBER",
+            "a \"_\" in a number must sit between two digits",
+            span(start, end_at),
+            Diag.Help.Hint("write digit groups like 0xFFFF_FFFF or 0b1010_1010; remove the extra \"_\""),
+          ),
+        )
+      end
+    else
+      value = HEX_DIGITS.index_of(char.downcase).unwrap_or(16)
+      if value >= base
+        return Diag.Outcome.Failed(
+          Diag.fail(
+            "LEX-INVALID-NUMBER",
+            "\"#{char}\" is not #{RADIX_NAMES[base]} digit",
+            span(start, end_at),
+            Diag.Help.Hint("hex digits are 0-9 and a-f, octal 0-7, binary 0 and 1"),
+          ),
+        )
+      end
+
+      digits = digits.push(value)
+    end
+  end
+
+  if digits.empty?
+    return Diag.Outcome.Failed(
+      Diag.fail(
+        "LEX-INVALID-NUMBER",
+        "#{input.text.slice(first, 2)} needs at least one digit",
+        span(start, end_at),
+        Diag.Help.Hint("write a number such as 0xFF, 0b1010 or 0o755"),
+      ),
+    )
+  end
+
+  prefix = input.text.slice(first, 2).downcase
+  return Diag.Outcome.Done(token(input.text, "integer", radix_value(digits, base, prefix), start, end_at))
 end
 
 # Scans one piece of a string literal. It starts after the opening `"`, or
@@ -1514,6 +1590,54 @@ def integer_value(digits: String) -> Tokens.Value
   end
 
   return Tokens.Value.Huge(strip_zeros(digits))
+end
+
+# The value of the digits of a radix literal: a Whole when it fits an Int, else the Huge of its decimal digits, the
+# value a decimal literal gives, so the range check and the least Int (`-0x8000_0000_0000_0000`) work the same way. A
+# literal with more significant digits than RADIX_EXACT_DIGITS is the Huge of its prefix and those digits (`0x1ff...`):
+# still out of range, still distinct from every other literal for the duplicate case arms, and found without the
+# decimal conversion, whose cost grows with the square of the length.
+def radix_value(digits: List[Int], base: Int, prefix: String) -> Tokens.Value
+  value = 0
+  for digit in digits
+    if value > (INT_MAX - digit) / base
+      significant = digits.drop_while do |d: Int| d == 0 end
+      if significant.size > RADIX_EXACT_DIGITS[base]
+        return Tokens.Value.Huge(prefix + significant.map do |d: Int| HEX_DIGITS.slice(d, 1) end.join(""))
+      end
+
+      return Tokens.Value.Huge(decimal_text(significant, base))
+    end
+
+    value = value * base + digit
+  end
+
+  return Tokens.Value.Whole(value)
+end
+
+# The decimal digits of a number given by its digits in another base: a little-endian list of decimal digits is
+# multiplied by the base and added to, once per digit. Only a literal outside the Int range comes here, and it has a
+# digit that is not 0, so the text has no leading zero.
+def decimal_text(digits: List[Int], base: Int) -> String
+  decimal: List[Int] = []
+  for digit in digits
+    grown: List[Int] = []
+    carry = digit
+    for place in decimal
+      sum = place * base + carry
+      grown = grown.push(sum % 10)
+      carry = sum / 10
+    end
+
+    while carry > 0
+      grown = grown.push(carry % 10)
+      carry = carry / 10
+    end
+
+    decimal = grown
+  end
+
+  return decimal.reverse.map do |place: Int| place.to_s end.join("")
 end
 
 def unexpected_character(character: String, start: Source.Position, stop: Source.Position) -> Diag.Diagnostic

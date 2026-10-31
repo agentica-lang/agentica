@@ -78,6 +78,19 @@ DIAGNOSTICS = [
     ("separator before the exponent", "1_e5", "LEX-INVALID-NUMBER", (1, 1, 1, 5), None),
     ("trailing separator in the exponent", "1e5_", "LEX-INVALID-NUMBER", (1, 1, 1, 5), None),
     ("separator before a method", "x = 1_.times", "LEX-INVALID-NUMBER", (1, 5, 1, 7), None),
+    # Hex, binary and octal literals: a prefix needs a digit, a digit of its base, and a `_` between two digits.
+    ("radix prefix with no digit", "x = 0x", "LEX-INVALID-NUMBER", (1, 5, 1, 7), None),
+    ("separator after the radix prefix", "x = 0b_1", "LEX-INVALID-NUMBER", (1, 5, 1, 9), None),
+    ("trailing separator in a hex literal", "x = 0xFF_", "LEX-INVALID-NUMBER", (1, 5, 1, 10), None),
+    ("double separator in a binary literal", "x = 0b1__0", "LEX-INVALID-NUMBER", (1, 5, 1, 11), None),
+    ("binary digit above 1", "x = 0b102", "LEX-INVALID-NUMBER", (1, 5, 1, 10), None),
+    ("octal digit above 7", "x = 0o8", "LEX-INVALID-NUMBER", (1, 5, 1, 8), None),
+    ("hex letter above f", "x = 0xFG", "LEX-INVALID-NUMBER", (1, 5, 1, 9), None),
+    ("hex literal above the Int range", program(MAIN, "  x = 0x8000_0000_0000_0000", "end"), "CHECK-INT-RANGE",
+     (2, 7, 2, 28), None),
+    # A very long literal lexes in linear time: it is out of range without its decimal value being worked out.
+    ("hex literal of 20000 digits", program(MAIN, "  x = 0x" + "F" * 20000, "end"), "CHECK-INT-RANGE",
+     (2, 7, 2, 20009), None),
     # Characters and delimiters, with the C-style habits that get a help.
     ("unexpected character", "x @", "LEX-UNEXPECTED-CHAR", (1, 3), False),
     ("semicolon", "x = 1;\ny = 2", "LEX-UNEXPECTED-CHAR", (1, 6), True),
@@ -281,6 +294,11 @@ RUNS = [
              "  puts(-1_000)", "  puts(1_000.to_s)", "  puts((1_000..1_002).to_a)", "  puts((1_000...1_002).to_a)",
              "  _1 = 5", "  puts(_1)", "  _n = 2", "  puts((0.._n).to_a)", "  1_000.times do |i|", "  end", "end"),
      "1000\n1000000\n1000.0005\n0.55\n1000.5\n-1000\n1000\n[1000, 1001, 1002]\n[1000, 1001]\n5\n[0, 1, 2]\n"),
+    ("hex, binary and octal literals in either case, with separators, the Int bounds and a pattern",
+     program(MAIN, "  puts(0xFF + 0Xff_ff)", "  puts(0b1010 + 0B1111_0000)", "  puts(0o755 + 0O17)",
+             "  puts(0x7FFF_FFFF_FFFF_FFFF)", "  puts(-0x8000_0000_0000_0000)", "  puts(0xFF.to_s)",
+             "  case 255", "    0xFF -> puts(\"ff\")", "    _ -> puts(\"other\")", "  end", "end"),
+     "65790\n250\n508\n9223372036854775807\n-9223372036854775808\n255\nff\n"),
 ]
 
 

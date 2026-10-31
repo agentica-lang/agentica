@@ -64,6 +64,28 @@ true
 
 `1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `s.to_i` and `s.to_f` reject a `_` in text.
 
+## Hex, binary and octal
+
+`0x`, `0b` and `0o` write an `Int` in base 16, 2 or 8, as in Ruby. The prefix and the hex letters take either case, and `_` separates digits here too.
+
+```agentica
+def main() -> Void
+  puts(0xFF)
+  puts(0b1010_1010)
+  puts(0o755)
+  puts(0x7FFF_FFFF_FFFF_FFFF)
+end
+```
+
+```output
+255
+170
+493
+9223372036854775807
+```
+
+The range is the one of `Int`: `0x8000_0000_0000_0000` is `CHECK-INT-RANGE`. A prefix with no digit (`0x`), a digit outside the base (`0b102`, `0o8`) or a misplaced `_` (`0xFF_`) is `LEX-INVALID-NUMBER`. A leading zero alone is still decimal: `0755` is `755`.
+
 ## Division
 
 `/` on two `Int` values cuts off the decimals, toward zero. `%` is the remainder and works on `Int` only.
