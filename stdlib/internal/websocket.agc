@@ -17,6 +17,9 @@ KEY_BYTES = 16
 MASK_BYTES = 4
 # A control frame carries at most this many bytes, and a close frame keeps 2 of them for its code.
 NO_KEY = Bytes.from_list([]).unwrap!
+ACCEPT_BYTES = 20
+# The bytes of a token (RFC 9110 5.6.2): what a subprotocol name is made of.
+TOKEN_BYTES = "!#$%&'*+-.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".bytes
 CONTROL_BYTES = 125
 REASON_BYTES = 123
 # The opcodes of RFC 6455 5.2.
@@ -83,6 +86,26 @@ end
 ## the GUID.
 export def accept_key(key: String) -> String
   return Base64.strict_encode64(Digest.sha1("#{key}#{GUID}".bytes))
+end
+
+## A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes.
+export def valid_accept?(accept: String) -> Bool
+  case Base64.strict_decode64(accept)
+    ok(data) -> return data.size == ACCEPT_BYTES
+    error(_) -> return false
+  end
+end
+
+## True for a name made only of token bytes (no space, comma, control byte or quote), as a subprotocol is. An empty
+## name is a token here: it stands for no subprotocol.
+export def token?(name: String) -> Bool
+  for byte in name.bytes
+    if not token_byte?(byte)
+      return false
+    end
+  end
+
+  return true
 end
 
 ## A Sec-WebSocket-Key is the base64 of 16 random bytes.
@@ -186,14 +209,14 @@ export def check_head(head: Head) -> Optional[Problem]
   return none
 end
 
-## What is wrong with the length of a head whose tail was read: a data frame past the cap, or a 64-bit length that is
-## not a length.
-export def check_length(head: Head, max: Int) -> Optional[Problem]
+## What is wrong with the length of a head whose tail was read: a 64-bit length that is not a length, or a data frame
+## that would take its message past the cap, given the `held` bytes of the message's earlier fragments.
+export def check_length(head: Head, max: Int, held: Int) -> Optional[Problem]
   if head.length < 0
     return some(Problem(code: CLOSE_PROTOCOL, reason: "invalid frame length"))
   end
 
-  if head.length > max
+  if not control?(head.opcode) and held + head.length > max
     return some(Problem(code: CLOSE_TOO_BIG, reason: "message too big"))
   end
 
@@ -269,7 +292,7 @@ export def take(assembly: Assembly, head: Head, payload: Bytes, max: Int) -> Tak
 end
 
 ## A close frame: no payload (no code), or a code of two bytes and a reason that is UTF-8. A code that no peer may send
-## (below 1000, 1004 to 1006, 1015 and 1016 to 2999, past 4999) is a protocol error, as is one byte of payload.
+## (below 1000, 1004 to 1006, 1015 to 2999, past 4999) is a protocol error, as is one byte of payload.
 export def parse_close(payload: Bytes) -> Closing
   if payload.empty?
     return Closing.Peer(CLOSE_NORMAL, "")
@@ -330,13 +353,13 @@ export def close_frame(code: Int, reason: String) -> Bytes
   return frame(CLOSE, Bytes.concat([Binary.write_u16_be(code).unwrap!, short_reason(reason)]))
 end
 
-## True for a close code that a peer may send: 1000 to 1011 except 1004 to 1006, and 3000 to 4999.
+## True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999.
 export def valid_code?(code: Int) -> Bool
   if code >= 3000 and code <= 4999
     return true
   end
 
-  return code >= 1000 and code <= 1011 and code != 1004 and code != 1005 and code != 1006
+  return code >= 1000 and code <= 1014 and code != 1004 and code != 1005 and code != 1006
 end
 
 def known_opcode?(opcode: Int) -> Bool
@@ -384,4 +407,14 @@ def utf8?(data: Bytes) -> Bool
     ok(_) -> return true
     error(_) -> return false
   end
+end
+
+def token_byte?(byte: Int) -> Bool
+  for allowed in TOKEN_BYTES
+    if allowed == byte
+      return true
+    end
+  end
+
+  return false
 end

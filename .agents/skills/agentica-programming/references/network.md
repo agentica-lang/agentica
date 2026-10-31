@@ -371,7 +371,9 @@ end
 ```
 
 - The session `Fn[HTTP.WebSocket, Result[Void]]` runs in the connection's task.
-  `incoming` and `outgoing` hold 8 messages (backpressure). `incoming` ends with
+  `incoming` and `outgoing` hold 8 messages (backpressure), and a session that
+  stops draining `incoming` stops the server reading the socket (no pong, no
+  close answer): keep receiving, or end. `incoming` ends with
   one `Close(code, reason)`, whatever ended the connection (code 1006: no close
   frame came); then it closes. Receive until `Close`, or until the closed error.
 - Messages are whole: fragments are joined, text is UTF-8 checked, pings are

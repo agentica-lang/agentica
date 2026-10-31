@@ -142,6 +142,10 @@ static void test_upgrade(void) {
   assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket, h2c\r\n\r\n") == 501);
   assert(head_status("POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nUpgrade: websocket\r\n\r\n") == 501);
   assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nUpgrade: websocket\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade:  websocket \t\r\nConnection: Upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nupgrade: websocket\r\nconnection: upgrade\r\n\r\n") == 0);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nUpgrade: h2c\r\n\r\n") == 501);
+  assert(head_status("GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\n , h2c\r\n\r\n") == 400);
   assert(head_status("GET / HTTP/1.1\r\nHost: x\r\n\r\n") == 0);
 }
 

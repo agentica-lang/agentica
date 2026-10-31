@@ -365,7 +365,7 @@ export type UploadHandler = Fn[HttpRequest, RequestBody, Result[HttpResponse]]
 ## A message of a WebSocket, in either direction. `Text` and `Binary` are whole messages: the server joins the
 ## fragments of a message it receives, and a text message is checked as UTF-8. `Ping` and `Pong` carry at most 125
 ## bytes. The server answers every ping it receives with a pong, and does not hand it to the handler. `Close` is the
-## end: the code (1000 to 1003 and 1007 to 1011 are the codes of RFC 6455, 3000 to 4999 are for programs) and a reason
+## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
 ## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
 ## close frame (the peer left, a timeout) its code is 1006.
 export enum Message
@@ -379,8 +379,9 @@ end
 ## An upgraded connection, for the session function of `accept_websocket`: messages from the peer arrive on `incoming`
 ## and the messages to send go on `outgoing`. `protocol` is the subprotocol that was agreed, or "". Both channels hold
 ## 8 messages, so a handler that does not read makes the server stop reading the socket, and a handler that sends
-## faster than the peer reads waits. `incoming` closes after the `Close` message, and `outgoing` closes when the
-## connection is over, so a send then is an error.
+## faster than the peer reads waits. A session must keep taking messages from `incoming` (or end): while it does not,
+## the server does not read the socket, so the pings and the close of the peer go unanswered. `incoming` closes after
+## the `Close` message, and `outgoing` closes when the connection is over, so a send then is an error.
 export struct WebSocket
   incoming: Channel[Message]
   outgoing: Channel[Message]
@@ -394,7 +395,8 @@ export type WebSocketSession = Fn[WebSocket, Result[Void]]
 
 ## The limits of a WebSocket. `max_message_bytes` is the largest message, joined from its fragments (1 to 256 MiB): a
 ## larger one closes the connection with code 1009. `idle_ms` is the longest the server waits for the peer to send
-## anything, 0 for no limit; a timeout drops the connection, and the handler receives `Close` with code 1006. `ping_ms`
+## anything, 0 for no limit but a year (a read that times out closes the socket); a timeout drops the connection, and
+## the handler receives `Close` with code 1006. `ping_ms`
 ## makes the server send a ping after that many milliseconds without anything to write, 0 for none: with a `ping_ms`
 ## below `idle_ms` the pongs keep a live peer from being dropped. `close_ms` is how long the server waits for the
 ## peer's answer to its close frame. `protocols` are the subprotocols the server speaks, in order of preference.
@@ -1853,9 +1855,26 @@ def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options
       keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
       return Sent(keep: keep, rest: incoming.rest)
     Upgrade.Accept(session, limits, key, protocol) ->
-      run_websocket(socket, incoming.rest, session, limits, key, protocol, options)
+      case check_accept(limits, key, protocol)
+        ok(_) -> run_websocket(socket, incoming.rest, session, limits, key, protocol, options)
+        error(message) ->
+          IO.warn("http: handler error: #{message}")
+          failed(socket, incoming.request, options.request_timeout_ms)
+      end
+
       return Sent(keep: false, rest: NO_BYTES)
   end
+end
+
+# An `Upgrade.Accept` is made by `accept_websocket`, but its fields are public, so the server checks what it writes
+# into the 101 answer (the key must be an accept key, the protocol a token) and the limits as `accept_websocket` does.
+def check_accept(limits: WebSocketOptions, key: String, protocol: String) -> Result[Void]
+  try check_websocket_options(limits)
+  if not WebSocketWire.valid_accept?(key) or not WebSocketWire.token?(protocol)
+    return error("http: an Upgrade.Accept must come from accept_websocket")
+  end
+
+  return ok()
 end
 
 # Writes the 101 answer, then runs the session in this task with a reader, a forwarder and a writer around it: the
@@ -1938,16 +1957,20 @@ def session_code(result: Result[Void]) -> Int
   end
 end
 
-# The frames of the handler's messages, in order, until `outgoing` closes. After a close frame the rest are dropped.
+# The frames of the handler's messages, in order, until `outgoing` closes. After a close frame the rest are dropped. A
+# receive that times out only starts the next wait: the channel says it is closed.
 def forward_messages(wire: Wire) -> Void
   closing = false
   while true
-    case wire.outgoing.recv(WS_WAIT_MS)
+    case wire.outgoing.recv(quiet_wait(wire.options))
       ok(message) ->
         if not closing
           closing = hand_over(wire, message)
         end
-      error(_) -> return
+      error(_) ->
+        if wire.outgoing.closed?
+          return
+        end
     end
   end
 end
@@ -1967,7 +1990,7 @@ end
 
 # A send to the writer. If the writer is gone the connection is over, so `outgoing` closes and senders learn of it.
 def pass_on(wire: Wire, item: Outgoing, closes: Bool) -> Bool
-  if not Result.ok?(wire.wire.send(item, WS_WAIT_MS))
+  if not send_when_room(wire.wire, item)
     wire.outgoing.close
   end
 
@@ -1987,6 +2010,22 @@ def sendable_code(code: Int) -> Int
   return WebSocketWire.CLOSE_INTERNAL
 end
 
+# Sends when the channel has room, waiting as long as it takes: a send that times out only starts the next wait. False
+# when the channel is closed.
+def send_when_room[T](channel: Channel[T], value: T) -> Bool
+  while true
+    case channel.send(value, WS_WAIT_MS)
+      ok(_) -> return true
+      error(_) ->
+        if channel.closed?
+          return false
+        end
+    end
+  end
+
+  return false
+end
+
 # The only task that writes the socket. It ends the connection: after the peer's answer to a close frame we sent, the
 # answer to a close of the peer's, a frame that reports a protocol error, the loss of the peer, or `close_ms` without
 # an answer. Once our close frame is out nothing else is written.
@@ -2002,17 +2041,26 @@ def write_frames(wire: Wire) -> Void
             return
         end
       error(_) ->
-        if closing or wire.wire.closed? or wire.options.ping_ms == 0
-          end_websocket(wire, false)
-          return
-        end
-
-        if not Result.ok?(send_all(wire.socket, WebSocketWire.ping_frame(NO_BYTES), wire.write_ms))
+        if not keep_waiting(wire, closing)
           end_websocket(wire, false)
           return
         end
     end
   end
+end
+
+# What the writer does when its wait ended with no item: the connection ends when our close frame got no answer in
+# `close_ms` or the channel is closed; else a ping is due (when `ping_ms` is set) or the wait starts again.
+def keep_waiting(wire: Wire, closing: Bool) -> Bool
+  if closing or wire.wire.closed?
+    return false
+  end
+
+  if wire.options.ping_ms == 0
+    return true
+  end
+
+  return Result.ok?(send_all(wire.socket, WebSocketWire.ping_frame(NO_BYTES), wire.write_ms))
 end
 
 # How long the writer waits for the next item: for the peer's answer once we closed, else until a ping is due.
@@ -2021,6 +2069,12 @@ def writer_wait(options: WebSocketOptions, closing: Bool) -> Int
     return options.close_ms
   end
 
+  return quiet_wait(options)
+end
+
+# The wait of a task that has nothing to do until something comes: the interval of the pings, else a day. A timeout
+# only starts the next wait.
+def quiet_wait(options: WebSocketOptions) -> Int
   if options.ping_ms > 0
     return options.ping_ms
   end
@@ -2084,7 +2138,7 @@ def read_frames(wire: Wire) -> Void
   assembly = WebSocketWire.new_assembly()
   going = true
   while going
-    case read_frame(wire, rest)
+    case read_frame(wire, rest, assembly.total)
       Read.Got(head, payload, more) ->
         rest = more
         if WebSocketWire.control?(head.opcode)
@@ -2120,15 +2174,15 @@ def message_of(text: Bool, data: Bytes) -> Message
   return Message.Binary(data)
 end
 
-# Hands a message to the handler; false when the handler is gone (the channel closed, or it never took it).
+# Hands a message to the handler, waiting for room; false when the handler is gone (the channel closed).
 def deliver(wire: Wire, message: Message) -> Bool
-  return Result.ok?(wire.incoming.send(message, WS_WAIT_MS))
+  return send_when_room(wire.incoming, message)
 end
 
 # What a control frame does. True when the connection goes on.
 def on_control(wire: Wire, head: WebSocketWire.Head, payload: Bytes) -> Bool
   if WebSocketWire.ping?(head.opcode)
-    return Result.ok?(wire.wire.send(Outgoing.Data(WebSocketWire.pong_frame(payload)), WS_WAIT_MS))
+    return send_when_room(wire.wire, Outgoing.Data(WebSocketWire.pong_frame(payload)))
   end
 
   if WebSocketWire.close?(head.opcode)
@@ -2170,25 +2224,25 @@ def send_to_writer(wire: Wire, item: Outgoing) -> Void
 end
 
 # One frame: the head, its tail, then the payload unmasked. A frame that breaks a rule is `Bad` before its payload is
-# read, so a size past the cap is never allocated.
-def read_frame(wire: Wire, rest: Bytes) -> Read
+# read, so a message past the cap (`held` bytes of its earlier fragments and this frame) is never allocated.
+def read_frame(wire: Wire, rest: Bytes, held: Int) -> Read
   case take_bytes(wire, rest, 2)
     error(_) -> return Read.Lost
     ok(first) ->
       head = WebSocketWire.head_of(first.front)
       case WebSocketWire.check_head(head)
         some(problem) -> return Read.Bad(problem)
-        none -> return read_tail(wire, head, first.rest)
+        none -> return read_tail(wire, head, first.rest, held)
       end
   end
 end
 
-def read_tail(wire: Wire, head: WebSocketWire.Head, rest: Bytes) -> Read
+def read_tail(wire: Wire, head: WebSocketWire.Head, rest: Bytes, held: Int) -> Read
   case take_bytes(wire, rest, WebSocketWire.tail_size(head))
     error(_) -> return Read.Lost
     ok(tail) ->
       whole = WebSocketWire.complete(head, tail.front)
-      case WebSocketWire.check_length(whole, wire.options.max_message_bytes)
+      case WebSocketWire.check_length(whole, wire.options.max_message_bytes, held)
         some(problem) -> return Read.Bad(problem)
         none -> return read_payload(wire, whole, tail.rest)
       end
@@ -2235,12 +2289,13 @@ def read_size(need: Int) -> Int
   return smaller(need, BODY_READ_BYTES)
 end
 
+# A timeout of a read closes the socket, so there is no wait without an end: with no `idle_ms` it is a year.
 def read_wait(options: WebSocketOptions) -> Int
   if options.idle_ms > 0
     return options.idle_ms
   end
 
-  return WS_WAIT_MS
+  return WATCH_MS
 end
 
 # The task of an upload: it sends the pieces of the body to the channel and closes it on every path. When the body

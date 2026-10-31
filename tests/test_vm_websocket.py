@@ -69,6 +69,13 @@ def protocol(ws: HTTP.WebSocket) -> Result[Void]
   return echo(ws)
 end
 
+# Says nothing for longer than the interval of the pings, then speaks: a quiet outgoing channel must not end the session.
+def late(ws: HTTP.WebSocket) -> Result[Void]
+  Task.sleep(700)
+  try ws.outgoing.send(HTTP.Message.Text("late"), 5000)
+  return echo(ws)
+end
+
 def failing(ws: HTTP.WebSocket) -> Result[Void]
   return error("the session failed")
 end
@@ -92,6 +99,18 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
 
   if request.path == "/keepalive"
     return HTTP.accept_websocket(request, &echo, HTTP.WebSocketOptions(idle_ms: 600, ping_ms: 200))
+  end
+
+  if request.path == "/late"
+    return HTTP.accept_websocket(request, &late, HTTP.WebSocketOptions(ping_ms: 150, idle_ms: 3000))
+  end
+
+  if request.path == "/forged"
+    return ok(HTTP.Upgrade.Accept(&echo, HTTP.WebSocketOptions(), "forged", ""))
+  end
+
+  if request.path == "/badoptions"
+    return HTTP.accept_websocket(request, &echo, HTTP.WebSocketOptions(max_message_bytes: 0))
   end
 
   if request.path == "/greet"
@@ -192,9 +211,9 @@ def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_
         assert c.message() == (PING, b"abc")
         c.send(PONG, b"abc")
         assert vm.next_line() == "pong 3"
-        c.close_with(1001)
-        assert c.close_frame() == (1001, "")
-    assert vm.next_line() == "closed 1001 "
+        c.close_with(1012)
+        assert c.close_frame() == (1012, "")
+    assert vm.next_line() == "closed 1012 "
     # The subprotocol is the first of the server's list that the client offered.
     with Client(port, timeout=scaled(10)) as c:
         headers = c.connect("/protocol", {"Sec-WebSocket-Protocol": "other, superchat, chat"})
@@ -235,7 +254,8 @@ RULES = [
     ("invalid-utf8", lambda c: c.send(TEXT, b"\xff\xfe"), 1007),
     ("text-cut-inside-a-character", lambda c: c.send(TEXT, b"\xc3"), 1007),
     ("over-the-cap", lambda c: c.send(BINARY, b"", length=2000), 1009),
-    ("over-the-cap-in-fragments", lambda c: (c.binary(b"x" * 600, fin=False), c.send(CONTINUATION, b"x" * 600)), 1009),
+    # The second frame only announces its 600 bytes: the message is refused before its payload is read.
+    ("over-the-cap-in-fragments", lambda c: (c.binary(b"x" * 600, fin=False), c.send(CONTINUATION, b"", length=600)), 1009),
     ("close-code-1005", lambda c: c.close_with(1005), 1002),
     ("close-with-one-byte", lambda c: c.send(CLOSE, b"x"), 1002),
     ("close-reason-not-utf8", lambda c: c.send(CLOSE, struct.pack(">H", 1000) + b"\xff"), 1007),
@@ -267,6 +287,13 @@ def test_requests_that_are_not_a_handshake_are_answered_and_never_upgraded(tmp_p
         assert c.request("/echo", key="none")[0] == 400
         assert c.request("/echo", key="abc")[0] == 400
         assert c.request("/plain")[0] == 200
+        # An Accept that accept_websocket did not make, and limits it did not accept, are the handler's error.
+        assert c.request("/forged")[0] == 500
+        assert c.ended()
+    with Client(port, timeout=scaled(10)) as c:
+        assert c.request("/badoptions")[0] == 500
+        assert c.ended()
+    with Client(port, timeout=scaled(10)) as c:
         c.sock.sendall(b"GET /echo HTTP/1.1\r\nHost: x\r\nUpgrade: h2c\r\nConnection: Upgrade\r\n\r\n")
         assert c.response()[0] == 501
         assert c.ended()
@@ -307,6 +334,25 @@ def test_idle_peers_are_dropped_pings_keep_a_live_one_and_a_lost_or_silent_peer_
     with Client(port, timeout=scaled(10)) as c:
         c.connect("/echo")
     assert closing(vm) == ["closed 1006 connection lost"]
+    # The session speaks after 700 ms of silence, with pings every 150 ms: the forwarder and the writer wait and go on.
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/late")
+        started = time.monotonic()
+        while True:
+            opcode, payload = c.message()
+            if opcode == TEXT:
+                break
+            assert opcode == PING
+            c.send(PONG, payload)
+        assert payload == b"late" and time.monotonic() - started > 0.6
+        c.text("still here")
+        while True:
+            opcode, payload = c.message()
+            if opcode == TEXT:
+                break
+            c.send(PONG, payload)
+        assert payload == b"still here"
+    assert closing(vm)[-1] == "closed 1006 connection lost"
     with Client(port, timeout=scaled(10)) as c:
         c.connect("/greet")
         assert c.message() == (TEXT, b"hello")

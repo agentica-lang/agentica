@@ -124,11 +124,10 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **Server.** One task per connection, and requests on one connection run one at
   a time. `Upgrade` and `CONNECT` get 501 (a WebSocket handshake is the one
   `Upgrade` a `listen_websocket` server takes, 10.7.2), and `HTTP/1.1` only is
-  accepted. At
-  most `max_connections` connections are open at once, and an extra one waits in
-  the kernel's backlog. `HTTP.wait` returns only after `HTTP.close_server`. When
-  `main` returns or the run fails, every server and client is closed and every
-  handler task stops.
+  accepted. At most `max_connections` connections are open at once, and an
+  extra one waits in the kernel's backlog. `HTTP.wait` returns only after
+  `HTTP.close_server`. When `main` returns or the run fails, every server and
+  client is closed and every handler task stops.
 - **Exposure.** `std/http` is reached by an explicit import,
   `import HTTP from "std/http"`, like `std/queue`. `HTTP` is a free alias. The
   record and handle types (`HttpRequest`, `HttpResponse`, `HttpClientOptions`,
@@ -290,7 +289,8 @@ Properties of the client that no test checks:
   bounds the rest of the request. The checks run in this order: the parse
   errors of 10.6; an `Upgrade` header (501, unless the request is a `GET` with
   one `Upgrade: websocket`, which `std/http` then answers 501 itself on a route
-  that does not upgrade); an `Expect` other than
+  that does not upgrade, after the checks below: the `Expect` (417) and size
+  (413) refusals of a handshake head come first there); an `Expect` other than
   `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
   `100 Continue` if `Expect` asked and no body byte is buffered; then the body,
   which is kept as it comes. The head goes through `read_head`, chunk framing
