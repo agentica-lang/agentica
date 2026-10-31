@@ -2,6 +2,11 @@
 input, `--tree`, the `[style]` of the nearest agentica.toml and the exit codes. The cases assert exit statuses, the
 files, the listed paths and diagnostic codes, never message text."""
 import json
+import os
+import stat
+import sys
+
+import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 
@@ -54,6 +59,20 @@ def test_write_mode_rewrites_the_files_of_the_current_folder_and_skips_agc_libs(
     assert [text(tmp_path, name) for name in ("src/bad.agc", "src/crlf.agc", "good.agc")] == [FORMATTED] * 3
     assert text(tmp_path, "agc_libs/lib/vendored.agc") == UNFORMATTED
     assert fmt("--check", cwd=tmp_path).code == 0
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits and symbolic links")
+def test_write_mode_keeps_the_permission_bits_and_writes_through_a_symbolic_link(tmp_path):
+    lay_out(tmp_path, {"tool.agc": UNFORMATTED, "frozen.agc": UNFORMATTED, "real/target.agc": UNFORMATTED})
+    (tmp_path / "tool.agc").chmod(0o755)
+    (tmp_path / "frozen.agc").chmod(0o444)
+    os.symlink("real/target.agc", tmp_path / "link.agc")
+    result = fmt("tool.agc", "frozen.agc", "link.agc", cwd=tmp_path)
+    assert (result.code, result.stdout, result.stderr) == (0, "", "")
+    modes = [stat.S_IMODE((tmp_path / name).stat().st_mode) for name in ("tool.agc", "frozen.agc")]
+    assert modes == [0o755, 0o444]
+    assert [text(tmp_path, name) for name in ("tool.agc", "frozen.agc", "real/target.agc")] == [FORMATTED] * 3
+    assert os.readlink(tmp_path / "link.agc") == "real/target.agc"
 
 
 def test_a_file_that_does_not_parse_is_refused_and_left_as_it_is(tmp_path):
