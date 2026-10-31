@@ -1369,16 +1369,6 @@ static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t s
   return open_socket(vm, args, span, true);
 }
 
-/* TLS.connect with PEM paths (6 arguments) and TLS.listen with them (4): the forms before TlsContext. No program
-   compiled now calls them; they stay only so that the VM still loads the previous bootstrap/stage0.agcb, whose copy
-   of std/http names them (it never calls them while it compiles). A later stage0 refresh lets them go. */
-static agc_value builtin_removed_tls_form(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
-  (void)args;
-  (void)span;
-  return agc_error_value("network: this TLS form takes a TlsContext now (TLS.client_context, TLS.server_context)");
-}
-
 static agc_value builtin_listen(agc_vm *vm, agc_value *args, uint32_t span) { return open_listener(vm, args, span, false); }
 
 static agc_value builtin_tls_listen(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1722,8 +1712,6 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 3, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"TLS.connect", 6, builtin_removed_tls_form, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"TLS.listen", 4, builtin_removed_tls_form, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.idle?", 2, builtin_idle, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
