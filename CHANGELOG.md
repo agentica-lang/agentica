@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
+  requests through a forward proxy in absolute form (`https://` with a proxy is
+  an error until `CONNECT`).
 - `File.replace(path, data)` replaces an existing file in one step, keeping its
   permission bits and any symbolic link to it.
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the

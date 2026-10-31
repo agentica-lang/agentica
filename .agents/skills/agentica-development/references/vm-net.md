@@ -345,3 +345,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `idle_ms`, `ping_ms`, a peer that leaves and a close that is not answered.
   `vm/tests/http_wire_test.c` has the head check that lets only a `GET` with one
   `Upgrade: websocket` through.
+- HTTP client through a proxy (`HttpClientOptions.proxy`):
+  `tests/test_vm_http_proxy.py` runs one VM program against
+  `tests/fixtures/http-proxy-peer.py`, a stdlib forward proxy that refuses any
+  request target that is not in absolute form, with two origins. It asserts the
+  request line and `Host` the proxy saw for each client call, the one pooled
+  proxy connection for two origins, two clients with two proxies, an IPv6
+  literal, a proxy that is down, and the `https` and bad-proxy errors.

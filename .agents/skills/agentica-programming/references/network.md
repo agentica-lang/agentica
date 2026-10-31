@@ -89,7 +89,7 @@ Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[Header], bytes_written: Int)
-HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "")
+HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "", proxy: String = "")
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
@@ -97,7 +97,11 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
   body limit and system CA trust. Options must be positive; `max_connections` is
   at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
-  whole call.
+  whole call. `proxy: "http://host:port"` sends every `http://` request
+  through a forward proxy in absolute form (pooled by the proxy; also
+  `get_response`, `open`, `upload`, `download`, `start`); `https://` with a
+  proxy is an `error` (no `CONNECT` yet), a proxy that cannot be reached is an
+  `error` that names it, and there is no proxy auth or environment reading.
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head
