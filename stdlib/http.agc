@@ -70,7 +70,9 @@ STREAM_POLL_MS = 60000
 WATCH_MS = 31536000000
 HEX_DIGITS = "0123456789abcdef"
 # The messages a WebSocket channel holds before its sender waits, and how long a task waits for a channel when nothing
-# is due (a day: a timeout of the wait only starts the next one).
+# is due (a day). A timeout of that wait only starts the next one: with `ping_ms` set the tasks wait one ping interval
+# instead, and the tests drive that path; with `ping_ms == 0` the same loops run once a day, which no test can reach
+# (the constant cannot be changed from a program), and it is the same code with a longer wait.
 WS_QUEUE = 8
 WS_WAIT_MS = 86400000
 # The most bytes a ping or a pong carries (a control frame is at most 125).
@@ -396,10 +398,10 @@ export type WebSocketSession = Fn[WebSocket, Result[Void]]
 ## The limits of a WebSocket. `max_message_bytes` is the largest message, joined from its fragments (1 to 256 MiB): a
 ## larger one closes the connection with code 1009. `idle_ms` is the longest the server waits for the peer to send
 ## anything, 0 for no limit but a year (a read that times out closes the socket); a timeout drops the connection, and
-## the handler receives `Close` with code 1006. `ping_ms`
-## makes the server send a ping after that many milliseconds without anything to write, 0 for none: with a `ping_ms`
-## below `idle_ms` the pongs keep a live peer from being dropped. `close_ms` is how long the server waits for the
-## peer's answer to its close frame. `protocols` are the subprotocols the server speaks, in order of preference.
+## the handler receives `Close` with code 1006. `ping_ms` makes the server send a ping after that many milliseconds
+## without anything to write, 0 for none: with a `ping_ms` below `idle_ms` the pongs keep a live peer from being
+## dropped. `close_ms` is how long the server waits for the peer's answer to its close frame. `protocols` are the
+## subprotocols the server speaks, in order of preference.
 export struct WebSocketOptions
   max_message_bytes: Int = 1048576
   idle_ms: Int = 0
