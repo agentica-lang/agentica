@@ -228,7 +228,7 @@ def test_a_struct_update_follows_the_rules_of_construction_across_files(workspac
         "root.agc": "import Lib from \"lib\"\n\ndef main() -> Void\n  b = Lib.make().with(label: \"b\")\n  puts(Lib.grow(b))\n  puts(Lib.hidden().n)\nend\n\n"}) == "Box(label: \"b\", size: 2)\n2\n"
     # A builtin record of std/http is updated without importing a module that declares it.
     assert output_of(workspace, scratch, {
-        "root.agc": "import Http from \"std/http\"\n\ndef main() -> Void\n  o = Http.client_options()\n  p = o.with(timeout_ms: 5000, ca_file: \"ca.pem\")\n  puts(p.timeout_ms)\n  puts(o.timeout_ms)\nend\n\n"}) == "5000\n30000\n"
+        "root.agc": "import Http from \"std/http\"\n\ndef main() -> Void\n  o = HttpClientOptions()\n  p = o.with(timeout_ms: 5000, ca_file: \"ca.pem\")\n  puts(p.timeout_ms)\n  puts(o.timeout_ms)\nend\n\n"}) == "5000\n30000\n"
     # Alias.with(...) is a call of the module's function named with, not an update.
     assert output_of(workspace, scratch, {
         "lib.agc": "export def with(n: Int) -> Int\n  return n + 1\nend\n\n",

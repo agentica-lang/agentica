@@ -65,10 +65,10 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
-  options = HTTP.download_options()
+  options = HTTP.DownloadOptions()
   show(HTTP.download(pool, base + "/bin/5", dir + "/five.bin", options))
   show(HTTP.download(pool, base + "/chunked/70000", dir + "/chunk.bin", options))
   show(HTTP.download(pool, base + "/close/70000", dir + "/close.bin", options))
@@ -84,10 +84,10 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
-  options = HTTP.download_options()
+  options = HTTP.DownloadOptions()
   show(HTTP.download(pool, "ftp://example.com/x", dir + "/u.bin", options))
   show(HTTP.download(pool, base + "/bin/10", dir + "/zero.bin", HTTP.DownloadOptions(timeout_ms: 0, max_total_bytes: 10)))
   show(HTTP.download(pool, base + "/bin/10", dir + "/huge-opt.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 268435457)))
@@ -112,8 +112,8 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
-  show(HTTP.download(pool, System.args()[0] + "/bin/10", System.args()[1] + "/denied.bin", HTTP.download_options()))
+  pool = Result.unwrap!(HTTP.client())
+  show(HTTP.download(pool, System.args()[0] + "/bin/10", System.args()[1] + "/denied.bin"))
   HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW)
@@ -124,10 +124,10 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  pool = Result.unwrap!(HTTP.client())
   base = System.args()[0]
   dir = System.args()[1]
-  options = HTTP.download_options()
+  options = HTTP.DownloadOptions()
   show(HTTP.download(pool, base + "/bin/BIG", dir + "/big.bin", options))
   show(HTTP.download(pool, base + "/chunked/CHUNKED", dir + "/big-chunked.bin", options))
   HTTP.close_client(pool)
@@ -141,7 +141,7 @@ SHOW
 
 def main() -> Void
   secure = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1048576, ca_file: System.args()[0] + "/ca.pem")))
-  show(HTTP.download(secure, System.args()[1] + "/bin/100", System.args()[2] + "/tls.bin", HTTP.download_options()))
+  show(HTTP.download(secure, System.args()[1] + "/bin/100", System.args()[2] + "/tls.bin"))
   HTTP.close_client(secure)
 end
 """.replace("SHOW", SHOW)

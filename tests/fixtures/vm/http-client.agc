@@ -37,7 +37,7 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   port = TCP.local_port(listener)
   server = Task.spawn(&serve, listener)
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  pool = Result.unwrap!(HTTP.client())
   base = "http://127.0.0.1:#{port}"
   first = Result.unwrap!(HTTP.get(pool, base + "/a?b=1#frag"))
   second = HTTP.request(pool, "DELETE", base, "".bytes, [Header(name: "X-Id", value: "7")])

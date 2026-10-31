@@ -217,14 +217,10 @@ struct Whole
   kept: Bool
 end
 
-## Returns the default client options: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates.
-export def client_options() -> HttpClientOptions
-  return HttpClientOptions()
-end
-
-## Creates a client that keeps connections open and reuses them. Every number in `options` must be positive,
-## `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. Close the client
-## with `close_client`.
+## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
+## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates. Every number
+## in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is
+## an error. Close the client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   if String.contains?(options.ca_file, String.from_code(0))
@@ -298,12 +294,8 @@ export def request(
   end
 end
 
-## Returns the default download options: a 30 s timeout and bodies up to 256 MiB. `DownloadOptions()` gives the same.
-export def download_options() -> DownloadOptions
-  return DownloadOptions()
-end
-
-## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`.
+## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`. `options` is optional
+## and defaults to `DownloadOptions()`: a 30 s timeout and bodies up to 256 MiB.
 ##
 ## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
 ## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
@@ -378,15 +370,10 @@ export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
   end
 end
 
-## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
-## bodies.
-export def server_options() -> HttpServerOptions
-  return HttpServerOptions()
-end
-
 ## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the
 ## whole request and returns the whole response. Port 0 picks a free port, which `local_port` returns. The server
-## closes when the task that called `listen` ends.
+## closes when the task that called `listen` ends. `options` is optional and defaults to `HttpServerOptions()`: 30 s
+## `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB bodies.
 export def listen(
   host: String,
   port: Int,
@@ -403,7 +390,8 @@ export def listen(
   return ok(start(listener, Route.Whole(handler), options))
 end
 
-## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
+## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options` is
+## optional and defaults to `HttpServerOptions()`.
 export def listen_tls(
   host: String,
   port: Int,
@@ -425,6 +413,7 @@ end
 ## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
 ## (chunked, each piece flushed), for Server-Sent Events or any body that is not ready when the handler returns. Answer
 ## the routes that are one text with `HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(text))`.
+## `options` is optional and defaults to `HttpServerOptions()`.
 export def listen_stream(
   host: String,
   port: Int,
@@ -441,7 +430,8 @@ export def listen_stream(
   return ok(start(listener, Route.Streaming(handler), options))
 end
 
-## Like `listen_stream`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
+## Like `listen_stream`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options`
+## is optional and defaults to `HttpServerOptions()`.
 export def listen_stream_tls(
   host: String,
   port: Int,

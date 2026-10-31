@@ -373,7 +373,7 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
         "type.agc": steps_program(handler, main_running('BDD.step("x", &main)')),
         "silent.agc": steps_program('def main() -> Void\n  puts("no run")\nend'),
         "loops.agc": steps_program("def main() -> Void\n  while true\n  end\n  BDD.run([])\nend"),
-        "http.agc": steps_program("def main() -> Void\n  options = HTTP.client_options()\n  BDD.run([])\nend"),
+        "http.agc": steps_program("def main() -> Void\n  client = HTTP.client()\n  BDD.run([])\nend"),
         "forged.feature": "Feature: Forged\nScenario: forged\nGiven forge an end\nThen fail later\n",
         "forged.agc": steps_program(main_running(
             'BDD.step("forge an end") do |ctx, args|\n'
