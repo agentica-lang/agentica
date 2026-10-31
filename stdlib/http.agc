@@ -23,7 +23,18 @@ OWNER_WAIT_MS = 86400000
 # How long a caller waits past its deadline for the worker's answer.
 REPLY_GRACE_MS = 100
 MAX_INTERIM = 15
+# What a connection is doing: waiting for a request, in the body of a response, closed after a body that ended it
+# (SPENT: reading says the body is over, a request is refused), or over (finished or failed).
+IDLE = 0
+READING = 1
+SPENT = 2
+OVER = 3
+# How the body of a response is framed.
+BY_LENGTH = 0
+BY_CHUNKS = 1
+BY_CLOSE = 2
 CLIENT_CLOSED = "http: client is closed"
+CONNECTION_OVER = "http: the connection is closed"
 TIMED_OUT = "network: operation timed out"
 CUT_SHORT = "http: connection closed before the response was complete"
 TRUNCATED = "http: truncated HTTP body"
@@ -203,6 +214,34 @@ export struct Download
   bytes_written: Int
 end
 
+## An HTTP/1.1 connection that the program drives itself, as `Net::HTTP.start` gives: one request at a time, and the
+## body read piece by piece. Open it with `start`, send with `send_request`, read with `read_body` and end it with
+## `finish`. The fields are the connection's own: do not read them. It belongs to the task that opened it, as a socket
+## does, and one call at a time uses it.
+export struct Connection
+  ## The socket, a plain one or a TLS one.
+  socket: Socket
+  ## `http` or `https`, the host and the port, which the request head names.
+  scheme: String
+  host: String
+  port: Int
+  ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
+  ## body.
+  options: HttpClientOptions
+  ## The one `Exchange` of the connection, in a channel that holds a single value: a call takes it and puts it back,
+  ## so a second call at the same time finds it empty and says so.
+  cell: Channel[Exchange]
+end
+
+## The head of a response read on a `Connection`: the `status` and `headers` (names in lowercase). The body is still
+## on the connection, for `read_body`.
+export struct ResponseHead
+  ## The status, however high: 404 and 500 are normal responses. An interim `1xx` head is read past.
+  status: Int
+  ## The response headers.
+  headers: List[Header]
+end
+
 ## A response whose body is sent as it is produced: the `status` and `headers` of the head, and a `body` channel of
 ## pieces. The handler returns it at once and a task it spawned sends the pieces and closes the channel at the end. The
 ## server sends each piece as soon as it arrives and ends the body when the channel closes. When the client leaves, the
@@ -221,6 +260,24 @@ export struct StreamResponse
   ## closed when the handler returns and has another size is a 500. Not for a 204 or a 304. `none` is the default: the
   ## body is chunked.
   length: Optional[Int] = none
+end
+
+# Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
+# `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
+# `chunks` is the decoder of a chunked body, and `closes` whether the connection ends with the body
+# (`Connection: close`, HTTP/1.0 or a body that runs to the end of input).
+struct Exchange
+  phase: Int
+  framing: Int
+  left: Int
+  chunks: HttpWire.Chunk
+  closes: Bool
+end
+
+# One step of a body: the piece read and where the response stands after it.
+struct Step
+  piece: Bytes
+  exchange: Exchange
 end
 
 struct Whole
@@ -369,6 +426,113 @@ export def download(
   end
 end
 
+## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
+## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with
+## `options.ca_file` (the system's by default). Only `timeout_ms` (the time of each call: this one, each
+## `send_request` and each `read_body`) and `max_body_bytes` (the largest request body) of `options` apply: nothing is
+## pooled. The connection is for one request at a time and stays open for the next one when the response had a body
+## that was read to its end (`read_body` gave an empty piece) and the server did not close it. A response body is at
+## most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with `finish`. For whole requests use
+## `get_response` or the pooled client instead.
+export def start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
+  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  where = try parse_url(origin)
+  if where.target != "/"
+    return error("http: start takes an origin such as http://host:8080, with no path or query")
+  end
+  socket = try open_socket(where, options)
+  cell: Channel[Exchange] = Channel.new(1)
+  cell.send(settled(IDLE, false), 0)
+  return ok(Connection(
+    socket: socket,
+    scheme: where.scheme,
+    host: where.host,
+    port: where.port,
+    options: options,
+    cell: cell,
+  ))
+end
+
+## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
+## `Net::HTTP#send_request` does. `target` is the path with its query (`/items?page=2`); `method`, `body` (`Bytes`, at
+## most `max_body_bytes`; `"".bytes` sends none) and `headers` (default none) are as for `request`, and the client
+## adds `Host` and `Content-Length`. The body of the response is not read: call `read_body` until it gives an empty
+## piece (a response with no body, such as one to `HEAD` or a `204`, leaves the connection ready at once). An `error`
+## is a request refused before it was written, which leaves the connection as it was, a connection that is closed or
+## has a response still to be read, or a failure of the connection, which then ends. A server that closed an idle
+## connection shows as an `error` here: `start` a new one.
+export def send_request(
+  conn: Connection,
+  method: String,
+  target: String,
+  body: Bytes,
+  headers: List[Header] = [],
+) -> Result[ResponseHead]
+  exchange = try take_exchange(conn)
+  if exchange.phase == READING
+    put_exchange(conn, exchange)
+    return error("http: the body of the last response is not read to its end")
+  end
+  if exchange.phase == OVER or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER)
+  end
+  # A request that cannot be encoded (a bad method, header or target, a body over the limit) was never written, so
+  # the connection is as healthy as before. Only a failure after the first byte ends it.
+  encoded = HttpWire.encode_request(
+    conn.scheme,
+    conn.host,
+    conn.port,
+    method,
+    target,
+    headers,
+    body,
+    conn.options.max_body_bytes,
+  )
+  case encoded
+    ok(request) -> return send_encoded(conn, request, method == "HEAD", body)
+    error(message) ->
+      put_exchange(conn, exchange)
+      return error(message)
+  end
+end
+
+## Reads the next piece of the body of the last response, at most `max_bytes` (1 to 1 MiB, 64 KiB by default), as
+## Ruby's `Net::HTTP#read_body` does with a block. It waits for at least one byte, and an empty `Bytes` is the end of
+## the body: the connection is then ready for the next `send_request`, or closed when the server said so. It is the
+## end as soon as the last byte has been read, so a program that knows the length may stop before the empty piece. A
+## chunked body is decoded and a `Content-Length` one is held to its length. A cut body, a bad chunk and a timeout are
+## an `error`, and end the connection.
+export def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
+  if max_bytes < 1 or max_bytes > BODY_READ_BYTES
+    return error("http: max_bytes must be 1 to 1048576")
+  end
+  exchange = try take_exchange(conn)
+  if exchange.phase == OVER
+    put_exchange(conn, exchange)
+    return error(CONNECTION_OVER)
+  end
+  if exchange.phase == IDLE or exchange.phase == SPENT
+    put_exchange(conn, exchange)
+    return ok(NO_BYTES)
+  end
+  deadline = Time.monotonic_ms() + conn.options.timeout_ms
+  case next_piece(conn.socket, exchange, max_bytes, deadline)
+    ok(step) ->
+      put_exchange(conn, finished_exchange(conn, step.exchange))
+      return ok(step.piece)
+    error(message) ->
+      end_connection(conn)
+      return error(message)
+  end
+end
+
+## Ends the connection and frees its socket, as Ruby's `Net::HTTP#finish` does. A response body not read to its end is
+## dropped. It is safe to call twice.
+export def finish(conn: Connection) -> Void
+  end_connection(conn)
+end
+
 ## Returns every value of the header `name`, ignoring case, in order.
 export def header_values(headers: List[Header], name: String) -> List[String]
   wanted = String.downcase(name)
@@ -418,7 +582,7 @@ export def listen(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start(listener, Route.Whole(handler), options))
+  return ok(start_server(listener, Route.Whole(handler), options))
 end
 
 ## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options` is
@@ -438,7 +602,7 @@ export def listen_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, cert_file, key_file)
-  return ok(start(listener, Route.Whole(handler), options))
+  return ok(start_server(listener, Route.Whole(handler), options))
 end
 
 ## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
@@ -458,7 +622,7 @@ export def listen_stream(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start(listener, Route.Streaming(handler), options))
+  return ok(start_server(listener, Route.Streaming(handler), options))
 end
 
 ## Like `listen_stream`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options`
@@ -478,7 +642,7 @@ export def listen_stream_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, cert_file, key_file)
-  return ok(start(listener, Route.Streaming(handler), options))
+  return ok(start_server(listener, Route.Streaming(handler), options))
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
@@ -520,6 +684,210 @@ def request_once(
   response = request(pool, method, url, body, headers)
   close_client(pool)
   return response
+end
+
+def settled(phase: Int, closes: Bool) -> Exchange
+  chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
+  return Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
+end
+
+# The socket of `start`: TLS with the verification of `ca_file` for `https`, TCP for `http`.
+def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
+  if where.scheme == "https"
+    return TLS.connect(where.host, where.port, options.ca_file, options.timeout_ms)
+  end
+  return TCP.connect(where.host, where.port, options.timeout_ms)
+end
+
+# The one value of the cell of `conn`, which the call now holds. An empty cell means another call has it.
+def take_exchange(conn: Connection) -> Result[Exchange]
+  case conn.cell.recv(0)
+    ok(exchange) -> return ok(exchange)
+    error(_) -> return error("http: the connection is in use by another call")
+  end
+end
+
+def put_exchange(conn: Connection, exchange: Exchange) -> Void
+  conn.cell.send(exchange, 0)
+end
+
+# Closes the socket and leaves the connection over, whatever it was doing. A cell that another call holds is left to
+# it: its next step fails on the closed socket.
+def end_connection(conn: Connection) -> Void
+  TCP.close(conn.socket)
+  conn.cell.recv(0)
+  conn.cell.send(settled(OVER, true), 0)
+end
+
+# The request head and body written and the response head read: the connection is now in the response, or ended.
+def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes) -> Result[ResponseHead]
+  case sent_request(conn, request, head_only, body)
+    ok(head) ->
+      put_exchange(conn, finished_exchange(conn, exchange_of(head)))
+      return ok(ResponseHead(status: head.status, headers: head.headers))
+    error(message) ->
+      end_connection(conn)
+      return error(message)
+  end
+end
+
+# The head sent, the body after it, and the response head read (a HEAD request has no body in its answer).
+def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.Response]
+  deadline = Time.monotonic_ms() + conn.options.timeout_ms
+  try TCP.send(conn.socket, head, try time_left(conn.socket, deadline))
+  at = 0
+  while at < body.size
+    piece = body.slice(at, smaller(SEND_BYTES, body.size - at))
+    try TCP.send_bytes(conn.socket, piece, try time_left(conn.socket, deadline))
+    at = at + piece.size
+  end
+  return read_head_of(conn.socket, head_only, DOWNLOAD_MAX_BYTES, deadline)
+end
+
+# Where the connection stands after a head: reading its body, which a response with no body makes an empty one that
+# `finished_exchange` settles at once.
+def exchange_of(head: HttpWire.Response) -> Exchange
+  framing = BY_LENGTH
+  if head.chunked
+    framing = BY_CHUNKS
+  end
+  if head.until_close
+    framing = BY_CLOSE
+  end
+  chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
+  return Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: head.closes)
+end
+
+# A body that has been read to its end leaves the connection idle. It is closed instead when the server said so or
+# when input is left after the body (a second response sent at once, or bytes after the last chunk): the next request
+# would read that stale input as its answer.
+def finished_exchange(conn: Connection, exchange: Exchange) -> Exchange
+  if exchange.phase != READING or not body_ended?(exchange)
+    return exchange
+  end
+  if exchange.closes or not Result.unwrap_or(HttpWire.idle?(conn.socket, conn.options.timeout_ms), false)
+    TCP.close(conn.socket)
+    return settled(SPENT, true)
+  end
+  return settled(IDLE, false)
+end
+
+def body_ended?(exchange: Exchange) -> Bool
+  if exchange.framing == BY_CHUNKS
+    return exchange.chunks.done
+  end
+  if exchange.framing == BY_LENGTH
+    return exchange.left == 0
+  end
+  return false
+end
+
+# The next piece of a body, and the response after it. A piece is never empty unless the body is over.
+def next_piece(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+  if exchange.framing == BY_CHUNKS
+    return next_chunked(socket, exchange, most, deadline)
+  end
+  if exchange.framing == BY_CLOSE
+    return next_until_close(socket, exchange, most, deadline)
+  end
+  if exchange.left == 0
+    return ok(Step(piece: NO_BYTES, exchange: exchange))
+  end
+  data = try recv_body(socket, smaller(exchange.left, most), deadline)
+  if data.empty?
+    return error(TRUNCATED)
+  end
+  next = Exchange(
+    phase: READING,
+    framing: BY_LENGTH,
+    left: exchange.left - data.size,
+    chunks: exchange.chunks,
+    closes: exchange.closes,
+  )
+  return ok(Step(piece: data, exchange: next))
+end
+
+# A chunked body: the decoder says which bytes of each read are body, and a read may be all framing, so it goes on
+# until there is a piece or the body is over.
+def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+  state = exchange.chunks
+  while true
+    if state.done
+      return ok(Step(piece: NO_BYTES, exchange: with_chunks(exchange, state)))
+    end
+    if state.remaining > 0
+      data = try recv_body(socket, smaller(state.remaining, most), deadline)
+      if data.empty?
+        return error(TRUNCATED)
+      end
+      return ok(Step(piece: data, exchange: with_chunks(exchange, HttpWire.chunk_read(state, data.size))))
+    end
+    data = try recv_body(socket, smaller(FRAME_BYTES, most), deadline)
+    if data.empty?
+      return error(TRUNCATED)
+    end
+    case HttpWire.chunk(state, data, 0)
+      ok(after) ->
+        state = after
+        if state.done and state.next != data.size
+          # The framing read went past the last chunk: those bytes were taken from the input and are lost.
+          exchange = Exchange(
+            phase: READING,
+            framing: BY_CHUNKS,
+            left: 0,
+            chunks: exchange.chunks,
+            closes: true,
+          )
+        end
+        pieces = run_pieces(data, state.runs)
+        if not pieces.empty?
+          return ok(Step(piece: Bytes.concat(pieces), exchange: with_chunks(exchange, state)))
+        end
+      error(problem) -> return error("http: #{rest_of(problem, 4)}")
+    end
+  end
+  return error(TRUNCATED)
+end
+
+def with_chunks(exchange: Exchange, state: HttpWire.Chunk) -> Exchange
+  return Exchange(
+    phase: READING,
+    framing: BY_CHUNKS,
+    left: 0,
+    chunks: state,
+    closes: exchange.closes,
+  )
+end
+
+# The pieces of data that the runs (start, length pairs) of the decoder name.
+def run_pieces(data: Bytes, runs: List[Int]) -> List[Bytes]
+  pieces: List[Bytes] = []
+  at = 0
+  while at < List.size(runs)
+    pieces = pieces.push(data.slice(List.at(runs, at), List.at(runs, at + 1)))
+    at = at + 2
+  end
+  return pieces
+end
+
+# A body that ends with the connection: over TLS the end must be the peer's close_notify, else it was cut. The end
+# is a body of length 0 that closes the connection, which `finished_exchange` does.
+# `left` counts the bytes given so far, for the cap that every framing has.
+def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> Result[Step]
+  data = try recv_body(socket, most, deadline)
+  if data.empty?
+    if not HttpWire.clean_eof?(socket)
+      return error(TRUNCATED)
+    end
+    done = Exchange(phase: READING, framing: BY_LENGTH, left: 0, chunks: exchange.chunks, closes: true)
+    return ok(Step(piece: NO_BYTES, exchange: done))
+  end
+  given = exchange.left + data.size
+  if given > DOWNLOAD_MAX_BYTES
+    return error(TOO_LARGE)
+  end
+  next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
+  return ok(Step(piece: data, exchange: next))
 end
 
 def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
@@ -653,7 +1021,7 @@ def parse_url(url: String) -> Result[Target]
   return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
-def start(listener: Listener, route: Route, options: HttpServerOptions) -> HttpServer
+def start_server(listener: Listener, route: Route, options: HttpServerOptions) -> HttpServer
   return HttpWire.server(listener, options.max_connections) do |server|
     accept_all(Service(server: server, route: route, options: options))
   end
@@ -732,7 +1100,7 @@ def read_length(reading: Reading) -> Result[Incoming]
     pieces = List.append(pieces, data)
     left = left - data.size
   end
-  return finish(reading, Bytes.concat(pieces), NO_BYTES)
+  return read_done(reading, Bytes.concat(pieces), NO_BYTES)
 end
 
 def read_chunked(reading: Reading) -> Result[Incoming]
@@ -752,7 +1120,7 @@ def read_chunked(reading: Reading) -> Result[Incoming]
       pieces = add_runs(pieces, data, state.runs)
     end
   end
-  return finish(reading, Bytes.concat(pieces), data.drop(state.next))
+  return read_done(reading, Bytes.concat(pieces), data.drop(state.next))
 end
 
 def next_chunk(reading: Reading, state: HttpWire.Chunk, data: Bytes) -> Result[HttpWire.Chunk]
@@ -762,7 +1130,7 @@ def next_chunk(reading: Reading, state: HttpWire.Chunk, data: Bytes) -> Result[H
   end
 end
 
-def finish(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
+def read_done(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
   head = reading.head
   request = HttpRequest(
     method: head.method,
@@ -1600,7 +1968,7 @@ def exchange(answer: Answer, reused: Bool) -> Attempt
     sent = send_all(socket, job.head.bytes + job.body, left)
     return finish_exchange(answer, read_response(answer), sent, reused)
   end
-  writer = Task.spawn(&send_request, answer)
+  writer = Task.spawn(&write_request, answer)
   received = read_response(answer)
   if not Result.ok?(received.response)
     TCP.close(socket)
@@ -1619,7 +1987,7 @@ def exchange(answer: Answer, reused: Bool) -> Attempt
   return finish_exchange(answer, received, sent, reused)
 end
 
-def send_request(answer: Answer) -> Result[Void]
+def write_request(answer: Answer) -> Result[Void]
   left = answer.job.deadline - Time.monotonic_ms()
   if left <= 0
     return error(TIMED_OUT)
@@ -1664,7 +2032,7 @@ def read_response(answer: Answer) -> Received
         case HttpWire.read_response(answer.socket, job.method == "HEAD", answer.max_body_bytes, left)
           ok(head) ->
             if head.status >= 200
-              return read_body(answer, head)
+              return read_response_body(answer, head)
             end
             interim = interim + 1
             if interim > MAX_INTERIM
@@ -1687,7 +2055,7 @@ end
 # A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
 # are a server bug or a response nobody asked for, and the next call must not read them; after an end of input the
 # next call would fail. The body is the bytes the framing carries, whatever they hold.
-def read_body(answer: Answer, head: HttpWire.Response) -> Received
+def read_response_body(answer: Answer, head: HttpWire.Response) -> Received
   whole: Result[Whole] = error("")
   if head.chunked
     whole = read_chunked_body(answer)
@@ -1846,11 +2214,17 @@ end
 
 # The response head of a download, with the download budget as the body limit.
 def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.Response]
+  return read_head_of(socket, false, budget, deadline)
+end
+
+# The head of the final response (after at most MAX_INTERIM interim ones), with the framing of a response to HEAD when
+# `head_only`, and `budget` as the largest body the head may announce.
+def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) -> Result[HttpWire.Response]
   interim = 0
   while true
     case time_left(socket, deadline)
       ok(left) ->
-        case HttpWire.read_response(socket, false, budget, left)
+        case HttpWire.read_response(socket, head_only, budget, left)
           ok(head) ->
             if head.status >= 200
               return ok(head)

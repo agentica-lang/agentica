@@ -16,8 +16,9 @@
 import Source from "source"
 import Types from "types"
 
-## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its digits, with a
-## leading - when a pattern negates it.
+## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its decimal digits
+## (a hex, binary or octal literal far past 2^64 keeps its prefix and digits instead, `0x1ff...`), with a leading -
+## when a pattern negates it.
 export enum LitValue
   Whole(Int)
   Huge(String)
