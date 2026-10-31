@@ -323,6 +323,7 @@ TLS.client_context
 TLS.connect
 TLS.listen
 TLS.server_context
+TLS.upgrade
 Task.await
 Task.await_result
 Task.cancel
