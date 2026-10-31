@@ -31,6 +31,11 @@ def main() -> Void
   show_text("latin-1", bytes_of([97, 233, 255]).decode("latin-1"))
   show_bytes("ascii", "ab".encode("ascii"))
   show_text("ascii", bytes_of([97, 98]).decode("ascii"))
+  # ISO-8859-15 and Windows-1252: the euro sign and the letters that differ from Latin-1.
+  show_bytes("iso-8859-15", "€Šœ".encode("iso-8859-15"))
+  show_text("iso-8859-15", bytes_of([164, 166, 233]).decode("iso-8859-15"))
+  show_bytes("cp1252", "€‚“”".encode("cp1252"))
+  show_text("windows-1252", bytes_of([128, 150, 159, 233]).decode("windows-1252"))
   # The plain forms read either mark and are big-endian without one; LE, BE and UTF-8 keep a mark as U+FEFF.
   show_text("utf-16", bytes_of([255, 254, 97, 0]).decode("utf-16"))
   show_text("utf-16", bytes_of([0, 97]).decode("utf-16"))
@@ -56,6 +61,9 @@ def main() -> Void
   show_text("ascii", bytes_of([97, 128]).decode("ascii"))
   show_bytes("ascii", "aé".encode("ascii"))
   show_bytes("latin-1", "a€".encode("latin-1"))
+  show_bytes("iso-8859-15", "a¤".encode("iso-8859-15"))
+  show_text("cp1252", bytes_of([97, 129]).decode("cp1252"))
+  show_bytes("cp1252", "aŁ".encode("cp1252"))
   show_bytes("koi8-r", "a".encode("koi8-r"))
   show_text("utf-8-sig", bytes_of([97]).decode("utf-8-sig"))
 end
