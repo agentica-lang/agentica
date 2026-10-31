@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-31
+
+The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
+`0.19.0-beta.2` and `0.19.0-beta.3` below.
+
 ### Added
 
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
@@ -806,7 +811,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0...HEAD
+[0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
 [0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
 [0.19.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...0.19.0-beta.2
 [0.19.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.18.0...0.19.0-beta.1
