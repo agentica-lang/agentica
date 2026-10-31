@@ -57,12 +57,15 @@ struct Pending
   parent: Int
 end
 
-# The outline with, for each node, where its children start in it and how many there are: a node's children are
-# queued together, so they sit side by side.
+# The outline with, for each node, where its children start in it and how many there are, and where each node starts
+# and stops. A node's children are queued together, so they sit side by side; they come in source order and do not
+# overlap, so their starts and their stops both ascend, and the searches among them are binary.
 struct Outline
   nodes: List[Node]
   first: List[Int]
   count: List[Int]
+  starts: List[Int]
+  stops: List[Int]
 end
 
 # The tokens that are not line breaks or the end of the text, with their offsets for the binary searches.
@@ -145,7 +148,9 @@ def outline_of(program: Ast.Program, marks: Marks) -> Outline
     at += 1
   end
 
-  return Outline(nodes: nodes, first: first, count: count)
+  starts = nodes.map do |node: Node| node.span.start.offset end
+  stops = nodes.map do |node: Node| node.span.stop.offset end
+  return Outline(nodes: nodes, first: first, count: count, starts: starts, stops: stops)
 end
 
 # A node the parser made without text of its own has an empty span; it gets no comment.
@@ -165,8 +170,13 @@ end
 
 # The index of the last value of the ascending `values` that is at most `limit`, or -1.
 def last_at_or_before(values: List[Int], limit: Int) -> Int
-  low = 0
-  high = values.size
+  return last_in(values, 0, values.size, limit)
+end
+
+# The index of the last value of `values[from...to]`, ascending, that is at most `limit`, or `from - 1`.
+def last_in(values: List[Int], from: Int, to: Int, limit: Int) -> Int
+  low = from
+  high = to
   while low < high
     middle = (low + high) / 2
     if values[middle] <= limit
@@ -181,8 +191,13 @@ end
 
 # The index of the first value of the ascending `values` that is at least `limit`, or the size of the list.
 def first_at_or_after(values: List[Int], limit: Int) -> Int
-  low = 0
-  high = values.size
+  return first_in(values, 0, values.size, limit)
+end
+
+# The index of the first value of `values[from...to]`, ascending, that is at least `limit`, or `to`.
+def first_in(values: List[Int], from: Int, to: Int, limit: Int) -> Int
+  low = from
+  high = to
   while low < high
     middle = (low + high) / 2
     if values[middle] < limit
@@ -273,22 +288,17 @@ def token_kind(marks: Marks, index: Int) -> String
   return marks.tokens[index].kind
 end
 
-# The deepest node whose span holds `offset`, found from the Program down; the Program when no node holds it.
+# The deepest node whose span holds `offset`, found from the Program down; the Program when no node holds it. At each
+# level the only child that can hold it is the last one starting at or before it.
 def enclosing_of(outline: Outline, offset: Int) -> Int
   current = 0
   looking = true
   while looking
-    looking = false
-    child = outline.first[current]
-    stop = child + outline.count[current]
-    while child < stop
-      if holds?(outline.nodes[child].span, offset)
-        current = child
-        looking = true
-        child = stop
-      else
-        child += 1
-      end
+    first = outline.first[current]
+    child = last_in(outline.starts, first, first + outline.count[current], offset)
+    looking = child >= first and holds?(outline.nodes[child].span, offset)
+    if looking
+      current = child
     end
   end
 
@@ -301,16 +311,10 @@ end
 
 # The child of `parent` that ends last at or before `offset`, or -1.
 def preceding_of(outline: Outline, parent: Int, offset: Int) -> Int
-  found = -1
-  child = outline.first[parent]
-  stop = child + outline.count[parent]
-  while child < stop
-    span = outline.nodes[child].span
-    if span.stop.offset <= offset and (found < 0 or span.stop.offset >= outline.nodes[found].span.stop.offset)
-      found = child
-    end
-
-    child += 1
+  first = outline.first[parent]
+  found = last_in(outline.stops, first, first + outline.count[parent], offset)
+  if found < first
+    return -1
   end
 
   return found
@@ -318,16 +322,11 @@ end
 
 # The child of `parent` that starts first at or after `offset`, or -1.
 def following_of(outline: Outline, parent: Int, offset: Int) -> Int
-  found = -1
-  child = outline.first[parent]
-  stop = child + outline.count[parent]
-  while child < stop
-    span = outline.nodes[child].span
-    if span.start.offset >= offset and (found < 0 or span.start.offset < outline.nodes[found].span.start.offset)
-      found = child
-    end
-
-    child += 1
+  first = outline.first[parent]
+  stop = first + outline.count[parent]
+  found = first_in(outline.starts, first, stop, offset)
+  if found == stop
+    return -1
   end
 
   return found

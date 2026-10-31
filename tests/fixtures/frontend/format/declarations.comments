@@ -5,6 +5,7 @@
 11:3 leading FieldDecl 12:3 "# before a field"
 13:10 trailing FieldDecl 13:3 "# after a field"
 14:3 trailing FieldDecl 13:3 "# before the end of a struct"
+17:12 leading EnumVariant 19:3 "# after an enum header"
 18:3 leading EnumVariant 19:3 "# before a variant"
 20:10 trailing EnumVariant 20:3 "# after a variant"
 23:12 trailing ConstDecl 23:1 "# after a constant"

@@ -14,7 +14,7 @@ struct Point
   # before the end of a struct
 end
 
-enum Shape
+enum Shape # after an enum header
   # before a variant
   Circle(Int)
   Square # after a variant

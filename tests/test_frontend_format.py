@@ -7,6 +7,7 @@ The goldens in fixtures/frontend/format/ cover the positions of 47.4; tools/refr
 keeps its tokens: the lexer goldens of test_frontend_lexer.py do not move.
 """
 import re
+import time
 
 import pytest
 
@@ -17,6 +18,11 @@ FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "format"
 LINE = re.compile(r'^(\d+):(\d+) (leading|trailing|dangling) [A-Za-z]+ \d+:\d+(?: (?:elsif|else|end))? "(.*)"$')
 # A large file of the repo with many comments and no heredoc, so a line that starts with `#` is a comment.
 LARGE = "compiler/syntax/parser.agc"
+# Declarations of the generated file of the timing test, three comments each.
+GENERATED_DECLS = 6000
+# Seconds the attachment of the generated file may take: well above the time of a linear search (about half a second),
+# well below the time of a quadratic one (more than ten seconds).
+GENERATED_LIMIT = 4.0
 
 
 class FormatStage(PytestStageCase):
@@ -52,3 +58,24 @@ def test_every_own_line_comment_of_a_large_file_is_placed_once_in_source_order(f
     assert placed == sorted(placed)
     assert [place for place in placed if place in set(expected)] == expected
     assert len(expected) > 100
+
+
+def test_the_attachment_of_a_file_with_many_declarations_stays_near_linear(format_stage):
+    lines = []
+    for index in range(GENERATED_DECLS):
+        lines += ["# leads f%d" % index, "def f%d() -> Int # on the header" % index,
+                  "  return %d # on the value" % index, "end", ""]
+    directory = format_stage.make_temp_dir()
+    (directory / "many.agc").write_text("\n".join(lines), encoding="utf-8")
+    started = time.monotonic()
+    output = format_stage.run_sections(["many.agc"], cwd=directory)["many.agc"]
+    elapsed = time.monotonic() - started
+    placed = output.rstrip("\n").split("\n")
+    assert len(placed) == 3 * GENERATED_DECLS
+    last = 5 * GENERATED_DECLS - 4
+    assert [line.split(" ")[:4] for line in placed[-3:]] == [
+        ["%d:1" % last, "leading", "FunctionDecl", "%d:1" % (last + 1)],
+        ["%d:20" % (last + 1), "trailing", "TypeRef", "%d:16" % (last + 1)],
+        ["%d:15" % (last + 2), "trailing", "Return", "%d:3" % (last + 2)],
+    ]
+    assert elapsed < GENERATED_LIMIT, elapsed

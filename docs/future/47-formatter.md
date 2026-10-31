@@ -191,6 +191,9 @@ printed.
 - between struct fields or enum variants; leading on the `FieldDecl` or
   `EnumVariant`; above it, and a doc block stays directly above its
   declaration.
+- after a `struct` or `enum` header (`struct S # note`); leading on the first
+  `FieldDecl` or `EnumVariant` (rules 2 and 3 give it); above that member, at
+  the member indent.
 - before a closing bracket of a call, list, map or struct literal; trailing on
   the last element (own line); on its own line after it, and the comma goes
   before the comment.
