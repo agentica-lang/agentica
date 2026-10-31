@@ -5,6 +5,7 @@
 ## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 
 import WebSocketWire from "std/internal/websocket"
+import URI from "std/uri"
 
 READ_BYTES = 65536
 # Chunked framing is read in small pieces, so the decoder sees the bytes of a chunk's framing and no more.
@@ -85,7 +86,9 @@ STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
-BAD_PROXY = "http: the proxy must be an http:// origin such as http://host:8080, with no user info, path or query"
+BAD_PROXY = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
+# Said without the user info: an error never repeats the credentials.
+BAD_LOGIN = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
 NO_BODY = "a 204 or 304 response cannot have a body"
 WRONG_SIZE = "the body is not the length it was given"
 CRLF = "\r\n".bytes
@@ -99,6 +102,12 @@ struct Target
   host: String
   port: Int
   target: String
+end
+
+# The proxy of the options: where it is, and the `Proxy-Authorization` value its user info makes ("" with none).
+struct Proxy
+  target: Target
+  login: String
 end
 
 # What a server's handler returns: a whole response, or one whose body is a channel (listen_stream).
@@ -291,8 +300,11 @@ export struct Connection
   host: String
   port: Int
   ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
-  ## body.
+  ## body. A `proxy` has no user info here, so printing a connection shows no password.
   options: HttpClientOptions
+  ## The `Proxy-Authorization` value of the proxy's user info ("" with none), alone in a channel that holds one value:
+  ## a channel prints as `<Channel>`, where a field would print the login.
+  login: Channel[String]
   ## The one `Exchange` of the connection, in a channel that holds a single value: a call takes it and puts it back,
   ## so a second call at the same time finds it empty and says so.
   cell: Channel[Exchange]
@@ -458,7 +470,9 @@ end
 ## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
 ## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
 ## connections are pooled by the proxy, and an `https://` request is an error (a `CONNECT` tunnel is not built yet);
-## a `proxy` that is not an `http://` origin is an error here. Close the client with `close_client`.
+## a `proxy` that is not an `http://` origin is an error here. The user info of the `proxy`
+## (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`, and a
+## `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   try check_proxy(options)
@@ -523,7 +537,7 @@ export def request(
     where.port,
     method,
     request_target(options, where),
-    headers,
+    with_login(options, headers),
     body,
     options.max_body_bytes,
   )
@@ -543,7 +557,7 @@ export def request(
     kept: false,
   )
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
-    ok(_) -> return wait_reply(reply, deadline)
+    ok(_) -> return unless_denied(options, wait_reply(reply, deadline))
     error(message) ->
       if message == CHANNEL_CLOSED
         return error(CLIENT_CLOSED)
@@ -583,14 +597,20 @@ export def download(
     where.port,
     "GET",
     request_target(client_options, where),
-    [],
+    with_login(client_options, []),
     NO_BYTES,
     client_options.max_body_bytes,
   )
   deadline = Time.monotonic_ms() + options.timeout_ms
+  # What a 407 from the proxy is told as; empty when there is no proxy, whose 407 is the server's own answer.
+  denied = ""
+  if client_options.proxy != ""
+    denied = client_denied(client_options)
+  end
+
   socket = try connect_download(pool, via, deadline)
   case TCP.send(socket, head, try time_left(socket, deadline))
-    ok(_) -> return finish_download(socket, path, options, deadline)
+    ok(_) -> return finish_download(socket, path, options, deadline, denied)
     error(message) ->
       TCP.close(socket)
       return error(message)
@@ -647,7 +667,7 @@ export def send_request(
     conn.port,
     method,
     connection_target(conn, target),
-    headers,
+    connection_headers(conn, headers),
     body,
     conn.options.max_body_bytes,
   )
@@ -1093,15 +1113,177 @@ end
 
 # The proxy of the options: an `http://host:port` origin.
 def proxy_target(options: HttpClientOptions) -> Result[Target]
-  case parse_url(options.proxy)
-    ok(proxy) ->
-      if proxy.scheme == "http" and proxy.target == "/"
-        return ok(proxy)
+  proxy = try proxy_of(options)
+  return ok(proxy.target)
+end
+
+# The proxy of the options and its login. The user info is cut out of the URL before `parse_url` sees it, which refuses
+# it; the last `@` ends it, so a password may hold a raw one. Both parts are percent-decoded, and the URL is not
+# kept or quoted anywhere after this: an error names neither the user info nor the URL.
+def proxy_of(options: HttpClientOptions) -> Result[Proxy]
+  url = options.proxy
+  split = first_of(url, "://")
+  if split == String.length(url)
+    return error(BAD_PROXY)
+  end
+
+  rest = rest_of(url, split + 3)
+  stop = first_of(rest, "/")
+  stop = smaller(stop, first_of(rest, "?"))
+  stop = smaller(stop, first_of(rest, "#"))
+  authority = String.slice(rest, 0, stop)
+  at = last_at(authority)
+  login = ""
+  origin = url
+  if at >= 0
+    login = try login_of(String.slice(authority, 0, at))
+    origin = "#{String.slice(url, 0, split + 3)}#{rest_of(authority, at + 1)}#{rest_of(rest, stop)}"
+  end
+
+  case parse_url(origin)
+    ok(target) ->
+      if target.scheme == "http" and target.target == "/"
+        return ok(Proxy(target: target, login: login))
       end
     error(_) -> return error(BAD_PROXY)
   end
 
   return error(BAD_PROXY)
+end
+
+# The index of the last `@` of `text`, or -1.
+def last_at(text: String) -> Int
+  found = -1
+  for position in 0...String.length(text)
+    if String.slice(text, position, 1) == "@"
+      found = position
+    end
+  end
+
+  return found
+end
+
+# The `Proxy-Authorization` value (RFC 7617, Basic) of the `user:password` user info of a proxy URL, percent-decoded.
+# The user name cannot hold a colon, which ends it in the credentials.
+def login_of(info: String) -> Result[String]
+  if info == ""
+    return error(BAD_LOGIN)
+  end
+
+  colon = first_of(info, ":")
+  user = try unescaped(String.slice(info, 0, colon))
+  password = ""
+  if colon < String.length(info)
+    password = try unescaped(rest_of(info, colon + 1))
+  end
+
+  if user == "" or String.contains?(user, ":")
+    return error(BAD_LOGIN)
+  end
+
+  return ok("Basic #{Base64.strict_encode64("#{user}:#{password}".bytes)}")
+end
+
+# A part of the user info, percent-decoded, with an error that does not quote it.
+def unescaped(text: String) -> Result[String]
+  case URI.decode_uri_component(text)
+    ok(decoded) -> return ok(decoded)
+    error(_) -> return error(BAD_LOGIN)
+  end
+end
+
+# The headers of a request that goes through the proxy of `options`: the ones given, and the login of the proxy's user
+# info unless the caller set `Proxy-Authorization` itself. Only the proxy gets it: the header is part of this request,
+# which a forward proxy reads and does not pass on. A connection keeps its login apart: see `connection_headers`.
+def with_login(options: HttpClientOptions, headers: List[Header]) -> List[Header]
+  if options.proxy == ""
+    return headers
+  end
+
+  case proxy_of(options)
+    ok(proxy) -> return add_login(proxy.login, headers)
+    error(_) -> return headers
+  end
+end
+
+# The headers of a request on `conn`, with the login its options no longer hold. Only the call that holds the
+# connection's exchange (or owns the connection) reads the login, so taking it and putting it back is safe.
+def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
+  case conn.login.recv(0)
+    ok(login) ->
+      conn.login.send(login, 0)
+      return add_login(login, headers)
+    error(_) -> return headers
+  end
+end
+
+def add_login(login: String, headers: List[Header]) -> List[Header]
+  if login == "" or not header_values(headers, "proxy-authorization").empty?
+    return headers
+  end
+
+  return List.append(headers, Header(name: "Proxy-Authorization", value: login))
+end
+
+# Whether the request on `conn` carried a login.
+def offered?(conn: Connection) -> Bool
+  case conn.login.recv(0)
+    ok(login) ->
+      conn.login.send(login, 0)
+      return login != ""
+    error(_) -> return false
+  end
+end
+
+# The error of a `407` from the proxy of `options`: it names the proxy, never the credentials. `offered` says whether
+# the request carried a login.
+def proxy_denied(options: HttpClientOptions, offered: Bool) -> String
+  case proxy_of(options)
+    ok(proxy) ->
+      name = proxy_name(proxy.target)
+      if not offered
+        return "http: the proxy #{name} requires credentials (407): put user:password in the proxy URL"
+      end
+
+      return "http: the proxy #{name} refused the credentials (407)"
+    error(message) -> return message
+  end
+end
+
+# `proxy_denied` for the options of a client, whose user info is still in `proxy`.
+def client_denied(options: HttpClientOptions) -> String
+  case proxy_of(options)
+    ok(proxy) -> return proxy_denied(options, proxy.login != "")
+    error(message) -> return message
+  end
+end
+
+# The answer of a pooled request, or the proxy's error when the proxy answered `407`.
+def unless_denied(options: HttpClientOptions, answer: Result[HttpResponse]) -> Result[HttpResponse]
+  case answer
+    ok(response) ->
+      if proxy_asked?(options, response.status)
+        return error(client_denied(options))
+      end
+
+      return ok(response)
+    error(message) -> return error(message)
+  end
+end
+
+# True for a `407` answered by the proxy of `options`, which is an error for the call, not a response.
+def proxy_asked?(options: HttpClientOptions, status: Int) -> Bool
+  return status == 407 and options.proxy != ""
+end
+
+# `host:port` of a target as an error shows it: an IPv6 literal in brackets and the port always there.
+def proxy_name(where: Target) -> String
+  name = where.host
+  if String.contains?(name, ":")
+    name = "[#{name}]"
+  end
+
+  return "#{name}:#{where.port}"
 end
 
 def check_proxy(options: HttpClientOptions) -> Result[Void]
@@ -1113,14 +1295,33 @@ def check_proxy(options: HttpClientOptions) -> Result[Void]
   return ok()
 end
 
-# The connection to the host of `where`, idle and with no request yet.
+# The connection to the host of `where`, idle and with no request yet. Its options keep the proxy without the user
+# info, which only the header of each request needs.
 def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
   via = try connect_target(where, options)
   socket = try open_socket(via, options)
+  login: Channel[String] = Channel.new(1)
+  kept = options
+  if options.proxy != ""
+    proxy = try proxy_of(options)
+    login.send(proxy.login, 0)
+    kept = options.with(proxy: "http://#{host_authority(proxy.target.host, proxy.target.port)}")
+  else
+    login.send("", 0)
+  end
+
   cell: Channel[Exchange] = Channel.new(1)
   cell.send(settled(IDLE, false), 0)
   return ok(
-    Connection(socket: socket, scheme: where.scheme, host: where.host, port: where.port, options: options, cell: cell),
+    Connection(
+      socket: socket,
+      scheme: where.scheme,
+      host: where.host,
+      port: where.port,
+      options: kept,
+      login: login,
+      cell: cell,
+    ),
   )
 end
 
@@ -1148,12 +1349,7 @@ def reaching(connected: Result[Socket], options: HttpClientOptions, where: Targe
         return error(message)
       end
 
-      name = where.host
-      if String.contains?(name, ":")
-        name = "[#{name}]"
-      end
-
-      return error("http: cannot reach the proxy #{name}:#{where.port}: #{message}")
+      return error("http: cannot reach the proxy #{proxy_name(where)}: #{message}")
   end
 end
 
@@ -1190,6 +1386,11 @@ end
 def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes) -> Result[ResponseHead]
   case sent_request(conn, request, head_only, body)
     ok(head) ->
+      if proxy_asked?(conn.options, head.status)
+        end_connection(conn)
+        return error(proxy_denied(conn.options, offered?(conn)))
+      end
+
       put_exchange(conn, finished_exchange(conn, exchange_of(head)))
       return ok(ResponseHead(status: head.status, headers: head.headers))
     error(message) ->
@@ -1403,7 +1604,7 @@ def uploaded(
     conn.port,
     method,
     connection_target(conn, target),
-    headers,
+    connection_headers(conn, headers),
     NO_BYTES,
     conn.options.max_body_bytes,
   )
@@ -1426,6 +1627,11 @@ end
 
 # The response of an upload, whole, from its head on.
 def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpResponse]
+  if proxy_asked?(conn.options, response.status)
+    end_connection(conn)
+    return error(proxy_denied(conn.options, offered?(conn)))
+  end
+
   exchange = try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
   whole = try read_whole(conn, conn.options.max_body_bytes)
@@ -3231,11 +3437,20 @@ def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
     ok(s) ->
       attempt = exchange(Answer(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes), reused)
       if not attempt.retry
-        return Done(socket: socket, answer: attempt.answer, kept: attempt.kept)
+        # A 407 ends the connection, as it does for `start`, `upload` and `download`.
+        refused = ok_status?(attempt.answer, 407) and worker.options.proxy != ""
+        return Done(socket: socket, answer: attempt.answer, kept: attempt.kept and not refused)
       end
       TCP.close(s)
       return run_job(worker, error(""), job)
     error(message) -> return Done(socket: socket, answer: error(message), kept: false)
+  end
+end
+
+def ok_status?(answer: Result[HttpResponse], status: Int) -> Bool
+  case answer
+    ok(response) -> return response.status == status
+    error(_) -> return false
   end
 end
 
@@ -3474,11 +3689,17 @@ end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
 # the partial file stays, while a path that existed before is never touched.
-def finish_download(socket: Socket, path: String, options: DownloadOptions, deadline: Int) -> Result[Download]
+def finish_download(
+  socket: Socket,
+  path: String,
+  options: DownloadOptions,
+  deadline: Int,
+  denied: String,
+) -> Result[Download]
   case time_left(socket, deadline)
     ok(left) ->
       case File.open(path, "create_private", left)
-        ok(out) -> return stream_download(socket, out, options, deadline)
+        ok(out) -> return stream_download(socket, out, options, deadline, denied)
         error(message) ->
           TCP.close(socket)
           return error(message)
@@ -3490,9 +3711,19 @@ def finish_download(socket: Socket, path: String, options: DownloadOptions, dead
 end
 
 # The response head (after at most MAX_INTERIM interim ones) streamed into the file.
-def stream_download(socket: Socket, out: FileHandle, options: DownloadOptions, deadline: Int) -> Result[Download]
+def stream_download(
+  socket: Socket,
+  out: FileHandle,
+  options: DownloadOptions,
+  deadline: Int,
+  denied: String,
+) -> Result[Download]
   case download_head(socket, options.max_total_bytes, deadline)
     ok(head) ->
+      if head.status == 407 and denied != ""
+        return fail_download(socket, out, deadline, denied)
+      end
+
       case save_body(socket, out, head, options.max_total_bytes, deadline)
         ok(written) ->
           case File.close(out, larger(deadline - Time.monotonic_ms(), 1))
