@@ -69,7 +69,7 @@ behave the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 ```text
 HTTP.client_options() -> HttpClientOptions
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
+HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
 HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
@@ -77,7 +77,7 @@ HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, heade
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download_options() -> DownloadOptions
-HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
+HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
 
 Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
@@ -117,8 +117,7 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   planned `agentica-lang/charset` package). `HttpResponse` is not JSON
   encodable. The body of a request in a server handler is `Bytes` too:
   `HTTP.text(request.body, request.headers)`.
-- Names that do not exist: `HTTP.client()` (write
-  `HTTP.client(HTTP.client_options())`), `response.text`, `header_timeout_ms`
+- Names that do not exist: `response.text`, `header_timeout_ms`
   (`request_timeout_ms`), and `read`, `trailers`, `close_body`,
   `request_stream` (one whole `HTTP.request`).
 
@@ -126,14 +125,14 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 
 ```text
 HTTP.server_options() -> HttpServerOptions
-HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
 HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 
-HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_stream(host: String, port: Int, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HTTP.StreamResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
@@ -155,7 +154,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
   puts(HTTP.local_port(server))
   IO.flush()
   HTTP.wait(server).unwrap!

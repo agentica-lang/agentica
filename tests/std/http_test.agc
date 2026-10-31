@@ -41,8 +41,8 @@ def main() -> Void
       Test.eq(HTTP.listen_tls("127.0.0.1", 0, "none.pem", "none.pem", &answer, wide).message, "http: max_connections must be at most 65536")
     end,
     Test.test("a live server answers and closes inside a test") do
-      server = try HTTP.listen("127.0.0.1", 0, &answer, HTTP.server_options())
-      pool = try HTTP.client(HTTP.client_options())
+      server = try HTTP.listen("127.0.0.1", 0, &answer)
+      pool = try HTTP.client()
       response = HTTP.get(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/inside")
       HTTP.close_client(pool)
       HTTP.close_server(server)
@@ -93,9 +93,9 @@ def main() -> Void
       Test.eq(HTTP.DownloadOptions(), HTTP.download_options())
     end,
     Test.test("a download writes the body to a new file") do
-      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
-      pool = try HTTP.client(HTTP.client_options())
-      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-tiny.bin", HTTP.download_options())
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer)
+      pool = try HTTP.client()
+      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-tiny.bin")
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)

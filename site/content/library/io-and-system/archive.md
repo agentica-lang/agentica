@@ -8,8 +8,8 @@ description: The Archive module, which extracts named files from TAR and ZIP arc
 
 ```text
 Archive.options() -> Archive.Options
-Archive.extract_tar(src: String, members: List[String], dest_dir: String, options: Archive.Options) -> Result[List[Int]]
-Archive.extract_zip(src: String, members: List[String], dest_dir: String, options: Archive.Options) -> Result[List[Int]]
+Archive.extract_tar(src: String, members: List[String], dest_dir: String, options: Archive.Options = Archive.Options()) -> Result[List[Int]]
+Archive.extract_zip(src: String, members: List[String], dest_dir: String, options: Archive.Options = Archive.Options()) -> Result[List[Int]]
 ```
 
 `extract_tar` reads a plain `.tar` or a gzipped `.tar.gz` (picked by the gzip magic), writes each member under `dest_dir`, and returns the byte counts in member order. `members` holds 1 to 256 archive paths; one leading `./` is optional, so `./lib.so` and `lib.so` are the same member. Every failure is an `error` and never a halt; a partial destination is kept on error and is only usable when the call returns `ok`.
@@ -18,8 +18,7 @@ Archive.extract_zip(src: String, members: List[String], dest_dir: String, option
 import Archive from "std/archive"
 
 def main() -> Void
-  opts = Archive.options()
-  case Archive.extract_tar("ffi.tar.gz", ["libssl.so", "include/ssl.h"], "vendor", opts)
+  case Archive.extract_tar("ffi.tar.gz", ["libssl.so", "include/ssl.h"], "vendor")
     ok(counts) -> puts("wrote #{counts}")
     error(message) -> IO.warn("cannot unpack: #{message}")
   end
