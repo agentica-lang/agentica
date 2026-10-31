@@ -365,7 +365,7 @@ end
 String.from_bytes(data: Bytes) -> Result[String]
 ```
 
-Decodes UTF-8 bytes strictly: invalid, overlong, surrogate and incomplete sequences give an error Result, never replacement characters. It is the inverse of [`s.bytes`](#bytes).
+Decodes UTF-8 bytes strictly: invalid, overlong, surrogate and incomplete sequences give an error Result, never replacement characters. It is the inverse of [`s.bytes`](#bytes). [`b.decode(encoding)`](/library/data-structures/bytes/#decode) reads the other encodings.
 
 ```agentica
 def main() -> Void
@@ -398,6 +398,30 @@ end
 ```output
 3
 [104, 195, 169]
+```
+
+## encode
+
+```text
+String.encode(s: String, encoding: String) -> Result[Bytes]
+```
+
+Writes the text as bytes in an encoding, named as for [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII or Latin-1. Plain `utf-16` and `utf-32` write a byte order mark and then big-endian units; the `le` and `be` forms write no mark. A character that ASCII or Latin-1 cannot hold gives an error Result whose text ends with its index in the text, `at index N`, and an unknown name gives an error too. The Unicode encodings never fail: `s.encode("utf-8")` is `ok(s.bytes)`.
+
+```agentica
+def main() -> Void
+  puts("hé".encode("utf-16le").unwrap!.to_a)
+  puts("hé".encode("utf-16").unwrap!.to_a)
+  puts("hé".encode("latin-1").unwrap!.to_a)
+  puts("h€".encode("latin-1"))
+end
+```
+
+```output
+[104, 0, 233, 0]
+[254, 255, 0, 104, 0, 233]
+[104, 233]
+error("cannot encode U+20AC in Latin-1 at index 1")
 ```
 
 ## bytesize

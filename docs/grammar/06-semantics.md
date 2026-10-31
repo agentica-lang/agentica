@@ -683,6 +683,10 @@ end
   (`RUNTIME-INDEX-OUT-OF-RANGE`); `take` and `drop` clamp to the length like
   the `List` ones (`RUNTIME-INVALID-COUNT` for a negative count). `slice`,
   `take` and `drop` copy; a view would keep a large parent alive.
+- `b.decode(encoding)` gives a `Result[String]` and `s.encode(encoding)` a
+  `Result[Bytes]`, for UTF-8, UTF-16, UTF-32, ASCII and Latin-1; an invalid
+  input, a character the encoding cannot hold or an unknown name is an error
+  (site page Bytes, "decode").
 - `a + b` joins two `Bytes`; `Bytes.concat(parts)` joins a `List[Bytes]` in one
   copy. `+` in a loop copies everything on each pass and takes quadratic time,
   so join many parts with `Bytes.concat`. To build bytes one at a time, build a

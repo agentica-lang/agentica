@@ -23,7 +23,19 @@ a + b -> Bytes
 Bytes.concat(parts: List[Bytes]) -> Bytes # one copy
 b.each do |byte| ... end                  # Void
 for byte in b ... end
+b.decode(encoding) -> Result[String]      # text in an encoding; see below
+s.encode(encoding) -> Result[Bytes]
 ```
+
+- `decode` and `encode` take `utf-8`, `utf-16`, `utf-16le`, `utf-16be`,
+  `utf-32`, `utf-32le`, `utf-32be`, `ascii` and `latin-1`, without case and with
+  `_` as `-` (aliases: `utf8`, `utf16`, `utf32`, `utf-16-le`, `us-ascii`,
+  `latin1`, `iso-8859-1`, `iso8859-1`, `l1`, `cp819`). Plain `utf-16` and
+  `utf-32` read and drop a byte order mark (big-endian without one) and write
+  one with big-endian units; the other forms keep a mark as U+FEFF. Errors are
+  strict and end with `at byte N` (decode) or `at index N` (encode, a character
+  ASCII or Latin-1 lacks); an unknown name is an error too (other encodings:
+  the `agentica-lang/charset` package).
 
 - `==` and `!=` compare length and bytes. They are not constant time: compare
   MACs and tokens with `HMAC.secure_compare`. There is no `<`, and `b == "s"`

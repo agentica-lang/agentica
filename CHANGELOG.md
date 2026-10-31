@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.client`, `HTTP.listen` (and its TLS and stream forms), `HTTP.download`
   and `Archive.extract_tar` / `extract_zip` take their options last with a
   default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
+- `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
+  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
 
 ### Changed
 
