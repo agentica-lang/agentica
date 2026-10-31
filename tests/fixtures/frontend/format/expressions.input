@@ -1,0 +1,29 @@
+def main() -> Void
+  xs = [
+    1,
+    2,
+    # before a closing bracket
+  ]
+  ys = [
+    # inside an empty list
+  ]
+  m = {
+    "a": # after a map key
+      1,
+  }
+  total = (
+    xs
+      .map do |x| # after the block parameters
+        x * 2
+      end
+      # between chain lines
+      .size
+  )
+  xs.each do # after do with no parameter
+    puts(1)
+  end
+  puts(
+    total, # after an argument
+  )
+  puts() # after an empty call
+end

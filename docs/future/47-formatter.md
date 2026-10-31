@@ -1,10 +1,9 @@
 ## 47. Code formatter (`agentica fmt`)
 
-**Status:** Deferred (the bootstrap is done), decided by the owner on
-2026-10-15: roadmap row 7.9. The owner also asked for this plan on the same day.
-Nothing is implemented. The open questions in 47.9 need the owner's answers
-before phase 47b starts. Phase 47d also waits for the language server (§43),
-which is not scheduled.
+**Status:** In progress: roadmap row 7.9, decided by the owner on 2026-10-15,
+who also asked for this plan on the same day. Phase 47a is done (47.10). The
+owner answered the open questions of 47.9 on 2026-10-31. Phase 47d waits for
+the language server (§43), which is not scheduled.
 
 In short: `agentica fmt` rewrites `.agc` files in place with one printer. It is
 written in Agentica in `compiler/`, on the self-hosted lexer and parser.
@@ -192,6 +191,9 @@ printed.
 - between struct fields or enum variants; leading on the `FieldDecl` or
   `EnumVariant`; above it, and a doc block stays directly above its
   declaration.
+- after a `struct` or `enum` header (`struct S # note`); leading on the first
+  `FieldDecl` or `EnumVariant` (rules 2 and 3 give it); above that member, at
+  the member indent.
 - before a closing bracket of a call, list, map or struct literal; trailing on
   the last element (own line); on its own line after it, and the comma goes
   before the comment.
@@ -405,6 +407,10 @@ below; there is no separate roadmap phase file.
 
 Each question has options and a recommendation.
 
+**Answered** by the owner on 2026-10-31: every recommendation, so 1(a), 2(a),
+3(a), 4(a) with the grammar note in 47b, 5(a), 6(b), 8(a) and 9(a). The printer
+also honors `[style] blank_line_after_end` (47.2).
+
 1. **Width when there is no `[style]`.** Options: (a) 119, the width of
    `compiler/` and `stdlib/`; (b) 100, the rustfmt default; (c) 80, the Prettier
    default. **Recommendation:** (a), one number across the repo and the owner's
@@ -460,8 +466,16 @@ Each question has options and a recommendation.
 ### 47.10 Implementation (row 7.9)
 
 One PR per phase of 47.8, each with its own tests and docs. The §47.9 open
-questions need the owner's answers before 47b starts; 47d waits for the
-language server (§43, not scheduled) and is outside this order.
+questions are answered; 47d waits for the language server (§43, not scheduled)
+and is outside this order.
+
+- [x] 47a: `Lexer.lex_with_comments` and the attachment pass of 47.4 in
+  `compiler/format/comments.agc`, with option B (a side list); the goldens of
+  `tests/fixtures/frontend/format/` print each comment's node and role. The
+  width test that turns a trailing comment into a leading one needs the flat
+  width of a node, so it comes with the printer in 47b.
+- [ ] 47b: the printer, `fmt --check` and `make fmt-check`.
+- [ ] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`.
 
 Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes in CI
 over `compiler/` and `stdlib/`, `agentica check` reports the width, and the

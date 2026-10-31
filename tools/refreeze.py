@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGES = ["lexer", "parser", "modules", "check", "lower", "catalog", "bytecode"]
+STAGES = ["lexer", "parser", "format", "modules", "check", "lower", "catalog", "bytecode"]
 
 # One stage with the whole slow tier can take many minutes; a stage that runs longer than this is stopped.
 STAGE_TIMEOUT = 3600

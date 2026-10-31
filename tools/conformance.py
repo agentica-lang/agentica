@@ -204,6 +204,7 @@ EXCLUDED = {
     "tests/test_frontend_bytecode.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_catalog.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_check.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
+    "tests/test_frontend_format.py": "the comment attachment of the formatter, pure Agentica, the same on every system",
     "tests/test_frontend_lexer.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_lower.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_modules.py": "frozen goldens of the front end stages; the spec and golden areas run it live",

@@ -1,0 +1,2 @@
+2:3 leading ExprStmt 3:3 "# a comment in a CRLF file"
+3:11 trailing ExprStmt 3:3 "# after code"
