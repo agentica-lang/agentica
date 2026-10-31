@@ -330,3 +330,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   and TLS) for `tests/fixtures/http-stream-peer.py`, where `http.client` reads
   the chunks as they arrive and times them, leaves mid-stream and sends
   HTTP/1.0.
+- HTTP streamed requests (`listen_upload`): `tests/test_vm_http.py` runs one VM
+  server program (`UPLOAD_SERVER_PROGRAM`, one and four schedulers, plus TLS)
+  against a raw socket client: a 3 MiB body with a slow handler (backpressure),
+  keep-alive, a chunked body with a pipelined request in one write, an early
+  answer, a 413, a cut body, a bad chunk, `Expect: 100-continue`, the step
+  timeout and `HTTP.read_all`.
