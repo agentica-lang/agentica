@@ -90,13 +90,16 @@ closes the connection (never back to the pool) and ends with an error.
   - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(data)` for its
     other routes (built)
 
+- **Job:** A server whose routes take uploads too big to hold
+  - **The one form:** `HTTP.listen_upload`, with `HTTP.read_all(body, max)` for
+    its small routes (built)
+
 The checker cannot stop `HTTP.open` on a small response, so these pass the
 one-way test by job, as `Task.map` and channels do (§27): each form exists for
 something the others cannot do (a body that does not fit the limit or never
 ends), and the skill teaches whole messages first and the streaming form only
 for those jobs. Left out until a program needs it: an upload and a streamed
-response in one call (a proxy), and streamed request bodies on the server (big
-uploads to an Agentica server); each would need its own one-way test.
+response in one call (a proxy), which would need its own one-way test.
 
 ### 30.12 Later: binary bodies and `TlsContext`
 

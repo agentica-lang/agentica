@@ -799,6 +799,31 @@ export def listen_upload_tls(
   return ok(start_server(listener, Route.Uploading(handler), options))
 end
 
+## Collects the body of an upload for a handler of `listen_upload` that wants it whole, so one server can serve small
+## routes simply next to the big ones: the pieces of `body` joined, at most `max_bytes` (0 or more), after the end of
+## the body was checked. It is an `error` when the body is longer than `max_bytes` (the handler then answers 413, and
+## the server closes the connection after that answer) and when `done` says the body did not arrive whole.
+export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
+  if max_bytes < 0
+    return error("http: max_bytes must be 0 or more")
+  end
+  pieces: List[Bytes] = []
+  total = 0
+  while true
+    case body.pieces.recv(OWNER_WAIT_MS)
+      ok(piece) ->
+        total = total + piece.size
+        if total > max_bytes
+          return error("http: body exceeds max_bytes")
+        end
+        pieces = pieces.push(piece)
+      error(_) -> break
+    end
+  end
+  try Task.await(body.done)
+  return ok(Bytes.concat(pieces))
+end
+
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
 ## text or file. The server then answers with `Content-Length`, as `listen` does.
 export def whole(data: Bytes) -> Channel[Bytes]
@@ -1478,8 +1503,10 @@ def read_done(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
 end
 
 # A request whose body goes to the handler as it arrives. A task reads the body from the socket while the handler runs.
-# The connection stays only when the body was read to its end: a handler that answered earlier (or a body that failed)
-# gets its answer sent, the reading stops, and the connection closes after the input is drained.
+# The connection stays only when the body was read whole by the time the handler returned: the task sends `rest` (the
+# bytes it read past the body) only then, and before it closes the pieces. Otherwise (the handler answered first, or
+# the body failed) the answer says `Connection: close`, and after it the task is cancelled, the input is drained and
+# the connection closes.
 def answer_upload(reading: Reading, handler: UploadHandler, options: HttpServerOptions) -> Sent
   socket = reading.socket
   head = reading.head
@@ -1496,25 +1523,34 @@ def answer_upload(reading: Reading, handler: UploadHandler, options: HttpServerO
     headers: head.headers,
     body: NO_BYTES,
   )
+  result = handler.call(request, RequestBody(pieces: pieces, done: feeder))
+  pieces.close
+  past = left.recv(0)
+  whole = Result.ok?(past)
   keep = false
-  case handler.call(request, RequestBody(pieces: pieces, done: feeder))
-    ok(response) -> keep = reply_whole(socket, request, response, options.request_timeout_ms)
+  case result
+    ok(response) -> keep = reply_whole(socket, request, closing_unless(response, whole), options.request_timeout_ms)
     error(message) ->
       IO.warn("http: handler error: #{message}")
       failed(socket, request, options.request_timeout_ms)
   end
-  pieces.close
-  # The feeder sends `rest` only when the body was read whole, and before it closes the pieces: no value means the
-  # handler answered first, or the body failed.
-  case left.recv(0)
-    ok(past) ->
-      Task.await(feeder)
-      return Sent(keep: keep, rest: past)
-    error(_) -> Task.cancel(feeder)
+  if whole
+    Task.await(feeder)
+    return Sent(keep: keep, rest: Result.unwrap_or(past, NO_BYTES))
   end
+  Task.cancel(feeder)
   drain(socket, Time.monotonic_ms() + ANSWER_MS)
   TCP.close(socket)
   return Sent(keep: false, rest: NO_BYTES)
+end
+
+# The response, with `Connection: close` added unless the body of the request was read whole.
+def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
+  if whole
+    return response
+  end
+  headers = response.headers.push(Header(name: "Connection", value: "close"))
+  return HttpResponse(status: response.status, headers: headers, body: response.body)
 end
 
 # The task of an upload: it sends the pieces of the body to the channel and closes it on every path. When the body
@@ -1541,7 +1577,7 @@ def feed_body(feeding: Feeding) -> Result[Bytes]
   end
   left = reading.head.length
   while left > 0
-    data = try more_request(socket, smaller(left, BODY_READ_BYTES), Time.monotonic_ms() + feeding.step_ms)
+    data = try more_request(socket, smaller(left, READ_BYTES), Time.monotonic_ms() + feeding.step_ms)
     try feeding.pieces.send(data, feeding.step_ms)
     left = left - data.size
   end
@@ -1556,7 +1592,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
   while not state.done
     deadline = Time.monotonic_ms() + feeding.step_ms
     if state.remaining > 0
-      data = try more_request(socket, smaller(state.remaining, BODY_READ_BYTES), deadline)
+      data = try more_request(socket, smaller(state.remaining, READ_BYTES), deadline)
       try feeding.pieces.send(data, feeding.step_ms)
       state = HttpWire.chunk_read(state, data.size)
     else
@@ -1670,6 +1706,7 @@ def answer(socket: Socket, incoming: Incoming, service: Service) -> Sent
           failed(socket, incoming.request, options.request_timeout_ms)
       end
       return Sent(keep: false, rest: NO_BYTES)
+    # An upload route is served by answer_upload, which `serve` calls before it gets here.
     Route.Uploading(_) -> return Sent(keep: false, rest: NO_BYTES)
   end
 end

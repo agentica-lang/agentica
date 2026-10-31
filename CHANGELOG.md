@@ -16,7 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Handler`.
 - `HTTP.listen_upload` (and `listen_upload_tls`) gives a handler the body of the
   request on a channel as it arrives (`HTTP.RequestBody`: `pieces` and a `done`
-  task), for uploads too big to hold; `HTTP.UploadHandler` names its type.
+  task), for uploads too big to hold; `HTTP.UploadHandler` names its type, and
+  `HTTP.read_all` collects a body for a small route.
 
 ### Changed
 

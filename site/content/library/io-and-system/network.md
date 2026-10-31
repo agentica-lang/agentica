@@ -596,6 +596,7 @@ data: tick 3
 ```text
 HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 ```
 
 `listen` reads the whole body before the handler runs. For an upload too big to hold, or one the handler stores as it comes (a file), `listen_upload` gives the handler the body on a channel. It is the server side of [`HTTP.upload`](#httpopen-and-httpupload), and it has the shape of `listen_stream`: another kind of handler, not a field of `HttpRequest`, so `HttpRequest`, `HTTP.Handler` and every existing handler stay as they are.
@@ -606,7 +607,9 @@ HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: Str
 - The handler runs the usual receive loop until the closed error, then awaits `done`: `ok` means the whole body arrived, and an `error` says why it did not (the client left, a bad chunk, a timeout). A channel can only end, so `done` is the only way to tell a whole body from a cut one: always await it.
 - The channel holds 8 pieces. A handler that reads slowly makes the server wait, and the client's data waits in the socket, so memory stays bounded.
 - `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the handler has not taken), not the time of the whole upload. `max_body_bytes` does not apply: a streamed body is at most 256 MiB, and a handler that wants less counts the bytes and answers `413`.
-- The connection stays for the next request only when the handler read the body to its end. A handler that answers first (a `413`, a `401`) has its answer sent and the connection closes after it, so a client still sending may see the close before it reads the answer. `Expect: 100-continue` is answered before the handler runs.
+- The connection stays for the next request only when the whole body had arrived by the time the handler returned. Otherwise (a handler that answers first, with a `413` or a `401`, or a body that failed) the answer gets a `Connection: close` header and the connection closes after it, so a client still sending may see the close before it reads the answer.
+- `Expect: 100-continue` is answered with `100` before the handler runs, so a handler cannot refuse an upload before the client sends the body. The checks that come before the handler still answer first: a body over 256 MiB (`413`), and a `Transfer-Encoding` or `Content-Length` that is not valid.
+- `HTTP.read_all(body, max_bytes)` collects the body for a handler that wants it whole, so one `listen_upload` server can serve its small routes simply: it returns the pieces joined as a `Result[Bytes]`, an `error` when the body is longer than `max_bytes` (answer `413`) or did not arrive whole (it awaits `done`).
 - The handler's `error(message)` is a 500 as for `listen`. Routes that need the whole body in memory are simpler with `listen`.
 
 A server that counts an upload, and the client call that streams one to it:

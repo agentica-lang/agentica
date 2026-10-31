@@ -380,6 +380,21 @@ Properties of the client that no test checks:
   pump read the end of the body from the receive's own error (`channel:
   closed`), not from a later `closed?`. HTTP/1.0 never gets here: the parser
   answers 505.
+- A `listen_upload` server reads the head (and the framing checks: 413 over
+  256 MiB, 400, 411, 417 and the `100 Continue`) the same way, then spawns a
+  feeder task and calls the handler with `RequestBody(pieces, done)`. The
+  feeder reads the socket in steps of at most 64 KiB (the wait of each is
+  `request_timeout_ms`, also for a piece the handler has not taken) and sends
+  each piece, chunked bodies decoded, into an 8-slot channel, so memory per
+  connection is about 512 KiB. It sends the bytes it read past the body to a
+  one-slot `rest` channel, then closes `pieces`, and its result is `done`. When
+  the handler returns, the server closes `pieces` and looks at `rest` without
+  waiting: a value means the body was read whole, so the answer goes out as it
+  is and the connection serves the next request, starting from `rest`. No value
+  means the handler answered early or the body failed: the answer gets
+  `Connection: close`, the feeder is cancelled, the input is drained for at most
+  the answer time and the connection closes. `HTTP.read_all` is a receive loop
+  over `pieces` with a byte limit that awaits `done`.
 
 #### 10.7.3 Errors and status codes
 

@@ -538,6 +538,13 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
     return error("the handler failed")
   end
 
+  if request.path == "/all"
+    case HTTP.read_all(body, 8)
+      ok(data) -> return answer(200, "all #{data.size}")
+      error(message) -> return answer(413, message)
+    end
+  end
+
   pause = 0
   if request.path == "/slow"
     pause = 300
@@ -1234,14 +1241,19 @@ def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_th
     # A handler that answers before it read the body: its answer arrives and the connection ends.
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
         conn.sendall(b"POST /early HTTP/1.1\r\nHost: x\r\nContent-Length: 1000000\r\n\r\n" + b"x" * 1000)
-        assert read_answers(conn, 1) == [("200", "early")]
-        assert vm.next_line() == "/early"
+        raw = b""
         conn.settimeout(scaled(10))
         try:
-            rest = conn.recv(65536)
+            while True:
+                more = conn.recv(65536)
+                if not more:
+                    break
+                raw += more
         except OSError:
-            rest = b""
-        assert rest == b"", "the connection ends after an answer that left the body unread"
+            pass
+        assert raw.startswith(b"HTTP/1.1 200") and raw.endswith(b"early"), raw
+        assert b"connection: close" in raw.lower(), "the answer says it closes, whatever the timing"
+        assert vm.next_line() == "/early"
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
         conn.sendall(b"POST /stop HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n")
         assert read_answers(conn, 1) == [("413", "stopped")]
@@ -1259,6 +1271,29 @@ def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_th
     with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
         conn.sendall(b"POST /fail HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\n\r\nok")
         assert read_answers(conn, 1)[0][0] == "500"
+    # HTTP.read_all: a body within its limit, then one past it (413 from the handler, and the connection closes).
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /all HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nhello")
+        assert read_answers(conn, 1) == [("200", "all 5")]
+        conn.sendall(b"POST /all HTTP/1.1\r\nHost: x\r\nContent-Length: 20\r\n\r\n" + b"x" * 20)
+        assert read_answers(conn, 1)[0][0] == "413"
+    # Expect: 100-continue is answered before the handler runs, and the body that follows is streamed as usual.
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /count HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n")
+        interim = b""
+        while b"\r\n\r\n" not in interim:
+            more = conn.recv(4096)
+            assert more, "the 100 arrives before the body"
+            interim += more
+        assert interim.startswith(b"HTTP/1.1 100")
+        conn.sendall(b"abcd")
+        assert read_answers(conn, 1) == [("200", "/count abcd done ok")]
+        assert vm.next_line() == "POST /count 0 4 done ok"
+    # A body that stops arriving: each step waits request_timeout_ms (2 s), then `done` is an error.
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(20)) as conn:
+        conn.sendall(b"POST /count HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n0123456789")
+        line = vm.next_line()
+        assert line.startswith("POST /count 0 10 done error: "), line
     import http.client
     import ssl
     context = ssl.create_default_context(cafile=str(CERTS / "ca.pem"))

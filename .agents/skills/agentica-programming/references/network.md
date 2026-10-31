@@ -174,6 +174,7 @@ HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: Str
 HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
+HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
@@ -300,9 +301,10 @@ end
 
 `listen` reads the whole body first (at most `max_body_bytes`). For an upload
 too big to hold, use `listen_upload`: the handler is
-`Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]` (`HTTP.UploadHandler`),
-`request.body` is empty, and `body.pieces` (a `Channel[Bytes]`, pieces up to 64
-KiB, never empty, chunked bodies decoded) carries the body.
+`Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]`
+(`HTTP.UploadHandler`), `request.body` is empty, and `body.pieces` (a
+`Channel[Bytes]`, pieces up to 64 KiB, never empty, chunked bodies decoded)
+carries the body.
 
 ```ruby
 def save(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
@@ -325,6 +327,12 @@ end
 - `max_body_bytes` does not apply; the body is at most 256 MiB, and a handler
   that wants less counts bytes and answers 413. `request_timeout_ms` is the wait
   of each step, not of the whole upload.
-- The connection serves the next request only when the body was read to its end;
-  a handler that answers first has its answer sent and the connection closes.
+- The connection serves the next request only when the whole body had arrived
+  when the handler returned; otherwise the answer carries `Connection: close`
+  and the connection closes after it.
+- `Expect: 100-continue` gets its `100` before the handler runs: a handler
+  cannot refuse an upload before the body is sent.
+- `HTTP.read_all(body, max_bytes)` collects the body (an `error` past
+  `max_bytes`, or when `done` is an error), so one `listen_upload` server can
+  serve its small routes simply.
 - The response is whole. `HTTP.upload` is the client that streams to it.
