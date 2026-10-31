@@ -326,7 +326,7 @@ GATED = (
     ("TLS.connect", 'TLS.connect("127.0.0.1", 1, "ca.pem", 1000)', "files"),
     ("TLS.connect.client_cert", 'TLS.connect("127.0.0.1", 1, "", 1000, "cert.pem", "key.pem")', "files"),
     ("TLS.listen", 'TLS.listen("127.0.0.1", 0, "cert.pem", "key.pem")', "files"),
-    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: "ca.pem"))), '
+    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HttpClientOptions(ca_file: "ca.pem"))), '
                              '"https://127.0.0.1:1/")', "files"),
 )
 

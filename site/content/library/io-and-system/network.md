@@ -142,15 +142,14 @@ HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
 
-### HTTP.client and HTTP.client_options
+### HTTP.client
 
 ```text
-HTTP.client_options() -> HttpClientOptions
 HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 ```
 
-A client reuses open connections for the same scheme, host and port. Every field of `HttpClientOptions` has the default below, so `HttpClientOptions(timeout_ms: 5000)` changes one and keeps the others; `client_options()` gives them all.
+A client reuses open connections for the same scheme, host and port. Every field of `HttpClientOptions` has the default below, so `HttpClientOptions(timeout_ms: 5000)` changes one and keeps the others, and `HTTP.client()` uses them all.
 
 | Option | Default | Limit |
 |---|---|---|
@@ -251,11 +250,10 @@ end
 ### HTTP.download
 
 ```text
-HTTP.download_options() -> DownloadOptions
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
 ```
 
-- `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()` gives 30 s and 256 MiB, and so does `download_options()`. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `DownloadOptions()`, the default, gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
 - The download sends a `GET` and streams the body to `path`, so bodies may be arbitrary bytes. The file never grows past `max_total_bytes`.
 - The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
 - The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
@@ -278,10 +276,9 @@ end
 
 The server is in `std/http` too: a handler takes the whole request and returns the whole response. It runs one task per connection, with keep-alive.
 
-### HTTP.listen and HTTP.server_options
+### HTTP.listen
 
 ```text
-HTTP.server_options() -> HttpServerOptions
 HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
@@ -328,7 +325,7 @@ Handler errors:
 - A response that cannot be sent gets the same 500 and close, with `http: invalid response: <reason>` on stderr: status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304.
 - A runtime error in a handler ends only its connection. The program goes on but exits with code 1 at the end, as for any unawaited task crash.
 
-Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(max_connections: 16)` changes one; `server_options()` gives them all. The same checks as the client options apply.
+Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(max_connections: 16)` changes one, and a call without `options` uses them all. The same checks as the client options apply.
 
 | Option | Default | Bounds |
 |---|---|---|

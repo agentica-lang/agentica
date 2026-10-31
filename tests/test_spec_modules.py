@@ -320,7 +320,7 @@ class TestModuleRules:
             [({"root.agc": text, "lib.agc": call, "libs/wire.agc": call},
               "root.agc", {"AGENTICA_PATH": "{dir}/libs"}) for _name, text in roots]
             + [({"root.agc": 'import HTTP from "std/http"\ndef main() -> Void\n'
-                             '  HTTP.close_client(Result.unwrap!(HTTP.client(HTTP.client_options())))\nend\n\n'},
+                             '  HTTP.close_client(Result.unwrap!(HTTP.client()))\nend\n\n'},
                 "root.agc", None)]
             + [({"root.agc": http + body + "end\n\n"}, "root.agc", None) for body, _code in bodies]
             + [({"root.agc": "struct %s\n  n: Int\nend\n\n" % name + MAIN}, "root.agc", None) for name in names])

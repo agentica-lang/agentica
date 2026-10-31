@@ -596,7 +596,7 @@ def test_compile_exits_1_on_a_diagnostic_and_2_on_an_unwritable_output(tmp_path)
     temp = cli_temp(tmp_path)
     work = tmp_path
     rejected_file = work / "file.agc"
-    rejected_file.write_text("def main() -> Void\n  c = HTTP.client_options()\nend\n", encoding="utf-8")
+    rejected_file.write_text("def main() -> Void\n  c = HTTP.client()\nend\n", encoding="utf-8")
     rejected = agentica(temp, work, "compile", rejected_file, "-o", work / "out.agcb")
     assert rejected[0] == 1
     assert "error[CHECK-UNKNOWN-NAME]" in rejected[2]

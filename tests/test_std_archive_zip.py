@@ -179,7 +179,7 @@ def programs(calls):
     )
 
 
-def run_zip(work, name, src, members, dest, opts="Archive.options()"):
+def run_zip(work, name, src, members, dest, opts="Archive.Options()"):
     return run_calls(work, name, [(name, src, members, dest, opts)])
 
 
@@ -789,7 +789,7 @@ def test_destination_spellings_with_backslashes_extract(tmp_path):
         "mixed": root.replace(os.sep, "/") + "\\d-mix",
         "cacheroot": root + "/d-cache",
     }
-    calls = [(variant, "stored.zip", ["plain.txt", "sub/deep.bin"], dest, "Archive.options()")
+    calls = [(variant, "stored.zip", ["plain.txt", "sub/deep.bin"], dest, "Archive.Options()")
              for variant, dest in dests.items()]
     lines = run_calls(work, "spellings", calls)
     assert lines == ["%s ok [%d, %d]" % (variant, len(STORED_HELLO), len(DEEP_DATA)) for variant in dests] + [""], lines
@@ -848,8 +848,8 @@ def test_narrowed_copies_count_physical_bytes_exactly(tmp_path):
         "end\n"
         "\n"
         "def main() -> Void\n"
-        '  show("exact", Exact.extract_zip("tiny.zip", ["a.txt"], "o1", Exact.options()))\n'
-        '  show("short", Short.extract_zip("tiny.zip", ["a.txt"], "o2", Short.options()))\n'
+        '  show("exact", Exact.extract_zip("tiny.zip", ["a.txt"], "o1", Exact.Options()))\n'
+        '  show("short", Short.extract_zip("tiny.zip", ["a.txt"], "o2", Short.Options()))\n'
         "end\n"
     )
     path = work / "capped.agc"

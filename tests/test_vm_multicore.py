@@ -2662,7 +2662,7 @@ end
 # CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
 # requests wait on the server; every request of the load tasks gets its own path back.
 def phase(base: String, ca: String, clients: Int, requests: Int) -> Int
-  pool = HTTP.client(HTTP.client_options().with(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+  pool = HTTP.client(HttpClientOptions(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: base, requests: requests)
   tasks = (1..clients).to_a.map do |k|
     Task.spawn(&load, l)
@@ -2694,7 +2694,7 @@ def main() -> Void
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", ca, clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
   # during the load), every caller then gets an error (none hangs), and wait returns.
-  pool = HTTP.client(HTTP.client_options().with(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+  pool = HTTP.client(HttpClientOptions(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
   callers = (1..clients).to_a.map do |k|
     Task.spawn(&until_closed, l)
@@ -2805,7 +2805,7 @@ def main() -> Void
   Test.run([
     Test.test("wait returns once a busy handler has ended") do
       started = try TCP.listen("127.0.0.1", 0)
-      server = try HTTP.listen("127.0.0.1", 0, &spin, HTTP.server_options())
+      server = try HTTP.listen("127.0.0.1", 0, &spin)
       socket = try TCP.connect("127.0.0.1", HTTP.local_port(server), 5000)
       try TCP.send(socket, "GET /#{TCP.local_port(started)} HTTP/1.1\r\nHost: x\r\n\r\n", 5000)
       signal = try TCP.accept(started, 5000)

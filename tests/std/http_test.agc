@@ -25,14 +25,14 @@ end
 def main() -> Void
   Test.run([
     Test.test("default client options") do
-      Test.eq(HTTP.client_options(), options(30000, 4))
+      Test.eq(HttpClientOptions(), options(30000, 4))
     end,
     Test.test("client options are checked") do
       try Test.eq(HTTP.client(options(0, 4)).message, "http: every option must be positive")
       Test.eq(HTTP.client(options(1000, 65537)).message, "http: max_connections must be at most 65536")
     end,
     Test.test("default server options") do
-      Test.eq(HTTP.server_options(), HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576))
+      Test.eq(HttpServerOptions(), HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576))
     end,
     Test.test("server options are checked before listening") do
       bad = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 0, max_connections: 1, max_body_bytes: 16)
@@ -81,7 +81,7 @@ def main() -> Void
       Test.eq(HTTP.text("e".bytes, long).message.length < 150, true)
     end,
     Test.test("bad URLs fail before any connection") do
-      pool = try HTTP.client(HTTP.client_options())
+      pool = try HTTP.client()
       scheme = HTTP.get(pool, "ftp://example.com/")
       port = HTTP.get(pool, "http://example.com:0/")
       HTTP.close_client(pool)
@@ -89,8 +89,7 @@ def main() -> Void
       Test.eq(port.message, "http: the port must be 1..65535")
     end,
     Test.test("download options carry the 256 MiB budget") do
-      Test.eq(HTTP.download_options(), HTTP.DownloadOptions(timeout_ms: 30000, max_total_bytes: 268435456))
-      Test.eq(HTTP.DownloadOptions(), HTTP.download_options())
+      Test.eq(HTTP.DownloadOptions(), HTTP.DownloadOptions(timeout_ms: 30000, max_total_bytes: 268435456))
     end,
     Test.test("a download writes the body to a new file") do
       server = try HTTP.listen("127.0.0.1", 0, &download_answer)
@@ -107,9 +106,9 @@ def main() -> Void
       Path.remove("download-tiny.bin", 5000)
     end,
     Test.test("a download reports a 404 and still writes its body") do
-      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
-      pool = try HTTP.client(HTTP.client_options())
-      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/gone", "download-gone.bin", HTTP.download_options())
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer)
+      pool = try HTTP.client()
+      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/gone", "download-gone.bin")
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)
@@ -120,8 +119,8 @@ def main() -> Void
       Path.remove("download-gone.bin", 5000)
     end,
     Test.test("a download refuses a body over the budget before reading it") do
-      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
-      pool = try HTTP.client(HTTP.client_options())
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer)
+      pool = try HTTP.client()
       small = HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)
       got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/hundred", "download-over.bin", small)
       HTTP.close_client(pool)
@@ -134,14 +133,14 @@ def main() -> Void
       Path.remove("download-over.bin", 5000)
     end,
     Test.test("a download never overwrites and checks its options first") do
-      pool = try HTTP.client(HTTP.client_options())
+      pool = try HTTP.client()
       bad = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 0, max_total_bytes: 10))
       try Test.eq(bad.message, "http: every download option must be positive")
       huge = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 268435457))
       try Test.eq(huge.message, "http: max_total_bytes must be at most 268435456")
       try File.write_text("download-kept.bin", "old", 5000)
-      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
-      kept = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-kept.bin", HTTP.download_options())
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer)
+      kept = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-kept.bin")
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)

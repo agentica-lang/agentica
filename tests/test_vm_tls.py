@@ -126,7 +126,7 @@ end
 def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
   ca = System.args()[1]
-  options = HTTP.client_options().with(ca_file: ca, timeout_ms: 20000)
+  options = HttpClientOptions(ca_file: ca, timeout_ms: 20000)
   pool = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(pool, base + "/first")))
   # The client read its CA file once, for its first connection: every later one, three at once here, uses that
@@ -173,7 +173,7 @@ def main() -> Void
   # the waiters, and the build goes on for the other two. The client has one timeout, so the two others start half
   # of it after the first: each side of the first one's deadline has half the timeout to spare.
   timeout = String.to_int!(System.args()[4])
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: System.args()[1], timeout_ms: timeout)))
+  pool = Result.unwrap!(HTTP.client(HttpClientOptions(ca_file: System.args()[1], timeout_ms: timeout)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
   Task.sleep(timeout / 2)
   calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
@@ -184,7 +184,7 @@ def main() -> Void
   HTTP.close_client(pool)
   # A failed build is not kept: once the file is right, the same client builds again and connects.
   fixed = System.args()[2]
-  again = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: fixed, timeout_ms: 20000)))
+  again = Result.unwrap!(HTTP.client(HttpClientOptions(ca_file: fixed, timeout_ms: 20000)))
   puts(String.starts_with?(show(HTTP.get(again, base + "/bad")), "ssl-load-verify-source!"))
   Result.unwrap!(File.write_text(fixed, Result.unwrap!(File.read_text("#{System.args()[0]}/ca.pem", 5000)), 5000))
   puts(show(HTTP.get(again, base + "/good")))
@@ -206,7 +206,7 @@ end
 
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  options = HTTP.client_options().with(ca_file: "#{System.args()[0]}/ca.pem", timeout_ms: 5000)
+  options = HttpClientOptions(ca_file: "#{System.args()[0]}/ca.pem", timeout_ms: 5000)
   pool = Result.unwrap!(HTTP.client(options))
   call = Task.spawn(&get, Call(pool: pool, url: "https://127.0.0.1:#{TCP.local_port(listener)}/"))
   # The server never answers the ClientHello: the client's connection is in its handshake when the client closes.

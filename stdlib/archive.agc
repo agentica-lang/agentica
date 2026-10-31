@@ -129,11 +129,6 @@ struct Scan
   total: Int
 end
 
-## Returns the default options: a 30 s deadline and at most 256 MiB of extracted files. `Options()` gives the same.
-export def options() -> Options
-  return Options()
-end
-
 ## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
 ## member order.
 ##
@@ -147,7 +142,8 @@ end
 ## never misdecoded. Every local record is validated even after the selected files, so corruption past a selected
 ## file is still an error. Selected payloads stream within their exact compressed window with their CRC32 and
 ## uncompressed size verified; unselected payloads are skipped by size and offset only, never inflated or
-## CRC-checked.
+## CRC-checked. `options` is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted
+## files.
 export def extract_zip(
   src: String,
   members: List[String],
@@ -173,7 +169,8 @@ end
 ## data. Headers follow USTAR with PAX `path` and `size` records (local for one entry, global until replaced) and GNU
 ## long names; other PAX records are ignored, sparse entries are refused, and only `0`, NUL and `7` type flags count
 ## as regular files. A selected link, directory or device is an error, as are a missing member, a repeated member, a
-## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member.
+## bad checksum, truncation, non-zero padding after the end, and any trailing bytes after the gzip member. `options`
+## is optional and defaults to `Options()`: a 30 s deadline and at most 256 MiB of extracted files.
 export def extract_tar(
   src: String,
   members: List[String],
