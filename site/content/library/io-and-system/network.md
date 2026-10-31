@@ -452,15 +452,17 @@ def logged(next: HTTP.Handler) -> HTTP.Handler
   end
 end
 
+def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  if HTTP.header_values(request.headers, "authorization").empty?
+    return ok(HttpResponse(status: 401, headers: [], body: "".bytes))
+  end
+
+  return next.call(request)
+end
+
 # Answers 401 to a request without an Authorization header, and does not call the next handler.
 def guarded(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request|
-    if HTTP.header_values(request.headers, "authorization").empty?
-      ok(HttpResponse(status: 401, headers: [], body: "".bytes))
-    else
-      next.call(request)
-    end
-  end
+  return handler() do |request| authorized(next, request) end
 end
 
 def main() -> Void
