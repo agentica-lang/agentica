@@ -430,6 +430,38 @@ ENV_CASES = [
     ),
     ({"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "http_proxy": "http://mine:1"},
      [("http://example.com/", "http://mine:1")]),
+    # An entry that is not valid is ignored: none crashes the call, and none exempts a host (0.1 is not the tail of
+    # 10.0.0.1).
+    (
+        {"http_proxy": "http://p:1", "NO_PROXY": "1.2.3.4/,a/,/,10.0.0.0/33,10.0.0.0/x,10.0.0.0/8/9,0.1,::1:80x"},
+        [
+            ("http://1.2.3.4/", "http://p:1"),
+            ("http://a/", "http://p:1"),
+            ("http://10.0.0.1/", "http://p:1"),
+            ("http://[::1]/", "http://p:1"),
+        ],
+    ),
+    # Spaces separate entries too; an entry with the default port, an IPv6 literal with a port, a trailing dot.
+    (
+        {"http_proxy": "http://p:1", "https_proxy": "http://s:2", "NO_PROXY": "a.com:80 [::1]:8080  example.net."},
+        [
+            ("http://a.com/", ""),
+            ("https://a.com/", "http://s:2"),
+            ("http://[::1]:8080/", ""),
+            ("http://[::1]:9090/", "http://p:1"),
+            ("http://example.net/", ""),
+            ("http://example.net./", ""),
+            ("http://www.example.net/", ""),
+        ],
+    ),
+    ({"http_proxy": "http://p:1", "NO_PROXY": "example.com"}, [("http://example.com./", "")]),
+    ({"http_proxy": "http://p:1", "NO_PROXY": "a.test  b.test,c.test"},
+     [("http://a.test/", ""), ("http://b.test/", ""), ("http://c.test/", ""), ("http://d.test/", "http://p:1")]),
+    # 0.0.0.0/0 is every IPv4 address and no name.
+    (
+        {"http_proxy": "http://p:1", "NO_PROXY": "0.0.0.0/0"},
+        [("http://8.8.8.8/", ""), ("http://example.com/", "http://p:1")],
+    ),
     # Another scheme is returned as it is.
     ({"http_proxy": "socks5://p:1080"}, [("http://example.com/", "socks5://p:1080")]),
 ]
