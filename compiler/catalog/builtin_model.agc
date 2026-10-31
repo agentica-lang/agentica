@@ -82,8 +82,8 @@ end
 
 ## The default value of a builtin parameter, a constant the call site can build with no code of its own (the same
 ## constants as the default of a user function, and an empty Bytes). Absent is no default. Whole, Real, Text and Flag
-## are the literals of those types, Nothing is nil, EmptyBytes is `"".bytes`, and Variant holds "Enum.Variant" of a
-## builtin enum whose variant has no payload.
+## are the literals of those types, Nothing is nil, EmptyBytes is `"".bytes`, None is `none` (an Optional), and
+## Variant holds "Enum.Variant" of a builtin enum whose variant has no payload.
 export enum Default
   Absent
   Whole(Int)
@@ -94,6 +94,7 @@ export enum Default
   EmptyList
   EmptyMap
   EmptyBytes
+  None
   Variant(String)
 end
 

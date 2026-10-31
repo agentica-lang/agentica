@@ -4,7 +4,7 @@ struct Reply
 end
 
 def main() -> Void
-  puts(JSON.schema(HttpClientOptions))
+  puts(JSON.schema(HttpServerOptions))
   h = Header(name: "a", value: "ñ")
   text = JSON.encode(h)
   puts(text)

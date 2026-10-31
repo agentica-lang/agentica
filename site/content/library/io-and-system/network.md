@@ -107,6 +107,12 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ```text
 TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
+TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
+TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
+TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
+
+TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "")
+TlsServerOptions(cert_file: String, key_file: String)
 ```
 
 TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
@@ -121,6 +127,7 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
 - `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
+- A `TlsContext` is the TLS setup of one role, built once and shared by every listener and HTTP client made from it. `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run (the fields mean what the paths of `TLS.connect` and `TLS.listen` mean), so a file changed later needs a new context. A context stays valid while a listener made from it is open. Giving a context of the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`.
 - `TLS.connect` sends a client certificate when `cert_file` and `key_file` name PEM files, checked as `TLS.listen` checks them. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
@@ -159,6 +166,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
 | `ca_file` | `""`: the system's CA certificates | |
 | `proxy` | `""`: no proxy | an `http://host:port` origin, see below |
+| `tls` | `none` | a client `TlsContext` for the connections of `HTTP.client`, which then do not read `ca_file` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - With a `proxy` (`HttpClientOptions(proxy: "http://proxy:8080")`) every `http://` request goes to that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, the `Host` header still the target's), and the client keeps and reuses its connections by the proxy, so requests to different hosts share them. It applies to `HTTP.client` and the calls that take a client or options: `get_response`, `post_response`, `HTTP.open`, `HTTP.upload`, `HTTP.download` and `HTTP.start`. The proxy must be an `http://` origin with no user info, path or query, or the call that gets it is an `error`. An `https://` URL with a `proxy` is an `error` (`http: https through a proxy is not supported yet`) and is never sent in the clear: a `CONNECT` tunnel is not built. There is no proxy authentication and the environment is not read: the default is no proxy.
@@ -169,6 +177,18 @@ import HTTP from "std/http"
 
 def main() -> Void
   client = HTTP.client(HttpClientOptions(timeout_ms: 5000, max_connections: 2)).unwrap!
+  HTTP.close_client(client)
+end
+```
+
+Clients that trust the same CA file share one context: build it once and pass it to each.
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def main() -> Void
+  tls = TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!
+  client = HTTP.client(HttpClientOptions(tls: some(tls))).unwrap!
   HTTP.close_client(client)
 end
 ```

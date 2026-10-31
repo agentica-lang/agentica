@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT
 } agc_tag;
 
 typedef struct {
@@ -241,10 +241,10 @@ typedef struct {
 } agc_listener;
 
 /* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c), and the TLS client
-   context that its https connections share (vm/tcp.c's, opaque here: made by the first HttpWire.connect_tls, given
-   back by HttpWire.drop_tls, which sets tls_dropped; both under rt->sync). The service task drops it once the client
-   is closed and its pool has ended; a client never closed keeps it until the run ends. The context reads the CA file
-   once, so a change to the file reaches new clients only. */
+   context that its https connections share when the options name no TlsContext (vm/tcp.c's, opaque here: made by the
+   first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under rt->sync). The
+   service task drops it once the client is closed and its pool has ended; a client never closed keeps it until the run
+   ends. The context reads the CA file once, so a change to the file reaches new clients only. */
 typedef struct {
   agc_value jobs, options;
   void *tls;
@@ -252,17 +252,30 @@ typedef struct {
 } agc_http_client;
 
 /* HttpClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
-   max_connections, max_body_bytes, ca_file, proxy. HttpWire.service checks the shape, since the std-only rule lives
-   in the front end and bytecode can call the builtin with any struct. */
-#define AGC_HTTP_OPTIONS_FIELDS 6
+   max_connections, max_body_bytes, ca_file, proxy, tls (Optional[TlsContext]). HttpWire.service checks the shape,
+   since the std-only rule lives in the front end and bytecode can call the builtin with any struct. ca_file goes in
+   the next PR, when std/http moves to tls. */
+#define AGC_HTTP_OPTIONS_FIELDS 7
 #define AGC_HTTP_OPTION_CA_FILE 4
 #define AGC_HTTP_OPTION_PROXY 5
+#define AGC_HTTP_OPTION_TLS 6
 
 typedef struct {
   agc_resource *state;
   agc_value listener;
   agc_task *group;
 } agc_http_server;
+
+/* A TlsContext (vm/tls_context.c): an atomic GC block (no GC pointer in it) with one count on the native TLS config
+   of its role, which `release` gives back. It has no close: a Boehm finalizer gives the count back once no value
+   reaches the block, run between turns (agc_gc_finalize_pending), never inside a collection; the sockets and
+   listeners made from it hold counts of their own. The one GC finalizer of the VM
+   (docs/vm/05-values-execution-builtins.md §5.3). */
+typedef struct {
+  void *config;
+  void (*release)(void *config);
+  bool server;
+} agc_tls_context;
 
 struct agc_ffi_call;
 
@@ -477,6 +490,8 @@ void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);
+/* Runs the GC finalizers that are due (a TlsContext no value reaches); a scheduler calls it between turns. */
+void agc_gc_finalize_pending(void);
 
 agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_optional_make(const agc_program *p, bool some, agc_value value);
@@ -488,6 +503,7 @@ agc_value agc_process_value(agc_process *p);
 agc_value agc_socket_value(agc_socket *s);
 agc_value agc_listener_value(agc_listener *l);
 agc_value agc_http_client_value(agc_http_client *c);
+agc_value agc_tls_context_value(void *config, void (*release)(void *config), bool server);
 agc_value agc_test_case_value(agc_test_case *c);
 agc_value agc_http_server_value(agc_http_server *s);
 agc_value agc_channel_value(agc_channel *c);
@@ -504,6 +520,7 @@ agc_process *agc_as_process(agc_vm *vm, agc_value v);
 agc_socket *agc_as_socket(agc_vm *vm, agc_value v);
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
 agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
+agc_tls_context *agc_as_tls_context(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v);

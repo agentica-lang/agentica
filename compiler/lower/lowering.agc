@@ -104,6 +104,12 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys).push("Optional"))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
   used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)).concat(Builtins.default_enums().to_a))
+  none_records = Builtins.none_default_records()
+  if used.to_a.any? do |name: String| none_records.include?(name) end
+    # A record whose left-out field defaults to `none` builds an Optional that no expression names.
+    used = used.add("Optional")
+  end
+
   tables = Program.build(decls, used, scanned.type_value)
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
   start = plan.slots.size > 0

@@ -89,6 +89,7 @@ HttpWire.chunked
 HttpWire.clean_eof?
 HttpWire.close_server
 HttpWire.close_write
+HttpWire.connect_context
 HttpWire.connect_tls
 HttpWire.drop_tls
 HttpWire.encode_request
@@ -318,8 +319,10 @@ TCP.read_line
 TCP.recv_bytes.bytes
 TCP.send
 TCP.send_bytes.bytes
+TLS.client_context
 TLS.connect
 TLS.listen
+TLS.server_context
 Task.await
 Task.await_result
 Task.cancel

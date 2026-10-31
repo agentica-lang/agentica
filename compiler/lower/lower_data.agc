@@ -259,6 +259,7 @@ export def lower_catalog_default(
       # `"".bytes`: the empty Bytes constant.
       made = State.target(State.step(fx, span), want)
       return ok(State.Out(fx: State.emit_const(made.fx, made.slot, Ir.Imm.Bytes(""), span), slot: made.slot))
+    Model.Default.None -> return lower_enum(cx, fx, "Optional", "None", [], span, want, true)
     Model.Default.Variant(name) ->
       parts = name.split(".")
       return lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)

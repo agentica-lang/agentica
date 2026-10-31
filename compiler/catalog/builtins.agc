@@ -146,7 +146,8 @@ export def parameter_text(parameter: Model.Named) -> String
   return "#{typed} = #{default_text(parameter.default)}"
 end
 
-## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes or Enum.Variant; "" for no default.
+## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none or Enum.Variant; "" for no
+## default.
 export def default_text(value: Model.Default) -> String
   case value
     Model.Default.Absent -> return ""
@@ -158,6 +159,7 @@ export def default_text(value: Model.Default) -> String
     Model.Default.EmptyList -> return "[]"
     Model.Default.EmptyMap -> return "{}"
     Model.Default.EmptyBytes -> return "\"\".bytes"
+    Model.Default.None -> return "none"
     Model.Default.Variant(name) -> return name
   end
 end
@@ -180,6 +182,30 @@ export def record_defaults() -> Map[String, Set[String]]
   end
 
   return found
+end
+
+## The builtin records with a field whose default is `none`: a program that builds one needs the Optional enum in its
+## tables, since a constructor that leaves the field out builds `none` with no expression that names Optional. Only
+## record fields count: a builtin parameter with a `none` default would need the same, and no builtin has one.
+export def none_default_records() -> Set[String]
+  names: List[String] = []
+  for record in DATA_RECORDS
+    if record.fields.any? do |field: Model.Named| none_default?(field.default) end
+      names = names.push(record.name)
+    end
+  end
+
+  return Set.new(names)
+end
+
+## The problem with the defaults of a record field, or "" when its default fits its type (default_fits?).
+export def record_default_problem(record: String, field: Model.Named) -> String
+  if default_fits?(field)
+    return ""
+  end
+
+  written = Types.to_text(field.type)
+  return "the default of #{record}.#{field.name} is not #{article(written)} #{written}"
 end
 
 ## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
@@ -233,6 +259,14 @@ export def default_enums() -> Set[String]
   return Set.new(names)
 end
 
+# True for the `none` default.
+def none_default?(value: Model.Default) -> Bool
+  case value
+    Model.Default.None -> return true
+    _ -> return false
+  end
+end
+
 # The index of the first parameter with a default, or the number of parameters when none has one.
 def first_default(form: Model.Builtin) -> Int
   at = 0
@@ -269,6 +303,7 @@ def default_fits?(parameter: Model.Named) -> Bool
     Model.Default.EmptyList -> return Types.is?(type, "List")
     Model.Default.EmptyMap -> return Types.is?(type, "Map")
     Model.Default.EmptyBytes -> return Types.is?(type, "Bytes")
+    Model.Default.None -> return Types.is?(type, "Optional")
     Model.Default.Variant(name) -> return variant_fits?(type, name)
   end
 end

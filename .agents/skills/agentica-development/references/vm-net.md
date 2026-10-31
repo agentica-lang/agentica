@@ -48,6 +48,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   these and `vm/digest_openssl.c` include OpenSSL. Each session has two memory
   BIOs, and the error queue drains into our codes. Init, minimums, trust and
   verification: §10.3.
+- `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
+  `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
+  demand) in one pool job; `agc_tls_context_take` checks the role
+  (`RUNTIME-TLS-CONTEXT-ROLE`) and takes a count.
 - A TLS socket or listener is the same `net` with `secure` set. `TLS.connect`
   and `TLS.listen` load the config in a pool job (`start_setup`), then connect
   or listen as TCP does. The read callback feeds ciphertext to the session, runs

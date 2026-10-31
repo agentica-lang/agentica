@@ -13,8 +13,8 @@ import threading
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, compile_text,
-                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli,
+                                 compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -563,15 +563,21 @@ def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_ge
     assert server.wait() == 0
 
 
-def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
+def run_against_a_spoiled_ca(tmp_path, adopt, program, name):
+    """Runs PROGRAM against a Python HTTPS server with a copy of the test CA, which the program spoils; checks the
+    answers (five ok, then a failed new build) and returns the trace."""
     server, port = python_server(adopt, "close")
     ca = tmp_path / "ca.pem"
     ca.write_bytes((CERTS / "ca.pem").read_bytes())
     trace, env = trace_env(tmp_path)
-    result = run_vm(compile_text(SHARED_CONTEXT_PROGRAM, "shared-context", tmp_path), env=vm_environment(env),
-                    args=[CERTS, ca], stdin=port + "\n")
+    result = run_vm(compile_text(program, name, tmp_path), env=vm_environment(env), args=[CERTS, ca],
+                    stdin=port + "\n")
     assert (result.code, result.stdout) == (0, "ok\nok\nok\nok\nok\ntrue\n"), result.stderr
-    text = trace.read_text()
+    return trace.read_text()
+
+
+def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
+    text = run_against_a_spoiled_ca(tmp_path, adopt, SHARED_CONTEXT_PROGRAM, "shared-context")
     # Five handshakes of the first client on one context it built; the second client's build failed.
     assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 1, text
     assert "shared=0" not in text
@@ -706,3 +712,127 @@ def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retri
     # One build for the waiters (the second client's first build failed, its second one worked).
     assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 2, text
     assert len(re.findall(r"tls_handshake_done socket=", text)) == 3, text
+
+
+CONTEXT_CLIENT_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Call
+  pool: HttpClient
+  url: String
+end
+
+def get(call: Call) -> Result[HttpResponse]
+  return HTTP.get(call.pool, call.url)
+end
+
+def show(r: Result[HttpResponse]) -> String
+  case r
+    ok(response) -> return String.from_bytes(response.body).unwrap!
+    error(message) -> return message
+  end
+end
+
+def main() -> Void
+  base = "https://localhost:#{Result.unwrap!(IO.gets())}"
+  ca = System.args()[1]
+  tls = Result.unwrap!(TLS.client_context(TlsClientOptions(ca_file: ca)))
+  options = HttpClientOptions(tls: some(tls), timeout_ms: 20000)
+  pool = Result.unwrap!(HTTP.client(options))
+  puts(show(HTTP.get(pool, base + "/first")))
+  # The context read its CA file when it was built: spoiling the file changes nothing for it, three connections at
+  # once here and a second client that shares it. A new context reads the file again and fails.
+  Result.unwrap!(File.write_text(ca, "not a certificate", 5000))
+  calls: List[Task[Result[HttpResponse]]] = []
+  for n in 0...3
+    calls = calls.push(Task.spawn(&get, Call(pool: pool, url: base + "/again")))
+  end
+  for call in calls
+    puts(show(Task.await(call)))
+  end
+  other = Result.unwrap!(HTTP.client(options))
+  puts(show(HTTP.get(other, base + "/other")))
+  puts(String.starts_with?(TLS.client_context(TlsClientOptions(ca_file: ca)).message, "ssl-load-verify-source!"))
+  HTTP.close_client(pool)
+  HTTP.close_client(other)
+end
+"""
+
+
+def test_a_tls_context_reads_its_ca_file_once_and_https_clients_share_it(tmp_path, adopt):
+    text = run_against_a_spoiled_ca(tmp_path, adopt, CONTEXT_CLIENT_PROGRAM, "context-client")
+    # One context built from the file (the second build failed), five handshakes on it, and no client context.
+    assert len(re.findall(r"tls_context role=client ca=file", text)) == 1, text
+    assert "shared=" not in text
+    assert len(re.findall(r"tls_handshake_done socket=", text)) == 5, text
+
+
+DROPPED_CONTEXT_PROGRAM = """\
+def listener_of(dir: String) -> Listener
+  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  return TLS.listen("127.0.0.1", 0, server.unwrap!).unwrap!
+end
+
+# Garbage over many turns, so collections run and the finalizer of the dropped context runs between turns.
+def churn() -> Int
+  total = 0
+  for n in 0...300
+    total += List.repeat(n, 20000).size
+    Task.sleep(0)
+  end
+  return total
+end
+
+def echo(listener: Listener) -> Result[Void]
+  socket = try TCP.accept(listener, 5000)
+  try TCP.send(socket, try TCP.read_line(socket, 5000) + "!\\n", 5000)
+  TCP.close(socket)
+  return ok()
+end
+
+def round(dir: String, listener: Listener, text: String) -> Void
+  server = Task.spawn do echo(listener) end
+  socket = TLS.connect("localhost", TCP.local_port(listener), "#{dir}/ca.pem", 5000).unwrap!
+  TCP.send(socket, text + "\\n", 5000).unwrap!
+  puts(TCP.read_line(socket, 5000).unwrap!)
+  IO.inspect(Task.await(server))
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  # No value reaches the context after this call: the listener holds its own count.
+  listener = listener_of(dir)
+  round(dir, listener, "first")
+  puts(churn())
+  round(dir, listener, "second")
+end
+"""
+
+
+def test_a_dropped_context_stays_valid_for_its_listener(tmp_path):
+    result = run_text(tmp_path, "dropped-context", DROPPED_CONTEXT_PROGRAM)
+    assert (result.code, result.stdout) == (0, "first!\nok()\n6000000\nsecond!\nok()\n"), result.stderr
+
+
+@pytest.mark.parametrize("name, call, file, covers", [
+    ("a client context to TLS.listen", 'TLS.listen("127.0.0.1", 0, client)', "main.agc", "client"),
+    ("a server context in HttpClientOptions.tls", "HTTP.client(HttpClientOptions(tls: some(server)))", "std/http.agc",
+     None),
+])
+def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_the_context(tmp_path, name, call, file, covers):
+    program = tmp_path / "main.agc"
+    program.write_text(
+        'import HTTP from "std/http"\n\ndef main() -> Void\n  dir = System.args()[0]\n'
+        '  client = TLS.client_context(TlsClientOptions()).unwrap!\n'
+        '  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", '
+        'key_file: "#{dir}/server-key.pem")).unwrap!\n'
+        f"  IO.inspect({call})\nend\n", encoding="utf-8")
+    result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
+    assert result.code == 1, name
+    problem = json.loads(result.stderr)
+    assert (problem["code"], problem["file"]) == ("RUNTIME-TLS-CONTEXT-ROLE", file), result.stderr
+    if covers:
+        start, end = problem["range"]["start"], problem["range"]["end"]
+        line = program.read_text().splitlines()[start["line"] - 1]
+        assert (start["line"], line[start["column"] - 1:end["column"] - 1]) == (7, covers), result.stderr
+
