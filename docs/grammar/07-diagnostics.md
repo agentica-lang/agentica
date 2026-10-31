@@ -253,10 +253,6 @@ is a rule:
   (`CHECK-REDEFINED-NAME`)
   - **Help:** rename the type parameter
 
-- **Written:** a default on a parameter whose type has a type parameter, such as
-  `xs: List[T] = []` (`CHECK-DEFAULT-VALUE`)
-  - **Help:** make the parameter required
-
 - **Written:** a parameter without a default after one with a default, such as
   `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)
   - **Help:** give `b` a default, or move the parameters with a default to the

@@ -61,7 +61,7 @@ Options(name: "a", retries: 3, tags: [])
 Options(name: "b", retries: 1, tags: [])
 ```
 
-A default follows the rules of a parameter default: a literal, `true`, `false`, `nil`, `none`, `[]`, `{}` or an enum variant without a payload. Anything else is `CHECK-DEFAULT-VALUE`, and a value of the wrong type is `CHECK-TYPE-MISMATCH`.
+A default follows the rules of a parameter default: a literal, `true`, `false`, `nil`, `none`, `[]`, `{}` or an enum variant without a payload, but not a struct built with no arguments, which only a parameter takes. Anything else is `CHECK-DEFAULT-VALUE`, and a value of the wrong type is `CHECK-TYPE-MISMATCH`.
 
 ```agentica {expect="CHECK-DEFAULT-VALUE"}
 struct Options

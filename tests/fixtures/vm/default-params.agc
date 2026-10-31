@@ -28,6 +28,11 @@ def show(line: String) -> Void
   puts(line)
 end
 
+# A generic function may default a parameter whose type has T: `[]`, `{}` or `none`.
+def tally[T](first: T, rest: List[T] = [], extra: Optional[T] = none) -> String
+  return "#{rest.size} #{extra.some?}"
+end
+
 def countdown(n: Int, step: Int = 1) -> Int
   if n <= 0
     return n
@@ -52,6 +57,8 @@ def main() -> Void
   each_line("b.txt", 50, &show)
   each_line("c.txt", &show)
   puts(countdown(3))
+  puts(tally(1))
+  puts(tally("a", ["b"], some("c")))
   puts(["a", "b", "c"] |> join())
   puts(4 |> scale())
   f = &join
