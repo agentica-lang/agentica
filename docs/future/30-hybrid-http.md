@@ -32,7 +32,7 @@ and wait for binary bodies (#803). The server's (20g) are `Bytes`.
 **Channels are enough; `Lazy[T]` is not needed.** An HTTP body is pushed
 by I/O and read by another task, at its own speed: that is a bounded channel
 (backpressure when full), with timeouts on each wait, `close` for the end, and
-`closed?` to tell the end from a timeout (§27.2). A `Lazy` (§27.4) is pulled by
+`closed? and empty?` to tell the end from a timeout (§27.2). A `Lazy` (§27.4) is pulled by
 one consumer through a chain of functions in one task; it would add nothing
 here.
 
