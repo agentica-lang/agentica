@@ -49,6 +49,13 @@ const char *agc_tls_error_name(agc_tls_error code);
 agc_tls_config *agc_tls_client_config(const char *ca_file, const char *cert_file, const char *key_file,
                                       agc_tls_failure *failure);
 agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_file, agc_tls_failure *failure);
+/* The ALPN protocols of a config just built, before anything shares it: WIRE is the protocol list of RFC 7301 (each
+   name after its length byte), LEN bytes, which the config copies. A client offers them; a server selects the first of
+   its own that the client offers too, and fails the handshake with the no_application_protocol alert when there is
+   none (a client that offers no ALPN gets none); the server's choice reads the config, so whoever runs a server
+   handshake holds a count on it until the handshake ends. False with the failure, the config untouched. */
+bool agc_tls_config_set_alpn(agc_tls_config *config, const uint8_t *wire, size_t len, bool server,
+                             agc_tls_failure *failure);
 /* One more count on CONFIG (NULL stays NULL); agc_tls_config_free gives one back and frees the config with the last. */
 agc_tls_config *agc_tls_config_ref(agc_tls_config *config);
 void agc_tls_config_free(agc_tls_config *config);
@@ -67,5 +74,7 @@ agc_tls_status agc_tls_write(agc_tls *t, const uint8_t *data, size_t len, agc_tl
 void agc_tls_close(agc_tls *t);
 const char *agc_tls_protocol(const agc_tls *t);
 const char *agc_tls_cipher(const agc_tls *t);
+/* The protocol ALPN selected (LEN bytes at *DATA, which the session owns), 0 for none. */
+size_t agc_tls_alpn(const agc_tls *t, const uint8_t **data);
 
 #endif

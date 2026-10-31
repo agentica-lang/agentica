@@ -23,13 +23,15 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
+TLS.alpn(socket: Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
 TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
 TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
 
-TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "")
-TlsServerOptions(cert_file: String, key_file: String)
+TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "",
+                 alpn: List[String] = [])
+TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
 ```
 
 - A `TlsContext` is the TLS setup of one role, built once (the PEM files are
@@ -52,6 +54,11 @@ TlsServerOptions(cert_file: String, key_file: String)
   process, plus `SSL_CERT_DIR`. A nonempty one is a PEM CA file that replaces
   system trust; a missing or empty file fails `TLS.client_context`. An IP
   address host is checked against the certificate's IP addresses.
+- `alpn` (both options) lists the ALPN protocols: a client offers them, a
+  server picks the first of its own that the client offers (none in common:
+  the handshake fails; a client offering none gets none). `TLS.alpn(socket)`
+  is the protocol picked, or `""`. Names are 1 to 255 bytes, checked when the
+  context is built. `HTTP.client` and `HTTP.listen_tls` speak HTTP/1.1 only.
 - A server context takes a PEM certificate chain and key; a bad file or
   mismatched key fails `TLS.server_context`. A client context sends a client
   certificate when `cert_file` and `key_file` name the same PEM forms (both

@@ -36,7 +36,7 @@ export VM_BUILTINS = Set.new([
   "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait", "Process.close",
   "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.close_listener", "TCP.send",
   "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen",
-  "TLS.client_context", "TLS.server_context", "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs",
+  "TLS.alpn", "TLS.client_context", "TLS.server_context", "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs",
   "HttpWire.options", "HttpWire.clean_eof?", "HttpWire.connect_tls", "HttpWire.connect_context", "HttpWire.drop_tls",
   "HttpWire.chunked", "HttpWire.chunk.bytes", "HttpWire.chunk_read", "HttpWire.idle?", "HttpWire.read_head.bytes",
   "HttpWire.read_response", "HttpWire.encode_request", "HttpWire.encode_response", "HttpWire.error_answer",

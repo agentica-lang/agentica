@@ -1,6 +1,6 @@
 ## 29. TLS contexts
 
-**Status:** 19a built; 19b and 19c planned (roadmap phase 19), decided by the
+**Status:** 19a and 19c built; 19b planned (roadmap phase 19), decided by the
 user on 2026-10-12. It is part of order step 7.4: after phase 17 (`Task.map` and
 channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)). `with` (15c) is built, so
@@ -18,7 +18,12 @@ certificate of mTLS stays) and `TlsServerOptions(cert_file, key_file)`, with
 no `TLS.client_options()` helper; `HttpClientOptions.tls` is an
 `Optional[TlsContext] = none` in place of `ca_file`, and with `none` each client
 builds its own system-trust context lazily; the `listen_*_tls` forms take a
-server context. 19b (`TLS.upgrade`) and 19c (ALPN) are still planned.
+server context. 19b (`TLS.upgrade`) is still planned.
+
+**Built (19c):** the `alpn: List[String] = []` field of both options records
+and `TLS.alpn(socket) -> String` (`""` for none), as 29.7 says. A server picks
+the first of its own protocols that the client offers too and refuses the
+handshake when none is in common.
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS

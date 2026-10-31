@@ -32,6 +32,9 @@
 struct agc_tls_config {
   _Atomic size_t refs;
   SSL_CTX *ctx;
+  /* A server's ALPN protocols, in the wire form, for select_alpn; NULL for none and on a client. */
+  uint8_t *alpn;
+  unsigned alpn_len;
 };
 
 struct agc_tls {
@@ -179,6 +182,8 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
   }
   atomic_init(&c->refs, 1);
   c->ctx = ctx;
+  c->alpn = NULL;
+  c->alpn_len = 0;
   return c;
 }
 
@@ -240,6 +245,43 @@ agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_fil
   return wrap(ctx, failure);
 }
 
+/* The server's choice (RFC 7301 §3.2): the first of its protocols that the client offers too, or the fatal alert. It
+   runs during a handshake, whose owner holds a count on the config (vm/tcp.c), and OpenSSL copies the choice OUT
+   points to into the session. */
+static int select_alpn(SSL *ssl, const unsigned char **out, unsigned char *outlen, const unsigned char *in,
+                       unsigned inlen, void *arg) {
+  (void)ssl;
+  const agc_tls_config *c = arg;
+  unsigned char *chosen = NULL;
+  if (SSL_select_next_proto(&chosen, outlen, c->alpn, c->alpn_len, in, inlen) != OPENSSL_NPN_NEGOTIATED)
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+  *out = chosen;
+  return SSL_TLSEXT_ERR_OK;
+}
+
+bool agc_tls_config_set_alpn(agc_tls_config *config, const uint8_t *wire, size_t len, bool server,
+                             agc_tls_failure *failure) {
+  if (!len || len > 65535) {
+    fail(failure, AGC_TLS_ERR_INTERNAL, "bad ALPN list");
+    return false;
+  }
+  if (!server) {
+    /* SSL_CTX_set_alpn_protos returns 0 on success, unlike the other setters. */
+    if (SSL_CTX_set_alpn_protos(config->ctx, wire, (unsigned)len) == 0) return true;
+    take_errors(failure, AGC_TLS_ERR_INTERNAL);
+    return false;
+  }
+  config->alpn = malloc(len);
+  if (!config->alpn) {
+    fail(failure, AGC_TLS_ERR_NOMEM, "out of memory");
+    return false;
+  }
+  memcpy(config->alpn, wire, len);
+  config->alpn_len = (unsigned)len;
+  SSL_CTX_set_alpn_select_cb(config->ctx, select_alpn, config);
+  return true;
+}
+
 agc_tls_config *agc_tls_config_ref(agc_tls_config *config) {
   if (config) atomic_fetch_add_explicit(&config->refs, 1, memory_order_relaxed);
   return config;
@@ -248,6 +290,7 @@ agc_tls_config *agc_tls_config_ref(agc_tls_config *config) {
 void agc_tls_config_free(agc_tls_config *config) {
   if (!config || atomic_fetch_sub_explicit(&config->refs, 1, memory_order_acq_rel) != 1) return;
   SSL_CTX_free(config->ctx);
+  free(config->alpn);
   free(config);
 }
 
@@ -361,3 +404,11 @@ void agc_tls_close(agc_tls *t) {
 const char *agc_tls_protocol(const agc_tls *t) { return SSL_get_version(t->ssl); }
 
 const char *agc_tls_cipher(const agc_tls *t) { return SSL_get_cipher_name(t->ssl); }
+
+size_t agc_tls_alpn(const agc_tls *t, const uint8_t **data) {
+  const unsigned char *chosen = NULL;
+  unsigned len = 0;
+  SSL_get0_alpn_selected(t->ssl, &chosen, &len);
+  *data = chosen;
+  return chosen ? len : 0;
+}

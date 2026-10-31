@@ -105,6 +105,7 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ## TLS
 
 ```text
+TLS.alpn(socket: Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
 TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
@@ -116,11 +117,13 @@ struct TlsClientOptions
   ca_file: String = ""
   cert_file: String = ""
   key_file: String = ""
+  alpn: List[String] = []
 end
 
 struct TlsServerOptions
   cert_file: String
   key_file: String
+  alpn: List[String] = []
 end
 ```
 
@@ -138,6 +141,7 @@ A `TlsContext` is the TLS setup of one role, built once and shared by every sock
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
 - A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
+- `alpn` lists the protocols that ALPN negotiates in the handshake (`["h2", "http/1.1"]`), for a library that speaks HTTP/2 or gRPC on a TLS socket. A client offers them; a server picks the first of its own that the client offers too, and refuses the handshake when none is in common (a client that offers none gets none). `TLS.alpn(socket)` returns the protocol picked, or `""`. Each name is 1 to 255 bytes, checked when the context is built. `HTTP.client` and `HTTP.listen_tls` speak HTTP/1.1 only: give them a context without `alpn`.
 - A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 

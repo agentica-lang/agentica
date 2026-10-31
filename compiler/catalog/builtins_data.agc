@@ -188,6 +188,7 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "ca_file", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(name: "cert_file", type: Types.Type.String, default: Model.Default.Text("")),
       Model.Named(name: "key_file", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "alpn", type: Types.Type.List(Types.Type.String), default: Model.Default.EmptyList),
     ],
   ),
   Model.Record(
@@ -195,6 +196,7 @@ export RECORDS: List[Model.Record] = [
     fields: [
       Model.Named(name: "cert_file", type: Types.Type.String),
       Model.Named(name: "key_file", type: Types.Type.String),
+      Model.Named(name: "alpn", type: Types.Type.List(Types.Type.String), default: Model.Default.EmptyList),
     ],
   ),
 ]
@@ -4573,6 +4575,16 @@ ROWS_48: List[Model.Builtin] = [
 ]
 
 ROWS_49: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "TLS.alpn",
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "TLS.alpn",
+    effects: ["network"],
+    description: "Return the protocol that ALPN selected in the TLS handshake, or \"\" for none.",
+    alternatives: [],
+  ),
   Model.Builtin(
     name: "TLS.client_context",
     parameters: [Model.Named(name: "options", type: Types.Type.Struct("TlsClientOptions", []))],

@@ -82,6 +82,34 @@ def main() -> Void
 end
 """
 
+ALPN_CLIENT_PROGRAM = """\
+def offer(port: Int, ca: String, alpn: List[String]) -> Result[String]
+  socket = try TLS.connect("localhost", port, try TLS.client_context(TlsClientOptions(ca_file: ca, alpn: alpn)), 5000)
+  line = try TCP.read_line(socket, 5000)
+  return ok("#{TLS.alpn(socket)} #{line}")
+end
+
+def main() -> Void
+  port = String.to_int!(IO.gets().unwrap!)
+  ca = "#{System.args()[0]}/ca.pem"
+  IO.inspect(offer(port, ca, ["http/1.1"]))
+  IO.inspect(offer(port, ca, ["spdy/3"]))
+end
+"""
+
+ALPN_SERVER_PROGRAM = """\
+def main() -> Void
+  dir = System.args()[0]
+  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: ["h2", "http/1.1"])
+  listener = TLS.listen("127.0.0.1", 0, TLS.server_context(options).unwrap!).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  puts(TLS.alpn(TCP.accept(listener, 10000).unwrap!))
+  IO.flush()
+  puts(TCP.accept(listener, 10000).ok?)
+end
+"""
+
 HTTPS_GOODBYE_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -555,6 +583,22 @@ def test_client_certificate_to_a_python_server_that_requires_one_and_refused_wit
     assert (result.code, result.stdout) == (0, "hello Agentica Test Client\nfalse\n"), result.stderr
     assert [server.next_line(), server.next_line()] == ["client Agentica Test Client", "refused"]
     assert server.wait() == 0
+
+
+def test_alpn_against_python_on_both_sides_the_servers_choice_none_and_a_refusal(tmp_path, adopt):
+    server, port = python_server(adopt, "alpn")
+    result = run_text(tmp_path, "alpn-client", ALPN_CLIENT_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, 'ok("http/1.1 http/1.1")\nok(" ")\n'), result.stderr
+    assert server.wait() == 0
+    vm = adopt(start_vm(compile_text(ALPN_SERVER_PROGRAM, "alpn-server", tmp_path), CERTS))
+    port = vm.next_line()
+    chosen = run([PYTHON, PYTHON_PEER, "alpn-client", port, "http/1.1,h2"], timeout=scaled(30))
+    assert (chosen.code, chosen.stdout) == (0, "h2\n"), chosen.stderr
+    assert vm.next_line() == "h2"
+    refused = run([PYTHON, PYTHON_PEER, "alpn-client", port, "spdy/3"], timeout=scaled(30))
+    assert (refused.code, refused.stdout) == (0, "refused\n"), refused.stderr
+    assert vm.next_line() == "false"
+    assert vm.wait() == 0, vm.stderr_text()
 
 
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
