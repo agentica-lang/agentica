@@ -1,7 +1,7 @@
 """An HTTP forward proxy and two origin servers, all on 127.0.0.1 with port 0, for the client's proxy tests.
 
-It prints one line, `proxy A B proxy2`, the four ports (two proxies that share nothing), and serves until its stdin
-closes. The proxy refuses anything but the
+It prints one line, `proxy A B proxy2 locked`, the five ports (two proxies that share nothing, and a third that asks
+for credentials), and serves until its stdin closes. The proxy refuses anything but the
 absolute-form request target (`GET http://host:port/path HTTP/1.1`, RFC 9112 3.2.2), forwards the request to the origin
 named in it with http.client, and answers with a `Via` header. For each request it prints what it saw, so a test can
 assert the request line and the `Host` header, and the number of the client connection it came on (`<proxy>:<n>`, `1:1` the first connection of the first proxy):
@@ -9,8 +9,13 @@ assert the request line and the `Host` header, and the number of the client conn
     SAW <connection> <request line> | <Host header>
 
 The origins answer `/hello` (their name and the path with its query), `/big` (200000 bytes), and echo a body on any
-other path (its size and its first 10 bytes). Standard library only.
+other path (its size and its first 10 bytes).
+
+The locked proxy answers 407 with `Proxy-Authenticate` unless `Proxy-Authorization` is `LOGIN`, the Basic credentials of
+the user `us@er` and the password `p:ss/w`; a SAW line of it ends with ` | <the Proxy-Authorization header, or ->`. No
+proxy passes that header on to the origin, as a forward proxy does not (it is hop-by-hop). Standard library only.
 """
+import base64
 import http.client
 import http.server
 import socketserver
@@ -21,7 +26,9 @@ import urllib.parse
 # Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
 sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 
-HOP_BY_HOP = {"connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer"}
+HOP_BY_HOP = {"connection", "keep-alive", "proxy-connection", "proxy-authorization", "transfer-encoding", "upgrade",
+              "te", "trailer"}
+LOGIN = "Basic " + base64.b64encode(b"us@er:p:ss/w").decode()
 PRINT = threading.Lock()
 
 
@@ -74,6 +81,7 @@ class Origin(http.server.BaseHTTPRequestHandler):
 class Proxy(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     tag = "?"
+    locked = False
 
     def log_message(self, *args):
         pass
@@ -95,7 +103,17 @@ class Proxy(http.server.BaseHTTPRequestHandler):
 
     def forward(self):
         body = read_body(self)
-        say("SAW %s %s | %s" % (self.number, self.requestline, self.headers.get("Host")))
+        offered = self.headers.get("Proxy-Authorization")
+        suffix = " | %s" % (offered or "-") if self.locked else ""
+        say("SAW %s %s | %s%s" % (self.number, self.requestline, self.headers.get("Host"), suffix))
+        if self.locked and offered != LOGIN:
+            body = b"credentials needed"
+            self.send_response(407)
+            self.send_header("Proxy-Authenticate", 'Basic realm="peer"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if not self.path.startswith("http://"):
             return self.refuse("the request target must be in absolute form")
         url = urllib.parse.urlsplit(self.path)
@@ -142,8 +160,9 @@ def serve(handler):
 def main():
     first = type("A", (Origin,), {"name": "A"})
     second = type("B", (Origin,), {"name": "B"})
-    proxies = [type("P%d" % n, (Proxy,), {"tag": str(n), "counter": [0], "lock": threading.Lock()}) for n in (1, 2)]
-    servers = [serve(proxies[0]), serve(first), serve(second), serve(proxies[1])]
+    proxies = [type("P%d" % n, (Proxy,), {"tag": str(n), "counter": [0], "lock": threading.Lock(), "locked": n == 3})
+               for n in (1, 2, 3)]
+    servers = [serve(proxies[0]), serve(first), serve(second), serve(proxies[1]), serve(proxies[2])]
     say(" ".join(str(server.server_address[1]) for server in servers))
     sys.stdin.read()
     for server in servers:
