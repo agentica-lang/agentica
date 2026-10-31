@@ -153,6 +153,9 @@ import Sqlite from "pkg/sqlite/db"
   `-`, at most 64 characters (the optional top-level `name` follows the same
   rule). Only git sources exist; a `path`, a branch or a version range is
   `PKG-MANIFEST-INVALID`.
+- `[style] max_line_width = N` (an integer of 1 or more) makes a line of more
+  than N characters (comments too) `CHECK-LINE-TOO-LONG`, in the same files
+  as the rule below; `agentica fmt` lays out in N columns (default 119).
 - `[style] blank_line_after_end = true` (boolean, default false; else
   `PKG-MANIFEST-INVALID`) makes a line with only `end` need an empty line
   after it, in the files below the manifest's folder that have no manifest of

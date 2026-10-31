@@ -21,8 +21,8 @@ import Rewrite from "rewrite"
 ## reexported does the same for the names the file re-exports (`export Url.parse`): the linked name of the original.
 ## watched are the files of its package that its extern functions may open (the bytecode cache watches them), and
 ## probed the paths whose presence chose a library for them (the cache notes whether each exists).
-## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`
-## (check_style.agc).
+## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`, and
+## max_line_width is the longest line it allows, 0 for no limit (check_style.agc).
 export struct LinkedModule
   key: String
   file: String
@@ -39,6 +39,7 @@ export struct LinkedModule
   watched: List[String]
   probed: List[String]
   blank_line_after_end: Bool
+  max_line_width: Int
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -313,6 +314,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       watched: module.origin.watched,
       probed: module.origin.probed,
       blank_line_after_end: module.origin.blank_line_after_end,
+      max_line_width: module.origin.max_line_width,
     ),
   )
 end

@@ -5,10 +5,15 @@
 ## that diagnostic. Then it checks its own work: the output must parse to the same normal form as the input (47.7),
 ## with the same words of comments in the same order, or the file is refused with FMT-INTERNAL and nothing is written.
 ##
+## With `blank_line_after_end`, every bare `end` gets the empty line after it that CHECK-BLANK-LINE-AFTER-END asks
+## for (check/check_style.agc), the `end` of a one-line `do ... end` that the layout broke included; the end of the
+## file gets none.
+##
 ## The normal form (`tree_text`, what `agentica fmt --tree` prints) is the parse text of the tree (parse_text.agc)
 ## without node ids and spans, which the layout moves, then one line with the words of every comment in order, since
 ## a long comment is wrapped into more lines.
 
+import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
 import Lexer from "../syntax/lexer"
 import ParseText from "../syntax/parse_text"
@@ -22,11 +27,22 @@ import Layout from "layout"
 ## The width of the output when no `[style] max_line_width` sets one (47.9, question 1).
 export WIDTH = 119
 
-## The text of `text` formatted in `width` columns, or the diagnostic of a text that does not lex or parse, or
+## What the formatter is asked: the width of the output, and whether every bare `end` gets an empty line after it.
+export struct Settings
+  width: Int
+  blank_line_after_end: Bool
+end
+
+## The settings of a file with no `[style]`: the width WIDTH and no empty line added after `end`.
+export def default_settings() -> Settings
+  return Settings(width: WIDTH, blank_line_after_end: false)
+end
+
+## The text of `text` formatted as `settings` ask, or the diagnostic of a text that does not lex or parse, or
 ## FMT-INTERNAL when the output would not keep the tree and the comments. CRLF line ends become LF.
-export def format_text(text: String, width: Int) -> Diag.Outcome[String]
+export def format_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
-  case unchecked_text(input, width)
+  case unchecked_text(input, settings)
     Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(output) -> return checked(input, output)
   end
@@ -34,7 +50,7 @@ end
 
 ## Like format_text without the check of its own output, which the tests use to show what a refused file would have
 ## become.
-export def unchecked_text(text: String, width: Int) -> Diag.Outcome[String]
+export def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
   case Lexer.lex_with_comments(input)
     Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
@@ -44,7 +60,12 @@ export def unchecked_text(text: String, width: Int) -> Diag.Outcome[String]
         Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           context = Layout.context(input, scanned.tokens, attachment)
-          return Diag.Outcome.Done(Docs.render(Layout.program_doc(context, program), width))
+          output = Docs.render(Layout.program_doc(context, program), settings.width)
+          if settings.blank_line_after_end
+            return Diag.Outcome.Done(with_blank_lines(output))
+          end
+
+          return Diag.Outcome.Done(output)
       end
   end
 end
@@ -61,6 +82,32 @@ export def tree_text(text: String) -> Diag.Outcome[String]
           lines = ParseText.print_program(program).map do |line: String| without_places(line) end
           return Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
       end
+  end
+end
+
+# `output` with an empty line after each bare `end` that the style rule asks one for. The output lexes, since the
+# layout keeps every token.
+def with_blank_lines(output: String) -> String
+  case Lexer.lex(output)
+    Diag.Outcome.Failed(_) -> return output
+    Diag.Outcome.Done(tokens) ->
+      after = Set.new(Style.missing_lines(output, tokens).map do |token: Tokens.Token| token.span.start.line end)
+      if after.size == 0
+        return output
+      end
+
+      lines: List[String] = []
+      number = 1
+      for line in output.split("\n")
+        lines = lines.push(line)
+        if after.include?(number)
+          lines = lines.push("")
+        end
+
+        number += 1
+      end
+
+      return lines.join("\n")
   end
 end
 

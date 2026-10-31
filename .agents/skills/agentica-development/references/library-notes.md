@@ -281,4 +281,5 @@ As in `references/frontend.md` ("Comments and style"): a module `##` doc block
 and a `##` doc on every exported `def`, `struct` and `enum` you add or touch
 (as `stdlib/queue.agc`), none on code you do not touch. A `#` comment names a
 VM behavior that the code copies. Lines are at most 119 characters
-(`stdlib/agentica.toml`, `tests/test_style_line_width.py`).
+(`stdlib/agentica.toml`, `tests/test_style_line_width.py`: std/ files are
+library files, which `CHECK-LINE-TOO-LONG` does not cover).

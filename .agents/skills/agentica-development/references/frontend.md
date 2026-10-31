@@ -344,8 +344,8 @@ Style and comments follow `.agents/skills/agentica-code-guidelines/`. Each
 `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc` gets a `##`
 block, as in `stdlib/queue.agc`; the first `##` block, followed by a blank line,
 is the module doc. Lines are at most 119 characters, comments included
-(`[style]` of `compiler/agentica.toml`, checked by
-`tests/test_style_line_width.py`). The pipe-chain rule is not linted; reviews
+(`[style]` of `compiler/agentica.toml`: `CHECK-LINE-TOO-LONG` in the build and
+in `make check-compiler`). The pipe-chain rule is not linted; reviews
 check it.
 
 ## The command line in Agentica
