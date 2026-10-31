@@ -1,0 +1,36 @@
+# before the module doc
+## The module doc.
+
+# after the module doc
+
+import Lib from "lib" # after an import
+import {A, B} from "other"
+
+# before a struct
+struct Point
+  # before a field
+  x: Int
+  y: Int # after a field
+  # before the end of a struct
+end
+
+enum Shape
+  # before a variant
+  Circle(Int)
+  Square # after a variant
+end
+
+LIMIT = 10 # after a constant
+
+def area(
+  # before a parameter
+  shape: Shape,
+  scale: Int, # after a parameter
+) -> Int # after the result type
+  return scale
+end
+
+def empty() -> Void
+  # alone in an empty body
+end
+# after the last item

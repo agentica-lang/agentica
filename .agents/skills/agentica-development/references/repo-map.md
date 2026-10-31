@@ -29,6 +29,7 @@ compiler/         # the front end (§18.3): one folder per context; a new file g
   diagnostics/    # Diagnostic, Outcome, the packed Problem, and the plain, AI and JSON forms
   docs/           # `agentica doc` (§32.5; imports syntax/, diagnostics/ and modules/, the last only to link a file with re-exports)
   query/          # outline, type-at, refs, symbol (§39)
+  format/         # `agentica fmt` (§47): comments.agc attaches the plain comments of Lexer.lex_with_comments to the tree; attach.agc prints that (goldens in tests/fixtures/frontend/format/, refreeze stage `format`)
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md

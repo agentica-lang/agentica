@@ -1,0 +1,8 @@
+5:5 trailing Literal 4:5 "# before a closing bracket"
+8:5 dangling ListLit 7:8 "# inside an empty list"
+11:10 trailing Literal 11:5 "# after a map key"
+16:19 trailing BlockParam 16:16 "# after the block parameters"
+19:7 trailing MethodCall 15:5 "# between chain lines"
+22:14 leading ExprStmt 23:5 "# after do with no parameter"
+26:12 trailing NameRef 26:5 "# after an argument"
+28:10 trailing ExprStmt 28:3 "# after an empty call"
