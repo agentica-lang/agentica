@@ -249,7 +249,9 @@ end
 ## and it closes the channel on every path, so the reader runs the usual receive loop until the closed error and then
 ## awaits `done`: `ok` means the body ended cleanly, an `error` says why it did not (a cut body, a timeout, a body over
 ## 256 MiB). To stop early the reader closes the channel: the task's next `send` fails, it closes the connection and
-## `done` is an `error`. The connection belongs to the task and is never reused.
+## `done` is an `error`. That works only while data flows: on a quiet stream the task waits in its read until
+## `timeout_ms`, so the prompt stop is `Task.cancel(stream.done)`, which closes the connection at once. The connection
+## belongs to the task and is never reused.
 export struct Stream
   status: Int
   headers: List[Header]
@@ -574,14 +576,17 @@ end
 
 ## Sends a request whose body comes from a channel, and returns the whole response. The caller's other task sends the
 ## pieces (`Bytes` of any content) and closes the channel at the end. `length` is the exact byte count, which the
-## request then says as `Content-Length`, or -1 (the default) for a chunked body. `method` is `POST`, `PUT` or `PATCH`;
-## `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the response body, not the upload.
-## `options.timeout_ms` is the time of each wait: the connect, each piece from the channel, each send and the head of
-## the response. A body that is longer or shorter than `length`, or a channel that stays silent for longer than
-## the timeout, is an `error` and ends the connection. A channel that closes ends the body, also when its producer
-## died, so a producer that can fail should set `length`. A server that answers and closes before the upload ends
-## shows as an `error`, not as its answer. The connection is not pooled. The channel is closed when the call returns,
-## so a producer that is still sending finds the closed error and stops.
+## request then says as `Content-Length` and which ends the body as soon as that many bytes were sent (the producer
+## need not close the channel), or -1 (the default) for a chunked body, which ends when the channel closes. `method` is
+## `POST`, `PUT` or `PATCH`; `headers` and `options` are as for `request`, and `options.max_body_bytes` limits the
+## response body, not the upload. `options.timeout_ms` is the time of each wait: the connect, each piece from the
+## channel, each send and the head of the response. A body that is longer or shorter than `length`, or a channel that
+## stays silent for longer than the timeout, is an `error` and ends the connection. A channel that closes ends the
+## body, also when its producer died, so a producer that can fail should set `length`. A server that answers and closes
+## before the upload ends (a 413) does not hide its answer: when a write fails, the head of the response that is
+## waiting is read and returned, and the write failure is the `error` only when there is none. The connection is not
+## pooled. The channel is closed when the call returns, so a producer that is still sending finds the closed error and
+## stops.
 export def upload(
   method: String,
   url: String,
@@ -1029,27 +1034,48 @@ def uploaded(
     NO_BYTES,
     conn.options.max_body_bytes,
   )
-  try TCP.send(conn.socket, stream_head(head, length), timeout)
-  try upload_pieces(conn.socket, body, length, timeout)
-  response = try read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + timeout)
+  # A failure to write is not the end: a server that refused the upload (a 413) answers and closes, and its answer is
+  # waiting in the input. It is returned when it can be read; else the failure is.
+  failed = ""
+  case TCP.send(conn.socket, stream_head(head, length), timeout)
+    ok(_) -> failed = try upload_pieces(conn.socket, body, length, timeout)
+    error(message) -> failed = "http: #{message}"
+  end
+  case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + timeout)
+    ok(response) -> return upload_answer(conn, response)
+    error(message) ->
+      if failed != ""
+        return error(failed)
+      end
+      return error(message)
+  end
+end
+
+# The response of an upload, whole, from its head on.
+def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpResponse]
   exchange = try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
   whole = try read_whole(conn, conn.options.max_body_bytes)
   return ok(HttpResponse(status: response.status, headers: response.headers, body: whole))
 end
 
-# Sends each piece of the channel as it comes, until it closes: as chunks and a last chunk, or with a `length`, as they
-# are and only while they fit in it.
-def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: Int) -> Result[Void]
+# Sends each piece of the channel as it comes: as chunks, until the channel closes and then the last chunk, or with a
+# `length`, as they are and only while they fit in it, ending at the last byte (the producer need not close the
+# channel). The result is "" when everything was written, the reason when a write failed, and an `error` for a
+# problem of the body itself (too long, too short, a silent channel), which no answer of the server changes.
+def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: Int) -> Result[String]
   count = 0
-  while true
+  while length == UNSIZED or count < length
     case body.recv(timeout)
       ok(piece) ->
         if length != UNSIZED and count + piece.size > length
           return error("http: the upload body is longer than its length")
         end
         count = count + piece.size
-        try emit(socket, piece, timeout, length, 0)
+        sent = emit(socket, piece, timeout, length, 0)
+        if not Result.ok?(sent)
+          return ok("http: #{sent.message}")
+        end
       error(message) ->
         if message != CHANNEL_CLOSED
           return error(message)
@@ -1058,12 +1084,15 @@ def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: In
     end
   end
   if length == UNSIZED
-    return TCP.send(socket, "0\r\n\r\n", timeout)
+    case TCP.send(socket, "0\r\n\r\n", timeout)
+      ok(_) -> return ok("")
+      error(message) -> return ok("http: #{message}")
+    end
   end
   if count != length
     return error("http: the upload body is shorter than its length")
   end
-  return ok()
+  return ok("")
 end
 
 # The rest of the body of the last response, as one value of at most `most` bytes.

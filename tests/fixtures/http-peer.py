@@ -15,6 +15,7 @@ sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 CERTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tls")
 GATE = threading.Barrier(3, timeout=10)
 HELD = []
+QUIET_CLOSED = []
 # Set by every connection of the raw server; /early waits on it (see there).
 ARRIVED = threading.Event()
 
@@ -121,6 +122,23 @@ class Web(http.server.BaseHTTPRequestHandler):
             except OSError:
                 pass
             self.close_connection = True
+        elif self.path == "/quiet":
+            # One chunk, then silence until the client closes its socket (or 10 s pass): the feeder of an open
+            # stream is blocked in its read, and only a cancel closes the connection at once.
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            self.wfile.write(b"2\r\nhi\r\n")
+            self.wfile.flush()
+            self.connection.settimeout(10)
+            try:
+                if self.connection.recv(1) == b"":
+                    QUIET_CLOSED.append(self.client_address[1])
+            except OSError:
+                pass
+            self.close_connection = True
+        elif self.path == "/quiet-closed":
+            self.reply(200, str(len(QUIET_CLOSED)))
         elif self.path == "/megabytes":
             self.reply(200, b"x" * 3 * 1048576)
         elif self.path == "/slow":
@@ -145,6 +163,14 @@ class Web(http.server.BaseHTTPRequestHandler):
             self.rfile.readline()
 
     def do_POST(self):
+        if self.path == "/refuse":
+            # The answer goes out as soon as the head is read, and the connection closes with the upload unread:
+            # the client's write fails while its answer is already in the input.
+            self.wfile.write(b"HTTP/1.1 413 Payload Too Large\r\nConnection: close\r\nContent-Length: 4\r\n\r\nbig!")
+            self.wfile.flush()
+            time.sleep(0.3)
+            self.close_connection = True
+            return
         body, framing = self.read_request_body()
         if self.path == "/upload":
             self.reply(200, "%s %s %d %s" % (self.command, framing, len(body), hashlib.sha256(body).hexdigest()[:8]))

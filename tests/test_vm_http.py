@@ -328,6 +328,22 @@ def refused(opened: Result[HTTP.Stream]) -> String
   end
 end
 
+# Whether the peer saw the client of /quiet close its socket, within about two seconds.
+def peer_saw_close(plain: String) -> Bool
+  for _ in 1..40
+    case HTTP.get_response(plain + "/quiet-closed")
+      ok(response) ->
+        if decoded(response.body) == "1"
+          return true
+        end
+      error(_) -> return false
+    end
+
+    Task.sleep(50)
+  end
+  return false
+end
+
 def main() -> Void
   plain = "http://127.0.0.1:#{System.args()[1]}"
   raw = "http://127.0.0.1:#{System.args()[3]}"
@@ -349,6 +365,11 @@ def main() -> Void
   puts(refused(HTTP.open("GET", plain + "/slow", "".bytes, [], options(300, 1, 1000, ""))))
   puts(refused(HTTP.open("GET", "ftp://127.0.0.1/", "".bytes)))
   puts(refused(HTTP.open("BAD METHOD", plain + "/hello", "".bytes)))
+  quiet = Result.unwrap!(HTTP.open("GET", plain + "/quiet", "".bytes, [], options(20000, 1, 1000, "")))
+  puts(decoded(Result.unwrap!(quiet.body.recv(5000))))
+  Task.cancel(quiet.done)
+  puts(Result.ok?(Task.await(quiet.done)))
+  puts(peer_saw_close(plain))
   puts(Task.pending_count())
 end
 """
@@ -372,10 +393,14 @@ def doubled(unit: Bytes, times: Int) -> Bytes
 end
 
 def upload(method: String, pieces: List[Bytes], length: Int, timeout: Int, close: Bool) -> String
+  return upload_to("/upload", method, pieces, length, timeout, close)
+end
+
+def upload_to(path: String, method: String, pieces: List[Bytes], length: Int, timeout: Int, close: Bool) -> String
   plain = "http://127.0.0.1:#{System.args()[1]}"
   into: Channel[Bytes] = Channel.new(2)
   Task.spawn(&produce, Producer(pieces: pieces, into: into, close: close))
-  case HTTP.upload(method, plain + "/upload", into, length, [Header(name: "X-Kind", value: "up")], options(timeout, 1, 1000, ""))
+  case HTTP.upload(method, plain + path, into, length, [Header(name: "X-Kind", value: "up")], options(timeout, 1, 1000, ""))
     ok(response) -> return "#{response.status} #{decoded(response.body)}"
     error(message) -> return "error: #{message}"
   end
@@ -393,6 +418,9 @@ def main() -> Void
   puts(upload("POST", small, 3, 5000, true))
   puts(upload("POST", small, 8, 5000, true))
   puts(upload("POST", small, -1, 300, false))
+  puts(upload("POST", small, 6, 300, false))
+  puts(upload("PATCH", [], 0, 300, false))
+  puts(upload_to("/refuse", "POST", [mega, mega, mega, mega, mega, mega, mega, mega, mega, mega, mega, mega], -1, 5000, true))
   puts(upload("GET", small, -1, 5000, true))
   puts(upload("POST", small, -2, 5000, true))
 end
@@ -853,6 +881,9 @@ def test_open_streams_a_response_body_on_a_channel_with_backpressure_and_an_earl
         "error: network: operation timed out",
         "error: http: the URL must be http:// or https:// with a host, and without user info",
         "error: http: invalid method",
+        "hi",
+        "false",
+        "true",
         "0"], "stream-open")
 
 
@@ -868,6 +899,9 @@ def test_upload_sends_a_body_from_a_channel_chunked_or_with_its_length(tmp_path,
         "error: http: the upload body is longer than its length",
         "error: http: the upload body is shorter than its length",
         "error: channel: timed out",
+        "200 POST length 6 6 bef7c249",
+        "200 PATCH length 0 0 e3b0c442",
+        "413 big!",
         "error: http: upload takes POST, PUT or PATCH",
         "error: http: length must be -1 (chunked) or the number of bytes"], "stream-upload")
 
