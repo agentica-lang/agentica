@@ -182,7 +182,9 @@ end
   body `T` is opaque: store, return and pass it on, but no `==`, arithmetic,
   printing, fields or methods (`CHECK-TYPE-MISMATCH`, `CHECK-UNKNOWN-METHOD`),
   and it is no `Map` key or `Set` element; take an `Fn` parameter for
-  behaviour. A parameter name may not be the name of a struct, enum or alias of
+  behaviour. `JSON.encode(x)` and `JSON.from(x)` work, and each call checks
+  that the bound type is encodable (`CHECK-NOT-ENCODABLE`, references/json.md).
+  A parameter name may not be the name of a struct, enum or alias of
   the file. A parameter whose type has a type parameter takes `none`, `[]` or
   `{}` as its default (`x: T = 1` is `CHECK-TYPE-MISMATCH`).
   `&first_or` needs the expected `Fn` type (`f: Fn[List[Int], Int, Int] =

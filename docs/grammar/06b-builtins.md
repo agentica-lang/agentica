@@ -87,7 +87,7 @@ the checker enforces:
   annotation.
 - `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
   returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
-  cannot call `decode` or `encode` on its type parameter. A codec follows the
+  cannot call `decode` on its type parameter. A codec follows the
   rules of an `Fn` value: it may be a parameter, a struct field or a list item,
   and it has no `to_s`, `inspect` or equality and is no constant or `ATS` value.
   `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`.

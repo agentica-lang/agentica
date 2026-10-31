@@ -56,12 +56,15 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 ## Generic code: codecs
 
-A generic function cannot `JSON.encode(x)` or `JSON.decode(text, T)` its `T`
-(`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`). Take a `JSON.Codec[T]`
-parameter; the caller passes `JSON.codec(User)`. `codec.decode`, `encode` and
-`from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for that struct.
-A codec is like an `Fn` value: a parameter, field or list item, but no
-printing, `inspect` (`IO.inspect` too), `==`, constant or `ATS` value. Its
+A generic function may `JSON.encode(x)` or `JSON.from(x)` a value of type `T`
+(or `List[T]`, `Map[String, T]`, `Optional[T]`, `Box[T]`): each call checks that
+the type bound to `T` is encodable (`CHECK-NOT-ENCODABLE` at that argument, for
+an `Fn`, `Bytes` or `Task`), and a generic caller that passes its `T` on carries
+the check. `JSON.decode(text, T)` stays `CHECK-NOT-DECODABLE`: take a
+`JSON.Codec[T]` parameter; the caller passes `JSON.codec(User)`. `codec.decode`,
+`encode` and `from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for
+that struct. A codec is like an `Fn` value: a parameter, field or list item, but
+no printing, `inspect` (`IO.inspect` too), `==`, constant or `ATS` value. Its
 methods have no function form (`JSON.Codec.decode(c, s)` is
 `CHECK-UNKNOWN-NAME`).
 
@@ -199,8 +202,8 @@ Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
   is not needed before encoding; use builders for dynamic objects or mixed
   arrays.
 - A shared stdio helper takes the encoded `String`, prints it and flushes. There
-  are no structural unions to accept any struct; a generic function encodes a
-  `T` only through a `JSON.Codec[T]`.
+  are no structural unions to accept any struct; a generic `def emit[T](x: T)`
+  can `JSON.encode(x)` instead.
 
 ```ruby
 def greet_json(text: String) -> Result[String]

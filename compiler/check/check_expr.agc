@@ -213,7 +213,8 @@ def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expect
     )
   end
 
-  return ok(State.Out(st: st, type: CheckTypes.substitute(type, found)))
+  current = try CheckTypes.check_json_needs(cx, st, node.name, found, [], [], node.span)
+  return ok(State.Out(st: current, type: CheckTypes.substitute(type, found)))
 end
 
 # target.call(args): the target is a function value and the arguments match its parameters.
