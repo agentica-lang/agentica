@@ -364,6 +364,21 @@ Every failure is an error value. The checks run in this order:
   a link. The error is `filesystem: cannot rename path`. Without
   `RENAME_NOREPLACE` the call answers `EINVAL`, which is reported; there is no
   check-first fallback, since that would race.
+- `File.replace(path, data, timeout_ms)` is one pool job. `uv_fs_realpath`
+  finds the target, which must be a regular file, so a link stays a link. The
+  data goes to a new file in the target's folder, `.agc-PID-N.tmp` (exclusive,
+  no link followed, mode 0600 while it is written, so a long file name cannot
+  make it too long and nobody else reads it). `fchmod` gives it the target's
+  mode `& 0777`, `fsync` flushes it, and `uv_fs_rename` moves it over the
+  target (`rename`; `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows,
+  which refuses a read-only target before anything is written). The folder is
+  then flushed on POSIX. A reader sees the old file or the new one, never
+  neither. A failure removes the new file; one that cannot be made is named in
+  the error. A killed process can leave the new file behind. At most 16 MiB of
+  data. It works by path, like `Path.rename`: a
+  folder of the path swapped between the `realpath` and the rename by someone
+  with write access to its parent is not defended. After a timeout the job runs
+  to its end (14.3).
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `File.replace(path, data)` replaces an existing file in one step, keeping its
+  permission bits and any symbolic link to it.
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
   formatter would change and exits 1 if there are any (it keeps a short `do`
   block or case arm on one line); `agentica fmt --tree FILE` prints the tree
