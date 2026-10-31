@@ -30,9 +30,10 @@ DEPS_FOLDER = "deps"
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
 ## files that the bytecode cache must watch because of it, and probed the paths whose presence decided a choice there.
-## blank_line_after_end is true for a file of a project whose manifest turns on `[style] blank_line_after_end`; no
-## other file has it. library is true for a file of a std/ or pkg/ library and for what such a file imports by a
-## relative path: those files keep the style answer of their origin.
+## blank_line_after_end is true for a file of a project whose manifest turns on `[style] blank_line_after_end`, and
+## max_line_width is the `[style] max_line_width` of that project (0 for no limit); no other file has either.
+## library is true for a file of a std/ or pkg/ library and for what such a file imports by a relative path: those
+## files keep the style answer of their origin.
 export struct Origin
   package: String
   root: String
@@ -41,6 +42,7 @@ export struct Origin
   watched: List[String]
   probed: List[String]
   blank_line_after_end: Bool
+  max_line_width: Int
   library: Bool
 end
 
@@ -60,8 +62,8 @@ end
 ## of the project (none when it is in no workspace), the names that the manifests of the locked packages declare (by
 ## package name; check_manifests reads them before any file is loaded), the packages loaded so far (by name), and
 ## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none), and
-## `style_dir`, the folder of the manifest when it turns on `[style] blank_line_after_end` ("" when it does not, or
-## when there is no manifest).
+## `style_dir`, the folder of the manifest when it asks for a `[style]` rule ("" when it does not, or when there is
+## no manifest), with the rules it asks for: `blank_line_after_end` and `max_line_width` (0 for no limit).
 export struct Scope
   deps: String
   os: String
@@ -75,6 +77,8 @@ export struct Scope
   opened: Map[String, Opened]
   native_root: String
   style_dir: String
+  blank_line_after_end: Bool
+  max_line_width: Int
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -116,6 +120,8 @@ export def scope_of(project: Project.Project) -> Scope
         opened: {},
         native_root: "",
         style_dir: "",
+        blank_line_after_end: false,
+        max_line_width: 0,
       )
     Project.Project.Declared(found) ->
       return Scope(
@@ -131,6 +137,8 @@ export def scope_of(project: Project.Project) -> Scope
         opened: {},
         native_root: "",
         style_dir: style_folder(found),
+        blank_line_after_end: found.manifest.blank_line_after_end,
+        max_line_width: found.manifest.max_line_width,
       )
   end
 end
@@ -167,7 +175,8 @@ export def project_origin(scope: Scope) -> Origin
     natives: scope.natives,
     watched: scope.watched,
     probed: scope.probed,
-    blank_line_after_end: scope.style_dir != "",
+    blank_line_after_end: scope.blank_line_after_end,
+    max_line_width: scope.max_line_width,
     library: false,
   )
 end
@@ -182,7 +191,11 @@ export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: O
     return importer
   end
 
-  return importer.with(blank_line_after_end: Project.styled?(workspace, scope.style_dir, key))
+  if Project.styled?(workspace, scope.style_dir, key)
+    return importer.with(blank_line_after_end: scope.blank_line_after_end, max_line_width: scope.max_line_width)
+  end
+
+  return importer.with(blank_line_after_end: false, max_line_width: 0)
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
@@ -195,6 +208,7 @@ export def library_origin() -> Origin
     watched: [],
     probed: [],
     blank_line_after_end: false,
+    max_line_width: 0,
     library: true,
   )
 end
@@ -261,6 +275,7 @@ export def open_package(
         watched: package.watched,
         probed: package.probed,
         blank_line_after_end: false,
+        max_line_width: 0,
         library: false,
       ),
       name: stored_name(package.label, inner),
@@ -534,9 +549,9 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
   return scope.opened[origin.package].names
 end
 
-# The folder of the manifest when it asks for the style rule, else "".
+# The folder of the manifest when it asks for a style rule, else "".
 def style_folder(found: Project.Found) -> String
-  if found.manifest.blank_line_after_end
+  if found.manifest.blank_line_after_end or found.manifest.max_line_width > 0
     return found.dir
   end
 

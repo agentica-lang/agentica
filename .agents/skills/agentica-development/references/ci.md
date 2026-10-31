@@ -212,8 +212,8 @@ binary and C tests. The two run at once and a shard unpacks both.
     `vm-task-map` (alone on the CPU)
   - `tests-shared`: `test-shared`
   - `checks`: `vm-test`, `test-bdd`, `layout-check`, `fixed-point`,
-    `vm-jit-test`, `smoke`, `fmt-check`, the stage0 rebuild check,
-    `vendored-test`, `dup-check`
+    `vm-jit-test`, `smoke`, `fmt-check`, `check-compiler`, the stage0 rebuild
+    check, `vendored-test`, `dup-check`
   - `test`: the aggregate of the five jobs above
   - `sanitizer-build`: `vm-sanitize-build` (the sanitizer `dist/agentica` and
     its stages), then the upload

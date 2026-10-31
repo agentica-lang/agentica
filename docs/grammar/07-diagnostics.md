@@ -103,6 +103,13 @@ its help lists each candidate as `FILE:LINE:COL`, and it exits 2. A `LEX-`,
 that is on no expression. Exit 1 means fix the program, exit 2 fix the question.
 A usage error is a diagnostic too, so with `--json` it is JSON as well.
 
+`FMT-` is the prefix of `agentica fmt`. `FMT-USAGE` is a mistake in the call
+(an unknown option, a wrong form, a missing path, or a folder with no `.agc`
+file), located at `<arguments>` as `QUERY-USAGE` is, with exit 2. A file named
+in the call is formatted whatever its extension, as `check` does. `FMT-INTERNAL` is a file
+whose formatted text would not keep its tree or its comments; the file is left
+as it is, and the command exits 1, as for a file that does not parse.
+
 Names and forms from other languages get a `help` that names the Agentica form
 (`len(x)`, `elif`, `let x = 5`, `Mutex.new`, `Agent.start_link`, `Thread.new`, a
 Ruby String method Agentica lacks): those without a code of their own are in the

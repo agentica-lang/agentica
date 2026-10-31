@@ -350,10 +350,12 @@ def manifest_edited_during_the_fetch(ws, tmp_path, manifest):
 @contextlib.contextmanager
 def manifest_not_writable(ws, tmp_path, manifest):
     """While the block runs, `add` can read the manifest but not write it, after it wrote the lock. It yields the
-    environment that the command needs. POSIX: the `git` shim makes a folder where the new manifest is written first.
-    Windows: a process that holds the manifest open (an editor, for instance) stops the rename that replaces it."""
+    environment that the command needs. POSIX: the `git` shim makes folders at the names beside the manifest where
+    `File.replace` writes the new one first (`.agc-<pid>-<n>.tmp`, every name it tries). Windows: a process that holds
+    the manifest open (an editor, for instance) stops the rename that replaces it."""
     if os.name != "nt":
-        yield {"PATH": git_shim(tmp_path, 'mkdir -p %s/agentica.toml.new-$PPID' % ws.project)}
+        names = " ".join("%s/.agc-$PPID-%d.tmp" % (ws.project, n) for n in range(16))
+        yield {"PATH": git_shim(tmp_path, "mkdir -p %s" % names)}
         return
     with open(manifest, "rb"):
         yield {}

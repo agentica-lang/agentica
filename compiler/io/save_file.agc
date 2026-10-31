@@ -21,41 +21,24 @@ export def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
   return File.close(out, timeout_ms)
 end
 
-## Puts `data` in the file at `path` so that no reader sees a half-written file there: it is written to a file beside
-## it first, and that file is renamed into place (`Path.rename` never replaces, so an old file, `replacing`, is moved
-## to a backup name first and removed at the end). A step that fails puts the old file back and removes what was made.
+## Puts `data` in the file at `path` so that no reader sees a half-written file there. An old file (`replacing`) is
+## replaced in one step by `File.replace`, which keeps its permission bits and writes through a symbolic link. A new
+## file is written beside the path first and renamed into place (`Path.rename` never replaces, so a file made there
+## meanwhile is kept); a step that fails removes what was made.
 export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) -> Result[Void]
-  stamp = System.pid()
-  fresh = "#{path}.new-#{stamp}"
-  backup = "#{path}.old-#{stamp}"
-  written = bytes(fresh, data, timeout_ms)
-  if !written.ok?
-    Path.remove(fresh, timeout_ms)
-    return written
-  end
-
   if replacing
-    moved = Path.rename(path, backup, timeout_ms)
-    if !moved.ok?
-      Path.remove(fresh, timeout_ms)
-      return moved
-    end
+    return File.replace(path, data, timeout_ms)
   end
 
-  placed = Path.rename(fresh, path, timeout_ms)
+  fresh = "#{path}.new-#{System.pid()}"
+  placed = bytes(fresh, data, timeout_ms)
+  if placed.ok?
+    placed = Path.rename(fresh, path, timeout_ms)
+  end
+
   if !placed.ok?
-    if replacing
-      Path.rename(backup, path, timeout_ms)
-    end
-
     Path.remove(fresh, timeout_ms)
-    return placed
   end
 
-  if replacing
-    # The new file stands; a backup that cannot be removed is only a spare file.
-    Path.remove(backup, timeout_ms)
-  end
-
-  return ok()
+  return placed
 end

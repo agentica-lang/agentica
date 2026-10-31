@@ -228,8 +228,8 @@ def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lo
   return ok()
 end
 
-# Replaces the file whole (SaveFile.replace puts the old one back if a step fails). A file that cannot be written is
-# PKG-WRITE; `later` is more help for the user, when a file was written before this one.
+# Replaces the file whole (SaveFile.replace leaves the old one as it was if a step fails). A file that cannot be
+# written is PKG-WRITE; `later` is more help for the user, when a file was written before this one.
 def save(settings: Env.Settings, file: String, text: String, later: String) -> Result[Void]
   replacing = settings.workspace.file_exists.call(file)
   written = SaveFile.replace(file, text.bytes, replacing, WRITE_TIMEOUT_MS)

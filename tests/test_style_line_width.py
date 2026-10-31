@@ -1,9 +1,11 @@
-"""Line width of the .agc files in compiler/ and stdlib/.
+"""Line width of the .agc files in stdlib/.
 
-Each agentica.toml under those folders may hold a [style] table with max_line_width (docs/future/45-packages.md,
-45.5). The width counts characters (Unicode code points, not bytes) on every line, comments and doc comments
-included. This test enforces it until `agentica check` reads [style] itself. A missing tomllib skips the test locally
-and fails it in CI.
+`agentica check` enforces `[style] max_line_width` as CHECK-LINE-TOO-LONG for the files of a project, and CI runs it
+over compiler/ (`make check-compiler`). The files of stdlib/ are not files of a project: they load as `std/` modules,
+library files that no style rule covers, and most of them cannot be checked as a root of their own, since they use
+names only std/ may use. So this test keeps their width: the `max_line_width` of stdlib/agentica.toml, counted in
+characters (Unicode code points, not bytes) on every line, comments and doc comments included. A missing tomllib
+skips the test locally and fails it in CI.
 """
 import os
 
@@ -16,7 +18,7 @@ try:
 except ImportError:  # Python before 3.11
     tomllib = None
 
-STYLED_FOLDERS = ("compiler", "stdlib")
+STYLED_FOLDERS = ("stdlib",)
 
 
 def manifests():

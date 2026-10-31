@@ -162,7 +162,7 @@ end
 ## The first style problem of a linked program: the files whose project asks for a rule that they break. `none` when
 ## none does. The style rules come after the type check, so a program that does not check reports that first.
 export def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem]
-  return Style.blank_line_after_end(linked, NO_STYLED)
+  return Style.first_problem(linked, NO_STYLED)
 end
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
@@ -361,7 +361,7 @@ end
 def style_after(checking: Checker.Checking, linked: Linker.Linked, styled: Set[String]) -> Optional[Problems.Problem]
   case checking
     Checker.Checking.Failed(_) -> return none
-    Checker.Checking.Done(_) -> return Style.blank_line_after_end(linked, styled)
+    Checker.Checking.Done(_) -> return Style.first_problem(linked, styled)
   end
 end
 

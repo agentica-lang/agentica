@@ -14,8 +14,12 @@ program, the bytecode cache and the sandbox flags.
   A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and
   symbolic links to files, as `symbol` does; `build/` is not skipped.
   `check --stdin FILE.agc` reads the text from standard input.
-- `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
-  formatter would change (exit 1 if any, 0 if none); it writes nothing.
+- `agentica fmt [PATH...]` formats the `.agc` files in place (default: the
+  current folder, without `agc_libs/`); `--check` only lists the files it would
+  change (exit 1 if any); `agentica fmt -` formats standard input to standard
+  output. A file that does not parse is left as it is (exit 1); a wrong call is
+  `FMT-USAGE` (exit 2). The `[style]` of the nearest `agentica.toml` sets the
+  width (default 119) and `blank_line_after_end`.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
