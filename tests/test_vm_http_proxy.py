@@ -259,9 +259,19 @@ def main() -> Void
   calls("http://us%40er:hunter2@#{locked}", a, dir, "wrong")
   puts("-- no user info")
   calls("http://#{locked}", a, dir, "none")
+  puts("-- a 407 ends the pooled connection")
+  pool = HTTP.client(HttpClientOptions(proxy: "http://#{locked}")).unwrap!
+  show(HTTP.get(pool, "#{a}/hello?first"))
+  show(HTTP.get(pool, "#{a}/hello?second"))
+  HTTP.close_client(pool)
   puts("-- the caller's own header wins")
   mine = [Header(name: "Proxy-Authorization", value: args[3])]
   show(HTTP.post_response("#{a}/echo", "mine".bytes, mine, HttpClientOptions(proxy: "http://#{locked}")))
+  puts("-- printing a connection shows no password, and the origin never got a Proxy-Authorization header")
+  conn = HTTP.start(a, HttpClientOptions(proxy: "http://us%40er:p%3Ass%2Fw@#{locked}")).unwrap!
+  IO.inspect(conn)
+  HTTP.finish(conn)
+  show(HTTP.get_response("#{a}/seen"))
   puts("-- a bad login or a bad proxy never quotes the user info")
   shown(HTTP.client(HttpClientOptions(proxy: "http://%zz:hunter2@127.0.0.1:1")))
   shown(HTTP.client(HttpClientOptions(proxy: "http://a%3Ab:hunter2@127.0.0.1:1")))
@@ -311,7 +321,13 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
                "start 200"]
     bad_login = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
     bad_proxy = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
-    assert output_lines(result.stdout) == [
+    lines = output_lines(result.stdout)
+    # A printed connection holds its proxy without the user info (the login is in a channel, which prints opaque).
+    shown = lines[lines.index("-- printing a connection shows no password, and the origin never got a Proxy-Authorization header") + 1]
+    assert shown.startswith("Connection(") and 'proxy: "http://127.0.0.1:%s"' % locked in shown, shown
+    assert "login: <Channel>" in shown, shown
+    lines = [line if line != shown else "<INSPECT>" for line in lines]
+    assert lines == [
         *granted,
         "-- the first colon ends the user, a later one is the password",
         "200 hello from A /hello?colon",
@@ -319,8 +335,14 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
         *denied,
         "-- no user info",
         *asked,
+        "-- a 407 ends the pooled connection",
+        asked[0],
+        asked[0],
         "-- the caller's own header wins",
         "200 got 4 bytes: mine",
+        "-- printing a connection shows no password, and the origin never got a Proxy-Authorization header",
+        "<INSPECT>",
+        "200 seen []",
         "-- a bad login or a bad proxy never quotes the user info",
         bad_login,
         bad_login,
@@ -331,13 +353,17 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
         "-- a proxy that is down",
         "true",
     ]
-    seen = [line.split(" ", 2)[2] for line in [peer.next_line() for _ in range(20)]]
+    raw = [peer.next_line() for _ in range(22)]
+    seen = [line.split(" ", 2)[2] for line in raw]
     # Every request of the good login (and the colon form) carried the one header; the wrong login and the missing one
     # went out with their own (or none) and were told 407.
     assert all(line.endswith(" | " + LOGIN) for line in seen[:7]), seen
     assert all(" | Basic " in line and not line.endswith(LOGIN) for line in seen[7:13]), seen
     assert all(line.endswith(" | -") for line in seen[13:19]), seen
-    assert seen[19].endswith(" | " + LOGIN)
+    assert all(line.endswith(" | -") for line in seen[19:21]), seen
+    # The 407 closed the pooled connection, so the second call came on a new one.
+    assert raw[19].split(" ")[1] != raw[20].split(" ")[1], raw
+    assert seen[21].endswith(" | " + LOGIN)
     assert all(" HTTP/1.1 | 127.0.0.1:%s | " % first in line for line in seen if "http://127.0.0.1:%s/" % first in line)
     # The password is in no output, no error and no trace; the origin never saw a Proxy-Authorization header (a proxy
     # keeps it), and the request target holds no user info.

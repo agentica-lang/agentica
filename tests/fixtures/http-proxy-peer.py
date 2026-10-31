@@ -8,12 +8,13 @@ assert the request line and the `Host` header, and the number of the client conn
 
     SAW <connection> <request line> | <Host header>
 
-The origins answer `/hello` (their name and the path with its query), `/big` (200000 bytes), and echo a body on any
-other path (its size and its first 10 bytes).
+The origins answer `/hello` (their name and the path with its query), `/big` (200000 bytes), `/seen` (the
+`Proxy-Authorization` values they received), and echo a body on any other path (its size and its first 10 bytes).
 
 The locked proxy answers 407 with `Proxy-Authenticate` unless `Proxy-Authorization` is `LOGIN`, the Basic credentials of
 the user `us@er` and the password `p:ss/w`; a SAW line of it ends with ` | <the Proxy-Authorization header, or ->`. No
-proxy passes that header on to the origin, as a forward proxy does not (it is hop-by-hop). Standard library only.
+proxy passes that header on to the origin, as a forward proxy does not (it is hop-by-hop), and an origin records it if
+one does. Standard library only.
 """
 import base64
 import http.client
@@ -55,6 +56,8 @@ def read_body(handler):
 class Origin(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     name = "?"
+    # The Proxy-Authorization values that reached an origin after the proxy forwarded; `/seen` answers them.
+    received = []
 
     def log_message(self, *args):
         pass
@@ -68,7 +71,11 @@ class Origin(http.server.BaseHTTPRequestHandler):
 
     def handle_any(self):
         body = read_body(self)
-        if self.path.startswith("/hello"):
+        if self.headers.get("Proxy-Authorization") is not None:
+            self.received.append(self.headers["Proxy-Authorization"])
+        if self.path == "/seen":
+            self.answer(("seen %s" % self.received).encode())
+        elif self.path.startswith("/hello"):
             self.answer(("hello from %s %s" % (self.name, self.path)).encode())
         elif self.path == "/big":
             self.answer(b"x" * 200000)

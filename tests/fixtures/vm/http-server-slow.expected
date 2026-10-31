@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3260,
+  "steps": 3276,
   "stdout": [
     "<Bytes 10 736c6f77202f736c6f77>",
     "hanging",

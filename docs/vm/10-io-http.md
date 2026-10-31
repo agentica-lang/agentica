@@ -177,7 +177,9 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   URL is cut out before `parse_url` (which refuses it) and decoded into one
   `Proxy-Authorization: Basic` header, added to the head of each request and
   never to the URL, the job or an error; a 407 from the proxy ends the call
-  with an error that names the proxy, and closes a connection of `start`.
+  with an error that names the proxy and closes the connection, pooled or not.
+  A `Connection` keeps the proxy without user info in its options and the login
+  in a channel, so printing it shows no password.
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
