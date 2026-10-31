@@ -48,7 +48,9 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
 
 - Literals: `42`, `3.14`, `1.5e-3`, `1e5` (a Float; `1.e5` is not), `1_000` (a
   `_` between digits is only visual; another `_` is `LEX-INVALID-NUMBER`),
-  `"text"` (escapes `\" \\ \# \n \r \t`), `true`,
+  `0xFF`, `0b1010`, `0o755` (Int in base 16, 2, 8; either case; a bad digit or
+  a prefix with none is `LEX-INVALID-NUMBER`; `0755` is decimal), `"text"`
+  (escapes `\" \\ \# \n \r \t`), `true`,
   `false`, `nil`. A minus sign is an operator, not part of the literal; an
   integer that does not fit is `CHECK-INT-RANGE`.
 - Interpolation: `"total: #{n + 1}"`. Strings go in as is, `Json` as its JSON

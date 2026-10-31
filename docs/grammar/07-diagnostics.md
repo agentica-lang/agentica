@@ -338,7 +338,7 @@ is a rule:
     the error level is `err`
 
 - **Written:** `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`,
-  `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`)
+  `HTTP.write_bytes` with the import (`CHECK-IMPORT-NAME`)
   - **Help:** a handler that returns its whole response: `return
     ok(HttpResponse(status: 200, headers: [], body: text.bytes))`
 

@@ -63,7 +63,7 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
 ```
 
 - A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count.
-- The core has no hex literals: write masks in decimal (`255`, `65535`).
+- Write masks in hex or binary: `0xFF`, `0xFFFF`, `0b1010`.
 - `x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits < 0` tests the
   sign of a Float (not NaN: use `x != x`).
 
