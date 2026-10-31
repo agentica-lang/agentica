@@ -229,17 +229,23 @@ def sized(feed: Feed) -> Void
 end
 
 def three(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
   feed.body.send("abc".bytes, 5000)
   feed.body.close
 end
 
 def five_and_more(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
   feed.body.send("abc".bytes, 5000)
   feed.body.send("defgh".bytes, 5000)
   feed.body.close
 end
 
 def exact_and_more(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
   feed.body.send("abcde".bytes, 5000)
   feed.body.send("f".bytes, 5000)
   feed.body.close
@@ -342,7 +348,7 @@ STREAM_PYTHON_LINES = [
     "sized-head 200 8 None b'' whole True",
     "sized-short 200 8 incomplete b'abc'",
     "sized-long 200 5 incomplete b'abc'",
-    "sized-extra 200 5 b'abcde' closed",
+    "sized-extra 200 5 b'abcde'",
     "sized-whole 200 5 b'hello'",
     "sized-wrong 500",
     "binary 200 b'\\xff\\x00\\x80\\xfeend' framed",
@@ -560,7 +566,7 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
     """http.client reads the chunks of /ticks as they arrive and times them, over plain TCP and TLS; HEAD, keep-alive
     after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client. A stream
     with a length goes out with Content-Length and no chunks: whole, cut short, cut for a piece past the length and
-    closed after one that fills it too soon."""
+    ended when the length is full, whatever a producer sends after it."""
     source = tmp_path / "stream-server.agc"
     source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, flags=flags, stdin=True))

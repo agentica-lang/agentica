@@ -221,11 +221,12 @@ end
   are `Bytes` sent as they are (a file or binary data works); empty ones are
   skipped. A body already closed when the handler returns goes out
   with `Content-Length`.
-- `length: some(n)` is for a body of known size (a big file in pieces): the
-  head has `Content-Length: n` and the pieces go out raw. A body that ends
-  short of `n`, or a piece that would pass it, closes the connection, so the
-  client sees an incomplete body. A closed body of another size, a negative
-  length, or a length on a 204 or 304 is the 500 of `listen`.
+- `length: some(n)` is for a body of known size (a big file in pieces): the head
+  has `Content-Length: n` and the pieces go out raw. A body that ends short of
+  `n`, or a piece that would pass it, closes the connection, so the client sees
+  an incomplete body. The body ends when `n` bytes are sent: the server then
+  closes the channel, so a producer that goes on stops. A closed body of another
+  size, a negative length, or a length on a 204 or 304 is the 500 of `listen`.
 - The server reads the connection for the whole stream. When the client's input
   ends (it left, or half-closed) or a send fails, it closes the channel: the
   producer's next `send` is `error("channel: closed")`, and it must stop.

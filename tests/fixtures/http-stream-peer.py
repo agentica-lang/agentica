@@ -95,19 +95,21 @@ def sized_cut(label, path):
 
 
 def sized_extra():
-    """A producer that sends more after the length is full: the client has its whole body, and the connection closes
-    instead of waiting for another request."""
+    """A producer that sends more after the length is full: the client has its whole body and never a byte more. The
+    server ends the body when it is full, so the extra piece is dropped or, if it was already queued, cuts the
+    connection: which of the two depends on timing, so the line does not say."""
     s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
     s.sendall(b"GET /sized-extra HTTP/1.1\r\nHost: x\r\n\r\n")
     got = b""
     while not got.endswith(b"abcde"):
         got += s.recv(4096)
+    s.settimeout(0.5)
     try:
-        end = "closed" if s.recv(4096) == b"" else "open"
+        got += s.recv(4096)
     except OSError:
-        end = "closed"
+        pass
     print("sized-extra", got.split(b" ")[1].decode(), got.split(b"Content-Length: ")[1].split(b"\r\n")[0].decode(),
-          got.split(b"\r\n\r\n")[1], end)
+          got.split(b"\r\n\r\n")[1])
     s.close()
 
 

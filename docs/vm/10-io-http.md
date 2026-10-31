@@ -353,13 +353,15 @@ Properties of the client that no test checks:
   the same encoding. Pieces are `Bytes` and go out with `TCP.send_bytes`, so no
   UTF-8 check runs on them. Otherwise the head is `encode_response` of the same
   status and headers with an empty body, its `Content-Length: 0` swapped for
-  `Transfer-Encoding: chunked` (so the head checks and the C code are the
-  same), and the connection task sends the pieces
-  as it takes them from the channel. With `length: some(n)` the head carries
-  `Content-Length: n` in place of the chunked header and the pieces go out raw;
-  the pump counts the bytes, cuts the connection when the body ends short or a
-  piece would pass `n`, and sends no last chunk. A watcher task, spawned in
-  the group, loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
+  `Transfer-Encoding: chunked` (so the head checks and the C code are the same),
+  and the connection task sends the pieces as it takes them from the channel.
+  With `length: some(n)` the head carries `Content-Length: n` in place of the
+  chunked header and the pieces go out raw; the pump counts the bytes, cuts the
+  connection when the body ends short or a piece would pass `n`, sends no last
+  chunk and ends the body when it is full (it closes the channel, so a client
+  that has its bytes is not held until the producer closes; a piece already
+  queued after that cuts the connection). A watcher task, spawned in the group,
+  loops on `TCP.recv_bytes` for the whole stream: the end of the client's input
   (or a read error) sets a one-slot `left` channel and closes the body channel,
   which wakes the connection task and fails the producer's next `send`, with no
   write needed; the pump then sees `left` and does not send the last chunk, so
@@ -369,11 +371,11 @@ Properties of the client that no test checks:
   pipelined request are not kept and the connection closes at the end of the
   stream, after `close_write` and a drain (as does `Connection: close`, or a
   request already in the buffer). When the stream has ended with nothing read,
-  the watcher's pending read is the wait for the next request: its bytes go
-  back as the start of the request, and the connection task waits for them at
-  most `idle_timeout_ms`. `take_ready` and the pump read the end of the body
-  from the receive's own error (`channel: closed`), not from a later `closed?`.
-  HTTP/1.0 never gets here: the parser answers 505.
+  the watcher's pending read is the wait for the next request: its bytes go back
+  as the start of the request, and the connection task waits for them at most
+  `idle_timeout_ms`. `take_ready` and the pump read the end of the body from the
+  receive's own error (`channel: closed`), not from a later `closed?`. HTTP/1.0
+  never gets here: the parser answers 505.
 
 #### 10.7.3 Errors and status codes
 

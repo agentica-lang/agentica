@@ -1040,13 +1040,38 @@ def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> 
   return Sent(keep: false, rest: NO_BYTES)
 end
 
+# What the watcher has seen so far: STREAM_CUT when the client left, STREAM_EARLY when it sent bytes, else STREAM_DONE.
+# It is read before the last byte of the body goes out (the last chunk, or the last byte of a body with a length),
+# because after it the client may send its next request, which the watcher would then take for bytes of the stream.
+def watched(left: Channel[Bool], sent: Channel[Bool]) -> Int
+  if Result.ok?(left.recv(0))
+    return STREAM_CUT
+  end
+  if Result.ok?(sent.recv(0))
+    return STREAM_EARLY
+  end
+  return STREAM_DONE
+end
+
+# Whether the producer has sent a piece past a body that is full. The channel is closed either way, so a producer that
+# sends more learns that the body is over; an empty piece is no data.
+def overrun?(body: Channel[Bytes]) -> Bool
+  more = body.recv(0)
+  body.close
+  if Result.ok?(more) and not more.unwrap!.empty?
+    return true
+  end
+  return false
+end
+
 # Sends the pieces as they come, then the last chunk (a body with a length has none). The wait for a piece has no
 # deadline of its own: a slow producer is not an error, and the client leaving, the producer closing or the server
 # closing all wake it. A piece gets `timeout` to be sent, so a client that stops reading cuts the stream. STREAM_CUT
 # when the body was cut: a send failed (the channel is closed for the producer), the watcher saw the client leave
-# (left has a value), or a body with a length ended short. Only a producer's close ends the body. STREAM_EARLY when
-# the client sent bytes during the stream (sent has a value, read before the last chunk goes out: after it the client
-# may send its next request), STREAM_DONE otherwise.
+# (left has a value), a body with a length ended short, or a piece came after it was full. Only a producer's close
+# ends the body, or its length when it has one. STREAM_EARLY when the client sent bytes during the stream (sent has a
+# value, read before the last chunk or the last byte of a body with a length goes out: after it the client may send
+# its next request), STREAM_DONE otherwise.
 def pump(
   socket: Socket,
   body: Channel[Bytes],
@@ -1057,7 +1082,22 @@ def pump(
   timeout: Int,
 ) -> Int
   count = 0
+  early = STREAM_DONE
+  if length == 0
+    early = watched(left, sent)
+    if early == STREAM_CUT
+      body.close
+      return STREAM_CUT
+    end
+  end
   for piece in first
+    if length != UNSIZED and count + piece.size == length
+      early = watched(left, sent)
+      if early == STREAM_CUT
+        body.close
+        return STREAM_CUT
+      end
+    end
     case emit(socket, piece, timeout, length, count)
       ok(total) -> count = total
       error(_) ->
@@ -1066,8 +1106,23 @@ def pump(
     end
   end
   while true
+    if length != UNSIZED and count == length
+      # The client has the whole body and may already send its next request, so the stream ends now and does not wait
+      # for the producer to close the channel. A piece that is already waiting is more than the length.
+      if overrun?(body)
+        return STREAM_CUT
+      end
+      break
+    end
     case body.recv(STREAM_POLL_MS)
       ok(piece) ->
+        if length != UNSIZED and count + piece.size == length
+          early = watched(left, sent)
+          if early == STREAM_CUT
+            body.close
+            return STREAM_CUT
+          end
+        end
         case emit(socket, piece, timeout, length, count)
           ok(total) -> count = total
           error(_) ->
@@ -1083,17 +1138,13 @@ def pump(
   if length != UNSIZED and count != length
     return STREAM_CUT
   end
-  if Result.ok?(left.recv(0))
-    return STREAM_CUT
+  if length == UNSIZED
+    early = watched(left, sent)
+    if early == STREAM_CUT or not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
+      return STREAM_CUT
+    end
   end
-  early = Result.ok?(sent.recv(0))
-  if length == UNSIZED and not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
-    return STREAM_CUT
-  end
-  if early
-    return STREAM_EARLY
-  end
-  return STREAM_DONE
+  return early
 end
 
 # Sends one piece and gives the bytes sent so far: as chunks, or with a `length`, as they are and only while they fit
