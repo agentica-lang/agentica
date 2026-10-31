@@ -6,7 +6,7 @@ def main() -> Void
     IO.warn("usage: http_get.agc URL")
     System.exit(2)
   end
-  client = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  client = Result.unwrap!(HTTP.client())
   response = Result.unwrap!(HTTP.get(client, arguments[0]))
   puts(String.from_int(response.status))
   puts(HTTP.text(response.body, response.headers).unwrap!)

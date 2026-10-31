@@ -41,7 +41,7 @@ end
 
 def main() -> Void
   port = 0
-  server = HTTP.listen("127.0.0.1", port, &handle, HTTP.server_options()).unwrap!
+  server = HTTP.listen("127.0.0.1", port, &handle).unwrap!
   puts("listening #{port}")
   IO.flush()
   HTTP.wait(server).unwrap!

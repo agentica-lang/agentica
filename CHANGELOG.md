@@ -14,11 +14,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   size goes out with `Content-Length` and no chunk framing, and a body that
   ends short or runs over closes the connection.
 - Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
-  the values of `HTTP.client_options()` and `HTTP.server_options()`, so
-  `HttpClientOptions(timeout_ms: 5000)` changes one field.
+  so `HttpClientOptions(timeout_ms: 5000)` changes one field.
 - `HTTP.client`, `HTTP.listen` (and its TLS and stream forms), `HTTP.download`
   and `Archive.extract_tar` / `extract_zip` take their options last with a
   default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
+
+### Removed
+
+- **Breaking:** `HTTP.client_options()`, `HTTP.server_options()`,
+  `HTTP.download_options()` and `Archive.options()`: leave the argument out, or
+  build the record (`HttpClientOptions(timeout_ms: 5000)`,
+  `HttpServerOptions()`, `HTTP.DownloadOptions()`, `Archive.Options()`).
 
 ## [0.19.0-beta.2] - 2026-10-31
 

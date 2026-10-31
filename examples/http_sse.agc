@@ -25,7 +25,7 @@ def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen_stream("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  server = HTTP.listen_stream("127.0.0.1", 0, &handle).unwrap!
   if System.args().length == 1 and System.args()[0] == "serve"
     puts(HTTP.local_port(server))
     IO.flush()
@@ -33,7 +33,7 @@ def main() -> Void
     return
   end
 
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/events").unwrap!
   puts(response.status)

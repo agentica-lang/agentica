@@ -14,7 +14,7 @@ end
 
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  pool = Result.unwrap!(HTTP.client())
   call = Task.spawn(&post, Call(pool: pool, url: "http://127.0.0.1:#{TCP.local_port(listener)}/"))
   # The POST runs up to its wait for the answer: its job is on the client's channel.
   Task.sleep(0)

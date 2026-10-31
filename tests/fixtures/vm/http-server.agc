@@ -71,7 +71,7 @@ def raw_body(port: Int, bytes: List[Int]) -> String
 end
 
 def main() -> Void
-  defaults = HTTP.server_options()
+  defaults = HttpServerOptions()
   IO.inspect(defaults)
   bad = HttpServerOptions(request_timeout_ms: 0, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 16)
   IO.inspect(HTTP.listen("127.0.0.1", 0, &handle, bad))

@@ -20,7 +20,7 @@ end
 
 # Makes a client, hands it over and crashes: the client is not the crashed task's.
 def make_and_crash(clients: Channel[HttpClient]) -> Result[Void]
-  clients.send(Result.unwrap!(HTTP.client(HTTP.client_options())), 5000)
+  clients.send(Result.unwrap!(HTTP.client()), 5000)
   failed: Result[Int] = error("the maker crashes")
   Result.unwrap!(failed)
   return ok()

@@ -8,14 +8,14 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
   if System.args().length == 1 and System.args()[0] == "serve"
     puts(HTTP.local_port(server))
     IO.flush()
     HTTP.wait(server).unwrap!
     return
   end
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
   puts(response.status)

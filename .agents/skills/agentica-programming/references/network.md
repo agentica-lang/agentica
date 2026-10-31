@@ -68,7 +68,6 @@ calls are `CHECK-UNKNOWN-NAME` and the help shows the import. Client and server
 behave the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 ```text
-HTTP.client_options() -> HttpClientOptions
 HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
@@ -76,7 +75,6 @@ HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = 
 HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
-HTTP.download_options() -> DownloadOptions
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
 
 Header(name: String, value: String)
@@ -87,10 +85,11 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
-  most `max_body_bytes`, with any content. `client_options()` gives a 30 s timeout,
-  a 30 s idle timeout, 4 connections per origin, a 1 MiB body limit and system
-  CA trust. Options must be positive; `max_connections` is at most 65536 and
-  `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the whole call.
+  most `max_body_bytes`, with any content. `HttpClientOptions()`, the default,
+  gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
+  body limit and system CA trust. Options must be positive; `max_connections` is
+  at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
+  whole call.
 - The client keeps idle keep-alive connections per scheme, host and port. URLs
   are `http://` or `https://`; the fragment is dropped, user info is rejected
   and IPv6 hosts go in brackets. It adds `Host` and `Content-Length`; a request
@@ -109,7 +108,7 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   exist (`create_private`, so an existing path fails untouched) and a failed
   download keeps the partial file. 4xx and 5xx still return `ok` with their
   status and written body, without redirect follow; the connection is not
-  pooled. `DownloadOptions()` and `download_options()` give 30 s and 256 MiB.
+  pooled. `DownloadOptions()`, the default, gives 30 s and 256 MiB.
 - A body is `Bytes`: send text as `"...".bytes` (no body: `"".bytes`) and read
   it with `HTTP.text(response.body, response.headers)`, which decodes UTF-8
   only: a `charset` in `Content-Type` other than `utf-8`, or a body that is not
@@ -124,7 +123,6 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 ## HTTP server (`std/http`)
 
 ```text
-HTTP.server_options() -> HttpServerOptions
 HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
@@ -177,12 +175,12 @@ end
   response: <reason>` on stderr. A runtime error ends only its connection (the
   client sees a close; the run exits 1 at the end, as for any unobserved task
   crash). Handlers have no time limit.
-- `server_options()` gives a 30 s `request_timeout_ms` (first byte of the first
-  request; then each whole request from its first byte; then each response write
-  from the handler's return), a 30 s `idle_timeout_ms` between requests, 128
-  connections at once (more wait) and a 1 MiB body limit, with the client's
-  checks. Bad requests never reach the handler: the server answers 400, 413,
-  417, 431, 501 or 505 itself and closes.
+- `HttpServerOptions()`, the default, gives a 30 s `request_timeout_ms` (first
+  byte of the first request; then each whole request from its first byte; then
+  each response write from the handler's return), a 30 s `idle_timeout_ms`
+  between requests, 128 connections at once (more wait) and a 1 MiB body limit,
+  with the client's checks. Bad requests never reach the handler: the server
+  answers 400, 413, 417, 431, 501 or 505 itself and closes.
 - `close_server` closes the listener and every connection and cancels the
   handlers and their spawned tasks. `wait` returns `ok()` once the server is
   closed and those tasks ended. When `main` returns, the server stops with the

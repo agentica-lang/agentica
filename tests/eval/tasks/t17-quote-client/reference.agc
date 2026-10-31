@@ -49,7 +49,7 @@ end
 
 def main() -> Void
   base = System.args()[0]
-  client = HTTP.client(HTTP.client_options()).unwrap!
+  client = HTTP.client().unwrap!
   sent = 0
   failed = 0
   while !IO.eof?()
