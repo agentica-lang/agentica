@@ -160,6 +160,7 @@ def reply(socket: Socket) -> Result[String]
   while line.slice(3, 1) == "-"
     line = try TCP.read_line(socket, 5000)
   end
+
   return ok(line)
 end
 
@@ -173,6 +174,7 @@ def starttls(host: String, context: TlsContext) -> Result[Socket]
   if !ready.start_with?("220")
     return error(ready)
   end
+
   return TLS.upgrade(plain, context, host, 5000)
 end
 ```
