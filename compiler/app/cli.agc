@@ -302,7 +302,8 @@ def check(session: Session, words: List[String]) -> Int
 end
 
 # `fmt [PATH...]`, `fmt --check [PATH...]`, `fmt -` and `fmt --tree FILE` (cli_fmt.agc). Any other form, an option
-# among the paths and a path that names no `.agc` file are FMT-USAGE, status 2.
+# among the paths (a file named -x.agc is written ./-x.agc), a missing path and a folder with no `.agc` file are
+# FMT-USAGE, status 2.
 def fmt(session: Session, words: List[String]) -> Int
   if words.size > 0 and words[0] == "--tree"
     if words.size != 2
@@ -326,7 +327,7 @@ def fmt(session: Session, words: List[String]) -> Int
 
   for path in paths
     if path.starts_with?("-")
-      return fmt_usage(session, "unknown option #{path}")
+      return fmt_usage(session, "unknown option #{path} (a file whose name starts with - is written ./#{path})")
     end
   end
 

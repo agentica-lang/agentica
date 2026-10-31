@@ -4,8 +4,9 @@
 ## `fmt [PATH...]` rewrites the files that formatting changes, `fmt --check [PATH...]` lists them, one per line, and
 ## gives 1 when there are any, `fmt -` formats the standard input to the standard output, and `fmt --tree FILE` prints
 ## the normal form of 47.7, which the tests compare before and after formatting. A file that does not parse prints its
-## diagnostic, is left as it is and gives 1. A mistake in the call (an unknown option, a path that names no `.agc`
-## file) is FMT-USAGE and gives 2.
+## diagnostic, is left as it is and gives 1. A file named in the call is formatted whatever its extension, as `check`
+## does. A mistake in the call (an unknown option, a wrong form, a missing path, a folder with no `.agc` file) is
+## FMT-USAGE and gives 2.
 ##
 ## The settings come from the `[style]` of the nearest agentica.toml, going up from the folder of the file (or of the
 ## working folder, for `fmt -`): `max_line_width` is the width (Format.WIDTH when it sets none) and
