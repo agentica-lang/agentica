@@ -480,6 +480,33 @@ export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[Ht
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
 
+## The proxy that the environment names for `url`, to pass as `HttpClientOptions(proxy: ...)`, or `""` when there is
+## none. It is the only call that reads the environment: a client never does, so nothing changes until a program asks.
+## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
+## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
+## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy).
+## `ALL_PROXY` is not read. A value with no `://` is read as `http://` (`proxy.example:8080`), and one with another
+## scheme is returned as it is, so the client that gets it says it is not an `http://` origin.
+##
+## `no_proxy` (or `NO_PROXY`) is a comma list that says where no proxy is used, and the result is then `""`: `*` is
+## every host; `example.com` and `.example.com` are that domain and its subdomains; an entry may end in `:port`
+## (`[::1]:8080` for an IPv6 literal); an IP literal matches itself, and an IPv4 range such as `10.0.0.0/8` matches its
+## addresses (an IPv6 range is not read). Spaces around an entry and empty entries are ignored, and the case of a
+## host is not significant. A `url` that is not valid gives `""`: the call that gets it reports it.
+##
+## A proxy for an `https://` URL is returned, but `HTTP` does not tunnel to it yet and refuses it.
+export def proxy_from_env(url: String) -> String
+  case parse_url(url)
+    ok(where) ->
+      if no_proxy_for?(where)
+        return ""
+      end
+
+      return proxy_of_scheme(where.scheme)
+    error(_) -> return ""
+  end
+end
+
 ## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
 ## is not sent, unless a connection had already started sending it.
 export def close_client(pool: HttpClient) -> Void
@@ -1284,6 +1311,153 @@ def proxy_name(where: Target) -> String
   end
 
   return "#{name}:#{where.port}"
+end
+
+# The proxy of the environment for a URL scheme (`http` or `https`), as `http://host:port` text, or "".
+def proxy_of_scheme(scheme: String) -> String
+  lower = "http_proxy"
+  upper = "HTTP_PROXY"
+  # A CGI program (REQUEST_METHOD set) may have an HTTP_PROXY made from the request's Proxy header: httpoxy.
+  trusted = not Result.ok?(System.env("REQUEST_METHOD"))
+  if scheme == "https"
+    lower = "https_proxy"
+    upper = "HTTPS_PROXY"
+    trusted = true
+  end
+
+  value = String.trim(env_value(lower, upper, trusted))
+  if value == "" or String.contains?(value, "://")
+    return value
+  end
+
+  return "http://#{value}"
+end
+
+# The variable `lower`, else `upper` when `upper_read`: the lower-case one wins, empty or not, as in curl. ""
+# when unset.
+def env_value(lower: String, upper: String, upper_read: Bool) -> String
+  case System.env(lower)
+    ok(value) -> return value
+    error(_) ->
+      if not upper_read
+        return ""
+      end
+
+      return Result.unwrap_or(System.env(upper), "")
+  end
+end
+
+# True when `no_proxy` names the target `where`.
+def no_proxy_for?(where: Target) -> Bool
+  for entry in String.split(env_value("no_proxy", "NO_PROXY", true), ",")
+    item = String.downcase(String.trim(entry))
+    if item == "*" or (item != "" and exempt?(item, where))
+      return true
+    end
+  end
+
+  return false
+end
+
+# One `no_proxy` entry against a target: `host`, `.domain`, `host:port`, `[v6]:port` or an IPv4 `a.b.c.d/bits`.
+def exempt?(item: String, where: Target) -> Bool
+  host = item
+  port = 0
+  if String.starts_with?(item, "[")
+    close = first_of(item, "]")
+    if close == String.length(item)
+      return false
+    end
+
+    host = String.slice(item, 1, close - 1)
+    after = rest_of(item, close + 1)
+    if after != ""
+      if not String.starts_with?(after, ":")
+        return false
+      end
+
+      port = entry_port(rest_of(after, 1))
+    end
+  elsif List.size(String.split(item, ":")) == 2
+    colon = first_of(item, ":")
+    host = String.slice(item, 0, colon)
+    port = entry_port(rest_of(item, colon + 1))
+  end
+
+  if port < 0 or (port > 0 and port != where.port)
+    return false
+  end
+
+  if String.contains?(host, "/")
+    return in_range?(host, where.host)
+  end
+
+  suffix = host
+  if String.starts_with?(suffix, "*.")
+    suffix = rest_of(suffix, 1)
+  end
+
+  if String.starts_with?(suffix, ".")
+    suffix = rest_of(suffix, 1)
+  end
+
+  return suffix != "" and (where.host == suffix or String.ends_with?(where.host, ".#{suffix}"))
+end
+
+# The port of a `no_proxy` entry, or -1 when it is not 1..65535.
+def entry_port(text: String) -> Int
+  if text == "" or String.length(text) > 5 or not plain?(text, true)
+    return -1
+  end
+
+  port = String.to_int!(text)
+  if port < 1 or port > 65535
+    return -1
+  end
+
+  return port
+end
+
+# True when the IPv4 address `host` is in the range `spec` (`10.0.0.0/8`); anything else is not in a range.
+def in_range?(spec: String, host: String) -> Bool
+  parts = String.split(spec, "/")
+  if List.size(parts) != 2 or not plain?(parts[1], true) or String.length(parts[1]) > 2
+    return false
+  end
+
+  bits = String.to_int!(parts[1])
+  base = ipv4_number(parts[0])
+  address = ipv4_number(host)
+  if bits > 32 or base < 0 or address < 0
+    return false
+  end
+
+  # The bits below the prefix are cut off by dividing them away.
+  step = 1
+  for _ in 0...(32 - bits)
+    step = step * 2
+  end
+
+  return base / step == address / step
+end
+
+# An IPv4 address `a.b.c.d` as one number, or -1 when `text` is not one.
+def ipv4_number(text: String) -> Int
+  parts = String.split(text, ".")
+  if List.size(parts) != 4
+    return -1
+  end
+
+  total = 0
+  for part in parts
+    if part == "" or String.length(part) > 3 or not plain?(part, true) or String.to_int!(part) > 255
+      return -1
+    end
+
+    total = total * 256 + String.to_int!(part)
+  end
+
+  return total
 end
 
 def check_proxy(options: HttpClientOptions) -> Result[Void]

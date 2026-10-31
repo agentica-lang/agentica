@@ -179,7 +179,11 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   never to the URL, the job or an error; a 407 from the proxy ends the call
   with an error that names the proxy and closes the connection, pooled or not.
   A `Connection` keeps the proxy without user info in its options and the login
-  in a channel, so printing it shows no password.
+  in a channel, so printing it shows no password. `proxy_from_env(url)` is the
+  only reader of the environment (`System.env`, which std/http may call; the
+  pure `compiler/` folders never import it, only `io/native_artifact.agc`
+  does): it picks the variable by the URL scheme, matches `no_proxy` against
+  the parsed host and port, and returns `""` or the proxy text.
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the

@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.proxy_from_env(url)` returns the proxy that `http_proxy`, `https_proxy`
+  and `no_proxy` name for a URL (curl's rules), or `""`, for
+  `HttpClientOptions(proxy: ...)`.
 - `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
   requests through a forward proxy in absolute form (`https://` with a proxy is
   an error until `CONNECT`).

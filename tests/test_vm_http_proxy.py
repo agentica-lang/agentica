@@ -371,3 +371,112 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     for secret in ("hunter2", "p:ss", "p%3Ass", "ss/w", "ss%2Fw", "us@er", "us%40er"):
         assert secret not in everything, secret
     assert not any("@" in line.split(" ")[1] for line in seen if line.startswith(("GET", "PUT", "POST")))
+
+
+ENV_PROGRAM = """\
+import HTTP from "std/http"
+
+def main() -> Void
+  for url in System.args()
+    puts("#{url} => [#{HTTP.proxy_from_env(url)}]")
+  end
+end
+"""
+
+# Every variable that proxy_from_env reads: a run starts from none of them, whatever the caller's shell has.
+ENV_NAMES = ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "no_proxy", "NO_PROXY", "REQUEST_METHOD")
+
+# (environment, [(url, the proxy it gets)]): one VM run for each environment.
+ENV_CASES = [
+    # A scheme-less https proxy gets http://; the no_proxy list has every kind of entry.
+    (
+        {
+            "http_proxy": " http://proxy.local:3128/ ",
+            "HTTPS_PROXY": "secure.local:3129",
+            "NO_PROXY": " .internal.test, example.org:8080 ,10.0.0.0/8,[::1], 192.168.1.5,localhost,,",
+        },
+        [
+            ("http://example.com/", "http://proxy.local:3128/"),
+            ("https://example.com/", "http://secure.local:3129"),
+            ("http://a.internal.test/x", ""),
+            ("http://internal.test/", ""),
+            ("http://notinternal.test/", "http://proxy.local:3128/"),
+            ("http://example.org:8080/", ""),
+            ("http://www.example.org:8080/", ""),
+            ("http://example.org/", "http://proxy.local:3128/"),
+            ("http://10.2.3.4/", ""),
+            ("http://11.2.3.4/", "http://proxy.local:3128/"),
+            ("http://[::1]/", ""),
+            ("http://192.168.1.5/", ""),
+            ("http://192.168.1.50/", "http://proxy.local:3128/"),
+            ("http://LOCALHOST/", ""),
+            ("http://localhost.example.com/", "http://proxy.local:3128/"),
+            ("ftp://example.com/", ""),
+        ],
+    ),
+    # The lower-case name wins over the upper-case one, even when it is set and empty.
+    (
+        {"http_proxy": "http://lower:1", "HTTP_PROXY": "http://upper:2", "https_proxy": "",
+         "HTTPS_PROXY": "http://up-secure:3", "no_proxy": "", "NO_PROXY": "*"},
+        [("http://example.com/", "http://lower:1"), ("https://example.com/", "")],
+    ),
+    # NO_PROXY=* turns every host off; without it the upper-case name is read.
+    ({"HTTP_PROXY": "http://upper:2", "NO_PROXY": "*"}, [("http://example.com/", "")]),
+    ({"HTTP_PROXY": "http://upper:2"}, [("http://example.com/", "http://upper:2"), ("https://example.com/", "")]),
+    # httpoxy: REQUEST_METHOD (a CGI program) makes HTTP_PROXY untrusted; the other names stay.
+    (
+        {"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "HTTPS_PROXY": "http://ok:3"},
+        [("http://example.com/", ""), ("https://example.com/", "http://ok:3")],
+    ),
+    ({"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "http_proxy": "http://mine:1"},
+     [("http://example.com/", "http://mine:1")]),
+    # Another scheme is returned as it is.
+    ({"http_proxy": "socks5://p:1080"}, [("http://example.com/", "socks5://p:1080")]),
+]
+
+
+def test_proxy_from_env_reads_the_proxy_variables_the_way_curl_does(tmp_path):
+    """Only a program that calls HTTP.proxy_from_env reads the environment: the variables, their precedence, the
+    httpoxy rule and each kind of no_proxy entry, over controlled environments (no peer is needed)."""
+    source = tmp_path / "env.agc"
+    source.write_text(ENV_PROGRAM, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "env.agcb")
+    for env, expected in ENV_CASES:
+        extra = {name: None for name in ENV_NAMES}
+        extra.update(env)
+        result = run_vm(bytecode, env=vm_environment(extra), args=[url for url, _ in expected], timeout=scaled(60))
+        assert result.code == 0, result.stderr
+        assert output_lines(result.stdout) == ["%s => [%s]" % pair for pair in expected], env
+
+
+ENV_CLIENT_PROGRAM = """\
+import HTTP from "std/http"
+
+def main() -> Void
+  args = System.args()
+  for url in ["http://127.0.0.1:#{args[0]}/hello", "http://127.0.0.1:#{args[1]}/hello"]
+    options = HttpClientOptions(proxy: HTTP.proxy_from_env(url))
+    case HTTP.get_response(url, options)
+      ok(response) -> puts("#{response.status} via=#{HTTP.header_values(response.headers, "via")}")
+      error(message) -> puts(message)
+    end
+  end
+end
+"""
+
+
+def test_the_proxy_of_the_environment_is_the_proxy_option_of_a_client(tmp_path, adopt):
+    """The value of proxy_from_env goes straight into HttpClientOptions: the origin that no_proxy names is reached
+    directly, the other through the proxy."""
+    peer = adopt(Child([PYTHON, PEER], stdin=True))
+    proxy, first, second, _proxy_two, _locked = peer.next_line().split()
+    source = tmp_path / "env_client.agc"
+    source.write_text(ENV_CLIENT_PROGRAM, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "env_client.agcb")
+    extra = {name: None for name in ENV_NAMES}
+    extra.update(http_proxy="127.0.0.1:" + proxy, no_proxy="127.0.0.1:" + second)
+    result = run_vm(bytecode, env=vm_environment(extra), args=[first, second], timeout=scaled(60))
+    assert result.code == 0, result.stderr
+    assert output_lines(result.stdout) == ['200 via=["1.1 proxy-peer"]', "200 via=[]"]
+    # Only the first request reached the proxy.
+    assert peer.next_line().split(" ", 2)[2] == "GET http://127.0.0.1:%s/hello HTTP/1.1 | 127.0.0.1:%s" % (first, first)
