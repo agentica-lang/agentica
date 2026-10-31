@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
+  `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
+  `Handler`.
+
 ## [0.19.0] - 2026-10-31
 
 The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
@@ -31,9 +37,6 @@ The first stable release since 0.18.0, with the changes of `0.19.0-beta.1`,
   `headers`, `body` and a `done` task) for a download too big to hold or that
   never ends, and `HTTP.upload` sends a body that another task feeds through a
   channel, chunked or with an exact `length`.
-- `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
-  `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
-  `Handler`.
 
 ### Changed
 
