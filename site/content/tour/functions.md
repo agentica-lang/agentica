@@ -319,7 +319,7 @@ ana
 banana
 ```
 
-In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`.
+In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`. A parameter whose type has `T` takes a default as any other, such as `rest: List[T] = []` or `extra: Optional[T] = none`; a call must still show `T` through another argument or its expected type.
 
 ```agentica {expect="CHECK-ENUM-TYPE-INFERENCE"}
 def empty_of[T]() -> List[T]

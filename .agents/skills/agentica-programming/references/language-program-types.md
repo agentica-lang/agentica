@@ -182,7 +182,8 @@ end
   printing, fields or methods (`CHECK-TYPE-MISMATCH`, `CHECK-UNKNOWN-METHOD`),
   and it is no `Map` key or `Set` element; take an `Fn` parameter for
   behaviour. A parameter name may not be the name of a struct, enum or alias of
-  the file, and a parameter whose type has a type parameter has no default.
+  the file. A parameter whose type has a type parameter takes `none`, `[]` or
+  `{}` as its default (`x: T = 1` is `CHECK-TYPE-MISMATCH`).
   `&first_or` needs the expected `Fn` type (`f: Fn[List[Int], Int, Int] =
   &first_or`); `xs.filter(&name)` has it, `xs.map(&name)` does not.
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the

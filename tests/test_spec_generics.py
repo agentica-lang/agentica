@@ -178,8 +178,20 @@ RULES = {
         'extern "c"\n  def abs[T](n: C.Int32) -> C.Int32\n  end\nend\n\n' + main("puts(1)"), "PARSE-UNEXPECTED-TOKEN",
         "["),
     "a call takes no type arguments": (declared("puts(first_or[Int]([1], 2))"), "PARSE-UNEXPECTED-TOKEN", "("),
-    "a default value of a type parameter's type": (
-        "def f[T](xs: List[T] = []) -> Int\n  return xs.size\nend\n\n" + main("puts(1)"), "CHECK-DEFAULT-VALUE", "[]"),
+    # A default that does not depend on T is allowed, as on a field of a generic struct; one of another type fails its
+    # type check.
+    "an empty list default of a type parameter's type": (
+        "def f[T](x: T, xs: List[T] = []) -> Int\n  return xs.size\nend\n\n" + main("puts(f(1))"), None, None),
+    "an empty map default of a type parameter's type": (
+        "def f[T](x: T, m: Map[String, T] = {}) -> Int\n  return m.size\nend\n\n" + main("puts(f(1))"), None, None),
+    "a none default of a type parameter's type": (
+        "def f[T](x: T, y: Optional[T] = none) -> Bool\n  return y.some?\nend\n\n" + main("puts(f(1, some(2)))"),
+        None, None),
+    "a default of another type than T": (
+        "def f[T](x: T = 1) -> Int\n  return 0\nend\n\n" + main("puts(f(2))"), "CHECK-TYPE-MISMATCH", "1"),
+    "a call that gives T only through a default": (
+        "def f[T](y: Optional[T] = none) -> Int\n  return 0\nend\n\n" + main("puts(f())"),
+        "CHECK-ENUM-TYPE-INFERENCE", "f()"),
     "a default value of another type is allowed": (
         "def f[T](x: T, n: Int = 1) -> T\n  return x\nend\n\n" + main("puts(f(1))"), None, None),
     "== on T": (body("z = x == y"), "CHECK-TYPE-MISMATCH", "=="),

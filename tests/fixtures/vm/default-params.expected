@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 281,
+  "steps": 315,
   "stdout": [
     "a, b",
     "a-b",
@@ -17,6 +17,8 @@
     "b.txt 50",
     "c.txt 1000",
     "0",
+    "0 false",
+    "1 true",
     "a, b, c",
     "7 -0.5 true",
     "p+q",

@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A parameter whose type has a type parameter may take a default (`none`, `[]`
+  or `{}`), as a field of a generic struct does.
 - **Breaking:** the body of an `HttpResponse` is `Bytes`, for the client's
   responses and for the ones a `listen` handler returns (write `"text".bytes`,
   and `HTTP.text(r.body, r.headers)` to read text); `HttpResponse` is no longer
