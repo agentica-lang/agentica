@@ -315,6 +315,13 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     if request.path == "/sized-late"
       return sized_stream(feed, &late_close, 5)
     end
+    if request.path == "/sized-queued"
+      # The piece past the length is already in the channel when the handler returns, and the producer never closes.
+      queued: Channel[Bytes] = Channel.new(4)
+      queued.send("abcde".bytes, 5000)
+      queued.send("f".bytes, 5000)
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: queued, length: some(5)))
+    end
     if request.path == "/sized-zero"
       return sized_stream(feed, &nothing_then_close, 0)
     end
@@ -376,6 +383,7 @@ STREAM_PYTHON_LINES = [
     "sized-long 200 5 incomplete b'abc'",
     "sized-extra 200 5 b'abcde'",
     "sized-late 200 5 b'abcde' whole True",
+    "sized-queued 200 5 b'abcde' whole True",
     "sized-zero 200 0 b'' whole True",
     "sized-whole 200 5 b'hello'",
     "sized-wrong 500",

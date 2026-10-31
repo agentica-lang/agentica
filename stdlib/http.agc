@@ -1088,10 +1088,11 @@ def pump(
   early = STREAM_DONE
   for piece in first
     if length != UNSIZED and count + piece.size == length
-      early = watched(left, sent)
-      # Closed before the last byte goes out: a request that the watcher reads after the client has the body is then
-      # the next request, not a dropped pipelined one (the watcher tells them apart by `body.closed?`).
+      # Closed before the watcher is read and before the last byte goes out: a request that the watcher reads after
+      # the close is the next request, not a dropped pipelined one (it tells them apart by `body.closed?`), and one
+      # that it read before is seen in `sent`.
       body.close
+      early = watched(left, sent)
       if early == STREAM_CUT
         return STREAM_CUT
       end
@@ -1101,6 +1102,10 @@ def pump(
       error(_) ->
         body.close
         return STREAM_CUT
+    end
+    if length != UNSIZED and count == length
+      # A piece that was already queued after the one that fills the length is not read.
+      break
     end
   end
   while true
@@ -1113,8 +1118,8 @@ def pump(
     case body.recv(STREAM_POLL_MS)
       ok(piece) ->
         if length != UNSIZED and count + piece.size == length
-          early = watched(left, sent)
           body.close
+          early = watched(left, sent)
           if early == STREAM_CUT
             return STREAM_CUT
           end

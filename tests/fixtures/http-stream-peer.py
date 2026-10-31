@@ -235,6 +235,7 @@ def main():
     sized_cut("sized-long", "/sized-long")
     sized_extra()
     sized_next("sized-late", "/sized-late")
+    sized_next("sized-queued", "/sized-queued")
     sized_next("sized-zero", "/sized-zero")
     sized_whole()
     binary("binary", plain())
