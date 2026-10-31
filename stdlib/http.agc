@@ -40,9 +40,10 @@ CUT_SHORT = "http: connection closed before the response was complete"
 TRUNCATED = "http: truncated HTTP body"
 TOO_LARGE = "http: body exceeds max_body_bytes"
 BAD_BODY = "http: body is not valid UTF-8"
-# The charsets that text reads as UTF-8 (us-ascii is a strict subset of it), and the most characters of a refused
-# charset that its error repeats.
-UTF8_CHARSETS = Set.new(["utf-8", "utf8", "us-ascii"])
+# The names of UTF-8 that text reads with String.from_bytes, matched as Bytes.decode matches them (charset_of
+# lowercases, text reads `_` as `-`), so every spelling of UTF-8 gets the same error; and the most characters of a
+# refused charset that its error repeats.
+UTF8_CHARSETS = Set.new(["utf-8", "utf8"])
 MAX_SHOWN = 64
 # Texts of the C builtins that std/http matches on (vm/channel.c, vm/tcp.c); each is marked there.
 CHANNEL_CLOSED = "channel: closed"
@@ -545,23 +546,31 @@ export def header_values(headers: List[Header], name: String) -> List[String]
   return found
 end
 
-## Returns `body` as a `String`, decoding it as UTF-8 and nothing else. `headers` are those of the same message
-## (`response.headers`): when its `Content-Type` has a `charset`, it must be `utf-8` (or `us-ascii`, which UTF-8
-## contains); without one the body is read as UTF-8. A body that is not valid UTF-8, or any other charset, is an
-## `error` result; the charset error names the charset. Other charsets (Latin-1, Windows-1252, Shift_JIS, UTF-16) are
-## for the `agentica-lang/charset` package.
+## Returns `body` as a `String`, decoded in the `charset` of the `Content-Type` of `headers`, those of the same
+## message (`response.headers`), or as UTF-8 when there is none. The charsets are the encodings of `Bytes.decode`
+## (UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and Windows-1252, by any of their names, in any case). A body
+## that is not valid in its charset is an `error` result, with the offset for a charset other than UTF-8, and any
+## other charset is an `error` that names it: those (Shift_JIS, GB18030, KOI8-R) are for the `agentica-lang/charset`
+## package.
 export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
   charset = charset_of(headers)
-  if charset != "" and not UTF8_CHARSETS.include?(charset)
+  if charset == "" or UTF8_CHARSETS.include?(charset.replace("_", "-"))
+    case String.from_bytes(body)
+      ok(decoded) -> return ok(decoded)
+      error(_) -> return error(BAD_BODY)
+    end
+  end
+  # Every encoding writes the empty text, so this asks whether Bytes.decode knows the name.
+  if not "".encode(charset).ok?
     shown = charset
     if shown.length > MAX_SHOWN
       shown = shown.slice(0, MAX_SHOWN)
     end
     return error("http: charset #{shown} is not supported, decode the body with agentica-lang/charset")
   end
-  case String.from_bytes(body)
+  case body.decode(charset)
     ok(decoded) -> return ok(decoded)
-    error(_) -> return error(BAD_BODY)
+    error(message) -> return error("http: #{message}")
   end
 end
 

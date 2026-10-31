@@ -23,6 +23,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   request with no client to open or close, as Ruby's `Net::HTTP.get_response`
   does. Many requests still use `HTTP.client()` with `get` and `post`.
 
+### Changed
+
+- `HTTP.text` decodes the `charset` of `Content-Type` with `bytes.decode`: a
+  Latin-1, Windows-1252 or UTF-16 body that was an error now decodes, and a
+  `us-ascii` body with a non-ASCII byte is now an error.
+
 ## [0.19.0-beta.3] - 2026-10-31
 
 ### Added

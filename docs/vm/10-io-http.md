@@ -96,7 +96,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   it, and a failed download keeps the partial file.
 - **Bodies are bytes.** The client keeps a response body as it came, a handler
   gets the request body as it came and returns `Bytes`; `HTTP.text` decodes
-  UTF-8 only (a `charset` other than `utf-8` is an error). The server never
+  it in the `charset` of `Content-Type` when `Bytes.decode` knows it (UTF-8
+  without one; any other charset is an error). The server never
   answers 400 for the content of a body, only for its framing.
   `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
@@ -454,8 +455,8 @@ The codes that the hostile-case goldens fix are those 10.6 marks as fixed.
 covers a URL that is not `http://` or `https://` with a host (userinfo and
 non-ASCII are rejected), DNS, connect and TLS failures, the timeout,
 `http: client is closed`, a malformed response, a body over `max_body_bytes`,
-and a truncated body. A body that is not UTF-8 is no failure of the call:
-`HTTP.text` refuses it. A connection that fails is never pooled.
+and a truncated body. A body that is not valid in its charset is no failure of
+the call: `HTTP.text` refuses it. A connection that fails is never pooled.
 
 #### 10.7.4 Tests
 
