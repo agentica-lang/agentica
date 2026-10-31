@@ -24,6 +24,21 @@ reads no `openssl.cnf`, so both builds behave the same.
   port is bound, and `TLS.connect` before it connects. Both load the chain and
   key the same way (`use_identity` in `vm/tls_openssl.c`). The connect timeout
   covers the setup, lookup, connect and handshake.
+- **Contexts.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
+  one `agc_tls_config` of one role, which counts its owners: the context and
+  each listener or connection made from it. So a dropped context stays valid
+  until its last listener closes. A GC finalizer gives the context's count
+  back; the collector runs finalizers only on demand, at the start of a
+  scheduler's next task (`agc_gc_finalize_pending`), never inside an
+  allocation (§5.3). The GC does not see the native size of an `SSL_CTX`, so a
+  program builds a context once and reuses it. `TLS.client_context` and
+  `TLS.server_context` check the options as `TLS.connect` and `TLS.listen`
+  check their paths (and a server context needs both files), then one pool job
+  with no deadline reads the files off the scheduler thread, so a bad file
+  fails the build. `TLS.listen(host, port, context)` and an `HttpClient` whose
+  `options.tls` names a context load nothing. A context of the wrong role (a
+  server context in `HttpClientOptions.tls`, a client one for `TLS.listen`) is
+  a program bug: `RUNTIME-TLS-CONTEXT-ROLE` at the context argument.
 - **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048 bits) on
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A

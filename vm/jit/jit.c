@@ -89,7 +89,8 @@ const char *const agc_jit_parking[] = {
     "Process.read_available", "Process.read_bytes.bytes", "Process.read_line", "Process.send",
     "Process.send_bytes.bytes", "Process.spawn", "Process.spawn_captured", "Process.spawn_channel", "Process.wait",
     "TCP.accept", "TCP.connect", "TCP.listen", "TCP.read_line", "TCP.recv_bytes.bytes", "TCP.send",
-    "TCP.send_bytes.bytes", "TLS.connect", "TLS.listen", "Task.await", "Task.await_result", "Task.sleep", "Test.run",
+    "TCP.send_bytes.bytes", "TLS.client_context", "TLS.connect", "TLS.listen", "TLS.server_context", "Task.await",
+    "Task.await_result", "Task.sleep", "Test.run",
 };
 const size_t agc_jit_parking_count = sizeof agc_jit_parking / sizeof agc_jit_parking[0];
 

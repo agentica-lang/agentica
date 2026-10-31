@@ -318,8 +318,10 @@ TCP.read_line
 TCP.recv_bytes.bytes
 TCP.send
 TCP.send_bytes.bytes
+TLS.client_context
 TLS.connect
 TLS.listen
+TLS.server_context
 Task.await
 Task.await_result
 Task.cancel

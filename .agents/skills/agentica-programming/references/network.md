@@ -25,7 +25,19 @@ TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
 TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
+TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
+TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
+TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
+
+TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "")
+TlsServerOptions(cert_file: String, key_file: String)
 ```
+
+- A `TlsContext` is the TLS setup of one role, built once (the PEM files are
+  read and checked then, as the paths of `TLS.connect` and `TLS.listen` are)
+  and shared by every listener and HTTP client made from it
+  (`HttpClientOptions(tls: some(context))`). A file changed later needs a new
+  context. The other role is `RUNTIME-TLS-CONTEXT-ROLE`.
 
 - TLS listeners and sockets use the same TCP calls (`TCP.accept`, `TCP.send`,
   `TCP.recv_bytes`, `TCP.read_line`, `TCP.close`, `TCP.close_listener`,
@@ -89,7 +101,7 @@ Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[Header], bytes_written: Int)
-HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "")
+HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "", tls: Optional[TlsContext] = none)
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at

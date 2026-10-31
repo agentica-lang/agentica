@@ -11,7 +11,7 @@ import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 
 # The field types that keep a builtin record from JSON.decode: an enum, a channel, and Bytes (JSON has no bytes:
 # HttpRequest.body).
-UNDECODABLE = Set.new(["Enum", "Channel", "Bytes"])
+UNDECODABLE = Set.new(["Enum", "Channel", "Bytes", "Opaque"])
 
 ## The builtin enum of an Optional value: none, and some with its item. The VM prints a variant of the enum named
 ## Optional as its name alone (none, some(1)).
@@ -146,12 +146,20 @@ def builtin_decodable() -> Map[String, List[Types.Type]]
   found: Map[String, List[Types.Type]] = {}
   for name in BUILTIN_STRUCTS
     types = RECORDS[name].map do |field: Model.Named| field.type end
-    if !types.any? do |type: Types.Type| UNDECODABLE.include?(Types.tag(type)) end
+    if !types.any? do |type: Types.Type| undecodable?(type) end
       found = found.put(name, types)
     end
   end
 
   return found
+end
+
+# True for a field type JSON cannot hold: an UNDECODABLE one, alone or in an Optional (HttpClientOptions.tls).
+def undecodable?(type: Types.Type) -> Bool
+  case type
+    Types.Type.Optional(item) -> return undecodable?(item)
+    _ -> return UNDECODABLE.include?(Types.tag(type))
+  end
 end
 
 # The builtin records the program uses, and the ones those have a field of, in the order of BUILTIN_STRUCTS.

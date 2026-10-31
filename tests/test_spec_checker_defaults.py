@@ -181,6 +181,16 @@ SINGLE_FILE = [
      main_with('  a = TLS.connect("h", 1, "", 50)\n  b = TLS.connect("h", 1, "", 50, "c.pem", "k.pem")\n'), None, None),
     ("the client certificate of TLS.connect is still a String",
      main_with('  a = TLS.connect("h", 1, "", 50, 7, "k.pem")\n'), "CHECK-TYPE-MISMATCH", "7"),
+    ("TlsClientOptions may leave out every field, and HttpClientOptions its tls, which is none",
+     main_with('  a = TLS.client_context(TlsClientOptions())\n  b = TlsClientOptions(ca_file: "ca.pem")\n'
+               '  c = HttpClientOptions()\n  d: Optional[TlsContext] = c.tls\n'
+               '  e = HttpClientOptions(tls: some(a.unwrap!))\n'), None, None),
+    ("TlsServerOptions has no default key pair",
+     main_with('  a = TlsServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TlsServerOptions(cert_file: "c.pem")'),
+    ("the tls of HttpClientOptions is an Optional[TlsContext], not a CA file",
+     main_with('  a = HttpClientOptions(tls: "ca.pem")\n'), "CHECK-TYPE-MISMATCH", '"ca.pem"'),
+    ("HttpClientOptions holds a TlsContext, so JSON cannot decode it",
+     main_with('  puts(JSON.decode("{}", HttpClientOptions).ok?)\n'), "CHECK-NOT-DECODABLE", "HttpClientOptions"),
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
     ("a builtin has no function value, defaults or not",

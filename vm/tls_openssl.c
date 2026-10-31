@@ -7,6 +7,7 @@
 #include "tls.h"
 #include "tls_trust.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +26,11 @@
 
 #define SCRATCH 4096
 
+/* A config is shared by counts (agc_tls_config_ref): a TlsContext value, each socket or listener made from it and an
+   HttpClient's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
+   count on the SSL_CTX (SSL_new). */
 struct agc_tls_config {
+  _Atomic size_t refs;
   SSL_CTX *ctx;
 };
 
@@ -150,6 +155,9 @@ static SSL_CTX *new_ctx(const SSL_METHOD *method, agc_tls_failure *f) {
     take_errors(f, AGC_TLS_ERR_INTERNAL);
     return NULL;
   }
+  /* The queue is per thread, and a pool thread builds many contexts: errors that an earlier build left (the system
+     trust skips the certificates it cannot read) must not become the failure of this one. */
+  ERR_clear_error();
   SSL_CTX *ctx = SSL_CTX_new(method);
   if (!ctx || SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) != 1) {
     take_errors(f, AGC_TLS_ERR_INTERNAL);
@@ -169,6 +177,7 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
     SSL_CTX_free(ctx);
     return NULL;
   }
+  atomic_init(&c->refs, 1);
   c->ctx = ctx;
   return c;
 }
@@ -176,9 +185,10 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
 /* SSL_CERT_FILE, when set, replaces the platform's store (tls_trust.h) on every system; SSL_CERT_DIR adds to either. */
 static void system_trust(SSL_CTX *ctx) {
   const char *file = getenv("SSL_CERT_FILE");
-  if (!file || !*file)
+  if (!file || !*file) {
     (void)agc_tls_trust_system(SSL_CTX_get_cert_store(ctx));
-  else if (SSL_CTX_load_verify_file(ctx, file) != 1)
+    ERR_clear_error();
+  } else if (SSL_CTX_load_verify_file(ctx, file) != 1)
     ERR_clear_error();
   const char *dir = getenv("SSL_CERT_DIR");
   if (dir && *dir && SSL_CTX_load_verify_dir(ctx, dir) != 1) ERR_clear_error();
@@ -230,8 +240,13 @@ agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_fil
   return wrap(ctx, failure);
 }
 
+agc_tls_config *agc_tls_config_ref(agc_tls_config *config) {
+  if (config) atomic_fetch_add_explicit(&config->refs, 1, memory_order_relaxed);
+  return config;
+}
+
 void agc_tls_config_free(agc_tls_config *config) {
-  if (!config) return;
+  if (!config || atomic_fetch_sub_explicit(&config->refs, 1, memory_order_acq_rel) != 1) return;
   SSL_CTX_free(config->ctx);
   free(config);
 }

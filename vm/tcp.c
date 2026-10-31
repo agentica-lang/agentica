@@ -573,7 +573,7 @@ static agc_value net_error(agc_vm *vm, const net *n, const char *what, int err) 
   return agc_result_value(false, agc_string_value(agc_utf8_decode((const uint8_t *)text, n_text, "?", true)));
 }
 
-static agc_value tls_failure(agc_vm *vm, const char *head, const agc_tls_failure *f) {
+agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_failure *f) {
   if (f->sys) return agc_system_error(vm, head, f->sys);
   size_t size = agc_size_add(strlen(head), sizeof f->detail + 4);
   char *text = agc_alloc_atomic(size);
@@ -586,17 +586,17 @@ agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, con
   size_t size = agc_size_add(strlen(what), agc_size_add(strlen(path), 32));
   char *head = agc_alloc_atomic(size);
   snprintf(head, size, "%s: load failed from: \"%s\"", what, path);
-  return tls_failure(vm, head, f);
+  return agc_tls_failure_error(vm, head, f);
 }
 
 static agc_value secure_error(agc_vm *vm, const net *n) {
   const agc_tls_failure *f = &n->failure;
-  if (n->parent) return tls_failure(vm, "port->ssl-ports: accept failed", f);
+  if (n->parent) return agc_tls_failure_error(vm, "port->ssl-ports: accept failed", f);
   if (f->code == AGC_TLS_ERR_BAD_CERT) return agc_tls_load_error(vm, "ssl-load-certificate-chain!", n->cert_file, f);
   if (f->code == AGC_TLS_ERR_BAD_KEY || f->code == AGC_TLS_ERR_KEY_MISMATCH)
     return agc_tls_load_error(vm, "ssl-load-private-key!", n->key_file, f);
   if (f->code == AGC_TLS_ERR_BAD_CA) return agc_tls_load_error(vm, "ssl-load-verify-source!", n->ca_file, f);
-  return tls_failure(vm, n->listener ? "ssl-make-server-context: setup failed" : "ssl-connect: connect failed", f);
+  return agc_tls_failure_error(vm, n->listener ? "ssl-make-server-context: setup failed" : "ssl-connect: connect failed", f);
 }
 
 static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
@@ -1160,7 +1160,7 @@ static agc_value accept_done(agc_vm *vm, request *q, const net *l) {
   if (q->accept_rc) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->accept_rc));
   if (q->closed) return agc_error_value(listener_closed);
   if (q->child && q->opened) return adopt(vm, q, l);
-  if (q->child && q->tls_failed) return tls_failure(vm, "port->ssl-ports: accept failed", &q->child->failure);
+  if (q->child && q->tls_failed) return agc_tls_failure_error(vm, "port->ssl-ports: accept failed", &q->child->failure);
   if (q->child) return agc_error_value(socket_closed);
   if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->error));
   return agc_error_value(listener_closed);
@@ -1274,7 +1274,8 @@ static bool begin_open(void *data, agc_io_job *job) {
   net *n = q->n;
   link_request(q, job);
   n->loop = agc_loop_uv(n->io);
-  int rc = n->shared ? shared_open(n) : n->secure ? start_setup(n) : resolve(n);
+  /* A net with a TlsContext's config has nothing to load. */
+  int rc = n->shared ? shared_open(n) : n->secure && !n->config ? start_setup(n) : resolve(n);
   if (rc) {
     n->error = rc;
     finish(q);
@@ -1318,11 +1319,13 @@ static tls_shared *client_context(agc_vm *vm, agc_http_client *c, const char *ca
 
 /* Opens a client socket to NAME:PORT. FILES are the TLS ca_file, cert_file and key_file (NULL when unused), which the
    net then owns. CLIENT, when not NULL, is the HttpClient whose context the net takes a count on
-   (HttpWire.connect_tls); its ca_file is then kept for the error text. */
+   (HttpWire.connect_tls); its ca_file is then kept for the error text. CONFIG, when not NULL, is a TlsContext's
+   config with a count for the net, used in place of both. */
 static agc_value connect_net(agc_vm *vm, char *name, int64_t port, bool secure, char *files[3],
-                             agc_http_client *client, int64_t timeout) {
+                             agc_http_client *client, agc_tls_config *config, int64_t timeout) {
   net *n = new_net(vm, name, port, false);
   n->secure = secure;
+  n->config = config;
   n->ca_file = files[0];
   n->cert_file = files[1];
   n->key_file = files[2];
@@ -1358,12 +1361,13 @@ static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, b
     for (size_t k = 0; k < 3; k++) free(files[k]);
     return agc_error_value("network: host cannot contain NUL");
   }
-  return connect_net(vm, name, port, secure, files, NULL, timeout);
+  return connect_net(vm, name, port, secure, files, NULL, NULL, timeout);
 }
 
 /* HttpWire.connect_tls(client, host, port, timeout_ms) (std-only): TLS.connect with the client's ca_file, on the
    context that the client's connections share, so it is built once (#394). After HttpWire.drop_tls a call builds
-   its own context, as TLS.connect does. */
+   its own context, as TLS.connect does. A client whose options.tls names a TlsContext connects with that context
+   (HttpWire.service checked its role), and its ca_file is not read. */
 static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_value denied = net_denied(vm, span, false);
   if (!agc_is(denied, AGC_T_VOID)) return denied;
@@ -1376,10 +1380,16 @@ static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span)
   /* HttpWire.service checked the shape; checked again, since a bad read here goes past the struct. */
   const agc_struct *o = agc_as_struct(vm, c->options);
   if (o->n != AGC_HTTP_OPTIONS_FIELDS) return agc_error_value("http: invalid client options");
+  const agc_enum *tls = agc_as_enum(vm, o->fields[AGC_HTTP_OPTION_TLS]);
   const agc_string *ca_file = agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]);
-  if (vm->rt->deny_fs && ca_file->bytes > 0) return agc_error_value(AGC_DENIED_FS);
+  if (!tls->n && vm->rt->deny_fs && ca_file->bytes > 0) return agc_error_value(AGC_DENIED_FS);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
+  if (tls->n) {
+    char *none[3] = {NULL, NULL, NULL};
+    agc_tls_config *config = agc_tls_config_ref(agc_as_tls_context(vm, tls->payload[0])->config);
+    return connect_net(vm, name, port, true, none, NULL, config, timeout);
+  }
   /* HTTP.client refuses a ca_file with NUL, so only bytecode that skipped it gets here. */
   char *ca = agc_cstr(ca_file);
   if (!ca) {
@@ -1387,7 +1397,7 @@ static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span)
     return agc_error_value("http: invalid client options");
   }
   char *files[3] = {ca, NULL, NULL};
-  return connect_net(vm, name, port, true, files, c, timeout);
+  return connect_net(vm, name, port, true, files, c, NULL, timeout);
 }
 
 /* HttpWire.drop_tls(client) (std-only): the client gives its count on its context back, when its owner task ends.
@@ -1404,14 +1414,20 @@ static agc_value builtin_drop_tls(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span, bool secure) {
-  agc_value denied = net_denied(vm, span, secure);
+static const char server_role[] = "TLS.listen takes a server TlsContext (TLS.server_context), not a client one";
+
+/* TCP.listen(host, port), TLS.listen(host, port, cert_file, key_file) or TLS.listen(host, port, context) (CONTEXT).
+   The form with paths goes in the next PR, with std/http's move to contexts. */
+static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span, bool secure, bool context) {
+  if (context) agc_tls_context_check(vm, args[2], true, server_role, span + 3);
+  agc_value denied = net_denied(vm, span, secure && !context);
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);
   if (port < 0 || port > 65535) return agc_error_value("network: port must be 0..65535");
   char *files[2] = {NULL, NULL};
-  if (secure && !tls_paths(vm, args + 2, 2, files)) return agc_error_value("network: path cannot contain NUL");
+  if (secure && !context && !tls_paths(vm, args + 2, 2, files))
+    return agc_error_value("network: path cannot contain NUL");
   char *name = agc_cstr(host);
   if (!name) {
     free(files[0]);
@@ -1422,6 +1438,7 @@ static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span,
   n->secure = secure;
   n->cert_file = files[0];
   n->key_file = files[1];
+  if (context) n->config = agc_tls_context_take(vm, args[2], true, server_role, span + 3);
   agc_listener *lv = agc_alloc(sizeof(agc_listener));
   lv->state = own(vm, n, true);
   lv->port = port;
@@ -1434,10 +1451,16 @@ static agc_value builtin_tls_connect(agc_vm *vm, agc_value *args, uint32_t span)
   return open_socket(vm, args, span, true);
 }
 
-static agc_value builtin_listen(agc_vm *vm, agc_value *args, uint32_t span) { return open_listener(vm, args, span, false); }
+static agc_value builtin_listen(agc_vm *vm, agc_value *args, uint32_t span) {
+  return open_listener(vm, args, span, false, false);
+}
 
 static agc_value builtin_tls_listen(agc_vm *vm, agc_value *args, uint32_t span) {
-  return open_listener(vm, args, span, true);
+  return open_listener(vm, args, span, true, false);
+}
+
+static agc_value builtin_tls_listen_context(agc_vm *vm, agc_value *args, uint32_t span) {
+  return open_listener(vm, args, span, true, true);
 }
 
 static bool begin_accept(void *data, agc_io_job *job) {
@@ -1777,6 +1800,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 6, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TLS.listen", 3, builtin_tls_listen_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.idle?", 2, builtin_idle, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
