@@ -11,13 +11,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
-  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
+  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII, Latin-1,
+  ISO-8859-15 and Windows-1252.
 - Hex, binary and octal integer literals, as in Ruby: `0xFF`, `0b1010`,
   `0o755`, with `_` between digits.
 - `HTTP.start`, `HTTP.send_request`, `HTTP.read_body` and `HTTP.finish` give
   one HTTP/1.1 connection that the program drives: read the response head,
   then the body piece by piece, and send a second request on the same socket
   once the body has been read to its end (after Ruby's `Net::HTTP`).
+- `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make one
+  request with no client to open or close, as Ruby's `Net::HTTP.get_response`
+  does. Many requests still use `HTTP.client()` with `get` and `post`.
 - `HTTP.open` gives a response body on a channel (`HTTP.Stream`: `status`,
   `headers`, `body` and a `done` task) for a download too big to hold or that
   never ends, and `HTTP.upload` sends a body that another task feeds through a
