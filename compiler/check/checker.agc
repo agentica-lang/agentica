@@ -16,6 +16,7 @@ import Help from "check_help"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
+import CheckTypes from "check_types"
 import Reuse from "check_reuse"
 import Prelude from "prelude_files"
 
@@ -79,6 +80,14 @@ end
 export struct Rechecked
   checking: Checking
   taken: Int
+end
+
+# A call or a reference of the generic function callee in the body of the generic function caller, with the type
+# arguments it binds.
+struct JsonPass
+  caller: String
+  callee: String
+  found: Map[String, T.Type]
 end
 
 ## Checks a linked program. The settings tell where the files of the prelude are read.
@@ -171,6 +180,7 @@ def start(linked: Linker.Linked) -> State.Cx
     texts: texts,
     expression: &Expr.check_expression,
     prelude: false,
+    json_needs: {},
   )
 end
 
@@ -204,6 +214,7 @@ def run(
     end
   end
 
+  cx = cx.with(json_needs: json_needs(cx, st, linked.modules))
   problems: List[Failure.Problem] = []
   failed: List[String] = []
   for module in linked.modules
@@ -245,6 +256,59 @@ def run(
     bound: attached.st.bound,
   )
   return ok(Recovered(checked: checked, problems: problems, failed: failed))
+end
+
+# Cx.json_needs: the body of each generic function of every module is checked once with no needs known, which gives
+# what its own JSON.encode and JSON.from calls need and the generic functions it calls; then a callee's needs, bound by
+# each call, become the caller's until nothing changes. A body that fails is left out here: the check of the bodies
+# reports it. A need is a variable of the function or an Optional, JsonField or Map key of one, so a function has a
+# few at most and the loop ends.
+def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -> Map[String, List[T.Type]]
+  needs: Map[String, List[T.Type]] = {}
+  passes: List[JsonPass] = []
+  for module in modules
+    here = cx.with(file: module.file)
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Function(node) if node.type_parameters.size > 0 ->
+          step = Statements.check_function(here, st.with(json_uses: []), node)
+          if step.ok?
+            for use in step.unwrap!.json_uses
+              case use
+                State.JsonUse.Need(type) -> needs = add_json_need(needs, node.name, type)
+                State.JsonUse.Pass(callee, found) ->
+                  passes = passes.push(JsonPass(caller: node.name, callee: callee, found: found))
+              end
+            end
+          end
+
+        _ -> needs = needs
+      end
+    end
+  end
+
+  changed = true
+  while changed
+    changed = false
+    for pass in passes
+      for need in needs.get(pass.callee).unwrap_or([])
+        bound = CheckTypes.encode_needs(cx, CheckTypes.substitute(need, pass.found))
+        for inherited in bound.unwrap_or([])
+          grown = add_json_need(needs, pass.caller, inherited)
+          if grown[pass.caller].size != needs.get(pass.caller).unwrap_or([]).size
+            needs = grown
+            changed = true
+          end
+        end
+      end
+    end
+  end
+
+  return needs
+end
+
+def add_json_need(needs: Map[String, List[T.Type]], name: String, need: T.Type) -> Map[String, List[T.Type]]
+  return needs.put(name, CheckTypes.add_need(needs.get(name).unwrap_or([]), need))
 end
 
 # What the run starts from: nothing, or the entries of the unchanged modules of the earlier check.

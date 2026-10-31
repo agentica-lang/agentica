@@ -126,7 +126,25 @@ codec.encode(value: T) -> String
 codec.from(value: T) -> Json
 ```
 
-A generic function cannot call `JSON.encode` or `JSON.decode` on its type parameter `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`.
+A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]` or a generic struct of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
+
+```agentica
+def to_json[T](value: T) -> String
+  return JSON.encode(value)
+end
+
+def main() -> Void
+  puts(to_json([1, 2]))
+  puts(to_json({"ok": true}))
+end
+```
+
+```output
+[1,2]
+{"ok":true}
+```
+
+`JSON.decode` needs the type at run time, so a generic function cannot call it on `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`.
 
 ```agentica
 struct User

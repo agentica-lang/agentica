@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 100,
+  "stdout": [
+    "{\"name\":\"ada\",\"tags\":[\"x\",\"y\"],\"age\":null}",
+    "{\"value\":{\"age\":null,\"name\":\"ada\",\"tags\":[\"x\",\"y\"]}}",
+    "true",
+    "[1,2,3]",
+    "{\"value\":[1,2,3]}",
+    "true",
+    "{\"k\":{\"name\":\"ada\",\"tags\":[\"x\",\"y\"],\"age\":null}}",
+    "{\"value\":{\"k\":{\"age\":null,\"name\":\"ada\",\"tags\":[\"x\",\"y\"]}}}",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

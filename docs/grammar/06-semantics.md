@@ -603,12 +603,22 @@ they are for an `Fn`:
 - a field or a method (`x.name`, `x.with(...)`): `CHECK-UNKNOWN-METHOD`;
   `x.call(...)`: `CHECK-TYPE-MISMATCH`.
 - a literal or variant arm in `case x`: `CHECK-PATTERN-TYPE`.
-- `JSON.encode(x)`: `CHECK-NOT-ENCODABLE`; `JSON.decode(text, T)`:
-  `CHECK-NOT-DECODABLE`. Take a `JSON.Codec[T]` parameter instead
+- `JSON.decode(text, T)`: `CHECK-NOT-DECODABLE`, since decoding needs the type
+  at run time. Take a `JSON.Codec[T]` parameter instead
   (`docs/grammar/06b-builtins.md`, JSON).
 - `T` as a `Map` key or a `Set` element: `CHECK-MAP-KEY-TYPE` and
   `CHECK-SET-ELEMENT-TYPE`, wherever it is written; a call with `Int` does not
   help.
+
+`JSON.encode(x)` and `JSON.from(x)` are allowed when the type of `x` holds
+type parameters (`T`, `List[T]`, `Map[String, T]`, `Box[T]`, `Optional[T]`)
+and some types for them would make it encodable; otherwise (`Task[T]`, an
+`Fn`) they are `CHECK-NOT-ENCODABLE` in the body. The check of the types moves
+to each call: when a call (or a reference `&f`) binds the type parameters,
+the bound types must be encodable, else `CHECK-NOT-ENCODABLE` at the argument
+that binds them (at the call, or the reference, when no argument does). A
+generic function that passes its own `T` to such a function takes on the same
+requirement, wherever the two are declared.
 
 Behaviour comes from `Fn` parameters, as in `max_by`: there are no traits or
 constraints on a type parameter. The data-type and effect rules are judged on

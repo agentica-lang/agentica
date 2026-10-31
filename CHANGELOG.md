@@ -10,13 +10,24 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
+  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
+
+## [0.19.0-beta.3] - 2026-10-31
+
+### Added
+
+- `HTTP.StreamResponse` takes `length: some(n)`: a streamed body of known
+  size goes out with `Content-Length` and no chunk framing, and a body that
+  ends short or runs over closes the connection.
 - Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
   so `HttpClientOptions(timeout_ms: 5000)` changes one field.
 - `HTTP.client`, `HTTP.listen` (and its TLS and stream forms), `HTTP.download`
   and `Archive.extract_tar` / `extract_zip` take their options last with a
   default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
-- `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
-  UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII and Latin-1.
+- `JSON.encode` and `JSON.from` work on a value of a type parameter inside a
+  generic function; each call checks that the type it binds is encodable
+  (`CHECK-NOT-ENCODABLE` at that argument).
 
 ### Changed
 
@@ -29,6 +40,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.download_options()` and `Archive.options()`: leave the argument out, or
   build the record (`HttpClientOptions(timeout_ms: 5000)`,
   `HttpServerOptions()`, `HTTP.DownloadOptions()`, `Archive.Options()`).
+
+### Fixed
+
+- A native callback may print more than the output buffer holds; it waits for
+  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.2] - 2026-10-31
 
@@ -62,8 +78,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Compiling deeply nested `some(...)` calls is much faster (900 levels: from
   4 s to 0.6 s).
-- A native callback may print more than the output buffer holds; it waits for
-  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.1] - 2026-10-30
 
@@ -772,7 +786,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...HEAD
+[0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
 [0.19.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...0.19.0-beta.2
 [0.19.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.18.0...0.19.0-beta.1
 [0.18.0]: https://github.com/agentica-lang/agentica/compare/0.17.0...0.18.0

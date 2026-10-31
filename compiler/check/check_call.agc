@@ -412,6 +412,13 @@ def check_generic_call(
   end
 
   try check_void_arguments(cx, current, node, signature, found)
+  templates: List[T.Type] = []
+  for at in 0...count
+    templates = templates.push(signature.params[Defaults.param_of(shape, count, at)])
+  end
+
+  spans = node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end
+  current = try Types.check_json_needs(cx, current, node.name, found, templates, spans, node.span)
   return ok(State.Out(st: current, type: Types.substitute(signature.result, found)))
 end
 

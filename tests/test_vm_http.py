@@ -220,6 +220,51 @@ def binary(feed: Feed) -> Void
   feed.body.close
 end
 
+# Pieces for the routes that give a length: the server sends them as they are, with Content-Length and no chunks.
+def sized(feed: Feed) -> Void
+  feed.body.send("abc".bytes, 5000)
+  Task.sleep(TICK_MS)
+  feed.body.send("defgh".bytes, 5000)
+  feed.body.close
+end
+
+def three(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
+  feed.body.send("abc".bytes, 5000)
+  feed.body.close
+end
+
+def five_and_more(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
+  feed.body.send("abc".bytes, 5000)
+  feed.body.send("defgh".bytes, 5000)
+  feed.body.close
+end
+
+def exact_and_more(feed: Feed) -> Void
+  # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
+  Task.sleep(TICK_MS)
+  feed.body.send("abcde".bytes, 5000)
+  feed.body.send("f".bytes, 5000)
+  feed.body.close
+end
+
+# The length is full at once and the producer closes much later: the client has its answer and sends its next request
+# in between, so the server must end the stream at the length and not wait for the close.
+def late_close(feed: Feed) -> Void
+  Task.sleep(TICK_MS)
+  feed.body.send("abcde".bytes, 5000)
+  Task.sleep(400)
+  feed.body.close
+end
+
+def nothing_then_close(feed: Feed) -> Void
+  Task.sleep(400)
+  feed.body.close
+end
+
 def endless(feed: Feed) -> Void
   while Result.ok?(feed.body.send("data: again\\n\\n".bytes, 5000))
     Task.sleep(20)
@@ -231,6 +276,11 @@ def stream(feed: Feed, job: Fn[Feed, Void]) -> Result[HTTP.StreamResponse]
   Task.spawn(job, feed)
   headers = [Header(name: "Content-Type", value: "text/event-stream")]
   return ok(HTTP.StreamResponse(status: 200, headers: headers, body: feed.body))
+end
+
+def sized_stream(feed: Feed, job: Fn[Feed, Void], length: Int) -> Result[HTTP.StreamResponse]
+  Task.spawn(job, feed)
+  return ok(HTTP.StreamResponse(status: 200, headers: [], body: feed.body, length: some(length)))
 end
 
 def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
@@ -249,6 +299,43 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     end
     if request.path == "/binary"
       return stream(feed, &binary)
+    end
+    if request.path == "/sized"
+      return sized_stream(feed, &sized, 8)
+    end
+    if request.path == "/sized-short"
+      return sized_stream(feed, &three, 8)
+    end
+    if request.path == "/sized-long"
+      return sized_stream(feed, &five_and_more, 5)
+    end
+    if request.path == "/sized-extra"
+      return sized_stream(feed, &exact_and_more, 5)
+    end
+    if request.path == "/sized-late"
+      return sized_stream(feed, &late_close, 5)
+    end
+    if request.path == "/sized-queued"
+      # The piece past the length is already in the channel when the handler returns, and the producer never closes.
+      queued: Channel[Bytes] = Channel.new(4)
+      queued.send("abcde".bytes, 5000)
+      queued.send("f".bytes, 5000)
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: queued, length: some(5)))
+    end
+    if request.path == "/sized-zero"
+      return sized_stream(feed, &nothing_then_close, 0)
+    end
+    if request.path == "/sized-negative"
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("hello".bytes), length: some(-3)))
+    end
+    if request.path == "/sized-204"
+      return ok(HTTP.StreamResponse(status: 204, headers: [], body: HTTP.whole("".bytes), length: some(0)))
+    end
+    if request.path == "/sized-whole"
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("hello".bytes), length: some(5)))
+    end
+    if request.path == "/sized-wrong"
+      return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("hello".bytes), length: some(9)))
     end
     if request.path == "/binary-whole"
       return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128, 254]).unwrap!)))
@@ -285,6 +372,23 @@ STREAM_PYTHON_LINES = [
     "tls-timing apart",
     "tls-keep-alive 200 5 whole True",
     "head 200 chunked b'' whole True",
+    "plain-sized 200 None 8 ['abc', 'defgh']",
+    "plain-sized-timing apart",
+    "plain-sized-keep-alive 200 5 whole True",
+    "tls-sized 200 None 8 ['abc', 'defgh']",
+    "tls-sized-timing apart",
+    "tls-sized-keep-alive 200 5 whole True",
+    "sized-head 200 8 None b'' whole True",
+    "sized-short 200 8 incomplete b'abc'",
+    "sized-long 200 5 incomplete b'abc'",
+    "sized-extra 200 5 b'abcde'",
+    "sized-late 200 5 b'abcde' whole True",
+    "sized-queued 200 5 b'abcde' whole True",
+    "sized-zero 200 0 b'' whole True",
+    "sized-whole 200 5 b'hello'",
+    "sized-wrong 500",
+    "sized-negative 500",
+    "sized-204 500",
     "binary 200 b'\\xff\\x00\\x80\\xfeend' framed",
     "binary-whole 200 4 b'\\xff\\x00\\x80\\xfe'",
     "tls-binary 200 b'\\xff\\x00\\x80\\xfeend' framed",
@@ -498,7 +602,11 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
 def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_producer_of_a_client_that_left(
         tmp_path, adopt, flags):
     """http.client reads the chunks of /ticks as they arrive and times them, over plain TCP and TLS; HEAD, keep-alive
-    after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client."""
+    after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client. A stream
+    with a length goes out with Content-Length and no chunks: whole, cut short, cut for a piece past the length and
+    ended when the length is full (the next request on the connection works though the producer closes much
+    later, also for a length of 0), whatever a producer sends after it (a piece that crosses it is a cut); a negative length and a length on a 204 are a
+    500."""
     source = tmp_path / "stream-server.agc"
     source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, flags=flags, stdin=True))
@@ -510,7 +618,12 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
     assert vm.wait() == 0, "the VM server finishes"
     assert vm.next_line() == "ok()"
     assert vm.next_line() == "ok()"
-    assert vm.stderr_text() == ""
+    # The only things said are the answers that were refused: a closed body of 5 bytes with a length of 9, a negative
+    # length, and a length on a 204.
+    assert vm.stderr_text() == (
+        "http: invalid response: the body is not the length it was given\n"
+        "http: invalid response: the length of a streamed body cannot be negative\n"
+        "http: invalid response: a 204 or 304 response cannot have a body\n")
 
 
 def start_server(tmp_path, adopt):
