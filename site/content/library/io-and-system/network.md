@@ -165,7 +165,7 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
 | `ca_file` | `""`: the system's CA certificates | |
-| `tls` | `none` | a client `TlsContext`; with `some(context)`, `ca_file` is not read |
+| `tls` | `none` | a client `TlsContext` for the connections of `HTTP.client`, which then do not read `ca_file` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - The client runs as Agentica code in its own tasks, so it spends the run's `--max-steps` budget.

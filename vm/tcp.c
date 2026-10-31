@@ -1400,6 +1400,26 @@ static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span)
   return connect_net(vm, name, port, true, files, c, NULL, timeout);
 }
 
+static const char client_role[] = "TLS.connect takes a client TlsContext (TLS.client_context), not a server one";
+
+/* HttpWire.connect_context(host, port, context, timeout_ms) (std-only): TLS.connect on a client TlsContext, for
+   std/http until TLS.connect itself takes a context (the next PR; this name then goes). */
+static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_tls_context_check(vm, args[2], false, client_role, span + 3);
+  agc_value denied = net_denied(vm, span, false);
+  if (!agc_is(denied, AGC_T_VOID)) return denied;
+  const agc_string *host = agc_as_string(vm, args[0]);
+  int64_t port = agc_as_int(vm, args[1]);
+  int64_t timeout = agc_as_int(vm, args[3]);
+  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (port < 1 || port > 65535) return agc_error_value("network: port must be 1..65535");
+  char *name = agc_cstr(host);
+  if (!name) return agc_error_value("network: host cannot contain NUL");
+  char *none[3] = {NULL, NULL, NULL};
+  return connect_net(vm, name, port, true, none, NULL, agc_tls_context_take(vm, args[2], false, client_role, span + 3),
+                     timeout);
+}
+
 /* HttpWire.drop_tls(client) (std-only): the client gives its count on its context back, when its owner task ends.
    Connections still open or in their handshake keep their own counts. */
 static agc_value builtin_drop_tls(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1807,6 +1827,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"HttpWire.read_response", 4, builtin_read_response, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.clean_eof?", 1, builtin_clean_eof, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.connect_tls", 4, builtin_connect_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.connect_context", 4, builtin_connect_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 

@@ -92,6 +92,8 @@ builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
 builtin HttpWire.connect_tls forms=1
   HttpWire.connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpClient), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context."
+builtin HttpWire.connect_context forms=1
+  HttpWire.connect_context(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket] shape=(String, Int, Opaque(TlsContext), Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_context" effects=["network"] desc="Internal to std/http: TLS.connect on a client TlsContext."
 builtin HttpWire.drop_tls forms=1
   HttpWire.drop_tls(client: HttpClient) -> Void shape=(Opaque(HttpClient)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
 builtin HttpWire.encode_request forms=1

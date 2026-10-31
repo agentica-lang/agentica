@@ -968,6 +968,22 @@ ROWS_10: List[Model.Builtin] = [
     description: "Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context.",
     alternatives: [],
   ),
+  # For std/http until TLS.connect takes a context, in the next PR, which removes it.
+  Model.Builtin(
+    name: "HttpWire.connect_context",
+    parameters: [
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "port", type: Types.Type.Int),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.connect_context",
+    effects: ["network"],
+    description: "Internal to std/http: TLS.connect on a client TlsContext.",
+    alternatives: [],
+  ),
   Model.Builtin(
     name: "HttpWire.drop_tls",
     parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
