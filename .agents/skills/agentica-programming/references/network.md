@@ -134,7 +134,7 @@ HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: Str
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
-HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
 HttpServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
 ```
 
@@ -221,6 +221,14 @@ end
   are `Bytes` sent as they are (a file or binary data works); empty ones are
   skipped. A body already closed when the handler returns goes out
   with `Content-Length`.
+- `length: some(n)` is for a body of known size (a big file in pieces): the head
+  has `Content-Length: n` and the pieces go out raw. A body that ends short of
+  `n`, or a piece that would pass it, closes the connection, so the client sees
+  an incomplete body. The body ends as soon as `n` bytes are sent, without
+  waiting for the producer to close: the server closes the channel (the
+  producer's next `send` fails, and it stops) and the connection serves the next
+  request. A closed body of another size, a negative length, or a length on a
+  204 or 304 is the 500 of `listen`.
 - The server reads the connection for the whole stream. When the client's input
   ends (it left, or half-closed) or a send fails, it closes the channel: the
   producer's next `send` is `error("channel: closed")`, and it must stop.
