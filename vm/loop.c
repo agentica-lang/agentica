@@ -1610,6 +1610,31 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   return go;
 }
 
+/* The loop run happens inside a turn: the drain may end detached jobs, whose done halves must not see the waiting
+   task (agc_own would give it their resources, a compute call would take its value). So, as in agc_io_service, a
+   scratch task is current, no turn is, and a done half that raises ends the run through the scheduler's failure
+   target, which gives the task back (agc_io_service_reset). */
+void agc_io_pause(agc_vm *vm, uint64_t ms) {
+  if (!agc_io_here(vm)) {
+    uv_sleep(1);
+    return;
+  }
+  agc_task *saved = vm->task;
+  agc_catch_buf *jit_catch = vm->jit_catch;
+  bool in_turn = vm->in_turn;
+  vm->service_saved = saved;
+  vm->servicing = true;
+  vm->task = agc_alloc(sizeof(agc_task));
+  vm->jit_catch = NULL;
+  vm->in_turn = false;
+  (void)agc_io_run_for(vm, ms, true);
+  vm->in_turn = in_turn;
+  vm->jit_catch = jit_catch;
+  vm->task = saved;
+  vm->servicing = false;
+  vm->service_saved = NULL;
+}
+
 /* The stall check of the I/O thread (docs/vm/16-architecture.md §16.9, "Stall"). Every scheduler waits in an empty
    queue (agc_runq_quiet), so none can make work; then the only producer left is this thread, and the run has stalled
    when this thread has nothing either: no request in the inbox, no ready job, no armed task timer, and nothing alive on
@@ -2122,6 +2147,11 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   (void)ms;
   if (!alive_required) agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
   return false;
+}
+
+void agc_io_pause(agc_vm *vm, uint64_t ms) {
+  (void)vm;
+  (void)ms;
 }
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {

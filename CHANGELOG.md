@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
   the values of `HTTP.client_options()` and `HTTP.server_options()`, so
   `HttpClientOptions(timeout_ms: 5000)` changes one field.
+- `HTTP.client`, `HTTP.listen` (and its TLS and stream forms), `HTTP.download`
+  and `Archive.extract_tar` / `extract_zip` take their options last with a
+  default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
 
 ## [0.19.0-beta.2] - 2026-10-31
 
@@ -49,6 +52,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Compiling deeply nested `some(...)` calls is much faster (900 levels: from
   4 s to 0.6 s).
+- A native callback may print more than the output buffer holds; it waits for
+  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.1] - 2026-10-30
 

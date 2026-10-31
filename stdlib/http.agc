@@ -228,19 +228,13 @@ end
 
 ## Returns the default client options: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates.
 export def client_options() -> HttpClientOptions
-  return HttpClientOptions(
-    timeout_ms: 30000,
-    idle_timeout_ms: 30000,
-    max_connections: 4,
-    max_body_bytes: 1048576,
-    ca_file: "",
-  )
+  return HttpClientOptions()
 end
 
 ## Creates a client that keeps connections open and reuses them. Every number in `options` must be positive,
 ## `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. Close the client
 ## with `close_client`.
-export def client(options: HttpClientOptions) -> Result[HttpClient]
+export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   if String.contains?(options.ca_file, String.from_code(0))
     return error("http: ca_file cannot contain NUL")
@@ -327,7 +321,12 @@ end
 ## the body is still written and the status returned, so check `status` before using the file. There is no
 ## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
 ## context and its certificates for `https`, whose verification stays on.
-export def download(pool: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
+export def download(
+  pool: HttpClient,
+  url: String,
+  path: String,
+  options: DownloadOptions = DownloadOptions(),
+) -> Result[Download]
   if options.timeout_ms <= 0 or options.max_total_bytes <= 0
     return error("http: every download option must be positive")
   end
@@ -391,12 +390,7 @@ end
 ## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
 ## bodies.
 export def server_options() -> HttpServerOptions
-  return HttpServerOptions(
-    request_timeout_ms: 30000,
-    idle_timeout_ms: 30000,
-    max_connections: 128,
-    max_body_bytes: 1048576,
-  )
+  return HttpServerOptions()
 end
 
 ## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the
@@ -406,7 +400,7 @@ export def listen(
   host: String,
   port: Int,
   handler: Fn[HttpRequest, Result[HttpResponse]],
-  options: HttpServerOptions,
+  options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
     options.request_timeout_ms,
@@ -425,7 +419,7 @@ export def listen_tls(
   cert_file: String,
   key_file: String,
   handler: Fn[HttpRequest, Result[HttpResponse]],
-  options: HttpServerOptions,
+  options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
     options.request_timeout_ms,
@@ -444,7 +438,7 @@ export def listen_stream(
   host: String,
   port: Int,
   handler: Fn[HttpRequest, Result[StreamResponse]],
-  options: HttpServerOptions,
+  options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
     options.request_timeout_ms,
@@ -463,7 +457,7 @@ export def listen_stream_tls(
   cert_file: String,
   key_file: String,
   handler: Fn[HttpRequest, Result[StreamResponse]],
-  options: HttpServerOptions,
+  options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
   try check_options(
     options.request_timeout_ms,

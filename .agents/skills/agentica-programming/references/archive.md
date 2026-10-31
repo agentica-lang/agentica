@@ -8,8 +8,8 @@ halts, whatever the input.
 
 ```text
 Archive.options() -> Archive.Options
-Archive.extract_tar(src, members, dest_dir, options) -> Result[List[Int]]
-Archive.extract_zip(src, members, dest_dir, options) -> Result[List[Int]]
+Archive.extract_tar(src, members, dest_dir, options = Archive.Options()) -> Result[List[Int]]
+Archive.extract_zip(src, members, dest_dir, options = Archive.Options()) -> Result[List[Int]]
 ```
 
 - `options` is `Archive.Options(timeout_ms: Int = 30000,
