@@ -12,6 +12,7 @@ import ctypes
 import json
 import os
 import platform
+import re
 import select
 import signal
 import subprocess
@@ -3198,6 +3199,41 @@ def test_native_callback_edges(tmp_path, peer, mode, schedulers, status, code, s
         assert (result.code, result.stderr) == (status, "")
     else:
         assert diagnostic(result, status) == (code, start)
+
+
+CALLBACK_PROFILE = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_twice(fn: Step, x: C.Int32) -> C.Int32
+end
+
+def double(x: Int) -> Int
+  return x * 2
+end
+
+def outer() -> Int
+  n = peer_call_twice(Native.callback(Step, &double), 3)
+  return n
+end
+
+def main() -> Void
+  puts(outer())
+end
+"""
+
+
+# A folded stack sampled in a callback holds the frames below it, through the native call that ran it.
+@NATIVE_CALLS
+def test_the_folded_profile_of_a_callback_holds_the_frames_below(tmp_path, peer):
+    if "trace off" in agentica("--version").stdout:
+        pytest.skip("the VM was built with TRACE=0")
+    trace = tmp_path / "folded.trace"
+    # The profile trace needs one scheduler; the multicore runs of this module set more by default.
+    result = agentica("--schedulers", "1", program(tmp_path, CALLBACK_PROFILE % literal(peer)),
+                      env={"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": str(trace),
+                           "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1"})
+    assert (result.code, result.stdout, result.stderr) == (0, "6008\n", "")
+    stacks = [re.sub(r"@[^;]*", "", line.rsplit(" ", 1)[0]) for line in trace.read_text().splitlines()]
+    assert "main;outer;peer_call_twice;Native.call;double" in stacks
 
 
 EXTERN_TEST = """extern "%s"
