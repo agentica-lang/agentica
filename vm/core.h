@@ -323,6 +323,10 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
    jobs to the scheduler. With ALIVE_REQUIRED a loop with nothing alive is not run and the call returns false, so the
    caller stops waiting; without it the call always waits and returns true. */
 bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required);
+/* One wait of a scheduler that may not park, for the jobs of others to end (a print inside a callback of native code,
+   vm/output.c): a loop run of at most MS milliseconds where this thread runs the loop (agc_io_here), else a sleep of a
+   millisecond while the other schedulers end the jobs (agc_io_service). */
+void agc_io_pause(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other

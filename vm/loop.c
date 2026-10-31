@@ -1610,6 +1610,13 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   return go;
 }
 
+void agc_io_pause(agc_vm *vm, uint64_t ms) {
+  if (agc_io_here(vm))
+    (void)agc_io_run_for(vm, ms, true);
+  else
+    uv_sleep(1);
+}
+
 /* The stall check of the I/O thread (docs/vm/16-architecture.md §16.9, "Stall"). Every scheduler waits in an empty
    queue (agc_runq_quiet), so none can make work; then the only producer left is this thread, and the run has stalled
    when this thread has nothing either: no request in the inbox, no ready job, no armed task timer, and nothing alive on
@@ -2122,6 +2129,11 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   (void)ms;
   if (!alive_required) agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
   return false;
+}
+
+void agc_io_pause(agc_vm *vm, uint64_t ms) {
+  (void)vm;
+  (void)ms;
 }
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {

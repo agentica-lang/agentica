@@ -35,6 +35,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Compiling deeply nested `some(...)` calls is much faster (900 levels: from
   4 s to 0.6 s).
+- A native callback may print more than the output buffer holds; it waits for
+  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.1] - 2026-10-30
 

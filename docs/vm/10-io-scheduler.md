@@ -435,7 +435,11 @@ section says how the scheduler and the loop keep them.
   the head waiter wakes when its whole text fits, and the retry finds its slot.
   `agc_output_waiting` hides that protocol from the builtins. A print longer
   than the buffer holds the stream and copies in pieces, so prints never
-  interleave, and nothing else the VM writes lands inside one. A print has no
+  interleave, and nothing else the VM writes lands inside one. A print or a
+  flush inside a native callback cannot park (C waits on the thread's stack):
+  with no writer ahead it joins the FIFO as its head and runs the loop for the
+  writes in flight (`callback_turn`, `agc_io_pause`); behind a writer it fails
+  with `RUNTIME-NATIVE-CALLBACK`. A print has no
   `timeout_ms`. Its wait is not a stall, since the writer is alive on the loop
   (10.2.1). A cancelled waiter leaves the FIFO (`agc_output_leave`, §14.3), and
   text it already copied is written whole. `IO.flush` returns when the data

@@ -3085,6 +3085,40 @@ def test_native_callback_failures_end_the_native_call(tmp_path, peer, mode, flag
         assert diagnostic(result, status) == (code, start)
 
 
+CALLBACK_PUTS = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_twice(fn: Step, x: C.Int32) -> C.Int32
+end
+
+def noisy(x: Int) -> Int
+  2000.times do |k|
+    puts("#{x} #{k} %s")
+  end
+
+  IO.flush()
+  return x
+end
+
+def main() -> Void
+  puts(peer_call_twice(Native.callback(Step, &noisy), 1))
+end
+"""
+
+
+# A callback may print more than the output buffer holds: it cannot park, so it waits in place for the writer, to a
+# file and to a pipe, and every line comes out in order.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("to_file", [False, True])
+def test_a_callback_prints_more_than_the_output_buffer(tmp_path, peer, schedulers, to_file):
+    out = tmp_path / "out.txt"
+    result = agentica("--schedulers", schedulers, program(tmp_path, CALLBACK_PUTS % (literal(peer), "x" * 80)),
+                      stdout_to=out if to_file else None)
+    assert (result.code, result.stderr) == (0, "")
+    lines = ["%d %d %s" % (x, k, "x" * 80) for x in (1, 2) for k in range(2000)]
+    assert (out.read_text() if to_file else result.stdout) == "\n".join(lines + ["1002"]) + "\n"
+
+
 CALLBACK_EDGES = """extern "%s"
   resource Hook, free: peer_hook_free
   resource Res, free: peer_res_free
