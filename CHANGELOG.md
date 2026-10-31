@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0-beta.3] - 2026-10-31
+
 ### Added
 
 - `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make one
@@ -36,6 +38,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.download_options()` and `Archive.options()`: leave the argument out, or
   build the record (`HttpClientOptions(timeout_ms: 5000)`,
   `HttpServerOptions()`, `HTTP.DownloadOptions()`, `Archive.Options()`).
+
+### Fixed
+
+- A native callback may print more than the output buffer holds; it waits for
+  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.2] - 2026-10-31
 
@@ -69,8 +76,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Compiling deeply nested `some(...)` calls is much faster (900 levels: from
   4 s to 0.6 s).
-- A native callback may print more than the output buffer holds; it waits for
-  the writer instead of failing with `RUNTIME-NATIVE-CALLBACK`.
 
 ## [0.19.0-beta.1] - 2026-10-30
 
@@ -779,7 +784,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...HEAD
+[0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
 [0.19.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...0.19.0-beta.2
 [0.19.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.18.0...0.19.0-beta.1
 [0.18.0]: https://github.com/agentica-lang/agentica/compare/0.17.0...0.18.0
