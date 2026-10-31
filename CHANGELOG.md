@@ -27,6 +27,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   request.headers)`); the server no longer answers 400 for a request body that
   is not UTF-8. Rebuild `.agcb` files with such a handler.
 
+### Fixed
+
+- Compiling deeply nested `some(...)` calls is much faster (900 levels: from
+  4 s to 0.6 s).
+
 ## [0.19.0-beta.1] - 2026-10-30
 
 ### Added
