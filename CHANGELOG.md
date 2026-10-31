@@ -39,20 +39,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Breaking:** TLS takes a `TlsContext`, built once from its PEM files by
-  `TLS.client_context(TlsClientOptions(...))` or
-  `TLS.server_context(TlsServerOptions(...))` and shared by many connections.
-  `TLS.connect(host, port, "ca.pem", ms)` becomes
-  `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)`,
-  `TLS.listen(host, port, cert, key)` becomes
-  `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)`,
-  the `HTTP.listen_*_tls` forms take the server context in place of the two
-  paths, and `HttpClientOptions(ca_file: path)` becomes
-  `HttpClientOptions(tls: some(context))` (`none`, the default, is system
-  trust). `HttpClientOptions` now holds a `TlsContext`, so `JSON.schema`,
-  `JSON.decode` and `JSON.encode` refuse it (`CHECK-NOT-DECODABLE`,
-  `CHECK-NOT-ENCODABLE`). `TlsClientOptions`, `TlsContext` and
-  `TlsServerOptions` are reserved type names.
+- **Breaking:** `TLS.connect`, `TLS.listen`, the `HTTP.listen_*_tls` forms and
+  `HttpClientOptions` (`tls` replaces `ca_file`) take a `TlsContext` in place
+  of PEM paths. The network page's "Moving to contexts" lists each old form
+  and its new one.
 - **Breaking:** `channel.closed?` is `true` as soon as the channel is closed,
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for

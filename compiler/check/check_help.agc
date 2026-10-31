@@ -42,6 +42,16 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     return "this is #{Types.to_text(actual)}; turn it into a Result with .to_result(\"message\")"
   end
 
+  # A value where an Optional of its type goes (HttpClientOptions(tls: context)).
+  if Types.is?(expected, "Optional") and Types.same?(Types.item(expected), actual)
+    return "this is #{Types.to_text(actual)}; wrap it with some(...) for #{Types.to_text(expected)}"
+  end
+
+  # The CA file of the TLS.connect before contexts (19a).
+  if Types.same?(expected, Types.Type.Opaque("TlsContext")) and Types.same?(actual, Types.Type.String)
+    return "a TlsContext holds the PEM files: build one with TLS.client_context(TlsClientOptions(ca_file: path))"
+  end
+
   return convert_help(expected, actual)
 end
 
