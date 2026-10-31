@@ -29,6 +29,7 @@ CMAC.aes
 CMAC.des_ede3
 Channel.close
 Channel.closed?
+Channel.empty?
 Channel.new
 Channel.recv
 Channel.send

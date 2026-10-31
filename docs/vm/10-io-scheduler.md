@@ -355,7 +355,7 @@ section says how the scheduler and the loop keep them.
     the head sender the same way, and so is a slot freed when a woken sender
     hands its value to a waiting receiver. Each accepted value gets a send
     sequence number, kept in its ring slot and its reservation. The counters
-    `reserved_values` and `reserved_slots` keep `closed?` and the free space
+    `reserved_values` and `reserved_slots` keep `empty?` and the free space
     exact. A woken waiter re-runs its builtin and gets its reservation, even if
     its deadline passed, since the reservation came first.
   - **A waiter that leaves.** A waiter woken with a reservation is already off
@@ -372,8 +372,10 @@ section says how the scheduler and the loop keep them.
     senders. Receivers keep getting the values left. A `recv` on a closed
     channel with an empty ring, but a value reserved for a woken receiver,
     waits. The receiver that takes the last reservation wakes the others, which
-    then get the closed error. `closed?` is true when the channel is closed, the
-    ring is empty and nothing is reserved, and it stays true.
+    then get the closed error. `closed?` is the close flag, true at once even
+    with values left, so a producer sees the close between sends. `empty?` is
+    true when the ring is empty and nothing is reserved; after a close the two
+    together stay true.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
     (`agc_channel_claim`); §14.5 has the rules.
   - **Choices.** Mid-FIFO removal is O(n), as for the lock FIFO. A waiter whose

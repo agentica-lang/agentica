@@ -13,7 +13,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-enum { NEW, SEND, RECV, CLOSE, CLOSED, COUNT };
+enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, COUNT };
 
 static agc_vm vm;
 static agc_task *main_task;
@@ -90,6 +90,11 @@ static bool closed(agc_value ch) {
   return agc_as_bool(&vm, now(main_task, CLOSED, args));
 }
 
+static bool empty(agc_value ch) {
+  agc_value args[1] = {ch};
+  return agc_as_bool(&vm, now(main_task, EMPTY, args));
+}
+
 static bool got(agc_value result, int64_t value) {
   const agc_result *r = agc_as_result(&vm, result);
   return r->ok && agc_as_int(&vm, r->value) == value;
@@ -158,7 +163,7 @@ static void test_receiver_order(void) {
   assert(got(now(b, RECV, args), 2));
   assert(!a->channel.channel && !a->parked && !b->parked && !c->parked);
   close_channel(ch);
-  assert(closed(ch));
+  assert(closed(ch) && empty(ch));
 }
 
 static void test_sender_order(void) {
@@ -349,17 +354,35 @@ static void test_close_with_reserved_value(void) {
   wait_recv(a, ch, 5000);
   send(main_task, ch, 5, 0);
   close_channel(ch);
-  assert(!closed(ch));
+  assert(closed(ch) && !empty(ch));
   assert(next_ready() == a);
   settle();
   agc_value args_b[2] = {ch, agc_int(5000)};
   wait(b, RECV, args_b);
   agc_value args_a[2] = {ch, agc_int(5000)};
   assert(got(now(a, RECV, args_a), 5));
-  assert(closed(ch));
+  assert(closed(ch) && empty(ch));
   assert(next_ready() == b);
   settle();
   assert(failed(now(b, RECV, args_b), "channel: closed"));
+}
+
+/* closed? is the flag as soon as the channel is closed, with values still buffered; empty? turns true once the last
+   one is taken, and only then does a receive report the close. */
+static void test_closed_with_buffered_values(void) {
+  agc_value ch = make_channel(4);
+  assert(!closed(ch) && empty(ch));
+  send(main_task, ch, 1, 0);
+  send(main_task, ch, 2, 0);
+  assert(!closed(ch) && !empty(ch));
+  close_channel(ch);
+  assert(closed(ch) && !empty(ch));
+  assert(failed(send(main_task, ch, 3, 0), "channel: closed"));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(closed(ch) && !empty(ch));
+  assert(got(recv(main_task, ch, 0), 2));
+  assert(closed(ch) && empty(ch));
+  assert(failed(recv(main_task, ch, 0), "channel: closed"));
 }
 
 static void test_close_cancels_reserved_value(void) {
@@ -368,11 +391,11 @@ static void test_close_cancels_reserved_value(void) {
   wait_recv(a, ch, 5000);
   send(main_task, ch, 5, 0);
   close_channel(ch);
-  assert(!closed(ch));
+  assert(closed(ch) && !empty(ch));
   agc_task_cancel(&vm, a);
-  assert(!closed(ch));
+  assert(closed(ch) && !empty(ch));
   assert(got(recv(main_task, ch, 0), 5));
-  assert(closed(ch));
+  assert(closed(ch) && empty(ch));
   assert(failed(recv(main_task, ch, 0), "channel: closed"));
 }
 
@@ -391,7 +414,7 @@ static void test_close_with_reserved_slot(void) {
   agc_value args_a[3] = {ch, agc_int(2), agc_int(5000)};
   assert(failed(now(a, SEND, args_a), "channel: closed"));
   assert(failed(now(b, SEND, args_b), "channel: closed"));
-  assert(closed(ch));
+  assert(closed(ch) && empty(ch));
   assert(failed(recv(main_task, ch, 0), "channel: closed"));
 }
 
@@ -532,8 +555,9 @@ int main(void) {
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   main_task = vm.task;
-  static const char *names[COUNT] = {"Channel.new", "Channel.send", "Channel.recv", "Channel.close", "Channel.closed?"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1};
+  static const char *names[COUNT] = {"Channel.new",   "Channel.send",    "Channel.recv",
+                                     "Channel.close", "Channel.closed?", "Channel.empty?"};
+  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);
@@ -552,6 +576,7 @@ int main(void) {
   test_cancelled_sender();
   test_cancelled_sender_frees_slot();
   test_close_with_reserved_value();
+  test_closed_with_buffered_values();
   test_close_cancels_reserved_value();
   test_close_with_reserved_slot();
   test_close_wakes_receivers();

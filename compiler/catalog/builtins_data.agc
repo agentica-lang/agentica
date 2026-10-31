@@ -317,7 +317,17 @@ ROWS_1: List[Model.Builtin] = [
       rule: Model.Rule.ChannelTarget,
       implementation: "Channel.closed?",
       effects: [],
-      description: "True once the channel is closed and every value was taken; VM only.",
+      description: "True once the channel is closed, even with values still buffered; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Channel.empty?",
+      parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.ChannelTarget,
+      implementation: "Channel.empty?",
+      effects: [],
+      description: "True when no value is left to receive; after closed?, it says the channel is drained; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
