@@ -38,6 +38,15 @@ CLEAN = [
         None,
         None,
     ),
+    # The text codecs give Results, in the method and the function form.
+    (
+        MAIN + '  b = "abc".bytes\n'
+        '  t: Result[String] = b.decode("utf-16")\n'
+        '  u: Result[Bytes] = "a".encode("latin-1")\n'
+        '  puts("#{t.ok?} #{u.ok?} #{Bytes.decode(b, "ascii").ok?} #{String.encode("a", "utf-32").ok?}")\nend\n',
+        None,
+        None,
+    ),
     # A Map key, a Set item and Test.eq take Bytes.
     (
         MAIN + '  m: Map[Bytes, Int] = {"a".bytes: 1}\n'
@@ -96,6 +105,9 @@ REFUSED = [
     (MAIN + '  b = "abc".bytes\n  c = b.map do |x| x end\nend\n', "CHECK-UNKNOWN-METHOD", "b.map do |x| x end"),
     (MAIN + '  b: Bytes = "abc"\nend\n', "CHECK-TYPE-MISMATCH", '"abc"'),
     (MAIN + "  b: Bytes = Bytes.from_list([1])\nend\n", "CHECK-TYPE-MISMATCH", "Bytes.from_list([1])"),
+    # A codec may fail, so its result is a Result, and the encoding is a String.
+    (MAIN + '  s: String = "a".bytes.decode("utf-8")\nend\n', "CHECK-TYPE-MISMATCH", '"a".bytes.decode("utf-8")'),
+    (MAIN + '  b = "a".encode(8)\nend\n', "CHECK-TYPE-MISMATCH", "8"),
 ]
 
 

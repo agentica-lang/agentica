@@ -107,6 +107,11 @@ in a PR that rewrites the goldens.
   forms return the same text as an `error(...)` value.
 - `String.from_bytes` decodes a `Bytes` strictly: no surrogates, no overlong
   forms, no code points above U+10FFFF. It costs by size.
+- `Bytes.decode` and `String.encode` (`vm/text_codec.c`) cover UTF-8, UTF-16,
+  UTF-32, ASCII and Latin-1. A decode checks the input and sizes the String in
+  one pass and fills it in a second. An error is an `error(...)` value that
+  ends with the offset Python reports as the start of its Unicode error: a byte
+  offset for a decode, a character index for an encode. They cost by size.
 - The `Digest` hashes (`md5`, `sha1`, `sha256`, `sha512` and their
   `_hexdigest` forms) take a `Bytes`, hash it with OpenSSL's EVP digests
   (`vm/digest_openssl.c`, behind `digest.h`) and return the digest as a

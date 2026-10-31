@@ -160,6 +160,8 @@ extern const agc_builtin agc_string_builtins[];
 extern const size_t agc_string_builtin_count;
 extern const agc_builtin agc_bytes_builtins[];
 extern const size_t agc_bytes_builtin_count;
+extern const agc_builtin agc_text_codec_builtins[];
+extern const size_t agc_text_codec_builtin_count;
 extern const agc_builtin agc_number_builtins[];
 extern const size_t agc_number_builtin_count;
 extern const agc_builtin agc_crypto_builtins[];
