@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import ROOT
+from tests.agentica_test import ROOT, TIMEOUT_SCALE
 from tests.frontend_support import PytestStageCase, pytest_stage_fixtures
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "format"
@@ -21,7 +21,7 @@ LARGE = "compiler/syntax/parser.agc"
 # Declarations of the generated file of the timing test, three comments each.
 GENERATED_DECLS = 6000
 # Seconds the attachment of the generated file may take: well above the time of a linear search (about half a second),
-# well below the time of a quadratic one (more than ten seconds).
+# well below the time of a quadratic one (more than ten seconds). Slow runners scale it (AGENTICA_TEST_TIMEOUT_SCALE).
 GENERATED_LIMIT = 4.0
 
 
@@ -78,4 +78,4 @@ def test_the_attachment_of_a_file_with_many_declarations_stays_near_linear(forma
         ["%d:20" % (last + 1), "trailing", "TypeRef", "%d:16" % (last + 1)],
         ["%d:15" % (last + 2), "trailing", "Return", "%d:3" % (last + 2)],
     ]
-    assert elapsed < GENERATED_LIMIT, elapsed
+    assert elapsed < GENERATED_LIMIT * TIMEOUT_SCALE, elapsed
