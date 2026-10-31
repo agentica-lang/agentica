@@ -1,7 +1,7 @@
 ## 47. Code formatter (`agentica fmt`)
 
 **Status:** In progress: roadmap row 7.9, decided by the owner on 2026-10-15,
-who also asked for this plan on the same day. Phases 47a and 47b are done
+who also asked for this plan on the same day. Phases 47a, 47b and 47c are done
 (47.10); the printer also honors `blank_line_after_end` (47c). The owner
 answered the open questions of 47.9 on 2026-10-31. Phase 47d waits for the
 language server (§43), which is not scheduled.
@@ -496,9 +496,13 @@ and is outside this order.
   47.5: `|>` at the start of the line, clarity parentheses, lone strings in
   parentheses instead of split strings, refilled tables, hugged sole
   arguments, and one-line `do` blocks and case arms.
-- [ ] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`;
+- [x] 47c: write mode, standard input, `[style]` and `CHECK-LINE-TOO-LONG`;
   with `blank_line_after_end`, the empty line after every `end`, including an
-  `end` the printer creates when it breaks a one-line `do ... end`.
+  `end` the printer creates when it breaks a one-line `do ... end`. CI runs
+  `make check-compiler` (`agentica check compiler`). The width of `stdlib/`
+  stays a test (`tests/test_style_line_width.py`): its files load as `std/`
+  library files, which no style rule covers, and most cannot be checked as a
+  root of their own.
 
 Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes in CI
 over `compiler/` and `stdlib/`, `agentica check` reports the width, and the

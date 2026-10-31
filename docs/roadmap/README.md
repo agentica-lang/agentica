@@ -37,8 +37,8 @@ Items 1 to 4 (FFI-a, cached bytecode, packages
 5. The formatter
    [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt) (row 7.9).
    The owner answered the open questions of
-   [§47.9](../future/47-formatter.md#479-open-questions) on 2026-10-31; 47a and
-   47b are done.
+   [§47.9](../future/47-formatter.md#479-open-questions) on 2026-10-31; 47a,
+   47b and 47c are done, and 47d waits for the language server.
 6. [#396](https://github.com/agentica-lang/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
@@ -172,10 +172,10 @@ Weighed later (no fixed order):
   - **Next work:** Second batch (item 5 above; design and plan:
     [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)):
     `agentica fmt`, written in Agentica on the self-hosted lexer and parser
-    (parts 47a to 47c; 47a, the comment side list and its attachment, and 47b,
-    the printer with `fmt --check` and `make fmt-check`, are done; 47c adds
-    `CHECK-LINE-TOO-LONG`, which replaces `tests/test_style_line_width.py`).
-    47d, the LSP hook, waits for the language server (§43, not scheduled).
+    (parts 47a to 47c, done: the comment side list and its attachment, the
+    printer with `fmt --check` and `make fmt-check`, then write mode, `fmt -`,
+    `[style]` and `CHECK-LINE-TOO-LONG` with `make check-compiler`). 47d, the
+    LSP hook, waits for the language server (§43, not scheduled).
   - **Outcome:** Every `.agc` file has one layout, checked in CI
 
 - **Order:** 7.10

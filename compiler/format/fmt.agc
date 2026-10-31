@@ -29,7 +29,7 @@ end
 
 def shown(text: String, mode: String) -> String
   if mode == "--raw"
-    case Format.unchecked_text(text, Format.WIDTH)
+    case Format.unchecked_text(text, Format.default_settings())
       Diag.Outcome.Done(output) -> return output
       Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem) + "\n"
     end
@@ -42,7 +42,7 @@ def shown(text: String, mode: String) -> String
     end
   end
 
-  case Format.format_text(text, Format.WIDTH)
+  case Format.format_text(text, Format.default_settings())
     Diag.Outcome.Done(output) -> return output
     Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem) + "\n"
   end

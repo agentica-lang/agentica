@@ -1,7 +1,8 @@
-"""The optional style rule `[style] blank_line_after_end` of agentica.toml, through the CLI.
+"""The optional style rules of agentica.toml, `[style] blank_line_after_end` and `max_line_width`, through the CLI.
 
-With the key on, a line whose code is only `end` needs an empty line after it (CHECK-BLANK-LINE-AFTER-END, at the
-`end`). The cases run `--json check` and assert the code and the span, never the message (AGENTS.md).
+With `blank_line_after_end` on, a line whose code is only `end` needs an empty line after it
+(CHECK-BLANK-LINE-AFTER-END, at the `end`). With `max_line_width = N`, a line may have at most N characters
+(CHECK-LINE-TOO-LONG, from the first character past N to the end of the line). The cases run `--json check` and assert the code and the span, never the message (AGENTS.md).
 """
 import json
 
@@ -262,3 +263,79 @@ def test_a_file_is_checked_where_its_real_path_is(tmp_path):
     (tmp_path / "app" / "in.agc").symlink_to(tmp_path / "app" / "lib" / "util.agc")
     write(tmp_path / "app" / "main.agc", importing("in"))
     assert run_check(tmp_path / "app" / "main.agc")["code"] == "CHECK-BLANK-LINE-AFTER-END"
+
+
+# CHECK-LINE-TOO-LONG: `[style] max_line_width = N` allows N characters (code points) per line, comments included.
+WIDTH_20 = "[style]\nmax_line_width = 20\n"
+
+
+def wide(line):
+    """A program whose line 2 is `line`, which must be code or a comment at the indent of a body."""
+    return "def main() -> Void\n%s\n  puts(1)\nend\n" % line
+
+
+def span(problem):
+    found = problem["range"]
+    return (found["start"]["line"], found["start"]["column"]), (found["end"]["line"], found["end"]["column"])
+
+
+def test_a_line_over_the_width_is_reported_from_its_first_character_past_the_width(tmp_path):
+    line = "  x = 1234567890123"
+    assert len(line) == 19
+    assert check(tmp_path, wide(line), manifest=WIDTH_20) is None
+    assert check(tmp_path, wide(line + "4"), manifest=WIDTH_20) is None
+    problem = check(tmp_path, wide(line + "45"), manifest=WIDTH_20)
+    assert (problem["code"], span(problem)) == ("CHECK-LINE-TOO-LONG", ((2, 21), (2, 22)))
+    assert problem["file"].endswith("program.agc")
+    assert check(tmp_path, wide(line + "45"), manifest="") is None
+    assert check(tmp_path, wide(line + "45"), manifest=ON) is None
+
+
+# (what, line 2 of the program, the problem is at (line, column), or None when the program is clean)
+WIDTH_CASES = [
+    ("a comment counts", "  # a comment that is long", (2, 21)),
+    ("a character is one code point", "  x = \"%s\"" % ("é" * 11), None),
+    ("a wide character is one code point", "  x = \"%s\"" % ("世" * 13), (2, 21)),
+    ("a string counts", "  x = \"a long string\"", (2, 21)),
+]
+
+
+@pytest.mark.parametrize("what, line, expected", WIDTH_CASES, ids=[case[0] for case in WIDTH_CASES])
+def test_what_the_width_counts(tmp_path, what, line, expected):
+    problem = check(tmp_path, wide(line), manifest=WIDTH_20)
+    if expected is None:
+        assert problem is None
+    else:
+        assert (problem["code"], span(problem)[0]) == ("CHECK-LINE-TOO-LONG", expected)
+
+
+def test_a_carriage_return_is_not_counted(tmp_path):
+    program = wide("  x = 12345678901234").replace("\n", "\r\n")
+    assert check(tmp_path, program, manifest=WIDTH_20) is None
+    problem = check(tmp_path, wide("  x = 123456789012345").replace("\n", "\r\n"), manifest=WIDTH_20)
+    assert (problem["code"], span(problem)) == ("CHECK-LINE-TOO-LONG", ((2, 21), (2, 22)))
+
+
+def test_the_width_comes_after_a_type_error_and_before_the_empty_line_after_end(tmp_path):
+    both = WIDTH_20 + "blank_line_after_end = true\n"
+    program = "def main() -> Void\n  if true\n  end\n  x = 123456789012345\n  puts(x)\nend\n"
+    assert span(check(tmp_path, program, manifest=both))[0] == (4, 21)
+    assert check(tmp_path, program.replace("puts(x)", "puts(x + \"a\")"), manifest=both)["code"] != "CHECK-LINE-TOO-LONG"
+
+
+def test_the_width_covers_the_files_of_the_project_only_and_follows_the_manifest(tmp_path):
+    # The width is 28, so that the lines of main.agc fit and line 2 of util.agc (31 characters) does not.
+    long_module = "export def one() -> Int\n  return 1234567890 + 123456789\nend\n"
+    write(tmp_path / "lib" / "util.agc", long_module)
+    write(tmp_path / "sub" / "agentica.toml", "")
+    write(tmp_path / "sub" / "util.agc", long_module)
+    write(tmp_path / "agentica.toml", "[style]\nmax_line_width = 28\n")
+    write(tmp_path / "main.agc", importing("sub/util"))
+    assert run_check(tmp_path / "main.agc") is None
+    write(tmp_path / "main.agc", importing("lib/util"))
+    problem = run_check(tmp_path / "main.agc")
+    assert (problem["code"], span(problem)[0]) == ("CHECK-LINE-TOO-LONG", (2, 29))
+    assert problem["file"].endswith("util.agc")
+    # A wider limit in the manifest is seen by the next check, past the check cache.
+    write(tmp_path / "agentica.toml", "[style]\nmax_line_width = 40\n")
+    assert run_check(tmp_path / "main.agc") is None

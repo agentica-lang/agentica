@@ -1,6 +1,6 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
-## `doc`, check the layout of files with `fmt --check`, list the declarations of a file with `outline`, give the type
+## `doc`, format files with `fmt`, list the declarations of a file with `outline`, give the type
 ## at a position with `type-at`, list the references to a name with `refs`, write the packages of the lock to deps/
 ## with `install`, change the packages with `add` and `update`, or start the tests.
 ##
@@ -33,6 +33,7 @@ import Diag from "../diagnostics/diagnostic"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import Problems from "../diagnostics/problem"
+import Format from "../format/format"
 import BytecodeCache from "../io/bytecode_cache"
 import CheckCache from "../io/check_cache"
 import SaveFile from "../io/save_file"
@@ -41,6 +42,7 @@ import StdinBuffer from "../io/stdin_buffer"
 import LowerText from "../lower/lower_text"
 import Lowering from "../lower/lowering"
 import Env from "../modules/link_env"
+import Failure from "../modules/link_failure"
 import Resolve from "../modules/resolve_import"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
@@ -60,8 +62,10 @@ import Reply from "cli_reply"
 import Texts from "cli_text"
 import Pipeline from "pipeline"
 
-# The deadline of each call that writes the output of `compile`, in milliseconds.
+# The deadline of each call that writes the output of `compile` or a file of `fmt`, in milliseconds.
 SAVE_TIMEOUT = 60_000
+# The name of the standard input in the diagnostics of `fmt -`.
+STDIN_NAME = "<stdin>"
 
 # What one run is given besides the words of the user: the options read in front of them, the settings and the
 # hand-off. `buffer_file` is the file whose text came from standard input ("" for none), and `buffer_shown` that text
@@ -297,34 +301,50 @@ def check(session: Session, words: List[String]) -> Int
   end
 end
 
-# `fmt --check [PATH...]` and `fmt --tree FILE` (cli_fmt.agc). Any other form is a usage error.
+# `fmt [PATH...]`, `fmt --check [PATH...]`, `fmt -` and `fmt --tree FILE` (cli_fmt.agc). Any other form, an option
+# among the paths and a path that names no `.agc` file are FMT-USAGE, status 2.
 def fmt(session: Session, words: List[String]) -> Int
-  if words.size == 2 and words[0] == "--tree"
-    file = words[1]
-    case SourceReader.read(file)
-      SourceFile.Read.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{file}\n"))
-      SourceFile.Read.Invalid(at) ->
-        return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
-      SourceFile.Read.Text(text) ->
-        case CliFmt.tree(text)
-          Diag.Outcome.Done(tree) -> return emit(Reply.printed(tree + "\n"))
-          Diag.Outcome.Failed(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
-        end
+  if words.size > 0 and words[0] == "--tree"
+    if words.size != 2
+      return fmt_usage(session, "--tree takes one FILE")
+    end
+
+    return fmt_tree(session, words[1])
+  elsif words.size > 0 and words[0] == "-"
+    if words.size != 1
+      return fmt_usage(session, "- reads one file from standard input and takes no PATH")
+    end
+
+    return fmt_stdin(session)
+  end
+
+  checking = words.size > 0 and words[0] == "--check"
+  paths = words
+  if checking
+    paths = words.drop(1)
+  end
+
+  for path in paths
+    if path.starts_with?("-")
+      return fmt_usage(session, "unknown option #{path}")
     end
   end
 
-  if words.size == 0 or words[0] != "--check"
-    return emit(Reply.failed(2, CliFmt.usage() + "\n"))
-  end
-
-  case SymbolPaths.expand(session.settings.workspace, words.drop(1), "", CliFmt.usage())
-    SymbolPaths.Expanded.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+  case SymbolPaths.expand(session.settings.workspace, paths, "", CliFmt.usage())
+    SymbolPaths.Expanded.Refused(problem) -> return reject(session, problem.with(code: "FMT-USAGE"), problem.file, 2)
     SymbolPaths.Expanded.Files(roots) ->
       status = 0
+      settings: Map[String, Result[Format.Settings]] = {}
       for root in roots
-        found = fmt_check(session, root.typed)
-        if found > status
-          status = found
+        file = root.typed
+        found = CliFmt.manifest_dir(session.settings.workspace, file)
+        if !settings.has_key?(found)
+          settings = settings.put(found, CliFmt.settings_of(session.settings.workspace, found))
+        end
+
+        done = fmt_file(session, file, settings[found], checking)
+        if done > status
+          status = done
         end
       end
 
@@ -332,9 +352,64 @@ def fmt(session: Session, words: List[String]) -> Int
   end
 end
 
-# Checks the layout of one file: prints its path when formatting would change it, or its problem. Gives the status of
-# the file: 0 for no change, 1 for a change or a problem, 2 for a file that cannot be read.
-def fmt_check(session: Session, file: String) -> Int
+def fmt_usage(session: Session, message: String) -> Int
+  problem = QueryOptions.at_arguments("FMT-USAGE", message, Diag.Help.Hint(CliFmt.usage()))
+  return reject(session, problem, problem.file, 2)
+end
+
+# `fmt --tree FILE`: the normal form of the file.
+def fmt_tree(session: Session, file: String) -> Int
+  case SourceReader.read(file)
+    SourceFile.Read.Unreadable(_) -> return fmt_usage(session, "cannot read #{file}")
+    SourceFile.Read.Invalid(at) ->
+      return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
+    SourceFile.Read.Text(text) ->
+      case CliFmt.tree(text)
+        Diag.Outcome.Done(tree) -> return emit(Reply.printed(tree + "\n"))
+        Diag.Outcome.Failed(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
+      end
+  end
+end
+
+# `fmt -`: the standard input formatted to the standard output, with the settings of the working folder. A text that
+# does not parse prints its diagnostic, and nothing goes to the standard output.
+def fmt_stdin(session: Session) -> Int
+  case StdinBuffer.take()
+    StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+    StdinBuffer.Taken.Got(buffer) ->
+      buffered = session.with(buffer_file: STDIN_NAME, buffer_shown: buffer.shown)
+      case buffer.read
+        SourceFile.Read.Unreadable(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+        SourceFile.Read.Invalid(at) ->
+          return reject(buffered, Front.stage_problem(STDIN_NAME, SourceFile.invalid_utf8(at)), STDIN_NAME, 1)
+        SourceFile.Read.Text(text) ->
+          workspace = session.settings.workspace
+          settings = CliFmt.settings_of(workspace, CliFmt.manifest_dir(workspace, "."))
+          if !settings.ok?
+            return reject(buffered, Front.link_problem(Failure.unpack_failure(settings.message)), STDIN_NAME, 1)
+          end
+
+          case CliFmt.verdict(text, settings.unwrap!)
+            CliFmt.Verdict.Same -> print(text)
+            CliFmt.Verdict.Changed(output) -> print(output)
+            CliFmt.Verdict.Refused(problem) ->
+              return reject(buffered, Front.stage_problem(STDIN_NAME, problem), STDIN_NAME, 1)
+          end
+
+          return 0
+      end
+  end
+end
+
+# Formats one file with `settings` (or the failure of its manifest): with `checking` it prints the path of a file that
+# formatting would change, else it writes the new text in place. Gives the status of the file: 0 when it is formatted,
+# 1 for a change found by `--check`, a file that does not parse or a bad manifest, 2 for a file that cannot be read or
+# written.
+def fmt_file(session: Session, file: String, settings: Result[Format.Settings], checking: Bool) -> Int
+  if !settings.ok?
+    return reject(session, Front.link_problem(Failure.unpack_failure(settings.message)), file, 1)
+  end
+
   case SourceReader.read(file)
     SourceFile.Read.Unreadable(_) ->
       IO.warn("agentica: cannot read #{file}")
@@ -342,11 +417,21 @@ def fmt_check(session: Session, file: String) -> Int
     SourceFile.Read.Invalid(at) ->
       return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
     SourceFile.Read.Text(text) ->
-      case CliFmt.verdict(text)
+      case CliFmt.verdict(text, settings.unwrap!)
         CliFmt.Verdict.Same -> return 0
-        CliFmt.Verdict.Changed ->
-          puts(file)
-          return 1
+        CliFmt.Verdict.Changed(output) ->
+          if checking
+            puts(file)
+            return 1
+          end
+
+          written = SaveFile.replace(file, output.bytes, true, SAVE_TIMEOUT)
+          if !written.ok?
+            IO.warn("agentica: cannot write #{file}: #{written.message}")
+            return 2
+          end
+
+          return 0
         CliFmt.Verdict.Refused(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
       end
   end

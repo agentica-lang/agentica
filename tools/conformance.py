@@ -215,7 +215,7 @@ EXCLUDED = {
     "tests/test_frontend_wire.py": "the chunks of the bytecode writer, pure Agentica, the same on every system",
     "tests/test_stdlib_docs.py": "a check of the sources (docs on every export), the same on every system",
     "tests/test_stdlib_modules.py": "a check of stdlib/MODULES and stdlib/CORE, the same on every system",
-    "tests/test_style_line_width.py": "a check of the sources (line width), the same on every system",
+    "tests/test_style_line_width.py": "a check of the sources (line width of stdlib/), the same on every system",
     "tests/test_style_core_purity.py": "a check of the sources (the stage folders never call the machine), the same on every system",
     "tests/test_vm_style.py": "a check of the C sources (style), the same on every system",
     "tests/test_timeout_guard.py": "the time limit of the test harness itself",
