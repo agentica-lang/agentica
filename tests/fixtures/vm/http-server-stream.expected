@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 24859,
+  "steps": 25605,
   "stdout": [
     "-- each piece arrives before the producer sends the next one, and the connection is kept",
     "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",

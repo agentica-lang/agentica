@@ -428,7 +428,7 @@ The server adds `Content-Length` (not on 204 and 304, whose body must be empty),
 
 #### Handler and middleware
 
-`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
+`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. `HTTP.UpgradeHandler` is the one of [`listen_websocket`](#httplisten_websocket), whose handler answers or upgrades. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
 
 A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result.
 
@@ -508,7 +508,7 @@ Bad requests never reach the handler: the server answers and closes the connecti
 | 413 | a body over `max_body_bytes` |
 | 417 | an `Expect` other than `100-continue` |
 | 431 | headers too long or too many |
-| 501 | `CONNECT` or `Upgrade` |
+| 501 | `CONNECT`, or `Upgrade` (except a WebSocket handshake on a `listen_websocket` server) |
 | 505 | not `HTTP/1.1` |
 
 Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
@@ -649,6 +649,81 @@ end
 
 ```output
 200 11 bytes
+```
+
+### HTTP.listen_websocket
+
+```text
+HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_websocket_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
+HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
+```
+
+`listen_websocket` serves HTTP/1.1 as `listen` does and also upgrades a request to a WebSocket (RFC 6455). It is a fourth kind of handler next to `listen`, `listen_stream` and `listen_upload`, so `HTTP.Handler` and every existing handler stay as they are. Every other `listen` form answers a request with an `Upgrade` header 501, as before.
+
+`HTTP.UpgradeHandler` is `Fn[HttpRequest, Result[HTTP.Upgrade]]`. `HTTP.Upgrade` is an enum: `Upgrade.Reply(response)` answers the request as `listen` does (and the connection serves the next request), and `Upgrade.Accept(...)` upgrades it; make an `Accept` with `accept_websocket`, never by hand. `upgrade_only` makes an `UpgradeHandler` from an ordinary `Handler`, so a server mixes its plain routes and its WebSocket routes, and a router such as Bond's is wrapped once.
+
+- `accept_websocket(request, session, options)` checks the handshake: a `GET` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key` that is 16 bytes in base64. A request that is not one gets an `Upgrade.Reply`: `426` with `Sec-WebSocket-Version: 13` for another version, `400` for the rest. The head reader lets only a `GET` with one `Upgrade: websocket` through, so any other `Upgrade` (`h2c`, a `POST`) is the `501` of every server. A route that does not call `accept_websocket` ignores the headers.
+- `session` is a `HTTP.WebSocketSession`, `Fn[HTTP.WebSocket, Result[Void]]`. The server writes the `101` answer and runs it in the task of the connection. When it returns, the server sends a close frame (code 1000, or 1011 and a warning for an `error`) unless the session already sent one, waits for the peer's close frame, and closes the connection.
+- `HTTP.WebSocket` has `incoming` and `outgoing`, both `Channel[HTTP.Message]` of 8 messages, and `protocol`, the subprotocol that was agreed on (`""` for none). A handler that does not read makes the server stop reading the socket, and one that sends faster than the peer reads waits in `send`. `incoming` closes after the `Close` message, and `outgoing` closes when the connection is over, so a send then is an `error`.
+- `HTTP.Message` is `Text(String)`, `Binary(Bytes)`, `Ping(Bytes)`, `Pong(Bytes)` and `Close(Int, String)`, the code and the reason. A received `Text` or `Binary` is a whole message: the fragments are joined, and a text message is checked as UTF-8. The server answers every received ping with a pong and does not hand it on; a `Pong` is handed on. A `Ping` or `Pong` carries at most 125 bytes (more is cut).
+- A `Close` is the last message the handler receives, whatever ended the connection: the peer's close frame with its code and reason, a frame that broke the rules (the code of the answer: 1002, 1007 or 1009), or the loss of the connection (code 1006, since no close frame came). Sending `Close(code, reason)` starts the close handshake; a code that cannot be sent (below 1000, 1004 to 1006, 1012 to 2999, past 4999) is sent as 1011, and a reason is cut to 123 bytes.
+- The server checks every frame of the peer: it must be masked, with no reserved bit, a known opcode, a control frame whole and of at most 125 bytes, fragments in order, text as UTF-8 and a close code that a peer may send. A broken frame is answered with a close frame (1002 protocol error, 1007 invalid data, 1009 too big) and the connection ends. The server never masks its frames and accepts no extension, so nothing is compressed.
+- `HTTP.WebSocketOptions` has `max_message_bytes` (default 1 MiB, 1 to 256 MiB: a message past it, in one frame or joined from fragments, closes with 1009, and a frame that announces it is refused before its payload is read), `idle_ms` (default 0, no limit: the longest the server waits for the peer to send anything, after which the connection is dropped and the handler gets `Close` with 1006), `ping_ms` (default 0, none: the server sends a ping after that many milliseconds with nothing to write, so with `ping_ms` below `idle_ms` the pongs keep a live peer) and `close_ms` (default 5000: how long the server waits for the peer's answer to its close frame) and `protocols` (the subprotocols it speaks, in order of preference: the first one the client offered in `Sec-WebSocket-Protocol` is agreed on).
+- `request_timeout_ms` of `HttpServerOptions` bounds the handshake and each write of a frame. A WebSocket counts against `max_connections` for as long as it lives. `idle_timeout_ms` does not apply after the upgrade.
+- The server does not check `Origin`. A browser sends it with every handshake, and a handler that serves pages of its own should compare it with `HTTP.header_values(request.headers, "origin")` before it accepts, since a page of another site can open a WebSocket to it with the visitor's cookies.
+- Known limit: the mask of a frame is taken off in a loop over the bytes, at about 7 MB/s, so a message of a few MiB costs a fraction of a second of its connection's task. Keep `max_message_bytes` at what the application needs.
+
+An echo server that mixes a plain route and a WebSocket route:
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
+  case message
+    HTTP.Message.Text(text) ->
+      try ws.outgoing.send(HTTP.Message.Text("echo: #{text}"), 5000)
+      return ok(true)
+    HTTP.Message.Binary(data) ->
+      try ws.outgoing.send(HTTP.Message.Binary(data), 5000)
+      return ok(true)
+    HTTP.Message.Close(_, _) -> return ok(false)
+    _ -> return ok(true)
+  end
+end
+
+def echo(ws: HTTP.WebSocket) -> Result[Void]
+  while true
+    case ws.incoming.recv(60000)
+      ok(message) ->
+        if not try relay(ws, message)
+          return ok()
+        end
+
+      error(_) -> return ok()
+    end
+  end
+
+  return ok()
+end
+
+def home(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
+end
+
+def route(request: HttpRequest) -> Result[HTTP.Upgrade]
+  if request.path == "/echo"
+    return HTTP.accept_websocket(request, &echo)
+  end
+
+  return HTTP.upgrade_only(&home).call(request)
+end
+
+def main() -> Void
+  server = HTTP.listen_websocket("127.0.0.1", 8080, &route).unwrap!
+  HTTP.wait(server)
+end
 ```
 
 ### HTTP.wait and HTTP.close_server
