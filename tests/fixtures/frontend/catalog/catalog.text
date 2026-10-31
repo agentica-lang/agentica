@@ -861,10 +861,10 @@ builtin some forms=1
   some(value: T) -> Optional[T] shape=(Var(T)) -> Optional(Var(T)) rule=OptionalSome impl="" effects=[] desc="Construct a present Optional value."
 record FileInfo kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int
 record Header name: String, value: String
-record HttpClientOptions timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String
+record HttpClientOptions timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = ""
 record HttpRequest method: String, target: String, path: String, headers: List(Struct(Header)), body: Bytes
 record HttpResponse status: Int, headers: List(Struct(Header)), body: Bytes
-record HttpServerOptions request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int
+record HttpServerOptions request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
 record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
 record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: Bytes, deadline: Int, reply: Channel(Result(Struct(HttpResponse))), worker: Int, kept: Bool

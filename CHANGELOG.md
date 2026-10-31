@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
+  the values of `HTTP.client_options()` and `HTTP.server_options()`, so
+  `HttpClientOptions(timeout_ms: 5000)` changes one field.
+
 ## [0.19.0-beta.2] - 2026-10-31
 
 ### Added

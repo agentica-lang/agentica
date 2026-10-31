@@ -74,7 +74,7 @@ end
 def record_lines() -> List[String]
   lines: List[String] = []
   for name in RECORDS.keys.sort
-    fields = RECORDS[name].map do |field: Model.Named| "#{field.name}: #{Types.debug_text(field.type)}" end
+    fields = RECORDS[name].map do |field: Model.Named| "#{field.name}: #{shape_parameter(field)}" end
     lines = lines.push("record #{name} #{fields.join(", ")}")
   end
 

@@ -170,6 +170,18 @@ export def default_present?(value: Model.Default) -> Bool
   end
 end
 
+## The fields of each builtin record that have a default (Model.Named.default): a constructor may leave them out, as
+## the fields of a struct with a default, and the lowering fills them in (lower_data.agc, lower_struct).
+export def record_defaults() -> Map[String, Set[String]]
+  found: Map[String, Set[String]] = {}
+  for record in DATA_RECORDS
+    defaulted = record.fields.filter do |field: Model.Named| default_present?(field.default) end
+    found = found.put(record.name, Set.new(defaulted.map do |field: Model.Named| field.name end))
+  end
+
+  return found
+end
+
 ## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
 ## a single form (the other rules read the arguments by position, and a form picked by the number of arguments would
 ## be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has the

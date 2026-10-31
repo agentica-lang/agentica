@@ -83,7 +83,7 @@ Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
 Download(status: Int, headers: List[Header], bytes_written: Int)
-HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String)
+HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, ca_file: String = "")
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
@@ -138,7 +138,7 @@ HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes])
-HttpServerOptions(request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int)
+HttpServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
 ```
 
 A handler takes the whole request and returns the whole response:

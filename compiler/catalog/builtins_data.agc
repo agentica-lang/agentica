@@ -56,11 +56,11 @@ export RECORDS: List[Model.Record] = [
     Model.Record(
       name: "HttpClientOptions",
       fields: [
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "idle_timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "max_connections", type: Types.Type.Int),
-        Model.Named(name: "max_body_bytes", type: Types.Type.Int),
-        Model.Named(name: "ca_file", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+        Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+        Model.Named(name: "max_connections", type: Types.Type.Int, default: Model.Default.Whole(4)),
+        Model.Named(name: "max_body_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
+        Model.Named(name: "ca_file", type: Types.Type.String, default: Model.Default.Text("")),
       ],
     ),
     Model.Record(
@@ -84,10 +84,10 @@ export RECORDS: List[Model.Record] = [
     Model.Record(
       name: "HttpServerOptions",
       fields: [
-        Model.Named(name: "request_timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "idle_timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "max_connections", type: Types.Type.Int),
-        Model.Named(name: "max_body_bytes", type: Types.Type.Int),
+        Model.Named(name: "request_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+        Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+        Model.Named(name: "max_connections", type: Types.Type.Int, default: Model.Default.Whole(128)),
+        Model.Named(name: "max_body_bytes", type: Types.Type.Int, default: Model.Default.Whole(1048576)),
       ],
     ),
     Model.Record(

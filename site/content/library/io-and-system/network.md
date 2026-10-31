@@ -150,7 +150,7 @@ HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 ```
 
-A client reuses open connections for the same scheme, host and port. `client_options()` gives the defaults; build `HttpClientOptions` to change them.
+A client reuses open connections for the same scheme, host and port. Every field of `HttpClientOptions` has the default below, so `HttpClientOptions(timeout_ms: 5000)` changes one and keeps the others; `client_options()` gives them all.
 
 | Option | Default | Limit |
 |---|---|---|
@@ -167,10 +167,7 @@ A client reuses open connections for the same scheme, host and port. `client_opt
 import HTTP from "std/http"
 
 def main() -> Void
-  defaults = HTTP.client_options()
-  options = HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: defaults.idle_timeout_ms,
-    max_connections: 2, max_body_bytes: defaults.max_body_bytes, ca_file: "")
-  client = HTTP.client(options).unwrap!
+  client = HTTP.client(HttpClientOptions(timeout_ms: 5000, max_connections: 2)).unwrap!
   HTTP.close_client(client)
 end
 ```
@@ -331,7 +328,7 @@ Handler errors:
 - A response that cannot be sent gets the same 500 and close, with `http: invalid response: <reason>` on stderr: status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304.
 - A runtime error in a handler ends only its connection. The program goes on but exits with code 1 at the end, as for any unawaited task crash.
 
-`server_options()` gives the defaults; the same checks as the client options apply.
+Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(max_connections: 16)` changes one; `server_options()` gives them all. The same checks as the client options apply.
 
 | Option | Default | Bounds |
 |---|---|---|
@@ -449,7 +446,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 5000, max_connections: 64, max_body_bytes: 65536)
+  options = HttpServerOptions(request_timeout_ms: 10000, max_connections: 64, max_body_bytes: 65536)
   server = HTTP.listen("0.0.0.0", 8080, &handle, options).unwrap!
   puts("listening on #{HTTP.local_port(server)}")
   IO.flush()

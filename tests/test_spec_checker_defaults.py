@@ -239,6 +239,11 @@ SINGLE_FILE = [
      'struct S\n  a: Int = 1 + 1\nend\n\n' + main_with("  puts(1)\n"), "CHECK-DEFAULT-VALUE", "1 + 1"),
     ("with changes a field and leaves the others, defaults included",
      POINT + main_with("  puts(Point(y: 1).with(x: 5).inspect)\n"), None, None),
+    ("a builtin record with catalog defaults may leave every field out",
+     main_with("  c = HttpClientOptions()\n  s = HttpServerOptions(max_connections: 1)\n  puts(c.timeout_ms)\n"),
+     None, None),
+    ("a field of a builtin record without a catalog default must still be given",
+     main_with('  h = Header(name: "a")\n  puts(h.name)\n'), "CHECK-MISSING-FIELD", 'Header(name: "a")'),
 ]
 
 # Several files: (title, files, code, file of the diagnostic, text the range covers).
