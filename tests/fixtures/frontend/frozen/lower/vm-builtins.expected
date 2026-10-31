@@ -319,6 +319,7 @@ TCP.read_line
 TCP.recv_bytes.bytes
 TCP.send
 TCP.send_bytes.bytes
+TLS.alpn
 TLS.client_context
 TLS.connect
 TLS.listen

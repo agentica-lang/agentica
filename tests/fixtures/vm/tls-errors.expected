@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 255,
+  "steps": 267,
   "stdout": [
     "error(\"network: timeout must be positive milliseconds\")",
     "error(\"network: path cannot contain NUL\")",

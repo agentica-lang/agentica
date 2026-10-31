@@ -119,7 +119,10 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   through a forward proxy in absolute form (pooled by the proxy; also
   `get_response`, `open`, `upload`, `download`, `start`); `https://` with a
   proxy is an `error` (no `CONNECT` yet), a proxy that cannot be reached is an
-  `error` that names it, and there is no proxy auth or environment reading.
+  `error` that names it. User info (`http://user:pass@host:8080`, percent-
+  decoded, no colon in the user) is sent as `Proxy-Authorization: Basic` to the
+  proxy only, and a `407` is an `error` that names the proxy and never the
+  credentials. The environment is not read.
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head

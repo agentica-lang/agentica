@@ -13,6 +13,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
   requests through a forward proxy in absolute form (`https://` with a proxy is
   an error until `CONNECT`).
+- A proxy URL with user info logs in with `Proxy-Authorization: Basic` (proxy
+  only); a `407` is an error that names the proxy, not the credentials.
 - `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
   its PEM files, for `TLS.listen(host, port, context)` and
   `HttpClientOptions(tls: some(context))`, which many clients can share.
