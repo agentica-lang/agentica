@@ -221,7 +221,7 @@ end
 
 A parameter can end with `= value`. A call may leave it out.
 
-- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]` or `{}`.
+- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. A struct built with no arguments, `options: Options = Options()`, is a default too when every field of `Options` has one. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]`, `{}` or struct.
 - Parameters with a default go last (`CHECK-DEFAULT-ORDER`). The exception is a last `Fn` parameter, which a block fills.
 - Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 
@@ -319,7 +319,7 @@ ana
 banana
 ```
 
-In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`.
+In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`. A parameter whose type has `T` takes a default as any other, such as `rest: List[T] = []` or `extra: Optional[T] = none`; a call must still show `T` through another argument or its expected type.
 
 ```agentica {expect="CHECK-ENUM-TYPE-INFERENCE"}
 def empty_of[T]() -> List[T]

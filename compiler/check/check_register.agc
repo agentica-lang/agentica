@@ -496,7 +496,6 @@ def register_function(
 
     seen = seen.add(param.name)
     type = try Types.resolve_type(here, st, param.type, false)
-    try check_generic_default(cx, st, param, type)
     params = params.push(type)
   end
 
@@ -540,30 +539,6 @@ def check_hidden_types(
     end
 
     index += 1
-  end
-
-  return ok(true)
-end
-
-# CHECK-DEFAULT-VALUE at the default of a parameter whose type has a type parameter in it: the call could not give the
-# default a type.
-def check_generic_default(cx: State.Cx, st: State.St, param: Ast.Param, type: T.Type) -> Result[Bool]
-  case param.default
-    some(value) ->
-      if Types.has_variables?(type)
-        return error(
-          State.fail_help(
-            cx,
-            st,
-            "CHECK-DEFAULT-VALUE",
-            "a parameter whose type has a type parameter cannot have a default value",
-            Ast.expr_span(value),
-            "make the parameter required",
-          ),
-        )
-      end
-
-    none -> return ok(true)
   end
 
   return ok(true)

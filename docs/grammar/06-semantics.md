@@ -246,11 +246,14 @@ default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
 allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
 `none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for
-a builtin enum, or `Models.Level.Info` through an import alias). Anything else
-(a call such as `some(1)`, a name, `&name`, a struct, a variant with a payload,
-a non-empty list or map, an interpolated string, an operation) is
-`CHECK-DEFAULT-VALUE`, located at the expression, with a help that says to make
-the parameter required. A default cannot read another parameter or a module
+a builtin enum, or `Models.Level.Info` through an import alias). A parameter
+may also default to a struct built with no arguments, `options: Options =
+Options()`: each field takes its own default, and a field without one is
+`CHECK-MISSING-FIELD` at the default. Anything else (a call such as `some(1)`,
+a name, `&name`, a struct with arguments, a variant with a payload, a non-empty
+list or map, an interpolated string, an operation) is `CHECK-DEFAULT-VALUE`,
+located at the expression, with a help that says to make the parameter
+required. A default cannot read another parameter or a module
 constant.
 
 The type of a default is checked against the type of its parameter like an
@@ -383,7 +386,9 @@ a name that is not a field is `CHECK-UNKNOWN-FIELD`. A field that is given twice
 is `CHECK-DUPLICATE-FIELD`.
 
 A field default follows the rules of a parameter default (see "Default
-parameter values"): it is a constant of the same forms, anything else is
+parameter values"): it is a constant of the same forms, except a struct built
+with no arguments (`CHECK-DEFAULT-VALUE`: its own defaults could build the
+struct again at each construction, without end), anything else is
 `CHECK-DEFAULT-VALUE` at the expression, and its type is checked against the
 field type (`[]` and `{}` take the field type, a mismatch is
 `CHECK-TYPE-MISMATCH`). There is no order rule: a constructor names its fields,
@@ -525,7 +530,10 @@ parameter, as are a repeated name and a reserved one (`Int`, `List`). `def f[]`
 is `PARSE-UNEXPECTED-TOKEN`. `main` with type parameters is `CHECK-MAIN`. A type
 parameter that no parameter type and no result type mentions cannot be inferred:
 `CHECK-ENUM-TYPE-INFERENCE` at its name. A parameter whose type mentions a type
-parameter cannot have a default (`CHECK-DEFAULT-VALUE` at the default).
+parameter takes a default as any other: `none`, `[]` and `{}` fit `Optional[T]`,
+`List[T]` and `Map[String, T]`, and `x: T = 1` is `CHECK-TYPE-MISMATCH` at the
+default. A call that leaves out every argument that shows a type parameter
+cannot infer it (`CHECK-ENUM-TYPE-INFERENCE` at the call).
 
 ```ruby
 def first_or[T](xs: List[T], fallback: T) -> T

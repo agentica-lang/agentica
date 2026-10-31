@@ -87,6 +87,15 @@ SINGLE_FILE = [
     ("a default is a constant: a struct",
      'struct Point\n  x: Int\nend\n\ndef f(p: Point = Point(x: 1)) -> Int\n  return 1\nend\n\n'
      + main_with("  puts(f())\n"), "CHECK-DEFAULT-VALUE", "Point(x: 1)"),
+    ("a struct built with no arguments is a parameter default: its fields take their defaults",
+     'struct Opts\n  n: Int = 1\nend\n\ndef f(o: Opts = Opts()) -> Int\n  return o.n\nend\n\n'
+     + main_with("  puts(f())\n"), None, None),
+    ("a struct built with no arguments needs a default on every field",
+     'struct Need\n  n: Int\nend\n\ndef f(o: Need = Need()) -> Int\n  return o.n\nend\n\n'
+     + main_with("  puts(f())\n"), "CHECK-MISSING-FIELD", "Need()"),
+    ("a field default is not a struct, which could build its own struct again",
+     'struct Opts\n  n: Int = 1\nend\n\nstruct Outer\n  o: Opts = Opts()\nend\n\n'
+     + main_with("  puts(Outer().o.n)\n"), "CHECK-DEFAULT-VALUE", "Opts()"),
     ("a default is a constant: a variant with a payload",
      'enum Shape\n  Dot\n  Circle(Int)\nend\n\ndef f(s: Shape = Shape.Circle(1)) -> Int\n  return 1\nend\n\n'
      + main_with("  puts(f())\n"), "CHECK-DEFAULT-VALUE", "Shape.Circle(1)"),

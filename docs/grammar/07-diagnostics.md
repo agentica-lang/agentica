@@ -253,10 +253,6 @@ is a rule:
   (`CHECK-REDEFINED-NAME`)
   - **Help:** rename the type parameter
 
-- **Written:** a default on a parameter whose type has a type parameter, such as
-  `xs: List[T] = []` (`CHECK-DEFAULT-VALUE`)
-  - **Help:** make the parameter required
-
 - **Written:** a parameter without a default after one with a default, such as
   `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)
   - **Help:** give `b` a default, or move the parameters with a default to the
@@ -265,8 +261,8 @@ is a rule:
 - **Written:** a default that is not a constant, such as `b: Int = make()`, `b:
   Int = a`, `b: Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`)
   - **Help:** a default is a literal, `true`, `false`, `nil`, `none`, `[]`,
-    `{}` or an enum variant without a payload; make the parameter required and
-    pass the value at the call
+    `{}`, an enum variant without a payload or, for a parameter, a struct with
+    no arguments; make the parameter required and pass the value at the call
 
 - **Written:** `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)`
   (`CHECK-ARITY`)

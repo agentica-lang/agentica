@@ -9,6 +9,9 @@ import Ast from "../syntax/ast"
 import Types from "../syntax/types"
 import State from "check_state"
 
+# The default that only a parameter takes (check_value).
+EMPTY_STRUCT = "a struct with no arguments"
+
 ## CHECK-DEFAULT-ORDER at the first parameter without a default that follows a parameter with one, unless it is the
 ## last and an Fn (the block of a call goes to it), and CHECK-DEFAULT-VALUE at the first default that is not a
 ## constant. Parameters are read in order, so the first problem found is the leftmost.
@@ -19,7 +22,7 @@ export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) 
     param = node.params[index]
     case param.default
       some(value) ->
-        try check_value(cx, st, value, "make the parameter required")
+        try check_value(cx, st, value, true, "make the parameter required")
         seen = true
       none ->
         if seen and !(index == node.params.size - 1 and param.type.name == "Fn")
@@ -60,7 +63,7 @@ end
 ## CHECK-DEFAULT-VALUE at the first field default that is not a constant.
 export def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
   case field.default
-    some(value) -> return check_value(cx, st, value, "remove the default")
+    some(value) -> return check_value(cx, st, value, false, "remove the default")
     none -> return ok(true)
   end
 end
@@ -96,9 +99,16 @@ def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
   )
 end
 
-def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, remedy: String) -> Result[Bool]
-  if constant?(value)
+# param allows a struct built with no arguments: a field default that builds a struct could build its own struct again
+# at each construction, without end.
+def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy: String) -> Result[Bool]
+  if constant?(value) or (param and empty_construct?(value))
     return ok(true)
+  end
+
+  what = "write a literal, true, false, nil, none, [], {} or an enum variant without a payload"
+  if param
+    what = "write a literal, true, false, nil, none, [], {}, an enum variant without a payload or #{EMPTY_STRUCT}"
   end
 
   return error(
@@ -108,7 +118,7 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, remedy: String) -> 
       "CHECK-DEFAULT-VALUE",
       "a default value must be a constant",
       Ast.expr_span(value),
-      "write a literal, true, false, nil, none, [], {} or an enum variant without a payload, or #{remedy}",
+      "#{what}, or #{remedy}",
     ),
   )
 end
@@ -123,6 +133,15 @@ def constant?(value: Ast.Expr) -> Bool
     Ast.Expr.MapLit(node) -> return node.entries.size == 0
     Ast.Expr.EnumConstructor(node) -> return node.args.size == 0 and node.named.size == 0
     Ast.Expr.Call(node) -> return node.name == "none" and !node.parenthesized and node.args.size == 0
+    _ -> return false
+  end
+end
+
+# A struct built with no arguments, whose fields all take their defaults (the type check refuses one with a field that
+# has none).
+def empty_construct?(value: Ast.Expr) -> Bool
+  case value
+    Ast.Expr.Construct(node) -> return node.args.size == 0
     _ -> return false
   end
 end

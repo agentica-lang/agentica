@@ -153,8 +153,9 @@ end
 - A struct field may have a default: `retries: Int = 3`. A constructor may
   leave it out (`Options(name: "a")`); a field without one must be given
   (`CHECK-MISSING-FIELD`). The default follows the rules of a parameter default
-  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
-  is built again at each construction. `.with(...)` and `JSON.decode` are not
+  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), except a struct built
+  with no arguments (`C()`), with no order rule, and is built again at each
+  construction. `.with(...)` and `JSON.decode` are not
   affected: a decode still needs every key.
 - A generic struct, `struct Box[T]`, is written with all its arguments in a type
   (`Box[Int]`, `M.Box[Int]`); a bare `Box` or a wrong count is
@@ -182,7 +183,8 @@ end
   printing, fields or methods (`CHECK-TYPE-MISMATCH`, `CHECK-UNKNOWN-METHOD`),
   and it is no `Map` key or `Set` element; take an `Fn` parameter for
   behaviour. A parameter name may not be the name of a struct, enum or alias of
-  the file, and a parameter whose type has a type parameter has no default.
+  the file. A parameter whose type has a type parameter takes `none`, `[]` or
+  `{}` as its default (`x: T = 1` is `CHECK-TYPE-MISMATCH`).
   `&first_or` needs the expected `Fn` type (`f: Fn[List[Int], Int, Int] =
   &first_or`); `xs.filter(&name)` has it, `xs.map(&name)` does not.
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the
@@ -196,9 +198,12 @@ end
   The default is a constant: an Int, Float or String literal (a minus before a
   number is fine; `#{...}` is not), `true`, `false`, `nil`, `none`, `[]`, `{}`
   (built again at each call, typed by the parameter) or a payload-less enum
-  variant (`Level.Info`, or `Models.Level.Info` from another module). Anything
-  else (`some(1)` too) is `CHECK-DEFAULT-VALUE`; a wrong type is
-  `CHECK-TYPE-MISMATCH` at the default.
+  variant (`Level.Info`, or `Models.Level.Info` from another module). A
+  parameter, not a field, may also default to a struct built with no arguments
+  (`options: Options = Options()`), whose fields all need defaults
+  (`CHECK-MISSING-FIELD` at the default). Anything else (`some(1)` too) is
+  `CHECK-DEFAULT-VALUE`; a wrong type is `CHECK-TYPE-MISMATCH` at the
+  default.
 - After a defaulted parameter every parameter needs a default
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` parameter, which a block or the
   last argument always fills: with `def each_line(path: String, timeout_ms: Int

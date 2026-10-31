@@ -160,7 +160,7 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
 typedef struct native_site {
   agc_vm *vm;
   uint32_t span;
-  bool failed, refused;
+  bool failed, refused, called;
   const char *code, *message;
   agc_outcome *kept;
   struct native_site *outer;
@@ -1599,6 +1599,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     if (held != stack_held) free(held);
   }
   if (c->dying_count) free_dying(vm, c);
+  if (site.called) agc_task_clear_nested(vm->task);
   free_copies(e, in);
   if (site.failed) {
     /* The call fails as the callback did, or stops with it: what it made is freed and no value is made. */
@@ -2332,12 +2333,13 @@ static void callback_entry(void *data, const agc_c_value *args, agc_c_value *res
   agc_vm *vm = site->vm;
   agc_c_resource *res = cb->res;
   /* The run lets rt->sync go, which only the native call's own hold may be (a shared VM holds it once there). */
-  if (res->closed || (vm->rt->shared && vm->sync_depth != 1)) return;
+  if ((vm->rt->shared && vm->sync_depth != 1) || res->closed) return;
   agc_value values[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < cb->count; k++) values[k] = callback_argument(cb->params[k], &args[k]);
   agc_value got;
   agc_outcome failed;
   res->jobs++;
+  site->called = true;
   bool ran = agc_task_run_nested(vm, cb->fn, values, cb->count, site->span, &got, &failed);
   if (--res->jobs == 0 && res->closed && !res->freed) dying_add(vm->rt->ffi, res);
   if (!ran) {

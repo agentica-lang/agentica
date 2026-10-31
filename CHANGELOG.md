@@ -13,12 +13,24 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Every field of `HttpClientOptions` and `HttpServerOptions` has a default,
   the values of `HTTP.client_options()` and `HTTP.server_options()`, so
   `HttpClientOptions(timeout_ms: 5000)` changes one field.
+
+## [0.19.0-beta.2] - 2026-10-31
+
+### Added
+
+- `callback Name(params) -> result` in an extern block and
+  `Native.callback(Name, &fn)`: C calls an Agentica function back (`qsort`, a
+  SQLite collation); `Optional[Name]` parameters pass NULL for `none`.
+- A parameter may default to a struct built with no arguments, `options:
+  Options = Options()`, when every field of the struct has a default.
 - `HTTP.text(body, headers)` decodes a body as UTF-8 only: the `charset` of
   `Content-Type` must be `utf-8` or absent, and any other charset is an error
   that names it.
 
 ### Changed
 
+- A parameter whose type has a type parameter may take a default (`none`, `[]`
+  or `{}`), as a field of a generic struct does.
 - **Breaking:** the body of an `HttpResponse` is `Bytes`, for the client's
   responses and for the ones a `listen` handler returns (write `"text".bytes`,
   and `HTTP.text(r.body, r.headers)` to read text); `HttpResponse` is no longer
@@ -46,9 +58,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.StreamResponse` whose body is a `Channel[Bytes]`, sent as chunks as they
   arrive, for Server-Sent Events, tokens or files; `HTTP.whole(data)` is the
   channel of a route with one whole body.
-- `callback Name(params) -> result` in an extern block and
-  `Native.callback(Name, &fn)`: C calls an Agentica function back (`qsort`, a
-  SQLite collation); `Optional[Name]` parameters pass NULL for `none`.
 
 ## [0.18.0] - 2026-10-30
 
@@ -745,7 +754,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...HEAD
+[0.19.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...0.19.0-beta.2
 [0.19.0-beta.1]: https://github.com/agentica-lang/agentica/compare/0.18.0...0.19.0-beta.1
 [0.18.0]: https://github.com/agentica-lang/agentica/compare/0.17.0...0.18.0
 [0.17.0]: https://github.com/agentica-lang/agentica/compare/0.16.0...0.17.0

@@ -131,10 +131,11 @@ rules those comments do not carry.
   is code `r`, passed as its resource; `Optional[Name]` is code `o`, `none` for
   NULL. A fast call sets the thread's `native_site`; the closure runs the
   function with `agc_task_run_nested` (`interp.c`: the frame and register
-  arrays of its level, reused, over a barrier native frame; the outer frames
-  linked for stack traces by `agc_frame_segment`; rt->sync let go;
-  `t->callbacks` counted, which makes `agc_task_parking` fail; timers and the
-  runnext slot handed on at each turn boundary) and keeps a failure for
+  arrays of its level, reused and cleared when the native call returns
+  (`agc_task_clear_nested`), over a barrier native frame; the outer frames
+  linked for stack traces and folded profiles by `agc_frame_segment`; rt->sync
+  let go; `t->callbacks` counted, which makes `agc_task_parking` fail; timers
+  and the runnext slot handed on at each turn boundary) and keeps a failure for
   `agc_raise` once C has returned. A free function gets a refusing site. The
   nested run is `cold`, so `plain_turn` keeps its place (`make layout-check`).
 - A signature that starts with `compute ` runs on the compute pool
