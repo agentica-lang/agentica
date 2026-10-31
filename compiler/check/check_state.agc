@@ -74,7 +74,10 @@ end
 ## texts the source of every file by name. expression checks an expression: the cycle between expressions and
 ## statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one
 ## that imports it. prelude is true while the files of the compiler prelude are checked (check_prelude.agc): their type
-## variables are opaque types, and a Map key or Set element may be one.
+## variables are opaque types, and a Map key or Set element may be one. json_needs holds, by linked name, what each
+## generic function needs of its type arguments for the JSON.encode and JSON.from calls of its body and of the generic
+## functions it calls (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional,
+## JsonField or Map key of one, that must be encodable once the variables are bound.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -93,6 +96,15 @@ export struct Cx
   texts: Map[String, String]
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
   prelude: Bool
+  json_needs: Map[String, List[Types.Type]]
+end
+
+## What the body of a generic function does with JSON that its callers must know: Need is a JSON.encode or JSON.from
+## of a value whose type has type variables, with what it needs (CheckTypes.encode_needs); Pass is a call or a
+## reference of a generic function, with the type arguments it binds, which may hold the variables of the body.
+export enum JsonUse
+  Need(Types.Type)
+  Pass(String, Map[String, Types.Type])
 end
 
 ## What changes while a function is checked: the type of each node in a list indexed by id (set once the run starts,
@@ -106,7 +118,8 @@ end
 ## try-step for them). bound holds what each name binding introduced, by the id of its node (see record_bound); it is
 ## for the queries (`agentica type-at`), and the lowering never reads it. probe is true while a block is checked only
 ## to learn its result type (Stmt.check_block_in): an error(...) with no expected type then has the type
-## Result[Unknown] and does not fix the result of the block, and nothing checked in that run is kept.
+## Result[Unknown] and does not fix the result of the block, and nothing checked in that run is kept. json_uses holds
+## the JsonUse of the body in order; only the run that computes Cx.json_needs reads it.
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -123,6 +136,7 @@ export struct St
   step_tries: Set[Int]
   bound: Map[Int, List[Types.Type]]
   probe: Bool
+  json_uses: List[JsonUse]
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -182,7 +196,13 @@ export def fresh() -> St
     step_tries: no_tries,
     bound: {},
     probe: false,
+    json_uses: [],
   )
+end
+
+## The state with one more JsonUse of the body.
+export def use_json(st: St, use: JsonUse) -> St
+  return st.with(json_uses: st.json_uses.push(use))
 end
 
 ## The failure of a diagnostic with a help text.

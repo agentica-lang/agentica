@@ -15,6 +15,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.client`, `HTTP.listen` (and its TLS and stream forms), `HTTP.download`
   and `Archive.extract_tar` / `extract_zip` take their options last with a
   default, so `HTTP.client()` and `HTTP.listen(host, port, &handle)` work.
+- `JSON.encode` and `JSON.from` work on a value of a type parameter inside a
+  generic function; each call checks that the type it binds is encodable
+  (`CHECK-NOT-ENCODABLE` at that argument).
 
 ### Changed
 

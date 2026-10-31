@@ -128,6 +128,70 @@ export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool
   return encode_walk(cx, type, {}).passes
 end
 
+## What a type with type variables needs to be encodable once they are bound, or none when no binding makes it
+## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JsonField of one (its
+## item must not be a null), or a Map with one as key and String as value (the key must be a String). A variable
+## stands for String while the rest of the type is walked: String fits every place of an encodable type.
+export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[ResolvedType]]
+  strings: Map[String, ResolvedType] = {}
+  for name in variable_names(type)
+    strings = strings.put(name, Types.Type.String)
+  end
+
+  if !encodable?(cx, substitute(type, strings))
+    return none
+  end
+
+  return some(variable_needs(type, []))
+end
+
+## CHECK-NOT-ENCODABLE when the type arguments that a call or a reference of the generic function callee binds (found)
+## do not meet what callee needs (Cx.json_needs). The span is the one of the first argument whose parameter type
+## (templates, beside spans) has a variable of the failed need, else span. In a generic body the call is recorded
+## (State.JsonUse.Pass), so the body's own needs include the callee's.
+export def check_json_needs(
+  cx: State.Cx,
+  st: State.St,
+  callee: String,
+  found: Map[String, ResolvedType],
+  templates: List[ResolvedType],
+  spans: List[Source.Span],
+  span: Source.Span,
+) -> Result[State.St]
+  current = st
+  if cx.type_params.size > 0
+    current = State.use_json(current, State.JsonUse.Pass(callee, found))
+  end
+
+  for need in cx.json_needs.get(callee).unwrap_or([])
+    bound = substitute(need, found)
+    if encode_needs(cx, bound).none?
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-NOT-ENCODABLE",
+          "cannot JSON.encode #{Types.to_text(bound)} or its nested types",
+          binding_span(need, templates, spans, span),
+          "#{Types.display_name(callee)} gives this value to JSON.encode or JSON.from",
+        ),
+      )
+    end
+  end
+
+  return ok(current)
+end
+
+## found with the need, unless it holds the same type already.
+export def add_need(found: List[ResolvedType], need: ResolvedType) -> List[ResolvedType]
+  text = Types.to_text(need)
+  if found.any? do |known: ResolvedType| Types.to_text(known) == text end
+    return found
+  end
+
+  return found.push(need)
+end
+
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
 ## structs of those, and JsonField and Optional of a decodable type (Nil is not one; nor is an Optional, for a
 ## JsonField). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
@@ -1298,4 +1362,46 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Enum(name, args) -> return args
     _ -> return []
   end
+end
+
+# The span of the first argument whose parameter type has a variable of the need, else span.
+def binding_span(
+  need: ResolvedType, templates: List[ResolvedType], spans: List[Source.Span], span: Source.Span
+) -> Source.Span
+  names = Set.new(variable_names(need))
+  index = 0
+  while index < templates.size and index < spans.size
+    if variable_names(templates[index]).any? do |name: String| names.include?(name) end
+      return spans[index]
+    end
+
+    index += 1
+  end
+
+  return span
+end
+
+# The needs of encode_needs, added to found once each.
+def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[ResolvedType]
+  if Types.is?(type, "Var")
+    return add_need(found, type)
+  elsif Types.is?(type, "Optional") or json_field?(type)
+    if Types.is?(json_item(type), "Var")
+      return add_need(found, type)
+    end
+
+    return variable_needs(json_item(type), found)
+  elsif Types.is?(type, "List")
+    return variable_needs(Types.item(type), found)
+  elsif Types.is?(type, "Map")
+    if Types.is?(Types.key(type), "Var")
+      return variable_needs(Types.value(type), add_need(found, Types.Type.Map(Types.key(type), Types.Type.String)))
+    end
+
+    return variable_needs(Types.value(type), variable_needs(Types.key(type), found))
+  elsif Types.is?(type, "Struct")
+    return Types.args(type).reduce(found) do |sum: List[ResolvedType], arg: ResolvedType| variable_needs(arg, sum) end
+  end
+
+  return found
 end
