@@ -1369,15 +1369,6 @@ static agc_value builtin_tls_listen(agc_vm *vm, agc_value *args, uint32_t span) 
   return open_listener(vm, args, span, true);
 }
 
-/* TEMPORARY (bootstrap): the file-path forms that the std/http inside bootstrap/stage0.agcb names, kept as keys so
-   that front end loads until stage0 is refreshed. */
-static agc_value builtin_tls_removed(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
-  (void)args;
-  (void)span;
-  return agc_error_value("network: TLS.connect and TLS.listen take a TlsContext");
-}
-
 static bool begin_accept(void *data, agc_io_job *job) {
   request *q = data;
   link_request(q, job);
@@ -1713,8 +1704,6 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TLS.connect", 6, builtin_tls_removed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"TLS.listen", 4, builtin_tls_removed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 3, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

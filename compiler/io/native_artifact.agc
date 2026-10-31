@@ -283,7 +283,6 @@ def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HttpClie
     idle_timeout_ms: 30000,
     max_connections: 1,
     max_body_bytes: 1048576,
-    ca_file: "",
   )
   case HTTP.client(options)
     ok(pool) -> return ok(pool)

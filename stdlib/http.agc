@@ -451,14 +451,12 @@ struct Feed
 end
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates. Every number
-## in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is
-## an error. Close the client with `close_client`.
+## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates (set
+## `tls: some(context)` to use a client context of `TLS.client_context` instead). Every number in `options` must be
+## positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. Close the
+## client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
-  if String.contains?(options.ca_file, String.from_code(0))
-    return error("http: ca_file cannot contain NUL")
-  end
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
@@ -592,8 +590,8 @@ export def download(
 end
 
 ## Opens a connection to the `origin` (`http://host` or `https://host:8443`, with no path) and returns it, as
-## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with
-## `options.ca_file` (the system's by default). Only `timeout_ms` (the time of each call: this one, each
+## Ruby's `Net::HTTP.start` does. The connection is made now, and over `https` the certificate is verified with the
+## client context `options.tls` (the system trust by default). Only `timeout_ms` (the time of each call: this one, each
 ## `send_request` and each `read_body`) and `max_body_bytes` (the largest request body) of `options` apply: nothing is
 ## pooled. The connection is for one request at a time and stays open for the next one when the response had a body
 ## that was read to its end (`read_body` gave an empty piece) and the server did not close it. A response body is at
@@ -802,13 +800,13 @@ export def listen(
   return ok(start_server(listener, Route.Whole(handler), options))
 end
 
-## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options` is
-## optional and defaults to `HttpServerOptions()`.
+## Like `listen`, but over TLS, with the certificate and key of `tls`, a server context
+## (`TLS.server_context(TlsServerOptions(cert_file: ..., key_file: ...))`). `options` is optional and defaults to
+## `HttpServerOptions()`.
 export def listen_tls(
   host: String,
   port: Int,
-  cert_file: String,
-  key_file: String,
+  tls: TlsContext,
   handler: Handler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
@@ -818,7 +816,7 @@ export def listen_tls(
     options.max_connections,
     options.max_body_bytes,
   )
-  listener = try TLS.listen(host, port, cert_file, key_file)
+  listener = try TLS.listen(host, port, tls)
   return ok(start_server(listener, Route.Whole(handler), options))
 end
 
@@ -842,13 +840,12 @@ export def listen_stream(
   return ok(start_server(listener, Route.Streaming(handler), options))
 end
 
-## Like `listen_stream`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options`
-## is optional and defaults to `HttpServerOptions()`.
+## Like `listen_stream`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
+## and defaults to `HttpServerOptions()`.
 export def listen_stream_tls(
   host: String,
   port: Int,
-  cert_file: String,
-  key_file: String,
+  tls: TlsContext,
   handler: StreamHandler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
@@ -858,7 +855,7 @@ export def listen_stream_tls(
     options.max_connections,
     options.max_body_bytes,
   )
-  listener = try TLS.listen(host, port, cert_file, key_file)
+  listener = try TLS.listen(host, port, tls)
   return ok(start_server(listener, Route.Streaming(handler), options))
 end
 
@@ -884,13 +881,12 @@ export def listen_upload(
   return ok(start_server(listener, Route.Uploading(handler), options))
 end
 
-## Like `listen_upload`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`. `options` is
-## optional and defaults to `HttpServerOptions()`.
+## Like `listen_upload`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
+## and defaults to `HttpServerOptions()`.
 export def listen_upload_tls(
   host: String,
   port: Int,
-  cert_file: String,
-  key_file: String,
+  tls: TlsContext,
   handler: UploadHandler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
@@ -900,7 +896,7 @@ export def listen_upload_tls(
     options.max_connections,
     options.max_body_bytes,
   )
-  listener = try TLS.listen(host, port, cert_file, key_file)
+  listener = try TLS.listen(host, port, tls)
   return ok(start_server(listener, Route.Uploading(handler), options))
 end
 
@@ -951,13 +947,12 @@ export def listen_websocket(
   return ok(start_server(listener, Route.Sockets(handler), options))
 end
 
-## Like `listen_websocket`, but over TLS (`wss`), with the PEM certificate in `cert_file` and the key in `key_file`.
-## `options` is optional and defaults to `HttpServerOptions()`.
+## Like `listen_websocket`, but over TLS (`wss`), with the certificate and key of `tls`, a server context. `options` is
+## optional and defaults to `HttpServerOptions()`.
 export def listen_websocket_tls(
   host: String,
   port: Int,
-  cert_file: String,
-  key_file: String,
+  tls: TlsContext,
   handler: UpgradeHandler,
   options: HttpServerOptions = HttpServerOptions(),
 ) -> Result[HttpServer]
@@ -967,7 +962,7 @@ export def listen_websocket_tls(
     options.max_connections,
     options.max_body_bytes,
   )
-  listener = try TLS.listen(host, port, cert_file, key_file)
+  listener = try TLS.listen(host, port, tls)
   return ok(start_server(listener, Route.Sockets(handler), options))
 end
 
@@ -1053,12 +1048,27 @@ def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
   )
 end
 
-# The socket of `start`: TLS with the verification of `ca_file` for `https`, TCP for `http`.
+# The socket of `start`: TLS with the context of `options.tls` for `https` (one with the system trust, built for this
+# connection, when it names none), TCP for `http`.
 def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
   if where.scheme == "https"
-    return TLS.connect(where.host, where.port, options.ca_file, options.timeout_ms)
+    case options.tls
+      some(context) -> return TLS.connect(where.host, where.port, context, options.timeout_ms)
+      none ->
+        context = try TLS.client_context(TlsClientOptions())
+        return TLS.connect(where.host, where.port, context, options.timeout_ms)
+    end
   end
   return TCP.connect(where.host, where.port, options.timeout_ms)
+end
+
+# A TLS connection of a client's pool: on the context of `options.tls`, or on the client's shared system-trust context
+# when it names none (HttpWire.connect_tls builds it once per client).
+def connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+  case HttpWire.options(client).tls
+    some(context) -> return TLS.connect(host, port, context, timeout_ms)
+    none -> return HttpWire.connect_tls(client, host, port, timeout_ms)
+  end
 end
 
 # The one value of the cell of `conn`, which the call now holds. An empty cell means another call has it.
@@ -3140,7 +3150,7 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
     return error(TIMED_OUT)
   end
   if job.scheme == "https"
-    return HttpWire.connect_tls(worker.client, job.host, job.port, left)
+    return connect_tls(worker.client, job.host, job.port, left)
   end
   return TCP.connect(job.host, job.port, left)
 end
@@ -3361,7 +3371,7 @@ def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[S
     return error(TIMED_OUT)
   end
   if where.scheme == "https"
-    return HttpWire.connect_tls(pool, where.host, where.port, left)
+    return connect_tls(pool, where.host, where.port, left)
   end
   return TCP.connect(where.host, where.port, left)
 end
