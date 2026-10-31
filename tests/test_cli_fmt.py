@@ -4,11 +4,10 @@ files, the listed paths and diagnostic codes, never message text."""
 import json
 import os
 import stat
-import sys
 
 import pytest
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 
 FORMATTED = 'def main() -> Void\n  puts("ok")\nend\n'
 UNFORMATTED = 'def main() -> Void\n    puts( "ok" )\nend\n'
@@ -61,7 +60,7 @@ def test_write_mode_rewrites_the_files_of_the_current_folder_and_skips_agc_libs(
     assert fmt("--check", cwd=tmp_path).code == 0
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits and symbolic links")
+@host_only(WINDOWS, "file modes and links")
 def test_write_mode_keeps_the_permission_bits_and_writes_through_a_symbolic_link(tmp_path):
     lay_out(tmp_path, {"tool.agc": UNFORMATTED, "frozen.agc": UNFORMATTED, "real/target.agc": UNFORMATTED})
     (tmp_path / "tool.agc").chmod(0o755)
