@@ -222,7 +222,7 @@ end
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 ```
 
-Decodes a body as text. Pass the `headers` of the same message: the body is read in the `charset` of its `Content-Type` (any case, quoted or not), and as UTF-8 when there is none. The charsets are the encodings of [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII, Latin-1 (`iso-8859-1`), ISO-8859-15 and Windows-1252, by any of their names; `us-ascii` is read as UTF-8, which contains it. A body that is not valid in its charset is an `error` result (with the byte offset, except for UTF-8), and any other charset (`shift_jis`, `koi8-r`) is an `error` that names it. Other charsets belong to the planned `agentica-lang/charset` package.
+Decodes a body as text. Pass the `headers` of the same message: the body is read in the `charset` of its `Content-Type` (any case, quoted or not), and as UTF-8 when there is none. The charsets are the encodings of [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII, Latin-1 (`iso-8859-1`), ISO-8859-15 and Windows-1252, by any of their names. A body that is not valid in its charset is an `error` result (with the byte offset, except for UTF-8), and any other charset (`shift_jis`, `koi8-r`) is an `error` that names it. Other charsets belong to the planned `agentica-lang/charset` package.
 
 ```agentica
 import HTTP from "std/http"

@@ -10,9 +10,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `HTTP.text` decodes a body in the `charset` of its `Content-Type` when
-  `bytes.decode` knows it (Latin-1, Windows-1252, UTF-16 and the others), and
-  errors only for other charsets.
 - `bytes.decode(encoding)` and `text.encode(encoding)` read and write UTF-8,
   UTF-16, UTF-32 (LE, BE, or with a byte order mark), ASCII, Latin-1,
   ISO-8859-15 and Windows-1252.
@@ -25,6 +22,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.get_response(url)` and `HTTP.post_response(url, body)` make one
   request with no client to open or close, as Ruby's `Net::HTTP.get_response`
   does. Many requests still use `HTTP.client()` with `get` and `post`.
+
+### Changed
+
+- `HTTP.text` decodes the `charset` of `Content-Type` with `bytes.decode`: a
+  Latin-1, Windows-1252 or UTF-16 body that was an error now decodes, and a
+  `us-ascii` body with a non-ASCII byte is now an error.
 
 ## [0.19.0-beta.3] - 2026-10-31
 

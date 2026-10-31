@@ -64,6 +64,14 @@ def main() -> Void
       try Test.eq(HTTP.text("ñandú".bytes).unwrap!, "ñandú")
       try Test.eq(HTTP.text("ñ".bytes, [Header(name: "content-type", value: "text/html; charset=UTF-8")]).unwrap!, "ñ")
       try Test.eq(HTTP.text(binary).message, "http: body is not valid UTF-8")
+      for spelling in ["UTF8", "Utf-8", "utf_8"]
+        typed = [Header(name: "content-type", value: "text/plain; charset=#{spelling}")]
+        try Test.eq(HTTP.text(binary, typed).message, "http: body is not valid UTF-8")
+      end
+
+      ascii = [Header(name: "content-type", value: "text/plain; charset=US-ASCII")]
+      try Test.eq(HTTP.text("abc".bytes, ascii).unwrap!, "abc")
+      try Test.eq(HTTP.text("aé".bytes, ascii).message, "http: invalid ASCII at byte 1")
       try Test.eq(HTTP.text("caf".bytes + Bytes.from_list([233]).unwrap!, latin).unwrap!, "café")
       try Test.eq(HTTP.text(Bytes.from_list([128, 32, 147, 104, 148]).unwrap!, windows).unwrap!, "€ “h”")
       undefined = Bytes.from_list([97, 129]).unwrap!
