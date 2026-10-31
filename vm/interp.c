@@ -58,9 +58,9 @@ typedef struct {
 } nested_barrier;
 
 /* The stack of one level of callbacks of a task (agc_task.nested): the frame and register arrays, which keep the size
-   the callbacks grew them to, and the barrier and its native frame, all made at the level's first callback and reused
-   by the next ones. The arrays keep the values of the last callback until the native call that ran it returns
-   (agc_task_clear_nested). */
+   the callbacks of a native call grew them to, and the barrier and its native frame, all made at the level's first
+   callback and reused by the next ones. When the native call returns, the arrays are cleared, or let go when they
+   grew (agc_task_clear_nested). */
 struct agc_nested_stack {
   agc_frame *frames;
   uint32_t frame_capacity;
@@ -2052,13 +2052,29 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   return ok;
 }
 
+/* The largest register and frame arrays that a level keeps cleared between native calls; the first sizes that
+   ensure_registers and new_frame give. */
+#define NESTED_KEPT_REGISTERS 256
+#define NESTED_KEPT_FRAMES 64
+
 /* The level that the native call used is the one at t->callbacks; a deeper one was cleared when the native call that
-   used it returned. Past MAX_NESTED_CALLBACKS no callback ran (too_deep). */
+   used it returned. Past MAX_NESTED_CALLBACKS no callback ran (too_deep). Arrays that a deep callback grew are let go
+   (the next callback makes them again), so the clear costs the same after it as before. */
 NESTED void agc_task_clear_nested(agc_task *t) {
   agc_nested_stack *ns = t->callbacks < MAX_NESTED_CALLBACKS && t->nested ? t->nested[t->callbacks] : NULL;
   if (!ns) return;
-  if (ns->regs) memset(ns->regs, 0, ns->reg_capacity * sizeof *ns->regs);
-  memset(ns->frames, 0, ns->frame_capacity * sizeof *ns->frames);
+  if (ns->reg_capacity > NESTED_KEPT_REGISTERS) {
+    ns->regs = NULL;
+    ns->reg_capacity = 0;
+  } else if (ns->regs) {
+    memset(ns->regs, 0, ns->reg_capacity * sizeof *ns->regs);
+  }
+  if (ns->frame_capacity > NESTED_KEPT_FRAMES) {
+    ns->frames = NULL;
+    ns->frame_capacity = 0;
+  } else if (ns->frames) {
+    memset(ns->frames, 0, ns->frame_capacity * sizeof *ns->frames);
+  }
   memset(&ns->barrier.value, 0, sizeof ns->barrier.value);
 }
 
