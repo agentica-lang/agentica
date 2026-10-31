@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 31615,
+  "steps": 32687,
   "stdout": [
     "HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)",
     "error(\"http: every option must be positive\")",
@@ -28,7 +28,8 @@
     "413 [] [\"0\"] [\"close\"] []",
     "error: http: body exceeds max_body_bytes",
     "200 [\"yes\"] [\"23\"] [] [GET /still /still [] []]",
-    "HTTP/1.1 400 Bad Request",
+    "POST / / [] [[255, 254]]",
+    "POST / / [] [[255, 0, 128, 254, 10]]",
     "HTTP/1.1 505 HTTP Version Not Supported",
     "ok()",
     "ok()",

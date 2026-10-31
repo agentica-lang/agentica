@@ -27,6 +27,13 @@ async function main() {
   });
   console.log("node-chunked", chunked.res.statusCode, chunked.req.chunkedEncoding, chunked.body);
 
+  // A body that is not UTF-8, in chunks (no Content-Length): the handler gets the bytes as they are.
+  const binary = await call({ method: "POST", path: "/binary", agent: false }, (req) => {
+    req.write(Buffer.from([0xff]));
+    req.end(Buffer.from([0x00, 0x80]));
+  });
+  console.log("node-binary", binary.res.statusCode, binary.req.chunkedEncoding, binary.body);
+
   let continued = false;
   const expect = await call(
     { method: "POST", path: "/expect", agent: false, headers: { Expect: "100-continue", "Content-Length": 5 } },
