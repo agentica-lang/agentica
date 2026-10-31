@@ -19,6 +19,7 @@ Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> R
 File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
+File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
@@ -99,6 +100,10 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   drive and UNC paths but refuses drive and share roots, and refuses
   alternate-data-stream syntax or a component ending in a dot or space. A
   timeout gives an error but does not stop a removal in progress.
+- `File.replace(path, data, ms)` swaps an existing regular file for at most
+  16 MiB of bytes in one rename: a reader never sees a part or no file. It keeps
+  the permission bits and writes through a symlink, which stays a link. A
+  missing file is an error; Windows refuses a read-only one.
 - `Path.rename(from, to, ms)` moves a file, a symlink (as a link) or a directory
   to a path that does not exist, atomically: an existing target, even an empty
   directory, is an error and never replaced, so racing programs get one winner.

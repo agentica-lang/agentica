@@ -1,8 +1,8 @@
 /*
  * The File, Dir and Path builtins on Unix: the argument checks, host
  * paths, and file handles with their read and write buffers, including the
- * owner-only creates, lstat, the handle lock, the removals and the no-replace
- * rename. Work runs on the libuv pool. Service layer. Design:
+ * owner-only creates, lstat, the handle lock, the removals, the no-replace
+ * rename and the one-step replace. Work runs on the libuv pool. Service layer. Design:
  * docs/vm/02-reference-behavior.md §2.8.
  */
 /* glibc declares renameat2 and RENAME_NOREPLACE only for _GNU_SOURCE. */
@@ -45,6 +45,8 @@
 #include <unistd.h>
 
 #define LIMIT ((size_t)1048576)
+/* The most bytes of one File.replace. */
+#define REPLACE_LIMIT ((size_t)16777216)
 #define FORM_WIDTH 256
 #define CHUNK ((size_t)65536)
 #define WRITE_BUFFER ((size_t)4096)
@@ -57,7 +59,7 @@ typedef enum {
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_REPLACE
 } op_kind;
 
 typedef struct {
@@ -980,6 +982,83 @@ static void work_rename(op *o) {
 #endif
 }
 
+/* File.replace: the data goes to a new file beside the real target (after every link, so a link stays a link), takes
+   the target's permission bits, and is renamed over it in one step, so a reader sees the old file or the new one,
+   never a part. Every failure removes the new file and leaves the target as it was; a failed rename names the new
+   file (path) and the target (to). The new file belongs to the caller, and a hard link of the target keeps the old
+   bytes. */
+static void work_replace(op *o) {
+  char *target = agc_fs_realpath(o->path);
+  if (!target) {
+    fail_op(o, FS_RESOLVE, errno);
+    return;
+  }
+  agc_fs_info info;
+  if (agc_fs_stat(target, &info, true) != 0) {
+    int err = errno;
+    free(target);
+    fail_op(o, FS_RESOLVE, err);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    free(target);
+    fail_op(o, FS_NOT_REGULAR, 0);
+    return;
+  }
+#ifdef _WIN32
+  /* MoveFileExW never replaces a read-only file: refuse one before anything is written. */
+  if (!(info.mode & 0200)) {
+    free(target);
+    fail_op(o, FS_OPEN, EACCES);
+    return;
+  }
+#endif
+  char *fresh = NULL;
+  int fd = agc_fs_open_beside(target, &fresh);
+  if (fd < 0) {
+    /* The error names the new file that could not be made (too long a path, a folder without write permission). */
+    int err = errno;
+    free(target);
+    if (fresh) {
+      free(o->path);
+      o->path = fresh;
+    }
+    fail_op(o, FS_OPEN, err);
+    return;
+  }
+  /* The data is written while the file is still 0600, and gets the target's bits only once it is whole; the fsync
+     before the rename keeps a power loss from leaving an empty file in the target's place. */
+  int err = 0;
+  if (!write_all(fd, o->in, o->in_len, &err)) {
+    o->status = FS_WRITE;
+  } else if (agc_fs_fchmod(fd, (int)(info.mode & 0777)) != 0 || agc_fs_fsync(fd) != 0) {
+    err = errno;
+    o->status = FS_WRITE;
+  }
+  if (agc_fs_close(fd) != 0 && o->status == FS_OK) {
+    err = errno;
+    o->status = FS_WRITE;
+  }
+  if (o->status == FS_OK) {
+    if (agc_fs_replace(fresh, target) != 0) {
+      err = errno;
+      o->status = FS_RENAME;
+    } else {
+      agc_fs_sync_folder(target);
+    }
+  }
+  o->err = err;
+  if (o->status != FS_OK) agc_fs_unlink(fresh);
+  if (o->status == FS_RENAME) {
+    free(o->path);
+    o->path = fresh;
+    o->to = target;
+  } else {
+    free(fresh);
+    free(target);
+  }
+}
+
 /* A `regular` open (File.chunks) is refused unless the descriptor itself is a regular file, decided by its fstat as in
    work_sha256, so a pipe or a device swapped in after the path stat is never read. The open is non-blocking. */
 static void work_open(op *o) {
@@ -1147,6 +1226,7 @@ static void work(void *data) {
     case OP_REMOVE: work_remove(o); break;
     case OP_TRY_LOCK: work_try_lock(o); break;
     case OP_RENAME: work_rename(o); break;
+    case OP_REPLACE: work_replace(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1621,6 +1701,25 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
   op *o = new_op(vm, OP_RENAME);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
+  return start(vm, o, agc_void(), timeout);
+}
+
+/* File.replace(path, data, timeout_ms): see work_replace. */
+static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
+  const agc_string *path = agc_as_string(vm, args[0]);
+  size_t len = 0;
+  const uint8_t *data = agc_bytes_data(vm, args[1], &len);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  if (len > REPLACE_LIMIT) return error_of("filesystem: data exceeds 16777216 bytes");
+  if (timeout <= 0) return error_of(bad_timeout);
+  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  op *o = new_op(vm, OP_REPLACE);
+  o->in = malloc(len ? len : 1);
+  if (!o->in) agc_out_of_memory();
+  if (len) memcpy(o->in, data, len);
+  o->in_len = len;
+  o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
 }
 
@@ -2271,6 +2370,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"File.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
