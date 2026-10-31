@@ -331,7 +331,7 @@ def main() -> Void
 end
 ```
 
-Inside the body, `T` can be any type, so the body can only store it, return it and pass it on. Comparing, adding, printing or reading a field of a `T` value is an error, such as `CHECK-TYPE-MISMATCH` for `==`. To act on the items, take a function, as `max_by` does with `key`.
+Inside the body, `T` can be any type, so the body can only store it, return it and pass it on. Comparing, adding, printing or reading a field of a `T` value is an error, such as `CHECK-TYPE-MISMATCH` for `==`. To act on the items, take a function, as `max_by` does with `key`. `JSON.encode` and `JSON.from` are the exception: they work on a `T` value, and each call checks that the type it gives `T` can be written as JSON ([JSON](/library/text-and-data/json/)).
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def same[T](a: T, b: T) -> Bool

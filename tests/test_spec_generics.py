@@ -49,6 +49,12 @@ EMPTY_OF = "def empty_of[T]() -> List[T]\n  return []\nend\n\n"
 ID = "def id(x: Int) -> Int\n  return x\nend\n\n"
 BOX = "struct Box[T]\n  value: T\nend\n\n"
 YES = "def yes[T](x: T) -> Bool\n  return true\nend\n\n"
+ENCODES = (
+    BOX
+    + "def show[T](value: T) -> String\n  return JSON.encode(value)\nend\n\n"
+    "def wrap[T](value: T) -> String\n  return show(Box(value: value))\nend\n\n"
+    "def maybe[T](value: Optional[T]) -> String\n  return JSON.encode(value)\nend\n\n"
+)
 
 
 def main(*lines: str) -> str:
@@ -211,7 +217,27 @@ RULES = {
     "a variant arm on T": (
         body("case x", "  Maybe.None -> puts(1)", "  _ -> puts(2)", "end", header="enum Maybe\n  None\nend\n\n"),
         "CHECK-PATTERN-TYPE", "Maybe.None"),
-    "JSON.encode of T": (body("z = JSON.encode(x)"), "CHECK-NOT-ENCODABLE", "x"),
+    # JSON.encode and JSON.from on a type with T are checked where a call binds T: the argument that binds it is the
+    # span, and a generic caller passes the need on to its own callers.
+    "JSON.encode of T": (body("z = JSON.encode(x)"), None, None),
+    "JSON.from of a list of T and JSON.encode of a map of T": (
+        elements("a = JSON.from(xs)", "b = JSON.encode(m)"), None, None),
+    "JSON.encode of a Task of T": (body("t = Task.spawn do x end", "z = JSON.encode(t)"), "CHECK-NOT-ENCODABLE", "t"),
+    "calls that bind encodable types": (
+        ENCODES + ID + main("puts(show(1))", "puts(wrap([1]))", "puts(maybe(some(1)))", "g: Fn[Int, String] = &show",
+                            "puts(g.call(2))"), None, None),
+    "a call that binds an Fn": (ENCODES + ID + main("puts(show(&id))"), "CHECK-NOT-ENCODABLE", "&id"),
+    "a call that binds Bytes": (ENCODES + main('puts(show("a".bytes))'), "CHECK-NOT-ENCODABLE", '"a".bytes'),
+    "a call that binds a Task": (
+        ENCODES + main("puts(show(Task.spawn do 1 end))"), "CHECK-NOT-ENCODABLE", "Task.spawn do 1 end"),
+    "a generic caller passes the need on": (
+        ENCODES + main('puts(wrap("a".bytes))'), "CHECK-NOT-ENCODABLE", '"a".bytes'),
+    "a callee declared after its generic caller": (
+        "def outer[T](value: T) -> String\n  return inner([value])\nend\n\n"
+        "def inner[U](values: List[U]) -> String\n  return JSON.encode(values)\nend\n\n"
+        + main('puts(outer("a".bytes))'), "CHECK-NOT-ENCODABLE", '"a".bytes'),
+    "a reference that binds Bytes": (
+        ENCODES + main("g: Fn[Bytes, String] = &show"), "CHECK-NOT-ENCODABLE", "&show"),
     "JSON.decode to T": (body('z = JSON.decode("{}", T)'), "CHECK-NOT-DECODABLE", "T"),
     "T as a Map key": (
         "def f[T](m: Map[T, Int]) -> Int\n  return 0\nend\n\n" + main("puts(1)"), "CHECK-MAP-KEY-TYPE", "T"),

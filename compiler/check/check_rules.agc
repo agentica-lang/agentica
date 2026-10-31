@@ -439,11 +439,25 @@ def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
   return "JSON has no byte type; use a String field and decode it with Base64.strict_decode64(text)"
 end
 
-# JSON.encode and JSON.from: any value that can be written as JSON.
+# JSON.encode and JSON.from: any value that can be written as JSON. In a generic body a type with type variables is
+# allowed when some binding makes it encodable: what it needs of the variables is recorded for the callers
+# (State.JsonUse.Need), which check it where they bind them (CheckTypes.check_json_needs).
 def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try json_field_place(cx, out.st, out.type, "encode argument", Ast.expr_span(site.args[0]))
-  if !CheckTypes.encodable?(cx, out.type)
+  needs: Optional[List[T.Type]] = none
+  if !cx.prelude and CheckTypes.has_variables?(out.type)
+    needs = CheckTypes.encode_needs(cx, out.type)
+  end
+
+  if needs.some?
+    current = out.st
+    for need in needs.unwrap!
+      current = State.use_json(current, State.JsonUse.Need(need))
+    end
+
+    out = out.with(st: current)
+  elsif !CheckTypes.encodable?(cx, out.type)
     return error(
       State.fail_maybe(
         cx,
