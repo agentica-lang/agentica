@@ -31,6 +31,26 @@ end
 ok()
 ```
 
+## File.replace
+
+```text
+File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
+```
+
+Replaces an existing regular file with at most 16 MiB of bytes in one step, so a reader sees the old file or the new one, never a part or no file. Use it to save a file that people edit, as `agentica fmt` does.
+
+```agentica {mode="check"}
+def main() -> Void
+  r = File.replace("notes.txt", "second draft\n".bytes, 1000)
+  puts(r)
+end
+```
+
+- The bytes go to a new file beside the file, which takes its permission bits and is then renamed over it. A failure removes the new file and leaves the old one as it was.
+- A symbolic link is followed and stays a link: the file it points to is replaced. The new file belongs to the user who runs the program, and a hard link to the old file keeps the old bytes.
+- The file must exist and be a regular file: a missing path is `error("filesystem: cannot resolve path ...")`, a directory or a FIFO `error("filesystem: path does not refer to a regular file")`. Use `File.write_text` to create a file.
+- On Windows a read-only file is an error, and nothing is written.
+
 ## File.append_text
 
 ```text

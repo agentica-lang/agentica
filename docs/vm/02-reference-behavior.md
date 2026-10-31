@@ -364,6 +364,14 @@ Every failure is an error value. The checks run in this order:
   a link. The error is `filesystem: cannot rename path`. Without
   `RENAME_NOREPLACE` the call answers `EINVAL`, which is reported; there is no
   check-first fallback, since that would race.
+- `File.replace(path, data, timeout_ms)` is one pool job. `uv_fs_realpath`
+  finds the target, which must be a regular file, so a link stays a link. The
+  data goes to a new file beside the target, `TARGET.new-PID-N` (exclusive, no
+  link followed), which gets the target's mode `& 0777` by `fchmod` and is
+  renamed over the target with `uv_fs_rename` (`rename`; `MoveFileExW` with
+  `MOVEFILE_REPLACE_EXISTING` on Windows, which refuses a read-only target
+  before anything is written). A reader sees the old file or the new one, never
+  neither. A failure removes the new file. At most 16 MiB of data.
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

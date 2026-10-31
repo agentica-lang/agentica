@@ -59,6 +59,7 @@ File.open
 File.read_bytes.bytes
 File.read_line
 File.read_text
+File.replace
 File.sha256.bytes
 File.stat
 File.try_lock

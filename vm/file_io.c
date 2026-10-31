@@ -11,6 +11,8 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -157,6 +159,50 @@ int agc_fs_unlink(const char *path) {
   }
   uv_fs_t req;
   int result = uv_fs_unlink(NULL, &req, path, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
+int agc_fs_open_beside(const char *path, char **name) {
+  static atomic_uint counter;
+  *name = NULL;
+  if (!path || !*path) {
+    errno = EINVAL;
+    return -1;
+  }
+  size_t cap = strlen(path) + 48;
+  char *candidate = malloc(cap);
+  if (!candidate) {
+    errno = ENOMEM;
+    return -1;
+  }
+  /* Another writer may hold a name of this pid's sequence only after a pid reuse; a few tries step past it. */
+  for (int attempt = 0; attempt < 16; attempt++) {
+    snprintf(candidate, cap, "%s.new-%lu-%u", path, (unsigned long)uv_os_getpid(),
+             atomic_fetch_add(&counter, 1));
+    int fd = agc_fs_open(candidate, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE);
+    if (fd >= 0) {
+      *name = candidate;
+      return fd;
+    }
+    if (errno != EEXIST) break;
+  }
+  int err = errno;
+  free(candidate);
+  errno = err;
+  return -1;
+}
+
+int agc_fs_fchmod(int fd, int mode) {
+  uv_fs_t req;
+  int result = uv_fs_fchmod(NULL, &req, fd, mode, NULL);
+  uv_fs_req_cleanup(&req);
+  return os_result(result);
+}
+
+int agc_fs_replace(const char *from, const char *to) {
+  uv_fs_t req;
+  int result = uv_fs_rename(NULL, &req, from, to, NULL);
   uv_fs_req_cleanup(&req);
   return os_result(result);
 }

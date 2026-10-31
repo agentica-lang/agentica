@@ -919,3 +919,69 @@ end
 
 """ % literal(path))
     assert path.read_text() == "cleanup"
+
+
+REPLACE_PROGRAM = """def fill(letter: String) -> Bytes
+  text = letter
+  n = 0
+  while n < 16
+    text = text + text
+    n += 1
+  end
+
+  return text.bytes
+end
+
+def main() -> Void
+  args = System.args()
+  IO.inspect(File.replace(args[0], "new".bytes))
+  IO.inspect(File.replace(args[1], "still read-only".bytes))
+  IO.inspect(File.replace(args[2], "x".bytes).ok?)
+  IO.inspect(File.replace(args[3], "x".bytes).ok?)
+  payloads = [fill("a"), fill("b"), fill("c"), fill("d")]
+  i = 0
+  while i < 200
+    File.replace(args[4], payloads[i % 4]).unwrap!
+    i += 1
+  end
+end
+"""
+
+
+@host_only(WINDOWS, "POSIX permission bits and symbolic links; Windows keeps only the read-only bit")
+def test_file_replace_keeps_the_mode_writes_through_a_link_and_a_reader_never_sees_a_part_or_no_file(new_dir,
+                                                                                                    run_program):
+    root = new_dir()
+    target, alias, locked, watched = root / "target.txt", root / "alias.txt", root / "locked.txt", root / "watched.txt"
+    target.write_text("old")
+    target.chmod(0o751)
+    os.symlink("target.txt", alias)
+    locked.write_text("read-only")
+    locked.chmod(0o444)
+    watched.write_bytes(b"z" * 65536)
+    stop, seen = threading.Event(), []
+
+    def read_while_replaced():
+        # Every open must find the file whole: one letter, 64 KiB. A missing file or a short read is a broken swap.
+        while not stop.is_set():
+            try:
+                data = watched.read_bytes()
+            except FileNotFoundError:
+                seen.append("missing")
+                continue
+            if len(data) != 65536 or len(set(data)) != 1:
+                seen.append("part of %d bytes" % len(data))
+
+    reader = threading.Thread(target=read_while_replaced)
+    reader.start()
+    try:
+        output = run_program(REPLACE_PROGRAM, args=[alias, locked, root / "missing.txt", root, watched])
+    finally:
+        stop.set()
+        reader.join()
+    assert output == "ok()\nok()\nfalse\nfalse\n"
+    assert seen == []
+    assert os.readlink(alias) == "target.txt" and target.read_text() == "new"
+    assert (target.stat().st_mode & 0o777, locked.stat().st_mode & 0o777) == (0o751, 0o444)
+    assert locked.read_text() == "still read-only"
+    assert sorted(path.name for path in root.iterdir()) == ["alias.txt", "locked.txt", "target.txt", "watched.txt"]
