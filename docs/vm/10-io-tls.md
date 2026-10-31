@@ -15,40 +15,38 @@ reads no `openssl.cnf`, so both builds behave the same.
   result other than untrusted, expired or hostname, `UNEXPECTED_EOF` is a peer
   that closed during the handshake, and `PROTOCOL` is an error after the
   handshake.
-- **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
-  does, rejects a NUL in any path, and rejects a `cert_file` without a
-  `key_file` or the reverse. `TLS.listen` checks as `TCP.listen` does, and
-  rejects a NUL in either path. One pool job then reads the CA, certificate and
-  key files, off the scheduler thread, and only then does the VM resolve and
-  connect or listen. So a bad certificate or key fails `TLS.listen` before the
-  port is bound, and `TLS.connect` before it connects. Both load the chain and
-  key the same way (`use_identity` in `vm/tls_openssl.c`). The connect timeout
-  covers the setup, lookup, connect and handshake.
 - **Contexts.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
   one `agc_tls_config` of one role, which counts its owners: the context and
-  each listener or connection made from it. So a dropped context stays valid
-  until its last listener closes. A GC finalizer gives the context's count
-  back; the collector runs finalizers only on demand, at the start of a
-  scheduler's next task (`agc_gc_finalize_pending`), never inside an
-  allocation (§5.3). The GC does not see the native size of an `SSL_CTX`, so a
-  program builds a context once and reuses it. `TLS.client_context` and
-  `TLS.server_context` check the options as `TLS.connect` and `TLS.listen`
-  check their paths (and a server context needs both files), then one pool job
-  with no deadline reads the files off the scheduler thread, so a bad file
-  fails the build. `TLS.listen(host, port, context)` and an `HttpClient` whose
-  `options.tls` names a context load nothing. A context of the wrong role (a
-  server context in `HttpClientOptions.tls`, a client one for `TLS.listen`) is
-  a program bug: `RUNTIME-TLS-CONTEXT-ROLE` at the context argument.
+  each socket and listener made from it. So a dropped context stays valid
+  until its last socket closes. A GC finalizer gives the context's count back;
+  the collector runs finalizers only on demand, at the start of a scheduler's
+  next task (`agc_gc_finalize_pending`), never inside an allocation (§5.3).
+  The GC does not see the native size of an `SSL_CTX`, so a program builds a
+  context once and reuses it. `TLS.client_context` and
+  `TLS.server_context` check the options (a NUL in a path, a `cert_file`
+  without a `key_file` or the reverse, a server context without both), then
+  one pool job with no deadline reads the CA, certificate and key files off the
+  scheduler thread. So a bad file fails the context build, never a connect or
+  a listen. Both roles load the chain and key the same way (`use_identity` in
+  `vm/tls_openssl.c`). A context of the wrong role (a server context for
+  `TLS.connect` or `HttpClientOptions.tls`, a client one for `TLS.listen`) is a
+  program bug: `RUNTIME-TLS-CONTEXT-ROLE` at the context argument.
+- **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
+  does, and `TLS.listen` as `TCP.listen` does; neither reads a file. The
+  connect timeout covers the lookup, connect and handshake. An `HttpClient`
+  without a context (`HttpWire.connect_tls`) builds one system-trust context
+  lazily, in a pool job, the first time it connects, and its connections share
+  it.
 - **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048 bits) on
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A
-  missing or empty file fails the connect with `BAD_CA`. With an empty
+  missing or empty file fails `TLS.client_context` with `BAD_CA`. With an empty
   `ca_file`, the trust is `SSL_CERT_FILE` when set, else the platform's system
   store (`vm/tls_trust.h`). `SSL_CERT_DIR`, when set, adds a directory to
   either; with a `ca_file` it is not read. A source that fails to load is
   skipped, and verification still fails closed.
   - The system store is read once per process (`vm/tls_trust.c`, under
-    `CRYPTO_THREAD_run_once`, in the first setup pool job that needs it, never
+    `CRYPTO_THREAD_run_once`, in the first context pool job that needs it, never
     on the scheduler or I/O thread) and copied into each new context, so a trust
     change while the process runs is not seen. A first load that fails lasts for
     the whole process, and verification then fails closed. This holds on every
@@ -132,8 +130,8 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
   (also for a key that does not match the certificate) and
   `ssl-load-verify-source!:` (for `ca_file`).
 - **Turn costs and fuzzing.** TLS sockets use the TCP builtins, so they charge
-  by size (10.2.1). `TLS.connect` and `TLS.listen` charge nothing. Under
-  `no_files` both end the run with `RUNTIME-INTERNAL`.
+  by size (10.2.1). `TLS.connect`, `TLS.listen` and the context builds charge
+  nothing. Under `no_files` they end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
   other, with no socket, so it runs on all three systems. The platform trust
   policies have their own tests (`vm/tests/tls_trust_darwin_test.c`,

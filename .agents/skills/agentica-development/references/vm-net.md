@@ -53,8 +53,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   demand) in one pool job; `agc_tls_context_take` checks the role
   (`RUNTIME-TLS-CONTEXT-ROLE`) and takes a count.
 - A TLS socket or listener is the same `net` with `secure` set. `TLS.connect`
-  and `TLS.listen` load the config in a pool job (`start_setup`), then connect
-  or listen as TCP does. The read callback feeds ciphertext to the session, runs
+  and `TLS.listen` take a context's config and connect or listen as TCP
+  does. The read callback feeds ciphertext to the session, runs
   the handshake, and decrypts into `agc_inbuf`, so line and byte reads, limits,
   locks and timeouts are the TCP ones. Sends encrypt 16 KiB at a time, one
   `agc_stream_write` per piece. Children in a handshake hang off their request

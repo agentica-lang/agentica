@@ -105,20 +105,31 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 ## TLS
 
 ```text
-TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int, cert_file: String = "", key_file: String = "") -> Result[Socket]
-TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
-TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
-
-TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "")
-TlsServerOptions(cert_file: String, key_file: String)
+TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
+TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
 ```
 
-TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+```text
+struct TlsClientOptions
+  ca_file: String = ""
+  cert_file: String = ""
+  key_file: String = ""
+end
 
+struct TlsServerOptions
+  cert_file: String
+  key_file: String
+end
+```
+
+A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+
+- `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run, so a bad file fails there, not at each connect. A file that changes later does not change the context: build a new one.
+- `TLS.connect` takes a client context and `TLS.listen` a server context; the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`. A context stays valid while a socket or listener made from it is open.
 - `TLS.connect` uses TLS 1.2 or later and always checks the certificate and the host name (an IP address host against the certificate's IP addresses).
-- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails the connect.
+- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them; a missing or empty file fails `TLS.client_context`.
 
   | System | Store |
   |---|---|
@@ -126,19 +137,34 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
   | macOS | the system roots and Keychain trust settings |
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
-- `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
-- A `TlsContext` is the TLS setup of one role, built once and shared by every listener and HTTP client made from it. `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run (the fields mean what the paths of `TLS.connect` and `TLS.listen` mean), so a file changed later needs a new context. A context stays valid while a listener made from it is open. Giving a context of the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`.
-- `TLS.connect` sends a client certificate when `cert_file` and `key_file` name PEM files, checked as `TLS.listen` checks them. Leave both empty to send none; giving only one is an error.
+- A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
+- A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
 ```agentica {mode="check"}
 def main() -> Void
-  socket = TLS.connect("example.com", 443, "", 5000).unwrap!
+  context = TLS.client_context(TlsClientOptions()).unwrap!
+  socket = TLS.connect("example.com", 443, context, 5000).unwrap!
   sent = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
   puts(TCP.read_line(socket, 5000))
   TCP.close(socket)
 end
 ```
+
+### Moving to contexts
+
+Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
+
+| Before | Now |
+|---|---|
+| `TLS.connect(host, port, "ca.pem", ms)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)` |
+| `TLS.connect(host, port, ca, ms, cert, key)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: cert, key_file: key)).unwrap!, ms)` |
+| `TLS.listen(host, port, cert, key)` | `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)` |
+| `HTTP.listen_tls(host, port, cert, key, handler)` (and the `stream`, `upload` and `websocket` forms) | `HTTP.listen_tls(host, port, server_context, handler)` |
+| `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
+| `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
+
+Build each context once and share it. `HttpClientOptions` holds a `TlsContext`, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it.
 
 ## HTTP client
 
@@ -164,9 +190,8 @@ A client reuses open connections for the same scheme, host and port. Every field
 | `idle_timeout_ms` | 30 s, for kept connections | positive |
 | `max_connections` | 4, per host | positive, at most 65536 |
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
-| `ca_file` | `""`: the system's CA certificates | |
 | `proxy` | `""`: no proxy | an `http://host:port` origin, see below |
-| `tls` | `none` | a client `TlsContext` for the connections of `HTTP.client`, which then do not read `ca_file` |
+| `tls` | `none`: the system's CA certificates | a client `TlsContext` |
 
 - Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
 - With a `proxy` (`HttpClientOptions(proxy: "http://proxy:8080")`) every `http://` request goes to that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, the `Host` header still the target's), and the client keeps and reuses its connections by the proxy, so requests to different hosts share them. It applies to `HTTP.client` and the calls that take a client or options: `get_response`, `post_response`, `HTTP.open`, `HTTP.upload`, `HTTP.download` and `HTTP.start`. The proxy must be an `http://` origin with no user info, path or query, or the call that gets it is an `error`. An `https://` URL with a `proxy` is an `error` (`http: https through a proxy is not supported yet`) and is never sent in the clear: a `CONNECT` tunnel is not built. There is no proxy authentication and the environment is not read: the default is no proxy.
@@ -324,7 +349,7 @@ HTTP.finish(conn: HTTP.Connection) -> Void
 
 One connection that the program drives itself, outside the pool, as Ruby's `Net::HTTP.start`, `send_request`, `read_body` and `finish` do (and Python's `http.client.HTTPConnection`). Use it to read a body piece by piece, as it arrives (a big file, a log that never ends, lines of a stream), or to control the connection: which requests go on one socket, and when it closes. For whole responses use `get` and the pooled client, which are simpler.
 
-- `start` takes an origin (`http://host`, `https://host:8443`) with no path or query, and connects now. `https` verifies the certificate with `options.ca_file` (the system's by default). Only `timeout_ms`, `max_body_bytes`, `ca_file` and `proxy` of the options apply: `timeout_ms` is the time of each call (the connect, each `send_request`, each `read_body`), and `max_body_bytes` the largest request body.
+- `start` takes an origin (`http://host`, `https://host:8443`) with no path or query, and connects now. `https` verifies the certificate with `options.tls` (the system trust when `none`, built again for each `start`, so a program that opens many connections passes `tls: some(context)`). Only `timeout_ms`, `max_body_bytes`, `tls` and `proxy` of the options apply: `timeout_ms` is the time of each call (the connect, each `send_request`, each `read_body`), and `max_body_bytes` the largest request body.
 - `send_request` sends the request and returns when the head of the response has been read: `HTTP.ResponseHead` has `status` and `headers` (names in lowercase). `target` is the path and query (`/items?page=2`). `Host` and `Content-Length` are added; the rules for headers are those of `HTTP.request`. An interim `1xx` head is read past.
 - `read_body` waits for at least one byte and gives at most `max_bytes` (1 to 1 MiB) of the body, decoded (a chunked body has no framing in it). An empty `Bytes` is the end of the body. A `Content-Length` body is held to its length, a chunked one to its framing, and a body that runs to the close of the connection must end with a clean close (over TLS, the peer's `close_notify`). A response body is at most 256 MiB, the limit of `download`, whatever its framing. A response to `HEAD`, a `204`, a `304` and one with `Content-Length: 0` have no body: the connection is ready at once, with no `read_body` needed (a `read_body` gives the empty end piece).
 - After a body has been read to its end, the connection is ready for the next `send_request`, unless the server closed it (`Connection: close`, HTTP/1.0 or a body that ran to the close): then `send_request` is `error("http: the connection is closed")`. The end comes with the last byte, so a program that knows the length may stop reading before the empty piece. The connection is also closed when input is left after the body (a server that sent a second response in the same write, or bytes after the last chunk): reading its answer for the next request would be wrong. A request while the last body is still being read is an `error`, and the connection stays as it was.
@@ -409,11 +434,11 @@ The server is in `std/http` too: a handler takes the whole request and returns t
 
 ```text
 HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
 ```
 
-- `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a PEM certificate and key. Port 0 picks a free port (`local_port`).
+- `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
 - `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase) and `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`).
 
 A server that fetches its own page:
@@ -539,7 +564,7 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 
 ```text
 HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
@@ -617,7 +642,7 @@ data: tick 3
 
 ```text
 HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_upload_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_upload_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 ```
 
@@ -677,7 +702,7 @@ end
 
 ```text
 HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_websocket_tls(host: String, port: Int, cert_file: String, key_file: String, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_websocket_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
 ```

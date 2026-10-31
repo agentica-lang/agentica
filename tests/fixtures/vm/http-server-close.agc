@@ -32,7 +32,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def fetch(url: String) -> Result[HttpResponse]
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64, ca_file: "")).unwrap!
+  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   return HTTP.get(pool, url)
 end
 

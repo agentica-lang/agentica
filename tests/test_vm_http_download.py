@@ -140,7 +140,7 @@ import HTTP from "std/http"
 SHOW
 
 def main() -> Void
-  secure = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1048576, ca_file: System.args()[0] + "/ca.pem")))
+  secure = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1048576, tls: some(TLS.client_context(TlsClientOptions(ca_file: System.args()[0] + "/ca.pem")).unwrap!))))
   show(HTTP.download(secure, System.args()[1] + "/bin/100", System.args()[2] + "/tls.bin"))
   HTTP.close_client(secure)
 end

@@ -8,7 +8,12 @@ help texts are not asserted (AGENTS.md).
 """
 import pytest
 
-from tests.spec_support import assert_exact_span, assert_multi_file_case, assert_single_file_case
+from tests.spec_support import (
+    assert_exact_span,
+    assert_multi_file_case,
+    assert_program_diagnostic,
+    assert_single_file_case,
+)
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
 
@@ -177,10 +182,6 @@ SINGLE_FILE = [
                '  e = Process.spawn_channel("ls", [], "d", 50)\n  f = Process.spawn_channel("ls", [])\n'), None, None),
     ("Process.spawn_captured still needs its command and arguments",
      main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
-    ("TLS.connect may leave out the client certificate and key, or give them",
-     main_with('  a = TLS.connect("h", 1, "", 50)\n  b = TLS.connect("h", 1, "", 50, "c.pem", "k.pem")\n'), None, None),
-    ("the client certificate of TLS.connect is still a String",
-     main_with('  a = TLS.connect("h", 1, "", 50, 7, "k.pem")\n'), "CHECK-TYPE-MISMATCH", "7"),
     ("TlsClientOptions may leave out every field, and HttpClientOptions its tls, which is none",
      main_with('  a = TLS.client_context(TlsClientOptions())\n  b = TlsClientOptions(ca_file: "ca.pem")\n'
                '  c = HttpClientOptions()\n  d: Optional[TlsContext] = c.tls\n'
@@ -333,3 +334,23 @@ def test_single_file_programs(title, program, code, text, agentica_check):
 )
 def test_programs_of_several_files(title, files, code, file, text, agentica_check):
     assert_multi_file_case(agentica_check, files, code, file, text, assert_exact_span)
+
+
+# The forms before contexts, and a context where its Optional goes, carry a help: (title, program, code, text the range
+# covers). Only the presence of the help is asserted, not its text.
+HELPED = [
+    ("a TlsContext where HttpClientOptions takes its Optional",
+     main_with('  c = TLS.client_context(TlsClientOptions()).unwrap!\n  a = HttpClientOptions(tls: c)\n'),
+     "CHECK-TYPE-MISMATCH", "c"),
+    ("a CA file where TLS.connect takes a TlsContext",
+     main_with('  a = TLS.connect("h", 1, "", 50)\n'), "CHECK-TYPE-MISMATCH", '""'),
+    ("TLS.listen with the PEM paths",
+     main_with('  a = TLS.listen("h", 0, "c.pem", "k.pem")\n'), "CHECK-ARITY", 'TLS.listen("h", 0, "c.pem", "k.pem")'),
+]
+
+
+@pytest.mark.parametrize(("title", "program", "code", "text"), HELPED, ids=[case[0] for case in HELPED])
+def test_old_tls_forms_have_a_help(title, program, code, text, agentica_check):
+    found = assert_program_diagnostic(agentica_check, program, code)
+    assert_exact_span(program, found["range"], text)
+    assert found.get("help"), found

@@ -141,8 +141,7 @@ HTTP_PRELUDE = """\
 import HTTP from "std/http"
 
 def client() -> HttpClient
-  options = HttpClientOptions(timeout_ms: 20000, idle_timeout_ms: 30000, max_connections: 16, max_body_bytes: 1000,
-                              ca_file: "")
+  options = HttpClientOptions(timeout_ms: 20000, idle_timeout_ms: 30000, max_connections: 16, max_body_bytes: 1000)
   return HTTP.client(options).unwrap!
 end
 
