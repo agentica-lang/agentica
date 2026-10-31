@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.start`, `HTTP.send_request`, `HTTP.read_body` and `HTTP.finish` give
+  one HTTP/1.1 connection that the program drives: read the response head,
+  then the body piece by piece, and send a second request on the same socket
+  once the body has been read to its end (after Ruby's `Net::HTTP`).
 - `HTTP.StreamResponse` takes `length: some(n)`: a streamed body of known
   size goes out with `Content-Length` and no chunk framing, and a body that
   ends short or runs over closes the connection.

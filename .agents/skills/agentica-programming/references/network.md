@@ -76,6 +76,10 @@ HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, heade
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
+HTTP.start(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
+HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
+HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
+HTTP.finish(conn: HTTP.Connection) -> Void
 
 Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: Bytes)
@@ -90,6 +94,16 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   body limit and system CA trust. Options must be positive; `max_connections` is
   at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
   whole call.
+- One connection that you drive yourself (Ruby's `Net::HTTP.start`):
+  `HTTP.start(origin)` connects (an origin with no path),
+  `HTTP.send_request(conn, method, target, body)` returns at the response head
+  (`status`, `headers`), `HTTP.read_body(conn, max_bytes)` gives the body
+  piece by piece and an empty `Bytes` at its end, `HTTP.finish(conn)` closes.
+  After a body read to its end the same connection takes the next request,
+  unless the server closed it. Use it for a body read as it arrives (up to 256
+  MiB) or for control of the socket; whole responses use `get` or the client.
+  `timeout_ms` of the options is the time of each call and nothing is retried.
+  One call at a time, in the task that opened it.
 - The client keeps idle keep-alive connections per scheme, host and port. URLs
   are `http://` or `https://`; the fragment is dropped, user info is rejected
   and IPv6 hosts go in brackets. It adds `Host` and `Content-Length`; a request
@@ -98,9 +112,9 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 - Response header names are lowercase; `header_values` matches
   case-insensitively and keeps duplicates in order. 4xx and 5xx are normal
   responses. Errors are Results: protocol and limit errors start with `http: `,
-  a timeout is `network: operation timed out`. No streaming, automatic redirect
-  or gzip decoding. The client runs as Agentica code in tasks of its own, so it
-  spends the run's `--max-steps` budget.
+  a timeout is `network: operation timed out`. No streaming (see `HTTP.start`),
+  automatic redirect or gzip decoding. The client runs as Agentica code in tasks
+  of its own, so it spends the run's `--max-steps` budget.
 - `download` streams a `GET` body to a new file instead of `Bytes`, for
   binary-safe bodies up to 256 MiB: at most 1 MiB is held at once, every
   framing (`Content-Length`, chunked, close-delimited) counts against

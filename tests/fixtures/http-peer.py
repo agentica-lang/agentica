@@ -116,6 +116,12 @@ class Web(http.server.BaseHTTPRequestHandler):
             return
         self.reply(200, "%s %d %s" % (self.headers.get("X-Kind"), len(body), body[:8].decode()))
 
+    def do_HEAD(self):
+        # The head of a 5-byte body, and no body: the length is only announced.
+        self.send_response(200)
+        self.send_header("Content-Length", "5")
+        self.end_headers()
+
     def do_DELETE(self):
         self.reply(200, "deleted %s %s" % (self.path, self.headers.get("Content-Length")))
 
