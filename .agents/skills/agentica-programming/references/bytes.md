@@ -35,7 +35,8 @@ s.encode(encoding) -> Result[Bytes]
   one with big-endian units; the other forms keep a mark as U+FEFF. Errors are
   strict and end with `at byte N` (decode) or `at index N` (encode, a character
   ASCII or Latin-1 lacks); an unknown name is an error too (other encodings:
-  the `agentica-lang/charset` package).
+  the `agentica-lang/charset` package). For UTF-8, use `s.bytes` and
+  `String.from_bytes`.
 
 - `==` and `!=` compare length and bytes. They are not constant time: compare
   MACs and tokens with `HMAC.secure_compare`. There is no `<`, and `b == "s"`

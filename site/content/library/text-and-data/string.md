@@ -406,7 +406,7 @@ end
 String.encode(s: String, encoding: String) -> Result[Bytes]
 ```
 
-Writes the text as bytes in an encoding, named as for [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII or Latin-1. Plain `utf-16` and `utf-32` write a byte order mark and then big-endian units; the `le` and `be` forms write no mark. A character that ASCII or Latin-1 cannot hold gives an error Result whose text ends with its index in the text, `at index N`, and an unknown name gives an error too. The Unicode encodings never fail: `s.encode("utf-8")` is `ok(s.bytes)`.
+Writes the text as bytes in an encoding, named as for [`Bytes.decode`](/library/data-structures/bytes/#decode): UTF-8, UTF-16, UTF-32, ASCII or Latin-1. Plain `utf-16` and `utf-32` write a byte order mark and then big-endian units; the `le` and `be` forms write no mark. A character that ASCII or Latin-1 cannot hold gives an error Result whose text ends with its index in the text, `at index N`, and an unknown name gives an error too. The Unicode encodings never fail. For UTF-8, use [`.bytes`](#bytes) and [`String.from_bytes`](#from_bytes).
 
 ```agentica
 def main() -> Void
