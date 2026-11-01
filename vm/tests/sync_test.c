@@ -30,7 +30,7 @@ static _Atomic int reset_taken;
 
 /* The rows whose mark differs from their table's, checked one by one. Task.spawn_owning walks its argument without
    rt->sync and takes the lock itself to hand the handles over. LogRegistry.level, .floor and .lowest are leaves that
-   take it themselves around their reads. */
+   read atomics, which the writers change under it. */
 static const struct {
   const char *name;
   uint32_t arity;
