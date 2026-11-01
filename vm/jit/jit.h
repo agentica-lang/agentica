@@ -265,6 +265,13 @@ void agc_jit_enum(agc_value *dst, const agc_value *payload, const agc_variant_de
    field count answers AGC_JIT_EXIT_INTERPRET with DST and the turn cost left alone, so the interpreter runs the
    instruction and fails as it does. It allocates; it never fails or parks. */
 uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window, const agc_update_def *u);
+/* MAP in compiled code, as the interpreter's case: *DST = a new Map of the COUNT key and value pairs at PAIRS (the
+   window the loader checked), put in order into the run's empty Map. A String or Bytes key charges its bytes, and the
+   turn cost is applied after, as the interpreter does: AGC_STATUS_OK, or AGC_JIT_EXIT_YIELD when that ended the turn
+   (the result written). A key that is not an Int, a String or Bytes (hand-made bytecode) answers
+   AGC_JIT_EXIT_INTERPRET before anything is done, so the interpreter runs the instruction and fails as it does. It
+   allocates; it never fails or parks. */
+uint32_t agc_jit_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count);
 /* CALL_VALUE in compiled code, the first half of a native call of a function value: when WINDOW[0] is a function
    value whose function has code and takes ARGC arguments and its captures (the checks of call_value), and the task
    has room for its frame, its registers and one more depth without growing an array or failing, it pushes the frame
@@ -436,6 +443,8 @@ void agc_emit_closure(agc_emitter *e, agc_instr in, uint32_t captures);
 void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_t y);
 /* STRUCT_WITH of the update definition at UPDATE: a call of agc_jit_struct_with, which may leave. */
 void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t update);
+/* MAP of c pairs at R[b]: a call of agc_jit_map, which may leave. */
+void agc_emit_map(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);

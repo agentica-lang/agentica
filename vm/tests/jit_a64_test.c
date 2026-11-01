@@ -135,7 +135,7 @@ static void words(void) {
    left a b to offset 0 (a patch not written). AGENTICA_A64_DUMP=FILE writes the code for a disassembler. */
 static void every_kind(void) {
   agc_emitter e;
-  enum { COUNT = 27 };
+  enum { COUNT = 28 };
   agc_a64_emit_begin(&e, COUNT);
   uint32_t pc = 0;
   agc_instr in = {0, 1, 2, 3};
@@ -166,6 +166,8 @@ static void every_kind(void) {
   agc_a64_emit_list(&e, in);
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_struct_with(&e, in, pc, 0x1000);
+  agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_map(&e, in, pc);
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_builtin(&e, in, pc, 0x2000, 7, true);
   agc_a64_emit_label(&e, ++pc);

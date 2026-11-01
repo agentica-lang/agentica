@@ -134,6 +134,7 @@ static bool has_code(uint32_t op) {
     case AGC_OP_LIST_LEN:
     case AGC_OP_LIST_GET:
     case AGC_OP_LIST:
+    case AGC_OP_MAP:
     case AGC_OP_MAP_GET:
     case AGC_OP_NOT:
     case AGC_OP_FIELD:
@@ -480,6 +481,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;
       case AGC_OP_MAP_GET: agc_emit_map_get(e, in, pc); break;
+      case AGC_OP_MAP: agc_emit_map(e, in, pc); break;
       case AGC_OP_STRUCT:
         if (in.c < p->struct_count)
           agc_emit_new(e, in, (uint64_t)(uintptr_t)agc_jit_struct, in.c, p->structs[in.c].count);
@@ -1126,6 +1128,20 @@ uint32_t agc_jit_struct_with(agc_vm *vm, agc_value *dst, const agc_value *window
   /* The window is read in full before DST, which may be one of its registers, is written. */
   *dst = agc_struct_value(st);
   agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
+  return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
+}
+
+uint32_t agc_jit_map(agc_vm *vm, agc_value *dst, const agc_value *pairs, uint32_t count) {
+  /* agc_key_hash fails on a key of another tag; the check comes first, so a leave has charged and allocated nothing. */
+  for (size_t k = 0; k < count; k++) {
+    agc_value key = pairs[2 * k];
+    if (!agc_is(key, AGC_T_INT) && !agc_is(key, AGC_T_STRING) && !agc_is(key, AGC_T_BYTES))
+      return AGC_JIT_EXIT_INTERPRET;
+  }
+  agc_map *m = agc_as_map(vm, vm->rt->empty_map);
+  for (size_t k = 0; k < count; k++) m = agc_map_put(vm, m, pairs[2 * k], pairs[2 * k + 1]);
+  /* The pairs are read in full before DST, which may be one of their registers, is written. */
+  *dst = agc_map_value(m);
   return agc_turn_charge(vm) ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
 }
 

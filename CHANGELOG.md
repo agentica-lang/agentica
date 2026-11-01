@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Code under the JIT that unwraps Optionals (`unwrap!`) or builds Map literals
+  runs faster: such functions now get machine code.
+
 ### Fixed
 
 - Compiling deeply nested `some(...)` or `ok(...)` calls or list literals, with

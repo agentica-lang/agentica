@@ -429,12 +429,23 @@ void agc_emit_new(agc_emitter *e, agc_instr in, uint64_t fn, uint64_t x, uint64_
   call_fn(e, fn);
 }
 
+/* FN(vm, &R[a], &R[b], X), which may leave with a status. */
+static void window_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t fn, uint64_t x) {
+  helper_args(e, in);
+  move_imm64(e, ARG3, x);
+  call_status(e, fn, pc);
+}
+
 /* STRUCT_WITH: agc_jit_struct_with(vm, &R[a], &R[b], update), which leaves for the interpreter on a receiver of
    another struct, and applies the copy's charge itself, leaving with YIELD when that ends the turn. */
 void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t update) {
-  helper_args(e, in);
-  move_imm64(e, ARG3, update);
-  call_status(e, (uint64_t)(uintptr_t)agc_jit_struct_with, pc);
+  window_call(e, in, pc, (uint64_t)(uintptr_t)agc_jit_struct_with, update);
+}
+
+/* MAP: agc_jit_map(vm, &R[a], &R[b], c), which leaves for the interpreter on a key it cannot hash, and applies the
+   keys' charge itself, leaving with YIELD when that ends the turn. */
+void agc_emit_map(agc_emitter *e, agc_instr in, uint32_t pc) {
+  window_call(e, in, pc, (uint64_t)(uintptr_t)agc_jit_map, in.c);
 }
 
 /* The instructions that are one call of their opcode HELPER (with R[c] when TWO), the interpreter's own code: the
