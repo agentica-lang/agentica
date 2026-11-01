@@ -1217,6 +1217,7 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
   agc_value *R = t->regs + frame->base;
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
+    agc_jit_sync();
     agc_jit_exit out = code(vm, R, p->constants, pc);
     if (__builtin_expect(t->frame_count != depth, 0) || frame->tail) {
       /* Native calls are on the frames, not on the C stack any more, and a native tail call (which sets the frame's

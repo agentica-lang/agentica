@@ -351,7 +351,74 @@ const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {
   return NULL;
 }
 
+void agc_emit_start(agc_emitter *e, uint32_t count) {
+  memset(e, 0, sizeof *e);
+  e->count = count;
+  e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
+}
+
+void agc_emit_patch(agc_emitter *e, size_t at, agc_jit_patch_kind kind, uint64_t value) {
+  if (e->failed) return;
+  if (e->patch_count == e->patch_cap) {
+    size_t cap = e->patch_cap ? agc_size_mul(e->patch_cap, 2) : 64;
+    agc_jit_patch *patches = agc_alloc_atomic(agc_size_mul(cap, sizeof *patches));
+    if (e->patch_count) memcpy(patches, e->patches, e->patch_count * sizeof *patches);
+    e->patches = patches;
+    e->patch_cap = cap;
+  }
+  e->patches[e->patch_count++] = (agc_jit_patch){(uint32_t)at, kind, value};
+}
+
+bool agc_emit_patches(agc_emitter *e, size_t epilogue, agc_emit_stub stub, agc_emit_link link) {
+  /* Patches of one exit word come one after another, so a stub serves its run and a new run lays out a new one. */
+  size_t run = 0;
+  agc_jit_patch last = {0, AGC_JIT_PATCH_LABEL, 0};
+  for (size_t k = 0; k < e->patch_count; k++) {
+    agc_jit_patch p = e->patches[k];
+    size_t to;
+    if (p.kind == AGC_JIT_PATCH_LABEL) {
+      if (p.value >= e->count) return false;
+      to = e->labels[p.value];
+    } else if (p.kind == AGC_JIT_PATCH_EPILOGUE) {
+      to = epilogue;
+    } else if (p.kind == last.kind && p.value == last.value) {
+      to = run;
+    } else {
+      to = run = e->len;
+      last = p;
+      stub(e, p, epilogue);
+    }
+    link(e, p.at, to);
+  }
+  return true;
+}
+
 #if AGC_JIT_HOST
+/* The opcode helper of an instruction that is one helper call (agc_emit_helper), with *TWO_OPERANDS for the shape
+   with R[c], and *CHARGED when a charge then leaves to be applied, as the interpreter applies it after the
+   instruction. */
+static uint64_t opcode_helper(agc_opcode op, bool *two_operands, bool *charged) {
+  *two_operands = !(op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN || op == AGC_OP_TO_TEXT);
+  *charged = op == AGC_OP_TO_TEXT || op == AGC_OP_SAME || op == AGC_OP_CONCAT;
+  agc_status (*one)(agc_vm *, agc_value *, const agc_value *) = NULL;
+  agc_status (*two)(agc_vm *, agc_value *, const agc_value *, const agc_value *) = NULL;
+  switch (op) {
+    case AGC_OP_NEG_F: one = agc_op_neg_f; break;
+    case AGC_OP_LIST_LEN: one = agc_op_list_len; break;
+    case AGC_OP_TO_TEXT: one = agc_op_to_text; break;
+    case AGC_OP_ADD_F: two = agc_op_add_f; break;
+    case AGC_OP_SUB_F: two = agc_op_sub_f; break;
+    case AGC_OP_MUL_F: two = agc_op_mul_f; break;
+    case AGC_OP_DIV_F: two = agc_op_div_f; break;
+    case AGC_OP_LT_F: two = agc_op_lt_f; break;
+    case AGC_OP_LE_F: two = agc_op_le_f; break;
+    case AGC_OP_SAME: two = agc_op_same; break;
+    case AGC_OP_CONCAT: two = agc_op_concat; break;
+    default: two = agc_op_list_get; break;
+  }
+  return one ? (uint64_t)(uintptr_t)one : (uint64_t)(uintptr_t)two;
+}
+
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL,
    CALL_VALUE and RETURN; other instructions leave for the interpreter. */
 static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_function *f) {
@@ -396,7 +463,12 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
       case AGC_OP_CONCAT:
       case AGC_OP_TO_TEXT:
       case AGC_OP_LIST_LEN:
-      case AGC_OP_LIST_GET: agc_emit_helper(e, op, in, pc); break;
+      case AGC_OP_LIST_GET: {
+        bool two, charged;
+        uint64_t helper = opcode_helper(op, &two, &charged);
+        agc_emit_helper(e, helper, two, charged, in, pc);
+        break;
+      }
       case AGC_OP_LIST: agc_emit_list(e, in); break;
       case AGC_OP_CLOSURE:
         /* As for CALL, the loader checks bx. */

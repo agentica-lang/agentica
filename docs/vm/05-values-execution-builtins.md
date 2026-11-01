@@ -330,7 +330,9 @@ returns.
   across compiled code. The builtin's registers stay in the frame's register
   file during the call, so the collector sees them.
 - **Code.** Each instruction has fixed code, emitted in one pass over the
-  bytecode. The register convention is in the header of `vm/jit/emit_x64.c`.
+  bytecode. The register conventions are in the headers of `vm/jit/emit_x64.c`
+  and `vm/jit/emit_a64.c`. On arm64, the thread that runs compiled code first
+  runs `isb` (`agc_jit_sync`), as the code may come from another thread.
 - **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
   reserved in chunks of 1 MiB, each twice the last, so the address space follows
   the code. Code is written read-write, then sealed read-execute (`mprotect` on
@@ -406,8 +408,9 @@ returns.
   only. It compares the layout of the `--jit off` loop with a base revision. An
   intended move carries the `layout-change` label in CI, which accepts it.
 - **Known limits.**
-  - Only x86-64 has an emitter; the other hosts run the interpreter, arm64 macOS
-    included.
+  - x86-64 has an emitter. arm64 (Linux and macOS) has one only in a build
+    with `AGENTICA_JIT_ARM64=1`, and it makes no native calls yet: each call
+    takes its exit (#756). The other hosts run the interpreter.
   - A builtin that is neither leaf, direct nor a block call (for example
     output, tasks, channels and files) returns to the turn loop and unwinds the
     native calls below it.

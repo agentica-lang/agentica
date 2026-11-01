@@ -18,6 +18,7 @@
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
+# make AGENTICA_JIT_ARM64=1  on arm64, the JIT with its emitter (vm/jit/emit_a64.c); without it arm64 interprets
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
@@ -50,7 +51,7 @@ YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DIS
 # The vendored zlib build is codec-only (no configure, no gz* I/O): the eight sources deflate and inflate need.
 ZLIB_NAMES := adler32 crc32 deflate inffast inflate inftrees trees zutil
 VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/zlib.c vm/zlib_codec.c vm/tree.c vm/stream.c vm/lazy.c vm/ats.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/tls_context.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c vm/bytes.c vm/text_codec.c \
-  vm/jit/jit.c vm/jit/emit_x64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
+  vm/jit/jit.c vm/jit/emit_x64.c vm/jit/emit_a64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -216,6 +217,10 @@ endif
 endif
 ifeq ($(TRACE),0)
 VM_CFLAGS += -DAGC_TRACE_BUILD=0
+endif
+# The arm64 emitter compiles code only in a build with AGENTICA_JIT_ARM64=1 until its native calls land (#756).
+ifeq ($(AGENTICA_JIT_ARM64),1)
+VM_CFLAGS += -DAGC_JIT_ARM64
 endif
 VM_GC :=
 GC_INC :=

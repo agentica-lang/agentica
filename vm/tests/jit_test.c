@@ -124,6 +124,16 @@ static AGC_JIT_CALLER void code_memory(void) {
 #endif
 
 #if AGC_JIT_HOST
+/* The tests of x86-64 encodings and sizes, and of native calls in compiled code, which arm64 does not make yet
+   (#756): there each call takes its exit. vm/tests/jit_a64_test.c checks the arm64 words. */
+#if defined(__x86_64__) || defined(_M_X64)
+#define X64 1
+#define NATIVE_CALLS 1
+#else
+#define X64 0
+#define NATIVE_CALLS 0
+#endif
+
 /* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
 static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
 
@@ -1724,16 +1734,16 @@ int main(void) {
   batch();
   settle_is_linear();
   compile_race();
-  cap_inside_an_offset();
-  bytes();
+  if (X64) cap_inside_an_offset();
+  if (X64) bytes();
   call_return_exits();
-  native_calls();
-  native_leaf_calls();
+  if (NATIVE_CALLS) native_calls();
+  if (NATIVE_CALLS) native_leaf_calls();
   plain_leaf_calls();
   string_code_calls();
-  native_tail_calls();
-  wide_tail_calls();
-  call_values();
+  if (NATIVE_CALLS) native_tail_calls();
+  if (NATIVE_CALLS) wide_tail_calls();
+  if (NATIVE_CALLS) call_values();
   direct_calls();
   loops_and_steps();
   int_rules();
