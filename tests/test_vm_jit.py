@@ -737,6 +737,64 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
 
+def test_a_map_literal_whose_key_charge_ends_turns_ends_them_as_in_the_interpreter(tmp_path):
+    # Task 2's map literals hash a 256 KiB key, whose charge is more turn cost than a turn has steps, so each one ends
+    # the turn right after it, in compiled code (MAP) as in the interpreter: the order of the lines and the number of
+    # turns are the same in every tier.
+    bytecode = compile_text("""def doubled(times: Int) -> String
+  s = "k"
+  k = 0
+  while k < times
+    s = s + s
+    k += 1
+  end
+  return s
+end
+
+def build(keys: List[String], rounds: Int) -> Int
+  total = 0
+  i = 0
+  while i < rounds
+    m = {keys[i % keys.size]: i, "b": 1}
+    total = total + m.size
+    i += 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  keys = ["a", "c"]
+  if id == 2
+    keys = ["a", doubled(18)]
+  end
+  total = 0
+  round = 0
+  while round < 3
+    total += build(keys, 150 * id)
+    puts("task #{id} round #{round} total #{total}")
+    round += 1
+  end
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+""", "map_cost", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["build"] if jit_host() else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.endswith("\n2700\n"), (stdout, stderr)
+    turns = {}
+    for mode in ("off", "on", "always"):
+        trace = tmp_path / f"sched-{mode}.trace"
+        run_vm(bytecode, "--jit", mode, "--schedulers", "1",
+               env=vm_environment({"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": trace}))
+        turns[mode] = sum(" sched turn " in line for line in trace.read_text(encoding="utf-8").splitlines())
+    assert turns["off"] > 300 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+
+
 def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_path):
     bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
     # twice is called from main's compiled loop; thrice only from noisy, whose loop prints, so both stay interpreted.
@@ -817,7 +875,7 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
 
 @pytest.mark.parametrize("calls", [0, 3000])
 def test_on_runs_the_jit_turn_loop_only_in_sampled_turns_until_code_is_published(tmp_path, calls):
-    # main's first loop leaves at its two maps, so only pad may get code. Uncalled, it leaves the run in the plain turn
+    # main's first loop leaves at its two ranges, so only pad may get code. Uncalled, it leaves the run in the plain turn
     # loop but for the turns drawn at random, one in 16 (AGC_JIT_SAMPLE) on average of the steps / 2000 turns (bounded
     # here at twice that). Called 3000 times, the turns that start in it run the jit copy, which compiles it, and from
     # then on every turn does: at least the whole turns of the second loop's steps.
@@ -833,7 +891,7 @@ def main() -> Void
   total = 0
   i = 0
   while i < 20000
-    total = total + {{"k": i}}.size * {{"j": i}}.size
+    total = total + (i..i).size * (i..i + 1).size / 2
     i += 1
   end
   first = Profile.steps()
@@ -879,7 +937,7 @@ def main() -> Void
   total = 0
   i = 0
   while i < 600000
-    total = total + {"k": i}.size * {"j": i}.size
+    total = total + (i..i).size * (i..i + 1).size / 2
     i += 1
   end
   puts(total)
@@ -988,14 +1046,14 @@ end
 
 """
 MID_TURN = {
-    # main's loop parks at each pass, and a map keeps it out, so every turn starts in main and work returns before it
+    # main's loop parks at each pass, and a range keeps it out, so every turn starts in main and work returns before it
     # ends.
     "park": (MID_TURN_WORK + """def main() -> Void
   total = 0
   k = 0
   while k < 3000
     Task.sleep(0)
-    total = total + {"k": k}.size * work(120)
+    total = total + (k..k).size * work(120)
     k += 1
   end
   puts(total)
@@ -1057,7 +1115,7 @@ def main() -> Void
   while k < 3000
     try_send(ping, k)
     case pong.recv(5000)
-      ok(n) -> total = total + {"k": n}.size * work(120)
+      ok(n) -> total = total + (n..n).size * work(120)
       error(_) -> nil
     end
     k += 1
@@ -1442,6 +1500,38 @@ end
 """, "block_failure", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if jit_host() else [])
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO")
+
+
+def test_unwrap_of_none_in_native_calls_fails_as_in_the_interpreter(tmp_path):
+    # `unwrap!` on an Optional is the prelude's unwrap, whose none arm calls __fail_arg, a direct builtin: under `on`
+    # unwrap gets code and runs as a native call of get, itself a native call of main's loop. At the 700th pass it
+    # fails: the code, the span (the receiver of the call the user wrote, in get) and the stack (get, main) must not
+    # depend on the tier.
+    bytecode = compile_text("""def maybe(i: Int) -> Optional[Int]
+  if i < 700
+    return some(i)
+  end
+  return none
+end
+
+def get(i: Int) -> Int
+  return maybe(i).unwrap! + 1
+end
+
+def main() -> Void
+  puts("before")
+  total = 0
+  i = 0
+  while i < 1000
+    total += get(i)
+    i += 1
+  end
+  puts(total)
+end
+""", "unwrap_none", tmp_path)
+    want = ["@prelude::optional::unwrap", "get", "main", "maybe"] if jit_host() else []
+    assert compiled(bytecode, tmp_path, "on") == want
+    assert_same_failure(bytecode, "RUNTIME-UNWRAP-NONE", "get", "main")
 
 
 def test_a_task_cancelled_inside_a_long_block_call_stops_as_in_the_interpreter(tmp_path):

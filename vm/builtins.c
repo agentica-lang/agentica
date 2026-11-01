@@ -548,7 +548,7 @@ const agc_builtin agc_core_builtins[] = {
   {"List.any?", 2, NULL, AGC_NATIVE_ANY, AGC_COST_NONE, false, false, false},
   {"List.all?", 2, NULL, AGC_NATIVE_ALL, AGC_COST_NONE, false, false, false},
   {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY, AGC_COST_NONE, false, false, false},
-  {"__fail_arg", 3, builtin_fail_arg, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"__fail_arg", 3, builtin_fail_arg, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Range.include?", 2, builtin_range_include, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
