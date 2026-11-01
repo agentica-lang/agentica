@@ -110,8 +110,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    `spent` is set once a compile did not fit the budget or the code memory: from then on nothing is compiled
    (jit.c). `sample_bits` is the log2 of the sampling interval of agc_jit_turn, `sample_misses` the sampled turns in a
    row before which no entry was counted, and `counted` is set by an entry that `on` counted since the last sampled
-   turn. `seal` is agc_jit_mem_seal, which a C test replaces with one that fails. They come last, so the fields the
-   interpreter reads keep their offsets. */
+   turn. `seal` is agc_jit_mem_seal, which a C test replaces with one that fails, and `sync_cores` is
+   agc_jit_mem_sync_cores when the process registered for it, else NULL (agc_jit_use_sync). They come last, so the
+   fields the interpreter reads keep their offsets. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -139,11 +140,16 @@ typedef struct agc_jit {
   _Atomic uint32_t sample_bits, sample_misses;
   _Atomic bool counted;
   bool (*seal)(void *pages, size_t size);
+  bool (*sync_cores)(void);
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
    PROGRAM (then the run has the interpreter of AGC_JIT_OFF). TRACE gets the jit category's lines. */
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace);
+/* Decides, before anything is compiled, how arm64 code that one thread seals becomes safe to run on the others: when
+   REGISTERED (agc_jit_mem_sync_registered) is true, each seal runs SYNC_CORES and native calls have no isb; else
+   each native call runs isb before it branches. agc_jit_new calls it once; a C test calls it again with stubs. */
+void agc_jit_use_sync(agc_jit *jit, bool (*registered)(void), bool (*sync_cores)(void));
 /* The code of FUNCTION, entered at instruction PC, compiled now if this entry makes it hot, or NULL to interpret it.
    Any scheduler may call it. */
 agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc);
@@ -376,15 +382,16 @@ typedef struct {
 
 /* The machine code of one function as it is written: `labels[pc]` is where instruction pc starts, `entry` the offset
    that the entry table's address goes to. `failed` is set when an operand does not fit the encoding or the code
-   passes AGC_JIT_CODE_CAP; from then on nothing is written, and the function stays interpreted. The buffers are GC
-   memory without pointers. */
+   passes AGC_JIT_CODE_CAP; from then on nothing is written, and the function stays interpreted. `call_isb` (true
+   unless the JIT's seals synchronize every core, agc_jit_use_sync) makes the arm64 emitter put isb before the branch
+   of a native call. The buffers are GC memory without pointers. */
 typedef struct {
   uint8_t *code;
   size_t len, cap;
   uint32_t *labels, count, entry;
   agc_jit_patch *patches;
   size_t patch_count, patch_cap;
-  bool failed;
+  bool failed, call_isb;
 } agc_emitter;
 
 /* The byte of the host's code that fills a gap no code runs (before the entry table, between two functions sealed
@@ -461,6 +468,13 @@ void *agc_jit_mem_reserve(size_t size);
 bool agc_jit_mem_open(void *pages, size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);
 void agc_jit_mem_unmap(void *pages, size_t size);
+/* Linux arm64 only (nothing, or false, elsewhere): sync_register registers the process for membarrier's SYNC_CORE
+   command, once, while the process has one thread (agc_launch_init calls it before agc_init); sync_registered says
+   whether that worked; sync_cores runs the command, so that every thread of the process passes a context
+   synchronization event before the call returns (agc_jit_use_sync). */
+void agc_jit_mem_sync_register(void);
+bool agc_jit_mem_sync_registered(void);
+bool agc_jit_mem_sync_cores(void);
 
 /* Settles the `on` decision of every function of PROGRAM: CALLABLE[f] stays true when f may get code, LOOPED[f] is
    set when f has a loop and CALLING[f] when it calls a function of the program. Returns the work it did

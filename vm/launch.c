@@ -344,6 +344,8 @@ void agc_launch_init(agc_launch *launch) {
 #endif
   agc_launch_ignore_sigpipe();
   agc_launch_init_streams();
+  /* Before agc_init, which starts the collector's threads: the registration is cheap only while this is the one. */
+  agc_jit_mem_sync_register();
   agc_init();
   memset(launch, 0, sizeof *launch);
   launch->inherited = agc_files_inherited();

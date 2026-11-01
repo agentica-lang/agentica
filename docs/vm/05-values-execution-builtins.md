@@ -334,8 +334,13 @@ returns.
   bytecode. The register conventions are in the headers of `vm/jit/emit_x64.c`
   and `vm/jit/emit_a64.c`. On arm64, the thread that runs compiled code first
   runs `isb` (`agc_jit_sync`), as the code may come from another thread; a
-  native call reads the callee's code with an acquire load (`ldar`) and runs
-  `isb` before it branches there.
+  native call reads the callee's code with an acquire load (`ldar`). On Linux
+  each seal then runs membarrier's `SYNC_CORE` command, which makes every
+  thread synchronize, so a native call branches without `isb`. The launch
+  registers for it before any other thread starts, as the registration waits
+  for them. Where it fails (an old kernel, seccomp), and on macOS, which
+  documents no such guarantee, a native call runs `isb` first
+  (`agc_jit_use_sync`).
 - **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
   reserved in chunks of 1 MiB, each twice the last, so the address space follows
   the code. Code is written read-write, then sealed read-execute (`mprotect` on
