@@ -220,8 +220,10 @@ static void *grow(void *items, size_t *cap, size_t count, size_t need, size_t si
    - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
      exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
      from compiled code, and only when none of its own instructions leaves ("none" otherwise). A call of a callee
-     without code does not keep it out: that call is one CALL exit, as the call of the function itself is when it has
-     none. Such a call still leaves for the loops that call the function, as the callee's exit unwinds them.
+     without code does not keep it out: when it runs, it costs a CALL exit and then a RETURN exit back to the caller,
+     two trips where the function without code took one, but a call on a rare path (a disabled Logger.debug) costs
+     nothing on the common one; a probe that took such a call 300,000 times kept its time. The call still leaves for
+     the loops that call the function, as the callee's exit unwinds them.
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
      ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (builtin_trips).

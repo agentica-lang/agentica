@@ -375,10 +375,12 @@ returns.
     Blocks of a few instructions that `filter`, `map` or `reduce` call, and an
     empty function called many times, ran slower compiled. So `on` gives such a
     function code only for native calls. A call in it of a function without
-    code does not keep it out: that call is one `CALL` exit, as the call of the
-    function itself is when it has none. So `Logger.debug`, which calls
-    functions that stay out only when it logs, gets code, and a disabled call
-    stays in compiled code.
+    code does not keep it out. When that call runs, it costs a `CALL` exit and
+    a `RETURN` exit, two trips where the function without code took one (a
+    probe of 300,000 such calls kept its time), but a call on a rare path costs
+    nothing on the common one. So `Logger.debug`, which calls functions that
+    stay out only when it logs, gets code, and a disabled call stays in
+    compiled code.
   - `on` keeps out a function whose loop leaves compiled code often: each trip
     out and back costs more than the instructions it saves. The loops of
     `benchmarks/programs/print-lines.agc`, `small-values.agc` and `strings.agc`
