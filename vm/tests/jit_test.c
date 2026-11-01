@@ -1623,6 +1623,28 @@ static void small_cap(void) {
   assert(!agc_jit_code_of(jit, 3, 0) && atomic_load(&jit->work) == work);
 }
 
+/* A seal that fails, as mprotect to read-execute fails under the hardened runtime of macOS without MAP_JIT. */
+static bool refuse_seal(void *pages, size_t size) {
+  (void)pages;
+  (void)size;
+  return false;
+}
+
+/* A failed seal publishes nothing: the function stays interpreted, the cap drops to what was taken, so nothing is
+   compiled any more, and the code sealed before still runs. */
+static AGC_JIT_CALLER void seal_fails(void) {
+  four_functions p;
+  agc_jit *jit = four_new(&p);
+  agc_jit_code first = agc_jit_code_of(jit, 0, 0);
+  assert(first && jit->seal == agc_jit_mem_seal);
+  size_t used = atomic_load(&jit->used);
+  jit->seal = refuse_seal;
+  assert(!agc_jit_code_of(jit, 1, 0) && !agc_jit_may_run(jit, 1) && !atomic_load(&jit->code[1]));
+  assert(atomic_load(&jit->used) > used && jit->cap == atomic_load(&jit->used));
+  assert(!agc_jit_code_of(jit, 2, 0) && !agc_jit_may_run(jit, 2) && !atomic_load(&jit->code[2]));
+  four_run(&p, first, 0);
+}
+
 /* The work budget: each compile takes its instructions plus AGC_JIT_COMPILE_BASE before the walk. Two functions fit
    it exactly; the third does not, so it and the fourth stay interpreted without a walk or a byte of code memory, and
    the code made before still runs. */
@@ -1733,6 +1755,7 @@ int main(void) {
 #if AGC_JIT_HOST
   arena();
   small_cap();
+  seal_fails();
   work_budget();
   batch();
   settle_is_linear();

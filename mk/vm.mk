@@ -18,7 +18,6 @@
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
-# make AGENTICA_JIT_ARM64=1  on arm64, the JIT with its emitter (vm/jit/emit_a64.c); without it arm64 interprets
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
@@ -217,10 +216,6 @@ endif
 endif
 ifeq ($(TRACE),0)
 VM_CFLAGS += -DAGC_TRACE_BUILD=0
-endif
-# The arm64 emitter compiles code only in a build with AGENTICA_JIT_ARM64=1 until its native calls land (#756).
-ifeq ($(AGENTICA_JIT_ARM64),1)
-VM_CFLAGS += -DAGC_JIT_ARM64
 endif
 VM_GC :=
 GC_INC :=

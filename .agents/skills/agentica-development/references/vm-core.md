@@ -216,7 +216,7 @@ rules those comments do not carry.
 ## JIT (`vm/jit/`)
 
 Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
-`AGENTICA_JIT` (`on` is the default on x86-64).
+`AGENTICA_JIT` (`on` is the default on x86-64 and arm64).
 
 - `jit.c` decides every function once, in `agc_jit_new`. For `on`: a backward
   jump, and innermost loops that seldom leave the code. A call of a builtin that
@@ -244,10 +244,11 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
   the register file would grow, or it takes more than `AGC_JIT_TAIL_PARAMS` (32)
   arguments. `on` counts a self TAIL_CALL within that limit as a loop
   (`backward` in `jit.c`).
-- Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, only in a build with
-  `AGENTICA_JIT_ARM64=1`; `jit_a64_test.c` checks its words on any machine,
-  the `jit-arm64` CI job runs it). On arm64 a code slot is read with `ldar`
-  and new code is entered after `isb`.
+- Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, Linux and macOS;
+  `jit_a64_test.c` checks its words on any machine, the `jit-arm64` CI job and
+  Platforms run it). On arm64 a code slot is read with `ldar` and new code is
+  entered after `isb`. macOS seals with plain `mprotect`, so the binary must
+  not have the hardened runtime (`tools/release-check.sh` checks it).
 - A new instruction with code needs: a case in `has_code` and in the walk, its
   `agc_emit_*` in both emitters, a case in `jit_test.c`, `jit_a64_test.c` and
   `tests/test_vm_jit.py`. Compiled

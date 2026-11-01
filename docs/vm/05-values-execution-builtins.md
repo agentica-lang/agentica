@@ -232,11 +232,12 @@ ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 
 ### 6.4 JIT
 
-The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64
-machine code. The front end runs in the interpreter, except under the test-only
-`AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run that compiles a small
-program, its own compiles cost more than they save. The JIT changes no exit
-code, output, diagnostic, span or step count (`tests/test_vm_jit.py`).
+The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64 or
+arm64 (Linux and macOS) machine code. The front end runs in the interpreter,
+except under the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run
+that compiles a small program, its own compiles cost more than they save. The
+JIT changes no exit code, output, diagnostic, span or step count
+(`tests/test_vm_jit.py`).
 `vm/jit/jit.h` is its only boundary with the interpreter: the interpreter asks
 for a function's code, enters it at the frame's `pc`, and handles the exit it
 returns.
@@ -400,8 +401,7 @@ returns.
   vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
   with `off`, in CI. `make vm-jit-self-compile` compiles the front end under
   each mode and compares the bytes. `make test-jit-off` runs the conformance
-  areas with `off`, and `jit-soak.yml` runs it daily on the three x86-64
-  systems.
+  areas with `off`, and `jit-soak.yml` runs it daily on the five systems.
 - **Fuzzing and layout.** `make vm-libfuzz` needs clang and runs on Linux. It
   runs each accepted input with `always` and `on` and compares the result with
   the interpreter's. Only runs that read no clock are compared. A JIT run that
@@ -410,8 +410,11 @@ returns.
   only. It compares the layout of the `--jit off` loop with a base revision. An
   intended move carries the `layout-change` label in CI, which accepts it.
 - **Known limits.**
-  - x86-64 has an emitter. arm64 (Linux and macOS) has one only in a build
-    with `AGENTICA_JIT_ARM64=1` (#756). The other hosts run the interpreter.
+  - x86-64 and arm64 (Linux and macOS) have an emitter; Windows on arm64 and
+    32-bit hosts run the interpreter. On macOS the code pages are sealed with
+    plain `mprotect`, which needs a binary without the hardened runtime: the
+    release signs it ad hoc, and `tools/release-check.sh` fails a binary
+    signed with `--options runtime`.
   - A builtin that is neither leaf, direct nor a block call (for example
     output, tasks, channels and files) returns to the turn loop and unwinds the
     native calls below it.

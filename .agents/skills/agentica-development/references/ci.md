@@ -225,8 +225,8 @@ binary and C tests. The two run at once and a shard unpacks both.
     sanitizer `vm-test` and `fixed-point`; shard 2 also `vm-gc-stress`
   - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
   - `vm-layers`: `vm-layers`
-  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary with
-    `AGENTICA_JIT_ARM64=1`): `vm-test`, `vm-jit-test`, `tests/test_vm_jit.py`
+  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary): `vm-test`,
+    `vm-jit-test`, `tests/test_vm_jit.py`
   - `vm-sanitizers`: the aggregate of the C half
   - `warm-third-party`, `dup-check`: `master` pushes only
 
@@ -289,17 +289,17 @@ binary and C tests. The two run at once and a shard unpacks both.
 
 ## Conformance matrix (`platforms.yml`)
 
-One job per system: `linux-x86_64`, `linux-arm64` (`ubuntu-24.04-arm`, the
-interpreter: the arm64 JIT is opt-in), `windows-x86_64` (MSYS2 UCRT64),
+One job per system: `linux-x86_64`, `linux-arm64` (`ubuntu-24.04-arm`),
+`windows-x86_64` (MSYS2 UCRT64),
 `macos-x86_64` and `macos-arm64`; the Linux jobs use the system OpenSSL and
 zlib, the others the vendored ones. It runs on PRs with the `platforms` label
 and on `master` pushes. Each job runs `vm-test`, `vendored-check`,
 `bootstrap-smoke`, `fixed-point`, then `make conformance-area/<area>` per area
 of `tools/conformance.py`, then `make conformance-report` (a job summary and
 `summary.json`; exit 1 when a module did not finish, a case failed, an area has
-no passed case, or a skip is not allowed). `macos-arm64` then rebuilds with
-`AGENTICA_JIT_ARM64=1` and runs `vm-test`, `vm-jit-test` and
-`tests/test_vm_jit.py`. `conformance all-systems` merges the
+no passed case, or a skip is not allowed). `macos-arm64` then runs
+`vm-jit-test` (no `ci.yml` job runs the JIT on macOS ARM).
+`conformance all-systems` merges the
 reports and fails when a system is missing or a case ran on none. Not in the
 matrix: the Docker and Wine groups, the slow tier, sanitizers, fuzz and
 gc-stress (`ci.yml`, `fuzz.yml`).
@@ -348,9 +348,11 @@ Skip rules, checked by the report:
 - `sweep.yml` (weekly, and by hand) runs `make sweep-full` and
   `vm-jit-self-compile` (the front end compiles itself under `--jit on` and
   `always`, through the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`). Its
-  `jit-stress` job runs the JIT goldens on the GC stress and ASan binaries.
-- `jit-soak.yml` (daily, and by hand) runs `make test-jit-off`: the interpreter
-  alone, with `AGENTICA_JIT=off`, since `on` is the default. A canary in
+  `jit-stress` job runs the JIT goldens on the GC stress and ASan binaries, on
+  x86-64 and arm64, and `vm-jit-self-compile` on arm64.
+- `jit-soak.yml` (daily, and by hand) runs `make test-jit-off` on the five
+  systems: the interpreter alone, with `AGENTICA_JIT=off`, since `on` is the
+  default. A canary in
   `tests/test_vm_jit.py` fails if the variable stops reaching the VMs. A test
   that needs one mode passes `--jit` itself (the flag wins). It is the only
   daily schedule.

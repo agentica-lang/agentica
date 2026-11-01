@@ -677,7 +677,7 @@ static void seal_batch(agc_jit *jit, uint32_t function, const uint8_t *code, siz
       memset(memory + b->len, AGC_EMIT_PAD, at - b->len);
       memcpy(memory + at, code, size);
     }
-    sealed = agc_jit_mem_seal(memory, pages);
+    sealed = jit->seal(memory, pages);
     if (!sealed) {
       AGC_TRACE(jit->trace, AGC_TRACE_JIT, "memory pages=%zu", pages);
       jit->cap = atomic_load_explicit(&jit->used, memory_order_relaxed);
@@ -860,6 +860,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   agc_lock_share(jit->lock);
   jit->page = agc_jit_mem_page();
   jit->cap = AGC_JIT_CODE_CAP;
+  jit->seal = agc_jit_mem_seal;
   jit->chunk = jit->chunk_used = 0;
   jit->hot_entries = AGC_JIT_THRESHOLD;
   jit->hot_passes = AGC_JIT_PASSES;

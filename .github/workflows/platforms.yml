@@ -49,8 +49,6 @@ jobs:
             make: make
             python: python3
             shell: bash
-          # The interpreter: the arm64 JIT is opt-in (AGENTICA_JIT_ARM64=1) until #756 turns it on; ci.yml's
-          # jit-arm64 job runs it on Linux ARM64, and the last steps of macos-arm64 on macOS ARM.
           - platform: linux-arm64
             runner: ubuntu-24.04-arm
             make: make
@@ -221,28 +219,18 @@ jobs:
           path: build/conformance/summary.json
           if-no-files-found: error
 
-      # The arm64 JIT on macOS ARM (#756), once the conformance areas have run with the default binary: the VM is
-      # rebuilt with the emitter on (AGENTICA_JIT_ARM64=1). The C tests run compiled functions and native calls
-      # directly, the goldens and tests/test_vm_multicore.py run with AGENTICA_JIT=always (four schedulers compile and
-      # run code at once), and tests/test_vm_jit.py checks that the jit trace shows the functions compiled. The binary
-      # has no hardened runtime, so code pages are sealed with plain mprotect, without MAP_JIT.
-      # AGENTICA_JIT_ARM64 in the environment is both the build's flag and what tests/test_vm_jit.py reads.
-      - name: "JIT: the C tests with the arm64 emitter on"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform == 'macos-arm64' }}
-        run: ${{ matrix.make }} vm-test
-        env:
-          AGENTICA_JIT_ARM64: '1'
+      # The JIT on macOS ARM, which ci.yml has no runner for (its jit-arm64 job is Linux ARM64): the areas above ran
+      # with `on`, the default, and this runs the goldens and tests/test_vm_multicore.py with AGENTICA_JIT=always (four
+      # schedulers compile and run code at once). So the macos-arm64 status that `conformance all-systems` sums up is
+      # conformance plus the JIT. The real guard that the binary compiles at all is tests/test_vm_jit.py in the golden
+      # area: its jit_host() asserts that the jit trace shows a loop compiled on every machine with an emitter. The
+      # binary has no hardened runtime (the release signs it ad hoc), so code pages are sealed with plain mprotect,
+      # without MAP_JIT; macos-latest is a floating image, so a new macOS that refused that would fail here first.
       - name: "JIT: the goldens and their --max-steps sweeps with AGENTICA_JIT=always, then half the shards with the JIT off"
         if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform == 'macos-arm64' }}
         run: ${{ matrix.make }} vm-jit-test
         env:
-          AGENTICA_JIT_ARM64: '1'
           AGENTICA_SWEEP: sampled
-      - name: "JIT: tests/test_vm_jit.py (off, on and always agree; the jit trace shows the functions compiled)"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform == 'macos-arm64' }}
-        run: ${{ matrix.make }} test TESTS=tests/test_vm_jit.py
-        env:
-          AGENTICA_JIT_ARM64: '1'
 
       - run: if command -v ccache >/dev/null; then ccache --show-stats; fi
         if: ${{ !cancelled() }}

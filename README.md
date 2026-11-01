@@ -14,8 +14,8 @@ reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/
 ## Install
 
 Each release has an archive per system, with `bin/agentica` and the licenses:
-`linux-x86_64` and `linux-arm64` (glibc 2.28 or newer; ARM64 runs without the
-JIT), `macos-x86_64` and `macos-arm64` (macOS 12 or newer), and
+`linux-x86_64` and `linux-arm64` (glibc 2.28 or newer), `macos-x86_64` and
+`macos-arm64` (macOS 12 or newer), and
 `windows-x86_64` (Windows 10 or newer), with one `SHA256SUMS` file. Unpack one
 and put its `bin` folder on your `PATH`. The archives are not signed or
 notarized; the [install

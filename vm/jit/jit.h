@@ -110,7 +110,8 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    `spent` is set once a compile did not fit the budget or the code memory: from then on nothing is compiled
    (jit.c). `sample_bits` is the log2 of the sampling interval of agc_jit_turn, `sample_misses` the sampled turns in a
    row before which no entry was counted, and `counted` is set by an entry that `on` counted since the last sampled
-   turn. They come last, so the fields the interpreter reads keep their offsets. */
+   turn. `seal` is agc_jit_mem_seal, which a C test replaces with one that fails. They come last, so the fields the
+   interpreter reads keep their offsets. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -137,6 +138,7 @@ typedef struct agc_jit {
   _Atomic uint64_t tails, tails_compiled;
   _Atomic uint32_t sample_bits, sample_misses;
   _Atomic bool counted;
+  bool (*seal)(void *pages, size_t size);
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -283,12 +285,11 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
 /* Private to vm/jit/, the C tests and the libFuzzer entry point (vm/fuzz_libfuzzer.c) from here. */
 
-/* The architectures that have an emitter: x86-64 (emit_x64.c), and arm64 on Linux and macOS (emit_a64.c) in a build
-   with AGENTICA_JIT_ARM64=1 (-DAGC_JIT_ARM64), until it is on by default (#756). Elsewhere the JIT compiles
-   nothing. */
+/* The architectures that have an emitter: x86-64 (emit_x64.c), and arm64 on Linux and macOS (emit_a64.c). Elsewhere
+   (Windows on arm64, 32-bit machines) the JIT compiles nothing. */
 #if defined(__x86_64__) || defined(_M_X64)
 #define AGC_JIT_HOST 1
-#elif defined(__aarch64__) && !defined(_WIN32) && defined(AGC_JIT_ARM64)
+#elif defined(__aarch64__) && !defined(_WIN32)
 #define AGC_JIT_HOST 1
 #else
 #define AGC_JIT_HOST 0

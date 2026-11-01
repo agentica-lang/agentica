@@ -110,6 +110,14 @@ case "$kind" in
     # arm64 macOS refuses code without a signature; strip removes the linker's, so the release signs ad hoc (no
     # identity, no notarization) and this check proves the signature is whole.
     codesign --verify --strict "$binary" || die "$name has no valid code signature (ad hoc is enough)"
+    # The JIT seals its code pages with plain mprotect, which the hardened runtime refuses without MAP_JIT and an
+    # entitlement: a signature with `--options runtime` would turn every compile into a failed seal, so the JIT would
+    # silently interpret. codesign -d prints the CodeDirectory flags, (adhoc) here, on stderr.
+    signature=$(codesign -d --verbose=2 "$binary" 2>&1)
+    flags=$(grep -E '^CodeDirectory .*flags=' <<< "$signature" || true)
+    echo "$name: signature: $flags"
+    [ -n "$flags" ] || die "codesign -d printed no CodeDirectory flags for $name"
+    if grep -q 'runtime' <<< "$flags"; then die "$name is signed with the hardened runtime, which disables the JIT"; fi
     ;;
 
   pe)
