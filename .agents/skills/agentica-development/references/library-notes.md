@@ -290,6 +290,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   Go's empty-match rules applied to its spans; a slow generated tier), checks
   error positions and the ReDoS step budget; golden `std-regex` pins the Go
   rules. The benchmark pair is `benchmarks/programs/regex.agc`.
+- The front end imports `std/regex` (`compiler/check/check_regex.agc`, listed
+  in `stdlib/CORE`) to check regex literals (48b), so `compile`, its errors and
+  any builtin it calls are part of the front end: a change there needs the
+  stage0 refresh of `references/ci.md`.
 
 ## Comments and style in stdlib/
 

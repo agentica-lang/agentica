@@ -3,9 +3,9 @@
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
 backtracking (48.2), std first (48.3), after the bootstrap (§18, done), and a
 Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records it.
-48a and 48c are built (`stdlib/regex.agc`, `vm/regex.c`); 48b is not. The
-decisions are in 48.10; its four open questions were answered with the
-recommendations (A).
+48a, 48b and 48c are built (`stdlib/regex.agc`, the literal in
+`docs/grammar/04-lexical.md`, `vm/regex.c`). The decisions are in 48.10; its
+four open questions were answered with the recommendations (A).
 
 The Ruby-style `Regex` was a "later utility" in [pending
 roadmap](../roadmap/pending-general-programming-and-mcp.md).
@@ -293,12 +293,14 @@ error is `CHECK-REGEX-IMPORT`. `Regex` is not reserved, as `HTTP` is not
 
 **Checked, and built before `main`.** The checker runs the 48a parser on the
 body and flags, so an invalid literal is `CHECK-INVALID-REGEX` at its span and
-cannot fail at run time. Lowering emits the compiled program as data and builds
-the private `Program` value from it. The program is not compiled inside the
-constant, since a constant initializer cannot call a `def`
-(`docs/grammar/06-semantics.md`). Each literal is a constant, built once, before
-`main`, and only if a reachable function reads it. Building it charges steps,
-which count toward `--max-steps` before `main`.
+cannot fail at run time. As built, a literal is a call of std/regex's `compile`
+that the checker has proved succeeds: a literal in a function body becomes a
+constant, built once, before `main`, and only if a reachable function reads
+it; a literal in a constant initializer is built with that constant, the one
+call of a `def` an initializer may hold. Emitting the compiled program as data
+was weighed and left out: it would freeze the private `Program` layout into
+the front end. Building a literal charges steps, which count toward
+`--max-steps` before `main`.
 
 **The lexer rule.** A `/` outside a string or comment starts a literal when the
 previous token cannot end an operand. Operand ends are: integer and float
@@ -337,8 +339,7 @@ The cases:
 emitted), a body scanner and a flag scanner (both in code mode), a token kind
 `regex` with body, flags and span, a parser node, the checker rule and the
 constant lowering. The grammar changes go to `docs/grammar/04-lexical.md`,
-`06-semantics.md` and `07-diagnostics.md`. The diagnostic code names here and in
-48.5 are proposals until 48b.
+`06-semantics.md` and `07-diagnostics.md`.
 
 **Ruby differences (question 4).** `^` and `$` are text anchors here and line
 anchors in Ruby, so `/^ERROR/` matches only at the start of the text.
@@ -384,11 +385,11 @@ programming skill state these differences next to the literal.
   `match`, `match?`, `find_all`, `replace`, `split`, `escape` and `named`; the
   limits; goldens, peer, ReDoS test and benchmark. The site page carries the
   warning of 48.5 about `"#{name}"` and `"${name}"`.
-- **48b: the regex literal (48.6).** The lexer rule, the scanners, the node,
-  `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering. `compiler/`
-  only, after 48a. A test checks that a literal equals `Regex.compile` of its
-  body and mapped flags. The programming skill shows the literal as the normal
-  form, with the Ruby differences.
+- **48b: the regex literal (48.6), built.** The lexer rule, the scanners, the
+  node, `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering.
+  `compiler/` only, after 48a. A test checks that a literal equals
+  `Regex.compile` of its body and mapped flags. The programming skill shows the
+  literal as the normal form, with the Ruby differences.
 - **48c: C matcher, if measured.** A stepper with the same API and one STEP per
   resume (48.3). The PR records the numbers and the threshold.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`

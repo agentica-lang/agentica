@@ -1034,6 +1034,36 @@ def literal_node(token: Tokens.Token, value: Ast.LitValue, ids: Int) -> Ast.Expr
   return Ast.Expr.Literal(Ast.Literal(id: ids, value: value, span: token.span))
 end
 
+# A regex literal with its call `compile(pattern).unwrap!`, in post-order: the pattern string, the call, the
+# unwrap!, then the literal. The flag `m` of the literal is `(?s)` of the pattern (`.` matches a newline, as in Ruby).
+def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
+  body = Base.token_text(token)
+  flags = token.lexeme.slice(body.length + 2, token.lexeme.length - body.length - 2)
+  # In a fixed order, so /a/mi and /a/im are the same pattern, (?is)a.
+  mapped = ""
+  if flags.contains?("i")
+    mapped = "i"
+  end
+
+  if flags.contains?("m")
+    mapped = mapped + "s"
+  end
+
+  pattern = body
+  if mapped != ""
+    pattern = "(?#{mapped})#{body}"
+  end
+
+  text = Ast.Expr.Literal(Ast.Literal(id: ids, value: Ast.LitValue.Text(pattern), span: token.span))
+  call = Ast.Expr.Call(
+    Ast.Call(id: ids + 1, name: "", args: [text], piped: false, parenthesized: true, span: token.span),
+  )
+  unwrap = Ast.Expr.MethodCall(
+    Ast.MethodCall(id: ids + 2, target: call, name: "unwrap!", name_span: token.span, args: [], span: token.span),
+  )
+  return Ast.Expr.RegexLit(Ast.RegexLit(id: ids + 3, body: body, flags: flags, call: unwrap, span: token.span))
+end
+
 def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   cursor = pos + 1
   name = ""
@@ -1287,6 +1317,10 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return expr_at(literal_node(token, Base.literal_value(token), ids), pos + 1, ids)
   end
 
+  if kind == "regex"
+    return ok(Base.ExprAt(node: regex_node(token, ids), pos: pos + 1, ids: ids + 4))
+  end
+
   if kind == "left-paren"
     inner = try parse_expression(Base.with_blocks(e, true), pos + 1, ids)
     close = try Base.expect(e, inner.pos, "right-paren", "\")\"", false)
@@ -1336,6 +1370,23 @@ def adjacent?(first: Tokens.Token, second: Tokens.Token) -> Bool
   return first.span.stop.offset == second.span.start.offset
 end
 
+# Whether a / on this line, at or before pos, reads like the start of a regex after a name: `puts /x/`, a space before
+# the / and none after it. The lexer made it division, so the closing / of the pattern found no operand.
+def regex_after_name?(e: Base.Env, pos: Int) -> Bool
+  at = pos
+  while at > 0 and e.tokens[at].kind != "NL"
+    token = e.tokens[at]
+    before = e.tokens[at - 1]
+    if token.kind == "divide" and before.kind == "name" and !adjacent?(before, token)
+      return adjacent?(token, e.tokens[at + 1])
+    end
+
+    at -= 1
+  end
+
+  return false
+end
+
 # Help for a / or * where an expression should start: // and /* */ are not comments in Agentica. Also for the second <
 # of <<, Ruby's push.
 def primary_help(e: Base.Env, pos: Int) -> Diag.Help
@@ -1353,6 +1404,10 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
       "a line that starts with .name continues the expression on the line above, which must end in a value; " +
       "a blank line ends it",
     )
+  end
+
+  if pos > 0 and e.tokens[pos - 1].kind == "divide" and regex_after_name?(e, pos - 2)
+    return Base.hint("a / after a name is division; a call needs parentheses to take a regex, as in puts(/x/)")
   end
 
   if token.kind != "divide" and token.kind != "multiply"

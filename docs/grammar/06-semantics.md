@@ -148,9 +148,10 @@ whole program is read, in the order the constants depend on each other (a
 constant may read one declared later in its file). It may contain literals,
 string interpolation, list, map and `Set.new` literals, ranges, construction of
 structs, enum variants and `ok`/`error` values, operators, field access and
-indexing, reads of other constants, and calls of builtins whose catalog row has
-no effects, with block literals passed to them (the body of such a block may use
-assignments, `if`, `case`, `for`, `break`, `next` and `return`). It may not
+indexing, reads of other constants, regex literals, and calls of builtins whose
+catalog row has no effects, with block literals passed to them (the body of
+such a block may use assignments, `if`, `case`, `for`, `break`, `next` and
+`return`). It may not
 contain a call of a function declared with `def`, a function value (`&name`), a
 block that is not an argument of a builtin, a `while` loop, or a call of a
 builtin with effects (`stdout`, `stdin`, `filesystem`, `network`, `subprocess`,
@@ -192,6 +193,25 @@ attribute or a `const` keyword, since the capitals already mark a constant. A
 constant in a `case` pattern: patterns are literals and variants. Folding
 literal arithmetic. One line holding both import forms. A static data form for
 the initializers is a later option, only if start-up numbers ask for it.
+
+### Regex literals
+
+A regex literal (lexical form in [§4](04-lexical.md)) has the type
+`Regex.Regex` of `std/regex`, and its value is `Regex.compile` of the body,
+after `(?i)`, `(?s)` or `(?is)` for the flags `i`, `m` or both. So `/a.b/im`
+has the `source` `(?is)a.b`. The file must import `std/regex`, in any form (an
+alias, another alias, or a name list); without one the literal is
+`CHECK-REGEX-IMPORT`, at the literal. The checker compiles the pattern with
+`std/regex`, so a literal never fails at run time: a pattern it refuses is
+`CHECK-INVALID-REGEX`, at the character of the body that the error names, or
+at the whole literal when the place is past the body.
+
+A literal in a function or block body is built once, before `main`, as a
+constant is, and only if a function that `main` can reach holds it: a loop does
+not compile it again. A literal in a constant initializer is built with that
+constant. `^` and `$` are text anchors, not line anchors as in Ruby;
+`/(?m)^a/` gives line anchors. There is no `=~` and no `$1`: use
+`Regex.match?`, `Regex.match` and the groups of the match.
 
 ### Void completion
 

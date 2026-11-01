@@ -151,6 +151,35 @@ is a rule:
   - **Help:** comments start with `#`; `4 // 2` has no `//` operator, `/` on two
     Ints truncates
 
+- **Written:** `/a+` with no closing `/` on the line, or a line that starts
+  with `/ 2` (`LEX-UNTERMINATED-REGEX`)
+  - **Help:** end the pattern with `/` on the same line; for a division put the
+    `/` at the end of the line before, or wrap the expression in parentheses
+
+- **Written:** `/a[/]b/` (`LEX-UNTERMINATED-REGEX`)
+  - **Help:** write a slash in a class with a backslash, `[\/]`
+
+- **Written:** `/#{name}/` (`LEX-REGEX-INTERPOLATION`)
+  - **Help:** build a pattern at run time with `Regex.compile(text)`; `\#{`
+    matches the text `#{`
+
+- **Written:** `/a/x`, `/a/ii` (`LEX-REGEX-FLAG`)
+  - **Help:** the flags are `i` (ignore case) and `m` (`.` matches a newline),
+    each once
+
+- **Written:** `/a+/` in a file that does not import `std/regex`
+  (`CHECK-REGEX-IMPORT`)
+  - **Help:** add `import Regex from "std/regex"`; any import of `std/regex`
+    will do
+
+- **Written:** `/ab)/`, `/a{2,1}/` (`CHECK-INVALID-REGEX`)
+  - **Help:** the pattern syntax is that of `std/regex`; escape a literal
+    character with a backslash, such as `\.` or `\/`
+
+- **Written:** `puts /x/` (`PARSE-UNEXPECTED-TOKEN`)
+  - **Help:** a `/` after a name is division; a call needs parentheses to take
+    a regex, `puts(/x/)`
+
 - **Written:** a `##` doc block that is not directly above a `def`, `struct`,
   `enum`, field or variant (`PARSE-DETACHED-DOC`)
   - **Help:** put the doc block on the lines just above what it documents, with

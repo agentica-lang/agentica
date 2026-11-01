@@ -94,7 +94,8 @@ export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   end
 end
 
-# The names of the constants to build: those the reachable functions read, then, to a fixed point, those they read.
+# The names of the constants to build: those the reachable functions read and, to a fixed point, those the kept
+# constants read and those the functions their initializers call read.
 def kept_names(
   function_scans: List[Scans.Scan],
   by_function: Map[String, Int],
@@ -105,26 +106,29 @@ def kept_names(
   reached: Set[String] = Set.new([])
   pending: List[String] = ["main"]
   wanted: List[String] = []
-  at = 0
-  while at < pending.size
-    name = pending[at]
-    at += 1
-    if by_function.has_key?(name) and !reached.include?(name)
-      reached = reached.add(name)
-      scan = function_scans[by_function[name]]
-      wanted = wanted.concat(scan.consts)
-      pending = pending.concat(scan.calls)
-    end
-  end
-
   kept: Set[String] = Set.new([])
   at = 0
-  while at < wanted.size
-    name = wanted[at]
-    at += 1
-    if !literals.has_key?(name) and !kept.include?(name)
-      kept = kept.add(name)
-      wanted = wanted.concat(constant_scans[by_name[name]].consts)
+  wanted_at = 0
+  while at < pending.size or wanted_at < wanted.size
+    if at < pending.size
+      name = pending[at]
+      at += 1
+      if by_function.has_key?(name) and !reached.include?(name)
+        reached = reached.add(name)
+        scan = function_scans[by_function[name]]
+        wanted = wanted.concat(scan.consts)
+        pending = pending.concat(scan.calls)
+      end
+    else
+      name = wanted[wanted_at]
+      wanted_at += 1
+      if !literals.has_key?(name) and !kept.include?(name)
+        kept = kept.add(name)
+        scan = constant_scans[by_name[name]]
+        wanted = wanted.concat(scan.consts)
+        # Only a regex literal makes a constant call a function of the program: std/regex's compile.
+        pending = pending.concat(scan.calls)
+      end
     end
   end
 

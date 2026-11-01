@@ -101,6 +101,16 @@ diagnostics keep their original code and span.
   break (`resume`). No token or node field marks a heredoc: `Base.heredoc?`
   reads the opener text for the `case` pattern and the `import` path. Spans
   inside a body lie after the spans of the nodes that hold them.
+- A `/` starts a `regex` token (`scan_regex`) unless the token before it is in
+  `ENDS_EXPRESSION` (an operand end), or the `/` is part of `//`, `/*` or `*/`.
+  The parser builds `RegexLit` with its `call`, the post-order nodes of
+  `<compile>((?flags)body).unwrap!` whose name is "" until the linker
+  (`rewrite_regex`) fills in std/regex's `compile` for a file that imports it.
+  The checker (`check/check_regex.agc`) runs std/regex on the pattern.
+  `check_const` orders std/regex's constants first, since a literal in a
+  constant calls `compile`. Lowering makes each literal of a function body a
+  constant `regex#<id>` (`lower_scan.regex_constant`, `hoisted_regexes`), and
+  `kept_names` follows the calls of kept constants to a fixed point.
 
 ## Syntax tree (`compiler/syntax/ast.agc`)
 

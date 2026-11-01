@@ -414,6 +414,17 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     return parse_variant_pattern(e, pos, ids)
   end
 
+  if kind == "regex"
+    return error(
+      unexpected_help(
+        e,
+        pos,
+        "expected a pattern, found a regex",
+        "a regex is not a case pattern: test it in an if, as in if Regex.match?(text, /a+/)",
+      ),
+    )
+  end
+
   return error(unexpected(e, pos, "expected a pattern"))
 end
 

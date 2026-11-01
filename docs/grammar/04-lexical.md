@@ -256,3 +256,34 @@ so the nodes built from them stay on the opener line. The tokens inside `#{...}`
 keep their line and column in the body, and a diagnostic about them prints that
 line. A span inside a heredoc can therefore lie after the span of the expression
 that holds it.
+
+### Regex literals
+
+`/pattern/flags` is a regular expression of `std/regex`: the value of
+`Regex.compile` of the body, with the type `Regex.Regex` (semantics in
+[§6](06-semantics.md)). The body has no string escapes. A backslash is read
+with the character after it, so `\/` is a slash in the pattern and `\d` needs
+no second backslash. The body ends at the first unescaped `/`; `#` in the body
+is pattern text, never a comment.
+
+- A line break or the end of the file before the closing `/` is
+  `LEX-UNTERMINATED-REGEX`, at the literal.
+- A `/` inside a class `[...]` ends the literal and leaves the class open, which
+  is also `LEX-UNTERMINATED-REGEX`, with a help: write the slash as `\/`.
+- `#{` in the body is `LEX-REGEX-INTERPOLATION`; `\#{` matches the text `#{`. A
+  pattern built at run time is `Regex.compile(text)`.
+- After the closing `/` come the flags `i` (ignore case, `(?i)`) and `m` (`.`
+  matches a newline, `(?s)`), each at most once, in any order. Any other letter
+  or digit, or a repeated flag, is `LEX-REGEX-FLAG`, at that character.
+
+A `/` starts a literal when the token before it cannot end an operand. The
+operand ends are number and string literals, names, type names, `true`,
+`false`, `nil`, `end`, `)`, `]`, `}` and a regex literal; after one of them `/`
+is division and `/=` is the compound operator. So `a / b / c` and `x /= 2` keep
+their meaning, while `f(/=x/)`, `[/a/, /b/]` and `return /a/` hold literals. A
+line that starts with `/ 2` is `LEX-UNTERMINATED-REGEX`, with a help: put the
+operator at the end of the line before, or wrap the expression in parentheses.
+`//`, `/*` and `*/` stay two operators, which the parser explains as comment
+habits. `puts /x/` is division after a name, a `PARSE-UNEXPECTED-TOKEN` whose
+help shows `puts(/x/)`. A regex is not a `case` pattern
+(`PARSE-UNEXPECTED-TOKEN`).

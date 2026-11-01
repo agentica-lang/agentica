@@ -17,6 +17,7 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Ir from "ir"
 import Data from "lower_data"
+import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
   CODEC_BUILTINS, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
@@ -51,6 +52,14 @@ export def lower_expression(
     Ast.Expr.ConstRef(node) ->
       try typed(cx, expr, known)
       return lower_const_read(cx, fx, node, want)
+    Ast.Expr.RegexLit(node) ->
+      # A literal in a function body is a constant that lowering.agc made for it; in a constant it is its call.
+      hoisted = Scans.regex_constant(node)
+      if cx.reads.has_key?(hoisted)
+        return lower_const_read(cx, fx, Ast.ConstRef(id: node.id, name: hoisted, span: node.span), want)
+      end
+
+      return lower_expression(cx, fx, node.call, want, false, known)
     Ast.Expr.Unary(node) -> return lower_unary_checked(cx, fx, expr, node, want, known)
     Ast.Expr.FieldAccess(node) -> return lower_field_checked(cx, fx, expr, node, want, void, known)
     Ast.Expr.MethodCall(node) -> return lower_method_checked(cx, fx, expr, node, want, void, known)

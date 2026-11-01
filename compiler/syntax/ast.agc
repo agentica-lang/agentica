@@ -418,6 +418,7 @@ export enum Expr
   TypeName(TypeName)
   Typed(TypedTarget)
   ConstRef(ConstRef)
+  RegexLit(RegexLit)
 end
 
 ## A number, string, true, false or nil.
@@ -623,6 +624,18 @@ export struct ConstRef
   span: Source.Span
 end
 
+## A regex literal /body/flags (docs/grammar/04-lexical.md): the body as written and the flags (`i`, `m`). call is
+## `compile(pattern).unwrap!` of std/regex, which builds the value: the parser makes it with the name "" and the
+## pattern (the body after `(?i)`, `(?s)` or `(?is)` for the flags), and the linker names the function when the file
+## imports std/regex. Its nodes take the ids before the literal's own.
+export struct RegexLit
+  id: Int
+  body: String
+  flags: String
+  call: Expr
+  span: Source.Span
+end
+
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
 ## checks it as the first argument without checking it twice. The parser never makes it. id
 ## and span are those of the receiver.
@@ -657,6 +670,7 @@ export def expr_id(expr: Expr) -> Int
     Expr.TypeName(node) -> return node.id
     Expr.Typed(node) -> return node.id
     Expr.ConstRef(node) -> return node.id
+    Expr.RegexLit(node) -> return node.id
   end
 end
 
@@ -684,6 +698,7 @@ export def expr_span(expr: Expr) -> Source.Span
     Expr.TypeName(node) -> return node.span
     Expr.Typed(node) -> return node.span
     Expr.ConstRef(node) -> return node.span
+    Expr.RegexLit(node) -> return node.span
   end
 end
 

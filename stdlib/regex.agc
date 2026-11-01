@@ -165,8 +165,10 @@ struct FlagScan
   scoped: Bool
 end
 
-## Parses and compiles a pattern. An error starts with `character N: `. Limits: 4096 characters, a repetition count of
-## 1000, 10000 instructions after repetitions are expanded, groups nested 256 levels deep and 256 groups.
+## Parses and compiles a pattern. An error starts with `character N: `, N counted from 1: this prefix is a contract,
+## since the checker reads it to place CHECK-INVALID-REGEX in a regex literal (compiler/check/check_regex.agc). Limits:
+## 4096 characters, a repetition count of 1000, 10000 instructions after repetitions are expanded, groups nested 256
+## levels deep and 256 groups.
 export def compile(pattern: String) -> Result[Regex]
   chars = pattern.split("")
   if chars.size > MAX_PATTERN
