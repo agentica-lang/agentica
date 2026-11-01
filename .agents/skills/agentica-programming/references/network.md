@@ -129,17 +129,17 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
   whole call. `proxy: "http://host:port"` sends every `http://` request
   through a forward proxy in absolute form (pooled by the proxy; also
-  `get_response`, `open`, `upload`, `download`, `start`); `https://` with a
-  proxy is an `error` (no `CONNECT` yet), a proxy that cannot be reached is an
-  `error` that names it. User info (`http://user:pass@host:8080`, percent-
+  `get_response`, `open`, `upload`, `download`, `start`); `https://` opens a
+  `CONNECT` tunnel to the target (one per target in a pool) and speaks TLS
+  inside it, verified against the target; a non-2xx answer to the `CONNECT`
+  and a proxy that cannot be reached are an `error` that names the proxy. User info (`http://user:pass@host:8080`, percent-
   decoded, no colon in the user) is sent as `Proxy-Authorization: Basic` to the
   proxy only, and a `407` is an `error` that names the proxy and never the
   credentials. A client never reads the environment: pass
   `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules:
   lower-case `http_proxy`/`https_proxy` first, `HTTP_PROXY` ignored in CGI,
   `no_proxy` with `*`, domains, `:port`, IPs and IPv4 ranges; `""` is none; an
-  `https` proxy is returned but `https://` URLs through it are refused until
-  `CONNECT`).
+  `https://` URL gets `https_proxy`).
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head

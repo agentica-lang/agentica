@@ -366,8 +366,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   request target that is not in absolute form, with two origins. It asserts the
   request line and `Host` the proxy saw for each client call, the one pooled
   proxy connection for two origins, two clients with two proxies, an IPv6
-  literal, a proxy that is down, and the `https` and bad-proxy errors. A third,
+  literal, a proxy that is down, and the bad-proxy error. A third,
   locked proxy answers 407 unless `Proxy-Authorization` is the Basic login of
   `us@er` and `p:ss/w` (written in percent-encoding in the URL); the second
   test asserts the header of each call, the 407 errors, and that the password
-  is in no output, error or trace.
+  is in no output, error or trace. The peer also relays `CONNECT` (it refuses
+  port 9 with 403) to two TLS origins, and a third test runs every `https`
+  call (client, `get_response`, `post_response`, `open`, `upload`, `download`,
+  `start`) through it with `tls: some(context)` and with the system trust
+  (`SSL_CERT_FILE`): one tunnel per target, the login on the `CONNECT` only,
+  the 407 of the locked proxy, the target's own 407 as a response, a
+  certificate that fails inside the tunnel, a refused tunnel and a down proxy.

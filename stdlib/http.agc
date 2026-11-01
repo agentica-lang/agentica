@@ -469,10 +469,11 @@ end
 ## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
 ## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
 ## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
-## connections are pooled by the proxy, and an `https://` request is an error (a `CONNECT` tunnel is not built yet);
-## a `proxy` that is not an `http://` origin is an error here. The user info of the `proxy`
-## (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`, and a
-## `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
+## connections are pooled by the proxy. An `https://` request opens a `CONNECT host:port` tunnel through the proxy,
+## one per target, and speaks TLS inside it, verified against the target (a non-2xx answer to the `CONNECT` is an
+## error that names the proxy). A `proxy` that is not an `http://` origin is an error here. The user info of the
+## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
+## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
   try check_proxy(options)
@@ -496,7 +497,7 @@ end
 ## valid are ignored, one trailing dot of a host or an entry does not count, and the case of a host is not
 ## significant. A `url` that is not valid gives `""`: the call that gets it reports it.
 ##
-## A proxy for an `https://` URL is returned, but `HTTP` does not tunnel to it yet and refuses it.
+## An `https://` URL gets `https_proxy`, which `HTTP` then reaches with a `CONNECT` tunnel.
 export def proxy_from_env(url: String) -> String
   case parse_url(url)
     ok(where) ->
@@ -566,7 +567,7 @@ export def request(
     where.port,
     method,
     request_target(options, where),
-    with_login(options, headers),
+    with_login(options, where.scheme, headers),
     body,
     options.max_body_bytes,
   )
@@ -586,7 +587,7 @@ export def request(
     kept: false,
   )
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
-    ok(_) -> return unless_denied(options, wait_reply(reply, deadline))
+    ok(_) -> return unless_denied(options, where.scheme, wait_reply(reply, deadline))
     error(message) ->
       if message == CHANNEL_CLOSED
         return error(CLIENT_CLOSED)
@@ -626,14 +627,15 @@ export def download(
     where.port,
     "GET",
     request_target(client_options, where),
-    with_login(client_options, []),
+    with_login(client_options, where.scheme, []),
     NO_BYTES,
     client_options.max_body_bytes,
   )
   deadline = Time.monotonic_ms() + options.timeout_ms
-  # What a 407 from the proxy is told as; empty when there is no proxy, whose 407 is the server's own answer.
+  # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
+  # server's own answer.
   denied = ""
-  if client_options.proxy != ""
+  if proxy_asked?(client_options, where.scheme, 407)
     denied = client_denied(client_options)
   end
 
@@ -1097,9 +1099,10 @@ def settled(phase: Int, closes: Bool) -> Exchange
 end
 
 # What the request line says of the target: the path with its query, or, through a proxy, the whole URL (RFC 9112
-# 3.2.2, absolute-form), whose authority is the one the `Host` header has.
+# 3.2.2, absolute-form), whose authority is the one the `Host` header has. An `https` request is inside a CONNECT
+# tunnel and is written as it is with no proxy.
 def request_target(options: HttpClientOptions, where: Target) -> String
-  if options.proxy == ""
+  if options.proxy == "" or where.scheme == "https"
     return where.target
   end
 
@@ -1126,15 +1129,12 @@ def host_authority(host: String, port: Int) -> String
   return "#{name}:#{port}"
 end
 
-# Where a request to `where` connects: the host itself, or the proxy of the options. An `https` request through a proxy
-# needs a CONNECT tunnel, which does not exist yet, so it is refused rather than sent in the clear.
+# Where a request to `where` connects, as the pool names it: the host itself, or the proxy of the options for `http`.
+# An `https` request keeps the target's origin, so a pool keeps one tunnel per target (a client has one proxy): the
+# connection opens the tunnel itself (`connect_https`).
 def connect_target(where: Target, options: HttpClientOptions) -> Result[Target]
-  if options.proxy == ""
+  if options.proxy == "" or where.scheme == "https"
     return ok(where)
-  end
-
-  if where.scheme == "https"
-    return error("http: https through a proxy is not supported yet")
   end
 
   return proxy_target(options)
@@ -1224,8 +1224,9 @@ end
 # The headers of a request that goes through the proxy of `options`: the ones given, and the login of the proxy's user
 # info unless the caller set `Proxy-Authorization` itself. Only the proxy gets it: the header is part of this request,
 # which a forward proxy reads and does not pass on. A connection keeps its login apart: see `connection_headers`.
-def with_login(options: HttpClientOptions, headers: List[Header]) -> List[Header]
-  if options.proxy == ""
+def with_login(options: HttpClientOptions, scheme: String, headers: List[Header]) -> List[Header]
+  # An `https` request is inside the tunnel, where the target reads it: the login went with the CONNECT only.
+  if options.proxy == "" or scheme == "https"
     return headers
   end
 
@@ -1238,6 +1239,10 @@ end
 # The headers of a request on `conn`, with the login its options no longer hold. Only the call that holds the
 # connection's exchange (or owns the connection) reads the login, so taking it and putting it back is safe.
 def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
+  if conn.scheme == "https"
+    return headers
+  end
+
   case conn.login.recv(0)
     ok(login) ->
       conn.login.send(login, 0)
@@ -1288,10 +1293,10 @@ def client_denied(options: HttpClientOptions) -> String
 end
 
 # The answer of a pooled request, or the proxy's error when the proxy answered `407`.
-def unless_denied(options: HttpClientOptions, answer: Result[HttpResponse]) -> Result[HttpResponse]
+def unless_denied(options: HttpClientOptions, scheme: String, answer: Result[HttpResponse]) -> Result[HttpResponse]
   case answer
     ok(response) ->
-      if proxy_asked?(options, response.status)
+      if proxy_asked?(options, scheme, response.status)
         return error(client_denied(options))
       end
 
@@ -1300,9 +1305,10 @@ def unless_denied(options: HttpClientOptions, answer: Result[HttpResponse]) -> R
   end
 end
 
-# True for a `407` answered by the proxy of `options`, which is an error for the call, not a response.
-def proxy_asked?(options: HttpClientOptions, status: Int) -> Bool
-  return status == 407 and options.proxy != ""
+# True for a `407` answered by the proxy of `options` to an `http` request, which is an error for the call, not a
+# response. Inside a tunnel (`https`) a 407 is the target's own answer.
+def proxy_asked?(options: HttpClientOptions, scheme: String, status: Int) -> Bool
+  return status == 407 and options.proxy != "" and scheme == "http"
 end
 
 # `host:port` of a target as an error shows it: an IPv6 literal in brackets and the port always there.
@@ -1530,6 +1536,10 @@ end
 # The socket of `start`: TLS with the context of `options.tls` for `https` (one with the system trust, built for this
 # connection, when it names none), TCP for `http`.
 def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
+  if where.scheme == "https" and options.proxy != ""
+    return tunnel_context(where, options)
+  end
+
   if where.scheme == "https"
     case options.tls
       some(context) -> return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
@@ -1564,6 +1574,107 @@ def connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) ->
   end
 end
 
+# An `https` connection of a client's pool or of a download: TLS to the host, or, with a proxy in the options, a
+# CONNECT tunnel through the proxy with TLS inside it, on the same context as without a proxy (the client's shared
+# system trust, or the one of `options.tls`).
+def connect_https(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+  options = HttpWire.options(client)
+  if options.proxy == ""
+    return connect_tls(client, host, port, timeout_ms)
+  end
+
+  deadline = Time.monotonic_ms() + timeout_ms
+  socket = try tunnel(options, host, port, deadline)
+  upgraded = upgrade_client(client, options, socket, host, deadline)
+  return closing_on_error(upgraded, socket)
+end
+
+# TLS inside the tunnel `socket` to `host`, on the context of `options.tls` or the client's shared one.
+def upgrade_client(
+  client: HttpClient,
+  options: HttpClientOptions,
+  socket: Socket,
+  host: String,
+  deadline: Int,
+) -> Result[Socket]
+  left = try time_left(socket, deadline)
+  case options.tls
+    some(context) -> return HttpWire.upgrade_context(socket, context, host, left)
+    none -> return HttpWire.upgrade_tls(client, socket, host, left)
+  end
+end
+
+# The `https` socket of `start`, `open` and `upload` through a proxy: the tunnel, then TLS inside it on the context of
+# `options.tls`, or on one with the system trust built for this connection (as without a proxy).
+def tunnel_context(where: Target, options: HttpClientOptions) -> Result[Socket]
+  deadline = Time.monotonic_ms() + options.timeout_ms
+  socket = try tunnel(options, where.host, where.port, deadline)
+  context = try tunnel_trust(options)
+  left = try time_left(socket, deadline)
+  return closing_on_error(HttpWire.upgrade_context(socket, context, where.host, left), socket)
+end
+
+def tunnel_trust(options: HttpClientOptions) -> Result[TlsContext]
+  case options.tls
+    some(context) -> return ok(context)
+    none -> return TLS.client_context(TlsClientOptions())
+  end
+end
+
+# `answer`, with `socket` closed when it is an error: a failed upgrade leaves the plain socket open only when its
+# arguments were refused.
+def closing_on_error(answer: Result[Socket], socket: Socket) -> Result[Socket]
+  case answer
+    ok(secured) -> return ok(secured)
+    error(message) ->
+      TCP.close(socket)
+      return error(message)
+  end
+end
+
+# A CONNECT tunnel to `host:port` through the proxy of `options`, as a plain socket the proxy now relays: CONNECT
+# with the proxy's login (RFC 9110 9.3.6), then the head of the answer. A 2xx opens the tunnel; any other status is
+# an error that names the proxy (a 407 as for an `http` request) and never the login or the answer's body.
+def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -> Result[Socket]
+  proxy = try proxy_of(options)
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return error(TIMED_OUT)
+  end
+
+  socket = try reaching(TCP.connect(proxy.target.host, proxy.target.port, left), options, proxy.target)
+  target = proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
+  case tunnel_opened(socket, proxy, target, deadline)
+    ok(status) ->
+      if status >= 200 and status < 300
+        return ok(socket)
+      end
+
+      TCP.close(socket)
+      if status == 407
+        return error(proxy_denied(options, proxy.login != ""))
+      end
+
+      return error("http: the proxy #{proxy_name(proxy.target)} refused the tunnel to #{target} (#{status})")
+    error(message) ->
+      TCP.close(socket)
+      return error(message)
+  end
+end
+
+# The CONNECT sent over `socket` and the status of the head that answers it.
+def tunnel_opened(socket: Socket, proxy: Proxy, target: String, deadline: Int) -> Result[Int]
+  head = "CONNECT #{target} HTTP/1.1\r\nHost: #{target}\r\n"
+  if proxy.login != ""
+    head = "#{head}Proxy-Authorization: #{proxy.login}\r\n"
+  end
+
+  try TCP.send(socket, "#{head}\r\n", try time_left(socket, deadline))
+  # The answer has no body to read: a 2xx is followed by the tunnel and the others are dropped with the socket.
+  response = try read_head_of(socket, true, DOWNLOAD_MAX_BYTES, deadline)
+  return ok(response.status)
+end
+
 # The one value of the cell of `conn`, which the call now holds. An empty cell means another call has it.
 def take_exchange(conn: Connection) -> Result[Exchange]
   case conn.cell.recv(0)
@@ -1588,7 +1699,7 @@ end
 def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes) -> Result[ResponseHead]
   case sent_request(conn, request, head_only, body)
     ok(head) ->
-      if proxy_asked?(conn.options, head.status)
+      if proxy_asked?(conn.options, conn.scheme, head.status)
         end_connection(conn)
         return error(proxy_denied(conn.options, offered?(conn)))
       end
@@ -1829,7 +1940,7 @@ end
 
 # The response of an upload, whole, from its head on.
 def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpResponse]
-  if proxy_asked?(conn.options, response.status)
+  if proxy_asked?(conn.options, conn.scheme, response.status)
     end_connection(conn)
     return error(proxy_denied(conn.options, offered?(conn)))
   end
@@ -3640,7 +3751,7 @@ def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
       attempt = exchange(Answer(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes), reused)
       if not attempt.retry
         # A 407 ends the connection, as it does for `start`, `upload` and `download`.
-        refused = ok_status?(attempt.answer, 407) and worker.options.proxy != ""
+        refused = ok_status?(attempt.answer, 407) and proxy_asked?(worker.options, job.scheme, 407)
         return Done(socket: socket, answer: attempt.answer, kept: attempt.kept and not refused)
       end
       TCP.close(s)
@@ -3662,7 +3773,7 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
     return error(TIMED_OUT)
   end
   if job.scheme == "https"
-    return connect_tls(worker.client, job.host, job.port, left)
+    return connect_https(worker.client, job.host, job.port, left)
   end
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
   return reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
@@ -3884,7 +3995,7 @@ def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[S
     return error(TIMED_OUT)
   end
   if where.scheme == "https"
-    return connect_tls(pool, where.host, where.port, left)
+    return connect_https(pool, where.host, where.port, left)
   end
   return reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
 end

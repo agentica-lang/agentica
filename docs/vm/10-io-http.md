@@ -172,8 +172,17 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   writes the target's `Host`. The job names the proxy as its origin, scheme,
   host and port, so the owner pools connections by the proxy and the worker
   connects to it (a failure names the proxy). `open`, `upload`, `download` and
-  `start` do the same on their own connection. An `https` URL is refused
-  before any connection: there is no `CONNECT` yet. The user info of the proxy
+  `start` do the same on their own connection. An `https` URL keeps the
+  target as the job's origin, scheme, host and port (so a pool keeps one
+  tunnel per target) and the worker, or the call, opens the tunnel itself:
+  `connect_https` connects to the proxy, sends `CONNECT host:port` with the
+  `Host` of the authority and the login, reads the head of the answer (a 2xx
+  has no body, anything else drops the socket and is an error that names the
+  proxy, a 407 as below), and then `HttpWire.upgrade_tls` (the client's shared
+  system-trust context) or `HttpWire.upgrade_context` (`options.tls`, or a
+  context built for a call that has no client) starts TLS on that socket, with
+  the target as the host to verify. Inside the tunnel the request is in origin
+  form, the login is not written and a 407 is the target's. The user info of the proxy
   URL is cut out before `parse_url` (which refuses it) and decoded into one
   `Proxy-Authorization: Basic` header, added to the head of each request and
   never to the URL, the job or an error; a 407 from the proxy ends the call
