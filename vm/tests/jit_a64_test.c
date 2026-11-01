@@ -233,6 +233,22 @@ static void native_calls(void) {
   assert(find_word(&e, ret, 0xF9401A81u) != SIZE_MAX && find_word(&e, ret, 0xF9401E82u) != SIZE_MAX);
 }
 
+/* When every seal synchronizes the cores (call_isb false, agc_jit_use_sync), a native CALL and a TAIL_CALL branch
+   right after the add of the entry, with no isb anywhere. */
+static void calls_without_isb(void) {
+  agc_emitter e;
+  agc_a64_emit_begin(&e, 2);
+  e.call_isb = false;
+  agc_a64_emit_label(&e, 0);
+  agc_a64_emit_call(&e, (agc_instr){0, 2, 1, 0}, 0, 0x4000, 9);
+  agc_a64_emit_label(&e, 1);
+  agc_a64_emit_tail_call(&e, (agc_instr){0, 2, 1, 0}, 1, false, 0x4000, 2, 9, 0);
+  assert(agc_a64_emit_end(&e) > 0);
+  assert(find_word(&e, 0, 0xD5033FDFu) == SIZE_MAX);
+  size_t blr = find_word(&e, e.labels[0], 0xD63F01E0u), br = find_word(&e, e.labels[1], 0xD61F01E0u);
+  assert(blr < e.labels[1] && at(&e, blr - 4) == 0x910021EFu && br != SIZE_MAX && at(&e, br - 4) == 0x910011EFu);
+}
+
 /* The cap: a function whose code would pass AGC_JIT_CODE_CAP fails and writes nothing more. */
 static void cap(void) {
   agc_emitter e;
@@ -248,6 +264,7 @@ int main(void) {
   words();
   every_kind();
   native_calls();
+  calls_without_isb();
   cap();
   return 0;
 }

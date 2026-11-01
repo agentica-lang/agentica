@@ -13,6 +13,12 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+#if defined(__aarch64__) && defined(__linux__)
+#include <sys/syscall.h>
+
+/* The commands of membarrier(2) since Linux 4.16 (linux/membarrier.h), spelled out for older headers. */
+enum { MEMBARRIER_SYNC_CORE = 1 << 5, MEMBARRIER_REGISTER_SYNC_CORE = 1 << 6 };
+#endif
 
 size_t agc_jit_mem_page(void) {
   long page = sysconf(_SC_PAGESIZE);
@@ -37,6 +43,21 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
+
+#if defined(__aarch64__) && defined(__linux__)
+/* False on a kernel without the command (EINVAL), or where seccomp refuses the call: then each native call keeps
+   its isb (agc_jit_use_sync). */
+bool agc_jit_mem_sync_register(void) { return syscall(SYS_membarrier, MEMBARRIER_REGISTER_SYNC_CORE, 0, 0) == 0; }
+
+bool agc_jit_mem_sync_cores(void) { return syscall(SYS_membarrier, MEMBARRIER_SYNC_CORE, 0, 0) == 0; }
+#else
+/* x86-64 fetches coherently and needs neither. macOS documents no way to make other threads synchronize: the cache
+   maintenance of the seal (sys_icache_invalidate) runs isb on the calling core only, so a native call keeps its isb
+   there. */
+bool agc_jit_mem_sync_register(void) { return false; }
+
+bool agc_jit_mem_sync_cores(void) { return false; }
+#endif
 
 #if defined(__aarch64__) && defined(__linux__)
 /* The cache maintenance that libgcc and compiler-rt call __clear_cache, defined here on Linux arm64, where the seal

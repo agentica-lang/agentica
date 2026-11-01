@@ -246,8 +246,9 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
   (`backward` in `jit.c`).
 - Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, Linux and macOS;
   `jit_a64_test.c` checks its words on any machine, the `jit-arm64` CI job and
-  Platforms run it). On arm64 a code slot is read with `ldar` and new code is
-  entered after `isb`. macOS seals with plain `mprotect`, so the binary must
+  Platforms run it). On arm64 a code slot is read with `ldar`; a native call
+  runs `isb` before it branches unless each seal ran membarrier `SYNC_CORE`
+  (Linux, registered once in `agc_jit_use_sync`). macOS seals with plain `mprotect`, so the binary must
   not have the hardened runtime (`tools/release-check.sh` checks it, and
   `release.py smoke` checks that the package compiles).
 - A new instruction with code needs: a case in `has_code` and in the walk, its

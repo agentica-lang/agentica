@@ -608,7 +608,7 @@ static void epilogue_if(agc_emitter *e, int cc) {
 
 /* CALLEE = the code in the code table's SLOT, read when the call runs, then compared with 0 (EQ when the callee has
    none). The load acquires (ldar), so the code that another thread wrote and published with a release store is seen
-   whole; a native call then runs isb before it branches there (call_code), as run_compiled does (agc_jit_sync). */
+   whole; a native call then branches there (call_code), after an isb unless the seal synchronized every core. */
 static void load_code(agc_emitter *e, uint64_t slot) {
   move_imm64(e, T1, slot);
   put32(e, 0xC8DFFC00u | (uint32_t)T1 << 5 | (uint32_t)CALLEE); /* ldar x15, [x10] */
@@ -633,10 +633,12 @@ static void top_frame(agc_emitter *e) {
   put32(e, 0xD100814Au); /* sub x10, x10, #32 */
 }
 
-/* Branches to CALLEE + ENTRY (blr with LINK, else br), after isb: the code may be another thread's, just sealed. */
+/* Branches to CALLEE + ENTRY (blr with LINK, else br). The code may be another thread's, just sealed: an isb first
+   drops what this core fetched before, unless each seal makes every thread pass such an event (call_isb false; the
+   argument is at the seal in jit.c). */
 static void call_code(agc_emitter *e, uint32_t entry, bool link) {
   add_imm(e, CALLEE, CALLEE, entry);
-  put32(e, 0xD5033FDFu);                                        /* isb */
+  if (e->call_isb) put32(e, 0xD5033FDFu);                       /* isb */
   put32(e, (link ? 0xD63F0000u : 0xD61F0000u) | (uint32_t)CALLEE << 5); /* blr or br x15 */
 }
 

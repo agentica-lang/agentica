@@ -27,6 +27,11 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
   return FlushInstructionCache(GetCurrentProcess(), pages, size) != 0;
 }
 
+/* Windows has an emitter on x86-64 only, which fetches coherently. */
+bool agc_jit_mem_sync_register(void) { return false; }
+
+bool agc_jit_mem_sync_cores(void) { return false; }
+
 void agc_jit_mem_unmap(void *pages, size_t size) {
   (void)size;
   VirtualFree(pages, 0, MEM_RELEASE);

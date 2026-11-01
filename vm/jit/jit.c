@@ -354,6 +354,7 @@ const agc_jit_plain *agc_jit_plain_of(const agc_builtin *b) {
 void agc_emit_start(agc_emitter *e, uint32_t count) {
   memset(e, 0, sizeof *e);
   e->count = count;
+  e->call_isb = true;
   e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
 }
 
@@ -426,6 +427,7 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
   uint32_t self = (uint32_t)(f - p->functions);
   uint64_t counter = AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT) ? (uint64_t)(uintptr_t)jit : 0;
   agc_emit_begin(e, f->count);
+  e->call_isb = !jit->sync_cores;
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
     agc_instr in = f->code[pc];
     agc_opcode op = (agc_opcode)plain_op(in.op);
@@ -678,6 +680,15 @@ static void seal_batch(agc_jit *jit, uint32_t function, const uint8_t *code, siz
       memcpy(memory + at, code, size);
     }
     sealed = jit->seal(memory, pages);
+    /* Cross-modifying code on arm64: the seal cleaned the data cache and invalidated the instruction cache to the
+       point of unification for every core (dc cvau, ic ivau, dsb ish), but another core may still hold instructions
+       it fetched before, and only a context synchronization event on that core drops them. membarrier's SYNC_CORE
+       returns once every running thread of the process has taken the IPI, whose exception return is one, and a
+       thread that is not running takes one when it returns to user space. So each thread passes one after the cache
+       maintenance and before the release stores of publish below; a thread that then loads a code slot with acquire
+       (ldar in a native call) fetches after its own event and sees the new code without an isb of its own. When it
+       fails, nothing is published, as when the seal fails. */
+    if (sealed && jit->sync_cores) sealed = jit->sync_cores();
     if (!sealed) {
       AGC_TRACE(jit->trace, AGC_TRACE_JIT, "memory pages=%zu", pages);
       jit->cap = atomic_load_explicit(&jit->used, memory_order_relaxed);
@@ -814,6 +825,10 @@ agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block) {
 _Static_assert(AGC_JIT_SAMPLE == 1u << AGC_JIT_SAMPLE_BITS && AGC_JIT_SAMPLE_MAX == 1u << AGC_JIT_SAMPLE_MAX_BITS,
                "the sample bits match the intervals");
 
+void agc_jit_use_sync(agc_jit *jit, bool (*register_sync)(void), bool (*sync_cores)(void)) {
+  jit->sync_cores = register_sync() ? sync_cores : NULL;
+}
+
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace) {
   if (mode == AGC_JIT_OFF || !AGC_JIT_HOST) return NULL;
   /* Each function is decided once, here: a function kept out is never counted or walked again, and a run where every
@@ -861,6 +876,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->page = agc_jit_mem_page();
   jit->cap = AGC_JIT_CODE_CAP;
   jit->seal = agc_jit_mem_seal;
+  agc_jit_use_sync(jit, agc_jit_mem_sync_register, agc_jit_mem_sync_cores);
   jit->chunk = jit->chunk_used = 0;
   jit->hot_entries = AGC_JIT_THRESHOLD;
   jit->hot_passes = AGC_JIT_PASSES;

@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <uv.h>
 
@@ -307,6 +308,65 @@ static AGC_JIT_CALLER void native_calls(void) {
   assert(same_bits(regs[2], agc_int(43)) && t->frame_count == 1);
   *t = saved;
   vm.next_stop = 1000;
+}
+
+static int syncs;
+static bool refuse_register(void) { return false; }
+static bool accept_register(void) { return true; }
+static bool count_sync(void) {
+  syncs++;
+  return true;
+}
+
+#if defined(__aarch64__)
+/* The word before the blr of the first native CALL in CODE, the code of a function whose first instruction is that
+   CALL: isb when the call synchronizes itself, else the add of the native entry. */
+static uint32_t before_call(agc_jit_code code) {
+  const uint8_t *at = (const uint8_t *)(uintptr_t)code;
+  for (size_t k = 4; k < 4096; k += 4) {
+    uint32_t word, previous;
+    memcpy(&word, at + k, 4);
+    memcpy(&previous, at + k - 4, 4);
+    if (word == 0xD63F01E0u) return previous; /* blr x15 */
+  }
+  abort();
+}
+#endif
+
+/* The JIT decides once, at the start, whether seals synchronize every core (Linux arm64 with membarrier): a failed
+   registration leaves seals alone and each native call with its isb; a working one runs the sync at each seal and
+   drops the isb. Both run the native call of native_calls. */
+static AGC_JIT_CALLER void sync_choice(void) {
+  static agc_instr caller[] = {{AGC_OP_CALL, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
+  static agc_instr callee[] = {{AGC_OP_CONST, 1, 1, 0}, {AGC_OP_ADD_I, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static uint32_t spans[3] = {0};
+  static const agc_trace quiet = {0};
+  agc_value constants[2] = {agc_int(0), agc_int(1)};
+  agc_function fns[2] = {
+    {.name = agc_make_string("caller", 6, 6), .registers = 4, .code = caller, .spans = spans, .count = 2},
+    {.name = agc_make_string("callee", 6, 6), .registers = 2, .code = callee, .spans = spans, .count = 3},
+  };
+  agc_program program = {.functions = fns, .function_count = 2, .constants = constants, .constant_count = 2};
+  for (int works = 0; works < 2; works++) {
+    agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
+    assert(jit);
+    syncs = 0;
+    agc_jit_use_sync(jit, works ? accept_register : refuse_register, count_sync);
+    assert(works ? jit->sync_cores == count_sync : !jit->sync_cores);
+    assert(agc_jit_code_of(jit, 1, 0));
+    agc_jit_code code = agc_jit_code_of(jit, 0, 0);
+    assert(code && syncs == (works ? 2 : 0));
+#if defined(__aarch64__)
+    assert(before_call(code) == (works ? 0x910021EFu : 0xD5033FDFu)); /* add x15, x15, #8, or isb */
+#endif
+    agc_task saved = *vm.task;
+    agc_frame frames[2] = {{.function = 0}};
+    agc_value regs[8] = {[2] = agc_int(41)};
+    run_on(vm.task, frames, regs);
+    expect_exit(code(&vm, regs, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+    assert(same_bits(regs[2], agc_int(42)) && vm.task->frame_count == 1);
+    *vm.task = saved;
+  }
 }
 
 /* Function 0 calls function 1 natively with n in R2; function 1 tail-calls function 2 (sum) with (n, 0), which adds n,
@@ -1764,6 +1824,7 @@ int main(void) {
   if (X64) bytes();
   call_return_exits();
   native_calls();
+  sync_choice();
   native_leaf_calls();
   plain_leaf_calls();
   string_code_calls();
