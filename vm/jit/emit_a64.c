@@ -79,6 +79,14 @@ static uint32_t word_at(const agc_emitter *e, size_t at) {
          (uint32_t)e->code[at + 3] << 24;
 }
 
+/* b from FROM to TO, both byte offsets in the code, which is at most AGC_JIT_CODE_CAP long: in range of the 26-bit
+   word offset either way. The entry's movz/movk carry the table's distance in 32 bits, which the cap also bounds. */
+_Static_assert(AGC_JIT_CODE_CAP < (128u << 20), "a b reaches 128 MiB either way: every target in the code is in range");
+static uint32_t b_to(size_t from, size_t to) {
+  int64_t words = ((int64_t)to - (int64_t)from) / 4;
+  return 0x14000000u | ((uint32_t)words & 0x3FFFFFFu);
+}
+
 /* b to a patch's target, written by agc_emit_end. Every label, exit stub and the epilogue is reached by b, whose 26-bit
    offset covers 128 MiB, twice the code cap, so a function never has a target out of range. */
 static void branch_to(agc_emitter *e, agc_jit_patch_kind kind, uint64_t value) {
@@ -777,6 +785,34 @@ void A64(call_value)(agc_emitter *e, agc_instr in, uint32_t pc) {
   returned(e, in.a);
 }
 
+/* CALL_BUILTIN of a block call row at BUILTIN, as on x86-64 (agc_emit_block_call there): below
+   AGC_JIT_NATIVE_DEPTH, agc_jit_block_start, then one dispatch of its answers and of agc_jit_block_next's: a code
+   address calls the block's code at its native entry (call_code: after an isb unless the seal synchronized every
+   core), and after its native RETURN R[a] takes the block's value and agc_jit_block_next answers; 0 goes on,
+   AGC_JIT_BLOCK_RESTART takes the YIELD exit at AGC_JIT_PC_RESTART, any other answer is the exit's status at PC. */
+void A64(block_call)(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
+  compare_imm(e, true, DEPTH, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_HS, AGC_JIT_EXIT_INTERPRET, pc);
+  builtin_args(e, in, pc, builtin, span);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_block_start);
+  size_t dispatch = e->len;
+  compare_imm(e, true, X0, AGC_JIT_BLOCK_CODE);
+  size_t call = skip_if(e, CC_HS);
+  compare_imm(e, false, X0, AGC_JIT_BLOCK_RESTART);
+  exit_if(e, CC_EQ, AGC_JIT_EXIT_YIELD, AGC_JIT_PC_RESTART);
+  size_t done = skip_zero(e, false, false, X0);
+  branch_to(e, AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+  land(e, call);
+  move_reg(e, true, CALLEE, X0);
+  add_imm(e, X1, REGS, TAG((uint64_t)in.a + 1));
+  call_code(e, A64_NATIVE_ENTRY, true);
+  returned(e, in.a);
+  move_reg(e, true, X0, VM);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_block_next);
+  put32(e, b_to(e->len, dispatch));
+  land(e, done);
+}
+
 /* RETURN R[a]: under a native call (x22 above 0), the frame popped as return_value pops it, and
    AGC_JIT_EXIT_RETURNED with R[a] in x1:x2 for the caller's code (returned). Else agc_jit_block_return(vm, &R[a])
    first: when the frame returns to a block call that calls the same function again, the frame starts over with the
@@ -805,14 +841,6 @@ void A64(return)(agc_emitter *e, uint32_t a, uint32_t pc) {
   bump32(e, T0, TASK_FIELD(depth), -1);
   move_imm32(e, X0, AGC_JIT_EXIT_RETURNED);
   branch_to(e, AGC_JIT_PATCH_EPILOGUE, 0);
-}
-
-/* b from FROM to TO, both byte offsets in the code, which is at most AGC_JIT_CODE_CAP long: in range of the 26-bit
-   word offset either way. The entry's movz/movk carry the table's distance in 32 bits, which the cap also bounds. */
-_Static_assert(AGC_JIT_CODE_CAP < (128u << 20), "a b reaches 128 MiB either way: every target in the code is in range");
-static uint32_t b_to(size_t from, size_t to) {
-  int64_t words = ((int64_t)to - (int64_t)from) / 4;
-  return 0x14000000u | ((uint32_t)words & 0x3FFFFFFu);
 }
 
 /* The stub of an exit: x0 = the exit word (with the helper's status for EXIT_STATUS), then back to the epilogue. */

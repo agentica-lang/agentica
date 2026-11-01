@@ -280,7 +280,11 @@ returns.
     stepper, or charges turn cost, and its work is bounded.
   - A *block call* is a builtin row with a native kind (`map`, `filter`,
     `reduce` and the others). Its native frame calls a block, and the block's
-    frames run in compiled code when the block has code.
+    frames run in compiled code when the block has code. Compiled code starts
+    the call itself (`agc_jit_block_start`) when the block has code and the
+    task has room, and calls the block natively for each item;
+    `agc_jit_block_next` takes the native frame's next step after each
+    `RETURN`.
 
   Compiled code calls a direct builtin itself, and a leaf builtin when a native
   call is below it, so the native calls stay on the C stack. A leaf at native
@@ -297,8 +301,13 @@ returns.
   - `COST`: applies a turn cost.
   - `INTERPRET`: an instruction without code or with a slow path, which the
     interpreter runs. `run_compiled` calls a leaf builtin itself, at native
-    depth 0 or after a failed tag check. It starts a block call, whose block
-    then runs in its code.
+    depth 0 or after a failed tag check. It starts a block call that compiled
+    code did not start, whose block then runs in its code.
+  - `RESUME`: a block call that compiled code started has a step that may
+    fail, take a slow step or sort (a value of `filter`, `any?` or `all?` that
+    is not a Bool, a slow step of `times`, `upto`, `downto` or `each` of a
+    Range, the last item of `sort_by`). `run_compiled` resumes the native
+    frame, as the interpreter's `RETURN` does.
   - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
     transitions, then the code of the new top frame if it has some.
   - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
@@ -423,9 +432,10 @@ returns.
   - A builtin that is neither leaf, direct nor a block call (for example
     output, tasks, channels and files) returns to the turn loop and unwinds the
     native calls below it.
-  - A block call whose block has code takes the `RETURN` exit at its end, and
-    at a slow step of `times`, `upto`, `downto` or `each` of a Range. A block
-    that a stepper calls takes it at each call.
+  - A block call whose block has code takes the `RESUME` exit at a slow step
+    of `times`, `upto`, `downto` or `each` of a Range and at the end of
+    `sort_by`. After a turn ended inside it, it takes the `RETURN` exit at its
+    end. A block that a stepper calls takes it at each call.
   - A function with a loop that is called often but whose loop rarely runs still
     pays the entry and the exit at each call.
   - Until some code is published, only turns that start near a function that may

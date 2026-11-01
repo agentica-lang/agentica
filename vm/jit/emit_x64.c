@@ -718,6 +718,17 @@ void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, ui
   BYTES(e, 0x41, 0xFF, 0xE3);                     /* jmp r11 */
 }
 
+/* The native call of the code in rax with its R at R[a + 1] (a function value's window, a block's frame), whose
+   native RETURN hands over the value for R[a] (store_returned); any other exit word goes up unchanged. */
+static void call_window(agc_emitter *e, uint32_t a) {
+  lea(e, ARG1, REGS, TAG((uint64_t)a + 1));
+  BYTES(e, 0x48, 0x83, 0xC0, AGC_JIT_NATIVE_ENTRY); /* add rax, native entry */
+  BYTES(e, 0xFF, 0xD0);                             /* call rax */
+  BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
+  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+  store_returned(e, a);
+}
+
 /* CALL_VALUE of the function value in R[a] with in.b arguments after it, as a native call when it can be one:
    below AGC_JIT_NATIVE_DEPTH, agc_jit_call_value(vm, &R[a], argc, pc) checks the value and the room and pushes the
    frame (base a + 1, result to R[a]) as call_value does, and returns the callee's code, which is called at its native
@@ -735,12 +746,38 @@ void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_value);
   BYTES(e, 0x48, 0x85, 0xC0); /* test rax, rax */
   exit_if(e, CC_E, AGC_JIT_EXIT_CALL_VALUE, pc);
-  lea(e, ARG1, REGS, TAG((uint64_t)in.a + 1));
-  BYTES(e, 0x48, 0x83, 0xC0, AGC_JIT_NATIVE_ENTRY); /* add rax, native entry */
-  BYTES(e, 0xFF, 0xD0);                             /* call rax */
-  BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
-  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
-  store_returned(e, in.a);
+  call_window(e, in.a);
+}
+
+/* CALL_BUILTIN of a block call row at BUILTIN: below AGC_JIT_NATIVE_DEPTH, agc_jit_block_start(vm, &R[a], builtin,
+   span << 32 | pc + 1), else the INTERPRET exit. Each answer of it and of agc_jit_block_next goes to one dispatch: a
+   code address calls the block's code at its native entry with its R at R[a + 1]; after its native RETURN, R[a] takes
+   the block's value (the native frame's register) and agc_jit_block_next(vm) answers. 0 goes on after the call,
+   AGC_JIT_BLOCK_RESTART takes the YIELD exit at AGC_JIT_PC_RESTART, and any other answer is the exit's status at PC.
+   An exit of the block goes up unchanged, with its frame on top. */
+void agc_emit_block_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span) {
+  BYTES(e, 0x49, 0x81, 0xFE); /* cmp r14, depth */
+  word32(e, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_AE, AGC_JIT_EXIT_INTERPRET, pc);
+  builtin_args(e, in, pc, builtin, span);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_block_start);
+  size_t dispatch = e->len;
+  BYTES(e, 0x48, 0x3D); /* cmp rax, code */
+  word32(e, AGC_JIT_BLOCK_CODE);
+  size_t call = jump_to_patch(e, CC_AE);
+  byte(e, 0x3D); /* cmp eax, restart */
+  word32(e, AGC_JIT_BLOCK_RESTART);
+  exit_if(e, CC_E, AGC_JIT_EXIT_YIELD, AGC_JIT_PC_RESTART);
+  BYTES(e, 0x85, 0xC0); /* test eax, eax */
+  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+  size_t done = jump_to_patch(e, -1);
+  land(e, call);
+  call_window(e, in.a);
+  move_reg(e, true, ARG0, VM);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_block_next);
+  size_t back = jump_to_patch(e, -1);
+  put32_at(e, back, (uint32_t)(int32_t)((int64_t)dispatch - (int64_t)(back + 4)));
+  land(e, done);
 }
 
 /* RETURN R[a]: under a native call, the frame popped as return_value pops it, and AGC_JIT_EXIT_RETURNED with R[a] in

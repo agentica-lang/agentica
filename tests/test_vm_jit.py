@@ -613,6 +613,17 @@ def jit_trace(bytecode, tmp_path, mode):
     return trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
 
 
+def sched_turns(bytecode, tmp_path):
+    """{mode: the turns that the sched trace counts} of a run on one scheduler in each mode."""
+    turns = {}
+    for mode in MODES:
+        trace = tmp_path / f"sched-{mode}.trace"
+        run_vm(bytecode, "--jit", mode, "--schedulers", "1",
+               env=vm_environment({"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": trace}))
+        turns[mode] = sum(" sched turn " in line for line in trace.read_text(encoding="utf-8").splitlines())
+    return turns
+
+
 def compiled(bytecode, tmp_path, mode="always"):
     """The functions the jit trace says were compiled in a run with --jit MODE."""
     lines = jit_trace(bytecode, tmp_path, mode)
@@ -786,12 +797,7 @@ end
     assert compiled(bytecode, tmp_path, "on") == (["build"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.endswith("\n2700\n"), (stdout, stderr)
-    turns = {}
-    for mode in ("off", "on", "always"):
-        trace = tmp_path / f"sched-{mode}.trace"
-        run_vm(bytecode, "--jit", mode, "--schedulers", "1",
-               env=vm_environment({"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": trace}))
-        turns[mode] = sum(" sched turn " in line for line in trace.read_text(encoding="utf-8").splitlines())
+    turns = sched_turns(bytecode, tmp_path)
     assert turns["off"] > 300 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
 
 
@@ -1270,13 +1276,12 @@ def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
         counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
                   if " jit block count=" in line or " jit transition count=" in line or " jit leaf count=" in line}
         blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
-        # About one transition per block call (its last RETURN, 8,000 calls, a few interpreted before the block has
-        # code), not one per leaf below a native call. Of the half a million leaf calls, only those at native depth 0
-        # of the builtins that can fail take an exit (a frame that goes on after its native calls were unwound, as
-        # when a turn ended in them).
+        # Compiled code starts the 8,000 block calls itself and calls their block natively, so a call leaves compiled
+        # code only when a turn ends inside it (its last RETURN then exits), and no leaf below a native call does. Of
+        # the half a million leaf calls, only those at native depth 0 of the builtins that can fail take an exit (a
+        # frame that goes on after its native calls were unwound, as when a turn ended in them).
         assert counts.get("leaf", 0) < 50000, (mode, counts)
-        assert (blocks >= 7000 and transitions < blocks * 3 // 2) if jit_host() else blocks == transitions == 0, \
-            (mode, counts)
+        assert (blocks < 1000 and transitions < 4000) if jit_host() else blocks == transitions == 0, (mode, counts)
     steps = int(stdout.split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
 
@@ -1568,9 +1573,10 @@ end
 
 # Two tasks whose compiled loop (work) makes block calls of every kind over 300 items: map, filter, reduce, any? and
 # all? (both stop early), each, sort_by, a named function as the block, times, upto, downto and each of a Range, with
-# captured values. A compiled block that returns while its call has items left starts over in place, so only the last
-# item of each call (or the one that stops it) leaves compiled code. The turns of the two tasks end inside these
-# calls, and the order of the lines shows where.
+# captured values. Compiled code starts each call and calls its block natively; a block whose frame goes on at native
+# depth 0 (a turn ended inside it) and returns while its call has items left starts over in place, so only its last
+# item (or the one that stops it) leaves compiled code. The turns of the two tasks end inside these calls, and the
+# order of the lines shows where.
 BLOCK_KINDS = """def triple(x: Int) -> Int
   return x * 3
 end
@@ -1622,12 +1628,91 @@ def test_block_calls_of_every_kind_start_their_block_again_in_compiled_code(tmp_
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
-                  if " jit block count=" in line or " jit transition count=" in line}
+                  if " jit block count=" in line or " jit transition count=" in line or " jit turn count=" in line}
         blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
-        # One RETURN exit for each block call (and a few calls of work and main), not one for each item.
-        assert (blocks > 300 and transitions < 2 * blocks) if jit_host() else blocks == transitions == 0, (mode, counts)
+        # Of the 780 block calls, run_compiled starts only those whose block has no code yet, and a call leaves
+        # compiled code only when a turn ends inside it: fewer transitions than turns, not one for each call.
+        assert (blocks < 100 and transitions < counts.get("turn", 0)) if jit_host() else blocks == transitions == 0, \
+            (mode, counts)
     steps = int(stdout.split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
+
+
+# A block that compiled code calls natively fails (a division by zero in round 400): every tier fails at the block's
+# division with the same span and stack (the block, scan, main), its frame on top of the map's native frame.
+BLOCK_FAILS = """def scan(items: List[Int], rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total += items.map do |x| 1000 / (x + 400 - r) end.sum
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  items = (0...30).to_a
+  puts("before")
+  puts(scan(items, 1000))
+end
+"""
+
+
+def test_a_block_called_natively_fails_as_in_the_interpreter(tmp_path):
+    bytecode = compile_text(BLOCK_FAILS, "block_fails", tmp_path)
+    on = compiled(bytecode, tmp_path, "on")
+    assert all(name in on for name in ("block@block_fails.agc:5:24", "scan")) if jit_host() else on == [], on
+    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "scan", "main")
+
+
+# Two tasks whose compiled loop makes block calls of every kind over one or two items, so turns often end at a call's
+# last item, any? and all? stop at the first, and the steps of times, upto and each of a Range often fall where a turn
+# or a step limit stops: such a step, and sort_by's last item, leave compiled code (the RESUME exit) to be taken where
+# the interpreter takes it.
+# The order of the lines, the number of turns and the stop of every step limit are the same in every tier.
+SHORT_BLOCKS = """def work(id: Int) -> Int
+  total = 0
+  r = 0
+  while r < 3000
+    one = [r + id]
+    two = [r, id]
+    total += one.map do |x| x + 1 end.first
+    total += two.filter do |x| x % 2 == 0 end.size
+    total += two.reduce(0) do |acc, x| acc + x end
+    if two.any? do |x| x >= 0 end
+      total += 1
+    end
+    if two.all? do |x| x < 0 end
+      total += 1
+    end
+    total += two.sort_by do |x| 0 - x end.first
+    3.times do |i| i + id end
+    id.upto(id + 1) do |i| i end
+    (0...3).each do |i| i + r end
+    if r % 1000 == 0
+      puts("#{id} #{r} #{total}")
+    end
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&work, 2)
+  puts(work(1))
+  puts(Task.await(t))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_short_block_calls_end_turns_and_steps_as_in_the_interpreter(tmp_path):
+    bytecode = compile_text(SHORT_BLOCKS, "short_blocks", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.count("\n") == 9, stdout
+    turns = sched_turns(bytecode, tmp_path)
+    assert turns["off"] > 100 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+    assert_step_limits_stop_alike(bytecode, int(stdout.split("steps ")[1]))
 
 
 # map's block is &f, which tail-calls g (a loop long enough to end turns, compiled under `on`), which tail-calls f

@@ -44,8 +44,10 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
    runs with the interpreter's call_value (agc_jit_call_value_exit), failures included. RETURNED never reaches
    run_compiled: it is the answer of a natively called function's RETURN to its caller's code. YIELD and RAISE come from
    a builtin that compiled code called (agc_jit_call_builtin): it returned and the turn ends, or it failed or exited,
-   and run_compiled jumps to the turn's target. An exit from a natively called function goes up through its callers'
-   code unchanged, so run_compiled finds that function's frame on top. */
+   and run_compiled jumps to the turn's target. RESUME comes from a block call that compiled code started
+   (agc_jit_block_next): its native frame is on top, with the block's value in its register, and run_compiled resumes
+   it. An exit from a natively called function goes up through its callers' code unchanged, so run_compiled finds that
+   function's frame on top. */
 enum {
   AGC_JIT_EXIT_STEP = 16,
   AGC_JIT_EXIT_COST,
@@ -56,7 +58,8 @@ enum {
   AGC_JIT_EXIT_YIELD,
   AGC_JIT_EXIT_RAISE,
   AGC_JIT_EXIT_TAIL_CALL,
-  AGC_JIT_EXIT_CALL_VALUE
+  AGC_JIT_EXIT_CALL_VALUE,
+  AGC_JIT_EXIT_RESUME
 };
 
 /* An exit: 8 bytes, so both calling conventions return it in one register (rax), status in the low half. */
@@ -293,6 +296,29 @@ agc_value *agc_jit_block_return(agc_vm *vm, const agc_value *result);
 /* The pc of an exit taken by a frame that starts over at instruction 0 (agc_jit_block_return): run_compiled sets the
    top frame's pc to the exit's pc + 1, which wraps to 0. */
 #define AGC_JIT_PC_RESTART UINT32_MAX
+/* CALL_BUILTIN of a row with a native kind (`map`, `filter`, `times` and the others but a stepper) in compiled code,
+   the start of a block call whose block compiled code calls natively, as run_compiled starts it after the INTERPRET
+   exit (start_native): ARGS is the window R + a and WHERE is as for agc_jit_call_builtin. When the arguments have the
+   tags the row reads, the block is a function value whose function has code (compiled now if need be) and takes the
+   row's arguments and its captures, the task has room for the native frame, the block's frame and its registers and
+   one more depth without growing an array or failing, and a counting call's first step is on the fast path, it pushes
+   the native frame, which takes its first step. Otherwise it changes nothing and answers AGC_JIT_EXIT_INTERPRET.
+   The answer is one word: the block's code, when the native frame pushed the block's frame, for the code to call at
+   its native entry with the block's R at ARGS + 1; AGC_STATUS_OK when the call ended at once (no item, the result in
+   ARGS[0]), for the code to go on; AGC_JIT_EXIT_YIELD when it ended and its turn cost ended the turn, for the YIELD
+   exit at the call's pc; AGC_JIT_BLOCK_RESTART when the block's frame was pushed and its turn charge ended the turn,
+   for the YIELD exit at AGC_JIT_PC_RESTART (the block's frame then starts at instruction 0 in the next turn). A code
+   address is never below AGC_JIT_BLOCK_CODE. It never fails or parks; it may allocate and compile. */
+uint64_t agc_jit_block_start(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where);
+/* After the block's native RETURN (AGC_JIT_EXIT_RETURNED), once the code wrote the block's value to the call's
+   register (the native frame's, which is on top): the native frame's next step, as the interpreter's RETURN takes it
+   (resume_native), with the answers of agc_jit_block_start. When that step may fail, take a slow step or sort (the
+   value of filter, any? or all? is not a Bool, a counting call's step is the slow one, sort_by's last item), it
+   changes nothing and answers AGC_JIT_EXIT_RESUME, whose exit at the call's pc makes run_compiled take the step. It
+   never fails or parks; it may allocate. */
+uint64_t agc_jit_block_next(agc_vm *vm);
+#define AGC_JIT_BLOCK_RESTART 255
+#define AGC_JIT_BLOCK_CODE 4096
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -371,6 +397,8 @@ static inline void agc_jit_sync(void) {
 
 /* Exit words share the status half with agc_status, so every status is below the first exit. */
 _Static_assert((int)AGC_STATUS_COUNT <= (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");
+_Static_assert(AGC_JIT_EXIT_RESUME < AGC_JIT_BLOCK_RESTART && AGC_JIT_BLOCK_RESTART < AGC_JIT_BLOCK_CODE,
+               "a block call's answers are below any code address");
 
 /* A 32-bit offset written once the function is laid out: to the code of instruction `value` (LABEL), or to the exit
    stub that returns the exit word `value` (EXIT), or the status in eax with the pc in the high half of `value`
@@ -465,6 +493,10 @@ void agc_emit_tail_call(agc_emitter *e, agc_instr in, uint32_t pc, bool self, ui
                         uint32_t registers, uint64_t counter);
 /* CALL_VALUE: a native call when agc_jit_call_value pushed the frame, else the CALL_VALUE exit. */
 void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc);
+/* CALL_BUILTIN of the row at BUILTIN with a native kind, whose span is SPAN: agc_jit_block_start, then a native call
+   of the block for each of its calls, with agc_jit_block_next after each; below AGC_JIT_NATIVE_DEPTH only, else the
+   INTERPRET exit. */
+void agc_emit_block_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin, uint32_t span);
 void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc);
 size_t agc_emit_end(agc_emitter *e);
 

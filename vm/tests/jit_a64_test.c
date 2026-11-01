@@ -135,7 +135,7 @@ static void words(void) {
    left a b to offset 0 (a patch not written). AGENTICA_A64_DUMP=FILE writes the code for a disassembler. */
 static void every_kind(void) {
   agc_emitter e;
-  enum { COUNT = 28 };
+  enum { COUNT = 29 };
   agc_a64_emit_begin(&e, COUNT);
   uint32_t pc = 0;
   agc_instr in = {0, 1, 2, 3};
@@ -180,6 +180,8 @@ static void every_kind(void) {
   agc_a64_emit_tail_call(&e, in, pc, true, 0x4000, 2, 9, 0);
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_call_value(&e, in, pc);
+  agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_block_call(&e, in, pc, 0x6000, 7);
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_branch(&e, 1, true, 0, pc);
   agc_a64_emit_label(&e, ++pc);
@@ -251,6 +253,30 @@ static void calls_without_isb(void) {
   assert(blr < e.labels[1] && at(&e, blr - 4) == 0x910021EFu && br != SIZE_MAX && at(&e, br - 4) == 0x910011EFu);
 }
 
+/* A block call: agc_jit_block_start's answer goes to the dispatch, which compares it with AGC_JIT_BLOCK_CODE (cmp
+   through x12) and with AGC_JIT_BLOCK_RESTART; a code address goes to x15 and is called at its native entry after an
+   isb, and after agc_jit_block_next a b goes back to the dispatch. */
+static void block_calls(void) {
+  agc_emitter e;
+  agc_a64_emit_begin(&e, 1);
+  agc_a64_emit_label(&e, 0);
+  agc_a64_emit_block_call(&e, (agc_instr){AGC_OP_CALL_BUILTIN, 2, 0, 0}, 0, 0x6000, 7);
+  assert(agc_a64_emit_end(&e) > 0);
+  size_t start = find_word(&e, e.labels[0], 0xD63F0120u); /* blr x9: agc_jit_block_start */
+  static const uint32_t dispatch[] = {
+    0xD282000Cu, /* mov x12, #4096 */
+    0xEB0C001Fu, /* cmp x0, x12 */
+  };
+  expect_words(&e, start + 4, dispatch, 2, "block call dispatch");
+  assert((at(&e, start + 12) & 0xFF00001Fu) == 0x54000002u);                     /* b.hs to the call */
+  assert(at(&e, start + 16) == 0x7103FC1Fu);                                       /* cmp w0, #255 */
+  size_t blr = find_word(&e, start + 4, 0xD63F01E0u);                              /* blr x15 */
+  assert(at(&e, blr - 4) == 0xD5033FDFu && at(&e, blr - 8) == 0x910021EFu);        /* add x15, #8; isb */
+  assert(find_word(&e, start + 4, 0xAA0003EFu) < blr);                             /* mov x15, x0 */
+  size_t next = find_word(&e, blr + 4, 0xD63F0120u);                               /* blr x9: agc_jit_block_next */
+  assert(next != SIZE_MAX && b_target(&e, next + 4) == start + 4);
+}
+
 /* The cap: a function whose code would pass AGC_JIT_CODE_CAP fails and writes nothing more. */
 static void cap(void) {
   agc_emitter e;
@@ -267,6 +293,7 @@ int main(void) {
   every_kind();
   native_calls();
   calls_without_isb();
+  block_calls();
   cap();
   return 0;
 }

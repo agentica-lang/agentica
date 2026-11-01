@@ -1365,6 +1365,42 @@ static AGC_JIT_CALLER void block_calls_in_place(void) {
   }
 }
 
+/* A filter whose block returns an Int (bytecode the front end never writes) fails at the filter's span in both tiers,
+   with the same steps left. main calls the block once first, so under `always` it has code when main's code starts
+   the filter and calls the block natively; the value that is not a Bool takes the RESUME exit (agc_jit_block_next),
+   and run_compiled fails as the interpreter's RETURN does, with the block's frame popped and the native frame on
+   top. */
+static AGC_JIT_CALLER void block_value_not_bool(void) {
+  static block_program b;
+  memset(&b, 0, sizeof b);
+  b.builtins[0] = agc_find_builtin((const uint8_t *)"List.filter", 11, 2);
+  assert(b.builtins[0]);
+  agc_test_program(&b.program, &b.source, b.span_table, 16, b.constants, b.builtins, 1, b.fns, 2, &b.code[0][0],
+                   &b.spans[0][0], MAX_CODE, 0);
+  agc_value items[3] = {agc_int(1), agc_int(2), agc_int(3)};
+  b.constants[0] = agc_list_value(agc_list_from_array(items, 3));
+  b.constants[1] = agc_fn_value(agc_new_fn(1, 0));
+  b.constants[2] = agc_int(5);
+  b.program.constant_count = 3;
+  b.fns[1].params = 1;
+  agc_function *main_fn = &b.fns[0];
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_STEP, 1, 0, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 1, 2, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL, 1, 1, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 1, 0, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 2, 1, 1);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 0, 2);
+  agc_test_emit(main_fn, MAX_CODE, AGC_OP_RETURN, 1, 0, 1);
+  agc_test_emit(&b.fns[1], MAX_CODE, AGC_OP_STEP, 1, 0, 3);
+  agc_test_emit(&b.fns[1], MAX_CODE, AGC_OP_RETURN, 0, 0, 3);
+  int64_t left_off, left_jit;
+  uint64_t counts[2];
+  agc_outcome off = run_blocks(&b, false, 1000000, &left_off, counts);
+  agc_outcome on = run_blocks(&b, true, 1000000, &left_jit, counts);
+  assert(off.kind == AGC_FAILED && on.kind == AGC_FAILED && strcmp(on.code, off.code) == 0);
+  assert(on.span == off.span && left_jit == left_off);
+}
+
 /* One run of the code_program of TEXT with no JIT or with `always` (its trace on, so it counts the leaves that
    run_compiled called in *LEAVES): the outcome. Test.record is no leaf here, so only String.code can be counted. */
 static agc_outcome run_code(code_program *c, const char *text, bool jit, uint64_t *leaves) {
@@ -1872,6 +1908,7 @@ int main(void) {
   ineligible();
   sample_resets();
   block_calls_in_place();
+  block_value_not_bool();
   every_opcode_compiles();
 #else
   /* No emitter on this host: the JIT is never made. */
