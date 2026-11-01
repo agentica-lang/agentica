@@ -35,7 +35,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
   elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
-    return Reply.failed(2, "usage: agentica help [NAME] [--json]\n")
+    return Reply.failed(2, "usage: agentica help [NAME|std/MODULE[.NAME]] [--json]\n")
   end
 
   name = rest[1]
@@ -171,7 +171,7 @@ def namespaces_text() -> String
     "  bare functions: #{bare.join(" ")}",
     [
       "  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", ",
-      "\"std/bdd\") are not in this catalog.",
+      "\"std/bdd\") are not in this catalog: agentica help std/MODULE lists one.",
     ].join(""),
   ].join("\n")
 end
