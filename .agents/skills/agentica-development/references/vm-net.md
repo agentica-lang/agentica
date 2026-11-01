@@ -193,6 +193,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`HttpWire.connect_tls`, `HttpWire.drop_tls`) is a reference-counted
   `tls_shared` built once on a pool thread; each connection and the build hold a
   reference, so `drop_tls` never frees it under a handshake.
+  `HttpWire.upgrade_tls` (a CONNECT tunnel, `TLS.upgrade` on that context) takes
+  one the same way and starts its handshake once the build is over
+  (`shared_ready`).
 - `vm/http_server.c`: the server task group. The I/O thread owns the listener,
   the open count and the queue of `accept` and `wait` jobs. Builtins change them
   only by posted steps; `closed` is atomic (§10.7.2). It runs at N > 1

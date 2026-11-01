@@ -10,6 +10,7 @@
 #include "test_support.h"
 
 #include <assert.h>
+#include <setjmp.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
@@ -343,6 +344,66 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_test_pump_until_idle(&vm);
   agc_test_settle_loop(&vm);
 }
+
+/* An HttpClient as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy context. */
+static agc_value new_client(bool dropped) {
+  agc_http_client *c = agc_alloc(sizeof *c);
+  memset(c, 0, sizeof *c);
+  c->tls_dropped = dropped;
+  return agc_http_client_value(c);
+}
+
+/* HttpWire.upgrade_tls on a client that gave its context back (HttpWire.drop_tls) is an error before anything is
+   touched: the plain socket is still the program's, and a count taken for the call would be lost. */
+static void test_upgrade_tls_on_a_dropped_client(void) {
+  int fd = open_pair();
+  agc_value client = new_client(true);
+  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(1000)));
+  assert(error_is(out, "network: the client is closed"));
+  assert(send(fd, "still\n", 6, 0) == 6);
+  agc_value line = ok_of(step(call("TCP.read_line", 2, socket_v, agc_int(2000), agc_void(), agc_void())));
+  assert(agc_as_string(&vm, line)->bytes == 5);
+  close_pair(fd);
+}
+
+/* HttpWire.upgrade_context with a server-role context fails at its context argument (span + 2: argument i is at span
+   + 1 + i), not at `host`, and before anything is touched. The harness passes span 0, so the builtin is called here
+   with a span of its own. */
+static void test_upgrade_context_names_its_context_argument(void) {
+  agc_tls_failure f;
+  agc_tls_config *config = agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f);
+  assert(config);
+  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), text("localhost"), agc_int(1000)};
+  const char *name = "HttpWire.upgrade_context";
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 4);
+  assert(b);
+  if (setjmp(vm.fail) == 0) {
+    (void)b->fn(&vm, args, 100);
+    assert(!"the call did not fail");
+  }
+  assert(strcmp(vm.outcome->code, "RUNTIME-TLS-CONTEXT-ROLE") == 0);
+  assert(vm.outcome->span == 102);
+}
+
+/* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
+   starts the handshake on the socket it was given: a silent peer reads a TLS record (0x16, the ClientHello), the call
+   fails with the deadline, and the client keeps the context until HttpWire.drop_tls gives it back. */
+static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
+  int fd = open_pair();
+  agc_value client = new_client(false);
+  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(1500)));
+  assert(!agc_as_result(&vm, out)->ok);
+  unsigned char first = 0;
+  struct pollfd p = {fd, POLLIN, 0};
+  assert(poll(&p, 1, 2000) == 1 && recv(fd, &first, 1, 0) == 1 && first == 0x16);
+  assert(agc_as_http_client(&vm, client)->tls);
+  step(call("HttpWire.drop_tls", 1, client, agc_void(), agc_void(), agc_void()));
+  assert(!agc_as_http_client(&vm, client)->tls);
+  step(call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void()));
+  close(fd);
+  agc_test_pump_until_idle(&vm);
+  agc_test_settle_loop(&vm);
+}
 #endif
 
 int main(void) {
@@ -358,6 +419,9 @@ int main(void) {
   test_cancelled_tls_connect_past_its_deadline(false);
   test_cancelled_tls_connect_past_its_deadline(true);
   test_byte_keys();
+  test_upgrade_tls_on_a_dropped_client();
+  test_upgrade_context_names_its_context_argument();
+  test_upgrade_tls_builds_the_shared_context_then_handshakes();
 #endif
   puts("net tests passed");
   return 0;

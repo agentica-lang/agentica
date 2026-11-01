@@ -995,6 +995,36 @@ ROWS_10: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "HttpWire.upgrade_tls",
+    parameters: [
+      Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
+      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.upgrade_tls",
+    effects: ["network"],
+    description: "Internal to std/http: TLS.upgrade on the client's shared system-trust context.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "HttpWire.upgrade_context",
+    parameters: [
+      Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+      Model.Named(name: "context", type: Types.Type.Opaque("TlsContext")),
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Opaque("Socket")),
+    rule: Model.Rule.Plain,
+    implementation: "HttpWire.upgrade_context",
+    effects: ["network"],
+    description: "Internal to std/http: TLS.upgrade, on a client TlsContext that agrees on no protocol but HTTP/1.1.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "HttpWire.encode_request",
     parameters: [
       Model.Named(name: "scheme", type: Types.Type.String),

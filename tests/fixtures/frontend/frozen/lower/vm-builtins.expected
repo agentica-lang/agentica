@@ -104,6 +104,8 @@ HttpWire.read_response
 HttpWire.server
 HttpWire.service
 HttpWire.spawn
+HttpWire.upgrade_context
+HttpWire.upgrade_tls
 HttpWire.wait
 IO.eof?
 IO.flush
