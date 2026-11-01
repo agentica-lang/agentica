@@ -200,9 +200,8 @@ static uint32_t builtin_trips(const agc_program *p, uint8_t *rows, uint32_t bx, 
   uint8_t row = rows[bx];
   if (!row) {
     const agc_builtin *b = p->builtins[bx];
-    bool leaves = !(b->direct || b->leaf);
-    row = (uint8_t)(1u | (unsigned)(leaves && !b->native) << 1 | (unsigned)leaves << 2 |
-                    (unsigned)(leaves && agc_jit_parks(b)) << 3);
+    bool leaves = !(b->direct || b->leaf || b->native);
+    row = (uint8_t)(1u | (unsigned)leaves << 1 | (unsigned)leaves << 2 | (unsigned)(leaves && agc_jit_parks(b)) << 3);
     rows[bx] = row;
   }
   if (!(row & (loopless ? 4u : 2u))) return 0;
@@ -285,7 +284,9 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
       uint32_t kind = kind_of(kinds, in), bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
       if (kind == KIND_JUMP) continue;
       bool call = (kind == KIND_CALL || kind == KIND_TAIL) && bx < n;
-      calling[k] |= call || kind == KIND_VALUE;
+      /* A block call calls its block, a function value, as CALL_VALUE does. */
+      bool block = kind == KIND_BUILTIN && bx < p->builtin_count && p->builtins[bx]->native;
+      calling[k] |= call || kind == KIND_VALUE || block;
       if (kind == KIND_VALUE) continue;
       if (looped[k]) {
         while (r < region_count && last[r - first_region] < pc) r++;
