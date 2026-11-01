@@ -62,11 +62,11 @@ Weighed later (no fixed order):
     `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a,
     19b and ALPN, 19c, are done).
 17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
-18. The Windows issues
+19. The Windows issues
     [#474](https://github.com/agentica-lang/agentica/issues/474),
     [#462](https://github.com/agentica-lang/agentica/issues/462) and
     [#457](https://github.com/agentica-lang/agentica/issues/457).
-19. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
+20. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
 
 ### Done rows
 

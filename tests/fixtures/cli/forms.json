@@ -889,6 +889,12 @@
   "stdout": "ok(value: T) -> Result[T]\nok() -> Result[Void]\nConstruct a successful Result.\n",
   "written": []
  },
+ "[[\"help\", \"std\"], {}]": {
+  "code": 2,
+  "stderr": "<arguments>: error[QUERY-NOT-FOUND]\nstd is not a module of the standard library\n\n  = help: usage: agentica help std/MODULE[.NAME] [--json]\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"std/nope\"], {}]": {
   "code": 2,
   "stderr": "<arguments>: error[QUERY-NOT-FOUND]\nstd/nope is not a module of the standard library\n\n  = help: usage: agentica help std/MODULE[.NAME] [--json]\n",

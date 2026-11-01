@@ -19,14 +19,16 @@ import Suggest from "../syntax/suggest"
 import SourceFile from "../syntax/source_file"
 import Reply from "cli_reply"
 
+# The longest summary in the list of a module, in characters.
+SHORT_SUMMARY = 100
 # The usage line of a QUERY-USAGE from this command.
 USAGE = "usage: agentica help std/MODULE[.NAME] [--json]"
 
-## Whether `words`, the words from `help` on, ask for a module of the standard library: one word that starts with
-## `std/`, with or without a trailing `--json`. No builtin name starts that way.
+## Whether `words`, the words from `help` on, ask for a module of the standard library: one word that is `std` or
+## starts with `std/`, with or without a trailing `--json`. No builtin name is written that way.
 export def asks?(words: List[String]) -> Bool
   rest = unflagged(words)
-  return rest.size == 2 and rest[1].starts_with?("std/")
+  return rest.size == 2 and (rest[1] == "std" or rest[1].starts_with?("std/"))
 end
 
 ## Runs `agentica help std/...` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of
@@ -154,9 +156,39 @@ end
 # The signature of an export, and its summary under it when it has one.
 def list_line(item: DocModel.Item) -> String
   case DocModel.summary(item.doc)
-    some(summary) -> return "  #{item.signature}\n      #{summary}"
+    some(summary) -> return "  #{item.signature}\n      #{shortened(summary)}"
     none -> return "  #{item.signature}"
   end
+end
+
+# The summary up to the end of its first sentence, at most SHORT_SUMMARY characters: a longer one is cut at a word and
+# ends with an ellipsis. Only the text form is cut; the JSON summary is the whole first paragraph (32.5).
+def shortened(summary: String) -> String
+  sentence = summary
+  stop = summary.index_of(". ")
+  if stop.some?
+    sentence = summary.slice(0, stop.unwrap! + 1)
+  end
+
+  if sentence.length <= SHORT_SUMMARY
+    return sentence
+  end
+
+  cut = SHORT_SUMMARY
+  while cut > 0 and sentence.slice(cut, 1) != " "
+    cut -= 1
+  end
+
+  if cut == 0
+    cut = SHORT_SUMMARY
+  end
+
+  head = sentence.slice(0, cut)
+  while head.ends_with?(":") or head.ends_with?(",") or head.ends_with?(";")
+    head = head.slice(0, head.length - 1)
+  end
+
+  return "#{head}…"
 end
 
 def summary_of(item: DocModel.Item) -> String

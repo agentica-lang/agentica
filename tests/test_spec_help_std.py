@@ -42,6 +42,17 @@ def test_one_function_has_the_fields_of_a_builtin_help(tmp_path):
     assert help_std(["std/queue.pop", "--json"], cwd=tmp_path).stdout == result.stdout
 
 
+def test_a_parameter_default_and_a_variant_payload(tmp_path):
+    mime = json.loads(help_std(["std/mime.mime_type"], "--json", cwd=tmp_path).stdout)
+    assert mime["parameters"][1] == {
+        "name": "fallback", "type": "String", "default": '"application/octet-stream"',
+    }
+    value = json.loads(help_std(["std/toml.Value"], "--json", cwd=tmp_path).stdout)
+    assert value["kind"] == "enum" and "arity" not in value
+    first = value["variants"][0]
+    assert (first["name"], first["payload"]) == ("Str", ["String"])
+
+
 def test_a_struct_lists_its_fields(tmp_path):
     item = json.loads(help_std(["std/queue.QueueState"], "--json", cwd=tmp_path).stdout)
     assert item["kind"] == "struct" and "arity" not in item
@@ -56,6 +67,11 @@ def test_text_form(tmp_path):
     lines = listed.stdout.split("\n")
     assert lines[0] == "std/queue"
     assert "  pop(q: QueueState) -> Result[Popped]" in lines
+    # A list line is the first sentence only; the JSON summary keeps the whole paragraph.
+    assert "      Takes the oldest value." in lines
+    long = help_std(["std/mime"], cwd=tmp_path).stdout.split("\n")
+    shown = long[long.index(next(x for x in long if x.startswith("  mime_type("))) + 1]
+    assert shown.endswith("…") and len(shown) <= 6 + 101
     one = help_std(["std/queue.pop"], cwd=tmp_path)
     lines = one.stdout.split("\n")
     assert lines[0] == "pop(q: QueueState) -> Result[Popped]"
@@ -63,7 +79,7 @@ def test_text_form(tmp_path):
 
 
 def test_an_unknown_module_or_name_is_a_query_diagnostic(tmp_path):
-    for words in (["std/nope"], ["std/prelude/list"], ["std/internal/websocket"], ["std//queue"]):
+    for words in (["std"], ["std/"], ["std/nope"], ["std/prelude/list"], ["std/internal/websocket"], ["std//queue"]):
         diagnostic = problem(help_std(words, "--json", cwd=tmp_path), "QUERY-NOT-FOUND", 2)
         assert diagnostic["file"] == "<arguments>"
     # A name close to an export is offered; the plain form exits 2 too.
