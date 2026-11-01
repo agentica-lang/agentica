@@ -10,6 +10,7 @@
 #include "test_support.h"
 
 #include <assert.h>
+#include <setjmp.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
@@ -365,6 +366,25 @@ static void test_upgrade_tls_on_a_dropped_client(void) {
   close_pair(fd);
 }
 
+/* HttpWire.upgrade_context with a server-role context fails at its context argument (span + 2: argument i is at span
+   + 1 + i), not at `host`, and before anything is touched. The harness passes span 0, so the builtin is called here
+   with a span of its own. */
+static void test_upgrade_context_names_its_context_argument(void) {
+  agc_tls_failure f;
+  agc_tls_config *config = agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f);
+  assert(config);
+  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), text("localhost"), agc_int(1000)};
+  const char *name = "HttpWire.upgrade_context";
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 4);
+  assert(b);
+  if (setjmp(vm.fail) == 0) {
+    (void)b->fn(&vm, args, 100);
+    assert(!"the call did not fail");
+  }
+  assert(strcmp(vm.outcome->code, "RUNTIME-TLS-CONTEXT-ROLE") == 0);
+  assert(vm.outcome->span == 102);
+}
+
 /* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
    starts the handshake on the socket it was given: a silent peer reads a TLS record (0x16, the ClientHello), the call
    fails with the deadline, and the client keeps the context until HttpWire.drop_tls gives it back. */
@@ -400,6 +420,7 @@ int main(void) {
   test_cancelled_tls_connect_past_its_deadline(true);
   test_byte_keys();
   test_upgrade_tls_on_a_dropped_client();
+  test_upgrade_context_names_its_context_argument();
   test_upgrade_tls_builds_the_shared_context_then_handshakes();
 #endif
   puts("net tests passed");
