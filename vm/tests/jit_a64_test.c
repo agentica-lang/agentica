@@ -135,7 +135,7 @@ static void words(void) {
    left a b to offset 0 (a patch not written). AGENTICA_A64_DUMP=FILE writes the code for a disassembler. */
 static void every_kind(void) {
   agc_emitter e;
-  enum { COUNT = 23 };
+  enum { COUNT = 27 };
   agc_a64_emit_begin(&e, COUNT);
   uint32_t pc = 0;
   agc_instr in = {0, 1, 2, 3};
@@ -171,6 +171,14 @@ static void every_kind(void) {
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_plain_leaf(&e, in, pc, 0x3000, 7, &plain);
   agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_call(&e, in, pc, 0x4000, 9);
+  agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_tail_call(&e, in, pc, false, 0x4000, 2, 9, 0x5000);
+  agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_tail_call(&e, in, pc, true, 0x4000, 2, 9, 0);
+  agc_a64_emit_label(&e, ++pc);
+  agc_a64_emit_call_value(&e, in, pc);
+  agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_branch(&e, 1, true, 0, pc);
   agc_a64_emit_label(&e, ++pc);
   agc_a64_emit_return(&e, 1, pc);
@@ -192,6 +200,39 @@ static void every_kind(void) {
   }
 }
 
+/* The index of the first word from byte START that is WORD, or SIZE_MAX. */
+static size_t find_word(const agc_emitter *e, size_t start, uint32_t word) {
+  for (size_t k = start; k + 4 <= e->len; k += 4)
+    if (at(e, k) == word) return k;
+  return SIZE_MAX;
+}
+
+/* A native CALL reads the code slot with ldar and runs isb before its blr; a TAIL_CALL of another function runs isb
+   before its br; a native RETURN hands over its value in x1 and x2 with RETURNED in w0. */
+static void native_calls(void) {
+  agc_emitter e;
+  agc_a64_emit_begin(&e, 3);
+  agc_a64_emit_label(&e, 0);
+  agc_a64_emit_call(&e, (agc_instr){0, 2, 1, 0}, 0, 0x4000, 9);
+  size_t tail = e.len;
+  agc_a64_emit_label(&e, 1);
+  agc_a64_emit_tail_call(&e, (agc_instr){0, 2, 1, 0}, 1, false, 0x4000, 2, 9, 0);
+  size_t ret = e.len;
+  agc_a64_emit_label(&e, 2);
+  agc_a64_emit_return(&e, 3, 2);
+  size_t size = agc_a64_emit_end(&e);
+  assert(size > 0);
+  size_t ldar = find_word(&e, e.labels[0], 0xC8DFFD4Fu); /* ldar x15, [x10] */
+  size_t isb = find_word(&e, ldar, 0xD5033FDFu);
+  assert(ldar < tail && isb < tail && at(&e, isb + 4) == 0xD63F01E0u); /* blr x15 */
+  assert(at(&e, isb - 4) == 0x910021EFu);                                   /* add x15, x15, #8: the native entry */
+  isb = find_word(&e, tail, 0xD5033FDFu);
+  assert(isb < ret && at(&e, isb + 4) == 0xD61F01E0u && at(&e, isb - 4) == 0x910011EFu); /* add #4, br x15 */
+  /* The native RETURN: cbnz x22 at its start, and ldr x1, x2 from R[3] (bytes 48 and 56) on that path. */
+  assert((at(&e, ret) & 0xFF00001Fu) == 0xB5000000u + DEPTH);
+  assert(find_word(&e, ret, 0xF9401A81u) != SIZE_MAX && find_word(&e, ret, 0xF9401E82u) != SIZE_MAX);
+}
+
 /* The cap: a function whose code would pass AGC_JIT_CODE_CAP fails and writes nothing more. */
 static void cap(void) {
   agc_emitter e;
@@ -206,6 +247,7 @@ int main(void) {
   entries();
   words();
   every_kind();
+  native_calls();
   cap();
   return 0;
 }

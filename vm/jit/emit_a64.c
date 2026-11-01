@@ -26,9 +26,10 @@ _Static_assert(A64_TAIL_ENTRY == AGC_JIT_TAIL_ENTRY && A64_NATIVE_ENTRY == AGC_J
                "jit.h gives the entries of this emitter");
 #endif
 
-/* The general registers by number. x0 to x3 carry arguments and the result, x9 to x14 are scratch (caller-saved), and
-   x19 to x22 are callee-saved, so they survive every helper call. x16, x17 and x18 are never used. */
-enum { X0, X1, X2, X3, T0 = 9, T1, T2, T3, AT = 13, TAGS = 14, VM = 19, REGS, CONSTS, DEPTH, ZR = 31 };
+/* The general registers by number. x0 to x3 carry arguments and the result (a native RETURN's value in x1 and x2,
+   beside its exit word in x0), x9 to x15 are scratch (caller-saved), and x19 to x22 are callee-saved, so they survive
+   every helper call. CALLEE holds the code a native call goes to. x16, x17 and x18 are never used. */
+enum { X0, X1, X2, X3, T0 = 9, T1, T2, T3, AT = 13, TAGS = 14, CALLEE = 15, VM = 19, REGS, CONSTS, DEPTH, ZR = 31 };
 
 /* The condition codes. The low bit inverts a condition (EQ and NE, LT and GE, ...). */
 enum { CC_EQ, CC_NE, CC_HS, CC_LO, CC_VS = 6, CC_HI = 8, CC_LS, CC_GE, CC_LT, CC_GT, CC_LE };
@@ -38,7 +39,9 @@ enum { CC_EQ, CC_NE, CC_HS, CC_LO, CC_VS = 6, CC_HI = 8, CC_LS, CC_GE, CC_LT, CC
 #define TAG(r) ((uint64_t)(r) * 16)
 #define WORD(r) ((uint64_t)(r) * 16 + 8)
 
-/* The frame fields that a native CALL and TAIL_CALL write and RETURN reads (port.h). */
+/* The frame and task fields that a native CALL and TAIL_CALL write and RETURN reads (port.h); jit.h checks their
+   offsets and sizes. */
+#define FRAME_FIELD(name) ((uint64_t)offsetof(agc_frame, name))
 #define TASK_FIELD(name) ((uint64_t)offsetof(agc_task, name))
 
 /* Room for 4 more bytes, or `failed` past the code cap. Once `failed` is set nothing is written any more: put32,
@@ -174,6 +177,16 @@ static void load(agc_emitter *e, int rt, int base, uint64_t off) { memory(e, 0xF
 static void store(agc_emitter *e, int base, uint64_t off, int rt) { memory(e, 0xF9000000u, 8, rt, base, off); }
 static void load32(agc_emitter *e, int rt, int base, uint64_t off) { memory(e, 0xB9400000u, 4, rt, base, off); }
 static void load8(agc_emitter *e, int rt, int base, uint64_t off) { memory(e, 0x39400000u, 1, rt, base, off); }
+static void store32(agc_emitter *e, int base, uint64_t off, int rt) { memory(e, 0xB9000000u, 4, rt, base, off); }
+static void store8(agc_emitter *e, int base, uint64_t off, int rt) { memory(e, 0x39000000u, 1, rt, base, off); }
+
+/* The 32-bit field at [BASE + OFF] plus DELTA (1 or -1), through T3: the task's frame_count and depth, which only
+   the thread that runs the task touches. */
+static void bump32(agc_emitter *e, int base, uint64_t off, int delta) {
+  load32(e, T3, base, off);
+  put32(e, (delta > 0 ? 0x11000400u : 0x51000400u) | (uint32_t)T3 << 5 | (uint32_t)T3); /* add or sub w12, w12, #1 */
+  store32(e, base, off, T3);
+}
 
 /* cmp R, V on 64 (WIDE) or 32 bits; above 12 bits V goes through T3 first. */
 static void compare_imm(agc_emitter *e, bool wide, int r, uint64_t v) {
@@ -586,41 +599,179 @@ void A64(plain_leaf)(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t builtin
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_plain);
 }
 
-/* CALL: the CALL exit, for run_compiled to push the frame. Native calls on arm64 come in a later change (#756). */
-void A64(call)(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers) {
-  (void)in;
-  (void)slot;
-  (void)registers;
-  A64(exit)(e, AGC_JIT_EXIT_CALL, pc);
+/* b to the epilogue when CC holds, which returns x0 (and x1, x2) to the caller as they are. */
+static void epilogue_if(agc_emitter *e, int cc) {
+  size_t over = skip_if(e, cc ^ 1);
+  branch_to(e, AGC_JIT_PATCH_EPILOGUE, 0);
+  land(e, over);
 }
 
-/* TAIL_CALL: the TAIL_CALL exit. With COUNTER, the jit trace's agc_jit_count_tail(COUNTER, SLOT) runs first, which
-   counts it (and whether the callee in SLOT had code). */
+/* CALLEE = the code in the code table's SLOT, read when the call runs, then compared with 0 (EQ when the callee has
+   none). The load acquires (ldar), so the code that another thread wrote and published with a release store is seen
+   whole; a native call then runs isb before it branches there (call_code), as run_compiled does (agc_jit_sync). */
+static void load_code(agc_emitter *e, uint64_t slot) {
+  move_imm64(e, T1, slot);
+  put32(e, 0xC8DFFC00u | (uint32_t)T1 << 5 | (uint32_t)CALLEE); /* ldar x15, [x10] */
+  compare_imm(e, true, CALLEE, 0);
+}
+
+/* The flags for R + 16 * END against the end of the register file, regs + 16 * reg_capacity, of the task in T0: HI
+   when the window would pass it. */
+static void compare_room(agc_emitter *e, uint64_t end) {
+  load(e, T2, T0, TASK_FIELD(reg_capacity));
+  load(e, T3, T0, TASK_FIELD(regs));
+  put32(e, 0x8B00118Bu | (uint32_t)T2 << 16); /* add x11, x12, x11, lsl #4 */
+  add_imm(e, T3, REGS, TAG(end));
+  compare(e, T3, T2);
+}
+
+/* T1 = &frames[frame_count - 1], the top frame of the task in T0. */
+static void top_frame(agc_emitter *e) {
+  load32(e, T1, T0, TASK_FIELD(frame_count));
+  load(e, T2, T0, TASK_FIELD(frames));
+  put32(e, 0x8B0A156Au); /* add x10, x11, x10, lsl #5 */
+  put32(e, 0xD100814Au); /* sub x10, x10, #32 */
+}
+
+/* Branches to CALLEE + ENTRY (blr with LINK, else br), after isb: the code may be another thread's, just sealed. */
+static void call_code(agc_emitter *e, uint32_t entry, bool link) {
+  add_imm(e, CALLEE, CALLEE, entry);
+  put32(e, 0xD5033FDFu);                                        /* isb */
+  put32(e, (link ? 0xD63F0000u : 0xD61F0000u) | (uint32_t)CALLEE << 5); /* blr or br x15 */
+}
+
+/* After the native call of a callee's code: AGC_JIT_EXIT_RETURNED in w0 hands over its value in x1:x2 for R[a]; the
+   callee leaves its own registers as they were, as return_value does (#807). Any other exit word is the callee's (or
+   a deeper callee's), with its frame on top, and goes up unchanged. */
+static void returned(agc_emitter *e, uint32_t a) {
+  compare_imm(e, false, X0, AGC_JIT_EXIT_RETURNED);
+  epilogue_if(e, CC_NE);
+  store(e, REGS, TAG(a), X1);
+  store(e, REGS, WORD(a), X2);
+}
+
+/* CALL of function bx with the window at R[a], as a native call when it can be one, as on x86-64: the callee has code
+   (load_code), the native depth is below AGC_JIT_NATIVE_DEPTH, and the task has room for the frame, its REGISTERS and
+   one more depth without growing an array or failing. The frame is written as push_frame writes it, with the
+   caller's pc after the CALL. Anything else exits for run_compiled. */
+void A64(call)(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uint32_t registers) {
+  uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+  compare_imm(e, true, DEPTH, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_HS, AGC_JIT_EXIT_CALL, pc);
+  load_code(e, slot);
+  exit_if(e, CC_EQ, AGC_JIT_EXIT_CALL, pc);
+  load(e, T0, VM, offsetof(agc_vm, task));
+  load32(e, T1, T0, TASK_FIELD(frame_count));
+  load32(e, T2, T0, TASK_FIELD(frame_capacity));
+  put32(e, 0x6B0B015Fu); /* cmp w10, w11 */
+  exit_if(e, CC_HS, AGC_JIT_EXIT_CALL, pc);
+  load32(e, T1, T0, TASK_FIELD(depth));
+  compare_imm(e, false, T1, AGC_MAX_DEPTH);
+  exit_if(e, CC_HS, AGC_JIT_EXIT_CALL, pc);
+  compare_room(e, (uint64_t)in.a + registers);
+  exit_if(e, CC_HI, AGC_JIT_EXIT_CALL, pc);
+  /* T1 = the caller's frame, the top one; the callee's is the next. */
+  top_frame(e);
+  move_imm32(e, T3, pc + 1);
+  store32(e, T1, FRAME_FIELD(pc), T3);
+  load32(e, T3, T1, FRAME_FIELD(base));
+  add_imm(e, T3, T3, in.a);
+  store32(e, T1, 32 + FRAME_FIELD(base), T3);
+  store32(e, T1, 32 + FRAME_FIELD(ret), T3);
+  move_imm32(e, T3, function);
+  store32(e, T1, 32 + FRAME_FIELD(function), T3);
+  store32(e, T1, 32 + FRAME_FIELD(pc), ZR);
+  store8(e, T1, 32 + FRAME_FIELD(tail), ZR);
+  store(e, T1, 32 + FRAME_FIELD(native), ZR);
+  bump32(e, T0, TASK_FIELD(frame_count), 1);
+  bump32(e, T0, TASK_FIELD(depth), 1);
+  add_imm(e, X1, REGS, TAG(in.a));
+  call_code(e, A64_NATIVE_ENTRY, true);
+  returned(e, in.a);
+}
+
+/* The TAIL_CALL exit at PC when CC holds (always for CC < 0). With COUNTER, the jit trace's agc_jit_count_tail(COUNTER,
+   SLOT) runs first, which counts it (and whether the callee in SLOT had code). */
+static void tail_exit(agc_emitter *e, int cc, uint32_t pc, uint64_t counter, uint64_t slot) {
+  if (!counter) {
+    if (cc < 0)
+      A64(exit)(e, AGC_JIT_EXIT_TAIL_CALL, pc);
+    else
+      exit_if(e, cc, AGC_JIT_EXIT_TAIL_CALL, pc);
+    return;
+  }
+  size_t over = cc < 0 ? 0 : skip_if(e, cc ^ 1);
+  move_imm64(e, X0, counter);
+  move_imm64(e, X1, slot);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_count_tail);
+  A64(exit)(e, AGC_JIT_EXIT_TAIL_CALL, pc);
+  if (cc >= 0) land(e, over);
+}
+
+/* TAIL_CALL of function bx with the window at R[a], in place, as on x86-64 (agc_emit_tail_call there): the top frame
+   takes the callee's PARAMS arguments into R[0..) and becomes the callee's (pc 0, tail set). For itself (SELF) that is
+   a branch to instruction 0; another function needs code and room for its REGISTERS, and then the code branches to
+   its tail entry at the same native depth, on the same C stack. Anything else takes the TAIL_CALL exit with nothing
+   changed. */
 void A64(tail_call)(agc_emitter *e, agc_instr in, uint32_t pc, bool self, uint64_t slot, uint32_t params,
                     uint32_t registers, uint64_t counter) {
-  (void)in;
-  (void)self;
-  (void)params;
-  (void)registers;
-  if (counter) {
-    move_imm64(e, X0, counter);
-    move_imm64(e, X1, slot);
-    call_fn(e, (uint64_t)(uintptr_t)agc_jit_count_tail);
+  if (params > AGC_JIT_TAIL_PARAMS) {
+    tail_exit(e, -1, pc, counter, slot);
+    return;
   }
-  A64(exit)(e, AGC_JIT_EXIT_TAIL_CALL, pc);
+  if (!self) {
+    load_code(e, slot);
+    tail_exit(e, CC_EQ, pc, counter, slot);
+    load(e, T0, VM, offsetof(agc_vm, task));
+    compare_room(e, registers);
+    tail_exit(e, CC_HI, pc, counter, slot);
+  }
+  /* The window is copied upwards one register at a time, which is right as R[k] is never above R[a + k]. */
+  for (uint32_t k = 0; in.a && k < params; k++) A64(move)(e, k, (uint32_t)in.a + k);
+  load(e, T0, VM, offsetof(agc_vm, task));
+  top_frame(e);
+  if (!self) {
+    move_imm32(e, T3, (uint32_t)in.b | ((uint32_t)in.c << 16));
+    store32(e, T1, FRAME_FIELD(function), T3);
+  }
+  store32(e, T1, FRAME_FIELD(pc), ZR);
+  move_imm32(e, T3, 1);
+  store8(e, T1, FRAME_FIELD(tail), T3);
+  if (self) {
+    A64(jump)(e, 0);
+    return;
+  }
+  call_code(e, A64_TAIL_ENTRY, false);
 }
 
-/* CALL_VALUE: the CALL_VALUE exit, for run_compiled to call the function value. */
+/* CALL_VALUE of the function value in R[a] with in.b arguments after it, as a native call when it can be one: below
+   AGC_JIT_NATIVE_DEPTH, agc_jit_call_value(vm, &R[a], argc, pc) checks the value and the room, pushes the frame as
+   call_value does, and returns the callee's code (read with an acquire load), called at its native entry. A NULL
+   answer takes the CALL_VALUE exit with nothing pushed. */
 void A64(call_value)(agc_emitter *e, agc_instr in, uint32_t pc) {
-  (void)in;
-  A64(exit)(e, AGC_JIT_EXIT_CALL_VALUE, pc);
+  compare_imm(e, true, DEPTH, AGC_JIT_NATIVE_DEPTH);
+  exit_if(e, CC_HS, AGC_JIT_EXIT_CALL_VALUE, pc);
+  move_reg(e, true, X0, VM);
+  add_imm(e, X1, REGS, TAG(in.a));
+  move_imm32(e, X2, in.b);
+  move_imm32(e, X3, pc);
+  call_fn(e, (uint64_t)(uintptr_t)agc_jit_call_value);
+  move_reg(e, true, CALLEE, X0);
+  compare_imm(e, true, CALLEE, 0);
+  exit_if(e, CC_EQ, AGC_JIT_EXIT_CALL_VALUE, pc);
+  add_imm(e, X1, REGS, TAG((uint64_t)in.a + 1));
+  call_code(e, A64_NATIVE_ENTRY, true);
+  returned(e, in.a);
 }
 
-/* RETURN R[a]: agc_jit_block_return(vm, &R[a]) first: when the frame returns to a block call that calls the same
-   function again, the frame starts over with the next arguments, and the code goes on at instruction 0 with its
-   registers (or takes the YIELD exit at AGC_JIT_PC_RESTART when the turn ended, which leaves the frame's pc at 0);
-   otherwise the RETURN exit for run_compiled. */
+/* RETURN R[a]: under a native call (x22 above 0), the frame popped as return_value pops it, and
+   AGC_JIT_EXIT_RETURNED with R[a] in x1:x2 for the caller's code (returned). Else agc_jit_block_return(vm, &R[a])
+   first: when the frame returns to a block call that calls the same function again, the frame starts over with the
+   next arguments, and the code goes on at instruction 0 with its registers (or takes the YIELD exit at
+   AGC_JIT_PC_RESTART when the turn ended, which leaves the frame's pc at 0); otherwise the RETURN exit for
+   run_compiled. */
 void A64(return)(agc_emitter *e, uint32_t a, uint32_t pc) {
+  size_t native = skip_zero(e, true, true, DEPTH);
   move_reg(e, true, X0, VM);
   add_imm(e, X1, REGS, TAG(a));
   call_fn(e, (uint64_t)(uintptr_t)agc_jit_block_return);
@@ -633,10 +784,19 @@ void A64(return)(agc_emitter *e, uint32_t a, uint32_t pc) {
   branch_to(e, AGC_JIT_PATCH_EXIT, agc_emit_exit_word(AGC_JIT_EXIT_YIELD, AGC_JIT_PC_RESTART));
   land(e, go_on);
   A64(jump)(e, 0);
+  land(e, native);
+  load(e, X1, REGS, TAG(a));
+  load(e, X2, REGS, WORD(a));
+  load(e, T0, VM, offsetof(agc_vm, task));
+  bump32(e, T0, TASK_FIELD(frame_count), -1);
+  bump32(e, T0, TASK_FIELD(depth), -1);
+  move_imm32(e, X0, AGC_JIT_EXIT_RETURNED);
+  branch_to(e, AGC_JIT_PATCH_EPILOGUE, 0);
 }
 
 /* b from FROM to TO, both byte offsets in the code, which is at most AGC_JIT_CODE_CAP long: in range of the 26-bit
-   word offset either way. */
+   word offset either way. The entry's movz/movk carry the table's distance in 32 bits, which the cap also bounds. */
+_Static_assert(AGC_JIT_CODE_CAP < (128u << 20), "a b reaches 128 MiB either way: every target in the code is in range");
 static uint32_t b_to(size_t from, size_t to) {
   int64_t words = ((int64_t)to - (int64_t)from) / 4;
   return 0x14000000u | ((uint32_t)words & 0x3FFFFFFu);

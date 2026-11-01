@@ -124,14 +124,11 @@ static AGC_JIT_CALLER void code_memory(void) {
 #endif
 
 #if AGC_JIT_HOST
-/* The tests of x86-64 encodings and sizes, and of native calls in compiled code, which arm64 does not make yet
-   (#756): there each call takes its exit. vm/tests/jit_a64_test.c checks the arm64 words. */
+/* The tests of x86-64 encodings and sizes; vm/tests/jit_a64_test.c checks the arm64 words. */
 #if defined(__x86_64__) || defined(_M_X64)
 #define X64 1
-#define NATIVE_CALLS 1
 #else
 #define X64 0
-#define NATIVE_CALLS 0
 #endif
 
 /* N, as a count of the JIT's trace counters (transitions, turns, leaves): a build with the trace points compiled out
@@ -390,7 +387,9 @@ static AGC_JIT_CALLER void wide_tail_calls(void) {
     agc_emit_tail_call(&e, call, 0, k == 1, (uint64_t)(uintptr_t)&none, params, params + 1, 0);
     size[k] = e.len - start;
   }
-  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)32 * AGC_JIT_TAIL_PARAMS);
+  /* The exits are one jump; a callee of AGC_JIT_TAIL_PARAMS arguments gets their moves, at least 16 bytes each (four
+     arm64 instructions, more bytes on x86-64). */
+  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)16 * AGC_JIT_TAIL_PARAMS);
   /* A self TAIL_CALL (no native call needed) of 33 arguments exits with the frame as it was. */
   static agc_instr wide[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static uint32_t spans[3] = {0};
@@ -1741,13 +1740,13 @@ int main(void) {
   if (X64) cap_inside_an_offset();
   if (X64) bytes();
   call_return_exits();
-  if (NATIVE_CALLS) native_calls();
-  if (NATIVE_CALLS) native_leaf_calls();
+  native_calls();
+  native_leaf_calls();
   plain_leaf_calls();
   string_code_calls();
-  if (NATIVE_CALLS) native_tail_calls();
-  if (NATIVE_CALLS) wide_tail_calls();
-  if (NATIVE_CALLS) call_values();
+  native_tail_calls();
+  wide_tail_calls();
+  call_values();
   direct_calls();
   loops_and_steps();
   int_rules();
