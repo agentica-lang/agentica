@@ -36,6 +36,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_ffi_builtins, &agc_ffi_builtin_count},
   {agc_std_builtins, &agc_std_builtin_count},
   {agc_profile_builtins, &agc_profile_builtin_count},
+  {agc_regex_builtins, &agc_regex_builtin_count},
 };
 
 const size_t agc_builtin_table_count = sizeof agc_builtin_tables / sizeof agc_builtin_tables[0];

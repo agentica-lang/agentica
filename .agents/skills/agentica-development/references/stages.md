@@ -173,8 +173,8 @@ explicit stack); `resolve.agc` and `rewrite.agc` give every name its linked
 name.
 
 - The std-only guard: a two-part name whose module is in the catalog's std-only
-  set (`HttpWire`, `LogRegistry`) and that no import alias names is
-  `CHECK-UNKNOWN-NAME`, unless the module was embedded from `stdlib/`.
+  set (`HttpWire`, `LogRegistry`, `RegexEngine`) and that no import alias names
+  is `CHECK-UNKNOWN-NAME`, unless the module was embedded from `stdlib/`.
   `HttpWire` is also left out of `help`, its JSON and every "did you mean".
 - The linked program carries the root's `docs` and module doc; nothing after the
   parser reads them.

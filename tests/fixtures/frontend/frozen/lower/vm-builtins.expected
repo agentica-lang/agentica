@@ -260,6 +260,7 @@ Range.include?
 Range.last
 Range.size
 Range.to_a
+RegexEngine.search
 Result.message
 Result.ok?
 Result.unwrap!

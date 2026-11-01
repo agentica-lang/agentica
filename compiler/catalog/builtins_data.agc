@@ -288,6 +288,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Profile",
   "Random",
   "Range",
+  "RegexEngine",
   "Result",
   "SecureRandom",
   "Set",
@@ -313,6 +314,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "HttpWire": ["std/http", "HTTP"],
   "LogRegistry": ["std/logger", "Logger"],
+  "RegexEngine": ["std/regex", "Regex"],
 }
 
 ROWS_1: List[Model.Builtin] = [
@@ -3817,6 +3819,24 @@ ROWS_34: List[Model.Builtin] = [
     implementation: "Profile.steps",
     effects: [],
     description: "Count the steps this task has run so far; the same on every run, with or without the profile.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "RegexEngine.search",
+    parameters: [
+      Model.Named(name: "text", type: Types.Type.String),
+      Model.Named(name: "ops", type: Types.Type.List(Types.Type.Int)),
+      Model.Named(name: "xs", type: Types.Type.List(Types.Type.Int)),
+      Model.Named(name: "ys", type: Types.Type.List(Types.Type.Int)),
+      Model.Named(name: "classes", type: Types.Type.List(Types.Type.List(Types.Type.Int))),
+      Model.Named(name: "ncap", type: Types.Type.Int),
+      Model.Named(name: "mode", type: Types.Type.Int),
+    ],
+    result: Types.Type.List(Types.Type.Int),
+    rule: Model.Rule.Plain,
+    implementation: "RegexEngine.search",
+    effects: [],
+    description: "Internal to std/regex: run a compiled program; mode 0 gives the first end, 1 the captures, 2 all.",
     alternatives: [],
   ),
   Model.Builtin(

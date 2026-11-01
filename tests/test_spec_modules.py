@@ -305,6 +305,14 @@ class TestModuleRules:
         for declaration, checked in zip(declarations, results[3:]):
             self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
+    def test_regex_engine_is_internal_to_std_regex_and_its_name_is_reserved(self):
+        call, declared = self.checks(
+            [({"root.agc": 'def main() -> Void\n  x = RegexEngine.search("a", [8], [0], [0], [], 2, 0)\nend\n\n'},
+              "root.agc", None),
+             ({"root.agc": "struct RegexEngine\n  n: Int\nend\n\n" + MAIN}, "root.agc", None)])
+        self.assert_rejected(call, "CHECK-UNKNOWN-NAME", line=2)
+        self.assert_rejected(declared, "CHECK-REDEFINED-NAME", line=1)
+
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
         call = 'export def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n'
         roots = [("root.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n'

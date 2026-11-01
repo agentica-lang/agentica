@@ -277,15 +277,15 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## std/regex
 
-- `std/regex` (`stdlib/regex.agc`) is pure Agentica, no C (§48, phase 48a):
-  parser to a `Node` tree, compiler to the parallel `ops`/`xs`/`ys` lists of
-  `Program`, and a Pike VM in one hot `search` function. `Program.ends` lists
-  the closure of each pc when it meets no ASSERT, so the VM walks only the
-  rest. `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123).
-  A `prefix` is found with `String.index_of` over windows of the text.
+- `std/regex` (`stdlib/regex.agc`, §48): the parser to a `Node` tree and the
+  compiler to the parallel `ops`/`xs`/`ys` lists of `Program` are Agentica;
+  `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123). The
+  Pike VM is the std-only builtin `RegexEngine.search` (`vm/regex.c`, 48c), a
+  stepper that checks the program on every call (a direct call may pass any
+  lists) and returns flat capture lists; `find_all`'s Go empty-match rules run
+  in C too. Match values are built in Agentica.
 - `Program` is private and holds an empty `Set` (`seal`) so that
-  `JSON.decode` cannot build a `Regex`: `compile` is the only maker, and the
-  matcher trusts the program.
+  `JSON.decode` cannot build a `Regex`: `compile` is the only maker.
 - Tests: `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`,
   Go's empty-match rules applied to its spans; a slow generated tier), checks
   error positions and the ReDoS step budget; golden `std-regex` pins the Go

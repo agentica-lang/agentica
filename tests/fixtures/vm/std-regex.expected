@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 164562,
+  "steps": 64373,
   "stdout": [
     "a|ab: \"a\" at 0-1, groups [\"a@0\"]",
     "false",

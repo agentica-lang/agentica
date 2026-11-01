@@ -179,8 +179,9 @@ Weighed later (no fixed order):
   - **Next work:** Item 7 above; design and plan:
     [§48](../future/48-regex.md#48-regular-expressions). Part 48a is done:
     `std/regex` in Agentica (a parser and a linear-time Pike VM, no
-    backtracking). Next, the regex literal `/pattern/flags` (48b, `compiler/`
-    only); a C matcher only if measured (48c). The questions of
+    backtracking). Part 48c is done: the matcher runs in C (`vm/regex.c`).
+    Next, the regex literal `/pattern/flags` (48b, `compiler/` only). The
+    questions of
     [§48.10](../future/48-regex.md#4810-decisions-and-open-questions) are
     decided with its recommendations (A).
   - **Outcome:** A program searches, extracts, replaces and splits text with a

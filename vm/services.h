@@ -216,6 +216,8 @@ extern const agc_builtin agc_http_wire_builtins[];
 extern const size_t agc_http_wire_builtin_count;
 extern const agc_builtin agc_logger_builtins[];
 extern const size_t agc_logger_builtin_count;
+extern const agc_builtin agc_regex_builtins[];
+extern const size_t agc_regex_builtin_count;
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
 extern const agc_builtin agc_ffi_builtins[];
