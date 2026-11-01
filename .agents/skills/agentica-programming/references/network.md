@@ -98,6 +98,7 @@ behave the same on Linux, macOS and Windows, over HTTP and HTTPS.
 ```text
 HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
+HTTP.proxy_from_env(url: String) -> String
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
 HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
 HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
@@ -133,7 +134,12 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   `error` that names it. User info (`http://user:pass@host:8080`, percent-
   decoded, no colon in the user) is sent as `Proxy-Authorization: Basic` to the
   proxy only, and a `407` is an `error` that names the proxy and never the
-  credentials. The environment is not read.
+  credentials. A client never reads the environment: pass
+  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules:
+  lower-case `http_proxy`/`https_proxy` first, `HTTP_PROXY` ignored in CGI,
+  `no_proxy` with `*`, domains, `:port`, IPs and IPv4 ranges; `""` is none; an
+  `https` proxy is returned but `https://` URLs through it are refused until
+  `CONNECT`).
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head
