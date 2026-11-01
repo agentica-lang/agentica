@@ -7,12 +7,14 @@ import Ast from "../syntax/ast"
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
 ## value, an enum constructor, a pattern), and type_value says that it uses a type name as a value (JSON.decode(Person,
-## ...)).
+## ...)). covered are the ids of the expressions whose type is a List, Optional or Result around a type with the same
+## names as the type the checker records for their first argument or item (some(x), ok(x), [x, ...]).
 export struct Scan
   consts: List[String]
   calls: List[String]
   written: List[String]
   type_value: Bool
+  covered: List[Int]
 end
 
 ## The scan of the statements of a function body, and of the types it writes.
@@ -51,7 +53,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
 end
 
 def empty() -> Scan
-  return Scan(consts: [], calls: [], written: [], type_value: false)
+  return Scan(consts: [], calls: [], written: [], type_value: false, covered: [])
 end
 
 def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan) -> Scan
@@ -93,13 +95,30 @@ end
 def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
   case expr
     Ast.Expr.ConstRef(node) -> return found.with(consts: found.consts.push(node.name))
-    Ast.Expr.Call(node) -> return found.with(calls: found.calls.push(node.name))
+    Ast.Expr.Call(node) ->
+      return found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
     Ast.Expr.FunctionRef(node) -> return found.with(calls: found.calls.push(node.name))
     Ast.Expr.TypeName(node) -> return found.with(written: named(found.written, node.name, watched), type_value: true)
     Ast.Expr.EnumConstructor(node) -> return found.with(written: named(found.written, node.enum_name, watched))
     Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
+    Ast.Expr.ListLit(node) ->
+      if node.elements.size > 0
+        return found.with(covered: found.covered.push(node.id))
+      end
+
+      return found
     _ -> return found
   end
+end
+
+# covered with the call added when it is some(x) or ok(x), whose type check_some and check_ok build around the type of
+# x. Both names are builtin constructors that nothing may redefine.
+def wrapping(covered: List[Int], node: Ast.Call) -> List[Int]
+  if (node.name == "some" or node.name == "ok") and node.args.size == 1
+    return covered.push(node.id)
+  end
+
+  return covered
 end
 
 def see_stmt(found: Scan, stmt: Ast.Stmt, watched: Set[String]) -> Scan

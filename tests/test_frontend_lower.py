@@ -11,12 +11,18 @@ import re
 import pytest
 
 from tests.agentica_test import ROOT, run_vm, scaled, timeout
-from tests.frontend_cases import lower_deep_cases, lower_generated_program
+from tests.frontend_cases import checked_body, lower_deep_cases, lower_generated_program, repeat
 from tests.frontend_support import (
     FROZEN, HERMETIC_ENVIRONMENT, PytestStageCase, assert_golden, assert_goldens, assert_manifest, fixture_goldens,
     direct_files, fixture_roots, load_corpus, load_json, pytest_stage_fixtures, stdlib_compiler_sources, write_files)
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lower"
+
+# The lower stage costs about 1,900 steps for each level of nested some(...) and the budget allows 4,000. A walk of the
+# whole type of each level (#842) took about 10 million steps at 900 levels, above the 3.6 million of the budget. A step
+# budget makes the check deterministic on a loaded runner, where a clock would not.
+STEPS_PER_LEVEL = 4000
+
 
 def golden_text():
     """The text of every golden of the fixtures, in name order."""
@@ -52,6 +58,13 @@ def test_the_lowering_matches_the_goldens_of_the_fixtures(stage):
     goldens = fixture_goldens(FIXTURES, list(roots), ".ir")
     outputs = stage.run_sections(list(roots.values()), "--stdlib=%s" % (ROOT / "stdlib"), cwd=ROOT)
     assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "lowering fixtures")
+
+
+def test_nested_some_lowers_in_a_linear_number_of_steps(stage):
+    depth = 900
+    body = "  y = " + repeat("some(", depth) + "x" + repeat(")", depth) + "\n  puts(\"ok\")\n"
+    outputs = stage.run_cases({"some": checked_body(body)}, flags=("--max-steps", str(depth * STEPS_PER_LEVEL)))
+    assert re.search(r"^program ", outputs["some"])
 
 
 def test_vm_builtins_of_the_lowering_tables_are_the_ones_of_the_freeze():

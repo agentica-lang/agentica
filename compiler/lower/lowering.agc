@@ -56,13 +56,14 @@ struct Table
   block_count: Int
 end
 
-# What the scans of all the bodies give: one per function and constant, and the watched type names written anywhere,
-# with whether a function uses a type name as a value.
+# What the scans of all the bodies give: one per function and constant, the watched type names written anywhere, with
+# whether a function uses a type name as a value, and the ids of the covered expressions (Scans.Scan).
 struct Scanned
   function_scans: List[Scans.Scan]
   constant_scans: List[Scans.Scan]
   written: List[String]
   type_value: Bool
+  covered: Set[Int]
 end
 
 ## Lowers a linked program that the checker accepted.
@@ -103,7 +104,8 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
   watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys).push("Optional"))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
-  used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)).concat(Builtins.default_enums().to_a))
+  mentioned = mentioned_in(checked.types, scanned.covered, watched)
+  used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
   none_records = Builtins.none_default_records()
   if used.to_a.any? do |name: String| none_records.include?(name) end
     # A record whose left-out field defaults to `none` builds an Optional that no expression names.
@@ -327,11 +329,13 @@ def scan_all(
   function_scans: List[Scans.Scan] = []
   constant_scans: List[Scans.Scan] = []
   written: List[String] = []
+  covered: List[Int] = []
   type_value = false
   for decl in functions
     scan = Scans.scan_body(decl.body, watched)
     function_scans = function_scans.push(scan)
     written = written.concat(scan.written).concat(Scans.written_signature(decl, watched))
+    covered = covered.concat(scan.covered)
     if scan.type_value
       type_value = true
     end
@@ -341,6 +345,7 @@ def scan_all(
     scan = Scans.scan_value(decl.value, watched)
     constant_scans = constant_scans.push(scan)
     written = written.concat(scan.written)
+    covered = covered.concat(scan.covered)
     case decl.type
       some(ref) -> written = written.concat(Scans.written_in(ref, watched))
       none -> written = written
@@ -356,6 +361,7 @@ def scan_all(
     constant_scans: constant_scans,
     written: written,
     type_value: type_value,
+    covered: Set.new(covered),
   )
 end
 
@@ -381,14 +387,34 @@ def declared_names(decl: Ast.Decl, watched: Set[String]) -> List[String]
   return found
 end
 
-# The watched struct and enum names that the type of some expression mentions.
-def mentioned_in(types: List[Types.Type], watched: Set[String]) -> List[String]
+# The watched struct and enum names that the type of some expression mentions. The type of a covered expression is
+# not walked below its top: the rest has the names of its child's type, walked at the child's id. Nested some(...),
+# ok(...) or [...] hold one another's types, so walking each of them whole is quadratic in the depth.
+def mentioned_in(types: List[Types.Type], covered: Set[Int], watched: Set[String]) -> List[String]
   found: Set[String] = Set.new([])
+  id = 0
   for type in types
-    found = names_in(type, watched, found)
+    if covered.include?(id)
+      found = top_names(type, watched, found)
+    else
+      found = names_in(type, watched, found)
+    end
+
+    id += 1
   end
 
   return found.to_a
+end
+
+# found with the watched name of the top of the type of a covered expression added (a type of another shape, which the
+# checker does not give one, is walked whole).
+def top_names(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[String]
+  case type
+    Types.Type.Optional(_) -> return only("Optional", watched, found)
+    Types.Type.List(_) -> return found
+    Types.Type.Result(_) -> return found
+    _ -> return names_in(type, watched, found)
+  end
 end
 
 # found with the watched names in type added. A walk into a type adds to one set: the types of nested expressions
