@@ -421,6 +421,10 @@
     "numbers": {
       "patterns": [
         {
+          "match": "\\b0(?:[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*|[bB][01](?:_?[01])*|[oO][0-7](?:_?[0-7])*)\\b",
+          "name": "constant.numeric.integer.agentica"
+        },
+        {
           "match": "\\b[0-9](?:_?[0-9])*(?:\\.[0-9](?:_?[0-9])*)?[eE][+-]?[0-9](?:_?[0-9])*\\b",
           "name": "constant.numeric.float.agentica"
         },
@@ -525,7 +529,7 @@
       ]
     },
     "builtin-types": {
-      "match": "\\b(Int|Float|Bool|String|Nil|Void|List|Map|Set|Result|Optional|Range|Fn|Json|JsonField|JSON|Task|Await|Channel|Process|ProcessOutput|IO|System|Time|Random|Test|TestCase|File|Dir|Path|FileHandle|FileInfo|TCP|TLS|HttpWire|LogRegistry|LogEvent|LogLevel|Socket|Listener|HttpClient|HttpServer|Header|HttpRequest|HttpResponse|HttpClientOptions|HttpServerOptions)\\b",
+      "match": "\\b(Int|Float|Bool|String|Bytes|Nil|Void|List|Map|Set|Result|Optional|Range|Fn|Json|JsonField|JSON|Task|Await|Channel|Process|ProcessOutput|IO|System|Time|Random|Test|TestCase|File|Dir|Path|FileHandle|FileInfo|TCP|TLS|HttpWire|LogRegistry|LogEvent|LogLevel|Socket|Listener|HttpClient|HttpServer|Header|HttpRequest|HttpResponse|HttpClientOptions|HttpServerOptions)\\b",
       "name": "support.type.builtin.agentica"
     },
     "types": {
