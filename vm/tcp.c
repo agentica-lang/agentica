@@ -108,6 +108,9 @@ struct agc_conn {
   tls_shared *shared;
   net *next_waiter;
   agc_tls *tls;
+  /* The protocol that ALPN selected (a malloc'd C string), stored once when the handshake ends and read by TLS.alpn on
+     any scheduler: NULL before, and for none. */
+  _Atomic(char *) alpn;
   agc_tls_failure failure;
   uint8_t *cipher, *plain;
   size_t plain_at, plain_len;
@@ -160,6 +163,7 @@ static void settle(net *n) {
   uv_freeaddrinfo(n->addrs);
   agc_inbuf_free(&n->in);
   agc_tls_free(n->tls);
+  free(atomic_load_explicit(&n->alpn, memory_order_relaxed));
   agc_tls_config_free(n->config);
   if (n->shared) shared_unref(n->shared);
   free(n->cipher);
@@ -711,6 +715,20 @@ static void decrypt(net *n) {
   }
 }
 
+/* The handshake is over: the protocol that ALPN selected, if any, kept for TLS.alpn and returned ("" for none). I/O
+   thread only. */
+static const char *keep_alpn(net *n) {
+  const uint8_t *data;
+  size_t len = agc_tls_alpn(n->tls, &data);
+  if (!len) return "";
+  char *name = malloc(len + 1);
+  if (!name) agc_out_of_memory();
+  memcpy(name, data, len);
+  name[len] = '\0';
+  atomic_store_explicit(&n->alpn, name, memory_order_release);
+  return name;
+}
+
 static void advance(net *n) {
   if (n->tls_failed) return;
   if (!n->handshaken) {
@@ -722,8 +740,10 @@ static void advance(net *n) {
       return;
     }
     n->handshaken = true;
-    AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_done socket=%" PRIu64 " listener=%" PRIu64 " protocol=%s cipher=%s",
-              n->id, n->parent, agc_tls_protocol(n->tls), agc_tls_cipher(n->tls));
+    const char *alpn = keep_alpn(n);
+    AGC_TRACE(&n->trace, AGC_TRACE_TLS,
+              "tls_handshake_done socket=%" PRIu64 " listener=%" PRIu64 " protocol=%s cipher=%s alpn=%s", n->id,
+              n->parent, agc_tls_protocol(n->tls), agc_tls_cipher(n->tls), alpn);
     notify(n, n->opener);
   }
   decrypt(n);
@@ -863,11 +883,14 @@ static void serve(net *n) {
       continue;
     }
     c->secure = true;
+    /* The connection's own count: the server's ALPN callback reads the config during the handshake, which may outlast
+       the listener. */
+    c->config = agc_tls_config_ref(n->config);
     c->opener = q;
     q->next = n->handshakes;
     n->handshakes = q;
     AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake socket=0 listener=%" PRIu64 " role=server", n->id);
-    begin_tls(c, agc_tls_server(n->config, &c->failure));
+    begin_tls(c, agc_tls_server(c->config, &c->failure));
   }
 }
 
@@ -1387,8 +1410,11 @@ static agc_value builtin_tls_connect(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* HttpWire.connect_context(host, port, context, timeout_ms) (std-only): TLS.connect, the name std/http uses for a
-   connection on a client TlsContext (HTTP.start, and a client whose options.tls names one). */
+   connection on a client TlsContext (HTTP.start, and a client whose options.tls names one), on a context that agrees
+   on no protocol but HTTP/1.1. */
 static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_tls_context_check(vm, args[2], false, client_role, span + 3);
+  agc_tls_http1_check(vm, agc_as_tls_context(vm, args[2])->config, span + 3);
   return open_socket(vm, args, span, true);
 }
 
@@ -1619,6 +1645,16 @@ static agc_value builtin_clean_eof(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_bool(n && agc_conn_clean_eof(n));
 }
 
+/* TLS.alpn: the protocol that ALPN selected in the socket's handshake, "" for none, for a plain socket and for a closed
+   one. The I/O thread stores it before the handshake's end readies anything. */
+static agc_value builtin_alpn(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const net *n = live(agc_as_socket(vm, args[0]));
+  const char *name = n ? atomic_load_explicit(&n->alpn, memory_order_acquire) : NULL;
+  if (!name) return agc_string_value(vm->rt->empty_string);
+  return agc_string_value(agc_utf8_decode((const uint8_t *)name, strlen(name), "?", true));
+}
+
 static void half_close_step(void *data) { agc_conn_half_close(data); }
 
 /* HttpWire.close_write (std-only): the half-close of std/http's lingering
@@ -1764,6 +1800,8 @@ void agc_net_close(agc_vm *vm, agc_resource *r, const char *why) { disown(vm, r,
 /* A TLS connection is returned before its handshake: the session is made
    here and the handshake runs on the first read or write, under that
    call's timeout, so a slow client never stalls the accept loop. */
+const agc_tls_config *agc_conn_config(const agc_conn *c) { return c->config; }
+
 agc_conn *agc_conn_accept(agc_conn *l) {
   if (l->closed) return NULL;
   tcp_link *k = l->conn;
@@ -1779,7 +1817,9 @@ agc_conn *agc_conn_accept(agc_conn *l) {
   c->users++;
   if (!l->secure) return c;
   c->secure = true;
-  c->tls = agc_tls_server(l->config, &c->failure);
+  /* Its own count, as in serve: the handshake runs on the first read, maybe after the listener closed. */
+  c->config = agc_tls_config_ref(l->config);
+  c->tls = agc_tls_server(c->config, &c->failure);
   c->tls_failed = c->tls == NULL;
   if (c->tls) {
     c->cipher = malloc(CIPHER_SIZE);
@@ -1809,6 +1849,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 3, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.upgrade", 4, builtin_tls_upgrade, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TLS.alpn", 1, builtin_alpn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.close_write", 1, builtin_close_write, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.idle?", 2, builtin_idle, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"HttpWire.read_head.bytes", 4, builtin_read_head, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

@@ -113,6 +113,20 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
   partial wildcards. The server does not ask for client certificates.
+- **ALPN.** The `alpn` field of the options goes into the context in the wire
+  form of RFC 7301, checked when the context is built (each name 1 to 255
+  bytes, the list at most 65535 bytes). A client context offers it
+  (`SSL_CTX_set_alpn_protos`). A server context selects the first of its own
+  protocols that the client offers too (`SSL_select_next_proto` in its select
+  callback, whose argument is the config, so each accepted connection holds its
+  own count on the config), and fails the handshake with the
+  `no_application_protocol` alert when there is none; a client that offers no
+  ALPN gets none. When the handshake ends, the I/O thread stores the selected
+  name in the socket's `net` (an atomic pointer, set once), which `TLS.alpn`
+  reads: `""` for none, a plain socket or a closed one. The config also records
+  whether its list is none or exactly `http/1.1`: std/http speaks only
+  HTTP/1.1, so `HttpWire.service`, `HttpWire.connect_context` and
+  `HttpWire.server` halt with `RUNTIME-TLS-CONTEXT-ALPN` on any other list.
 - **Data path.** A TLS socket is the TCP socket of 10.3.1 with a session.
   Decrypted bytes go into the socket's input buffer, so `read_line`,
   `recv_bytes`, the 1 MiB limits, the locks and the timeouts are the TCP ones.

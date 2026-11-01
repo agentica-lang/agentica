@@ -34,7 +34,7 @@ export VM_BUILTINS = Set.new([
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
   "Channel.close", "Channel.closed?", "Channel.empty?", "Process.spawn", "Process.send", "Process.send_bytes.bytes",
   "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait", "Process.close",
-  "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.close_listener", "TCP.send",
+  "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.close_listener", "TCP.send", "TLS.alpn",
   "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen",
   "TLS.client_context", "TLS.server_context", "TLS.upgrade", "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs",
   "HttpWire.options", "HttpWire.clean_eof?", "HttpWire.connect_tls", "HttpWire.connect_context", "HttpWire.drop_tls",
