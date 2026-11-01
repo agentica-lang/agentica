@@ -1365,25 +1365,21 @@ static AGC_JIT_CALLER void block_calls_in_place(void) {
   }
 }
 
-/* A filter whose block returns an Int (bytecode the front end never writes) fails at the filter's span in both tiers,
-   with the same steps left. main calls the block once first, so under `always` it has code when main's code starts
-   the filter and calls the block natively; the value that is not a Bool takes the RESUME exit (agc_jit_block_next),
-   and run_compiled fails as the interpreter's RETURN does, with the block's frame popped and the native frame on
-   top. */
-static AGC_JIT_CALLER void block_value_not_bool(void) {
-  static block_program b;
-  memset(&b, 0, sizeof b);
-  b.builtins[0] = agc_find_builtin((const uint8_t *)"List.filter", 11, 2);
-  assert(b.builtins[0]);
-  agc_test_program(&b.program, &b.source, b.span_table, 16, b.constants, b.builtins, 1, b.fns, 2, &b.code[0][0],
-                   &b.spans[0][0], MAX_CODE, 0);
-  agc_value items[3] = {agc_int(1), agc_int(2), agc_int(3)};
-  b.constants[0] = agc_list_value(agc_list_from_array(items, 3));
-  b.constants[1] = agc_fn_value(agc_new_fn(1, 0));
-  b.constants[2] = agc_int(5);
-  b.program.constant_count = 3;
-  b.fns[1].params = 1;
-  agc_function *main_fn = &b.fns[0];
+/* main of a program whose one row is NAME (LEN bytes, arity 2): it calls the block (function 1, one parameter, a
+   function value without captures) with WARM first, so under `always` the block has code at the block call, then
+   makes the call with ARG and the block, and returns its result. The caller writes the block's code. */
+static void warm_block_program(block_program *b, const char *name, uint32_t len, agc_value arg, agc_value warm) {
+  memset(b, 0, sizeof *b);
+  b->builtins[0] = agc_find_builtin((const uint8_t *)name, len, 2);
+  assert(b->builtins[0]);
+  agc_test_program(&b->program, &b->source, b->span_table, 16, b->constants, b->builtins, 1, b->fns, 2, &b->code[0][0],
+                   &b->spans[0][0], MAX_CODE, 0);
+  b->constants[0] = arg;
+  b->constants[1] = agc_fn_value(agc_new_fn(1, 0));
+  b->constants[2] = warm;
+  b->program.constant_count = 3;
+  b->fns[1].params = 1;
+  agc_function *main_fn = &b->fns[0];
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_STEP, 1, 0, 1);
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 1, 2, 1);
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL, 1, 1, 1);
@@ -1391,6 +1387,17 @@ static AGC_JIT_CALLER void block_value_not_bool(void) {
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_CONST, 2, 1, 1);
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_CALL_BUILTIN, 1, 0, 2);
   agc_test_emit(main_fn, MAX_CODE, AGC_OP_RETURN, 1, 0, 1);
+}
+
+/* A block call of row NAME (LEN bytes, arity 2) over ITEMS whose block returns its item fails at the call's span in
+   both tiers, with the same code and steps left. Under `always` main's code starts the call and calls the block
+   natively (warm_block_program); the step that fails takes the RESUME exit
+   (agc_jit_block_next), and run_compiled fails as the interpreter's RETURN does, with the block's frame popped and the
+   native frame on top. The transitions are main's CALL of the block, the block's RETURN of that call, and the RESUME
+   exit; in the builds of AGC_LEAF_CHECK a failure inside the helper would abort (vm->in_code). */
+static AGC_JIT_CALLER void block_step_fails(const char *name, uint32_t len, agc_value items) {
+  static block_program b;
+  warm_block_program(&b, name, len, items, agc_int(5));
   agc_test_emit(&b.fns[1], MAX_CODE, AGC_OP_STEP, 1, 0, 3);
   agc_test_emit(&b.fns[1], MAX_CODE, AGC_OP_RETURN, 0, 0, 3);
   int64_t left_off, left_jit;
@@ -1398,7 +1405,37 @@ static AGC_JIT_CALLER void block_value_not_bool(void) {
   agc_outcome off = run_blocks(&b, false, 1000000, &left_off, counts);
   agc_outcome on = run_blocks(&b, true, 1000000, &left_jit, counts);
   assert(off.kind == AGC_FAILED && on.kind == AGC_FAILED && strcmp(on.code, off.code) == 0);
-  assert(on.span == off.span && left_jit == left_off);
+  assert(on.span == off.span && left_jit == left_off && counts[0] == TRACE_COUNT(3));
+}
+
+/* A filter whose block returns an Int, and a sort_by whose keys are an Int and a String (bytecode the front end never
+   writes): the first fails on the value that is not a Bool, the second at the sort after its last item. */
+static void block_steps_that_fail(void) {
+  agc_value ints[3] = {agc_int(1), agc_int(2), agc_int(3)};
+  block_step_fails("List.filter", 11, agc_list_value(agc_list_from_array(ints, 3)));
+  agc_value mixed[2] = {agc_int(1), agc_string_value(agc_make_string("a", 1, 1))};
+  block_step_fails("List.sort_by", 12, agc_list_value(agc_list_from_array(mixed, 2)));
+}
+
+/* 50.times with a block that has no STEP (bytecode the front end never writes: its blocks start with one), so a step
+   limit can stop the call at the step of a call after the first, right after a native RETURN: the RESUME exit then
+   takes that step in run_compiled, which fails as the interpreter's RETURN does (in the builds of AGC_LEAF_CHECK a
+   failure inside agc_jit_block_next would abort, vm->in_code). Every limit inside the call stops both tiers at the same
+   span with the same steps left. */
+static AGC_JIT_CALLER void counting_steps_at_the_limit(void) {
+  static block_program b;
+  warm_block_program(&b, "Int.times", 9, agc_int(50), agc_int(0));
+  agc_test_emit(&b.fns[1], MAX_CODE, AGC_OP_RETURN, 0, 0, 3);
+  int64_t left_off, left_jit;
+  uint64_t counts[2];
+  agc_outcome done = run_blocks(&b, true, 1000000, &left_jit, counts);
+  assert(done.kind == AGC_DONE);
+  for (int64_t limit = 1; limit < 60; limit++) {
+    agc_outcome off = run_blocks(&b, false, limit, &left_off, counts);
+    agc_outcome on = run_blocks(&b, true, limit, &left_jit, counts);
+    assert(on.kind == off.kind && left_jit == left_off);
+    if (off.kind == AGC_FAILED) assert(strcmp(on.code, off.code) == 0 && on.span == off.span);
+  }
 }
 
 /* One run of the code_program of TEXT with no JIT or with `always` (its trace on, so it counts the leaves that
@@ -1888,7 +1925,8 @@ int main(void) {
   ineligible();
   sample_resets();
   block_calls_in_place();
-  block_value_not_bool();
+  block_steps_that_fail();
+  counting_steps_at_the_limit();
   every_opcode_compiles();
 #else
   /* No emitter on this host: the JIT is never made. */
