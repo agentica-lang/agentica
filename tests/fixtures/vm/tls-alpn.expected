@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 1713,
+  "steps": 3022,
   "stdout": [
     "[ok(\"h2\"), ok(\"h2\")]",
     "[ok(\"http/1.1\"), ok(\"http/1.1\")]",
@@ -13,6 +13,8 @@
     "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
     "true",
     "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
+    "true",
+    "error(\"network: the ALPN protocols take more than 65535 bytes\")",
     "error(\"network: an ALPN protocol name is 1 to 255 bytes\")",
     ""
   ],

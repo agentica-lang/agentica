@@ -25,6 +25,8 @@
 #endif
 
 #define SCRATCH 4096
+/* The wire form of the ALPN list http/1.1 alone (agc_tls_config_http1). */
+#define HTTP1_WIRE "\x08http/1.1"
 
 /* A config is shared by counts (agc_tls_config_ref): a TlsContext value, each socket or listener made from it and an
    HttpClient's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
@@ -35,6 +37,8 @@ struct agc_tls_config {
   /* A server's ALPN protocols, in the wire form, for select_alpn; NULL for none and on a client. */
   uint8_t *alpn;
   unsigned alpn_len;
+  /* An ALPN list other than none or exactly http/1.1 (agc_tls_config_http1). */
+  bool other_alpn;
 };
 
 struct agc_tls {
@@ -184,6 +188,7 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
   c->ctx = ctx;
   c->alpn = NULL;
   c->alpn_len = 0;
+  c->other_alpn = false;
   return c;
 }
 
@@ -265,9 +270,13 @@ bool agc_tls_config_set_alpn(agc_tls_config *config, const uint8_t *wire, size_t
     fail(failure, AGC_TLS_ERR_INTERNAL, "bad ALPN list");
     return false;
   }
+  bool other = !(len == sizeof HTTP1_WIRE - 1 && memcmp(wire, HTTP1_WIRE, len) == 0);
   if (!server) {
     /* SSL_CTX_set_alpn_protos returns 0 on success, unlike the other setters. */
-    if (SSL_CTX_set_alpn_protos(config->ctx, wire, (unsigned)len) == 0) return true;
+    if (SSL_CTX_set_alpn_protos(config->ctx, wire, (unsigned)len) == 0) {
+      config->other_alpn = other;
+      return true;
+    }
     take_errors(failure, AGC_TLS_ERR_INTERNAL);
     return false;
   }
@@ -278,9 +287,12 @@ bool agc_tls_config_set_alpn(agc_tls_config *config, const uint8_t *wire, size_t
   }
   memcpy(config->alpn, wire, len);
   config->alpn_len = (unsigned)len;
+  config->other_alpn = other;
   SSL_CTX_set_alpn_select_cb(config->ctx, select_alpn, config);
   return true;
 }
+
+bool agc_tls_config_http1(const agc_tls_config *config) { return !config->other_alpn; }
 
 agc_tls_config *agc_tls_config_ref(agc_tls_config *config) {
   if (config) atomic_fetch_add_explicit(&config->refs, 1, memory_order_relaxed);

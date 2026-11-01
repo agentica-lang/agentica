@@ -48,6 +48,10 @@ def main() -> Void
   end
   IO.inspect(TLS.client_context(TlsClientOptions(alpn: [long.slice(0, 255)])).ok?)
   IO.inspect(TLS.client_context(TlsClientOptions(alpn: [long])))
+  # The list takes at most 65535 bytes, each name after its length byte: 255 names of 255 bytes and one of 254 fit.
+  full = (0...255).to_a.map do |_n: Int| long.slice(0, 255) end
+  IO.inspect(TLS.client_context(TlsClientOptions(alpn: full.push(long.slice(0, 254)))).ok?)
+  IO.inspect(TLS.client_context(TlsClientOptions(alpn: full.push(long.slice(0, 255)))))
   IO.inspect(
     TLS.server_context(
       TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: ["h2", ""]),

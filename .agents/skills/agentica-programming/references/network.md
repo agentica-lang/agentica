@@ -65,8 +65,11 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
 - `alpn` (both options) lists the ALPN protocols: a client offers them, a
   server picks the first of its own that the client offers (none in common:
   the handshake fails; a client offering none gets none). `TLS.alpn(socket)`
-  is the protocol picked, or `""`. Names are 1 to 255 bytes, checked when the
-  context is built. `HTTP.client` and `HTTP.listen_tls` speak HTTP/1.1 only.
+  is the protocol picked, or `""`. Names are 1 to 255 bytes and the list at
+  most 65535 bytes (one more byte per name), checked when the context is
+  built. `HTTP.client`, `HTTP.start` and `HTTP.listen_*_tls` speak HTTP/1.1
+  only: an `alpn` other than `[]` or `["http/1.1"]` halts with
+  `RUNTIME-TLS-CONTEXT-ALPN`.
 - A server context takes a PEM certificate chain and key; a bad file or
   mismatched key fails `TLS.server_context`. A client context sends a client
   certificate when `cert_file` and `key_file` name the same PEM forms (both

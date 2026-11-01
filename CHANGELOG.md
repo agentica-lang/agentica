@@ -21,7 +21,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `TLS.upgrade(socket, context, host, timeout_ms)` starts TLS on an open TCP
   socket (STARTTLS), as a client or a server by the context's role.
 - `TlsClientOptions` and `TlsServerOptions` take `alpn: List[String]`, the
-  protocols ALPN negotiates, and `TLS.alpn(socket)` returns the one selected.
+  protocols ALPN negotiates, and `TLS.alpn(socket)` returns the one selected;
+  `std/http` halts on an `alpn` other than `[]` or `["http/1.1"]`.
 - `File.replace(path, data)` replaces an existing file in one step, keeping its
   permission bits and any symbolic link to it.
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the

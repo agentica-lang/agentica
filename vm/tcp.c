@@ -1410,8 +1410,11 @@ static agc_value builtin_tls_connect(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* HttpWire.connect_context(host, port, context, timeout_ms) (std-only): TLS.connect, the name std/http uses for a
-   connection on a client TlsContext (HTTP.start, and a client whose options.tls names one). */
+   connection on a client TlsContext (HTTP.start, and a client whose options.tls names one), on a context that agrees
+   on no protocol but HTTP/1.1. */
 static agc_value builtin_connect_context(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_tls_context_check(vm, args[2], false, client_role, span + 3);
+  agc_tls_http1_check(vm, agc_as_tls_context(vm, args[2])->config, span + 3);
   return open_socket(vm, args, span, true);
 }
 
@@ -1797,6 +1800,8 @@ void agc_net_close(agc_vm *vm, agc_resource *r, const char *why) { disown(vm, r,
 /* A TLS connection is returned before its handshake: the session is made
    here and the handshake runs on the first read or write, under that
    call's timeout, so a slow client never stalls the accept loop. */
+const agc_tls_config *agc_conn_config(const agc_conn *c) { return c->config; }
+
 agc_conn *agc_conn_accept(agc_conn *l) {
   if (l->closed) return NULL;
   tcp_link *k = l->conn;

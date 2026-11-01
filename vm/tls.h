@@ -56,6 +56,9 @@ agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_fil
    handshake holds a count on it until the handshake ends. False with the failure, the config untouched. */
 bool agc_tls_config_set_alpn(agc_tls_config *config, const uint8_t *wire, size_t len, bool server,
                              agc_tls_failure *failure);
+/* Whether CONFIG agrees on no protocol but HTTP/1.1: its ALPN list is none or exactly http/1.1. Fixed once the config
+   is shared, so any thread that holds a count may ask. */
+bool agc_tls_config_http1(const agc_tls_config *config);
 /* One more count on CONFIG (NULL stays NULL); agc_tls_config_free gives one back and frees the config with the last. */
 agc_tls_config *agc_tls_config_ref(agc_tls_config *config);
 void agc_tls_config_free(agc_tls_config *config);

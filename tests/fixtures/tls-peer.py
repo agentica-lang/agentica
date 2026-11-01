@@ -203,8 +203,9 @@ def connect_starttls(port: int) -> None:
 
 
 def serve_alpn() -> None:
-    """ALPN on a server that offers h2 and http/1.1: two connections, each answered with the protocol it selected ("" for
-    none, which is also Python's answer when nothing is in common)."""
+    """ALPN on a server that offers h2 and http/1.1: two connections, each answered with the protocol it selected, or ""
+    when it selected none. Unlike the VM, Python's server does not refuse a client with no protocol in common: it
+    selects none and the handshake goes on."""
     context = server_context()
     context.set_alpn_protocols(["h2", "http/1.1"])
     for conn in accepted(2):
