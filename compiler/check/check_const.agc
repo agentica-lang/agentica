@@ -7,6 +7,7 @@
 import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
 import Linker from "../modules/linker"
+import {REGEX_MODULE} from "../modules/rewrite"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
@@ -58,9 +59,13 @@ export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModu
   return ok(current)
 end
 
+# The constants of std/regex come first: a regex literal in a constant calls its compile, which reads them, and the
+# order follows only the reads that an initializer writes.
 def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry]
   found: List[Entry] = []
-  for module in modules
+  regex_first = modules.select do |module: Linker.LinkedModule| module.key == REGEX_MODULE end
+  others = modules.select do |module: Linker.LinkedModule| module.key != REGEX_MODULE end
+  for module in regex_first.concat(others)
     for decl in module.declarations
       case decl
         Ast.Decl.Constant(node) ->

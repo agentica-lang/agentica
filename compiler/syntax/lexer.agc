@@ -127,11 +127,15 @@ PAIR_SECONDS = Set.new(["=", ">", "&", "|", "."])
 ## The only operator of three characters.
 ELLIPSIS = Op(kind: "dot-dot-dot", lexeme: "...", value: Tokens.Value.Text("..."), width: 3)
 
-## The token kinds that can end an expression: a line that starts with `.name` continues a line that ends in one.
+## The token kinds that can end an expression: a line that starts with `.name` continues a line that ends in one, and
+## a `/` after one is division; after any other token a `/` starts a regex literal.
 ENDS_EXPRESSION = Set.new([
   "name", "type-name", "integer", "float", "string", "interp-end", "right-paren", "right-bracket", "right-brace",
-  "end", "true", "false", "nil",
+  "end", "true", "false", "nil", "regex",
 ])
+
+## The flags a regex literal may end with: `i` (ignore case) and `m` (`.` matches a newline).
+REGEX_FLAGS = Set.new(["i", "m"])
 
 ## The keywords that start the head of a block: a leading dot on the line after one is not a continuation.
 BLOCK_HEADS = Set.new(["if", "elsif", "while", "case", "for"])
@@ -391,6 +395,17 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         end
 
       CharClass.Operator ->
+        if char == "/" and regex_start?(tokens, chars[index + 1], index)
+          case scan_regex(input, index, line, line_start)
+            Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+            Diag.Outcome.Done(found) ->
+              tokens = tokens.push(found)
+              index = found.span.stop.offset
+          end
+
+          next
+        end
+
         op = SINGLE_OPS.get(char, NO_OP)
         ahead = chars[index + 1]
         mark = ahead
@@ -1219,6 +1234,98 @@ end
 
 def heredoc_piece(input: Input, opener: Source.Span, kind: String, parts: List[String]) -> Tokens.Token
   return token(input.text, kind, Tokens.Value.Text(parts.join("")), opener.start, opener.stop)
+end
+
+# Whether a / at offset starts a regex: no token before it ends an expression, so it cannot be a division. `//`, `/*`
+# and `*/` stay two operators: an empty regex or one that starts with * is never valid, and the parser explains those
+# as comment habits.
+def regex_start?(tokens: List[Tokens.Token], ahead: String, offset: Int) -> Bool
+  if ahead == "/" or ahead == "*"
+    return false
+  elsif tokens.size == 0
+    return true
+  end
+
+  last = tokens[tokens.size - 1]
+  if (last.kind == "divide" or last.kind == "multiply") and last.span.stop.offset == offset
+    return false
+  end
+
+  return !ENDS_EXPRESSION.include?(last.kind)
+end
+
+# A regex literal `/body/flags` from its opening slash. The body is the pattern as written: a backslash is read with
+# the character after it (so `\/` does not end the body), and nothing is unescaped. A line break, the end of the text
+# or a `#{` in the body is an error, as is a flag other than `i` and `m` or a flag written twice.
+def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
+  chars = input.chars
+  start = Source.position(first, line, line_start)
+  index = first + 1
+  while chars[index] != "/"
+    char = chars[index]
+    if LINE_ENDS.include?(char) or (char == "\\" and LINE_ENDS.include?(chars[index + 1]))
+      return Diag.Outcome.Failed(unterminated_regex(start, Source.position(index, line, line_start)))
+    elsif char == "#" and chars[index + 1] == "{"
+      return Diag.Outcome.Failed(regex_interpolation(input, index, line, line_start))
+    elsif char == "\\"
+      index += 2
+    else
+      index += 1
+    end
+  end
+
+  body = input.text.slice(first + 1, index - first - 1)
+  stop = index + 1
+  flags = ""
+  while NAME_CHARS.include?(chars[stop])
+    flag = chars[stop]
+    if !REGEX_FLAGS.include?(flag) or flags.contains?(flag)
+      return Diag.Outcome.Failed(regex_flag(flag, Source.position(stop, line, line_start)))
+    end
+
+    flags = flags + flag
+    stop += 1
+  end
+
+  return Diag.Outcome.Done(
+    Tokens.Token(
+      kind: "regex",
+      lexeme: input.text.slice(first, stop - first),
+      value: Tokens.Value.Text(body),
+      span: span(start, Source.position(stop, line, line_start)),
+    ),
+  )
+end
+
+def unterminated_regex(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-UNTERMINATED-REGEX",
+    "unterminated regex literal",
+    span(start, stop),
+    Diag.Help.Hint(
+      "end the pattern with / on the same line; a / that starts a line, or follows an operator, starts a regex, so " +
+      "for a division put the / at the end of the line before, or wrap the expression in parentheses",
+    ),
+  )
+end
+
+def regex_interpolation(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-REGEX-INTERPOLATION",
+    "a regex literal cannot interpolate",
+    span(Source.position(index, line, line_start), Source.position(index + 2, line, line_start)),
+    Diag.Help.Hint("build a pattern at run time with Regex.compile(text); write \\\#{ to match the text \#{"),
+  )
+end
+
+def regex_flag(flag: String, at: Source.Position) -> Diag.Diagnostic
+  stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
+  return Diag.fail(
+    "LEX-REGEX-FLAG",
+    "unknown or repeated regex flag \"#{flag}\"",
+    span(at, stop),
+    Diag.Help.Hint("a regex literal takes the flags i (ignore case) and m (. matches a newline), each once"),
+  )
 end
 
 def lone_carriage_return(at: Source.Position) -> Diag.Diagnostic

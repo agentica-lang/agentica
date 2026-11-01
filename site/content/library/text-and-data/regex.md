@@ -17,27 +17,25 @@ Regex.escape(text: String) -> String
 Regex.named(m: Regex.Match, name: String) -> Result[Regex.Group]
 ```
 
-The text comes first, so a pipe reads like the call: `text |> Regex.split(re)`.
+The text comes first, so a pipe reads like the call: `text |> Regex.split(re)`. A fixed pattern is written as a regex literal, `/pattern/flags`; `Regex.compile` is for a pattern built at run time.
 
 ```agentica
 import Regex from "std/regex"
 
 def read_year(text: String) -> Result[String]
-  date = try Regex.compile("(?P<year>\\d{4})-\\d{2}-\\d{2}")
-  found = try Regex.match(text, date)
+  found = try Regex.match(text, /(?P<year>\d{4})-\d{2}-\d{2}/)
   year = try Regex.named(found, "year")
   return ok(year.text)
 end
 
 def main() -> Void
   puts(read_year("released on 2026-11-01"))
-  words = Regex.compile("(\\w+) (\\w+)").unwrap!
-  puts(Regex.replace("Ada Lovelace", words, "$2, $1"))
-  tags = Regex.compile("[,;]\\s*").unwrap!
-  puts("a, b;c" |> Regex.split(tags))
-  number = Regex.compile("\\d+").unwrap!
-  puts(Regex.find_all("7 apples, 12 pears", number).map do |m| m.text end)
-  puts(Regex.match?("no digits", number))
+  puts(Regex.replace("Ada Lovelace", /(\w+) (\w+)/, "$2, $1"))
+  puts("a, b;c" |> Regex.split(/[,;]\s*/))
+  puts(Regex.find_all("7 apples, 12 pears", /\d+/).map do |m| m.text end)
+  puts(Regex.match?("No Digits", /digits/i))
+  fruit = Regex.compile("\\b" + Regex.escape("pears") + "\\b").unwrap!
+  puts(Regex.match?("7 pears", fruit))
   puts(Regex.compile("(ab"))
 end
 ```
@@ -47,11 +45,24 @@ ok("2026")
 ok("Lovelace, Ada")
 ["a", "b", "c"]
 ["7", "12"]
-false
+true
+true
 error("character 4: missing ')' for the group at character 1")
 ```
 
-A pattern is a `String`, so each backslash of the pattern is written twice: `"\\d+"` is the pattern `\d+`. `Regex.escape(text)` gives a pattern that matches `text` literally.
+`Regex.escape(text)` gives a pattern that matches `text` literally. A pattern given to `Regex.compile` is a `String`, so each backslash of the pattern is written twice: `"\\d+"` is the pattern `\d+`.
+
+## Regex literals
+
+A regex literal is `Regex.compile` of its body, checked when the program is compiled. The body is the pattern as written, with no string escapes: `/\d+\.\d+/` is the pattern `\d+\.\d+`, and `\/` is a slash. The file must import `std/regex`, in any form; without one the literal is `CHECK-REGEX-IMPORT`. A pattern that `compile` refuses is `CHECK-INVALID-REGEX`, at the character the error names, so a literal never fails at run time and needs no `unwrap!`. A literal in a function is built once, before `main`, even inside a loop.
+
+- Flags follow the closing slash: `i` ignores case and is `(?i)`; `m` lets `.` match a newline and is `(?s)`. `/a.b/im` is the pattern `(?is)a.b`, which is also its `source`. Another letter, or a flag written twice, is `LEX-REGEX-FLAG`.
+- `#{` cannot appear in the body (`LEX-REGEX-INTERPOLATION`); `\#{` matches the text `#{`. Build a pattern from values with `Regex.compile`.
+- The body ends at the line end: a missing closing slash is `LEX-UNTERMINATED-REGEX`.
+- After a value, `/` is division: `a / b / c` divides, and `x /= 2` is the compound operator. After an operator, a comma, an opening bracket or a keyword it starts a literal: `[/a/, /b/]`, `return /a/`. A call needs its parentheses: `puts(/x/)`; `puts /x/` is a division and an error. A line that starts with `/ 2` is a literal that does not end; put the `/` at the end of the line before.
+- A literal is not a `case` pattern: test it in an `if` with `Regex.match?`.
+
+Watch out, coming from Ruby: `^` and `$` are text anchors, so `/^ERROR/` matches only at the start of the text; write `/(?m)^ERROR/` for line starts. The `m` flag means "dot matches newline", as in Ruby, while `(?m)` inside the pattern means line anchors. There is no `=~` and no `$1`: use `Regex.match` and the groups of the match.
 
 ## Matches
 
@@ -72,7 +83,7 @@ struct Regex.Group
 end
 ```
 
-Groups are numbered from 1 by their opening parenthesis. `Regex.named(m, name)` reads a named group, and an unknown name is an error. A `Regex.Regex` holds the pattern as `source`; only `compile` makes one. Printing a `Regex.Regex` shows `source` first, then its compiled program.
+Groups are numbered from 1 by their opening parenthesis. `Regex.named(m, name)` reads a named group, and an unknown name is an error. A `Regex.Regex` holds the pattern as `source`; only `compile` and a regex literal make one. Printing a `Regex.Regex` shows `source` first, then its compiled program.
 
 - `match?` says whether the pattern matches anywhere. It keeps no groups, so it is the cheapest search.
 - `match` gives the leftmost-first match, or `error("no match")`. Among alternatives the first that matches wins: `a|ab` on `ab` gives `a`.
@@ -110,4 +121,4 @@ A compile error starts with the character where it is, counted from 1: `characte
 
 Every loop of the matcher charges steps, so a long search shares the machine with other tasks and `--max-steps` stops it with `RUNTIME-STEP-LIMIT`. A search on a text of n characters with a pattern of m instructions and g groups costs O(n·m·g) steps, and `match?` O(n·m). `find_all`, `replace` and `split` run one search per match. `(a+)+$`, which takes exponential time in a backtracking matcher, takes linear time here. To stop a search after some time, run it in a task and await it with a timeout (`Task.await(task, timeout_ms)`).
 
-`find_all` returns every match at once, so a pattern that matches every character makes one `Match` per character. Compile a pattern once, outside the loop that uses it.
+`find_all` returns every match at once, so a pattern that matches every character makes one `Match` per character. Compile a run-time pattern once, outside the loop that uses it; a literal is built once already.

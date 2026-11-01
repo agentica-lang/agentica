@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 25:2:7-26:2:8 "expected an expression, found \"/\"" -
+ERROR LEX-UNTERMINATED-REGEX 25:2:7-28:2:10 "unterminated regex literal" "end the pattern with / on the same line; a / that starts a line, or follows an operator, starts a regex, so for a division put the / at the end of the line before, or wrap the expression in parentheses"

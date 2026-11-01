@@ -67,6 +67,11 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   the call goes on after the end line. It needs two text lines or more
   (`LEX-HEREDOC-ONE-LINE`; write `"text\n"`); a tab in the indentation is
   `LEX-HEREDOC-INDENT`; no end line is `LEX-UNTERMINATED-HEREDOC`.
+- Regex literals: `/\d+-\d+/i`, a `Regex.Regex` of `std/regex`, which the file
+  must import (`CHECK-REGEX-IMPORT`). No string escapes (`\/` is a slash);
+  flags `i` and `m` (`.` matches `\n`); no `#{}`. Checked when compiled
+  (`CHECK-INVALID-REGEX`) and built once. After a value `/` is division, so a
+  call takes it in parentheses: `puts(/x/)`. Details: `regex.md`.
 - Lists `[1, 2, 3]`; maps `{"a": 1, "b": 2}`. A repeated key keeps the last
   value at its first position.
 - `[]`, `{}` and `Set.new([])` need a type from an annotation, parameter, field

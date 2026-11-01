@@ -1,0 +1,16 @@
+program #21 0:1:1-123:9:1
+  declaration: import-decl #0 0:1:1-30:2:1 path="std/regex" alias="Regex"
+  declaration: const-decl #5 31:3:1-48:4:1 name="WORD"
+    value: regex-lit #4 38:3:8-47:3:17 body="[a-z]+" flags="i"
+  declaration: function-decl #20 49:5:1-123:9:1 name="main"
+    result: type-ref #6 63:5:15-67:5:19 name="Void"
+    body: expr-stmt #14 70:6:3-105:7:1
+      value: call #13 70:6:3-104:6:37 name="puts" piped=false
+        arg: call #12 75:6:8-103:6:36 name="Regex.match?" piped=false
+          arg: literal #7 88:6:21-94:6:27 value=string:"a\nb"
+          arg: regex-lit #11 96:6:29-102:6:35 body="a.b" flags="m"
+    body: expr-stmt #19 107:7:3-119:8:1
+      value: call #18 107:7:3-118:7:14 name="puts" piped=false
+        arg: binary #17 112:7:8-117:7:13 op=divide op-span=114:7:10-115:7:11
+          left: literal #15 112:7:8-113:7:9 value=int:6
+          right: literal #16 116:7:12-117:7:13 value=int:2

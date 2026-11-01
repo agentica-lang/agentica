@@ -190,6 +190,7 @@ export def expr_kind(expr: Ast.Expr) -> String
     Ast.Expr.TypeName(_) -> return "TypeName"
     Ast.Expr.Typed(_) -> return "TypedTarget"
     Ast.Expr.ConstRef(_) -> return "ConstRef"
+    Ast.Expr.RegexLit(_) -> return "RegexLit"
   end
 end
 

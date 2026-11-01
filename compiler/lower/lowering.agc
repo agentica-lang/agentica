@@ -104,6 +104,11 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
   watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys).push("Optional"))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
+  hoisted = hoisted_regexes(functions, scanned.function_scans)
+  constants = constants.concat(hoisted)
+  constant_decls = constants.map do |entry: LocatedConst| entry.constant end
+  scanned = with_hoisted(scanned, hoisted, watched)
+  order = checked.constants.concat(hoisted.map do |entry: LocatedConst| entry.constant.name end)
   mentioned = mentioned_in(checked.types, scanned.covered, watched)
   used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
   none_records = Builtins.none_default_records()
@@ -113,7 +118,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   end
 
   tables = Program.build(decls, used, scanned.type_value)
-  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
+  plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
   files = source_order(linked, functions, plan.kept, files_of, structs)
@@ -363,6 +368,48 @@ def scan_all(
     type_value: type_value,
     covered: Set.new(covered),
   )
+end
+
+# A regex literal in a function body becomes a constant of the file of the function, so the pattern is compiled once
+# however often the body runs. Its value is the call of the literal, and it comes after every constant of the program,
+# those of std/regex among them. The constant takes the id and span of the literal.
+def hoisted_regexes(functions: List[Located], scans: List[Scans.Scan]) -> List[LocatedConst]
+  found: List[LocatedConst] = []
+  at = 0
+  while at < functions.size
+    for regex in scans[at].regexes
+      constant = Ast.ConstDecl(
+        id: regex.id,
+        name: Scans.regex_constant(regex),
+        name_span: regex.span,
+        type: none,
+        value: regex.call,
+        exported: false,
+        doc: none,
+        span: regex.span,
+      )
+      found = found.push(LocatedConst(file: functions[at].file, constant: constant))
+    end
+
+    at += 1
+  end
+
+  return found
+end
+
+# The scan with the scans of the hoisted regex constants after those of the declared constants.
+def with_hoisted(scanned: Scanned, hoisted: List[LocatedConst], watched: Set[String]) -> Scanned
+  out = scanned
+  for entry in hoisted
+    scan = Scans.scan_value(entry.constant.value, watched)
+    out = out.with(
+      constant_scans: out.constant_scans.push(scan),
+      written: out.written.concat(scan.written),
+      covered: out.covered.union(Set.new(scan.covered)),
+    )
+  end
+
+  return out
 end
 
 # The watched type names the field types of a struct and the payload types of an enum write.

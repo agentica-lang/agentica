@@ -3,7 +3,8 @@
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
 backtracking (48.2), std first (48.3), after the bootstrap (§18, done), and a
 Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records it.
-48a is built (`stdlib/regex.agc`); 48b and 48c are not. The decisions are in
+48a (`stdlib/regex.agc`) and 48b (the literal, `docs/grammar/04-lexical.md`) are
+built; 48c is not. The decisions are in
 48.10; its four open questions were answered with the recommendations (A).
 
 The Ruby-style `Regex` was a "later utility" in [pending
@@ -292,12 +293,14 @@ error is `CHECK-REGEX-IMPORT`. `Regex` is not reserved, as `HTTP` is not
 
 **Checked, and built before `main`.** The checker runs the 48a parser on the
 body and flags, so an invalid literal is `CHECK-INVALID-REGEX` at its span and
-cannot fail at run time. Lowering emits the compiled program as data and builds
-the private `Program` value from it. The program is not compiled inside the
-constant, since a constant initializer cannot call a `def`
-(`docs/grammar/06-semantics.md`). Each literal is a constant, built once, before
-`main`, and only if a reachable function reads it. Building it charges steps,
-which count toward `--max-steps` before `main`.
+cannot fail at run time. As built, a literal is a call of std/regex's `compile`
+that the checker has proved succeeds: a literal in a function body becomes a
+constant, built once, before `main`, and only if a reachable function reads
+it; a literal in a constant initializer is built with that constant, the one
+call of a `def` an initializer may hold. Emitting the compiled program as data
+was weighed and left out: it would freeze the private `Program` layout into
+the front end. Building a literal charges steps, which count toward
+`--max-steps` before `main`.
 
 **The lexer rule.** A `/` outside a string or comment starts a literal when the
 previous token cannot end an operand. Operand ends are: integer and float

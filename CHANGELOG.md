@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with its signature and `##` doc (`--json` too).
 - `std/regex`: regular expressions in linear time, with the RE2 syntax
   (`Regex.match`, `find_all`, `replace`, `split`).
+- Regex literals `/pattern/flags` (flags `i` and `m`), checked when the
+  program is compiled; the file imports `std/regex`.
 
 ### Changed
 

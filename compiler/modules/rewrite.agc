@@ -14,7 +14,11 @@ import Parser from "../syntax/parser"
 import Source from "../syntax/source"
 import Declarations from "declarations"
 import Failure from "link_failure"
+import Modules from "modules"
 import Resolve from "resolve"
+
+## The module key of std/regex, whose compile a regex literal calls.
+export REGEX_MODULE = "std/regex.agc"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports left
@@ -281,7 +285,29 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
       name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
       return ok(Ast.Expr.FunctionRef(node.with(name: name)))
     Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
+    Ast.Expr.RegexLit(node) -> return ok(Ast.Expr.RegexLit(rewrite_regex(cx, node)))
     _ -> return rewrite_compound(cx, expr)
+  end
+end
+
+# The call inside a regex literal names std/regex's compile when the file imports std/regex in any form; it stays ""
+# otherwise, which the checker reports as CHECK-REGEX-IMPORT. The rest of the call needs no rewrite.
+def rewrite_regex(cx: Resolve.Context, node: Ast.RegexLit) -> Ast.RegexLit
+  if !cx.me.imports.any? do |key: String| key == REGEX_MODULE end
+    return node
+  end
+
+  name = Modules.linked_name(cx.modules, cx.modules[REGEX_MODULE], "compile")
+  case node.call
+    Ast.Expr.MethodCall(unwrap) ->
+      case unwrap.target
+        Ast.Expr.Call(call) ->
+          target = Ast.Expr.Call(call.with(name: name))
+          return node.with(call: Ast.Expr.MethodCall(unwrap.with(target: target)))
+        _ -> return node
+      end
+
+    _ -> return node
   end
 end
 

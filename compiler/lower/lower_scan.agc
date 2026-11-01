@@ -9,24 +9,33 @@ import Ast from "../syntax/ast"
 ## value, an enum constructor, a pattern), and type_value says that it uses a type name as a value (JSON.decode(Person,
 ## ...)). covered are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and check_list build their type, a
 ## List, Optional or Result, around a type with the names of the type recorded at x's id, so lowering.agc's top_names
-## reads only its top.
+## reads only its top. regexes are the regex literals of a function body: each one reads the constant
+## regex_constant names, which lowering.agc makes for it, so a literal is compiled once.
 export struct Scan
   consts: List[String]
   calls: List[String]
   written: List[String]
   type_value: Bool
   covered: List[Int]
+  regexes: List[Ast.RegexLit]
 end
 
 ## The scan of the statements of a function body, and of the types it writes.
 export def scan_body(body: List[Ast.Stmt], watched: Set[String]) -> Scan
   work: List[ConstWalk.Node] = body.map do |stmt: Ast.Stmt| ConstWalk.Node.Stmt(stmt) end
-  return walk(work, watched, empty())
+  return walk(work, watched, empty(), true)
 end
 
-## The scan of the initializer of a constant.
+## The scan of the initializer of a constant. A regex literal there is built with the constant, so the scan goes into
+## its call.
 export def scan_value(value: Ast.Expr, watched: Set[String]) -> Scan
-  return walk([ConstWalk.Node.Expr(value)], watched, empty())
+  return walk([ConstWalk.Node.Expr(value)], watched, empty(), false)
+end
+
+## The linked name of the constant that holds a regex literal of a function body. `#` keeps it apart from every name a
+## program can write.
+export def regex_constant(node: Ast.RegexLit) -> String
+  return "regex##{node.id}"
 end
 
 ## The watched names a type annotation writes, nested names included.
@@ -54,10 +63,10 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
 end
 
 def empty() -> Scan
-  return Scan(consts: [], calls: [], written: [], type_value: false, covered: [])
+  return Scan(consts: [], calls: [], written: [], type_value: false, covered: [], regexes: [])
 end
 
-def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan) -> Scan
+def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
   work = start
   found = first
   at = 0
@@ -70,6 +79,16 @@ def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan) -> Scan
     end
 
     work = work.concat(walked_children(node))
+    case node
+      ConstWalk.Node.Expr(Ast.Expr.RegexLit(regex)) ->
+        if hoist
+          found = found.with(consts: found.consts.push(regex_constant(regex)), regexes: found.regexes.push(regex))
+        else
+          work = work.push(ConstWalk.Node.Expr(regex.call))
+        end
+
+      _ -> found = found
+    end
   end
 
   return found

@@ -19,15 +19,25 @@ struct Regex.Match  # text, start, stop, groups: List[Regex.Group] (groups[0] is
 struct Regex.Group  # text, start, stop, matched; "" and -1 when not matched
 ```
 
-- The pattern is a `String`: double each backslash (`"\\d+"`). Compile once,
-  outside loops. Text first: `text |> Regex.split(re)`.
+- Write a fixed pattern as a literal, `/\d+/`: the checker compiles it
+  (`CHECK-INVALID-REGEX`), it is built once even in a loop, and it needs no
+  `unwrap!`. The file must import `std/regex` (`CHECK-REGEX-IMPORT`). The body
+  has no string escapes (`\/` is a slash) and no `#{}`. Flags: `i` is `(?i)`,
+  `m` is `(?s)` (`.` matches `\n`, as Ruby's `m`); `/a/im` has the `source`
+  `(?is)a`. After a value `/` is division: `puts(/x/)`, not `puts /x/`. A
+  literal is not a `case` pattern.
+- `Regex.compile(text)` is for a pattern built at run time: a `String`, so
+  double each backslash (`"\\d+"`), and compile it once, outside loops. Text
+  first: `text |> Regex.split(re)`.
 - Syntax: `. [a-z] [^a] \d \w \s \D \W \S` (ASCII), `^ $ \A \z \b \B`,
   `(...)`, `(?:...)`, `(?P<n>...)` or `(?<n>...)`, `|`, `* + ? {n} {n,}
   {n,m}` and lazy `*?`, flags `(?i)` (ASCII), `(?m)`, `(?s)`, `(?i:...)`. A
   `{` that starts no repetition is literal. No backreferences, lookaround,
   `\pL`, `[[:alpha:]]`, `\a`, `\0`: `compile` errors.
-- `^ $` are text anchors (not Ruby's line anchors): use `(?m)^` for lines.
-  `.` skips `\n` unless `(?s)`. `$` never matches before a final newline.
+- `^ $` are text anchors (not Ruby's line anchors): use `(?m)^` for lines,
+  `/(?m)^ERROR/`. `.` skips `\n` unless `(?s)` or the `m` flag. `$` never
+  matches before a final newline. No `=~` and no `$1`: use `Regex.match` and
+  its groups.
 - `find_all`, `replace`: after an empty match move one character; drop an
   empty match where the last match ended (Go: `x*` → `-` in `abxd` is
   `-a-b-d-`). `split` cuts only at matches of 1+ characters, keeps empty parts.

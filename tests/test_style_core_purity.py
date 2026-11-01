@@ -71,7 +71,7 @@ FORBIDDEN_BARE = {"puts"}
 
 # The std/ modules a core file may import: pure text and byte work, no files, sockets, processes or logging.
 # std/prelude/ holds the List, Map and Lazy methods written in Agentica.
-PURE_STD_MODULES = {"std/binary", "std/queue", "std/toml"}
+PURE_STD_MODULES = {"std/binary", "std/queue", "std/regex", "std/toml"}
 PURE_STD_PREFIXES = ("std/prelude/",)
 
 # Entry programs of the core folders, and the calls each one may make. Besides these calls they may print with `puts`

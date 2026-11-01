@@ -1,0 +1,8 @@
+import Regex from "std/regex"
+
+WORD = /[a-z]+/i
+
+def main() -> Void
+  puts(Regex.match?("a\nb", /a.b/m))
+  puts(6 / 2)
+end

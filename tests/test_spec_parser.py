@@ -346,8 +346,6 @@ class TestSpecParser:
             Reject("enum E\n  A\nend\nimport A from \"a\"\n", "PARSE-MISSING-BLANK-LINE"),
             Reject("def f() -> Void\nend\nend\n", "PARSE-TOP-LEVEL-STATEMENT"),
             Reject("def f() -> Void\nend\nputs(1)\n", "PARSE-TOP-LEVEL-STATEMENT"),
-            Reject(main_of("  x = / 2\n"), "PARSE-UNEXPECTED-TOKEN"),
-            Reject(main_of("  x = /abc/\n"), "PARSE-UNEXPECTED-TOKEN"),
         ])
 
     def test_elif_and_else_if_point_to_elsif(self):

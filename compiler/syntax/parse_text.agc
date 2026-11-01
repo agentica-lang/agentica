@@ -452,6 +452,10 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
       lines = out.push(head(at, role, "binary", node.id, node.span, op_attrs(node.op, node.op_span)))
       lines = print_expr(lines, child, "left", node.left)
       return print_expr(lines, child, "right", node.right)
+    Ast.Expr.RegexLit(node) ->
+      # The call is made from the body and flags, so the text form shows only those.
+      attrs = " body=#{Text.quote(node.body)} flags=#{Text.quote(node.flags)}"
+      return out.push(head(at, role, "regex-lit", node.id, node.span, attrs))
     # print_expr handles every other variant before it calls this one.
     _ -> return out
   end
