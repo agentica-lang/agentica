@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Code under the JIT that unwraps Optionals (`unwrap!`) or builds Map literals
   runs faster: such functions now get machine code.
+- Under the JIT, a loop that calls `map`, `filter`, `reduce`, `any?`, `all?`,
+  `each`, `sort_by`, `times`, `upto` or `downto` runs their blocks from machine
+  code, without a trip through the interpreter at each call.
 
 ### Fixed
 

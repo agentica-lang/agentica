@@ -78,6 +78,9 @@ static _Noreturn void unwind(agc_vm *vm) {
     vm->jit_catch = NULL;
     AGC_THROW(*jit_catch);
   }
+#if AGC_LEAF_CHECK
+  if (vm->in_code) agc_internal_abort("a failure would longjmp across compiled code");
+#endif
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
@@ -1218,8 +1221,22 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
     agc_jit_sync();
+#if AGC_LEAF_CHECK
+    vm->in_code = true;
+#endif
     agc_jit_exit out = code(vm, R, p->constants, pc);
+#if AGC_LEAF_CHECK
+    vm->in_code = false;
+#endif
     if (__builtin_expect(t->frame_count != depth, 0) || frame->tail) {
+      /* A block call that compiled code started (agc_jit_block_start) left its native frame on top, with the block's
+         value in the frame's register, for the step that may fail, take a slow step or sort: here, outside compiled
+         code, as the interpreter's RETURN resumes it. The frame count always changed: the native frame sits above the
+         frame the code was entered with. Its steps never park. */
+      if (out.status == AGC_JIT_EXIT_RESUME) {
+        resume_native(vm);
+        return vm->yield ? COMPILED_YIELD : COMPILED_RELOAD;
+      }
       /* Native calls are on the frames, not on the C stack any more, and a native tail call (which sets the frame's
          tail flag) may have made the frame another function's: the exit is the top frame's, whose function was called
          or tail-called natively, so it has code. */
@@ -1861,6 +1878,118 @@ __attribute__((noinline)) agc_value *agc_jit_block_return(agc_vm *vm, const agc_
   return R;
 }
 
+/* True when resume_native steps the block call ST on without anything that may fail, take a slow step or park, once
+   the block returned GOT: it then calls the block again (call_value, whose checks passed at the first call) or ends
+   the call (finish_native). So a counting call has its step on the fast path, the value that filter, any? and all?
+   read is a Bool, and sort_by has an item left, as its end sorts, which may fail. Only the kinds that
+   agc_jit_block_start starts; a stepper never is one. */
+static bool block_steps_natively(const agc_vm *vm, const agc_native *st, agc_value got) {
+  switch (st->kind) {
+    case AGC_NATIVE_RANGE_EACH:
+    case AGC_NATIVE_TIMES:
+    case AGC_NATIVE_UPTO:
+    case AGC_NATIVE_DOWNTO: return !st->more || vm->next_stop > 1;
+    case AGC_NATIVE_FILTER:
+    case AGC_NATIVE_ANY:
+    case AGC_NATIVE_ALL: return agc_is(got, AGC_T_BOOL);
+    case AGC_NATIVE_SORT_BY: return st->items.index < agc_list_len(st->items.list);
+    case AGC_NATIVE_MAP:
+    case AGC_NATIVE_REDUCE:
+    case AGC_NATIVE_EACH: return true;
+    default: return false;
+  }
+}
+
+/* What agc_jit_block_start and agc_jit_block_next answer once the native frame took its step, given N, the frame
+   count with that frame on top: AGC_STATUS_OK when the call ended (the result in the caller's register), or
+   AGC_JIT_EXIT_YIELD when that also ended the turn; CODE, the code of the block whose frame it pushed, or
+   AGC_JIT_BLOCK_RESTART when the turn charge of that call ended the turn. */
+static uint64_t block_answer(const agc_vm *vm, uint32_t n, agc_jit_code code) {
+  if (vm->task->frame_count < n) return vm->yield ? AGC_JIT_EXIT_YIELD : AGC_STATUS_OK;
+  return vm->yield ? AGC_JIT_BLOCK_RESTART : (uint64_t)(uintptr_t)code;
+}
+
+uint64_t agc_jit_block_start(agc_vm *vm, agc_value *args, const agc_builtin *b, uint64_t where) {
+  agc_task *t = vm->task;
+  const agc_program *p = vm->rt->program;
+  agc_native_kind kind = b->native;
+  /* The tags that start_native reads, so it cannot fail; the block, and its arguments, as call_value checks them. */
+  agc_value block;
+  uint32_t argc = 1;
+  switch (kind) {
+    case AGC_NATIVE_RANGE_EACH:
+      if (!agc_is(args[0], AGC_T_RANGE)) return AGC_JIT_EXIT_INTERPRET;
+      block = args[1];
+      break;
+    case AGC_NATIVE_TIMES:
+      if (!agc_is(args[0], AGC_T_INT)) return AGC_JIT_EXIT_INTERPRET;
+      block = args[1];
+      break;
+    case AGC_NATIVE_UPTO:
+    case AGC_NATIVE_DOWNTO:
+      if (!agc_is(args[0], AGC_T_INT) || !agc_is(args[1], AGC_T_INT)) return AGC_JIT_EXIT_INTERPRET;
+      block = args[2];
+      break;
+    case AGC_NATIVE_REDUCE:
+      if (!agc_is(args[0], AGC_T_LIST)) return AGC_JIT_EXIT_INTERPRET;
+      block = args[2];
+      argc = 2;
+      break;
+    case AGC_NATIVE_SORT_BY:
+      /* An empty list sorts at once (block_steps_natively). */
+      if (!agc_is(args[0], AGC_T_LIST) || !agc_list_len(agc_as_list(vm, args[0]))) return AGC_JIT_EXIT_INTERPRET;
+      block = args[1];
+      break;
+    case AGC_NATIVE_MAP:
+    case AGC_NATIVE_FILTER:
+    case AGC_NATIVE_ANY:
+    case AGC_NATIVE_ALL:
+    case AGC_NATIVE_EACH:
+      if (!agc_is(args[0], AGC_T_LIST)) return AGC_JIT_EXIT_INTERPRET;
+      block = args[1];
+      break;
+    default: return AGC_JIT_EXIT_INTERPRET;
+  }
+  if (!agc_is(block, AGC_T_FN)) return AGC_JIT_EXIT_INTERPRET;
+  const agc_fn *fn = agc_as_fn(vm, block);
+  if (fn->function >= p->function_count) return AGC_JIT_EXIT_INTERPRET;
+  const agc_function *callee = &p->functions[fn->function];
+  /* ARGS is R + a of the frame on top, inside the register file: the native frame's base, the block's after it. */
+  size_t base = (size_t)(args - t->regs);
+  if (callee->params != argc || callee->captures != fn->n || t->frame_capacity - t->frame_count < 2 ||
+      t->depth >= AGC_MAX_DEPTH || base + 1 + callee->registers > t->reg_capacity)
+    return AGC_JIT_EXIT_INTERPRET;
+  /* A counting call counts the step of its first call first: on the fast path only. */
+  if (counting(kind) && vm->next_stop <= 1) return AGC_JIT_EXIT_INTERPRET;
+  agc_jit_code code = agc_jit_callee_code(vm->rt->jit, fn->function, true);
+  if (!code) return AGC_JIT_EXIT_INTERPRET;
+  /* As run_compiled starts a block call after the INTERPRET exit, with the caller's pc past the call. */
+  t->frames[t->frame_count - 1].pc = (uint32_t)where;
+  uint32_t n = t->frame_count + 1;
+  start_native(vm, kind, (uint32_t)base, (uint32_t)(where >> 32));
+  return block_answer(vm, n, code);
+}
+
+uint64_t agc_jit_block_next(agc_vm *vm) {
+  agc_task *t = vm->task;
+  uint32_t n = t->frame_count;
+  const agc_frame *top = &t->frames[n - 1];
+  const agc_native *st = top->native;
+  /* The block's native RETURN popped its frame, and every frame it pushed above was popped before: the frame on top is
+     the native frame that agc_jit_block_start pushed. */
+  if (!st) agc_internal_abort("a native block call lost its native frame");
+  if (!block_steps_natively(vm, st, t->regs[top->base])) {
+    /* Counted here, below plain_turn: run_compiled's RESUME case keeps its few bytes (make layout-check). */
+    if (AGC_TRACE_ON(vm->rt->jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(vm->rt->jit);
+    return AGC_JIT_EXIT_RESUME;
+  }
+  /* The block's code was published at agc_jit_block_start, and code is never taken back. */
+  agc_jit_code code =
+    atomic_load_explicit(&vm->rt->jit->code[agc_as_fn(vm, st->fn)->function], memory_order_acquire);
+  resume_native(vm);
+  return block_answer(vm, n, code);
+}
+
 /* The most callbacks of native code that run one inside the other in a task: each holds C's frames and a turn loop on
    the thread's stack, which AGC_MAX_DEPTH does not bound. */
 #define MAX_NESTED_CALLBACKS 128
@@ -1965,7 +2094,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   agc_stepper *stepper = t->stepper;
   int64_t turn_cost = t->turn_cost;
   agc_catch_buf *jit_catch = vm->jit_catch;
-  bool in_turn = vm->in_turn;
+  bool in_turn = vm->in_turn, in_code = vm->in_code;
   uint32_t sync_depth = vm->sync_depth;
   agc_lock *stream_lock = vm->stream_lock;
   agc_outcome outcome = *vm->outcome;
@@ -2000,6 +2129,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
     agc_lock_drop_shared(vm->rt->sync);
   }
   vm->jit_catch = NULL;
+  vm->in_code = false;
   vm->in_turn = true;
   t->callbacks++;
   /* Volatile: set after the setjmp and read after a longjmp to it. */
@@ -2042,6 +2172,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   t->turn_cost = turn_cost;
   t->parking = t->retry = false;
   vm->jit_catch = jit_catch;
+  vm->in_code = in_code;
   vm->in_turn = in_turn;
   memcpy(vm->turn, turn, sizeof turn);
   *vm->outcome = outcome;

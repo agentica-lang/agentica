@@ -536,6 +536,8 @@ static size_t emit_function(agc_emitter *e, const agc_jit *jit, const agc_functi
           agc_emit_plain_leaf(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], plain);
         else if (b && (b->direct || b->leaf))
           agc_emit_builtin(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc], b->leaf);
+        else if (b && b->native && b->native != AGC_NATIVE_STEPPER)
+          agc_emit_block_call(e, in, pc, (uint64_t)(uintptr_t)b, f->spans[pc]);
         else
           agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc);
         break;

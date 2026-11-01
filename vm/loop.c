@@ -1621,14 +1621,16 @@ void agc_io_pause(agc_vm *vm, uint64_t ms) {
   }
   agc_task *saved = vm->task;
   agc_catch_buf *jit_catch = vm->jit_catch;
-  bool in_turn = vm->in_turn;
+  bool in_turn = vm->in_turn, in_code = vm->in_code;
   vm->service_saved = saved;
   vm->servicing = true;
   vm->task = agc_alloc(sizeof(agc_task));
   vm->jit_catch = NULL;
+  vm->in_code = false;
   vm->in_turn = false;
   (void)agc_io_run_for(vm, ms, true);
   vm->in_turn = in_turn;
+  vm->in_code = in_code;
   vm->jit_catch = jit_catch;
   vm->task = saved;
   vm->servicing = false;
