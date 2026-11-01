@@ -15,11 +15,7 @@
 #define SMALL_SIGMA 0x3C3u
 #define FINAL_SIGMA 0x3C2u
 
-typedef struct {
-  const uint8_t *p;
-  size_t m;
-  size_t *fail;
-} finder;
+typedef agc_finder finder;
 
 size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   if (cp < 0x80) {
@@ -81,8 +77,8 @@ size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
   return offset;
 }
 
-static finder make_finder(const agc_string *part) {
-  finder f = {(const uint8_t *)part->data, part->bytes, NULL};
+agc_finder agc_finder_new(const uint8_t *p, size_t m) {
+  agc_finder f = {p, m, NULL};
   if (f.m <= 8) return f;
   f.fail = agc_alloc_atomic(agc_size_mul(f.m, sizeof(size_t)));
   f.fail[0] = 0;
@@ -94,9 +90,10 @@ static finder make_finder(const agc_string *part) {
   return f;
 }
 
-static size_t find(const finder *f, const agc_string *text, size_t from) {
-  const uint8_t *t = (const uint8_t *)text->data;
-  size_t n = text->bytes, m = f->m;
+static finder make_finder(const agc_string *part) { return agc_finder_new((const uint8_t *)part->data, part->bytes); }
+
+size_t agc_finder_find(const agc_finder *f, const uint8_t *t, size_t n, size_t from) {
+  size_t m = f->m;
   if (from > n || m > n - from) return AGC_NOT_FOUND;
   if (m == 0) return from;
   if (!f->fail) {
@@ -114,6 +111,10 @@ static size_t find(const finder *f, const agc_string *text, size_t from) {
     if (k == m) return i + 1 - m;
   }
   return AGC_NOT_FOUND;
+}
+
+static size_t find(const finder *f, const agc_string *text, size_t from) {
+  return agc_finder_find(f, (const uint8_t *)text->data, text->bytes, from);
 }
 
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from) {

@@ -5,6 +5,7 @@
  */
 #include "../core.h"
 #include "../services.h"
+#include "../trace.h"
 #include "builtin_test.h"
 
 #include <assert.h>
@@ -17,6 +18,16 @@ enum { TEST, FIRST, ALL };
 static agc_vm vm;
 static uint64_t ids;
 static const agc_builtin *search;
+/* The time of the slowest resume of the last drive. */
+static uint64_t slowest_ns;
+
+/* A resume charges at most a turn and one chunk, so it ends in well under a millisecond in a release build; the
+   bound leaves room for slow machines and the instrumented builds. */
+#if defined(AGC_NO_GC) || defined(AGC_GC_STRESS)
+#define SLOW_RESUME_NS 400000000u
+#else
+#define SLOW_RESUME_NS 20000000u
+#endif
 
 /* A program: the three instruction lists, the classes and the number of capture slots. */
 typedef struct {
@@ -72,13 +83,19 @@ static agc_value drive(agc_value text, const program *p, int64_t mode, bool coll
   vm.task = t;
   assert(agc_is(search->fn(&vm, args, 0), AGC_T_VOID) && t->stepper);
   *resumes = 0;
+  slowest_ns = 0;
   for (;;) {
     vm.task = t;
     agc_turn_begin(&vm);
+    uint64_t began = agc_trace_now();
     agc_step step = t->stepper->step(&vm, t->stepper, agc_void());
+    uint64_t took = agc_trace_now() - began;
+    if (took > slowest_ns) slowest_ns = took;
     /* A chunk is at most 256 characters, 4096 instruction visits (plus the visits of the last character, at most
-       two per instruction) and 64 KB skipped. */
-    assert(vm.turn_cost_used <= AGC_TURN_STEPS + 256 + (4096 + 2 * (int64_t)p->n) / 64 + 65536 / AGC_COST_BYTES + 1);
+       two per instruction), under two windows of 64 KB skipped plus a prefix of at most 4 bytes per instruction, and
+       4096 items of the result list. */
+    assert(vm.turn_cost_used <= AGC_TURN_STEPS + 256 + (4096 + 2 * (int64_t)p->n) / 64 +
+                                    ((int64_t)2 * 65536 + 4 * (int64_t)p->n) / AGC_COST_BYTES + 4096 / 8 + 1);
     (*resumes)++;
     if (collect) {
       for (int k = 0; k < 64; k++) (void)agc_alloc(4096);
@@ -127,6 +144,56 @@ static void test_a_long_skip_yields(void) {
   size_t resumes;
   agc_value result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
   assert(length(result) == 1 && item(result, 0) == (int64_t)n && resumes > 1);
+  free(s);
+}
+
+/* A literal of 9000 `a` and a `b` over 1 MB of `a`: the prefix search is linear, so no resume reads the text much more
+   than its charge says (memchr and a whole memcmp per candidate took 41 ms in one resume). */
+static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
+  enum { LETTERS = 9000, N = LETTERS + 4 };
+  static int64_t ops[N], xs[N], ys[N];
+  ops[0] = SAVE;
+  for (int k = 1; k <= LETTERS; k++) {
+    ops[k] = CHAR;
+    xs[k] = 'a';
+  }
+  ops[LETTERS + 1] = CHAR;
+  xs[LETTERS + 1] = 'b';
+  ops[LETTERS + 2] = SAVE;
+  xs[LETTERS + 2] = 1;
+  ops[LETTERS + 3] = MATCH;
+  size_t n = 1 << 20;
+  char *s = malloc(n);
+  assert(s);
+  memset(s, 'a', n);
+  program p = {ops, xs, ys, N, no_classes(), 2};
+  size_t resumes;
+  agc_value result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
+  assert(length(result) == 0 && resumes > 1);
+  if (slowest_ns >= SLOW_RESUME_NS) fprintf(stderr, "slowest resume: %llu ns\n", (unsigned long long)slowest_ns);
+  assert(slowest_ns < SLOW_RESUME_NS);
+  /* With the `b` at the end it matches there. */
+  s[n - 1] = 'b';
+  result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
+  assert(length(result) == 1 && item(result, 0) == (int64_t)n);
+  free(s);
+}
+
+/* The empty match of a program with 257 groups at each of 16384 characters: 8.4M Ints, built a bounded number per
+   resume (building them in one resume took 79 ms). */
+static void test_a_huge_result_list_is_built_over_many_resumes(void) {
+  static const int64_t ops[] = {SAVE, SAVE, MATCH}, xs[] = {0, 1, 0}, ys[] = {0, 0, 0};
+  size_t n = 1 << 14;
+  char *s = malloc(n);
+  assert(s);
+  memset(s, 'z', n);
+  program p = {ops, xs, ys, 3, no_classes(), 514};
+  size_t resumes;
+  agc_value result = drive(text_of(s, n, n), &p, ALL, false, &resumes);
+  assert(length(result) == (n + 1) * 514 && resumes > 100);
+  assert(item(result, 0) == 0 && item(result, 2) == -1 && item(result, 514) == 1);
+  if (slowest_ns >= SLOW_RESUME_NS) fprintf(stderr, "slowest resume: %llu ns\n", (unsigned long long)slowest_ns);
+  assert(slowest_ns < SLOW_RESUME_NS);
   free(s);
 }
 
@@ -224,6 +291,8 @@ int main(void) {
   assert(search && search->arity == 7);
   test_long_search_yields_and_survives_collections();
   test_a_long_skip_yields();
+  test_a_long_literal_prefix_is_found_in_linear_time();
+  test_a_huge_result_list_is_built_over_many_resumes();
   test_all_follows_the_go_rules();
   test_empty_loops_end();
   test_hostile_programs_are_refused();

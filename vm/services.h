@@ -54,6 +54,16 @@ typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_numb
 size_t agc_utf8_encode(uint32_t cp, char out[4]);
 size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
+/* A byte pattern prepared for a search in linear time: KMP above 8 bytes (FAIL, a GC block), memchr and memcmp at or
+   below. agc_finder_find returns the first match in T[0..N) that starts at FROM or later, or AGC_NOT_FOUND; it reads
+   at most N - FROM bytes of T, each a bounded number of times. */
+typedef struct {
+  const uint8_t *p;
+  size_t m;
+  size_t *fail;
+} agc_finder;
+agc_finder agc_finder_new(const uint8_t *p, size_t m);
+size_t agc_finder_find(const agc_finder *f, const uint8_t *t, size_t n, size_t from);
 agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);

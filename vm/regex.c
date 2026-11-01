@@ -35,6 +35,11 @@ enum { SEARCH_MORE, SEARCH_DONE };
 #define RX_CHUNK_WORK 4096
 #define RX_CHUNK_SKIP 65536
 #define RX_WORK_PER_COST 64
+/* The result list is built at most RX_CHUNK_ITEMS Ints per STEP, each item 1 / RX_ITEMS_PER_COST of a unit of turn
+   cost; until then the Ints wait in blocks of RX_BLOCK, so a long result is never copied whole. */
+#define RX_CHUNK_ITEMS 4096
+#define RX_ITEMS_PER_COST 8
+#define RX_BLOCK 4096
 #define RX_NO_SLOT UINT32_MAX
 
 typedef struct {
@@ -70,6 +75,7 @@ typedef struct {
   uint8_t first[129];
   uint8_t *prefix;
   size_t prefix_len;
+  agc_finder finder;
   rx_list lists[2];
   int cur;
   uint32_t *marks, gen;
@@ -79,7 +85,7 @@ typedef struct {
   /* The search in progress: at character Q (byte B), PREV the character before it and C the one at it (-1 past the
      ends), CLEN the bytes of C. FOUND holds the captures of the best match so far, FOUND_END and FOUND_BYTE where it
      ended. */
-  bool searching, matched, done;
+  bool searching, matched, building;
   int64_t q, found_end;
   size_t b, clen, found_byte;
   int32_t prev, c;
@@ -87,11 +93,13 @@ typedef struct {
   /* ALL: where the next search starts, and where the last match ended (-1 before the first). */
   int64_t pos, prev_end;
   size_t pos_byte;
-  /* The Ints of the result so far (a list builder needs its final size first). */
-  int64_t *res;
-  size_t res_len, res_cap;
+  /* The Ints of the result so far, RX_BLOCK to a block (a list builder needs its final size first), then the list
+     being built from them: BUILT of RES_LEN pushed. */
+  int64_t **blocks;
+  size_t block_count, block_cap, res_len, built;
+  agc_list_builder out;
   agc_value result;
-  uint64_t chars_done, work_done, skipped;
+  uint64_t chars_done, work_done, skipped, items_done;
 } rx_run;
 
 static _Noreturn void refuse(agc_vm *vm, const char *what, uint32_t span) {
@@ -244,7 +252,6 @@ static void move_to(rx_run *r, size_t target) {
   } else {
     for (size_t k = r->b; k < target; k++) count += (r->s[k] & 0xC0) != 0x80;
   }
-  r->skipped += target - r->b;
   r->q += count;
   r->b = target;
   r->prev = char_before(r, target);
@@ -259,30 +266,31 @@ static size_t boundary(const rx_run *r, size_t b) {
 }
 
 /* With no thread running, moves to the next place a match may start: FOUND there, NONE when no place is left, MORE
-   after RX_CHUNK_SKIP bytes with the scan not done (the state is at a character boundary on the way). */
+   after RX_CHUNK_SKIP bytes with the scan not done (the state is at a character boundary on the way). Every byte it
+   examines counts in r->skipped, the prefix search's overlap of prefix_len - 1 bytes into the next window too; the
+   search is linear (agc_finder_find), so a window costs at most RX_CHUNK_SKIP + prefix_len byte reads. */
 static int skip(rx_run *r) {
   size_t from = r->b, limit = r->len - from > RX_CHUNK_SKIP ? from + RX_CHUNK_SKIP : r->len;
   if (r->line_start && r->prev >= 0 && r->prev != '\n') {
     const uint8_t *nl = memchr(r->s + from, '\n', limit - from);
     if (nl) {
+      r->skipped += (size_t)(nl - r->s) + 1 - from;
       move_to(r, (size_t)(nl - r->s) + 1);
       return SKIP_FOUND;
     }
+    r->skipped += limit - from;
     if (limit == r->len) return SKIP_NONE;
     move_to(r, boundary(r, limit));
     return SKIP_MORE;
   }
   if (r->prefix_len) {
-    size_t stop = limit + r->prefix_len - 1 < r->len ? limit + r->prefix_len - 1 : r->len;
-    for (size_t at = from; at + r->prefix_len <= stop;) {
-      const uint8_t *hit = memchr(r->s + at, r->prefix[0], stop - r->prefix_len + 1 - at);
-      if (!hit) break;
-      at = (size_t)(hit - r->s);
-      if (memcmp(hit, r->prefix, r->prefix_len) == 0) {
-        move_to(r, at);
-        return SKIP_FOUND;
-      }
-      at++;
+    /* A match that starts before LIMIT may end up to prefix_len - 1 bytes after it. */
+    size_t stop = r->len - limit > r->prefix_len - 1 ? limit + r->prefix_len - 1 : r->len;
+    size_t at = agc_finder_find(&r->finder, r->s, stop, from);
+    r->skipped += (at == AGC_NOT_FOUND ? stop : at + r->prefix_len) - from;
+    if (at != AGC_NOT_FOUND) {
+      move_to(r, at);
+      return SKIP_FOUND;
     }
     if (stop == r->len) return SKIP_NONE;
     move_to(r, boundary(r, limit));
@@ -292,10 +300,12 @@ static int skip(rx_run *r) {
   for (size_t at = from; at < limit; at++) {
     uint8_t byte = r->s[at];
     if (byte < 0x80 ? r->first[byte] : byte >= 0xC0 && r->first[128]) {
+      r->skipped += at + 1 - from;
       move_to(r, at);
       return SKIP_FOUND;
     }
   }
+  r->skipped += limit - from;
   /* A first set means no match is empty, so the end of the text starts none. */
   if (limit == r->len) return SKIP_NONE;
   move_to(r, boundary(r, limit));
@@ -404,37 +414,47 @@ static int search_run(rx_run *r) {
 }
 
 static void push_result(rx_run *r, const int64_t *items, size_t count) {
-  if (r->res_cap - r->res_len < count) {
-    size_t cap = r->res_cap ? r->res_cap : 16;
-    while (cap - r->res_len < count) cap = agc_size_mul(cap, 2);
-    int64_t *res = agc_alloc_atomic(agc_size_mul(cap, sizeof *res));
-    if (r->res_len) memcpy(res, r->res, r->res_len * sizeof *res);
-    r->res = res;
-    r->res_cap = cap;
+  for (size_t k = 0; k < count; k++) {
+    size_t block = r->res_len / RX_BLOCK;
+    if (block == r->block_count) {
+      if (r->block_count == r->block_cap) {
+        size_t cap = r->block_cap ? agc_size_mul(r->block_cap, 2) : 4;
+        int64_t **blocks = agc_alloc(agc_size_mul(cap, sizeof *blocks));
+        if (r->block_count) memcpy(blocks, r->blocks, r->block_count * sizeof *blocks);
+        r->blocks = blocks;
+        r->block_cap = cap;
+      }
+      r->blocks[r->block_count++] = agc_alloc_atomic(RX_BLOCK * sizeof **r->blocks);
+    }
+    r->blocks[block][r->res_len % RX_BLOCK] = items[k];
+    r->res_len++;
   }
-  memcpy(r->res + r->res_len, items, count * sizeof *items);
-  r->res_len += count;
 }
 
 static void push_caps(rx_run *r) { push_result(r, r->found, r->keep); }
 
-static agc_value finish(rx_run *r) {
-  r->done = true;
-  agc_list_builder out;
-  agc_list_builder_sized(&out, r->res_len);
-  for (size_t k = 0; k < r->res_len; k++) agc_list_builder_push(&out, agc_int(r->res[k]));
-  return agc_list_value(agc_list_builder_finish(&out));
+/* Pushes up to RX_CHUNK_ITEMS Ints of the result; true when the list is whole, in r->result. */
+static bool build_some(rx_run *r) {
+  if (!r->building) {
+    r->building = true;
+    agc_list_builder_sized(&r->out, r->res_len);
+  }
+  size_t stop = r->res_len - r->built > RX_CHUNK_ITEMS ? r->built + RX_CHUNK_ITEMS : r->res_len;
+  r->items_done += stop - r->built;
+  for (; r->built < stop; r->built++)
+    agc_list_builder_push(&r->out, agc_int(r->blocks[r->built / RX_BLOCK][r->built % RX_BLOCK]));
+  if (r->built < r->res_len) return false;
+  r->result = agc_list_value(agc_list_builder_finish(&r->out));
+  return true;
 }
 
 /* Advances the run by one chunk of work. True when it is over, with its value in r->result. */
 static bool advance(rx_run *r) {
-  r->chars_done = r->work_done = r->skipped = 0;
+  r->chars_done = r->work_done = r->skipped = r->items_done = 0;
   for (;;) {
+    if (r->building) return build_some(r);
     if (!r->searching) {
-      if (r->pos > r->chars) {
-        r->result = finish(r);
-        return true;
-      }
+      if (r->pos > r->chars) return build_some(r);
       search_begin(r, r->pos, r->pos_byte);
     }
     if (search_run(r) == SEARCH_MORE) return false;
@@ -442,8 +462,7 @@ static bool advance(rx_run *r) {
     if (!r->matched || r->mode != MODE_ALL) {
       if (r->matched && r->mode == MODE_TEST) push_result(r, &r->found_end, 1);
       if (r->matched && r->mode == MODE_FIRST) push_caps(r);
-      r->result = finish(r);
-      return true;
+      return build_some(r);
     }
     /* Go's rules: after an empty match the next search starts one character on, and an empty match right where the
        last match ended is dropped. The end is where MATCH ran, so the next search always starts further on. */
@@ -470,7 +489,8 @@ static agc_step regex_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   rx_run *r = (rx_run *)self;
   for (;;) {
     bool over = advance(r);
-    agc_charge(vm, r->chars_done + r->work_done / RX_WORK_PER_COST + r->skipped / AGC_COST_BYTES);
+    agc_charge(vm, r->chars_done + r->work_done / RX_WORK_PER_COST + r->skipped / AGC_COST_BYTES +
+                       r->items_done / RX_ITEMS_PER_COST);
     if (over) {
       agc_turn_charge(vm);
       return (agc_step){.kind = AGC_STEP_END, .value = r->result};
@@ -597,6 +617,7 @@ static void load_starts(rx_run *r) {
       r->prefix_len += 4;
     }
   }
+  r->finder = agc_finder_new(r->prefix, r->prefix_len);
   /* The first set: every character an instruction reached from pc 0 by empty moves takes; none when such a way
      reaches MATCH or ANY_NL, or when every character is in it. */
   next_gen(r);
