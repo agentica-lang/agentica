@@ -134,6 +134,10 @@ static AGC_JIT_CALLER void code_memory(void) {
 #define NATIVE_CALLS 0
 #endif
 
+/* N, as a count of the JIT's trace counters (transitions, turns, leaves): a build with the trace points compiled out
+   (make TRACE=0, the vm-trace-off check) counts nothing. */
+#define TRACE_COUNT(n) (AGC_TRACE_BUILD ? (uint64_t)(n) : 0)
+
 /* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
 static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
 
@@ -1268,7 +1272,7 @@ static AGC_JIT_CALLER void block_calls_in_place(void) {
   assert(agc_list_len(shifted) == BLOCK_ITEMS && same_bits(agc_list_get(shifted, 0), agc_int(101)) &&
          same_bits(agc_list_get(shifted, BLOCK_ITEMS - 1), agc_int(BLOCK_ITEMS + 100)));
   /* Each call of a block takes a step and a turn cost: 2000 calls end turns of 2000 steps inside them. */
-  assert(counts[0] == 3 && counts[1] >= 3);
+  assert(counts[0] == TRACE_COUNT(3) && (counts[1] >= 3 || !AGC_TRACE_BUILD));
   /* The calls take about 1000000 - left_off steps; the limits stop inside the reduce and the map. */
   int64_t used = 1000000 - left_off;
   for (int64_t limit = used / 7; limit < used; limit += used / 7) {
@@ -1344,7 +1348,7 @@ static AGC_JIT_CALLER void string_code_calls(void) {
       assert(off.kind == AGC_DONE && record_count == 1 && same_bits(recorded[0], agc_int(0xE9)) && leaves_on == 0);
     } else {
       assert(off.kind == AGC_FAILED && strcmp(off.code, "RUNTIME-INVALID-CHARACTER") == 0 && off.span == 4);
-      assert(strcmp(on.code, off.code) == 0 && on.span == off.span && leaves_on == 1);
+      assert(strcmp(on.code, off.code) == 0 && on.span == off.span && leaves_on == TRACE_COUNT(1));
     }
   }
 }
