@@ -134,12 +134,27 @@ class Proxy(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
         return False
 
+    def broken_tunnel(self, port):
+        """Port 7: a proxy that never answers the CONNECT. Port 8: a 200 whose bytes carry junk after the head, in the
+        one write, so the client has them before its TLS handshake. Both hold the socket until the client leaves."""
+        if port == "8":
+            self.wfile.write(b"HTTP/1.1 200 Connection Established\r\n\r\njunk")
+            self.wfile.flush()
+        self.connection.settimeout(10)
+        try:
+            self.connection.recv(1)
+        except OSError:
+            pass
+        self.close_connection = True
+
     def do_CONNECT(self):
         if not self.saw():
             return
         host, _, port = self.path.rpartition(":")
         if port == "9":
             return self.refuse("this proxy does not tunnel to port 9", 403)
+        if port in ("7", "8"):
+            return self.broken_tunnel(port)
         try:
             upstream = socket.create_connection((host.strip("[]"), int(port)), timeout=10)
         except (OSError, ValueError):

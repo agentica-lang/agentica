@@ -636,6 +636,11 @@ def main() -> Void
   end
 
   show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))
+  puts("-- a proxy that stalls, and a 200 with junk after its head")
+  stalled = HttpClientOptions(proxy: "http://#{proxy}", tls: some(context), timeout_ms: 500)
+  show(HTTP.get_response("https://127.0.0.1:7/", stalled))
+  show(HTTP.get_response("https://127.0.0.1:8/", refused))
+  started("https://127.0.0.1:8", refused, "/")
 end
 """
 
@@ -672,6 +677,8 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
 
     name = "127.0.0.1:" + locked
     refused = "http: the proxy 127.0.0.1:%s refused the tunnel to 127.0.0.1:9 (403)" % proxy
+    junk = ("http: the tunnel to 127.0.0.1:8 through the proxy 127.0.0.1:%s failed: "
+            "network: data came before the TLS handshake" % proxy)
     lines = output_lines(result.stdout)
     assert lines == [
         *served("ctx"),
@@ -694,10 +701,14 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
         "true",
         "true",
         "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
+        "-- a proxy that stalls, and a 200 with junk after its head",
+        "http: the tunnel to 127.0.0.1:7 through the proxy 127.0.0.1:%s failed: network: operation timed out" % proxy,
+        junk,
+        junk,
     ], lines
     # The CONNECT lines the peer saw, in order: the pooled client (one tunnel for the two gets of C, one for D), then a
     # tunnel for each of the other calls; and the same again on the system trust.
-    seen = [peer.next_line().split(" ", 2)[2] for _ in range(14 + 7 + 1 + 2)]
+    seen = [peer.next_line().split(" ", 2)[2] for _ in range(14 + 7 + 1 + 2 + 3)]
     connect = "CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s"
     on_c, on_d = connect % (tls_c, tls_c), connect % (tls_d, tls_d)
     assert seen[:14] == [on_c, on_d, on_c, on_c, on_c, on_c, on_c] * 2, seen
@@ -706,7 +717,7 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
         seen[19].rsplit(" | ", 1)[1], LOGIN], seen
     assert seen[19].rsplit(" | ", 1)[1].startswith("Basic ") and seen[19].rsplit(" | ", 1)[1] != LOGIN
     assert seen[21] == on_c, seen
-    assert seen[22:] == [connect % ("9", "9")] * 2, seen
+    assert seen[22:] == [connect % ("9", "9")] * 2 + [connect % ("7", "7")] + [connect % ("8", "8")] * 2, seen
     everything = result.stdout + result.stderr
     for secret in ("hunter2", "p:ss", "p%3Ass", "ss/w", "us@er", "us%40er"):
         assert secret not in everything, secret

@@ -131,11 +131,13 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   through a forward proxy in absolute form (pooled by the proxy; also
   `get_response`, `open`, `upload`, `download`, `start`); `https://` opens a
   `CONNECT` tunnel to the target (one per target in a pool) and speaks TLS
-  inside it, verified against the target; a non-2xx answer to the `CONNECT`
-  and a proxy that cannot be reached are an `error` that names the proxy. User info (`http://user:pass@host:8080`, percent-
-  decoded, no colon in the user) is sent as `Proxy-Authorization: Basic` to the
-  proxy only, and a `407` is an `error` that names the proxy and never the
-  credentials. A client never reads the environment: pass
+  inside it, verified against the target; a non-2xx answer to the `CONNECT`, a
+  failure after it and a proxy that cannot be reached are an `error` that names
+  the proxy. A `Proxy-Authorization` header you set in an `https` call goes to
+  the target, not to the proxy. User info (`http://user:pass@host:8080`,
+  percent-decoded, no colon in the user) is sent as `Proxy-Authorization:
+  Basic` to the proxy only, and a `407` is an `error` that names the proxy and
+  never the credentials. A client never reads the environment: pass
   `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules:
   lower-case `http_proxy`/`https_proxy` first, `HTTP_PROXY` ignored in CGI,
   `no_proxy` with `*`, domains, `:port`, IPs and IPv4 ranges; `""` is none; an

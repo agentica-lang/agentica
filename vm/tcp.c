@@ -612,6 +612,7 @@ static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
   return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", err);
 }
 
+/* std/http matches the UPGRADE_UNREAD text (BEFORE_TLS in stdlib/http.agc) to name the proxy of a CONNECT tunnel. */
 static agc_value upgrade_error(agc_vm *vm, const request *q) {
   if (q->tls_failed) return agc_tls_failure_error(vm, "tls-upgrade: handshake failed", &q->n->failure);
   if (q->open_error == UPGRADE_UNREAD) return agc_error_value("network: data came before the TLS handshake");

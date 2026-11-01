@@ -55,6 +55,8 @@ MAX_SHOWN = 64
 # Texts of the C builtins that std/http matches on (vm/channel.c, vm/tcp.c); each is marked there.
 CHANNEL_CLOSED = "channel: closed"
 END_OF_INPUT = "network: end of input"
+# vm/tcp.c upgrade_error: bytes came with the CONNECT answer, before the TLS handshake began.
+BEFORE_TLS = "network: data came before the TLS handshake"
 READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
@@ -1586,7 +1588,7 @@ def connect_https(client: HttpClient, host: String, port: Int, timeout_ms: Int) 
   deadline = Time.monotonic_ms() + timeout_ms
   socket = try tunnel(options, host, port, deadline)
   upgraded = upgrade_client(client, options, socket, host, deadline)
-  return closing_on_error(upgraded, socket)
+  return closing_on_error(upgraded, socket, options, host, port)
 end
 
 # TLS inside the tunnel `socket` to `host`, on the context of `options.tls` or the client's shared one.
@@ -1607,11 +1609,13 @@ end
 # The `https` socket of `start`, `open` and `upload` through a proxy: the tunnel, then TLS inside it on the context of
 # `options.tls`, or on one with the system trust built for this connection (as without a proxy).
 def tunnel_context(where: Target, options: HttpClientOptions) -> Result[Socket]
+  # The context is built first, so that its failure never leaves a tunnel socket behind.
+  context = try tunnel_trust(options)
   deadline = Time.monotonic_ms() + options.timeout_ms
   socket = try tunnel(options, where.host, where.port, deadline)
-  context = try tunnel_trust(options)
   left = try time_left(socket, deadline)
-  return closing_on_error(HttpWire.upgrade_context(socket, context, where.host, left), socket)
+  upgraded = HttpWire.upgrade_context(socket, context, where.host, left)
+  return closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
 def tunnel_trust(options: HttpClientOptions) -> Result[TlsContext]
@@ -1622,14 +1626,37 @@ def tunnel_trust(options: HttpClientOptions) -> Result[TlsContext]
 end
 
 # `answer`, with `socket` closed when it is an error: a failed upgrade leaves the plain socket open only when its
-# arguments were refused.
-def closing_on_error(answer: Result[Socket], socket: Socket) -> Result[Socket]
+# arguments were refused. Bytes that came with the CONNECT answer are the proxy's fault, so that error names the proxy
+# and the tunnel; a TLS failure is the target's and stays as it is.
+def closing_on_error(
+  answer: Result[Socket],
+  socket: Socket,
+  options: HttpClientOptions,
+  host: String,
+  port: Int,
+) -> Result[Socket]
   case answer
     ok(secured) -> return ok(secured)
     error(message) ->
       TCP.close(socket)
-      return error(message)
+      if message != BEFORE_TLS
+        return error(message)
+      end
+
+      case proxy_of(options)
+        ok(proxy) -> return error(tunnel_failed(proxy, tunnel_name(host, port), message))
+        error(_) -> return error(message)
+      end
   end
+end
+
+def tunnel_name(host: String, port: Int) -> String
+  return proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
+end
+
+# An error after the CONNECT went out, told with the proxy and the target, never with the login.
+def tunnel_failed(proxy: Proxy, target: String, message: String) -> String
+  return "http: the tunnel to #{target} through the proxy #{proxy_name(proxy.target)} failed: #{message}"
 end
 
 # A CONNECT tunnel to `host:port` through the proxy of `options`, as a plain socket the proxy now relays: CONNECT
@@ -1643,7 +1670,7 @@ def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -
   end
 
   socket = try reaching(TCP.connect(proxy.target.host, proxy.target.port, left), options, proxy.target)
-  target = proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
+  target = tunnel_name(host, port)
   case tunnel_opened(socket, proxy, target, deadline)
     ok(status) ->
       if status >= 200 and status < 300
@@ -1658,7 +1685,7 @@ def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -
       return error("http: the proxy #{proxy_name(proxy.target)} refused the tunnel to #{target} (#{status})")
     error(message) ->
       TCP.close(socket)
-      return error(message)
+      return error(tunnel_failed(proxy, target, message))
   end
 end
 
