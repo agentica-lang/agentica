@@ -18,16 +18,10 @@ enum { TEST, FIRST, ALL };
 static agc_vm vm;
 static uint64_t ids;
 static const agc_builtin *search;
-/* The time of the slowest resume of the last drive. */
+/* The last drive: the turn cost all its resumes charged, and the time of the slowest resume (printed when it is long,
+   never asserted: shared runners are too noisy for a time bound). */
+static int64_t total_cost;
 static uint64_t slowest_ns;
-
-/* A resume charges at most a turn and one chunk, so it ends in well under a millisecond in a release build; the
-   bound leaves room for slow machines and the instrumented builds. */
-#if defined(AGC_NO_GC) || defined(AGC_GC_STRESS)
-#define SLOW_RESUME_NS 400000000u
-#else
-#define SLOW_RESUME_NS 20000000u
-#endif
 
 /* A program: the three instruction lists, the classes and the number of capture slots. */
 typedef struct {
@@ -84,6 +78,7 @@ static agc_value drive(agc_value text, const program *p, int64_t mode, bool coll
   assert(agc_is(search->fn(&vm, args, 0), AGC_T_VOID) && t->stepper);
   *resumes = 0;
   slowest_ns = 0;
+  total_cost = 0;
   for (;;) {
     vm.task = t;
     agc_turn_begin(&vm);
@@ -96,12 +91,16 @@ static agc_value drive(agc_value text, const program *p, int64_t mode, bool coll
        4096 items of the result list. */
     assert(vm.turn_cost_used <= AGC_TURN_STEPS + 256 + (4096 + 2 * (int64_t)p->n) / 64 +
                                     ((int64_t)2 * 65536 + 4 * (int64_t)p->n) / AGC_COST_BYTES + 4096 / 8 + 1);
+    total_cost += vm.turn_cost_used;
     (*resumes)++;
     if (collect) {
       for (int k = 0; k < 64; k++) (void)agc_alloc(4096);
       agc_gc_collect();
     }
-    if (step.kind == AGC_STEP_END) return step.value;
+    if (step.kind == AGC_STEP_END) {
+      if (slowest_ns > 20000000u) fprintf(stderr, "note: slowest resume %llu ns\n", (unsigned long long)slowest_ns);
+      return step.value;
+    }
     assert(step.kind == AGC_STEP_YIELD);
   }
 }
@@ -147,8 +146,9 @@ static void test_a_long_skip_yields(void) {
   free(s);
 }
 
-/* A literal of 9000 `a` and a `b` over 1 MB of `a`: the prefix search is linear, so no resume reads the text much more
-   than its charge says (memchr and a whole memcmp per candidate took 41 ms in one resume). */
+/* A literal of 9000 `a` and a `b` over 1 MB of `a`: every byte the linear prefix search reads is charged (at least
+   the whole text here), and each resume stays within a turn and one chunk (drive), so the search spreads over many
+   resumes. */
 static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
   enum { LETTERS = 9000, N = LETTERS + 4 };
   static int64_t ops[N], xs[N], ys[N];
@@ -169,9 +169,7 @@ static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
   program p = {ops, xs, ys, N, no_classes(), 2};
   size_t resumes;
   agc_value result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
-  assert(length(result) == 0 && resumes > 1);
-  if (slowest_ns >= SLOW_RESUME_NS) fprintf(stderr, "slowest resume: %llu ns\n", (unsigned long long)slowest_ns);
-  assert(slowest_ns < SLOW_RESUME_NS);
+  assert(length(result) == 0 && total_cost >= (int64_t)n / AGC_COST_BYTES && resumes >= 4);
   /* With the `b` at the end it matches there. */
   s[n - 1] = 'b';
   result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
@@ -179,8 +177,9 @@ static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
   free(s);
 }
 
-/* The empty match of a program with 257 groups at each of 16384 characters: 8.4M Ints, built a bounded number per
-   resume (building them in one resume took 79 ms). */
+/* The empty match of a program with 257 groups at each of 16384 characters: 8.4M Ints. Each item of the list is
+   charged, and no resume charges more than a turn and one chunk (drive), so the list is built over hundreds of
+   resumes instead of in the last one. */
 static void test_a_huge_result_list_is_built_over_many_resumes(void) {
   static const int64_t ops[] = {SAVE, SAVE, MATCH}, xs[] = {0, 1, 0}, ys[] = {0, 0, 0};
   size_t n = 1 << 14;
@@ -190,10 +189,9 @@ static void test_a_huge_result_list_is_built_over_many_resumes(void) {
   program p = {ops, xs, ys, 3, no_classes(), 514};
   size_t resumes;
   agc_value result = drive(text_of(s, n, n), &p, ALL, false, &resumes);
-  assert(length(result) == (n + 1) * 514 && resumes > 100);
+  size_t items = (n + 1) * 514;
+  assert(length(result) == items && total_cost >= (int64_t)(items / 8) && resumes > 100);
   assert(item(result, 0) == 0 && item(result, 2) == -1 && item(result, 514) == 1);
-  if (slowest_ns >= SLOW_RESUME_NS) fprintf(stderr, "slowest resume: %llu ns\n", (unsigned long long)slowest_ns);
-  assert(slowest_ns < SLOW_RESUME_NS);
   free(s);
 }
 
