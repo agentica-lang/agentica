@@ -1665,6 +1665,52 @@ def test_a_block_called_natively_fails_as_in_the_interpreter(tmp_path):
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "scan", "main")
 
 
+# down recurses through map's block until the depth limit: compiled code starts each map and calls its block, until a
+# block call or a call of down would pass the limit, which compiled code leaves to the interpreter to fail on. Every
+# tier fails with RUNTIME-STACK-OVERFLOW the same way.
+DEEP_BLOCKS = """def down(n: Int) -> Int
+  if n == 0
+    return 0
+  end
+  return [n].map do |x| down(x - 1) end.first + 1
+end
+
+def main() -> Void
+  puts("before")
+  puts(down(100000))
+end
+"""
+
+
+def test_block_calls_that_recurse_to_the_depth_limit_fail_as_in_the_interpreter(tmp_path):
+    bytecode = compile_text(DEEP_BLOCKS, "deep_blocks", tmp_path)
+    assert_same_failure(bytecode, "RUNTIME-STACK-OVERFLOW", "down", "main")
+
+
+# A compiled loop of 3.times: 160 step limits in a row stop it at every step of a round, those of times among them,
+# whose step on the slow path leaves compiled code (at the call's start, or the RESUME exit after a call), as in the
+# interpreter.
+def test_step_limits_stop_a_loop_of_times_at_every_step_as_in_the_interpreter(tmp_path):
+    bytecode = compile_text("""def main() -> Void
+  total = 0
+  i = 0
+  while i < 400
+    3.times do |k| total + k end
+    total += i
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+""", "times_steps", tmp_path)
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("79800\n"), stdout
+    steps = int(stdout.split("steps ")[1])
+    for limit in range(steps // 2, steps // 2 + 160):
+        status, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert status == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+
+
 # Two tasks whose compiled loop makes block calls of every kind over one or two items, so turns often end at a call's
 # last item, any? and all? stop at the first, and the steps of times, upto and each of a Range often fall where a turn
 # or a step limit stops: such a step, and sort_by's last item, leave compiled code (the RESUME exit) to be taken where

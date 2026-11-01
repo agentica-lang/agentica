@@ -78,6 +78,9 @@ static _Noreturn void unwind(agc_vm *vm) {
     vm->jit_catch = NULL;
     AGC_THROW(*jit_catch);
   }
+#if AGC_LEAF_CHECK
+  if (vm->in_code) agc_internal_abort("a failure would longjmp across compiled code");
+#endif
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
@@ -1218,7 +1221,13 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
   uint32_t pc = frame->pc, depth = t->frame_count;
   for (;;) {
     agc_jit_sync();
+#if AGC_LEAF_CHECK
+    vm->in_code = true;
+#endif
     agc_jit_exit out = code(vm, R, p->constants, pc);
+#if AGC_LEAF_CHECK
+    vm->in_code = false;
+#endif
     if (__builtin_expect(t->frame_count != depth, 0) || frame->tail) {
       /* A block call that compiled code started (agc_jit_block_start) left its native frame on top, with the block's
          value in the frame's register, for the step that may fail, take a slow step or sort: here, outside compiled
@@ -1969,7 +1978,11 @@ uint64_t agc_jit_block_next(agc_vm *vm) {
   /* The block's native RETURN popped its frame, and every frame it pushed above was popped before: the frame on top is
      the native frame that agc_jit_block_start pushed. */
   if (!st) agc_internal_abort("a native block call lost its native frame");
-  if (!block_steps_natively(vm, st, t->regs[top->base])) return AGC_JIT_EXIT_RESUME;
+  if (!block_steps_natively(vm, st, t->regs[top->base])) {
+    /* Counted here, below plain_turn: run_compiled's RESUME case keeps its few bytes (make layout-check). */
+    if (AGC_TRACE_ON(vm->rt->jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(vm->rt->jit);
+    return AGC_JIT_EXIT_RESUME;
+  }
   /* The block's code was published at agc_jit_block_start, and code is never taken back. */
   agc_jit_code code =
     atomic_load_explicit(&vm->rt->jit->code[agc_as_fn(vm, st->fn)->function], memory_order_acquire);
@@ -2081,7 +2094,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   agc_stepper *stepper = t->stepper;
   int64_t turn_cost = t->turn_cost;
   agc_catch_buf *jit_catch = vm->jit_catch;
-  bool in_turn = vm->in_turn;
+  bool in_turn = vm->in_turn, in_code = vm->in_code;
   uint32_t sync_depth = vm->sync_depth;
   agc_lock *stream_lock = vm->stream_lock;
   agc_outcome outcome = *vm->outcome;
@@ -2116,6 +2129,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
     agc_lock_drop_shared(vm->rt->sync);
   }
   vm->jit_catch = NULL;
+  vm->in_code = false;
   vm->in_turn = true;
   t->callbacks++;
   /* Volatile: set after the setjmp and read after a longjmp to it. */
@@ -2158,6 +2172,7 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   t->turn_cost = turn_cost;
   t->parking = t->retry = false;
   vm->jit_catch = jit_catch;
+  vm->in_code = in_code;
   vm->in_turn = in_turn;
   memcpy(vm->turn, turn, sizeof turn);
   *vm->outcome = outcome;

@@ -99,9 +99,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    memory failed), `page` the host's page size, and `batch` the code that waits for a seal (jit.c), all under
    `lock`; `exits[op]` the INTERPRET exits at each opcode that went back to the turn loop, `leaves` the leaf builtins
    that run_compiled called itself, `blocks` the block calls (`map`, `filter`, `times` and the other rows with a native
-   kind) that it started itself, `transitions` the CALL, TAIL_CALL, CALL_VALUE and RETURN exits that it ran, `tails`
-   the TAIL_CALL exits and `tails_compiled` those whose callee had code (agc_jit_count_tail), all counted only while
-   the jit trace is on. `native_only[f]` is set when `on` gives a function without a loop code only
+   kind) that it started itself, `transitions` the CALL, TAIL_CALL, CALL_VALUE, RETURN and RESUME exits that it ran,
+   `tails` the TAIL_CALL exits and `tails_compiled` those whose callee had code (agc_jit_count_tail), all counted only
+   while the jit trace is on. `native_only[f]` is set when `on` gives a function without a loop code only
    for native calls and block calls: compiled at a CALL, TAIL_CALL or CALL_VALUE exit from compiled code (the first
    when `calling[f]`, set when f calls, tail-calls or calls a function value, else the AGC_JIT_CALLEE_THRESHOLD-th) or
    at the first block call that compiled code starts with it, and published at a seal, which clears its `skip`.
@@ -199,7 +199,7 @@ void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc);
 void agc_jit_count_leaf(agc_jit *jit);
 /* Counts a block call (a builtin row with a native kind) that run_compiled started, when the jit trace is on. */
 void agc_jit_count_block(agc_jit *jit);
-/* Counts a CALL, TAIL_CALL, CALL_VALUE or RETURN exit that run_compiled ran, when the jit trace is on. */
+/* Counts a CALL, TAIL_CALL, CALL_VALUE, RETURN or RESUME exit that run_compiled ran, when the jit trace is on. */
 void agc_jit_count_transition(agc_jit *jit);
 /* Counts a TAIL_CALL exit in `tails`, and in `tails_compiled` when the callee's code slot SLOT holds code (the register
    file had to grow, or it takes more than AGC_JIT_TAIL_PARAMS arguments). Compiled code calls it before the exit, and
@@ -207,10 +207,10 @@ void agc_jit_count_transition(agc_jit *jit);
 void agc_jit_count_tail(agc_jit *jit, _Atomic(agc_jit_code) *slot);
 /* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
    turn loop at, `leaf count=N`, the leaf builtins called between two runs of compiled code (at native depth 0, or a
-   plain leaf whose check failed), `block count=N`, the block calls started there, `transition count=N`, the
-   calls, tail calls and returns that left compiled code (a native call, tail call or return does not), `transition
-   op=tail-call count=N compiled=M`, the tail calls among them and those of a callee that had code, and `turn
-   count=N`, the turns that ran the jit copy of the turn loop. */
+   plain leaf whose check failed), `block count=N`, the block calls started there, `transition count=N`, the calls,
+   tail calls, returns and block steps that left compiled code (a native call, tail call or return does not),
+   `transition op=tail-call count=N compiled=M`, the tail calls among them and those of a callee that had code, and
+   `turn count=N`, the turns that ran the jit copy of the turn loop. */
 void agc_jit_report(agc_jit *jit);
 /* The CALL_BUILTIN of a row marked direct (agc_builtin.direct) in compiled code, as the interpreter's generic tail
    runs it: ARGS is the window R + a, WHERE the instruction's span in the high half and its pc + 1 in the low half,

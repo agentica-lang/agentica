@@ -593,6 +593,11 @@ struct agc_vm {
   /* Set only while compiled code runs a builtin (agc_jit_call_builtin): a failure or an exit jumps there first. */
   agc_catch_buf *jit_catch;
   jmp_buf fail, turn;
+  /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/core.h): a failure or an exit
+     with no jit_catch would longjmp across it, which unwind aborts on, so a helper that fails where it must not shows
+     on every system and not only as a crash on Windows x64. A callback of native code and an I/O pause clear it while
+     they run, as they clear jit_catch. */
+  bool in_code;
 };
 
 /* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
