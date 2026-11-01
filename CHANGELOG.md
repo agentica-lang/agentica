@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Under the JIT, a loop that calls `map`, `filter`, `reduce`, `any?`, `all?`,
   `each`, `sort_by`, `times`, `upto` or `downto` runs their blocks from machine
   code, without a trip through the interpreter at each call.
+- Under `--jit on`, a function without a loop that calls such block builtins
+  now gets machine code when compiled code calls it.
 
 ### Fixed
 
