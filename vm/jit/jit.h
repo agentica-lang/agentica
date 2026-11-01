@@ -283,19 +283,56 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
 /* Private to vm/jit/, the C tests and the libFuzzer entry point (vm/fuzz_libfuzzer.c) from here. */
 
-/* The architecture that has an emitter: x86-64 (emit_x64.c). Elsewhere the JIT compiles nothing. */
+/* The architectures that have an emitter: x86-64 (emit_x64.c), and arm64 on Linux and macOS (emit_a64.c) in a build
+   with AGENTICA_JIT_ARM64=1 (-DAGC_JIT_ARM64), until it is on by default (#756). Elsewhere the JIT compiles
+   nothing. */
 #if defined(__x86_64__) || defined(_M_X64)
+#define AGC_JIT_HOST 1
+#elif defined(__aarch64__) && !defined(_WIN32) && defined(AGC_JIT_ARM64)
 #define AGC_JIT_HOST 1
 #else
 #define AGC_JIT_HOST 0
 #endif
 
-/* The offsets of the tail entry (after the 2-byte jump of the entry from C) and of the native entry (after the 5-byte
-   jump of the tail entry) in a function's code, and the most native calls nested on the C stack: about 80 bytes each.
-   A deeper CALL exits, which unwinds them all; a native TAIL_CALL nests nothing. */
+/* The offsets of the tail entry and of the native entry in a function's code: on x86-64 after the 2-byte jump of the
+   entry from C and the 5-byte jump of the tail entry, on arm64 after one branch each. And the most native calls nested
+   on the C stack: about 80 bytes each. A deeper CALL exits, which unwinds them all; a native TAIL_CALL nests
+   nothing. */
+#if defined(__aarch64__)
+#define AGC_JIT_TAIL_ENTRY 4
+#define AGC_JIT_NATIVE_ENTRY 8
+#else
 #define AGC_JIT_TAIL_ENTRY 2
 #define AGC_JIT_NATIVE_ENTRY 7
+#endif
 #define AGC_JIT_NATIVE_DEPTH 256
+
+/* Both emitters' native CALL writes a frame as four dwords, a byte and a qword at these offsets, and indexes the
+   frames by a shift of 5; it reads frame_count, frame_capacity and depth as dwords and reg_capacity as a qword. */
+#if AGC_JIT_HOST
+#define AGC_JIT_FIELD_SIZE(type, name) sizeof(((type *)0)->name)
+_Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
+_Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 4 && offsetof(agc_frame, base) == 8 &&
+                 offsetof(agc_frame, ret) == 12 && offsetof(agc_frame, tail) == 16 &&
+                 offsetof(agc_frame, native) == 24,
+               "the native CALL writes the frame at these offsets");
+_Static_assert(AGC_JIT_FIELD_SIZE(agc_frame, pc) == 4 && AGC_JIT_FIELD_SIZE(agc_frame, base) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_frame, ret) == 4 && AGC_JIT_FIELD_SIZE(agc_frame, function) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_frame, tail) == 1 && sizeof(agc_native *) == 8,
+               "the native CALL writes the frame fields with these sizes");
+_Static_assert(AGC_JIT_FIELD_SIZE(agc_task, frame_count) == 4 && AGC_JIT_FIELD_SIZE(agc_task, frame_capacity) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_task, depth) == 4 && AGC_JIT_FIELD_SIZE(agc_task, reg_capacity) == 8,
+               "the native CALL reads the task's counts with these sizes");
+#endif
+
+/* Before a thread runs compiled code, which another thread may have written and sealed: on arm64 the seal's cache
+   maintenance reaches every core, but a core may still hold instructions it fetched before, so the thread that runs
+   the code synchronizes its context first (isb). Nothing on x86-64, whose instruction fetch is coherent. */
+static inline void agc_jit_sync(void) {
+#if defined(__aarch64__)
+  __asm__ __volatile__("isb" : : : "memory");
+#endif
+}
 
 /* The most arguments of a native TAIL_CALL: its code moves each one, so a callee with more (the loader allows 65,534)
    takes the TAIL_CALL exit instead, and the code of one TAIL_CALL stays small, as the compile budget counts it as one
@@ -349,11 +386,28 @@ typedef struct {
 } agc_emitter;
 
 /* The byte of the host's code that fills a gap no code runs (before the entry table, between two functions sealed
-   together): int3 on x86-64. */
+   together): int3 on x86-64; on arm64 four of them make udf #0, which is always undefined. */
+#if defined(__aarch64__)
+#define AGC_EMIT_PAD 0x00
+#else
 #define AGC_EMIT_PAD 0xCC
+#endif
 
-/* The emitter of the host (emit_x64.c), one call for each kind of instruction. agc_emit_end lays out the epilogue,
-   the exit stubs and the entry table, and returns the size of the finished code, or 0 when it failed. */
+/* What the two emitters share (jit.c). agc_emit_start empties E for a function of COUNT instructions;
+   agc_emit_patch records an offset to write once the function is laid out. agc_emit_patches, in agc_emit_end once
+   the epilogue is written, links every patch with LINK (the jump at AT to TO): to its label, to the epilogue, or to
+   the exit stub of its run of patches with the same exit word, which STUB lays out at the end of the code first. It
+   is false on a label past the function. */
+typedef void (*agc_emit_stub)(agc_emitter *e, agc_jit_patch p, size_t epilogue);
+typedef void (*agc_emit_link)(agc_emitter *e, size_t at, size_t to);
+void agc_emit_start(agc_emitter *e, uint32_t count);
+void agc_emit_patch(agc_emitter *e, size_t at, agc_jit_patch_kind kind, uint64_t value);
+bool agc_emit_patches(agc_emitter *e, size_t epilogue, agc_emit_stub stub, agc_emit_link link);
+/* The exit word of STATUS at PC, as compiled code returns it in one register. */
+static inline uint64_t agc_emit_exit_word(uint32_t status, uint32_t pc) { return ((uint64_t)pc << 32) | status; }
+
+/* The emitter of the host (emit_x64.c or emit_a64.c), one call for each kind of instruction. agc_emit_end lays out
+   the epilogue, the exit stubs and the entry table, and returns the size of the finished code, or 0 when it failed. */
 void agc_emit_begin(agc_emitter *e, uint32_t count);
 void agc_emit_label(agc_emitter *e, uint32_t pc);
 void agc_emit_move(agc_emitter *e, uint32_t a, uint32_t b);
@@ -363,7 +417,7 @@ void agc_emit_global(agc_emitter *e, uint32_t a, uint64_t slot, uint32_t pc);
 void agc_emit_step(agc_emitter *e, uint32_t n, uint32_t pc);
 void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
-void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc);
 void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_map_get(agc_emitter *e, agc_instr in, uint32_t pc);
 void agc_emit_list(agc_emitter *e, agc_instr in);

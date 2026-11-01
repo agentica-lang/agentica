@@ -225,8 +225,8 @@ binary and C tests. The two run at once and a shard unpacks both.
     sanitizer `vm-test` and `fixed-point`; shard 2 also `vm-gc-stress`
   - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
   - `vm-layers`: `vm-layers`
-  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary): `vm-test`,
-    `vm-jit-test`
+  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary with
+    `AGENTICA_JIT_ARM64=1`): `vm-test`, `vm-jit-test`, `tests/test_vm_jit.py`
   - `vm-sanitizers`: the aggregate of the C half
   - `warm-third-party`, `dup-check`: `master` pushes only
 
@@ -290,14 +290,16 @@ binary and C tests. The two run at once and a shard unpacks both.
 ## Conformance matrix (`platforms.yml`)
 
 One job per system: `linux-x86_64`, `linux-arm64` (`ubuntu-24.04-arm`, the
-interpreter only: no JIT emitter), `windows-x86_64` (MSYS2 UCRT64),
+interpreter: the arm64 JIT is opt-in), `windows-x86_64` (MSYS2 UCRT64),
 `macos-x86_64` and `macos-arm64`; the Linux jobs use the system OpenSSL and
 zlib, the others the vendored ones. It runs on PRs with the `platforms` label
 and on `master` pushes. Each job runs `vm-test`, `vendored-check`,
 `bootstrap-smoke`, `fixed-point`, then `make conformance-area/<area>` per area
 of `tools/conformance.py`, then `make conformance-report` (a job summary and
 `summary.json`; exit 1 when a module did not finish, a case failed, an area has
-no passed case, or a skip is not allowed). `conformance all-systems` merges the
+no passed case, or a skip is not allowed). `macos-arm64` then rebuilds with
+`AGENTICA_JIT_ARM64=1` and runs `vm-test`, `vm-jit-test` and
+`tests/test_vm_jit.py`. `conformance all-systems` merges the
 reports and fails when a system is missing or a case ran on none. Not in the
 matrix: the Docker and Wine groups, the slow tier, sanitizers, fuzz and
 gc-stress (`ci.yml`, `fuzz.yml`).

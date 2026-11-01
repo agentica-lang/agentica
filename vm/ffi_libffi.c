@@ -486,9 +486,10 @@ static void closure_entry(ffi_cif *cif, void *ret, void **args, void *user) {
 /* The build turns libffi's trampoline table on for Apple arm64 alone (FFI_TRAMPOLINE_TABLE in mk/vm.mk), in its
    fficonfig.h, which this file does not see. */
 #if defined(__APPLE__) && defined(__aarch64__)
-/* Apple arm64 refuses a page that was writable to become executable without MAP_JIT, and libffi's answer is the
-   trampoline table (closures.c): the code is a page of trampolines remapped from libffi's own image, and each
-   trampoline reads its closure from the data page beside it. No page is writable and executable. */
+/* Under the hardened runtime, Apple arm64 refuses a page that was writable to become executable without MAP_JIT (this
+   binary has none, so the JIT's mprotect flow works: vm/jit/mem_posix.c). libffi's trampoline table (closures.c)
+   needs no such page at all: the code is a page of trampolines remapped from libffi's own image, and each trampoline
+   reads its closure from the data page beside it. No page is writable and executable. */
 static bool code_make(agc_ffi_closure *c) {
   void *code = NULL;
   c->closure = ffi_closure_alloc(sizeof(ffi_closure), &code);

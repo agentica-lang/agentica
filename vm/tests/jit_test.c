@@ -124,6 +124,17 @@ static AGC_JIT_CALLER void code_memory(void) {
 #endif
 
 #if AGC_JIT_HOST
+/* The tests of x86-64 encodings and sizes; vm/tests/jit_a64_test.c checks the arm64 words. */
+#if defined(__x86_64__) || defined(_M_X64)
+#define X64 1
+#else
+#define X64 0
+#endif
+
+/* N, as a count of the JIT's trace counters (transitions, turns, leaves): a build with the trace points compiled out
+   (make TRACE=0, the vm-trace-off check) counts nothing. */
+#define TRACE_COUNT(n) (AGC_TRACE_BUILD ? (uint64_t)(n) : 0)
+
 /* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
 static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
 
@@ -376,7 +387,9 @@ static AGC_JIT_CALLER void wide_tail_calls(void) {
     agc_emit_tail_call(&e, call, 0, k == 1, (uint64_t)(uintptr_t)&none, params, params + 1, 0);
     size[k] = e.len - start;
   }
-  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)32 * AGC_JIT_TAIL_PARAMS);
+  /* The exits are one jump; a callee of AGC_JIT_TAIL_PARAMS arguments gets their moves, at least 32 bytes each on
+     x86-64 and 16 (four instructions) on arm64. */
+  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)(X64 ? 32 : 16) * AGC_JIT_TAIL_PARAMS);
   /* A self TAIL_CALL (no native call needed) of 33 arguments exits with the frame as it was. */
   static agc_instr wide[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static uint32_t spans[3] = {0};
@@ -1258,7 +1271,7 @@ static AGC_JIT_CALLER void block_calls_in_place(void) {
   assert(agc_list_len(shifted) == BLOCK_ITEMS && same_bits(agc_list_get(shifted, 0), agc_int(101)) &&
          same_bits(agc_list_get(shifted, BLOCK_ITEMS - 1), agc_int(BLOCK_ITEMS + 100)));
   /* Each call of a block takes a step and a turn cost: 2000 calls end turns of 2000 steps inside them. */
-  assert(counts[0] == 3 && counts[1] >= 3);
+  assert(counts[0] == TRACE_COUNT(3) && (counts[1] >= 3 || !AGC_TRACE_BUILD));
   /* The calls take about 1000000 - left_off steps; the limits stop inside the reduce and the map. */
   int64_t used = 1000000 - left_off;
   for (int64_t limit = used / 7; limit < used; limit += used / 7) {
@@ -1334,7 +1347,7 @@ static AGC_JIT_CALLER void string_code_calls(void) {
       assert(off.kind == AGC_DONE && record_count == 1 && same_bits(recorded[0], agc_int(0xE9)) && leaves_on == 0);
     } else {
       assert(off.kind == AGC_FAILED && strcmp(off.code, "RUNTIME-INVALID-CHARACTER") == 0 && off.span == 4);
-      assert(strcmp(on.code, off.code) == 0 && on.span == off.span && leaves_on == 1);
+      assert(strcmp(on.code, off.code) == 0 && on.span == off.span && leaves_on == TRACE_COUNT(1));
     }
   }
 }
@@ -1724,8 +1737,8 @@ int main(void) {
   batch();
   settle_is_linear();
   compile_race();
-  cap_inside_an_offset();
-  bytes();
+  if (X64) cap_inside_an_offset();
+  if (X64) bytes();
   call_return_exits();
   native_calls();
   native_leaf_calls();
