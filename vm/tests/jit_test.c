@@ -311,11 +311,16 @@ static AGC_JIT_CALLER void native_calls(void) {
 }
 
 static int syncs;
-static bool refuse_register(void) { return false; }
-static bool accept_register(void) { return true; }
+static bool not_registered(void) { return false; }
+static bool registered(void) { return true; }
 static bool count_sync(void) {
   syncs++;
   return true;
+}
+/* A SYNC_CORE that fails after the registration worked. */
+static bool fail_sync(void) {
+  syncs++;
+  return false;
 }
 
 #if defined(__aarch64__)
@@ -335,7 +340,8 @@ static uint32_t before_call(agc_jit_code code) {
 
 /* The JIT decides once, at the start, whether seals synchronize every core (Linux arm64 with membarrier): a failed
    registration leaves seals alone and each native call with its isb; a working one runs the sync at each seal and
-   drops the isb. Both run the native call of native_calls. */
+   drops the isb. Both run the native call of native_calls. A sync that fails is a failed seal: nothing is published,
+   and nothing is compiled any more. */
 static AGC_JIT_CALLER void sync_choice(void) {
   static agc_instr caller[] = {{AGC_OP_CALL, 2, 1, 0}, {AGC_OP_RETURN, 2, 0, 0}};
   static agc_instr callee[] = {{AGC_OP_CONST, 1, 1, 0}, {AGC_OP_ADD_I, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
@@ -351,7 +357,7 @@ static AGC_JIT_CALLER void sync_choice(void) {
     agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
     assert(jit);
     syncs = 0;
-    agc_jit_use_sync(jit, works ? accept_register : refuse_register, count_sync);
+    agc_jit_use_sync(jit, works ? registered : not_registered, count_sync);
     assert(works ? jit->sync_cores == count_sync : !jit->sync_cores);
     assert(agc_jit_code_of(jit, 1, 0));
     agc_jit_code code = agc_jit_code_of(jit, 0, 0);
@@ -367,6 +373,12 @@ static AGC_JIT_CALLER void sync_choice(void) {
     assert(same_bits(regs[2], agc_int(42)) && vm.task->frame_count == 1);
     *vm.task = saved;
   }
+  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
+  syncs = 0;
+  agc_jit_use_sync(jit, registered, fail_sync);
+  assert(!agc_jit_code_of(jit, 1, 0) && syncs == 1 && !atomic_load(&jit->code[1]) && !agc_jit_may_run(jit, 1));
+  assert(atomic_load(&jit->used) > 0 && jit->cap == atomic_load(&jit->used));
+  assert(!agc_jit_code_of(jit, 0, 0) && syncs == 1 && !agc_jit_may_run(jit, 0));
 }
 
 /* Function 0 calls function 1 natively with n in R2; function 1 tail-calls function 2 (sum) with (n, 0), which adds n,
@@ -1806,6 +1818,9 @@ static void settle_is_linear(void) {
 #endif
 
 int main(void) {
+  /* As agc_launch_init does, while the process has one thread: on Linux arm64 the tests below then compile with
+     membarrier and without the isb of a native call. */
+  agc_jit_mem_sync_register();
   agc_init();
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);

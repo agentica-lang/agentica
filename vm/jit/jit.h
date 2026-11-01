@@ -147,9 +147,9 @@ typedef struct agc_jit {
    PROGRAM (then the run has the interpreter of AGC_JIT_OFF). TRACE gets the jit category's lines. */
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace);
 /* Decides, before anything is compiled, how arm64 code that one thread seals becomes safe to run on the others: when
-   REGISTER_SYNC (agc_jit_mem_sync_register) succeeds, each seal runs SYNC_CORES and native calls have no isb; else
+   REGISTERED (agc_jit_mem_sync_registered) is true, each seal runs SYNC_CORES and native calls have no isb; else
    each native call runs isb before it branches. agc_jit_new calls it once; a C test calls it again with stubs. */
-void agc_jit_use_sync(agc_jit *jit, bool (*register_sync)(void), bool (*sync_cores)(void));
+void agc_jit_use_sync(agc_jit *jit, bool (*registered)(void), bool (*sync_cores)(void));
 /* The code of FUNCTION, entered at instruction PC, compiled now if this entry makes it hot, or NULL to interpret it.
    Any scheduler may call it. */
 agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc);
@@ -468,10 +468,12 @@ void *agc_jit_mem_reserve(size_t size);
 bool agc_jit_mem_open(void *pages, size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);
 void agc_jit_mem_unmap(void *pages, size_t size);
-/* Linux arm64 only (false elsewhere): sync_register registers the process for membarrier's SYNC_CORE command, once
-   when the JIT starts, and sync_cores runs it, so that every thread of the process passes a context synchronization
-   event before the call returns (agc_jit_use_sync). */
-bool agc_jit_mem_sync_register(void);
+/* Linux arm64 only (nothing, or false, elsewhere): sync_register registers the process for membarrier's SYNC_CORE
+   command, once, while the process has one thread (agc_launch_init calls it before agc_init); sync_registered says
+   whether that worked; sync_cores runs the command, so that every thread of the process passes a context
+   synchronization event before the call returns (agc_jit_use_sync). */
+void agc_jit_mem_sync_register(void);
+bool agc_jit_mem_sync_registered(void);
 bool agc_jit_mem_sync_cores(void);
 
 /* Settles the `on` decision of every function of PROGRAM: CALLABLE[f] stays true when f may get code, LOOPED[f] is

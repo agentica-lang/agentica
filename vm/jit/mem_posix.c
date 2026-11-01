@@ -45,16 +45,27 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
 
 #if defined(__aarch64__) && defined(__linux__)
-/* False on a kernel without the command (EINVAL), or where seccomp refuses the call: then each native call keeps
-   its isb (agc_jit_use_sync). */
-bool agc_jit_mem_sync_register(void) { return syscall(SYS_membarrier, MEMBARRIER_REGISTER_SYNC_CORE, 0, 0) == 0; }
+/* Set once by agc_jit_mem_sync_register, before any other thread exists, and only read after: the threads started
+   later see it through their creation. */
+static bool sync_registered;
+
+/* The registration waits for the other threads of the process (35 ms with the collector's and libuv's threads
+   running, against microseconds alone), so the launch makes it before agc_init starts any. It fails on a kernel
+   without the command (EINVAL), or where seccomp refuses the call: then each native call keeps its isb. */
+void agc_jit_mem_sync_register(void) {
+  sync_registered = syscall(SYS_membarrier, MEMBARRIER_REGISTER_SYNC_CORE, 0, 0) == 0;
+}
+
+bool agc_jit_mem_sync_registered(void) { return sync_registered; }
 
 bool agc_jit_mem_sync_cores(void) { return syscall(SYS_membarrier, MEMBARRIER_SYNC_CORE, 0, 0) == 0; }
 #else
-/* x86-64 fetches coherently and needs neither. macOS documents no way to make other threads synchronize: the cache
-   maintenance of the seal (sys_icache_invalidate) runs isb on the calling core only, so a native call keeps its isb
-   there. */
-bool agc_jit_mem_sync_register(void) { return false; }
+/* x86-64 fetches coherently and needs none of it. macOS documents no way to make other threads synchronize: the
+   cache maintenance of the seal (sys_icache_invalidate) runs isb on the calling core only, so a native call keeps
+   its isb there. */
+void agc_jit_mem_sync_register(void) {}
+
+bool agc_jit_mem_sync_registered(void) { return false; }
 
 bool agc_jit_mem_sync_cores(void) { return false; }
 #endif

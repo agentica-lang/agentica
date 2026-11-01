@@ -28,7 +28,9 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 /* Windows has an emitter on x86-64 only, which fetches coherently. */
-bool agc_jit_mem_sync_register(void) { return false; }
+void agc_jit_mem_sync_register(void) {}
+
+bool agc_jit_mem_sync_registered(void) { return false; }
 
 bool agc_jit_mem_sync_cores(void) { return false; }
 

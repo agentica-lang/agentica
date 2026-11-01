@@ -247,10 +247,12 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
 - Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, Linux and macOS;
   `jit_a64_test.c` checks its words on any machine, the `jit-arm64` CI job and
   Platforms run it). On arm64 a code slot is read with `ldar`; a native call
-  runs `isb` before it branches unless each seal ran membarrier `SYNC_CORE`
-  (Linux, registered once in `agc_jit_use_sync`). macOS seals with plain `mprotect`, so the binary must
-  not have the hardened runtime (`tools/release-check.sh` checks it, and
-  `release.py smoke` checks that the package compiles).
+  runs `isb` before it branches unless each seal runs membarrier `SYNC_CORE`
+  (Linux; `agc_launch_init` registers it before `agc_init` starts threads, as
+  the registration waits for every thread). macOS seals with plain
+  `mprotect`, so the binary must not have the hardened runtime
+  (`tools/release-check.sh` checks it, and `release.py smoke` checks that the
+  package compiles).
 - A new instruction with code needs: a case in `has_code` and in the walk, its
   `agc_emit_*` in both emitters, a case in `jit_test.c`, `jit_a64_test.c` and
   `tests/test_vm_jit.py`. Compiled

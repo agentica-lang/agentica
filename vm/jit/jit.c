@@ -825,8 +825,8 @@ agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function, bool block) {
 _Static_assert(AGC_JIT_SAMPLE == 1u << AGC_JIT_SAMPLE_BITS && AGC_JIT_SAMPLE_MAX == 1u << AGC_JIT_SAMPLE_MAX_BITS,
                "the sample bits match the intervals");
 
-void agc_jit_use_sync(agc_jit *jit, bool (*register_sync)(void), bool (*sync_cores)(void)) {
-  jit->sync_cores = register_sync() ? sync_cores : NULL;
+void agc_jit_use_sync(agc_jit *jit, bool (*registered)(void), bool (*sync_cores)(void)) {
+  jit->sync_cores = registered() ? sync_cores : NULL;
 }
 
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace) {
@@ -876,7 +876,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->page = agc_jit_mem_page();
   jit->cap = AGC_JIT_CODE_CAP;
   jit->seal = agc_jit_mem_seal;
-  agc_jit_use_sync(jit, agc_jit_mem_sync_register, agc_jit_mem_sync_cores);
+  agc_jit_use_sync(jit, agc_jit_mem_sync_registered, agc_jit_mem_sync_cores);
   jit->chunk = jit->chunk_used = 0;
   jit->hot_entries = AGC_JIT_THRESHOLD;
   jit->hot_passes = AGC_JIT_PASSES;
