@@ -48,6 +48,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   these and `vm/digest_openssl.c` include OpenSSL. Each session has two memory
   BIOs, and the error queue drains into our codes. Init, minimums, trust and
   verification: §10.3.
+- ALPN: the context build turns `alpn` into the RFC 7301 wire form, which the
+  pool job sets on the config (`agc_tls_config_set_alpn`). A server config's
+  select callback reads the config, so each accepted connection's `net` holds
+  its own count on it. `advance` stores the selected name once, in the atomic
+  `net.alpn`, for `TLS.alpn`.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
   `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
   demand) in one pool job; `agc_tls_context_take` checks the role

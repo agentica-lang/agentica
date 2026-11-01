@@ -246,9 +246,12 @@ static server *open_server(const agc_http_server *hs) {
   return s;
 }
 
+/* HttpWire.server(listener, max, f): a TLS listener whose alpn may agree on another protocol than HTTP/1.1 is
+   RUNTIME-TLS-CONTEXT-ALPN at the listener argument (in std/http's HTTP.listen_*_tls). */
 static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_listener *lv = agc_as_listener(vm, args[0]);
   int64_t max = agc_as_int(vm, args[1]);
+  if (lv->state->native) agc_tls_http1_check(vm, agc_conn_config(lv->state->native), span + 1);
   server *s = calloc(1, sizeof(server));
   if (!s) agc_out_of_memory();
   s->max = (size_t)(max < 1 ? 1 : max > MAX_CONNECTIONS ? MAX_CONNECTIONS : max);

@@ -22,6 +22,9 @@ void agc_conn_release(agc_conn *c);
 void agc_conn_retain(agc_conn *c);
 bool agc_conn_closed(const agc_conn *c);
 agc_conn *agc_conn_accept(agc_conn *l);
+/* The TLS config of a listener (NULL for plain TCP): set before the listener is shared and given back only when the
+   connection is freed, so a scheduler that holds the listener's resource may read it. */
+const agc_tls_config *agc_conn_config(const agc_conn *c);
 /* Closes a connection that agc_conn_accept made and no socket took, and gives back the count accept took. */
 void agc_conn_discard(agc_conn *c);
 /* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet; the
@@ -34,6 +37,9 @@ agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_fail
 /* RUNTIME-TLS-CONTEXT-ROLE with MESSAGE at span AT (the context argument) unless CONTEXT, a TlsContext, is a server
    context when SERVER and a client one otherwise (vm/tls_context.c). */
 void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at);
+/* RUNTIME-TLS-CONTEXT-ALPN at span AT unless CONFIG (NULL for plain TCP) agrees on no protocol but HTTP/1.1, the
+   only one std/http speaks (vm/tls_context.c): HTTP.client, HTTP.start and every HTTP.listen_*_tls ask it. */
+void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at);
 /* The check, then one more count on the context's config, for the socket or listener that will use it. */
 agc_tls_config *agc_tls_context_take(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at);
 

@@ -1,6 +1,6 @@
 ## 29. TLS contexts
 
-**Status:** 19a and 19b built; 19c planned (roadmap phase 19), decided by the
+**Status:** 19a, 19b and 19c built (roadmap phase 19), decided by the
 user on 2026-10-12. It is part of order step 7.4: after phase 17 (`Task.map` and
 channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)). `with` (15c) is built, so
@@ -23,8 +23,14 @@ server context.
 **Built (19b):** `TLS.upgrade` as 29.3 says, with two additions: the checks of
 the arguments (a closed or TLS socket, the timeout, an empty host for a client
 context) are `error` results that leave the socket open, and a send still in
-progress on the plain socket fails the upgrade as unread bytes do. 19c (ALPN)
-is still planned.
+progress on the plain socket fails the upgrade as unread bytes do.
+
+**Built (19c):** the `alpn: List[String] = []` field of both options records
+and `TLS.alpn(socket) -> String` (`""` for none), as 29.7 says. A server picks
+the first of its own protocols that the client offers too and refuses the
+handshake when none is in common. `std/http` speaks only HTTP/1.1, so it halts
+with `RUNTIME-TLS-CONTEXT-ALPN` on a context whose `alpn` is not `[]` or
+`["http/1.1"]`.
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS
@@ -280,7 +286,7 @@ one-way test because nothing else can express it:
   - **One-way test:** passes: today the floor is fixed at 1.2
 
 - **Option:** `alpn: List[String]`, with `TLS.alpn(socket) -> String` to read
-  the result (planned as item 19c, §30.13)
+  the result (built in item 19c, §30.13)
   - **Record:** both
   - **One-way test:** passes: no other way to offer protocols
 
@@ -325,8 +331,8 @@ while a socket made from it is open stays valid until the socket closes.
 ### 29.9 Implementation (row 7.4)
 
 One PR per item: 19a `TlsContext` (breaking, one step: contexts for `TLS` and
-`HTTP`, reserved names, migration); 19b `TLS.upgrade`; 19c ALPN. The other later
-options of §29.7 are not in this phase. Done when: a program builds one client
-context and one server context at start-up and shares them; `TLS`,
-`HTTP.client` and `HTTP.listen_tls` take only contexts; STARTTLS works against
-Python on both sides.
+`HTTP`, reserved names, migration); 19b `TLS.upgrade`; 19c ALPN; all three
+done. The other later options of §29.7 are not in this phase. Done when: a
+program builds one client context and one server context at start-up and shares
+them; `TLS`, `HTTP.client` and `HTTP.listen_tls` take only contexts; STARTTLS
+works against Python on both sides.

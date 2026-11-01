@@ -186,6 +186,12 @@ SINGLE_FILE = [
      main_with('  a = TLS.client_context(TlsClientOptions())\n  b = TlsClientOptions(ca_file: "ca.pem")\n'
                '  c = HttpClientOptions()\n  d: Optional[TlsContext] = c.tls\n'
                '  e = HttpClientOptions(tls: some(a.unwrap!))\n'), None, None),
+    ("alpn is a list of protocol names that both options records may leave out",
+     main_with('  a = TlsClientOptions(alpn: ["h2", "http/1.1"])\n'
+               '  b = TlsServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  c: List[String] = b.alpn\n'),
+     None, None),
+    ("alpn takes a list of names, not one name",
+     main_with('  a = TlsClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
     ("TlsServerOptions has no default key pair",
      main_with('  a = TlsServerOptions(cert_file: "c.pem")\n'), "CHECK-MISSING-FIELD", 'TlsServerOptions(cert_file: "c.pem")'),
     ("HttpClientOptions holds a TlsContext, so JSON cannot decode it",

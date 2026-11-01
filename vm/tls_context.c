@@ -13,13 +13,19 @@
 #include <string.h>
 
 /* TlsClientOptions and TlsServerOptions as compiler/catalog/builtins_data.agc lays them out. */
-#define CLIENT_FIELDS 3
-#define SERVER_FIELDS 2
+#define CLIENT_FIELDS 4
+#define SERVER_FIELDS 3
+/* RFC 7301: a protocol name is 1 to 255 bytes, and the list goes in a 16-bit length. */
+#define ALPN_NAME_MAX 255
+#define ALPN_LIST_MAX 65535
 
-/* One build: the paths (malloc'd; NULL for a field left empty, ca NULL for the system trust), and what the pool work
-   made. Only the pool work writes `config` and `failure`; the done half owns the rest. */
+/* One build: the paths (malloc'd; NULL for a field left empty, ca NULL for the system trust), the ALPN protocols in
+   their wire form (NULL for none), and what the pool work made. Only the pool work writes `config` and `failure`; the
+   done half owns the rest. */
 typedef struct {
   char *ca, *cert, *key;
+  uint8_t *alpn;
+  size_t alpn_len, protocols;
   bool server;
   agc_tls_config *config;
   agc_tls_failure failure;
@@ -32,6 +38,7 @@ static void free_build(build *b) {
   free(b->ca);
   free(b->cert);
   free(b->key);
+  free(b->alpn);
   free(b);
 }
 
@@ -39,6 +46,10 @@ static void work(void *data) {
   build *b = data;
   b->config = b->server ? agc_tls_server_config(b->cert, b->key, &b->failure)
                         : agc_tls_client_config(b->ca ? b->ca : "", b->cert, b->key, &b->failure);
+  if (b->config && b->alpn && !agc_tls_config_set_alpn(b->config, b->alpn, b->alpn_len, b->server, &b->failure)) {
+    agc_tls_config_free(b->config);
+    b->config = NULL;
+  }
 }
 
 static agc_value build_error(agc_vm *vm, const build *b) {
@@ -56,8 +67,8 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   build *b = data;
   agc_value result;
   if (b->config) {
-    AGC_TRACE(&vm->rt->trace, AGC_TRACE_TLS, "tls_context role=%s ca=%s", b->server ? "server" : "client",
-              b->server ? "none" : b->ca ? "file" : "system");
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_TLS, "tls_context role=%s ca=%s alpn=%zu", b->server ? "server" : "client",
+              b->server ? "none" : b->ca ? "file" : "system", b->protocols);
     result = agc_result_value(true, agc_tls_context_value(b->config, release_config, b->server));
     b->config = NULL;
   } else {
@@ -88,6 +99,41 @@ static bool path_of(agc_vm *vm, agc_value field, char **path) {
   return *path != NULL;
 }
 
+/* The size of the alpn field in the wire form of RFC 7301, each name after its length byte, into *LEN: NULL, or the
+   refusal of a name that is empty or longer than 255 bytes, or of a list longer than 65535 bytes. */
+static const char *alpn_size(agc_vm *vm, agc_value field, size_t *len) {
+  agc_list_cursor cursor;
+  agc_value item;
+  *len = 0;
+  agc_list_cursor_begin(&cursor, agc_as_list(vm, field), 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    size_t bytes = agc_as_string(vm, item)->bytes;
+    if (bytes == 0 || bytes > ALPN_NAME_MAX) return "network: an ALPN protocol name is 1 to 255 bytes";
+    *len += 1 + bytes;
+    if (*len > ALPN_LIST_MAX) return "network: the ALPN protocols take more than 65535 bytes";
+  }
+  return NULL;
+}
+
+/* The alpn field of LEN bytes (alpn_size) in its wire form into B; an empty list leaves b->alpn NULL. */
+static void alpn_of(agc_vm *vm, agc_value field, size_t len, build *b) {
+  if (!len) return;
+  b->alpn = malloc(len);
+  if (!b->alpn) agc_out_of_memory();
+  b->alpn_len = len;
+  agc_list_cursor cursor;
+  agc_value item;
+  size_t at = 0;
+  agc_list_cursor_begin(&cursor, agc_as_list(vm, field), 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_string *name = agc_as_string(vm, item);
+    b->alpn[at++] = (uint8_t)name->bytes;
+    memcpy(b->alpn + at, name->data, name->bytes);
+    at += name->bytes;
+    b->protocols++;
+  }
+}
+
 /* A field count other than the record's is bytecode the front end would not write: a wrong-type failure, as for any
    other argument. */
 static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_t span) {
@@ -95,13 +141,16 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   const agc_struct *o = agc_as_struct(vm, options);
   if (o->n != (server ? SERVER_FIELDS : CLIENT_FIELDS)) agc_wrong_tag(vm);
   if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
+  agc_value alpn = o->fields[server ? 2 : 3];
+  size_t alpn_len;
+  const char *refused = alpn_size(vm, alpn, &alpn_len);
+  if (refused) return agc_error_value(refused);
   build *b = calloc(1, sizeof *b);
   if (!b) agc_out_of_memory();
   b->server = server;
   bool paths = server ? path_of(vm, o->fields[0], &b->cert) && path_of(vm, o->fields[1], &b->key)
                       : path_of(vm, o->fields[0], &b->ca) && path_of(vm, o->fields[1], &b->cert) &&
                           path_of(vm, o->fields[2], &b->key);
-  const char *refused = NULL;
   if (!paths)
     refused = "network: path cannot contain NUL";
   else if (server && (!b->cert || !b->key))
@@ -114,6 +163,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
     free_build(b);
     return agc_error_value(refused);
   }
+  alpn_of(vm, alpn, alpn_len, b);
   agc_io_start(vm, &context_io, b, agc_void(), -1);
   return agc_void();
 }
@@ -128,6 +178,12 @@ static agc_value builtin_server_context(agc_vm *vm, agc_value *args, uint32_t sp
 
 void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at) {
   if (agc_as_tls_context(vm, context)->server != server) agc_fail(vm, "RUNTIME-TLS-CONTEXT-ROLE", message, at);
+}
+
+void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at) {
+  if (config && !agc_tls_config_http1(config))
+    agc_fail(vm, "RUNTIME-TLS-CONTEXT-ALPN",
+             "std/http speaks only HTTP/1.1, so the alpn of its TlsContext must be [] or [\"http/1.1\"]", at);
 }
 
 agc_tls_config *agc_tls_context_take(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at) {

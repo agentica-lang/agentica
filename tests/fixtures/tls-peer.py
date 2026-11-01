@@ -3,6 +3,7 @@ import socket
 import ssl
 import sys
 import threading
+from collections.abc import Iterator
 
 # Windows would print CRLF; the tests compare LF lines.
 sys.stdout.reconfigure(newline="\n")
@@ -98,6 +99,16 @@ def serve_close() -> None:
             threading.Thread(target=answer_once, args=(context, conn), daemon=True).start()
 
 
+def accepted(count: int) -> Iterator[socket.socket]:
+    """Listens on 127.0.0.1, port 0, prints the port, and yields COUNT connections, each with a 20 s timeout."""
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        print(listener.getsockname()[1], flush=True)
+        for _ in range(count):
+            conn, _ = listener.accept()
+            conn.settimeout(20)
+            yield conn
+
+
 def serve_mtls() -> None:
     """A TLS server that requires a client certificate from client-ca.pem: two connections, one line each.
 
@@ -106,25 +117,21 @@ def serve_mtls() -> None:
     context = server_context()
     context.verify_mode = ssl.CERT_REQUIRED
     context.load_verify_locations(os.path.join(CERTS, "client-ca.pem"))
-    with socket.create_server(("127.0.0.1", 0)) as listener:
-        print(listener.getsockname()[1], flush=True)
-        for _ in range(2):
-            conn, _ = listener.accept()
-            conn.settimeout(20)
-            try:
-                with context.wrap_socket(conn, server_side=True) as tls:
-                    subject = dict(item for field in tls.getpeercert()["subject"] for item in field)
-                    data = b""
-                    while not data.endswith(b"\n"):
-                        chunk = tls.recv(4096)
-                        if not chunk:
-                            break
-                        data += chunk
-                    tls.sendall(b"hello " + subject["commonName"].encode() + b"\n")
-                    print("client " + subject["commonName"], flush=True)
-            except (ssl.SSLError, OSError):
-                conn.close()
-                print("refused", flush=True)
+    for conn in accepted(2):
+        try:
+            with context.wrap_socket(conn, server_side=True) as tls:
+                subject = dict(item for field in tls.getpeercert()["subject"] for item in field)
+                data = b""
+                while not data.endswith(b"\n"):
+                    chunk = tls.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+                tls.sendall(b"hello " + subject["commonName"].encode() + b"\n")
+                print("client " + subject["commonName"], flush=True)
+        except (ssl.SSLError, OSError):
+            conn.close()
+            print("refused", flush=True)
 
 
 def connect(port: int) -> None:
@@ -195,6 +202,31 @@ def connect_starttls(port: int) -> None:
             print(ready, read_line(tls).decode().strip(), tls.version(), flush=True)
 
 
+def serve_alpn() -> None:
+    """ALPN on a server that offers h2 and http/1.1: two connections, each answered with the protocol it selected, or ""
+    when it selected none. Unlike the VM, Python's server does not refuse a client with no protocol in common: it
+    selects none and the handshake goes on."""
+    context = server_context()
+    context.set_alpn_protocols(["h2", "http/1.1"])
+    for conn in accepted(2):
+        with context.wrap_socket(conn, server_side=True) as tls:
+            tls.sendall((tls.selected_alpn_protocol() or "").encode() + b"\n")
+
+
+def connect_alpn(port: int, protocols: list[str]) -> None:
+    """ALPN on a client: prints the protocol the server selected, "" for none, or "refused" when the server ended the
+    handshake."""
+    context = ssl.create_default_context(cafile=os.path.join(CERTS, "ca.pem"))
+    context.set_alpn_protocols(protocols)
+    try:
+        with socket.create_connection(("127.0.0.1", port)) as raw:
+            raw.settimeout(20)
+            with context.wrap_socket(raw, server_hostname="localhost") as tls:
+                print(tls.selected_alpn_protocol() or "", flush=True)
+    except ssl.SSLError:
+        print("refused", flush=True)
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "server":
         serve()
@@ -208,5 +240,9 @@ if __name__ == "__main__":
         serve_starttls()
     elif sys.argv[1] == "starttls-client":
         connect_starttls(int(sys.argv[2]))
+    elif sys.argv[1] == "alpn":
+        serve_alpn()
+    elif sys.argv[1] == "alpn-client":
+        connect_alpn(int(sys.argv[2]), sys.argv[3].split(","))
     else:
         connect(int(sys.argv[2]))
