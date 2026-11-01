@@ -53,9 +53,37 @@ export def check_expression(
     )
   end
 
-  actual = try State.ensure(cx, checked.st, checked.type, expected, span)
+  actual = checked.type
+  if !T.unknown?(expected) and !matches_expected?(node, expected)
+    actual = try State.ensure(cx, checked.st, checked.type, expected, span)
+  end
+
   recorded = State.record_type(checked.st, Ast.expr_id(node), checked.type)
   return ok(State.Out(st: recorded.with(nest: st.nest), type: actual))
+end
+
+# True when the type of the node is the expected type without a look: some(x) against Optional[T], ok(x) against
+# Result[T] and [x, ...] against List[T], T known. check_some, check_ok and check_list check x against T, so the
+# type they build around x's passes Types.same?. Comparing it again at each level of nested some(...) walks the whole
+# type below, quadratic in the depth.
+def matches_expected?(node: Ast.Expr, expected: T.Type) -> Bool
+  case node
+    Ast.Expr.Call(call) ->
+      if call.args.size != 1
+        return false
+      elsif call.name == "some"
+        return known_item?(expected, "Optional")
+      end
+
+      return call.name == "ok" and known_item?(expected, "Result")
+    Ast.Expr.ListLit(list) -> return list.elements.size > 0 and known_item?(expected, "List")
+    _ -> return false
+  end
+end
+
+# True when the type is a word (List, Optional, Result) of a known type.
+def known_item?(type: T.Type, word: String) -> Bool
+  return T.is?(type, word) and !T.unknown?(T.item(type))
 end
 
 # An Int literal past the largest Int is CHECK-INT-RANGE, except this one under a minus.
@@ -312,6 +340,8 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
   return Statements.check_block_body(cx, st, node, some(T.params(expected)), T.result(expected), none)
 end
 
+# The type of a list with items is built from the first item's checked type or the expected item that every item
+# passed, which top_names (lowering.agc) and matches_expected? rely on.
 def check_list(cx: State.Cx, st: State.St, node: Ast.ListLit, expected: T.Type) -> Result[State.Out]
   if !T.unknown?(expected) and !T.is?(expected, "List")
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a list", node.span))

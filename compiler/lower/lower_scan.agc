@@ -7,8 +7,9 @@ import Ast from "../syntax/ast"
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
 ## value, an enum constructor, a pattern), and type_value says that it uses a type name as a value (JSON.decode(Person,
-## ...)). covered are the ids of the expressions whose type is a List, Optional or Result around a type with the same
-## names as the type the checker records for their first argument or item (some(x), ok(x), [x, ...]).
+## ...)). covered are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and check_list build their type, a
+## List, Optional or Result, around a type with the names of the type recorded at x's id, so lowering.agc's top_names
+## reads only its top.
 export struct Scan
   consts: List[String]
   calls: List[String]
