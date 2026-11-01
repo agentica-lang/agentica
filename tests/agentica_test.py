@@ -7,6 +7,7 @@ needs it.
 """
 import atexit
 import faulthandler
+import json
 import os
 import queue
 import shutil
@@ -455,6 +456,17 @@ def compile_text(text, name, tmp_path):
 def run_vm(bytecode, *flags, args=(), **options):
     """Run `dist/agentica run [flags] -- bytecode [args]`; options go to run()."""
     return run([*vm_command(), *flags, "--", bytecode, *args], **options)
+
+
+def run_json_cases(bytecode, cases):
+    """Run a driver that reads one JSON case per line of stdin and prints one JSON reply per line; return the replies,
+    one dict per case."""
+    stdin = "".join(json.dumps(case) + "\n" for case in cases).encode("utf-8")
+    result = run_vm(bytecode, stdin=stdin)
+    assert result.code == 0, result.stderr
+    replies = [json.loads(line) for line in result.stdout.splitlines()]
+    assert len(replies) == len(cases)
+    return replies
 
 
 # The tests do not read these from their own environment: a trace or a trust store set by the caller would change

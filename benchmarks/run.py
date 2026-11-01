@@ -39,6 +39,7 @@ NAMES = [
     "deadline-pingpong",
     "sleepers",
     "bytes",
+    "regex",
 ]
 SCALE_DEF = "def scale() -> Int\n  return 1\nend\n"
 # Programs for the front-end rows: a main that imports the largest module of the corpus, so that `check` goes through

@@ -5,14 +5,13 @@ vectors are the forms written out from reading Rack (no Ruby ran here); the gene
 Python's http.cookies, which is not the code under test. http.cookies reads back what std/cookie writes, and a header
 built from known pairs gives the expected map of the reader.
 """
-import json
 import random
 from email.utils import formatdate
 from http.cookies import SimpleCookie
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm
+from tests.agentica_test import FIXTURES, compile_agc, run_json_cases
 
 NO_MAX_AGE = -2 ** 63
 DEFAULTS = {"name": "", "value": "", "path": "", "domain": "", "max_age": NO_MAX_AGE, "expires": "", "secure": False,
@@ -30,12 +29,8 @@ def call(driver, cases):
     for op, arg in cases:
         cookie = {**DEFAULTS, **arg} if isinstance(arg, dict) else dict(DEFAULTS)
         text = "" if isinstance(arg, dict) else arg
-        lines.append(json.dumps({"op": op, "text": text, "cookie": cookie}))
-    result = run_vm(driver, stdin=("\n".join(lines) + "\n").encode("utf-8"))
-    assert result.code == 0, result.stderr
-    replies = [json.loads(line) for line in result.stdout.splitlines()]
-    assert len(replies) == len(cases)
-    return replies
+        lines.append({"op": op, "text": text, "cookie": cookie})
+    return run_json_cases(driver, lines)
 
 
 COOKIE_HEADERS = [

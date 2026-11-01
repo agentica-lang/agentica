@@ -93,9 +93,9 @@ s.to_f!() -> Float
   `["a", "b", "c"]`.
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
-- No regex builtin (`=~`, `matches?`). `s.chars` is `s.split("")`, `s.ord` is
-  `s.code`. `s.bytes` gives the UTF-8 bytes as a `Bytes` (`bytes.md`);
-  `s.bytes.to_a` gives a `List[Int]`.
+- No regex builtin or `=~`: use `std/regex` (`regex.md`). `s.chars` is
+  `s.split("")`, `s.ord` is `s.code`. `s.bytes` gives the UTF-8 bytes as a
+  `Bytes` (`bytes.md`); `s.bytes.to_a` gives a `List[Int]`.
 
 ## List
 

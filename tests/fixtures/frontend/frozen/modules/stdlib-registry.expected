@@ -19,6 +19,7 @@ std/prelude/map.agc
 std/prelude/optional.agc
 std/prelude/string.agc
 std/queue.agc
+std/regex.agc
 std/test/child.agc
 std/test/report.agc
 std/test/runner.agc

@@ -1,10 +1,11 @@
 ---
 title: Text and data
 weight: 2
-description: Work with text and numbers, read and write JSON and TOML, encode URLs, escape HTML and handle cookies, find the media type of a file, pack numbers into bytes, hash and sign bytes, and draw secure random bytes.
+description: Work with text and numbers, search and replace text with regular expressions, read and write JSON and TOML, encode URLs, escape HTML and handle cookies, find the media type of a file, pack numbers into bytes, hash and sign bytes, and draw secure random bytes.
 ---
 
 - Use [String](/library/text-and-data/string/) to cut, search, change and convert text, and to turn text into numbers.
+- Use [Regex](/library/text-and-data/regex/) (`std/regex`) to search, extract, replace and split text with regular expressions.
 - Use [Int and Float](/library/text-and-data/numbers/) to convert between `Int`, `Float` and `String`.
 - Use [JSON](/library/text-and-data/json/) to move data in and out of programs, for a known shape (structs) or not.
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a `Bytes`, and to frame messages.
