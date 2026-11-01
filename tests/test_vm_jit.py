@@ -11,18 +11,22 @@ in compiled code, and so is a call of a builtin marked direct; a block call
 (`map`, `filter`, ...) starts between two runs of compiled code, and its block
 runs compiled; other builtins and allocations without code run in the
 interpreter, and the code goes on after them.
-On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
-interpreter's, which must still match.
+On a host with an emitter the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs
+are the interpreter's, which must still match.
 """
+import functools
 import os
 import platform
+import tempfile
+from pathlib import Path
 
 import pytest
 
 from tests.agentica_test import compile_text, run_vm, vm_environment
 
-X86_64 = platform.machine().lower() in ("x86_64", "amd64")
 MODES = ("off", "on", "always")
+# The machines whose binary has an emitter (platform.machine(), lowercased).
+EMITTER_MACHINES = {"x86_64", "amd64"}
 
 # worker and main call and print, which leave compiled code for the interpreter. A spin call runs past a turn (2000
 # steps), so the three tasks' turns end inside compiled loops, and the order of the lines shows where.
@@ -585,6 +589,20 @@ def assert_step_limits_stop_alike(bytecode, steps):
         assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
 
 
+@functools.cache
+def jit_host():
+    """Whether the binary has an emitter for this machine: under --jit always the jit trace shows a loop compiled. It
+    must agree with EMITTER_MACHINES, so a binary that stopped compiling fails here instead of passing every test as
+    an interpreter."""
+    with tempfile.TemporaryDirectory() as folder:
+        bytecode = compile_text("def main() -> Void\n  i = 0\n  while i < 3\n    i += 1\n  end\nend\n", "host",
+                                Path(folder))
+        probe = compiled(bytecode, Path(folder)) == ["main"]
+    machine = platform.machine().lower()
+    assert probe == (machine in EMITTER_MACHINES), f"the jit trace says compiled={probe} on {machine}"
+    return probe
+
+
 def jit_trace(bytecode, tmp_path, mode):
     """The jit trace lines of a run with --jit MODE."""
     trace = tmp_path / "jit.trace"
@@ -616,7 +634,7 @@ def assert_compiled_without_exits(bytecode, tmp_path, want, forbidden):
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         names = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
-        assert names == (want[mode] if X86_64 else []), (mode, names)
+        assert names == (want[mode] if jit_host() else []), (mode, names)
         exits = [line for line in lines if " jit exit op=" in line and forbidden(line.split("op=")[1].split()[0])]
         assert exits == [], (mode, exits)
 
@@ -639,14 +657,14 @@ end
         assert code == 0 and stdout == "447\n", (style, stdout)
     lines = jit_trace(bytecode, tmp_path, "always")
     compiled_functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
-    assert compiled_functions == (["block@call-bridge.agc:9:23", "descend", "main"] if X86_64 else [])
+    assert compiled_functions == (["block@call-bridge.agc:9:23", "descend", "main"] if jit_host() else [])
     transitions = [line for line in lines if " jit exit op=call " in line or " jit exit op=return " in line]
     assert transitions == [], transitions
 
 
 def test_the_max_steps_sweep_of_three_tasks_in_compiled_loops_matches_the_interpreter(tmp_path):
     bytecode = compile_text(TASKS, "tasks", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["main", "same_text", "spin", "worker"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["main", "same_text", "spin", "worker"] if jit_host() else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 3 * 6 + 4, full
     limits = sorted({*range(1, 25), *range(1990, 2010), *range(25, 200000, 1201)})
@@ -679,7 +697,7 @@ def main() -> Void
   puts(grow(1))
 end
 """, "failure", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["grow", "main"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["grow", "main"] if jit_host() else [])
     for style in ((), ("--json",), ("--ai",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
@@ -687,14 +705,14 @@ end
 
 def test_a_task_cancelled_in_a_compiled_loop_stops_as_in_the_interpreter(tmp_path):
     bytecode = compile_text(CANCEL, "cancel", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["main", "spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["main", "spin"] if jit_host() else [])
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout == "5000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 
 def test_on_compiles_a_function_at_a_turn_that_starts_in_its_loop(tmp_path):
     bytecode = compile_text(THRESHOLD, "threshold", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["spin"] if jit_host() else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 3, full
     steps = int(full[1].split("steps ")[1])
@@ -705,7 +723,7 @@ def test_on_compiles_a_function_at_a_turn_that_starts_in_its_loop(tmp_path):
 
 def test_several_schedulers_compile_and_run_one_function_as_the_interpreter(tmp_path):
     bytecode = compile_text(SCHEDULERS, "schedulers", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["spin", "worker"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["spin", "worker"] if jit_host() else [])
     for _ in range(3):
         code, stdout, stderr = assert_same(bytecode, schedulers=4)
         assert code == 0 and stdout.count("\n") == 2, stderr
@@ -713,7 +731,7 @@ def test_several_schedulers_compile_and_run_one_function_as_the_interpreter(tmp_
 
 def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_does(tmp_path):
     bytecode = compile_text(COST, "cost", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["doubled", "main", "same", "worker"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["doubled", "main", "same", "worker"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
@@ -721,10 +739,11 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
 def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_path):
     bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
     # twice is called from main's compiled loop; thrice only from noisy, whose loop prints, so both stay interpreted.
-    assert compiled(bytecode, tmp_path, "on") == (["main", "spin", "twice"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["main", "noisy", "spin", "thrice", "twice"] if X86_64 else [])
-    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=" in line]
-    assert skips == [] if not X86_64 else [line.split("skip ")[1] for line in skips] == ["function=noisy loop=exits"]
+    assert compiled(bytecode, tmp_path, "on") == (["main", "spin", "twice"] if jit_host() else [])
+    every = ["main", "noisy", "spin", "thrice", "twice"]
+    assert compiled(bytecode, tmp_path, "always") == (every if jit_host() else [])
+    skips = [line.split("skip ")[1] for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=" in line]
+    assert skips == (["function=noisy loop=exits"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.count("\n") == 152, stderr
 
@@ -753,8 +772,8 @@ def main() -> Void
   puts(total)
 end
 """, "callee_threshold", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["hot", "main"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["hot", "main", "rare"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["hot", "main"] if jit_host() else [])
+    assert compiled(bytecode, tmp_path, "always") == (["hot", "main", "rare"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == "83000\n", (stdout, stderr)
 
@@ -774,7 +793,7 @@ def test_on_compiles_a_long_loop_body_only_after_enough_passes(tmp_path, passes)
   puts(acc)
 end
 """, "passes", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["main"] if X86_64 and passes == 40 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["main"] if jit_host() and passes == 40 else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == f"{sum(i * 60 + 1770 for i in range(passes))}\n", (stdout, stderr)
 
@@ -790,7 +809,7 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
     assert [line for line in lines if " jit compile " in line or " jit transition " in line] == []
     skips = sorted(line.split("skip ")[1] for line in lines if " jit skip " in line)
     assert skips == (sorted([f"function=f{k} loop=none" for k in range(14)] + ["function=main loop=exits"])
-                     if X86_64 else []), skips
+                     if jit_host() else []), skips
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == "4576500\n", (stdout, stderr)
 
@@ -833,10 +852,10 @@ end
     all_turns = total // 2000 + 1
     lines = jit_trace(bytecode, tmp_path, "on")
     turns = [int(line.split("count=")[1]) for line in lines if " jit turn count=" in line]
-    assert compiled(bytecode, tmp_path, "on") == (["pad"] if X86_64 and calls else [])
-    if X86_64 and not calls:
+    assert compiled(bytecode, tmp_path, "on") == (["pad"] if jit_host() and calls else [])
+    if jit_host() and not calls:
         assert len(turns) == 1 and 0 < turns[0] <= all_turns // 8 + 1, (turns, all_turns)
-    elif X86_64:
+    elif jit_host():
         assert len(turns) == 1 and turns[0] >= (total - first) // 2000, (turns, first, total)
     else:
         assert turns == []
@@ -870,7 +889,7 @@ end
     assert code == 0 and stdout.split("\n")[0] == "600000", (stdout, stderr)
     all_turns = int(stdout.split("\n")[1]) // 2000 + 1
     turns = [int(line.split("count=")[1]) for line in jit_trace(bytecode, tmp_path, "on") if " jit turn count=" in line]
-    if X86_64:
+    if jit_host():
         assert len(turns) == 1 and 0 < turns[0] <= all_turns // 64, (turns, all_turns)
     else:
         assert turns == []
@@ -919,7 +938,7 @@ end
 """, f"parks_{work}", tmp_path)
     lines = jit_trace(bytecode, tmp_path, "on")
     skips = sorted(line.split("skip ")[1] for line in lines if " jit skip " in line)
-    if X86_64:
+    if jit_host():
         assert skips == ([] if work else ["function=echo loop=exits", "function=main loop=exits"]), skips
         assert compiled(bytecode, tmp_path, "on") == (["echo", "main"] if work else [])
     acc = sum(sum(n * (k + 1) for k in range(work)) for n in range(1, 3001)) % 1000003 if work else 0
@@ -946,7 +965,7 @@ def test_on_compiles_a_loop_with_a_shared_call_that_never_parks(tmp_path):
   puts(acc)
 end
 """, "closed_loop", tmp_path)
-    if X86_64:
+    if jit_host():
         assert compiled(bytecode, tmp_path, "on") == ["main"]
     acc = 0
     for i in range(300000):
@@ -1056,7 +1075,7 @@ def test_on_compiles_a_hot_function_that_runs_only_inside_turns(tmp_path, case):
     # One scheduler draws the same samples in each run, and each case runs at least twice the passes it needs.
     source, expected = MID_TURN[case]
     bytecode = compile_text(source, f"mid_turn_{case}", tmp_path)
-    assert ("work" in compiled(bytecode, tmp_path, "on")) == X86_64
+    assert ("work" in compiled(bytecode, tmp_path, "on")) == jit_host()
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == expected, (stdout, stderr)
 
@@ -1064,7 +1083,7 @@ def test_on_compiles_a_hot_function_that_runs_only_inside_turns(tmp_path, case):
 def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     bytecode = compile_text(NATIVE, "native", tmp_path)
     for mode in ("on", "always"):
-        assert compiled(bytecode, tmp_path, mode) == (["down", "fib", "main"] if X86_64 else [])
+        assert compiled(bytecode, tmp_path, mode) == (["down", "fib", "main"] if jit_host() else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].startswith("66770\n"), full
     steps = int(full[1].split("steps ")[1])
@@ -1075,7 +1094,7 @@ def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     # returns through one exit per frame after each such unwind.
     lines = jit_trace(bytecode, tmp_path, "always")
     transitions = sum(int(line.split("count=")[1]) for line in lines if " jit transition count=" in line)
-    assert transitions < (30000 if X86_64 else 1), transitions
+    assert transitions < (30000 if jit_host() else 1), transitions
 
 
 @pytest.mark.parametrize("case", sorted(NATIVE_FAILURES))
@@ -1121,7 +1140,7 @@ end
 """, "native_failure", tmp_path)
     callees = {"depth": ["down"], "builtin": ["cut"], "leaf": ["pick"], "tail-leaf": ["pick", "relay"]}
     callees = callees.get(case, ["grow"])
-    assert compiled(bytecode, tmp_path, "on") == (sorted([*callees, "main"]) if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (sorted([*callees, "main"]) if jit_host() else [])
     for style in ((), ("--json",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
@@ -1186,7 +1205,7 @@ def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
     assert code == 0 and stdout.startswith("1 0 57\n2 0 60\n") and "\n368072\n385056\n" in stdout, stdout
     on = compiled(bytecode, tmp_path, "on")
     want = ["measure", "ping", "pong", "work"]
-    assert all(name in on for name in want) if X86_64 else on == [], on
+    assert all(name in on for name in want) if jit_host() else on == [], on
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
@@ -1197,7 +1216,7 @@ def test_leaf_builtins_run_in_compiled_code_without_leaving(tmp_path):
         # of the builtins that can fail take an exit (a frame that goes on after its native calls were unwound, as
         # when a turn ended in them).
         assert counts.get("leaf", 0) < 50000, (mode, counts)
-        assert (blocks >= 7000 and transitions < blocks * 3 // 2) if X86_64 else blocks == transitions == 0, \
+        assert (blocks >= 7000 and transitions < blocks * 3 // 2) if jit_host() else blocks == transitions == 0, \
             (mode, counts)
     steps = int(stdout.split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
@@ -1238,7 +1257,7 @@ def test_string_code_runs_in_compiled_code_without_leaving(tmp_path):
     bytecode = compile_text(CODES.replace("END", 'puts(warm)\n  puts("steps #{Profile.steps()}")'), "codes", tmp_path)
     code, stdout, _ = assert_same(bytecode)
     assert code == 0 and stdout.startswith("before\n904000\n"), stdout
-    assert compiled(bytecode, tmp_path, "on") == (["letter", "scan"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["letter", "scan"] if jit_host() else [])
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
@@ -1259,12 +1278,12 @@ def test_a_failure_of_string_code_in_compiled_code_matches_the_interpreter(tmp_p
 
 def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     bytecode = compile_text(READS, "reads", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["scan"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["scan"] if jit_host() else [])
     lines = jit_trace(bytecode, tmp_path, "on")
     exits = sorted(line.split("exit op=")[1] for line in lines if " jit exit op=" in line)
     leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
     assert exits == [], exits
-    assert len(leaves) == (1 if X86_64 else 0) and all(n > 2000 for n in leaves), leaves
+    assert len(leaves) == (1 if jit_host() else 0) and all(n > 2000 for n in leaves), leaves
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)
     steps = int(stdout.split("steps ")[1])
@@ -1331,14 +1350,14 @@ end
 
 def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
     bytecode = compile_text(VALUES, "values", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["parse", "walk"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["parse", "walk"] if jit_host() else [])
     # Only the two errors leave the code: the interpreter runs the `try` that returns them. parse is compiled too (its
     # `ok` is a leaf builtin that compiled code calls), and each error leaves both functions' code.
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         exits = sorted(line.split("exit op=")[1] for line in lines
                        if any(f" jit exit op={op} " in line for op in ("global", "struct", "enum", "try")))
-        assert exits == (["try count=4"] if X86_64 else []), (mode, exits)
+        assert exits == (["try count=4"] if jit_host() else []), (mode, exits)
     for style in ((), ("--json",), ("--ai",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout.startswith("369396\nfalse\n"), (style, stdout)
@@ -1349,18 +1368,18 @@ def test_globals_structs_enums_and_try_run_in_compiled_code(tmp_path):
 
 def test_on_compiles_a_loop_that_builds_strings_in_compiled_code(tmp_path):
     bytecode = compile_text(DENSE, "dense", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["label"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["label"] if jit_host() else [])
     skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=main " in line]
-    assert len(skips) == (1 if X86_64 else 0) and all(line.endswith(" loop=none") for line in skips), skips
-    assert compiled(bytecode, tmp_path, "always") == (["label", "main"] if X86_64 else [])
+    assert len(skips) == (1 if jit_host() else 0) and all(line.endswith(" loop=none") for line in skips), skips
+    assert compiled(bytecode, tmp_path, "always") == (["label", "main"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert (code, stdout) == (0, "198890\n"), (stdout, stderr)
 
 
 def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
     bytecode = compile_text(STRINGS, "strings", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["build"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["build", "main"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["build"] if jit_host() else [])
+    assert compiled(bytecode, tmp_path, "always") == (["build", "main"] if jit_host() else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0, stderr
     assert stdout.split("\n")[:16] == ["12890", "42", "1.5", "true", "nil", "hi", "1..3", "1...3",
@@ -1392,13 +1411,13 @@ STAYS = {
 def test_compiled_loops_run_builtins_map_reads_lists_and_blocks_without_leaving(tmp_path, case):
     source, functions, ops, most = STAYS[case]
     bytecode = compile_text(source, functions[0], tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (sorted(functions) if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (sorted(functions) if jit_host() else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 9, full
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
         exits = sum(int(line.split("count=")[1]) for line in lines for op in ops if f" jit exit op={op} " in line)
-        assert exits < (most if X86_64 else 1), (mode, exits)
+        assert exits < (most if jit_host() else 1), (mode, exits)
     # Limits below the two tasks' steps stop the run inside the loop, in either task.
     steps = sum(int(line.split("steps ")[1]) for line in full[1].splitlines() if " steps " in line)
     for limit in range(steps // 20, steps * 19 // 20, steps // 15):
@@ -1420,7 +1439,7 @@ def test_a_failure_inside_a_compiled_block_matches_the_interpreter(tmp_path):
   puts(total)
 end
 """, "block_failure", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if jit_host() else [])
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO")
 
 
@@ -1451,7 +1470,7 @@ def main() -> Void
   puts(Task.await(t))
 end
 """, "block_cancel", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["block@block_cancel.agc:11:27", "scan"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["block@block_cancel.agc:11:27", "scan"] if jit_host() else [])
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout == "12000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
@@ -1515,7 +1534,7 @@ def test_block_calls_of_every_kind_start_their_block_again_in_compiled_code(tmp_
                   if " jit block count=" in line or " jit transition count=" in line}
         blocks, transitions = counts.get("block", 0), counts.get("transition", 0)
         # One RETURN exit for each block call (and a few calls of work and main), not one for each item.
-        assert (blocks > 300 and transitions < 2 * blocks) if X86_64 else blocks == transitions == 0, (mode, counts)
+        assert (blocks > 300 and transitions < 2 * blocks) if jit_host() else blocks == transitions == 0, (mode, counts)
     steps = int(stdout.split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
 
@@ -1704,7 +1723,7 @@ def main() -> Void
   puts(drive(300))
 end
 """, "tail_failure", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["drive", "fall"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["drive", "fall"] if jit_host() else [])
     for mode in ("on", "always"):
         assert tail_call_exits(bytecode, tmp_path, mode) == (0, 0), mode
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "fall", "drive", "main")
@@ -1752,7 +1771,7 @@ def main() -> Void
   puts(Task.await(t))
 end
 """, "tail_cancel", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["chain", "churn", "warm"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["chain", "churn", "warm"] if jit_host() else [])
     for mode in ("on", "always"):
         assert tail_call_exits(bytecode, tmp_path, mode) == (0, 0), mode
     status, stdout, stderr = assert_same(bytecode, "--json")
@@ -1790,10 +1809,10 @@ def main() -> Void
   puts("steps #{Profile.steps()}")
 end
 """, "self_tail", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["chain"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["chain", "is_even", "is_odd", "main"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["chain"] if jit_host() else [])
+    assert compiled(bytecode, tmp_path, "always") == (["chain", "is_even", "is_odd", "main"] if jit_host() else [])
     assert tail_call_exits(bytecode, tmp_path, "on")[1] == 0
-    assert tail_call_exits(bytecode, tmp_path, "always") == ((1, 0) if X86_64 else (0, 0))
+    assert tail_call_exits(bytecode, tmp_path, "always") == ((1, 0) if jit_host() else (0, 0))
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith(f"{sum(range(1000001)) % 1000003}\nfalse\nsteps "), (stdout, stderr)
     assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
@@ -1838,9 +1857,9 @@ end
 """, "budget", tmp_path)
     lines = jit_trace(bytecode, tmp_path, "on")
     compiles = [line for line in lines if " jit compile " in line]
-    assert len(compiles) >= (2 if X86_64 else 0) and not any(" jit budget " in line for line in lines), lines
-    first = compiles[0].split("function=")[1].split()[0] if X86_64 else None
-    budget = int(compiles[0].split("instructions=")[1].split()[0]) + 32 if X86_64 else 1
+    assert len(compiles) >= (2 if jit_host() else 0) and not any(" jit budget " in line for line in lines), lines
+    first = compiles[0].split("function=")[1].split()[0] if jit_host() else None
+    budget = int(compiles[0].split("instructions=")[1].split()[0]) + 32 if jit_host() else 1
     trace = tmp_path / "budget.trace"
     env = {"AGENTICA_VM_TEST_JIT_BUDGET": budget, "AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}
     result = run_vm(bytecode, "--jit", "on", "--schedulers", "1", env=vm_environment(env))
@@ -1849,9 +1868,9 @@ end
     assert off.code == 0 and off.stdout.count("\n") == 2, off.stderr
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
     compiled_functions = [line.split("function=")[1].split()[0] for line in lines if " jit compile " in line]
-    assert compiled_functions == ([first] if X86_64 else []), lines
+    assert compiled_functions == ([first] if jit_host() else []), lines
     spent = [line.split(" jit ")[1] for line in lines if " jit budget " in line]
-    if X86_64:
+    if jit_host():
         assert len(spent) == 1 and spent[0].startswith("budget spent=work ") and f" work={budget} " in spent[0], spent
     else:
         assert spent == [], spent
@@ -1987,7 +2006,7 @@ end
 def test_a_failure_in_a_called_function_value_matches_the_interpreter(tmp_path, case):
     source, code, functions, stack = CALL_VALUE_FAILURES[case]
     bytecode = compile_text(source, f"call_value_{case}", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (functions if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (functions if jit_host() else [])
     assert_same_failure(bytecode, code, *stack)
 
 
@@ -2017,7 +2036,7 @@ def main() -> Void
 end
 """, "call_value_cancel", tmp_path)
     want = ["block@call_value_cancel.agc:12:23", "block@call_value_cancel.agc:17:21", "spin"]
-    assert compiled(bytecode, tmp_path, "on") == (want if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (want if jit_host() else [])
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
@@ -2044,4 +2063,4 @@ def test_the_jit_mode_of_the_environment_reaches_the_vm(tmp_path):
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
     functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
     jit_on = (os.environ.get("AGENTICA_JIT") or "on") in ("on", "always")
-    assert ("spin" in functions) == (X86_64 and jit_on), (os.environ.get("AGENTICA_JIT"), functions)
+    assert ("spin" in functions) == (jit_host() and jit_on), (os.environ.get("AGENTICA_JIT"), functions)

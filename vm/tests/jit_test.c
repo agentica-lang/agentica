@@ -65,6 +65,64 @@ typedef struct {
 
 static agc_vm vm;
 
+/* The code memory test runs on every machine that has a JIT or will have one, emitter or not: a function that
+   returns 42 (mov eax, 42; ret on x86-64, mov w0, #42; ret on arm64), and the mappings it lives in. */
+#if defined(__x86_64__) || defined(_M_X64)
+#define CODE_MEMORY_TEST 1
+static const uint8_t forty_two[] = {0xB8, 42, 0, 0, 0, 0xC3};
+#elif defined(__aarch64__)
+#define CODE_MEMORY_TEST 1
+static const uint8_t forty_two[] = {0x40, 0x05, 0x80, 0x52, 0xC0, 0x03, 0x5F, 0xD6};
+#else
+#define CODE_MEMORY_TEST 0
+#endif
+
+#if CODE_MEMORY_TEST
+#ifdef __linux__
+/* The range and the permissions ("rw-p", "r-xp") of the mapping of /proc/self/maps that holds P; false if none does. */
+static bool mapping_of(const void *p, unsigned long *lo, unsigned long *hi, char perms[8]) {
+  FILE *maps = fopen("/proc/self/maps", "r");
+  assert(maps);
+  char line[512];
+  bool found = false;
+  while (!found && fgets(line, sizeof line, maps))
+    found = sscanf(line, "%lx-%lx %7s", lo, hi, perms) == 3 && (uintptr_t)p >= *lo && (uintptr_t)p < *hi;
+  fclose(maps);
+  return found;
+}
+#endif
+
+/* True when the mapping that holds P has the permissions WANT, Linux only. */
+static bool mapped_as(const void *p, const char *want) {
+#ifdef __linux__
+  unsigned long lo, hi;
+  char perms[8];
+  return mapping_of(p, &lo, &hi, perms) && strcmp(perms, want) == 0;
+#else
+  (void)p;
+  (void)want;
+  return true;
+#endif
+}
+
+/* A reservation has no access; a page of it is opened writable, filled and sealed read-execute, and the next page
+   keeps no access. */
+static AGC_JIT_CALLER void code_memory(void) {
+  size_t page = agc_jit_mem_page();
+  assert(page >= 4096 && (page & (page - 1)) == 0 && AGC_JIT_CODE_CAP % page == 0);
+  uint8_t *pages = agc_jit_mem_reserve(2 * page);
+  assert(pages && mapped_as(pages, "---p") && mapped_as(pages + page, "---p"));
+  assert(agc_jit_mem_open(pages, page));
+  assert(mapped_as(pages, "rw-p") && mapped_as(pages + page, "---p"));
+  memcpy(pages, forty_two, sizeof forty_two);
+  assert(agc_jit_mem_seal(pages, page));
+  assert(mapped_as(pages, "r-xp") && mapped_as(pages + page, "---p"));
+  int (*fn)(void) = (int (*)(void))(uintptr_t)pages;
+  assert(fn() == 42);
+  agc_jit_mem_unmap(pages, 2 * page);
+}
+#endif
+
 #if AGC_JIT_HOST
 /* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
 static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
@@ -1477,36 +1535,6 @@ static void ineligible(void) {
   assert(callable[0] && looped[0] && calling[0]);
 }
 
-/* mov eax, 42; ret */
-static const uint8_t forty_two[] = {0xB8, 42, 0, 0, 0, 0xC3};
-
-#ifdef __linux__
-/* The range and the permissions ("rw-p", "r-xp") of the mapping of /proc/self/maps that holds P; false if none does. */
-static bool mapping_of(const void *p, unsigned long *lo, unsigned long *hi, char perms[8]) {
-  FILE *maps = fopen("/proc/self/maps", "r");
-  assert(maps);
-  char line[512];
-  bool found = false;
-  while (!found && fgets(line, sizeof line, maps))
-    found = sscanf(line, "%lx-%lx %7s", lo, hi, perms) == 3 && (uintptr_t)p >= *lo && (uintptr_t)p < *hi;
-  fclose(maps);
-  return found;
-}
-#endif
-
-/* True when the mapping that holds P has the permissions WANT, Linux only. */
-static bool mapped_as(const void *p, const char *want) {
-#ifdef __linux__
-  unsigned long lo, hi;
-  char perms[8];
-  return mapping_of(p, &lo, &hi, perms) && strcmp(perms, want) == 0;
-#else
-  (void)p;
-  (void)want;
-  return true;
-#endif
-}
-
 /* True when P and Q are in one mapping, Linux only. */
 static bool one_mapping(const void *p, const void *q) {
 #ifdef __linux__
@@ -1518,23 +1546,6 @@ static bool one_mapping(const void *p, const void *q) {
   (void)q;
   return true;
 #endif
-}
-
-/* A reservation has no access; a page of it is opened writable, filled and sealed read-execute, and the next page
-   keeps no access. */
-static AGC_JIT_CALLER void code_memory(void) {
-  size_t page = agc_jit_mem_page();
-  assert(page >= 4096 && (page & (page - 1)) == 0 && AGC_JIT_CODE_CAP % page == 0);
-  uint8_t *pages = agc_jit_mem_reserve(2 * page);
-  assert(pages && mapped_as(pages, "---p") && mapped_as(pages + page, "---p"));
-  assert(agc_jit_mem_open(pages, page));
-  assert(mapped_as(pages, "rw-p") && mapped_as(pages + page, "---p"));
-  memcpy(pages, forty_two, sizeof forty_two);
-  assert(agc_jit_mem_seal(pages, page));
-  assert(mapped_as(pages, "r-xp") && mapped_as(pages + page, "---p"));
-  int (*fn)(void) = (int (*)(void))(uintptr_t)pages;
-  assert(fn() == 42);
-  agc_jit_mem_unmap(pages, 2 * page);
 }
 
 /* A JIT with `always` for the four functions of P, made here. */
@@ -1703,8 +1714,10 @@ int main(void) {
   agc_init();
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-#if AGC_JIT_HOST
+#if CODE_MEMORY_TEST
   code_memory();
+#endif
+#if AGC_JIT_HOST
   arena();
   small_cap();
   work_budget();

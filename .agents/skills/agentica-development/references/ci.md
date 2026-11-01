@@ -225,6 +225,8 @@ binary and C tests. The two run at once and a shard unpacks both.
     sanitizer `vm-test` and `fixed-point`; shard 2 also `vm-gc-stress`
   - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
   - `vm-layers`: `vm-layers`
+  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary): `vm-test`,
+    `vm-jit-test`
   - `vm-sanitizers`: the aggregate of the C half
   - `warm-third-party`, `dup-check`: `master` pushes only
 
