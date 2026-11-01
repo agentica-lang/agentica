@@ -66,9 +66,9 @@ static void entries(void) {
   assert(at(&e, e.entry) == 0x1000000Au);
   uint32_t lo = (at(&e, e.entry + 4) >> 5) & 0xFFFF, hi = (at(&e, e.entry + 8) >> 5) & 0xFFFF;
   size_t table = e.entry + (lo | hi << 16);
-  assert(table == e.len - 4 * 2);
+  assert(table == e.len - 8); /* the two 4-byte offsets */
   for (uint32_t pc = 0; pc < 2; pc++) {
-    int32_t offset = (int32_t)at(&e, table + 4 * pc);
+    int32_t offset = (int32_t)at(&e, table + (size_t)4 * pc);
     assert((size_t)((int64_t)table + offset) == e.labels[pc]);
   }
   /* The JUMP at instruction 1 goes back to instruction 0. */
