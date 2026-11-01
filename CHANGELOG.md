@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   code, without a trip through the interpreter at each call.
 - Under `--jit on`, a function without a loop that calls such block builtins
   now gets machine code when compiled code calls it.
+- A disabled `Logger.debug` (or `info`, `warning`, `err`) call is cheaper,
+  above all under the JIT.
 
 ### Fixed
 

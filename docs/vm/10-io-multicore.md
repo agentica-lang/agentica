@@ -95,7 +95,10 @@ that still apply.
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
     needs a lock: `rt->sync`, the one coarse lock (§16.9), taken
-    around each `LogRegistry` builtin (its rows are marked `shared`).
+    around each `LogRegistry` builtin that writes or reads the array (its
+    rows are marked `shared`). The level, the lowest rank and the floor (the
+    higher of the two) are atomics that the writers change under the lock, so
+    `level`, `lowest` and `floor` are leaf rows that read one each without it.
     `install_default` is one native call, so the check for level -1 and the
     writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. As

@@ -214,8 +214,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->sync = agc_lock_new("sync");
   rt->out.lock = agc_lock_new("stdout");
   rt->err.lock = agc_lock_new("stderr");
-  rt->log.level = -1;
-  rt->log.lowest = AGC_LOG_NO_HANDLER;
+  agc_log_init(&rt->log);
   agc_trace_parse(&rt->trace, NULL, 2);
   rt->schedulers = 1;
   agc_vm_init_context(vm, rt);

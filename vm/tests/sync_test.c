@@ -29,7 +29,8 @@ static _Atomic int inside;
 static _Atomic int reset_taken;
 
 /* The rows whose mark differs from their table's, checked one by one. Task.spawn_owning walks its argument without
-   rt->sync and takes the lock itself to hand the handles over. */
+   rt->sync and takes the lock itself to hand the handles over. LogRegistry.level, .floor and .lowest are leaves that
+   read atomics, which the writers change under it. */
 static const struct {
   const char *name;
   uint32_t arity;
@@ -38,6 +39,7 @@ static const struct {
     {"IO.gets", 0, true},          {"IO.read", 0, true},     {"File.read_line", 2, true}, {"File.close", 2, true},
     {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
     {"File.stat", 2, false},       {"Path.join", 1, false},  {"Task.spawn_owning", 2, false},
+    {"LogRegistry.level", 0, false}, {"LogRegistry.floor", 0, false}, {"LogRegistry.lowest", 0, false},
 };
 
 /* Before agc_share nothing is taken: the count stays 0 and a drop without a take is harmless. */
@@ -124,7 +126,7 @@ static void table_marked(const agc_builtin *table, size_t count, bool shared) {
 }
 
 /* Which builtins the interpreter locks: marked by row. Every row of the tables of tasks, Task.map, channels, the
-   logger, processes, duplex channels, TCP and HTTP is locked (but Task.spawn_owning, in `expected`); no row of the
+   logger, processes, duplex channels, TCP and HTTP is locked (but the rows in `expected`); no row of the
    pure libraries (String, Bytes, numbers, JSON, Profile, Std) is.
    The mixed tables (the core one and File) are checked by row: stdin, handles and closes are locked, the output and
    the file calls that name a path are not. */
@@ -179,7 +181,8 @@ static void test_leaf_and_direct_rows(void) {
       {"Map.has_key?", 2, false, true},  {"Set.include?", 2, false, true},   {"List.concat", 2, false, true},
       {"String.slice", 3, false, true},  {"String.split", 2, false, true},   {"puts", 1, false, false},
       {"List.map", 2, false, false},     {"IO.gets", 0, false, false},       {"Task.spawn", 1, false, false},
-      {"Native.closed?", 1, true, false},
+      {"Native.closed?", 1, true, false}, {"LogRegistry.floor", 0, true, false},
+      {"LogRegistry.set_level", 1, false, false},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const char *name = expected[k].name;

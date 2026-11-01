@@ -33,13 +33,22 @@ static bool find(agc_vm *vm, const agc_string *name, size_t *at) {
   return false;
 }
 
+static int64_t read_rank(const _Atomic int64_t *rank) { return atomic_load_explicit(rank, memory_order_relaxed); }
+
+/* The writers hold rt->sync, so the three stores need no order between them: a leaf reader reads one of them. */
+static void set_ranks(agc_log_registry *log, int64_t level, int64_t lowest) {
+  atomic_store_explicit(&log->level, level, memory_order_relaxed);
+  atomic_store_explicit(&log->lowest, lowest, memory_order_relaxed);
+  atomic_store_explicit(&log->floor, level < 0 ? -1 : level > lowest ? level : lowest, memory_order_relaxed);
+}
+
 /* Only a detach needs the full scan: an append can only lower the minimum. */
 static void refresh_lowest(agc_log_registry *log) {
   int64_t lowest = AGC_LOG_NO_HANDLER;
   for (size_t i = 0; i < log->count; i++) {
     if (log->items[i].rank < lowest) lowest = log->items[i].rank;
   }
-  log->lowest = lowest;
+  set_ranks(log, read_rank(&log->level), lowest);
 }
 
 /* The array is replaced, never grown in place, and lives in the GC heap: the
@@ -54,13 +63,16 @@ static void append(agc_log_registry *log, agc_value name, int64_t rank, agc_valu
     log->cap = cap;
   }
   log->items[log->count++] = (agc_log_handler){name, handler, rank};
-  if (rank < log->lowest) log->lowest = rank;
+  if (rank < read_rank(&log->lowest)) set_ranks(log, read_rank(&log->level), rank);
 }
 
+/* LogRegistry.level, .floor and .lowest are leaf rows, so compiled code calls them and `on` compiles a function such
+ * as Logger.debug that calls them: each reads one atomic of the registry, which the writers (set_level,
+ * install_default, attach, detach) change under rt->sync, and does nothing else. */
 static agc_value builtin_level(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_int(vm->rt->log.level);
+  return agc_int(read_rank(&vm->rt->log.level));
 }
 
 /* The level a call needs to beat: -1 until the default is installed, then the
@@ -71,22 +83,21 @@ static agc_value builtin_level(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_floor(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  const agc_log_registry *log = &vm->rt->log;
-  if (log->level < 0) return agc_int(-1);
-  return agc_int(log->level > log->lowest ? log->level : log->lowest);
+  return agc_int(read_rank(&vm->rt->log.floor));
 }
 
 static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_sync_assert(vm);
   (void)span;
-  vm->rt->log.level = agc_as_int(vm, args[0]);
+  agc_log_registry *log = &vm->rt->log;
+  set_ranks(log, agc_as_int(vm, args[0]), read_rank(&log->lowest));
   return agc_void();
 }
 
 static agc_value builtin_lowest(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_int(vm->rt->log.lowest);
+  return agc_int(read_rank(&vm->rt->log.lowest));
 }
 
 /* One native call with no yield between the check and the writes: two tasks
@@ -97,11 +108,11 @@ static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t s
   (void)span;
   agc_log_registry *log = &vm->rt->log;
   (void)agc_as_fn(vm, args[0]);
-  if (log->level != -1) return agc_void();
+  if (read_rank(&log->level) != -1) return agc_void();
   agc_string *name = agc_make_string("console", 7, 7);
   size_t at;
   if (!find(vm, name, &at)) append(log, agc_string_value(name), DEFAULT_RANK, args[0]);
-  log->level = DEFAULT_RANK;
+  set_ranks(log, DEFAULT_RANK, read_rank(&log->lowest));
   return agc_void();
 }
 
@@ -164,10 +175,10 @@ static agc_value builtin_task_id(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_logger_builtins[] = {
-  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

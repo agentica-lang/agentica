@@ -813,6 +813,95 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
     assert code == 0 and stdout.count("\n") == 152, stderr
 
 
+LOGGER_LOOP = """import Logger from "std/logger"
+
+def shown(event: LogEvent) -> Void
+  puts("shown #{event.message}")
+end
+
+def main() -> Void
+  Logger.set_level(LogLevel.Info)
+  _ = Logger.detach("console")
+  _ = Logger.attach("shown", LogLevel.Debug, &shown)
+  i = 0
+  total = 0
+  while i < 3000
+    Logger.debug("tick #{i}")
+    if i == 2990
+      Logger.set_level(LogLevel.Debug)
+    end
+    if i == 2994
+      Logger.set_level(LogLevel.Info)
+    end
+    total = (total * 31 + i % 7) % 1000003
+    total = (total + i * i % 97 + i % 13) % 1000003
+    total = (total * 7 + i % 11) % 1000003
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_a_disabled_logger_debug_in_a_compiled_loop_runs_as_in_the_interpreter(tmp_path):
+    # LogRegistry.floor is a leaf: the compiled Logger.debug calls it itself (no exit at each call), and sees the level
+    # that set_level changes in the loop, so ticks 2991 to 2994 are shown in every tier.
+    bytecode = compile_text(LOGGER_LOOP, "logger_loop", tmp_path)
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("shown tick 2991\nshown tick 2992\n") and stdout.count("shown") == 4, stderr
+    exits = [int(line.split("count=")[1]) for line in jit_trace(bytecode, tmp_path, "always")
+             if " jit exit op=call-builtin " in line]
+    assert (sum(exits) < 100) if jit_host() else exits == [], exits
+    # `on` compiles debug too, although the functions it calls only when it logs stay out.
+    on = compiled(bytecode, tmp_path, "on")
+    assert any(name.endswith("::debug") for name in on) if jit_host() else on == [], on
+    turns = sched_turns(bytecode, tmp_path)
+    assert turns["off"] > 40 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
+def test_on_compiles_a_function_without_a_loop_whose_callee_stays_interpreted(tmp_path):
+    # noisy writes, so `on` keeps it out; check calls it only at every 1,000th round, and still gets code for its
+    # native calls from main's loop: 3,000 calls of check stay in compiled code, and only the 3 calls of noisy leave
+    # (with check kept out, each call of check took two transitions). The call of check still counts as leaving for
+    # main's loop, which is long enough to keep its code.
+    bytecode = compile_text("""def noisy(i: Int) -> Int
+  puts("noisy #{i}")
+  return i
+end
+
+def check(i: Int) -> Int
+  if i % 1000 == 999
+    return noisy(i)
+  end
+  return i % 7
+end
+
+def main() -> Void
+  i = 0
+  total = 0
+  while i < 3000
+    total = (total * 31 + check(i)) % 1000003
+    total = (total + i * i % 97 + i % 13) % 1000003
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+""", "rare_callee", tmp_path)
+    on = compiled(bytecode, tmp_path, "on")
+    assert on == (["check", "main"] if jit_host() else []), on
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("noisy 999\nnoisy 1999\nnoisy 2999\n"), stdout
+    lines = jit_trace(bytecode, tmp_path, "on")
+    transitions = [int(line.split("count=")[1]) for line in lines if " jit transition count=" in line]
+    assert (sum(transitions) < 100) if jit_host() else transitions == [], transitions
+    turns = sched_turns(bytecode, tmp_path)
+    assert turns["off"] > 10 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
 def test_on_compiles_a_function_without_a_loop_that_makes_block_calls(tmp_path):
     # score has no loop but makes block calls, which compiled code starts itself, so `on` gives it code at its first
     # call from main's compiled loop, as a function that calls: the calls of score, and their block calls, then stay
@@ -897,8 +986,9 @@ end
 
 
 def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
-    # f0 calls f1 ... f13, which prints: no function of the chain may get code, whatever the order of the functions in
-    # the file, so main's loop leaves at each call and nothing is compiled.
+    # f0 calls f1 ... f13, which prints: every call of the chain leaves, whatever the order of the functions in the
+    # file, so main's loop leaves at each call and stays out, and nothing is compiled. Only f13 leaves by itself; the
+    # others would get code for native calls, as their calls do not keep a function without a loop out.
     chain = "".join(f"def f{k}(x: Int) -> Int\n  return f{k + 1}(x + 1) + 1\nend\n\n" for k in range(13))
     chain += "def f13(x: Int) -> Int\n  if x == 0 - 5\n    puts(x)\n  end\n  return x\nend\n\n"
     chain += "def main() -> Void\n  t = 0\n  i = 0\n  while i < 3000\n    t = t + f0(i)\n    i += 1\n  end\n  puts(t)\nend\n"
@@ -906,8 +996,7 @@ def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
     lines = jit_trace(bytecode, tmp_path, "on")
     assert [line for line in lines if " jit compile " in line or " jit transition " in line] == []
     skips = sorted(line.split("skip ")[1] for line in lines if " jit skip " in line)
-    assert skips == (sorted([f"function=f{k} loop=none" for k in range(14)] + ["function=main loop=exits"])
-                     if jit_host() else []), skips
+    assert skips == (["function=f13 loop=none", "function=main loop=exits"] if jit_host() else []), skips
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout == "4576500\n", (stdout, stderr)
 

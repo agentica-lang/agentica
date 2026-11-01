@@ -291,11 +291,20 @@ typedef struct {
   int64_t rank;
 } agc_log_handler;
 
+/* The handler table and the global level of std/logger (vm/logger.c). LEVEL (-1 until the default handler is
+   installed), LOWEST (the lowest handler rank) and FLOOR (-1 while LEVEL is, else the higher of the two) are written
+   together under rt->sync, and read without it by the leaf rows LogRegistry.level, .lowest and .floor, so each is
+   atomic; FLOOR is kept with them so that a reader gets one consistent value. */
 typedef struct {
-  int64_t level, lowest;
+  _Atomic int64_t level, lowest, floor;
   agc_log_handler *items;
   size_t count, cap;
 } agc_log_registry;
+
+/* Sets an empty registry: level -1, no handler (vm/sync.c, as the ranks are the state that leaf rows read without
+   rt->sync). Out of line, so agc_vm_init keeps its size and the turn loops after it keep their addresses (make
+   layout-check). */
+void agc_log_init(agc_log_registry *log);
 
 /* One std/ source that the binary carries: PATH is relative to stdlib/ ("queue.agc", "bdd/gherkin.agc"). */
 typedef struct {
