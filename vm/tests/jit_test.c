@@ -1067,6 +1067,17 @@ static AGC_JIT_CALLER void maps_and_lists(void) {
   R[3] = any;
   expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
   assert(same_bits(R[3], vm.rt->empty_list));
+  /* MAP's helper: Int keys build the Map in order, the later of two equal keys winning. A key it cannot hash (a
+     Float, here after a String key that would charge) leaves before anything is charged or written. */
+  agc_value pairs[4] = {one, ten, one, agc_int(11)}, dst = any;
+  assert(agc_jit_map(&vm, &dst, pairs, 2) == AGC_STATUS_OK && vm.task->turn_cost == 0);
+  agc_value found;
+  assert(agc_map_get(&vm, agc_as_map(&vm, dst), one, &found) && same_bits(found, agc_int(11)));
+  pairs[0] = key;
+  pairs[2] = agc_float(1.5);
+  dst = any;
+  assert(agc_jit_map(&vm, &dst, pairs, 2) == AGC_JIT_EXIT_INTERPRET && same_bits(dst, any));
+  assert(vm.task->turn_cost == 0);
 }
 
 /* CLOSURE makes, in compiled code, a function value of bx that holds the CAPTURES registers from R[a] on. */

@@ -737,6 +737,64 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
 
+def test_a_map_literal_whose_key_charge_ends_turns_ends_them_as_in_the_interpreter(tmp_path):
+    # Task 2's map literals hash a 256 KiB key, whose charge is more turn cost than a turn has steps, so each one ends
+    # the turn right after it, in compiled code (MAP) as in the interpreter: the order of the lines and the number of
+    # turns are the same in every tier.
+    bytecode = compile_text("""def doubled(times: Int) -> String
+  s = "k"
+  k = 0
+  while k < times
+    s = s + s
+    k += 1
+  end
+  return s
+end
+
+def build(keys: List[String], rounds: Int) -> Int
+  total = 0
+  i = 0
+  while i < rounds
+    m = {keys[i % keys.size]: i, "b": 1}
+    total = total + m.size
+    i += 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  keys = ["a", "c"]
+  if id == 2
+    keys = ["a", doubled(18)]
+  end
+  total = 0
+  round = 0
+  while round < 3
+    total += build(keys, 150 * id)
+    puts("task #{id} round #{round} total #{total}")
+    round += 1
+  end
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+""", "map_cost", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["build"] if jit_host() else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.endswith("\n2700\n"), (stdout, stderr)
+    turns = {}
+    for mode in ("off", "on", "always"):
+        trace = tmp_path / f"sched-{mode}.trace"
+        run_vm(bytecode, "--jit", mode, "--schedulers", "1",
+               env=vm_environment({"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": trace}))
+        turns[mode] = sum(" sched turn " in line for line in trace.read_text(encoding="utf-8").splitlines())
+    assert turns["off"] > 300 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+
+
 def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_path):
     bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
     # twice is called from main's compiled loop; thrice only from noisy, whose loop prints, so both stay interpreted.
