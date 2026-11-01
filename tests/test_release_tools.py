@@ -2,9 +2,11 @@
 
 The real binaries and the extracted-package smoke run in release.yml (they need each system's tools). This test covers
 what runs anywhere: a package holds the expected files once each, and `collect` refuses a missing, an extra or a
-duplicated archive.
+duplicated archive. The signature check of tools/release-check.sh runs against stand-ins of the macOS tools.
 """
 import importlib.util
+import os
+import subprocess
 import tarfile
 import zipfile
 
@@ -127,3 +129,44 @@ def test_zip_members_keep_the_executable_bit(archives):
     with zipfile.ZipFile(packed["windows-x86_64"]) as z:
         info = z.getinfo(f"{release.package_name('windows-x86_64')}/bin/agentica.exe")
     assert (info.external_attr >> 16) & 0o111
+
+
+# Stand-ins of the macOS tools that the macho check calls, each printing what a good arm64 binary gives; codesign -d
+# prints the CodeDirectory line of the case, on stderr as the real one does.
+MACOS_TOOLS = {
+    "uname": 'echo arm64',
+    "lipo": 'echo arm64',
+    "file": 'echo "Mach-O 64-bit executable arm64"',
+    "vtool": 'printf "platform MACOS\\nminos 12.0\\n"',
+    "otool": 'case "$1" in -L) printf "bin:\\n\\t/usr/lib/libSystem.B.dylib (x)\\n" ;; *) echo PIE ;; esac',
+    "nm": 'printf "___stack_chk_fail\\n___memcpy_chk\\n"',
+    "codesign": 'case "$1" in -d) [ -z "$CODESIGN_FLAGS" ] || echo "CodeDirectory v=20400 $CODESIGN_FLAGS" >&2 ;; esac',
+}
+
+
+@pytest.mark.parametrize(("flags", "passes"), [
+    ("size=100 flags=0x2(adhoc) hashes=3+2", True),
+    ("size=100 flags=0x10002(adhoc,runtime) hashes=3+2", False),
+    ("size=100 flags=0x10002 hashes=3+2", False),
+    ("", False),
+])
+def test_release_check_refuses_the_hardened_runtime(tmp_path, flags, passes):
+    """The JIT seals pages with plain mprotect, which the hardened runtime refuses: a macOS binary signed with it
+    fails the check, by the flag's name or by its bit alone, and so does one whose CodeDirectory flags are missing."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for name, body in MACOS_TOOLS.items():
+        (tools / name).write_text(f"#!/bin/sh\n{body}\n")
+        (tools / name).chmod(0o755)
+    lines = (ROOT / "vm/third_party/openssl/VERSION.dat").read_text().splitlines()
+    numbers = dict(line.split("=", 1) for line in lines if "=" in line)
+    openssl = f"{numbers['MAJOR']}.{numbers['MINOR']}.{numbers['PATCH']}"
+    binary = tmp_path / "agentica"
+    binary.write_text(f"#!/bin/sh\necho 'agentica (OpenSSL {openssl})'\n")
+    binary.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}", "CODESIGN_FLAGS": flags}
+    proc = subprocess.run(["bash", str(ROOT / "tools/release-check.sh"), "macho", str(binary), "arm64", "12.0"],
+                          env=env, capture_output=True, text=True)
+    # Every case gets as far as the signature: the stand-ins pass the checks before it.
+    assert "signature:" in proc.stdout, proc.stderr
+    assert (proc.returncode == 0) == passes, proc.stderr

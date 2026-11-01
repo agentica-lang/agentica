@@ -51,8 +51,19 @@ jobs:
           AGENTICA_HEAVY_RACE_REPEATS: '20'
         run: poetry run python -m pytest tests/test_vm_multicore.py -q -k 'spawns_racing_the_end or held_by_cancelled_descendants'
 
+  # The JIT under the GC stress and sanitizer binaries, on both machines with an emitter; on arm64 also the front end
+  # compiling itself with the JIT on it (the sweep job above does that on x86-64).
   jit-stress:
-    runs-on: ubuntu-latest
+    name: jit-stress ${{ matrix.machine }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - machine: x86_64
+            runner: ubuntu-latest
+          - machine: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
       AGENTICA_TEST_TIMEOUT_SCALE: '4'
@@ -77,6 +88,9 @@ jobs:
           dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
       - name: The goldens with AGENTICA_JIT=always on the GC stress binary
         run: make -j"$(nproc)" vm-gc-stress-jit JOBS=4
+      - name: The front end compiles itself with the JIT on it (on and always) to the same stage2
+        if: ${{ !cancelled() && matrix.machine == 'arm64' }}
+        run: make vm-jit-self-compile
       - name: Build the sanitizer binary (ASan and UBSan, no GC) as dist/agentica
         if: ${{ !cancelled() }}
         env:

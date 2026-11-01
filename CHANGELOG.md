@@ -52,6 +52,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   channels, and `HTTP.upgrade_only` wraps an ordinary `Handler` for the other
   routes. Unmasking is slow (about 7 MB/s); the other `listen` forms still
   answer an `Upgrade` 501.
+- The JIT runs on Linux ARM64 and macOS arm64 too, on by default as on x86-64
+  (`--jit off` turns it off).
 
 ### Changed
 

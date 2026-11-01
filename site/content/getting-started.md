@@ -13,7 +13,7 @@ Download the archive of your system, check it against `SHA256SUMS`, unpack it an
 | System | Archive | Minimum |
 |---|---|---|
 | Linux x86-64 | `agentica-VERSION-linux-x86_64.tar.gz` | glibc 2.28 |
-| Linux ARM64 | `agentica-VERSION-linux-arm64.tar.gz` | glibc 2.28; runs on the interpreter (no JIT yet) |
+| Linux ARM64 | `agentica-VERSION-linux-arm64.tar.gz` | glibc 2.28 |
 | macOS Intel | `agentica-VERSION-macos-x86_64.tar.gz` | macOS 12 |
 | macOS Apple silicon | `agentica-VERSION-macos-arm64.tar.gz` | macOS 12, native (no Rosetta) |
 | Windows x86-64 | `agentica-VERSION-windows-x86_64.zip` | Windows 10 (system DLLs and the UCRT; no MSYS2 or Visual C++ redistributable) |

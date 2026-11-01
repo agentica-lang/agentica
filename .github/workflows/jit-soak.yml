@@ -2,10 +2,9 @@ name: JIT off soak
 
 # The interpreter alone, since `--jit on` is the default (docs/vm/05-values-execution-builtins.md §6.4) and every other
 # workflow runs the tests with it: every day, the Python tests of each system (the conformance areas of platforms.yml,
-# plus the destructive group) run with AGENTICA_JIT=off in the environment of every VM they start, on the three x86-64
+# plus the destructive group) run with AGENTICA_JIT=off in the environment of every VM they start, on the five
 # systems. The mode must change no exit code, output or diagnostic, so any failure is a bug of the interpreter that the
-# JIT hides or a test that depends on the mode. macOS arm64 is left out: it has no emitter, so it interprets in every
-# mode and platforms.yml already runs these tests there. A failure fails the job, and the report in the job summary
+# JIT hides or a test that depends on the mode. A failure fails the job, and the report in the job summary
 # names the failed cases. Not on pull requests, so their CI time does not change; run it by hand on a branch with
 # `gh workflow run jit-soak.yml --ref BRANCH`. A manual run never cancels the scheduled one (cancel-in-progress: false).
 on:
@@ -35,6 +34,11 @@ jobs:
             make: make
             python: python3
             shell: bash
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            make: make
+            python: python3
+            shell: bash
           - platform: windows-x86_64
             runner: windows-2025
             make: make
@@ -45,13 +49,18 @@ jobs:
             make: gmake
             python: python3
             shell: bash
+          - platform: macos-arm64
+            runner: macos-latest
+            make: gmake
+            python: python3
+            shell: bash
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
       AGENTICA_REQUIRE_VM: '1'
       # The same linkage as platforms.yml: system libraries on Linux, the vendored ones elsewhere (as the release does).
-      AGENTICA_OPENSSL: ${{ matrix.platform == 'linux-x86_64' && 'system' || 'vendored' }}
-      AGENTICA_ZLIB: ${{ matrix.platform == 'linux-x86_64' && 'system' || 'vendored' }}
+      AGENTICA_OPENSSL: ${{ startsWith(matrix.platform, 'linux-') && 'system' || 'vendored' }}
+      AGENTICA_ZLIB: ${{ startsWith(matrix.platform, 'linux-') && 'system' || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
       PYTHON: ${{ matrix.python }}
       PLATFORM: ${{ matrix.platform }}

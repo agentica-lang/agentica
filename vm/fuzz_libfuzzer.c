@@ -232,8 +232,8 @@ static void differential(const uint8_t *data, size_t size) {
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   // The return value of agc_fuzz_one (accepted, refused, over the limit) is not a failure; a crash or a difference is.
 #ifdef AGC_FUZZ_JIT_WRAP
-  /* Without an emitter (AGC_JIT_HOST 0: Linux arm64) a JIT run would only run the interpreter again: nothing to
-     compare, so nothing is captured either. */
+  /* Without an emitter (AGC_JIT_HOST 0) a JIT run would only run the interpreter again: nothing to compare, so
+     nothing is captured either. */
   if (AGC_JIT_HOST) {
     differential(data, size);
     return 0;

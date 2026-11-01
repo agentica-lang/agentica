@@ -17,6 +17,7 @@ are the interpreter's, which must still match.
 import functools
 import os
 import platform
+import sys
 import tempfile
 from pathlib import Path
 
@@ -25,10 +26,8 @@ import pytest
 from tests.agentica_test import compile_text, run_vm, vm_environment
 
 MODES = ("off", "on", "always")
-# The machines whose binary has an emitter (platform.machine(), lowercased): arm64 only in a build with
-# AGENTICA_JIT_ARM64=1, which the jit-arm64 CI job makes and names in its environment (#756).
-ARM64_EMITTER = os.environ.get("AGENTICA_JIT_ARM64") == "1"
-EMITTER_MACHINES = {"x86_64", "amd64"} | ({"aarch64", "arm64"} if ARM64_EMITTER else set())
+# The machines whose binary has an emitter (platform.machine(), lowercased): arm64 except on Windows, which has none.
+EMITTER_MACHINES = {"x86_64", "amd64"} | ({"aarch64", "arm64"} if sys.platform != "win32" else set())
 
 # worker and main call and print, which leave compiled code for the interpreter. A spin call runs past a turn (2000
 # steps), so the three tasks' turns end inside compiled loops, and the order of the lines shows where.

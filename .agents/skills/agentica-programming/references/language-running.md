@@ -34,7 +34,7 @@ program, the bytecode cache and the sandbox flags.
   [FLAGS] -- OUT.agcb [ARGS...]` runs it (`run` only as the first word), on the
   same Agentica version only. Flags go before `--`: `--max-steps`, `--seed`,
   `--flush-timeout`, `--schedulers N`, `--jit MODE` (`on` by default, x86-64
-  only), the `--deny-*` flags, `--sandbox`, `--source-root DIR`, `--ai`,
+  and arm64), the `--deny-*` flags, `--sandbox`, `--source-root DIR`, `--ai`,
   `--json`. `agentica run --version` also lists the libraries.
 - `agentica F.agc` and `agentica test` keep the compiled program of each root
   file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`

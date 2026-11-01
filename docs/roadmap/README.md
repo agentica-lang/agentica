@@ -22,8 +22,8 @@ keeps their records.
 
 Released: 0.9.0 (the FFI core, FFI-a, with its Windows and macOS parity) and
 0.10.0 (the JIT groundwork, the rest of the FFI core, and the x86-64 JIT with
-our own emitter, no sljit). The CHANGELOG has the records. The arm64 emitter
-and smaller values (#396) are deferred.
+our own emitter, no sljit). The CHANGELOG has the records. Smaller values
+(#396) are deferred.
 
 - **Linux first:** new VM and C features land on Linux first. Until the Windows
   and macOS port, the feature is refused there with a clear error, and its

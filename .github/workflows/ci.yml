@@ -543,9 +543,9 @@ jobs:
           targets: dist/agentica
       - run: make vm-layers
 
-  # The JIT on Linux ARM64 (#756), on an arm64 runner that builds its own binary with the arm64 emitter on
-  # (AGENTICA_JIT_ARM64=1): the C tests (code memory, and compiled functions run directly), the goldens with
-  # AGENTICA_JIT=always, then half the shards with `off`, and tests/test_vm_jit.py.
+  # The JIT on Linux ARM64, on an arm64 runner that builds its own binary (the shards' build is x86-64): the C tests
+  # (code memory, and compiled functions and native calls run directly), the goldens with AGENTICA_JIT=always, then
+  # half the shards with `off`, and tests/test_vm_jit.py. Platforms runs the rest of the tests there with `on`.
   jit-arm64:
     needs: changes
     if: ${{ needs.changes.outputs.c != 'false' }}
@@ -554,7 +554,6 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
-      AGENTICA_JIT_ARM64: '1'
     steps:
       - uses: actions/checkout@v7
         with:
