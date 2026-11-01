@@ -384,9 +384,11 @@ returns.
     of `benchmarks/programs/channel-pingpong.agc` (32 instructions, a send and a
     receive) ran 1.2 times slower compiled; with longer bodies, two such calls
     broke even at 64 to 96 instructions, about three plain exits each.
-  - A block call in a function without a loop counts as leaving, so `on` keeps
-    that function out. A block without a loop gets code at the first block call
-    that compiled code starts with it, since that call runs it once per item.
+  - A block call does not count as leaving, as compiled code starts it. A
+    function without a loop that makes one gets code at its first exit, as a
+    function that calls does. A block without a loop gets code at the first
+    block call that compiled code starts with it, since that call runs it once
+    per item.
   - The jit copy of the turn loop has the same handlers as the plain copy, but
     its machine code sits at other addresses. That alone changed the timings of
     programs that compiled nothing. So a run with no function to compile has no

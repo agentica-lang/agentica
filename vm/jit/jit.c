@@ -188,24 +188,22 @@ static bool backward(const agc_program *p, agc_instr in, uint32_t kind, uint32_t
   return *start <= pc;
 }
 
-/* The trips out of compiled code that the `on` heuristic counts for a CALL_BUILTIN of row BX of P, in a function
-   without a loop when LOOPLESS: none, one, or AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park
-   (agc_jit_parking). A block call (a row with a native kind, such as `filter`: its native frame and the block's
-   frames) is started by run_compiled itself, which LOOPLESS says to count or not, as its exit unwinds the native
-   calls; a direct builtin is called by the code itself, which leaves only when the call ends the turn or fails, and so
-   is a leaf below a native call (at native depth 0 it leaves, but unwinds nothing). ROWS[BX] keeps the answer of each
-   row, which is the same at each of its call sites: bit 0 once known, bit 1 when it leaves from a loop, bit 2 when it
-   leaves from a function without one, bit 3 when it may park. */
-static uint32_t builtin_trips(const agc_program *p, uint8_t *rows, uint32_t bx, bool loopless) {
+/* The trips out of compiled code that the `on` heuristic counts for a CALL_BUILTIN of row BX of P: none, one, or
+   AGC_JIT_PARK_WEIGHT for a builtin that leaves and may park (agc_jit_parking). Compiled code calls a direct builtin
+   itself, which leaves only when the call ends the turn or fails, and so is a leaf below a native call (at native depth
+   0 it leaves, but unwinds nothing); it starts a block call (a row with a native kind, such as `filter`) itself too
+   (agc_jit_block_start) and calls the block natively. ROWS[BX] keeps the answer of each row, which is the same at each
+   of its call sites: bit 0 once known, bit 1 when it leaves, bit 2 when it may park. */
+static uint32_t builtin_trips(const agc_program *p, uint8_t *rows, uint32_t bx) {
   uint8_t row = rows[bx];
   if (!row) {
     const agc_builtin *b = p->builtins[bx];
     bool leaves = !(b->direct || b->leaf || b->native);
-    row = (uint8_t)(1u | (unsigned)leaves << 1 | (unsigned)leaves << 2 | (unsigned)(leaves && agc_jit_parks(b)) << 3);
+    row = (uint8_t)(1u | (unsigned)leaves << 1 | (unsigned)(leaves && agc_jit_parks(b)) << 2);
     rows[bx] = row;
   }
-  if (!(row & (loopless ? 4u : 2u))) return 0;
-  return row & 8u ? AGC_JIT_PARK_WEIGHT : 1;
+  if (!(row & 2u)) return 0;
+  return row & 4u ? AGC_JIT_PARK_WEIGHT : 1;
 }
 
 /* ITEMS, an atomic GC block of *CAP items of SIZE bytes whose first COUNT are set, with room for NEED items: when it
@@ -221,8 +219,7 @@ static void *grow(void *items, size_t *cap, size_t count, size_t need, size_t si
 /* Why `on` keeps a function out:
    - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
      exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
-     from compiled code, and only when none of its instructions leaves ("none" otherwise, where a block call counts:
-     its exit unwinds every native call).
+     from compiled code, and only when none of its instructions leaves ("none" otherwise).
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
      ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (builtin_trips).
@@ -284,9 +281,7 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
       uint32_t kind = kind_of(kinds, in), bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
       if (kind == KIND_JUMP) continue;
       bool call = (kind == KIND_CALL || kind == KIND_TAIL) && bx < n;
-      /* A block call calls its block, a function value, as CALL_VALUE does. */
-      bool block = kind == KIND_BUILTIN && bx < p->builtin_count && p->builtins[bx]->native;
-      calling[k] |= call || kind == KIND_VALUE || block;
+      calling[k] |= call || kind == KIND_VALUE;
       if (kind == KIND_VALUE) continue;
       if (looped[k]) {
         while (r < region_count && last[r - first_region] < pc) r++;
@@ -302,7 +297,10 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
           rows = grow(rows, &row_cap, known, (size_t)bx + 1, 1);
           memset(rows + known, 0, row_cap - known);
         }
-        regions[r].out += builtin_trips(p, rows, bx, !looped[k]);
+        regions[r].out += builtin_trips(p, rows, bx);
+        /* A block call calls its block, a function value, as CALL_VALUE does (only a function without a loop reads
+           it, and each of its instructions comes here). */
+        calling[k] |= p->builtins[bx]->native != AGC_NATIVE_NONE;
       }
     }
   }

@@ -813,6 +813,38 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
     assert code == 0 and stdout.count("\n") == 152, stderr
 
 
+def test_on_compiles_a_function_without_a_loop_that_makes_block_calls(tmp_path):
+    # score has no loop but makes block calls, which compiled code starts itself, so `on` gives it code at its first
+    # call from main's compiled loop, as a function that calls: the calls of score, and their block calls, then stay
+    # in compiled code, and only turns that end inside them leave it.
+    bytecode = compile_text("""def score(items: List[Int], bias: Int) -> Int
+  kept = items.filter do |x| (x + bias) % 3 == 0 end
+  return kept.map do |x| x * bias end.sum + kept.size
+end
+
+def main() -> Void
+  items = (0...20).to_a
+  total = 0
+  i = 0
+  while i < 3000
+    total = (total + score(items, i)) % 1000003
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+""", "loop_free_blocks", tmp_path)
+    on = compiled(bytecode, tmp_path, "on")
+    assert all(name in on for name in ("main", "score")) if jit_host() else on == [], on
+    code, stdout, _ = assert_same(bytecode)
+    assert code == 0 and stdout.count("\n") == 2, stdout
+    lines = jit_trace(bytecode, tmp_path, "on")
+    counts = {line.split(" jit ")[1].split()[0]: int(line.split("count=")[1]) for line in lines
+              if " jit transition count=" in line or " jit turn count=" in line}
+    assert counts.get("transition", 0) <= counts.get("turn", 0) if jit_host() else counts == {}, counts
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
 def test_on_compiles_a_function_without_a_loop_only_after_several_calls_from_compiled_code(tmp_path):
     # main's loop compiles; hot is then called from it 300 times, rare 6 times (fewer than the 16 calls that make a
     # function without a loop hot), so only hot gets code. always compiles all three.

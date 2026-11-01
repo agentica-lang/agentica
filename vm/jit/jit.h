@@ -103,7 +103,7 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    the TAIL_CALL exits and `tails_compiled` those whose callee had code (agc_jit_count_tail), all counted only while
    the jit trace is on. `native_only[f]` is set when `on` gives a function without a loop code only
    for native calls and block calls: compiled at a CALL, TAIL_CALL or CALL_VALUE exit from compiled code (the first
-   when `calling[f]`, set when f calls, tail-calls or calls a function value, else the AGC_JIT_CALLEE_THRESHOLD-th) or
+   when `calling[f]`, set when f calls, tail-calls, calls a function value or makes a block call, else the AGC_JIT_CALLEE_THRESHOLD-th) or
    at the first block call that compiled code starts with it, and published at a seal, which clears its `skip`.
    `live` is set by the first code published (agc_jit_turn), and `turns` counts the turns that ran the jit copy of the
    turn loop while the jit trace is on. `hot_entries`, `hot_passes` and `hot_calls` are the thresholds of `on`
