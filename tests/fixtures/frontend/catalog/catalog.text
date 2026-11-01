@@ -96,6 +96,10 @@ builtin HttpWire.connect_context forms=1
   HttpWire.connect_context(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket] shape=(String, Int, Opaque(TlsContext), Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_context" effects=["network"] desc="Internal to std/http: TLS.connect, on a client TlsContext."
 builtin HttpWire.drop_tls forms=1
   HttpWire.drop_tls(client: HttpClient) -> Void shape=(Opaque(HttpClient)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
+builtin HttpWire.upgrade_tls forms=1
+  HttpWire.upgrade_tls(client: HttpClient, socket: Socket, host: String, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpClient), Opaque(Socket), String, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.upgrade_tls" effects=["network"] desc="Internal to std/http: TLS.upgrade on the client's shared system-trust context."
+builtin HttpWire.upgrade_context forms=1
+  HttpWire.upgrade_context(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket] shape=(Opaque(Socket), Opaque(TlsContext), String, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.upgrade_context" effects=["network"] desc="Internal to std/http: TLS.upgrade, on a client TlsContext that agrees on no protocol but HTTP/1.1."
 builtin HttpWire.encode_request forms=1
   HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: Bytes, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(Header)), Bytes, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
 builtin HttpWire.encode_response forms=1
