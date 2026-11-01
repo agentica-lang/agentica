@@ -343,6 +343,47 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_test_pump_until_idle(&vm);
   agc_test_settle_loop(&vm);
 }
+
+/* An HttpClient as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy context. */
+static agc_value new_client(bool dropped) {
+  agc_http_client *c = agc_alloc(sizeof *c);
+  memset(c, 0, sizeof *c);
+  c->tls_dropped = dropped;
+  return agc_http_client_value(c);
+}
+
+/* HttpWire.upgrade_tls on a client that gave its context back (HttpWire.drop_tls) is an error before anything is
+   touched: the plain socket is still the program's, and a count taken for the call would be lost. */
+static void test_upgrade_tls_on_a_dropped_client(void) {
+  int fd = open_pair();
+  agc_value client = new_client(true);
+  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(1000)));
+  assert(error_is(out, "network: the client is closed"));
+  assert(send(fd, "still\n", 6, 0) == 6);
+  agc_value line = ok_of(step(call("TCP.read_line", 2, socket_v, agc_int(2000), agc_void(), agc_void())));
+  assert(agc_as_string(&vm, line)->bytes == 5);
+  close_pair(fd);
+}
+
+/* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
+   starts the handshake on the socket it was given: a silent peer reads a TLS record (0x16, the ClientHello), the call
+   fails with the deadline, and the client keeps the context until HttpWire.drop_tls gives it back. */
+static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
+  int fd = open_pair();
+  agc_value client = new_client(false);
+  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(1500)));
+  assert(!agc_as_result(&vm, out)->ok);
+  unsigned char first = 0;
+  struct pollfd p = {fd, POLLIN, 0};
+  assert(poll(&p, 1, 2000) == 1 && recv(fd, &first, 1, 0) == 1 && first == 0x16);
+  assert(agc_as_http_client(&vm, client)->tls);
+  step(call("HttpWire.drop_tls", 1, client, agc_void(), agc_void(), agc_void()));
+  assert(!agc_as_http_client(&vm, client)->tls);
+  step(call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void()));
+  close(fd);
+  agc_test_pump_until_idle(&vm);
+  agc_test_settle_loop(&vm);
+}
 #endif
 
 int main(void) {
@@ -358,6 +399,8 @@ int main(void) {
   test_cancelled_tls_connect_past_its_deadline(false);
   test_cancelled_tls_connect_past_its_deadline(true);
   test_byte_keys();
+  test_upgrade_tls_on_a_dropped_client();
+  test_upgrade_tls_builds_the_shared_context_then_handshakes();
 #endif
   puts("net tests passed");
   return 0;

@@ -1060,8 +1060,16 @@ static int resolve(net *n) {
   return rc;
 }
 
-/* A context build for N is over: its open fails with the build's failure (in n->failure), or goes on to DNS. I/O
-   thread only. */
+/* What a net does once its client's shared context exists: an upgraded net (HttpWire.upgrade_tls) has its connection
+   already and starts the client handshake, any other goes on to DNS. I/O thread only. */
+static int shared_ready(net *n) {
+  if (!n->upgraded) return resolve(n);
+  begin_tls(n, agc_tls_client(n->shared->config, n->host, &n->failure));
+  return 0;
+}
+
+/* A context build for N is over: its open fails with the build's failure (in n->failure), or goes on to DNS (or, for an
+   upgraded net, to its handshake). I/O thread only. */
 static void setup_over(net *n, bool built, int status) {
   if (n->closed || !n->opener) {
     settle(n);
@@ -1079,7 +1087,7 @@ static void setup_over(net *n, bool built, int status) {
     notify(n, n->opener);
     return;
   }
-  int rc = resolve(n);
+  int rc = shared_ready(n);
   if (rc) {
     n->error = rc;
     notify(n, n->opener);
@@ -1117,7 +1125,7 @@ static void shared_done(uv_work_t *w, int status) {
    first such net starts. I/O thread only. */
 static int shared_open(net *n) {
   tls_shared *s = n->shared;
-  if (s->config) return resolve(n);
+  if (s->config) return shared_ready(n);
   if (!s->building) {
     int rc = agc_io_queue_work(n->loop, &s->work, shared_work, shared_done);
     if (rc) return rc;
@@ -1460,21 +1468,29 @@ static bool begin_upgrade(void *data, agc_io_job *job) {
   shut(old, "upgrade");
   AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake socket=%" PRIu64 " listener=0 role=%s upgrade=%" PRIu64, n->id,
             n->server_side ? "server" : "client", old->id);
+  if (n->shared) {
+    /* HttpWire.upgrade_tls: the client's system-trust context, built now when this is its first use. */
+    int rc = shared_open(n);
+    if (rc) {
+      n->error = rc;
+      finish(q);
+    }
+    return true;
+  }
   begin_tls(n, n->server_side ? agc_tls_server(n->config, &n->failure) : agc_tls_client(n->config, n->host, &n->failure));
   return true;
 }
 
 static const char upgrade_role[] = "TLS.upgrade with a server TlsContext takes the host \"\"";
 
-/* TLS.upgrade(socket, context, host, timeout_ms): the TLS handshake over an open TCP socket (STARTTLS), on the side
-   that the context's role names. A server context with a host is a bug in the program, reported first. The checks of
-   the arguments leave the socket as it was; after them the plain socket is the request's (its resource is gone, so the
-   program sees it closed), and the handshake runs on a new TLS socket under the timeout, which closes it. */
-static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_socket *sk = agc_as_socket(vm, args[0]);
-  bool server = agc_as_tls_context(vm, args[1])->server;
-  const agc_string *host = agc_as_string(vm, args[2]);
-  int64_t timeout = agc_as_int(vm, args[3]);
+/* The checks and the start of an upgrade of SK to TLS, for TLS.upgrade (CONTEXT, a TlsContext) and HttpWire.upgrade_tls
+   (CLIENT, an HttpClient whose shared system-trust context is used; CONTEXT is then NULL). A server context with a host
+   is a bug in the program, reported first. The checks of the arguments leave the socket as it was; after them the plain
+   socket is the request's (its resource is gone, so the program sees it closed), and the handshake runs on a new TLS
+   socket under the timeout, which closes it. */
+static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *context, agc_http_client *client,
+                                const agc_string *host, int64_t timeout, uint32_t span) {
+  bool server = context && context->server;
   if (server && host->bytes) agc_fail(vm, "RUNTIME-TLS-CONTEXT-ROLE", upgrade_role, span + 3);
   const net *plain = live(sk);
   if (!plain) return agc_error_value(socket_closed);
@@ -1483,10 +1499,18 @@ static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span)
   if (!server && !host->bytes) return agc_error_value("network: host cannot be empty");
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
+  /* The count on the shared context goes with the last check, so no error that follows loses it. A client that gave
+     its context back (HttpWire.drop_tls) has none to give. */
+  tls_shared *shared = client ? client_context(vm, client) : NULL;
+  if (client && !shared) {
+    free(name);
+    return agc_error_value("network: the client is closed");
+  }
   net *n = new_net(vm, name, 0, false);
   n->secure = n->upgraded = true;
   n->server_side = server;
-  n->config = agc_tls_config_ref(agc_as_tls_context(vm, args[1])->config);
+  n->shared = shared;
+  if (context) n->config = agc_tls_config_ref(context->config);
   agc_socket *tls_socket = new_socket(vm, n, true);
   request *q = new_request(n, REQ_CONNECT);
   q->child = let_go(vm, sk->state);
@@ -1494,6 +1518,29 @@ static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span)
             sk->state->id);
   park(vm, q, agc_socket_value(tls_socket), timeout, begin_upgrade);
   return agc_void();
+}
+
+/* TLS.upgrade(socket, context, host, timeout_ms): the TLS handshake over an open TCP socket (STARTTLS), on the side
+   that the context's role names. */
+static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span) {
+  return upgrade_socket(vm, agc_as_socket(vm, args[0]), agc_as_tls_context(vm, args[1]), NULL, agc_as_string(vm, args[2]),
+                        agc_as_int(vm, args[3]), span);
+}
+
+/* HttpWire.upgrade_context(socket, context, host, timeout_ms) (std-only): TLS.upgrade, the name std/http uses for a
+   tunnel on a client TlsContext, which must agree on no protocol but HTTP/1.1 as HttpWire.connect_context requires. */
+static agc_value builtin_upgrade_context(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_tls_context_check(vm, args[1], false, client_role, span + 3);
+  agc_tls_http1_check(vm, agc_as_tls_context(vm, args[1])->config, span + 3);
+  return builtin_tls_upgrade(vm, args, span);
+}
+
+/* HttpWire.upgrade_tls(client, socket, host, timeout_ms) (std-only): the handshake over an open TCP socket on the
+   system-trust context that the client's connections share (HttpWire.connect_tls), so a CONNECT tunnel does not build
+   one of its own. */
+static agc_value builtin_upgrade_tls(agc_vm *vm, agc_value *args, uint32_t span) {
+  return upgrade_socket(vm, agc_as_socket(vm, args[1]), NULL, agc_as_http_client(vm, args[0]), agc_as_string(vm, args[2]),
+                        agc_as_int(vm, args[3]), span);
 }
 
 static agc_value builtin_listen(agc_vm *vm, agc_value *args, uint32_t span) { return open_listener(vm, args, span, false); }
@@ -1858,6 +1905,8 @@ const agc_builtin agc_tcp_builtins[] = {
   {"HttpWire.connect_tls", 4, builtin_connect_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.connect_context", 4, builtin_connect_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.upgrade_tls", 4, builtin_upgrade_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"HttpWire.upgrade_context", 4, builtin_upgrade_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_builtins[0];
