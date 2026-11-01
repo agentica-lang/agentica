@@ -8,16 +8,30 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-01
+
 ### Added
 
-- `HTTP.proxy_from_env(url)` returns the proxy that `http_proxy`, `https_proxy`
-  and `no_proxy` name for a URL (curl's rules), or `""`, for
-  `HttpClientOptions(proxy: ...)`.
+- `HTTP.listen_websocket` (and `listen_websocket_tls`) upgrades a request to a
+  WebSocket (RFC 6455): `HTTP.accept_websocket` checks the handshake and runs a
+  session that gets `HTTP.Message`s (text, binary, ping, pong, close) on two
+  channels, and `HTTP.upgrade_only` wraps an ordinary `Handler` for the other
+  routes. Unmasking is slow (about 7 MB/s); the other `listen` forms still
+  answer an `Upgrade` 501.
+- `HTTP.listen_upload` (and `listen_upload_tls`) gives a handler the body of the
+  request on a channel as it arrives (`HTTP.RequestBody`: `pieces` and a `done`
+  task), for uploads too big to hold; `HTTP.read_all` collects a body for a
+  small route.
+- `HTTP.Handler`, `HTTP.StreamHandler` and `HTTP.UploadHandler` name the handler
+  types of the `listen` forms; a middleware is a function from a `Handler` to a
+  `Handler`.
 - `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
-  requests through a forward proxy in absolute form, and `https://` requests
-  through a `CONNECT` tunnel with TLS to the target inside it.
+  requests through a forward proxy, and `https://` requests through a `CONNECT`
+  tunnel with TLS to the target inside it.
 - A proxy URL with user info logs in with `Proxy-Authorization: Basic` (proxy
   only); a `407` is an error that names the proxy, not the credentials.
+- `HTTP.proxy_from_env(url)` returns the proxy that `http_proxy`, `https_proxy`
+  and `no_proxy` name for a URL (curl's rules), or `""`.
 - `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
   its PEM files, for `TLS.listen(host, port, context)` and
   `HttpClientOptions(tls: some(context))`, which many clients can share.
@@ -26,32 +40,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `TlsClientOptions` and `TlsServerOptions` take `alpn: List[String]`, the
   protocols ALPN negotiates, and `TLS.alpn(socket)` returns the one selected;
   `std/http` halts on an `alpn` other than `[]` or `["http/1.1"]`.
-- `File.replace(path, data)` replaces an existing file in one step, keeping its
-  permission bits and any symbolic link to it.
-- `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
-  formatter would change and exits 1 if there are any (it keeps a short `do`
-  block or case arm on one line); `agentica fmt --tree FILE` prints the tree
-  that formatting keeps.
 - `agentica fmt [PATH...]` formats the files in place and `agentica fmt -`
   formats standard input; the `[style]` of the nearest `agentica.toml` sets the
   width and `blank_line_after_end`, and a wrong call is `FMT-USAGE` (exit 2).
-- **Breaking:** `agentica check` reports a line longer than `[style]
-  max_line_width` as `CHECK-LINE-TOO-LONG`. Heredoc bodies and long strings
-  count too, and `fmt` cannot break them: split them by hand.
+- `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the
+  formatter would change and exits 1 if there are any; `agentica fmt --tree
+  FILE` prints the tree that formatting keeps.
+- `File.replace(path, data)` replaces an existing file in one step, keeping its
+  permission bits and any symbolic link to it.
 - `channel.empty?` is `true` when no value is left to receive.
-- `HTTP.Handler` and `HTTP.StreamHandler` name the handler types of
-  `HTTP.listen` and its forms; a middleware is a function from a `Handler` to a
-  `Handler`.
-- `HTTP.listen_upload` (and `listen_upload_tls`) gives a handler the body of the
-  request on a channel as it arrives (`HTTP.RequestBody`: `pieces` and a `done`
-  task), for uploads too big to hold; `HTTP.UploadHandler` names its type, and
-  `HTTP.read_all` collects a body for a small route.
-- `HTTP.listen_websocket` (and `listen_websocket_tls`) upgrades a request to a
-  WebSocket (RFC 6455): `HTTP.accept_websocket` checks the handshake and runs a
-  session that gets `HTTP.Message`s (text, binary, ping, pong, close) on two
-  channels, and `HTTP.upgrade_only` wraps an ordinary `Handler` for the other
-  routes. Unmasking is slow (about 7 MB/s); the other `listen` forms still
-  answer an `Upgrade` 501.
 - The JIT runs on Linux ARM64 and macOS arm64 too, on by default as on x86-64
   (`--jit off` turns it off).
 
@@ -68,6 +65,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   even with values still buffered (as Ruby's `Queue#closed?`), so a producer
   sees the reader's close between sends. Write `ch.closed? and ch.empty?` for
   the old meaning, closed and drained.
+- **Breaking:** `agentica check` reports a line longer than `[style]
+  max_line_width` as `CHECK-LINE-TOO-LONG`. Heredoc bodies and long strings
+  count too, and `fmt` cannot break them: split them by hand.
 
 ## [0.19.0] - 2026-10-31
 
@@ -872,7 +872,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.19.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.20.0...HEAD
+[0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
 [0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
 [0.19.0-beta.2]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.1...0.19.0-beta.2
