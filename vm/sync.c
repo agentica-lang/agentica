@@ -81,6 +81,12 @@ void agc_lock_drop_shared(agc_lock *l) {
 /* `rt->sync` is held by many nested calls (a cancel ends a task, which wakes its awaiters, which ends a Task.map item),
    so the scheduler counts how deep it is in and the mutex is taken and dropped once, at the outer level. The count
    also lets agc_sync_reset undo a lock that a failed builtin still held when agc_fail jumped out of it. */
+void agc_log_init(agc_log_registry *log) {
+  atomic_init(&log->level, -1);
+  atomic_init(&log->lowest, AGC_LOG_NO_HANDLER);
+  atomic_init(&log->floor, -1);
+}
+
 void agc_sync_take_shared(agc_vm *vm) {
   if (vm->sync_depth++ == 0) agc_lock_take_shared(vm->rt->sync);
 }

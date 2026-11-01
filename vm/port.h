@@ -301,6 +301,11 @@ typedef struct {
   size_t count, cap;
 } agc_log_registry;
 
+/* Sets an empty registry: level -1, no handler (vm/sync.c, as the ranks are the state that leaf rows read without
+   rt->sync). Out of line, so agc_vm_init keeps its size and the turn loops after it keep their addresses (make
+   layout-check). */
+void agc_log_init(agc_log_registry *log);
+
 /* One std/ source that the binary carries: PATH is relative to stdlib/ ("queue.agc", "bdd/gherkin.agc"). */
 typedef struct {
   const char *path;
