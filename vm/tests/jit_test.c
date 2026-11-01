@@ -1582,9 +1582,8 @@ static void sample_resets(void) {
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is neither
    a leaf nor direct nor a block call) more than once in AGC_JIT_SPACING instructions, one that may park counting
    AGC_JIT_PARK_WEIGHT times; a leaf or direct builtin does not count, as compiled code calls it, nor a block call,
-   which run_compiled starts. A function without a loop that
-   calls a leaf builtin may still get code for native calls; one that starts a block call may not. A program where no
-   function is compiled has no JIT at all. */
+   which compiled code starts. A function without a loop that calls a leaf builtin or starts a block call may still get
+   code for native calls. A program where no function is compiled has no JIT at all. */
 static void ineligible(void) {
   static const agc_trace quiet = {0};
   one_function f;
@@ -1648,8 +1647,9 @@ static void ineligible(void) {
     assert(looped[0] && !looped[1] && calling[0] && !calling[1]);
     assert(callable[0] == !leaving && callable[1] == !leaving);
   }
-  /* A function without a loop that calls a leaf builtin may get code for native calls, as compiled code calls the
-     builtin itself; one that starts a block call may not, and the loop that calls it then leaves at the call. */
+  /* A function without a loop that calls a leaf builtin or starts a block call may get code for native calls, as
+     compiled code makes both calls itself; the block call makes it a function that calls (compiled at its first
+     exit). */
   agc_builtin leaf_row = {.leaf = true}, block_row = {.native = AGC_NATIVE_FILTER};
   const agc_builtin *callee_rows[2] = {&leaf_row, &block_row};
   agc_instr calls_loop[3] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 1, 0}, {AGC_OP_JUMP, 0, 0, 0}};
@@ -1660,27 +1660,7 @@ static void ineligible(void) {
     agc_program program = {.functions = fns, .function_count = 2, .builtins = callee_rows};
     bool callable[2], looped[2], calling[2];
     agc_jit_settle(&program, callable, looped, calling);
-    assert(callable[0] == (which == 0) && callable[1] == (which == 0));
-  }
-  /* A builtin row's answer is kept per row, apart for a loop and a function without one: a block call leaves from the
-     function, not from the loop, whichever of the two settle reads first. The loop's one trip out is its call of the
-     function, which drops; a second one would keep the loop out too. */
-  enum { BLOCK_LOOP = AGC_JIT_SPACING };
-  agc_instr block_body[2] = {{AGC_OP_CALL_BUILTIN, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}}, block_loop[BLOCK_LOOP];
-  for (uint16_t loop_first = 0; loop_first < 2; loop_first++) {
-    uint16_t body = loop_first, loop_at = !loop_first;
-    block_loop[0] = (agc_instr){AGC_OP_STEP, 1, 0, 0};
-    block_loop[1] = (agc_instr){AGC_OP_CALL_BUILTIN, 0, 1, 0};
-    block_loop[2] = (agc_instr){AGC_OP_CALL, 0, body, 0};
-    for (uint32_t pc = 3; pc + 1 < BLOCK_LOOP; pc++) block_loop[pc] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
-    block_loop[BLOCK_LOOP - 1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
-    agc_function fns[2];
-    fns[body] = (agc_function){.registers = 3, .code = block_body, .count = 2};
-    fns[loop_at] = (agc_function){.registers = 3, .code = block_loop, .count = BLOCK_LOOP};
-    agc_program program = {.functions = fns, .function_count = 2, .builtins = callee_rows};
-    bool callable[2], looped[2], calling[2];
-    agc_jit_settle(&program, callable, looped, calling);
-    assert(!callable[body] && callable[loop_at] && looped[loop_at] && !looped[body]);
+    assert(callable[0] && callable[1] && !looped[1] && calling[1] == (which == 1));
   }
   /* A function whose only loop is a TAIL_CALL of itself has a loop, so `on` compiles it at its entries; a TAIL_CALL of
      another function is no loop. */
