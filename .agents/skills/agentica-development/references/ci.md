@@ -290,9 +290,8 @@ binary and C tests. The two run at once and a shard unpacks both.
 ## Conformance matrix (`platforms.yml`)
 
 One job per system: `linux-x86_64`, `linux-arm64` (`ubuntu-24.04-arm`),
-`windows-x86_64` (MSYS2 UCRT64),
-`macos-x86_64` and `macos-arm64`; the Linux jobs use the system OpenSSL and
-zlib, the others the vendored ones. It runs on PRs with the `platforms` label
+`windows-x86_64` (MSYS2 UCRT64), `macos-x86_64` and `macos-arm64`; the Linux
+jobs use the system OpenSSL and zlib, the others the vendored ones. It runs on PRs with the `platforms` label
 and on `master` pushes. Each job runs `vm-test`, `vendored-check`,
 `bootstrap-smoke`, `fixed-point`, then `make conformance-area/<area>` per area
 of `tools/conformance.py`, then `make conformance-report` (a job summary and
@@ -385,7 +384,8 @@ sweep, `test-distribution` and the examples.
   the binary is not.
 - `tools/release.py smoke` (`python -I`) runs the extracted binary from a path
   with spaces and non-ASCII letters, with a system-only `PATH`. TLS is covered
-  by the OpenSSL version line only.
+  by the OpenSSL version line only. Outside Windows it also requires a
+  ` jit compile ` trace line from a `--jit always` run.
 - `collect` (every run) checks that there are exactly the five archives of
   `VERSION` and writes `SHA256SUMS`. `publish` runs only for a tag push equal to
   `VERSION`, and creates the GitHub Release with empty notes. A manual

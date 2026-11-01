@@ -321,8 +321,10 @@ bytes. The `always` ratio of the self-compile is 0.79.
   gain 5% to 8%, and `sleepers` and `maps` do not move beyond the noise.
 - **bytes.** Added on 2026-11-01 (master `7fd44393`, load average 1.9), in
   the same loop on the same host. On GitHub's runners, at size 16 with one
-  scheduler, it is the one program that `on` makes slower: 1.06 to 1.07 on
-  x86-64, 1.10 on Linux ARM64 and 1.00 to 1.11 on macOS ARM (#756).
+  scheduler, `on` makes it slower: 1.06 to 1.07 on x86-64, 1.10 on Linux ARM64
+  and 1.00 to 1.11 on macOS ARM (#756); `print-lines` is 1.05 there on Linux
+  ARM64. On this host `bytes` is 0.86 at size 4 and 0.85 at size 16, so the
+  slowdown comes from the runner hosts, not from the size.
 - **Noise.** `list-build` moves by 35% to 40% between runs of one mode. Nothing
   compiles in `list-bulk`, and its best of 5 follows its rare fast runs: 20
   runs per mode gave the same spread (218 to 318 ms `off`, 220 to 312 ms `on`,

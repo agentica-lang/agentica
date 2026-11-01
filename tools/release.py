@@ -296,6 +296,20 @@ def main() -> Void
   TCP.close_listener(listener)
 end
 """
+# A loop that `--jit always` compiles at its first call.
+JIT_LOOP = """\
+def sum(n: Int) -> Int
+  total = 0
+  for i in 0..n
+    total = total + i
+  end
+  return total
+end
+
+def main() -> Void
+  puts(sum(1000))
+end
+"""
 HTTP_LOOP = """\
 import HTTP from "std/http"
 
@@ -332,9 +346,11 @@ class Smoke:
         else:
             self.env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "TMPDIR": str(home), "LANG": "C.UTF-8"}
 
-    def run(self, *args: str, code: int | None = 0, timeout: int = 180) -> subprocess.CompletedProcess:
+    def run(self, *args: str, code: int | None = 0, timeout: int = 180,
+            env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
         try:
-            proc = subprocess.run([str(self.exe), *args], cwd=self.cwd, env=self.env, capture_output=True, input="",
+            proc = subprocess.run([str(self.exe), *args], cwd=self.cwd, env={**self.env, **(env or {})},
+                                  capture_output=True, input="",
                                   text=True, encoding="utf-8", timeout=timeout)
         except subprocess.TimeoutExpired as error:
             fail(f"agentica {' '.join(args)}: no exit in {timeout} s\n"
@@ -450,6 +466,13 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
         s.expect("--deny-run refuses processes", "denied: --deny-run" in out.stderr, out)
 
         network_smoke(s, work)
+        if not platform.startswith("windows"):
+            # The JIT seals its pages with mprotect, which a hardened-runtime signature would refuse on macOS: then
+            # every compile fails and the program still runs, interpreted. Only the trace shows that it compiled.
+            (work / "jit.agc").write_text(JIT_LOOP, encoding="utf-8")
+            out = s.run("--jit", "always", "jit.agc", env={"AGENTICA_VM_TRACE": "jit"})
+            s.expect("the JIT compiles in the packaged binary",
+                     out.stdout == "500500\n" and " jit compile " in out.stderr, out)
         print(f"smoke passed: {s.checks} checks on {archive.name}")
     finally:
         shutil.rmtree(base, ignore_errors=True)

@@ -285,11 +285,12 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
 /* Private to vm/jit/, the C tests and the libFuzzer entry point (vm/fuzz_libfuzzer.c) from here. */
 
-/* The architectures that have an emitter: x86-64 (emit_x64.c), and arm64 on Linux and macOS (emit_a64.c). Elsewhere
-   (Windows on arm64, 32-bit machines) the JIT compiles nothing. */
+/* The architectures that have an emitter: x86-64 (emit_x64.c), and little-endian arm64 on Linux and macOS
+   (emit_a64.c, which writes its words little-endian). Elsewhere (Windows on arm64, big-endian arm64, 32-bit machines)
+   the JIT compiles nothing. */
 #if defined(__x86_64__) || defined(_M_X64)
 #define AGC_JIT_HOST 1
-#elif defined(__aarch64__) && !defined(_WIN32)
+#elif defined(__aarch64__) && defined(__AARCH64EL__) && !defined(_WIN32)
 #define AGC_JIT_HOST 1
 #else
 #define AGC_JIT_HOST 0

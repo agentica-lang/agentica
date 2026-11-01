@@ -138,7 +138,7 @@ OPTIONS = [
   ].join(""),
   "  --jit <mode>",
   [
-    "     off, on or always: compile hot functions to machine code (on by default, x86-64 only; ",
+    "     off, on or always: compile hot functions to machine code (on by default, x86-64 and arm64; ",
     "AGENTICA_JIT sets it too, the flag wins); always compiles each function at its first call",
   ].join(""),
   "  --dump",

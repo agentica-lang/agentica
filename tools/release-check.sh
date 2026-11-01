@@ -112,12 +112,16 @@ case "$kind" in
     codesign --verify --strict "$binary" || die "$name has no valid code signature (ad hoc is enough)"
     # The JIT seals its code pages with plain mprotect, which the hardened runtime refuses without MAP_JIT and an
     # entitlement: a signature with `--options runtime` would turn every compile into a failed seal, so the JIT would
-    # silently interpret. codesign -d prints the CodeDirectory flags, (adhoc) here, on stderr.
+    # silently interpret. codesign -d prints the CodeDirectory flags, 0x2(adhoc) here, on stderr; the hardened runtime
+    # is the bit 0x10000, which is tested as a number too in case codesign leaves out its name.
     signature=$(codesign -d --verbose=2 "$binary" 2>&1)
-    flags=$(grep -E '^CodeDirectory .*flags=' <<< "$signature" || true)
+    flags=$(grep -E '^CodeDirectory .*flags=0x[0-9a-fA-F]+' <<< "$signature" || true)
     echo "$name: signature: $flags"
     [ -n "$flags" ] || die "codesign -d printed no CodeDirectory flags for $name"
-    if grep -q 'runtime' <<< "$flags"; then die "$name is signed with the hardened runtime, which disables the JIT"; fi
+    bits=$(sed -E 's/.*flags=0x([0-9a-fA-F]+).*/\1/' <<< "$flags")
+    if grep -q 'runtime' <<< "$flags" || (( 16#$bits & 0x10000 )); then
+      die "$name is signed with the hardened runtime, which disables the JIT"
+    fi
     ;;
 
   pe)
