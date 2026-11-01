@@ -7,7 +7,8 @@ them, and the connection they came on.
 import base64
 import socket
 
-from tests.agentica_test import FIXTURES, PYTHON, Child, compile_agc, output_lines, run_vm, scaled, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, compile_agc, host_only, output_lines, run_vm, scaled,
+                                 vm_environment)
 
 PEER = FIXTURES / "http-proxy-peer.py"
 
@@ -414,12 +415,6 @@ ENV_CASES = [
             ("ftp://example.com/", ""),
         ],
     ),
-    # The lower-case name wins over the upper-case one, even when it is set and empty.
-    (
-        {"http_proxy": "http://lower:1", "HTTP_PROXY": "http://upper:2", "https_proxy": "",
-         "HTTPS_PROXY": "http://up-secure:3", "no_proxy": "", "NO_PROXY": "*"},
-        [("http://example.com/", "http://lower:1"), ("https://example.com/", "")],
-    ),
     # NO_PROXY=* turns every host off; without it the upper-case name is read.
     ({"HTTP_PROXY": "http://upper:2", "NO_PROXY": "*"}, [("http://example.com/", "")]),
     ({"HTTP_PROXY": "http://upper:2"}, [("http://example.com/", "http://upper:2"), ("https://example.com/", "")]),
@@ -428,8 +423,6 @@ ENV_CASES = [
         {"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "HTTPS_PROXY": "http://ok:3"},
         [("http://example.com/", ""), ("https://example.com/", "http://ok:3")],
     ),
-    ({"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "http_proxy": "http://mine:1"},
-     [("http://example.com/", "http://mine:1")]),
     # An entry that is not valid is ignored: none crashes the call, and none exempts a host (0.1 is not the tail of
     # 10.0.0.1).
     (
@@ -462,23 +455,54 @@ ENV_CASES = [
         {"http_proxy": "http://p:1", "NO_PROXY": "0.0.0.0/0"},
         [("http://8.8.8.8/", ""), ("http://example.com/", "http://p:1")],
     ),
+    # A lower-case http_proxy under CGI: trusted on POSIX, but Windows has no such name apart from HTTP_PROXY (a request
+    # may have made it), so an http:// URL gets none there.
+    (
+        {"REQUEST_METHOD": "GET", "http_proxy": "http://x:1"},
+        [("http://example.com/", "" if WINDOWS else "http://x:1")],
+    ),
     # Another scheme is returned as it is.
     ({"http_proxy": "socks5://p:1080"}, [("http://example.com/", "socks5://p:1080")]),
 ]
 
 
-def test_proxy_from_env_reads_the_proxy_variables_the_way_curl_does(tmp_path):
-    """Only a program that calls HTTP.proxy_from_env reads the environment: the variables, their precedence, the
-    httpoxy rule and each kind of no_proxy entry, over controlled environments (no peer is needed)."""
+# Two names of one variable that differ only by case: Windows has one variable for both, so these run on POSIX only.
+ENV_CASES_BY_CASE = [
+    # The lower-case name wins over the upper-case one, even when it is set and empty.
+    (
+        {"http_proxy": "http://lower:1", "HTTP_PROXY": "http://upper:2", "https_proxy": "",
+         "HTTPS_PROXY": "http://up-secure:3", "no_proxy": "", "NO_PROXY": "*"},
+        [("http://example.com/", "http://lower:1"), ("https://example.com/", "")],
+    ),
+    # A lower-case http_proxy is trusted under CGI; the upper-case one next to it is not.
+    ({"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "http_proxy": "http://mine:1"},
+     [("http://example.com/", "http://mine:1")]),
+]
+
+
+def run_env_cases(tmp_path, cases):
+    """One VM run of ENV_PROGRAM for each (environment, expectations) of `cases`."""
     source = tmp_path / "env.agc"
     source.write_text(ENV_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "env.agcb")
-    for env, expected in ENV_CASES:
+    for env, expected in cases:
         extra = {name: None for name in ENV_NAMES}
         extra.update(env)
         result = run_vm(bytecode, env=vm_environment(extra), args=[url for url, _ in expected], timeout=scaled(60))
         assert result.code == 0, result.stderr
         assert output_lines(result.stdout) == ["%s => [%s]" % pair for pair in expected], env
+
+
+def test_proxy_from_env_reads_the_proxy_variables_the_way_curl_does(tmp_path):
+    """Only a program that calls HTTP.proxy_from_env reads the environment: the variables, the httpoxy rule and each
+    kind of no_proxy entry, over controlled environments (no peer is needed)."""
+    run_env_cases(tmp_path, ENV_CASES)
+
+
+@host_only(WINDOWS, "Windows has one environment variable for http_proxy and HTTP_PROXY: names do not differ by case")
+def test_proxy_from_env_prefers_the_lower_case_names(tmp_path):
+    """The lower-case name wins over the upper-case one, even empty, and is the only one trusted under CGI."""
+    run_env_cases(tmp_path, ENV_CASES_BY_CASE)
 
 
 ENV_CLIENT_PROGRAM = """\

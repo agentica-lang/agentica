@@ -484,9 +484,10 @@ end
 ## none. It is the only call that reads the environment: a client never does, so nothing changes until a program asks.
 ## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
 ## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
-## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy).
-## `ALL_PROXY` is not read. A value with no `://` is read as `http://` (`proxy.example:8080`), and one with another
-## scheme is returned as it is, so the client that gets it says it is not an `http://` origin.
+## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy); on
+## Windows, whose names do not differ by case, an `http://` URL then gets no proxy. `ALL_PROXY` is not read. A value
+## with no `://` is read as `http://` (`proxy.example:8080`), and one with another scheme is returned as it is, so the
+## client that gets it says it is not an `http://` origin.
 ##
 ## `no_proxy` (or `NO_PROXY`) is a list, separated by commas or spaces, that says where no proxy is used, and the
 ## result is then `""`: `*` is every host; `example.com` and `.example.com` are that domain and its subdomains; an
@@ -1319,11 +1320,15 @@ def proxy_of_scheme(scheme: String) -> String
   lower = "http_proxy"
   upper = "HTTP_PROXY"
   # A CGI program (REQUEST_METHOD set) may have an HTTP_PROXY made from the request's Proxy header: httpoxy.
-  trusted = not Result.ok?(System.env("REQUEST_METHOD"))
+  cgi = Result.ok?(System.env("REQUEST_METHOD"))
+  trusted = not cgi
   if scheme == "https"
     lower = "https_proxy"
     upper = "HTTPS_PROXY"
     trusted = true
+  elsif cgi and System.os() == "windows"
+    # Windows names are not case-sensitive: http_proxy is HTTP_PROXY, which a request may have made.
+    return ""
   end
 
   value = String.trim(env_value(lower, upper, trusted))
