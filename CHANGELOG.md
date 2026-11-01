@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica help std/MODULE` lists the exports of a standard library module
+  with their summaries, and `agentica help std/MODULE.NAME` prints one export
+  with its signature and `##` doc (`--json` too).
+
 ### Changed
 
 - Code under the JIT that unwraps Optionals (`unwrap!`) or builds Map literals

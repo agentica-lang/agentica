@@ -23,7 +23,9 @@ program, the bytecode cache and the sandbox flags.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
-  `agentica doc PATH` the exported API of a file or `std/` module.
+  `agentica doc PATH` the exported API of a file or `std/` module;
+  `agentica help std/MODULE[.NAME]` lists a `std/` module's exports with
+  their summaries, or prints one export with its doc.
 - `--deny-run`, `--deny-net`, `--deny-fs`, `--deny-env` and `--deny-native` make
   the blocked calls fail with `denied: --deny-X`; `--sandbox` sets all of them,
   for untrusted code. A program can start a process past one flag, so use
