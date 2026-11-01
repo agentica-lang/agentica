@@ -1261,6 +1261,8 @@ def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
   chars = input.chars
   start = Source.position(first, line, line_start)
   index = first + 1
+  # The offset of the `[` of an open class, or -1. A `]` first in a class (after `[` or `[^`) is literal text.
+  class_start = -1
   while chars[index] != "/"
     char = chars[index]
     if LINE_ENDS.include?(char) or (char == "\\" and LINE_ENDS.include?(chars[index + 1]))
@@ -1270,8 +1272,19 @@ def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
     elsif char == "\\"
       index += 2
     else
+      if char == "[" and class_start < 0
+        class_start = index
+      elsif char == "]" and class_start >= 0 and !class_head?(chars, class_start, index)
+        class_start = -1
+      end
+
       index += 1
     end
+  end
+
+  if class_start >= 0
+    # The / ends the literal inside a class, which can never be a valid pattern: say how to write the slash.
+    return Diag.Outcome.Failed(slash_in_class(start, Source.position(index + 1, line, line_start)))
   end
 
   body = input.text.slice(first + 1, index - first - 1)
@@ -1294,6 +1307,20 @@ def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
       value: Tokens.Value.Text(body),
       span: span(start, Source.position(stop, line, line_start)),
     ),
+  )
+end
+
+# Whether the `]` at index is the first character of the class that opens at class_start, so literal text.
+def class_head?(chars: List[String], class_start: Int, index: Int) -> Bool
+  return index == class_start + 1 or (index == class_start + 2 and chars[class_start + 1] == "^")
+end
+
+def slash_in_class(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-UNTERMINATED-REGEX",
+    "a / inside [...] ends the regex literal",
+    span(start, stop),
+    Diag.Help.Hint("write a slash in a class with a backslash, as in [\\/]"),
   )
 end
 

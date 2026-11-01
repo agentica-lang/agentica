@@ -1,11 +1,12 @@
 """The regex literal `/pattern/flags` (docs/grammar/04-lexical.md), checked through the product CLI.
 
 A diagnostic case asserts its code and its span (line and column of the start and of the exclusive end), never the
-message. A run case checks that a literal behaves as `Regex.compile` of its body with the flags written as (?i) and (?s);
-tests/fixtures/vm/regex-literal.agc is the golden of the same rule.
+message. A run case checks that a literal behaves as `Regex.compile` of its body with the flags written as (?i) and
+(?s); tests/fixtures/vm/regex-literal.agc is the golden of the same rule.
 """
 import json
 
+from tests.agentica_test import cli, run
 from tests.test_spec_lexer import run_all, span_of
 
 IMPORT = 'import Regex from "std/regex"\n\n'
@@ -33,6 +34,8 @@ DIAGNOSTICS = [
     ("slash with no operand", program("x = / 2"), "LEX-UNTERMINATED-REGEX", (4, 7, 4, 10)),
     # After a name a / is division, so `puts /x/` ends in a / with no operand; the help shows puts(/x/).
     ("regex after a name", program("puts /ab/"), "PARSE-UNEXPECTED-TOKEN", (4, 12, 5, 1)),
+    # A / inside a class ends the literal, which leaves the class open: the slash needs a backslash there.
+    ("slash in a class", program("r = /a[/]b/"), "LEX-UNTERMINATED-REGEX", (4, 7, 4, 11)),
     ("regex as a case pattern", program('case "a"', "  /a/ -> puts(1)", "  _ -> puts(2)", "end"),
      "PARSE-UNEXPECTED-TOKEN", (5, 5, 5, 8)),
 ]
@@ -48,6 +51,9 @@ RUNS = [
     ("a slash is division after a value and a regex after an operator",
      program("x = 12", "x /= 2", "puts(x / 3 / 2)", 'puts(Regex.match?("a/b", /a\\/b/))', "puts((/=x/).source)"),
      "1\ntrue\n=x\n"),
+    ("the flags give one pattern in any order",
+     program("puts((/a/mi).source)", "puts((/a/im).source)", "puts((/a/mi).source == (/a/im).source)"),
+     "(?is)a\n(?is)a\ntrue\n"),
     ("a literal in a loop and in a constant",
      IMPORT + "WORDS = [/a/, /b/i]\n\ndef main() -> Void\n  count = 0\n  for text in [\"ab\", \"B\", \"c\"]\n"
      "    if Regex.match?(text, /[ab]/i) and Regex.match?(text, WORDS[1])\n      count += 1\n    end\n  end\n\n"
@@ -74,3 +80,37 @@ def test_programs_print_what_the_rule_says(tmp_path):
     results = run_all(tmp_path, {case: source for case, source, _ in RUNS})
     found = [(case, results[case].code, results[case].stdout) for case, *_ in RUNS]
     assert found == [(case, 0, stdout) for case, _source, stdout in RUNS]
+
+
+# Files of one program: each imports std/regex its own way (an alias, another alias, a name list), and two of them hold
+# literals of the same shape at the same place, so the constant that each literal of a body becomes must stay its own.
+MODULES = {
+    "letters.agc": 'import Regex from "std/regex"\n\nexport def count(items: List[String]) -> Int\n'
+                   "  return items.select do |item: String| Regex.match?(item, /^a+$/) end.size\nend\n",
+    "digits.agc": 'import R from "std/regex"\n\nexport def count(items: List[String]) -> Int\n'
+                  "  return items.select do |item: String| R.match?(item, /^1+$/) end.size\nend\n",
+    "names.agc": 'import {match?} from "std/regex"\n\nexport def first_or[T](items: List[T], fallback: T) -> T\n'
+                 "  if match?(\"#{items.size}\", /^[1-9]/)\n    return items[0]\n  end\n\n  return fallback\nend\n",
+    "main.agc": 'import Digits from "digits"\nimport Letters from "letters"\nimport Names from "names"\n\n'
+                "def main() -> Void\n  items = [\"a\", \"aa\", \"11\", \"b\"]\n"
+                "  puts(Letters.count(items))\n  puts(Digits.count(items))\n"
+                "  puts(Names.first_or(items, \"none\"))\n  puts(Names.first_or([], \"none\"))\nend\n",
+}
+
+
+def test_literals_of_several_files_keep_their_own_patterns(tmp_path):
+    for name, text in MODULES.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    result = run(cli() + [str(tmp_path / "main.agc")])
+    assert (result.code, result.stdout) == (0, "2\n1\na\nnone\n"), result.stderr
+
+
+def test_an_import_of_std_regex_by_an_imported_file_is_not_enough(tmp_path):
+    (tmp_path / "letters.agc").write_text(MODULES["letters.agc"], encoding="utf-8")
+    (tmp_path / "main.agc").write_text(
+        'import Letters from "letters"\n\ndef main() -> Void\n  r = /a/\n  puts(Letters.count(["a"]))\nend\n',
+        encoding="utf-8",
+    )
+    result = run(cli() + ["--json", "check", str(tmp_path / "main.agc")])
+    problem = json.loads(result.stderr.strip().split("\n")[-1])
+    assert (result.code, problem["code"], span_of(problem)) == (1, "CHECK-REGEX-IMPORT", (4, 7, 4, 10))

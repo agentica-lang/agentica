@@ -156,6 +156,9 @@ is a rule:
   - **Help:** end the pattern with `/` on the same line; for a division put the
     `/` at the end of the line before, or wrap the expression in parentheses
 
+- **Written:** `/a[/]b/` (`LEX-UNTERMINATED-REGEX`)
+  - **Help:** write a slash in a class with a backslash, `[\/]`
+
 - **Written:** `/#{name}/` (`LEX-REGEX-INTERPOLATION`)
   - **Help:** build a pattern at run time with `Regex.compile(text)`; `\#{`
     matches the text `#{`

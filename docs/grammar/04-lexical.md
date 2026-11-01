@@ -261,13 +261,15 @@ that holds it.
 
 `/pattern/flags` is a regular expression of `std/regex`: the value of
 `Regex.compile` of the body, with the type `Regex.Regex` (semantics in
-[§6](06-semantics.md)). The body has no string escapes. A backslash is read with
-the character after it, so `\/` is a slash in the pattern and `\d` needs no
-second backslash. The body ends at the first unescaped `/`; `#` in the body is
-pattern text, never a comment.
+[§6](06-semantics.md)). The body has no string escapes. A backslash is read
+with the character after it, so `\/` is a slash in the pattern and `\d` needs
+no second backslash. The body ends at the first unescaped `/`; `#` in the body
+is pattern text, never a comment.
 
 - A line break or the end of the file before the closing `/` is
   `LEX-UNTERMINATED-REGEX`, at the literal.
+- A `/` inside a class `[...]` ends the literal and leaves the class open, which
+  is also `LEX-UNTERMINATED-REGEX`, with a help: write the slash as `\/`.
 - `#{` in the body is `LEX-REGEX-INTERPOLATION`; `\#{` matches the text `#{`. A
   pattern built at run time is `Regex.compile(text)`.
 - After the closing `/` come the flags `i` (ignore case, `(?i)`) and `m` (`.`

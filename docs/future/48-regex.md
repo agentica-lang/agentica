@@ -339,8 +339,7 @@ The cases:
 emitted), a body scanner and a flag scanner (both in code mode), a token kind
 `regex` with body, flags and span, a parser node, the checker rule and the
 constant lowering. The grammar changes go to `docs/grammar/04-lexical.md`,
-`06-semantics.md` and `07-diagnostics.md`. The diagnostic code names here and in
-48.5 are proposals until 48b.
+`06-semantics.md` and `07-diagnostics.md`.
 
 **Ruby differences (question 4).** `^` and `$` are text anchors here and line
 anchors in Ruby, so `/^ERROR/` matches only at the start of the text.
@@ -386,11 +385,11 @@ programming skill state these differences next to the literal.
   `match`, `match?`, `find_all`, `replace`, `split`, `escape` and `named`; the
   limits; goldens, peer, ReDoS test and benchmark. The site page carries the
   warning of 48.5 about `"#{name}"` and `"${name}"`.
-- **48b: the regex literal (48.6).** The lexer rule, the scanners, the node,
-  `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering. `compiler/`
-  only, after 48a. A test checks that a literal equals `Regex.compile` of its
-  body and mapped flags. The programming skill shows the literal as the normal
-  form, with the Ruby differences.
+- **48b: the regex literal (48.6), built.** The lexer rule, the scanners, the
+  node, `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering.
+  `compiler/` only, after 48a. A test checks that a literal equals
+  `Regex.compile` of its body and mapped flags. The programming skill shows the
+  literal as the normal form, with the Ruby differences.
 - **48c: C matcher, if measured.** A stepper with the same API and one STEP per
   resume (48.3). The PR records the numbers and the threshold.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`

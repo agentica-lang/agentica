@@ -1039,7 +1039,16 @@ end
 def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
   body = Base.token_text(token)
   flags = token.lexeme.slice(body.length + 2, token.lexeme.length - body.length - 2)
-  mapped = flags.replace("m", "s")
+  # In a fixed order, so /a/mi and /a/im are the same pattern, (?is)a.
+  mapped = ""
+  if flags.contains?("i")
+    mapped = "i"
+  end
+
+  if flags.contains?("m")
+    mapped = mapped + "s"
+  end
+
   pattern = body
   if mapped != ""
     pattern = "(?#{mapped})#{body}"
