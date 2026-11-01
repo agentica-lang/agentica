@@ -813,6 +813,49 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
     assert code == 0 and stdout.count("\n") == 152, stderr
 
 
+LOGGER_LOOP = """import Logger from "std/logger"
+
+def shown(event: LogEvent) -> Void
+  puts("shown #{event.message}")
+end
+
+def main() -> Void
+  Logger.set_level(LogLevel.Info)
+  _ = Logger.detach("console")
+  _ = Logger.attach("shown", LogLevel.Debug, &shown)
+  i = 0
+  total = 0
+  while i < 3000
+    Logger.debug("tick #{i}")
+    if i == 2990
+      Logger.set_level(LogLevel.Debug)
+    end
+    if i == 2994
+      Logger.set_level(LogLevel.Info)
+    end
+    total += i % 7
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
+def test_a_disabled_logger_debug_in_a_compiled_loop_runs_as_in_the_interpreter(tmp_path):
+    # LogRegistry.floor is a leaf: the compiled Logger.debug calls it itself (no exit at each call), and sees the level
+    # that set_level changes in the loop, so ticks 2991 to 2994 are shown in every tier.
+    bytecode = compile_text(LOGGER_LOOP, "logger_loop", tmp_path)
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("shown tick 2991\nshown tick 2992\n") and stdout.count("shown") == 4, stderr
+    exits = [int(line.split("count=")[1]) for line in jit_trace(bytecode, tmp_path, "always")
+             if " jit exit op=call-builtin " in line]
+    assert (sum(exits) < 100) if jit_host() else exits == [], exits
+    turns = sched_turns(bytecode, tmp_path)
+    assert turns["off"] > 40 and turns["on"] == turns["off"] and turns["always"] == turns["off"], turns
+    assert_max_steps_sweep(bytecode, int(stdout.split("steps ")[1]))
+
+
 def test_on_compiles_a_function_without_a_loop_that_makes_block_calls(tmp_path):
     # score has no loop but makes block calls, which compiled code starts itself, so `on` gives it code at its first
     # call from main's compiled loop, as a function that calls: the calls of score, and their block calls, then stay

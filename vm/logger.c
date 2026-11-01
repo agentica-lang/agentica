@@ -57,10 +57,17 @@ static void append(agc_log_registry *log, agc_value name, int64_t rank, agc_valu
   if (rank < log->lowest) log->lowest = rank;
 }
 
+/* LogRegistry.level, .floor and .lowest are leaf rows, so compiled code calls them and `on` compiles a function such
+ * as Logger.debug that calls them: each takes rt->sync itself around its reads, as Native.closed? does, and does
+ * nothing else. The writers (set_level, install_default, attach, detach) stay shared, so the interpreter holds
+ * rt->sync around them. */
 static agc_value builtin_level(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_int(vm->rt->log.level);
+  agc_sync_take(vm);
+  int64_t level = vm->rt->log.level;
+  agc_sync_drop(vm);
+  return agc_int(level);
 }
 
 /* The level a call needs to beat: -1 until the default is installed, then the
@@ -72,8 +79,10 @@ static agc_value builtin_floor(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   const agc_log_registry *log = &vm->rt->log;
-  if (log->level < 0) return agc_int(-1);
-  return agc_int(log->level > log->lowest ? log->level : log->lowest);
+  agc_sync_take(vm);
+  int64_t floor = log->level < 0 ? -1 : log->level > log->lowest ? log->level : log->lowest;
+  agc_sync_drop(vm);
+  return agc_int(floor);
 }
 
 static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -86,7 +95,10 @@ static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_lowest(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_int(vm->rt->log.lowest);
+  agc_sync_take(vm);
+  int64_t lowest = vm->rt->log.lowest;
+  agc_sync_drop(vm);
+  return agc_int(lowest);
 }
 
 /* One native call with no yield between the check and the writes: two tasks
@@ -164,10 +176,10 @@ static agc_value builtin_task_id(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_logger_builtins[] = {
-  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
