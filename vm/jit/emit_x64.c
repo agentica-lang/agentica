@@ -5,7 +5,7 @@
  */
 #include "jit.h"
 
-#if AGC_JIT_HOST
+#if AGC_JIT_HOST && (defined(__x86_64__) || defined(_M_X64))
 #include <stddef.h>
 #include <string.h>
 
@@ -70,11 +70,10 @@ _Static_assert(FIELD_SIZE(agc_string, chars) == 8, "a plain leaf's one-character
 
 /* The two shapes of the opcode helpers (agc_op_* in core.h). */
 typedef agc_status (*binary_helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *);
-typedef agc_status (*unary_helper)(agc_vm *, agc_value *, const agc_value *);
 
 /* Room for N more bytes, or `failed` past the code cap. Once `failed` is set nothing is written any more: byte,
-   put32_at and patch do nothing, so an offset recorded before the failure, whose bytes may be cut off at the cap, is
-   never written into, and agc_emit_end lays out nothing. */
+   put32_at and agc_emit_patch do nothing, so an offset recorded before the failure, whose bytes may be cut off at the
+   cap, is never written into, and agc_emit_end lays out nothing. */
 static void grow(agc_emitter *e, size_t n) {
   if (e->len + n > AGC_JIT_CODE_CAP) {
     e->failed = true;
@@ -196,23 +195,9 @@ static size_t jump_to_patch(agc_emitter *e, int cc) {
 /* The offset at AT now points here: a jump forward inside one instruction's code. */
 static void land(agc_emitter *e, size_t at) { put32_at(e, at, (uint32_t)(int32_t)(e->len - (at + 4))); }
 
-static void patch(agc_emitter *e, size_t at, agc_jit_patch_kind kind, uint64_t value) {
-  if (e->failed) return;
-  if (e->patch_count == e->patch_cap) {
-    size_t cap = e->patch_cap ? agc_size_mul(e->patch_cap, 2) : 64;
-    agc_jit_patch *patches = agc_alloc_atomic(agc_size_mul(cap, sizeof *patches));
-    if (e->patch_count) memcpy(patches, e->patches, e->patch_count * sizeof *patches);
-    e->patches = patches;
-    e->patch_cap = cap;
-  }
-  e->patches[e->patch_count++] = (agc_jit_patch){(uint32_t)at, kind, value};
-}
-
-static uint64_t exit_word(uint32_t status, uint32_t pc) { return ((uint64_t)pc << 32) | status; }
-
 /* jcc (or jmp for CC < 0) to the stub that returns STATUS at PC. */
 static void exit_if(agc_emitter *e, int cc, uint32_t status, uint32_t pc) {
-  patch(e, jump_to_patch(e, cc), AGC_JIT_PATCH_EXIT, exit_word(status, pc));
+  agc_emit_patch(e, jump_to_patch(e, cc), AGC_JIT_PATCH_EXIT, agc_emit_exit_word(status, pc));
 }
 
 /* The tag of register R must be TAG, else the instruction at PC fails with a wrong tag, as agc_as_int does. */
@@ -242,9 +227,7 @@ static void save_registers(agc_emitter *e) {
 }
 
 void agc_emit_begin(agc_emitter *e, uint32_t count) {
-  memset(e, 0, sizeof *e);
-  e->count = count;
-  e->labels = agc_alloc_atomic(agc_size_mul(count ? count : 1, sizeof *e->labels));
+  agc_emit_start(e, count);
   /* The entry from C at offset 0 jumps over the two entries of compiled code. The tail entry at AGC_JIT_TAIL_ENTRY,
      which a native TAIL_CALL of another function jumps to with everything as it is (the frame's R, the native depth,
      the stack of the caller's code, which every function lays out the same way): instruction 0. The native entry at
@@ -252,12 +235,12 @@ void agc_emit_begin(agc_emitter *e, uint32_t count) {
      the same for every function: one more native call deep, then instruction 0. */
   BYTES(e, 0xEB, 0x00); /* jmp short entry */
   size_t over = e->len - 1;
-  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
+  agc_emit_patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
   save_registers(e);
   BYTES(e, 0x49, 0xFF, 0xC6);        /* inc r14 */
   BYTES(e, 0x48, 0x83, 0xEC, FRAME); /* sub rsp, 40 */
   move_reg(e, true, REGS, ARG1);
-  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
+  agc_emit_patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, 0);
   if (!e->failed) e->code[over] = (uint8_t)(e->len - (over + 1));
   /* The entry from C: no native call below, then instruction pc by the table of offsets that agc_emit_end puts after
      the code. */
@@ -383,7 +366,7 @@ static void call_fn(agc_emitter *e, uint64_t fn) {
 static void call_status(agc_emitter *e, uint64_t fn, uint32_t pc) {
   call_fn(e, fn);
   BYTES(e, 0x85, 0xC0); /* test eax, eax */
-  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
 }
 
 /* The first three arguments of a helper call: vm, &R[a], &R[b]. */
@@ -469,31 +452,13 @@ void agc_emit_struct_with(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t up
   call_status(e, (uint64_t)(uintptr_t)agc_jit_struct_with, pc);
 }
 
-/* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
-   compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
-   cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
+/* The instructions that are one call of their opcode HELPER (with R[c] when TWO), the interpreter's own code: the
+   Float operators and compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT
+   (CHARGED: the cost_exit applies their charges, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
    check, whose INDEX_OUT_OF_RANGE leaves R[b] and R[c] for the message). */
-void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
-  if (op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN || op == AGC_OP_TO_TEXT) {
-    unary_helper one = op == AGC_OP_NEG_F ? agc_op_neg_f : op == AGC_OP_LIST_LEN ? agc_op_list_len : agc_op_to_text;
-    call_helper(e, (uint64_t)(uintptr_t)one, in, false, pc);
-    if (op == AGC_OP_TO_TEXT) cost_exit(e, pc);
-    return;
-  }
-  binary_helper two;
-  switch (op) {
-    case AGC_OP_ADD_F: two = agc_op_add_f; break;
-    case AGC_OP_SUB_F: two = agc_op_sub_f; break;
-    case AGC_OP_MUL_F: two = agc_op_mul_f; break;
-    case AGC_OP_DIV_F: two = agc_op_div_f; break;
-    case AGC_OP_LT_F: two = agc_op_lt_f; break;
-    case AGC_OP_LE_F: two = agc_op_le_f; break;
-    case AGC_OP_SAME: two = agc_op_same; break;
-    case AGC_OP_CONCAT: two = agc_op_concat; break;
-    default: two = agc_op_list_get; break;
-  }
-  call_helper(e, binary(two), in, true, pc);
-  if (op == AGC_OP_SAME || op == AGC_OP_CONCAT) cost_exit(e, pc);
+void agc_emit_helper(agc_emitter *e, uint64_t helper, bool two, bool charged, agc_instr in, uint32_t pc) {
+  call_helper(e, helper, in, two, pc);
+  if (charged) cost_exit(e, pc);
 }
 
 /* The tag of register R must be TAG, else the interpreter runs the instruction at PC, and fails as it does. */
@@ -569,14 +534,14 @@ void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
 }
 
 void agc_emit_jump(agc_emitter *e, uint32_t target) {
-  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, target);
+  agc_emit_patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_LABEL, target);
 }
 
 /* JUMP_IF_TRUE (WHEN) or JUMP_IF_FALSE: R[a] must be a Bool, whose payload is 0 or 1. */
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc) {
   need_tag(e, a, AGC_T_BOOL, pc);
   compare_imm8(e, true, REGS, WORD(a), 0);
-  patch(e, jump_to_patch(e, when ? CC_NE : CC_E), AGC_JIT_PATCH_LABEL, target);
+  agc_emit_patch(e, jump_to_patch(e, when ? CC_NE : CC_E), AGC_JIT_PATCH_LABEL, target);
 }
 
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1, status, pc); }
@@ -682,7 +647,7 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   BYTES(e, 0x49, 0x83, 0xC3, AGC_JIT_NATIVE_ENTRY); /* add r11, native entry */
   BYTES(e, 0x41, 0xFF, 0xD3);                       /* call r11 */
   BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
-  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
   store_returned(e, in.a);
 }
 
@@ -778,7 +743,7 @@ void agc_emit_call_value(agc_emitter *e, agc_instr in, uint32_t pc) {
   BYTES(e, 0x48, 0x83, 0xC0, AGC_JIT_NATIVE_ENTRY); /* add rax, native entry */
   BYTES(e, 0xFF, 0xD0);                             /* call rax */
   BYTES(e, 0x83, 0xF8, AGC_JIT_EXIT_RETURNED);      /* cmp eax, RETURNED */
-  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
+  agc_emit_patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EPILOGUE, 0);
   store_returned(e, in.a);
 }
 
@@ -808,7 +773,22 @@ void agc_emit_return(agc_emitter *e, uint32_t a, uint32_t pc) {
   op_mem(e, false, 0xFF, 1, RCX, TASK_FIELD(depth));       /* dec dword [rcx + depth] */
   byte(e, 0xB8); /* mov eax, RETURNED */
   word32(e, AGC_JIT_EXIT_RETURNED);
-  patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_EPILOGUE, 0);
+  agc_emit_patch(e, jump_to_patch(e, -1), AGC_JIT_PATCH_EPILOGUE, 0);
+}
+
+/* The rel32 at AT, so that its jump lands at TO. */
+static void link_rel32(agc_emitter *e, size_t at, size_t to) { put32_at(e, at, (uint32_t)(int32_t)(to - (at + 4))); }
+
+/* The stub of an exit: rax = the exit word (with the helper's status for EXIT_STATUS), then back to the epilogue. */
+static void exit_stub(agc_emitter *e, agc_jit_patch p, size_t epilogue) {
+  if (p.kind == AGC_JIT_PATCH_EXIT_STATUS) {
+    move_reg(e, false, RAX, RAX); /* mov eax, eax: the helper's status, high half cleared */
+    move_imm64(e, RCX, p.value);
+    BYTES(e, 0x48, 0x09, 0xC8); /* or rax, rcx */
+  } else {
+    move_imm64(e, RAX, p.value);
+  }
+  link_rel32(e, jump_to_patch(e, -1), epilogue);
 }
 
 /* The epilogue, the stubs of the exits (one for each run of patches with the same exit word), then the table of
@@ -822,33 +802,7 @@ size_t agc_emit_end(agc_emitter *e) {
   pop(e, REGS);
   pop(e, VM);
   byte(e, 0xC3); /* ret */
-  size_t stub = 0;
-  agc_jit_patch last = {0, AGC_JIT_PATCH_LABEL, 0};
-  for (size_t k = 0; k < e->patch_count; k++) {
-    agc_jit_patch p = e->patches[k];
-    size_t to;
-    if (p.kind == AGC_JIT_PATCH_LABEL) {
-      if (p.value >= e->count) return 0;
-      to = e->labels[p.value];
-    } else if (p.kind == AGC_JIT_PATCH_EPILOGUE) {
-      to = epilogue;
-    } else if (p.kind == last.kind && p.value == last.value) {
-      to = stub;
-    } else {
-      to = stub = e->len;
-      last = p;
-      if (p.kind == AGC_JIT_PATCH_EXIT_STATUS) {
-        move_reg(e, false, RAX, RAX); /* mov eax, eax: the helper's status, high half cleared */
-        move_imm64(e, RCX, p.value);
-        BYTES(e, 0x48, 0x09, 0xC8); /* or rax, rcx */
-      } else {
-        move_imm64(e, RAX, p.value);
-      }
-      size_t back = jump_to_patch(e, -1);
-      put32_at(e, back, (uint32_t)(int32_t)(epilogue - (back + 4)));
-    }
-    put32_at(e, p.at, (uint32_t)(int32_t)(to - (p.at + 4)));
-  }
+  if (!agc_emit_patches(e, epilogue, exit_stub, link_rel32)) return 0;
   while (!e->failed && e->len % 4) byte(e, AGC_EMIT_PAD);
   size_t table = e->len;
   for (uint32_t pc = 0; pc < e->count; pc++) word32(e, (uint32_t)(int32_t)(e->labels[pc] - table));
