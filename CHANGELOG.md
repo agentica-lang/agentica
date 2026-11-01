@@ -21,6 +21,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
   its PEM files, for `TLS.listen(host, port, context)` and
   `HttpClientOptions(tls: some(context))`, which many clients can share.
+- `TLS.upgrade(socket, context, host, timeout_ms)` starts TLS on an open TCP
+  socket (STARTTLS), as a client or a server by the context's role.
 - `File.replace(path, data)` replaces an existing file in one step, keeping its
   permission bits and any symbolic link to it.
 - `agentica fmt --check [PATH...]` lists the `.agc` files whose layout the

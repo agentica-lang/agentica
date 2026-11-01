@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 249,
+  "stdout": [
+    "STARTTLS",
+    "error(\"network: socket is closed\")",
+    "error(\"network: the socket is TLS already\")",
+    "ok(\"ready hello\")",
+    "ok([\"network: socket is closed\", \"ready hello!\"])",
+    "STARTTLS",
+    "false",
+    "tls-upgrade: handshake failed",
+    "error(\"network: host cannot be empty\")",
+    "error(\"network: timeout must be positive milliseconds\")",
+    "ok()",
+    "error(\"network: socket is closed\")",
+    ""
+  ],
+  "stderr": []
+}

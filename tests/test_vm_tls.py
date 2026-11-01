@@ -82,6 +82,44 @@ def main() -> Void
 end
 """
 
+STARTTLS_CLIENT_PROGRAM = """\
+def starttls(port: Int, tls: TlsContext, timeout_ms: Int) -> Result[Socket]
+  plain = try TCP.connect("127.0.0.1", port, 5000)
+  try TCP.send(plain, "STARTTLS\\n", 5000)
+  puts(try TCP.read_line(plain, 5000))
+  return TLS.upgrade(plain, tls, "localhost", timeout_ms)
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  port = String.to_int!(IO.gets().unwrap!)
+  tls = TLS.client_context(TlsClientOptions(ca_file: "#{dir}/ca.pem")).unwrap!
+  socket = starttls(port, tls, 5000).unwrap!
+  TCP.send(socket, "from agentica\\n", 5000).unwrap!
+  puts(TCP.read_line(socket, 5000).unwrap!)
+  TCP.close(socket)
+  IO.inspect(starttls(port, tls, 5000))
+  IO.inspect(starttls(port, tls, 300))
+end
+"""
+
+STARTTLS_SERVER_PROGRAM = """\
+def main() -> Void
+  dir = System.args()[0]
+  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem"))
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  plain = TCP.accept(listener, 10000).unwrap!
+  puts(TCP.read_line(plain, 10000).unwrap!)
+  TCP.send(plain, "220 ready\\n", 10000).unwrap!
+  socket = TLS.upgrade(plain, server.unwrap!, "", 10000).unwrap!
+  TCP.send(socket, "hello #{TCP.read_line(socket, 10000).unwrap!}\\n", 10000).unwrap!
+  TCP.close(socket)
+  puts("done")
+end
+"""
+
 HTTPS_GOODBYE_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -557,6 +595,21 @@ def test_client_certificate_to_a_python_server_that_requires_one_and_refused_wit
     assert server.wait() == 0
 
 
+def test_starttls_both_ways_against_python_data_before_the_handshake_and_a_handshake_timeout(tmp_path, adopt):
+    server, port = python_server(adopt, "starttls")
+    result = run_text(tmp_path, "starttls-client", STARTTLS_CLIENT_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, "220 ready\npython TLSv1.3 FROM AGENTICA\n220 ready\n"
+                                            'error("network: data came before the TLS handshake")\n220 ready\n'
+                                            'error("network: operation timed out")\n'), result.stderr
+    assert server.wait() == 0
+    vm = adopt(start_vm(compile_text(STARTTLS_SERVER_PROGRAM, "starttls-server", tmp_path), CERTS))
+    python = run([PYTHON, PYTHON_PEER, "starttls-client", vm.next_line()], timeout=scaled(30))
+    assert (python.code, python.stdout) == (0, "220 ready hello python TLSv1.3\n"), python.stderr
+    assert vm.next_line() == "STARTTLS"
+    assert vm.next_line() == "done"
+    assert vm.wait() == 0, vm.stderr_text()
+
+
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
@@ -770,8 +823,11 @@ def test_a_dropped_context_stays_valid_for_its_listener_and_sockets(tmp_path):
     ("a client context to TLS.listen", 'TLS.listen("127.0.0.1", 0, client)', "main.agc", "client"),
     ("a server context in HttpClientOptions.tls", "HTTP.client(HttpClientOptions(tls: some(server)))", "std/http.agc",
      None),
+    ("a server context with a host to TLS.upgrade",
+     'TLS.upgrade(TCP.connect("127.0.0.1", TCP.local_port(TCP.listen("127.0.0.1", 0).unwrap!), 1000).unwrap!, '
+     'server, "h", 1000)', "main.agc", '"h"'),
 ])
-def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_the_context(tmp_path, name, call, file, covers):
+def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument(tmp_path, name, call, file, covers):
     program = tmp_path / "main.agc"
     program.write_text(
         'import HTTP from "std/http"\n\ndef main() -> Void\n  dir = System.args()[0]\n'
