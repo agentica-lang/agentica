@@ -18,9 +18,16 @@ from tests.frontend_support import (
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lower"
 
-# The lower stage costs about 1,900 steps for each level of nested some(...) and the budget allows 4,000. A walk of the
-# whole type of each level (#842) took about 10 million steps at 900 levels, above the 3.6 million of the budget. A step
-# budget makes the check deterministic on a loaded runner, where a clock would not.
+# Nested values whose type holds the type of the level below (#842): the lower stage, the checker included, costs
+# about 1,600 to 2,600 steps for each level, so twice the depth costs less than 2.5 times the steps (a walk of the
+# type below at each level gave 3.3 times). STEPS_PER_LEVEL is the backstop for a cost that is quadratic from the
+# start. Steps, not a clock, so a loaded runner gives the same answer.
+NESTINGS = {
+    "some": ("", "some(", ")"),
+    "list": ("", "[", "]"),
+    "ok": ("", "ok(", ")"),
+    "annotated": ("Optional[", "some(", ")"),
+}
 STEPS_PER_LEVEL = 4000
 
 
@@ -60,11 +67,32 @@ def test_the_lowering_matches_the_goldens_of_the_fixtures(stage):
     assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "lowering fixtures")
 
 
-def test_nested_some_lowers_in_a_linear_number_of_steps(stage):
-    depth = 900
-    body = "  y = " + repeat("some(", depth) + "x" + repeat(")", depth) + "\n  puts(\"ok\")\n"
-    outputs = stage.run_cases({"some": checked_body(body)}, flags=("--max-steps", str(depth * STEPS_PER_LEVEL)))
-    assert re.search(r"^program ", outputs["some"])
+def lowering_steps(stage, text):
+    """The steps the lower stage takes over the program `text` (the profile total of the VM)."""
+    directory = stage.temp_dir()
+    write_files(directory, {"nested.agc": text})
+    report = directory / "profile.trace"
+    env = dict(HERMETIC_ENVIRONMENT, AGENTICA_VM_TRACE="profile", AGENTICA_VM_TRACE_FILE=str(report))
+    result = run_vm(stage.bytecode, args=["--stdlib=%s" % stage.stdlib, "nested.agc"], cwd=directory, env=env,
+                    timeout=scaled(600))
+    assert result.code == 0, result.stdout + result.stderr
+    assert re.search(r"^program ", result.stdout, flags=re.MULTILINE)
+    totals = re.findall(rb"^agc-trace \S+ profile total wall_ms=[0-9]+ steps=([0-9]+) ", report.read_bytes(),
+                        flags=re.MULTILINE)
+    return int(totals[-1])
+
+
+@pytest.mark.parametrize("kind", NESTINGS)
+def test_nested_values_lower_in_a_linear_number_of_steps(stage, kind):
+    annotation, opening, closing = NESTINGS[kind]
+
+    def program(depth):
+        typed = ": " + repeat(annotation, depth) + "Int" + repeat("]", depth) if annotation else ""
+        return checked_body("  y%s = %sx%s\n  puts(\"ok\")\n" % (typed, repeat(opening, depth), repeat(closing, depth)))
+
+    half, full = lowering_steps(stage, program(450)), lowering_steps(stage, program(900))
+    assert full < 2.5 * half, (half, full)
+    assert full < 900 * STEPS_PER_LEVEL, full
 
 
 def test_vm_builtins_of_the_lowering_tables_are_the_ones_of_the_freeze():

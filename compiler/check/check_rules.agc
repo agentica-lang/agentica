@@ -267,6 +267,8 @@ def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State
   return ok(out)
 end
 
+# ok(value): the type is built from the value's checked type, which top_names (lowering.agc) and matches_expected?
+# (check_expr.agc) rely on.
 def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.only_result_item(site.expected))
   return ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
@@ -301,7 +303,8 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   return ok(State.Out(st: message.st, type: expected))
 end
 
-# some(value): the expected Optional gives the value its expected type.
+# some(value): the expected Optional gives the value its expected type. The type is built from the value's checked
+# type, which top_names (lowering.agc) and matches_expected? (check_expr.agc) rely on.
 def check_some(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.only_optional_item(site.expected))
   return ok(State.Out(st: out.st, type: T.Type.Optional(out.type)))

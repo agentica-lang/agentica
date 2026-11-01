@@ -10,8 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Compiling deeply nested `some(...)` calls or list literals takes time in
-  proportion to the depth (900 levels of `some`: from 0.13 s to 0.05 s).
+- Compiling deeply nested `some(...)` or `ok(...)` calls or list literals, with
+  or without a type annotation, takes time in proportion to the depth (900
+  levels of `some`: from 0.13 s to 0.05 s).
 
 ## [0.20.0] - 2026-11-01
 

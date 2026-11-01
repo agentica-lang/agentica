@@ -23,7 +23,7 @@ import {
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
-## skips the type check of an item whose list or map was checked as a whole.
+## skips the type check of an item whose list or map, or payload whose some(...) or ok(...), was checked as a whole.
 export def lower_expression(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
@@ -38,7 +38,7 @@ export def lower_expression(
         return lower_optional(cx, fx, node, want, void, true, false)
       end
 
-      return lower_call(cx, fx, node, want, void, false, false)
+      return lower_call(cx, fx, node, want, void, known and ok_call?(node), false)
     Ast.Expr.Binary(node) ->
       try typed(cx, expr, known)
       return lower_binary(cx, fx, node, want)
@@ -163,6 +163,11 @@ export def lower_call(
     if laid_out and type_name?(node.args[index])
       arg = node.args[index]
       fx = try emit_layout(cx, fx, Lowering.type_of(cx, arg), Ast.expr_span(arg))
+    elsif ok_call?(node)
+      # The check of Result[T], this call's or that of the value holding it, covers T: a check at each level of nested
+      # ok(...) walks the whole type below it, quadratic in the depth.
+      out = try lower_expression(cx, fx, node.args[0], fx.next - 1, false, true)
+      fx = out.fx
     elsif defaulted
       out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
       fx = out.fx
@@ -252,6 +257,11 @@ end
 # A call of the builtin some or none.
 def optional_call?(node: Ast.Call) -> Bool
   return (node.name == "some" or node.name == "none") and Builtins.ref(node.name, node.args.size).ok?
+end
+
+# A call of the builtin ok with a value.
+def ok_call?(node: Ast.Call) -> Bool
+  return node.name == "ok" and node.args.size == 1 and Builtins.ref("ok", 1).ok?
 end
 
 # some(x) and none: a value of the builtin enum Optional (Program.OPTIONAL), made by an `enum` instruction. The check
