@@ -172,18 +172,33 @@ The `HttpWire` signatures, for the client and the server, are its rows in
   writes the target's `Host`. The job names the proxy as its origin, scheme,
   host and port, so the owner pools connections by the proxy and the worker
   connects to it (a failure names the proxy). `open`, `upload`, `download` and
-  `start` do the same on their own connection. An `https` URL is refused
-  before any connection: there is no `CONNECT` yet. The user info of the proxy
-  URL is cut out before `parse_url` (which refuses it) and decoded into one
-  `Proxy-Authorization: Basic` header, added to the head of each request and
-  never to the URL, the job or an error; a 407 from the proxy ends the call
-  with an error that names the proxy and closes the connection, pooled or not.
-  A `Connection` keeps the proxy without user info in its options and the login
-  in a channel, so printing it shows no password. `proxy_from_env(url)` is the
-  only reader of the environment (`System.env`, which std/http may call; the
-  pure `compiler/` folders never import it, only `io/native_artifact.agc`
-  does): it picks the variable by the URL scheme, matches `no_proxy` against
-  the parsed host and port, and returns `""` or the proxy text.
+  `start` do the same on their own connection. An `https` URL keeps the target
+  as the job's origin, scheme, host and port (so a pool keeps one tunnel per
+  target) and the worker, or the call, opens the tunnel itself: `connect_https`
+  connects to the proxy, sends `CONNECT host:port` with the `Host` of the
+  authority and the login, and reads the head of the answer (HTTP/1.0 or 1.1;
+  only the head is read, a 2xx is followed by the tunnel and any other status
+  drops the socket and is an error that names the proxy, a 407 as below). An
+  error after the CONNECT went out (a timeout, an end of input, a head that is
+  not HTTP, bytes that came with the head before the TLS handshake) names the
+  proxy and the target as well, never the login. Then `HttpWire.upgrade_tls`
+  (the client's shared system-trust context) or `HttpWire.upgrade_context`
+  (`options.tls`, or a context built for a call that has no client) starts TLS
+  on that socket, with the target as the host to verify. Inside the tunnel the
+  request is in origin form and a 407 is the target's. The login comes only from
+  the proxy URL and goes only with the CONNECT: a `Proxy-Authorization` header
+  that the caller sets in an `https` call goes to the target, as any header
+  does. The user info of the proxy URL is cut out before `parse_url` (which
+  refuses it) and decoded into one `Proxy-Authorization: Basic` header, added to
+  the head of each request and never to the URL, the job or an error; a 407 from
+  the proxy ends the call with an error that names the proxy and closes the
+  connection, pooled or not. A `Connection` keeps the proxy without user info in
+  its options and the login in a channel, so printing it shows no password.
+  `proxy_from_env(url)` is the only reader of the environment (`System.env`,
+  which std/http may call; the pure `compiler/` folders never import it, only
+  `io/native_artifact.agc` does): it picks the variable by the URL scheme,
+  matches `no_proxy` against the parsed host and port, and returns `""` or the
+  proxy text.
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the

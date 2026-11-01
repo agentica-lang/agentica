@@ -93,17 +93,6 @@ def main() -> Void
   puts("#{head.status} #{HTTP.header_values(head.headers, "via")}")
   puts(String.from_bytes(HTTP.read_body(conn).unwrap!).unwrap!)
   HTTP.finish(conn)
-  show(HTTP.get_response("https://127.0.0.1:#{args[1]}/", options))
-  case HTTP.start("https://127.0.0.1:#{args[1]}", options)
-    ok(_) -> puts("started")
-    error(message) -> puts(message)
-  end
-
-  case HTTP.download(HTTP.client(options).unwrap!, "https://127.0.0.1:#{args[1]}/x", "#{args[3]}/x.bin")
-    ok(_) -> puts("downloaded")
-    error(message) -> puts(message)
-  end
-
   # A proxy that is down: the error names it, whichever call reaches for it.
   down = "127.0.0.1:#{args[5]}"
   gone = HttpClientOptions(proxy: "http://#{down}")
@@ -133,9 +122,9 @@ end
 def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_path, adopt):
     """Every call of the client reaches the proxy with the absolute-form target and the Host of the target: the pooled
     calls share one proxy connection even for two origins, a request to another name keeps its Host, and a call with
-    no proxy does not touch it. https and a bad proxy are errors."""
+    no proxy does not touch it. A bad proxy is an error."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
-    proxy, first, second, proxy_two, _locked = peer.next_line().split()
+    proxy, first, second, proxy_two = peer.next_line().split()[:4]
     # A port that nothing listens on: bound and released.
     with socket.socket() as spare:
         spare.bind(("127.0.0.1", 0))
@@ -160,9 +149,6 @@ def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_
         '200 got 16 bytes: 0123456789 via=["1.1 proxy-peer"]',
         '200 ["1.1 proxy-peer"]',
         "hello from B /hello?start",
-        "http: https through a proxy is not supported yet",
-        "http: https through a proxy is not supported yet",
-        "http: https through a proxy is not supported yet",
         "true",
         "true",
         "true",
@@ -296,7 +282,7 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     wrong or missing login is a 407 error that names the proxy and never the user info; no output, error or trace
     holds the password."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
-    _proxy, first, _second, _proxy_two, locked = peer.next_line().split()
+    _proxy, first, _second, _proxy_two, locked = peer.next_line().split()[:5]
     with socket.socket() as spare:
         spare.bind(("127.0.0.1", 0))
         down = str(spare.getsockname()[1])
@@ -525,7 +511,7 @@ def test_the_proxy_of_the_environment_is_the_proxy_option_of_a_client(tmp_path, 
     """The value of proxy_from_env goes straight into HttpClientOptions: the origin that no_proxy names is reached
     directly, the other through the proxy."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
-    proxy, first, second, _proxy_two, _locked = peer.next_line().split()
+    proxy, first, second, _proxy_two, _locked = peer.next_line().split()[:5]
     source = tmp_path / "env_client.agc"
     source.write_text(ENV_CLIENT_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "env_client.agcb")
@@ -536,3 +522,202 @@ def test_the_proxy_of_the_environment_is_the_proxy_option_of_a_client(tmp_path, 
     assert output_lines(result.stdout) == ['200 via=["1.1 proxy-peer"]', "200 via=[]"]
     # Only the first request reached the proxy.
     assert peer.next_line().split(" ", 2)[2] == "GET http://127.0.0.1:%s/hello HTTP/1.1 | 127.0.0.1:%s" % (first, first)
+
+
+TUNNEL_PROGRAM = """\
+import HTTP from "std/http"
+
+def show(r: Result[HttpResponse]) -> Void
+  case r
+    ok(response) -> puts("#{response.status} #{Result.unwrap_or(String.from_bytes(response.body), "<not UTF-8>")}")
+    error(message) -> puts(message)
+  end
+end
+
+def chunks(into: Channel[Bytes]) -> Void
+  into.send("0123456".bytes, 2000)
+  into.close
+end
+
+def count(stream: HTTP.Stream) -> Int
+  total = 0
+  while true
+    case stream.body.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  return total
+end
+
+# Whether the call failed with the error that names the proxy that could not be reached (its text has more lines).
+def names_down(r: Result[HttpResponse], gone: String) -> Bool
+  case r
+    ok(_) -> return false
+    error(message) -> return String.starts_with?(message, "http: cannot reach the proxy #{gone}: ")
+  end
+end
+
+def started(origin: String, options: HttpClientOptions, path: String) -> Void
+  case HTTP.start(origin, options)
+    ok(conn) ->
+      case HTTP.send_request(conn, "GET", path, "".bytes)
+        ok(head) -> puts("start #{head.status} #{String.from_bytes(HTTP.read_body(conn).unwrap!).unwrap!}")
+        error(message) -> puts(message)
+      end
+
+      HTTP.finish(conn)
+    error(message) -> puts(message)
+  end
+end
+
+# Every call of the client over a tunnel to C or D, and the line it prints.
+def calls(options: HttpClientOptions, c: String, d: String, dir: String, tag: String) -> Void
+  pool = HTTP.client(options).unwrap!
+  show(HTTP.get(pool, "#{c}/hello?#{tag}"))
+  show(HTTP.get(pool, "#{c}/hello?#{tag}2"))
+  show(HTTP.get(pool, "#{d}/hello?#{tag}"))
+  HTTP.close_client(pool)
+  show(HTTP.post_response("#{c}/echo", "abc".bytes, [], options))
+  case HTTP.download(HTTP.client(options).unwrap!, "#{c}/big", "#{dir}/#{tag}.bin")
+    ok(done) -> puts("download #{done.status} #{File.stat("#{dir}/#{tag}.bin").unwrap!.size_bytes}")
+    error(message) -> puts(message)
+  end
+
+  case HTTP.open("GET", "#{c}/big", "".bytes, [], options)
+    ok(stream) -> puts("open #{stream.status} #{count(stream)}")
+    error(message) -> puts(message)
+  end
+
+  into: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&chunks, into)
+  show(HTTP.upload("PUT", "#{c}/echo", into, -1, [], options))
+  started(c, options, "/hello?#{tag}")
+end
+
+def main() -> Void
+  args = System.args()
+  proxy = "127.0.0.1:#{args[0]}"
+  locked = "127.0.0.1:#{args[1]}"
+  c = "https://127.0.0.1:#{args[2]}"
+  d = "https://127.0.0.1:#{args[3]}"
+  dir = args[4]
+  context = TLS.client_context(TlsClientOptions(ca_file: args[5])).unwrap!
+  calls(HttpClientOptions(proxy: "http://#{proxy}", tls: some(context)), c, d, dir, "ctx")
+  calls(HttpClientOptions(proxy: "http://#{proxy}"), c, d, dir, "sys")
+  puts("-- the locked proxy")
+  login = "http://us%40er:p%3Ass%2Fw@#{locked}"
+  show(HTTP.get_response("#{c}/hello?locked", HttpClientOptions(proxy: login, tls: some(context))))
+  started(c, HttpClientOptions(proxy: login, tls: some(context)), "/hello?locked")
+  show(HTTP.get_response("#{c}/hello?system", HttpClientOptions(proxy: login)))
+  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://#{locked}", tls: some(context))))
+  started(c, HttpClientOptions(proxy: "http://#{locked}", tls: some(context)), "/hello")
+  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://us%40er:hunter2@#{locked}", tls: some(context))))
+  puts("-- a 407 of the origin is a response, and no login reaches it")
+  show(HTTP.get_response("#{c}/407", HttpClientOptions(proxy: login, tls: some(context))))
+  show(HTTP.get_response("#{c}/seen", HttpClientOptions(tls: some(context))))
+  puts("-- the target is verified inside the tunnel")
+  strict = TLS.client_context(TlsClientOptions(ca_file: args[7])).unwrap!
+  case HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
+    ok(_) -> puts("answered")
+    error(message) -> puts(String.contains?(message, "proxy"))
+  end
+
+  puts("-- a refused tunnel, a proxy that is down, a bad proxy")
+  refused = HttpClientOptions(proxy: "http://#{proxy}", tls: some(context))
+  show(HTTP.get_response("https://127.0.0.1:9/", refused))
+  started("https://127.0.0.1:9", refused, "/")
+  down = HttpClientOptions(proxy: "http://127.0.0.1:#{args[6]}", tls: some(context))
+  puts(names_down(HTTP.get_response("#{c}/hello", down), "127.0.0.1:#{args[6]}"))
+  case HTTP.start(c, down)
+    ok(_) -> puts("started")
+    error(message) -> puts(String.starts_with?(message, "http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
+  end
+
+  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))
+  puts("-- a proxy that stalls, and a 200 with junk after its head")
+  stalled = HttpClientOptions(proxy: "http://#{proxy}", tls: some(context), timeout_ms: 500)
+  show(HTTP.get_response("https://127.0.0.1:7/", stalled))
+  show(HTTP.get_response("https://127.0.0.1:8/", refused))
+  started("https://127.0.0.1:8", refused, "/")
+end
+"""
+
+
+def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
+    """An https request through a proxy is a CONNECT to the target's host:port, then TLS inside the tunnel against the
+    target (on the context of tls, or the system trust), for every call: the pooled tunnel is one per target, the
+    login goes with the CONNECT only and never to the target, a non-2xx answer is an error that names the proxy, and
+    a 407 of the target itself is its response."""
+    peer = adopt(Child([PYTHON, PEER], stdin=True))
+    proxy, _first, _second, _proxy_two, locked, tls_c, tls_d = peer.next_line().split()
+    with socket.socket() as spare:
+        spare.bind(("127.0.0.1", 0))
+        down = str(spare.getsockname()[1])
+    source = tmp_path / "tunnel.agc"
+    source.write_text(TUNNEL_PROGRAM, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "tunnel.agcb")
+    ca = str(FIXTURES / "tls" / "ca.pem")
+    env = vm_environment({"SSL_CERT_FILE": ca})
+    result = run_vm(bytecode, env=env, args=[proxy, locked, tls_c, tls_d, str(tmp_path), ca, down, str(FIXTURES / "tls" / "self-signed.pem")], timeout=scaled(120))
+    assert result.code == 0, result.stderr
+
+    def served(tag):
+        return [
+            "200 hello from C /hello?%s" % tag,
+            "200 hello from C /hello?%s2" % tag,
+            "200 hello from D /hello?%s" % tag,
+            "200 got 3 bytes: abc",
+            "download 200 200000",
+            "open 200 200000",
+            "200 got 7 bytes: 0123456",
+            "start 200 hello from C /hello?%s" % tag,
+        ]
+
+    name = "127.0.0.1:" + locked
+    refused = "http: the proxy 127.0.0.1:%s refused the tunnel to 127.0.0.1:9 (403)" % proxy
+    junk = ("http: the tunnel to 127.0.0.1:8 through the proxy 127.0.0.1:%s failed: "
+            "network: data came before the TLS handshake" % proxy)
+    lines = output_lines(result.stdout)
+    assert lines == [
+        *served("ctx"),
+        *served("sys"),
+        "-- the locked proxy",
+        "200 hello from C /hello?locked",
+        "start 200 hello from C /hello?locked",
+        "200 hello from C /hello?system",
+        "http: the proxy %s requires credentials (407): put user:password in the proxy URL" % name,
+        "http: the proxy %s requires credentials (407): put user:password in the proxy URL" % name,
+        "http: the proxy %s refused the credentials (407)" % name,
+        "-- a 407 of the origin is a response, and no login reaches it",
+        "407 the origin wants credentials",
+        "200 seen []",
+        "-- the target is verified inside the tunnel",
+        "false",
+        "-- a refused tunnel, a proxy that is down, a bad proxy",
+        refused,
+        refused,
+        "true",
+        "true",
+        "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
+        "-- a proxy that stalls, and a 200 with junk after its head",
+        "http: the tunnel to 127.0.0.1:7 through the proxy 127.0.0.1:%s failed: network: operation timed out" % proxy,
+        junk,
+        junk,
+    ], lines
+    # The CONNECT lines the peer saw, in order: the pooled client (one tunnel for the two gets of C, one for D), then a
+    # tunnel for each of the other calls; and the same again on the system trust.
+    seen = [peer.next_line().split(" ", 2)[2] for _ in range(14 + 7 + 1 + 2 + 3)]
+    connect = "CONNECT 127.0.0.1:%s HTTP/1.1 | 127.0.0.1:%s"
+    on_c, on_d = connect % (tls_c, tls_c), connect % (tls_d, tls_d)
+    assert seen[:14] == [on_c, on_d, on_c, on_c, on_c, on_c, on_c] * 2, seen
+    # The locked proxy: the login with the CONNECT of the good calls, none or a wrong one in the others.
+    assert [line.rsplit(" | ", 1)[1] for line in seen[14:21]] == [LOGIN, LOGIN, LOGIN, "-", "-"] + [
+        seen[19].rsplit(" | ", 1)[1], LOGIN], seen
+    assert seen[19].rsplit(" | ", 1)[1].startswith("Basic ") and seen[19].rsplit(" | ", 1)[1] != LOGIN
+    assert seen[21] == on_c, seen
+    assert seen[22:] == [connect % ("9", "9")] * 2 + [connect % ("7", "7")] + [connect % ("8", "8")] * 2, seen
+    everything = result.stdout + result.stderr
+    for secret in ("hunter2", "p:ss", "p%3Ass", "ss/w", "us@er", "us%40er"):
+        assert secret not in everything, secret

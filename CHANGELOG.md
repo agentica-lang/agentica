@@ -14,8 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   and `no_proxy` name for a URL (curl's rules), or `""`, for
   `HttpClientOptions(proxy: ...)`.
 - `HttpClientOptions(proxy: "http://host:port")` sends the client's `http://`
-  requests through a forward proxy in absolute form (`https://` with a proxy is
-  an error until `CONNECT`).
+  requests through a forward proxy in absolute form, and `https://` requests
+  through a `CONNECT` tunnel with TLS to the target inside it.
 - A proxy URL with user info logs in with `Proxy-Authorization: Basic` (proxy
   only); a `407` is an error that names the proxy, not the credentials.
 - `TLS.client_context` and `TLS.server_context` build a `TlsContext` once from
