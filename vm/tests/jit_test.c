@@ -387,9 +387,9 @@ static AGC_JIT_CALLER void wide_tail_calls(void) {
     agc_emit_tail_call(&e, call, 0, k == 1, (uint64_t)(uintptr_t)&none, params, params + 1, 0);
     size[k] = e.len - start;
   }
-  /* The exits are one jump; a callee of AGC_JIT_TAIL_PARAMS arguments gets their moves, at least 16 bytes each (four
-     arm64 instructions, more bytes on x86-64). */
-  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)16 * AGC_JIT_TAIL_PARAMS);
+  /* The exits are one jump; a callee of AGC_JIT_TAIL_PARAMS arguments gets their moves, at least 32 bytes each on
+     x86-64 and 16 (four instructions) on arm64. */
+  assert(size[0] <= 8 && size[1] <= 8 && size[2] > (size_t)(X64 ? 32 : 16) * AGC_JIT_TAIL_PARAMS);
   /* A self TAIL_CALL (no native call needed) of 33 arguments exits with the frame as it was. */
   static agc_instr wide[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static uint32_t spans[3] = {0};
