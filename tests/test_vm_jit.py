@@ -16,6 +16,7 @@ are the interpreter's, which must still match.
 """
 import functools
 import os
+import platform
 import tempfile
 from pathlib import Path
 
@@ -24,6 +25,8 @@ import pytest
 from tests.agentica_test import compile_text, run_vm, vm_environment
 
 MODES = ("off", "on", "always")
+# The machines whose binary has an emitter (platform.machine(), lowercased).
+EMITTER_MACHINES = {"x86_64", "amd64"}
 
 # worker and main call and print, which leave compiled code for the interpreter. A spin call runs past a turn (2000
 # steps), so the three tasks' turns end inside compiled loops, and the order of the lines shows where.
@@ -588,11 +591,16 @@ def assert_step_limits_stop_alike(bytecode, steps):
 
 @functools.cache
 def jit_host():
-    """Whether the binary has an emitter for this machine: under --jit always the jit trace shows a loop compiled."""
+    """Whether the binary has an emitter for this machine: under --jit always the jit trace shows a loop compiled. It
+    must agree with EMITTER_MACHINES, so a binary that stopped compiling fails here instead of passing every test as
+    an interpreter."""
     with tempfile.TemporaryDirectory() as folder:
         bytecode = compile_text("def main() -> Void\n  i = 0\n  while i < 3\n    i += 1\n  end\nend\n", "host",
                                 Path(folder))
-        return compiled(bytecode, Path(folder)) == ["main"]
+        probe = compiled(bytecode, Path(folder)) == ["main"]
+    machine = platform.machine().lower()
+    assert probe == (machine in EMITTER_MACHINES), f"the jit trace says compiled={probe} on {machine}"
+    return probe
 
 
 def jit_trace(bytecode, tmp_path, mode):
