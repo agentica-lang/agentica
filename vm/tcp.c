@@ -1530,8 +1530,8 @@ static agc_value builtin_tls_upgrade(agc_vm *vm, agc_value *args, uint32_t span)
 /* HttpWire.upgrade_context(socket, context, host, timeout_ms) (std-only): TLS.upgrade, the name std/http uses for a
    tunnel on a client TlsContext, which must agree on no protocol but HTTP/1.1 as HttpWire.connect_context requires. */
 static agc_value builtin_upgrade_context(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_tls_context_check(vm, args[1], false, client_role, span + 3);
-  agc_tls_http1_check(vm, agc_as_tls_context(vm, args[1])->config, span + 3);
+  agc_tls_context_check(vm, args[1], false, client_role, span + 2);
+  agc_tls_http1_check(vm, agc_as_tls_context(vm, args[1])->config, span + 2);
   return builtin_tls_upgrade(vm, args, span);
 }
 
