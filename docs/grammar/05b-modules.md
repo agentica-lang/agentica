@@ -54,8 +54,8 @@ imported name (in the same list or in another import line, and the same name
 from the same module twice), of a builtin function such as `puts` or `ok`, or of
 a reserved type name such as `Int` or `JSON`; each is `CHECK-REDEFINED-NAME`,
 located at the name in the braces (at the new name of a rename). The std-only
-names `HttpWire` and `LogRegistry` are reserved too, so they can be neither an
-alias nor an imported name. A name that the module does not export, or that is
+names `HttpWire`, `LogRegistry` and `RegexEngine` are reserved too, so they can
+be neither an alias nor an imported name. A name that the module does not export, or that is
 private, is `CHECK-IMPORT-NAME` at the name, with a `did you mean` help over the
 exports only. These checks run when the file is loaded, so they are reported at
 the import, before any use of the name. A name used as the wrong kind (an

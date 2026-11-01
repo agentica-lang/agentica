@@ -405,25 +405,55 @@ def main() -> Void
   size = System.args()[0].to_i!
   re = Regex.compile("(a+)+$").unwrap!
   text = List.repeat("a", size).join("") + "!"
+  before = Profile.steps()
   puts(Regex.match?(text, re))
   puts(Regex.match(text, re).ok?)
+  puts(before)
+  puts(Profile.steps() - before)
 end
 """
 
 
 def test_a_pathological_pattern_runs_in_linear_steps_and_stops_at_the_step_limit(tmp_path):
-    """`(a+)+$` on "a" * n + "!" takes exponential time in a backtracking matcher. Here it runs under a step budget
-    proportional to n times the program size, at two sizes, and a smaller budget stops it with RUNTIME-STEP-LIMIT:
-    the matcher is Agentica code, so its loops charge steps and a turn never outlasts its budget."""
+    """`(a+)+$` on "a" * n + "!" takes exponential time in a backtracking matcher. Here the two searches take a step
+    per chunk of at most 256 characters each, so 24000 more characters cost at most about 2 * 24000 / 256 more steps,
+    and a budget that ends in the middle stops them with RUNTIME-STEP-LIMIT."""
     bytecode = compile_text(REDOS, "redos", tmp_path)
-    program_size = 10
-    for size in (2000, 8000):
-        # Each search takes about 60 steps per character and instruction (120 for the two).
-        budget = 240 * size * program_size
-        result = run_vm(bytecode, "--max-steps", str(budget), args=[str(size)])
-        assert result.code == 0 and result.stdout.splitlines() == ["false", "false"], (size, result.stderr)
-        result = run_vm(bytecode, "--json", "--max-steps", str(size), args=[str(size)])
-        assert result.code == 1 and '"RUNTIME-STEP-LIMIT"' in result.stderr, (size, result.stderr)
+    spent = {}
+    for size in (8000, 32000):
+        result = run_vm(bytecode, args=[str(size)])
+        lines = result.stdout.splitlines()
+        assert result.code == 0 and lines[:2] == ["false", "false"], (size, result.stderr)
+        before, spent[size] = int(lines[2]), int(lines[3])
+    assert spent[32000] - spent[8000] <= 2 * (24000 // 256 + 2), spent
+    result = run_vm(bytecode, "--json", "--max-steps", str(before + spent[32000] // 2), args=["32000"])
+    assert result.code == 1 and '"RUNTIME-STEP-LIMIT"' in result.stderr, result.stderr
+
+
+CANCEL = """import Regex from "std/regex"
+
+def search(text: String) -> Result[Bool]
+  re = try Regex.compile("(a+)+$")
+  return ok(Regex.match?(text, re))
+end
+
+def main() -> Void
+  text = "a"
+  while text.length < 4000000
+    text = text + text
+  end
+  task = Task.spawn(&search, text + "!")
+  Task.sleep(1)
+  Task.cancel(task)
+  puts(Task.await(task))
+end
+"""
+
+
+def test_a_long_search_hands_the_scheduler_back_and_can_be_cancelled(tmp_path):
+    """On one scheduler, main gets its turn back while the search of millions of characters runs, and cancels it."""
+    result = run_vm(compile_text(CANCEL, "cancel", tmp_path), "--schedulers", "1")
+    assert result.code == 0 and result.stdout == 'error("task: cancelled")\n', result.stderr
 
 
 @pytest.mark.parametrize("body, code", [

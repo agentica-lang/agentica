@@ -14,7 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with their summaries, and `agentica help std/MODULE.NAME` prints one export
   with its signature and `##` doc (`--json` too).
 - `std/regex`: regular expressions in linear time, with the RE2 syntax
-  (`Regex.match`, `find_all`, `replace`, `split`).
+  (`Regex.match`, `find_all`, `replace`, `split`), matched inside the VM.
 
 ### Changed
 
