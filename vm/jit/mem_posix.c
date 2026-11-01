@@ -19,9 +19,9 @@ size_t agc_jit_mem_page(void) {
   return page > 0 ? (size_t)page : 4096;
 }
 
-/* macOS on arm64 refuses executable pages without MAP_JIT; its emitter will map them so and switch them per thread
-   with pthread_jit_write_protect_np in place of the mprotect below. No emitter runs there yet. Without access, the
-   reservation takes address space only. */
+/* No access, then read-write, then read-execute works on macOS arm64 too, without MAP_JIT, because the binary has no
+   hardened runtime (the release signs it ad hoc): code_memory in vm/tests/jit_test.c runs a sealed page there. Without
+   access, the reservation takes address space only. */
 void *agc_jit_mem_reserve(size_t size) {
   void *pages = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
   return pages == MAP_FAILED ? NULL : pages;
