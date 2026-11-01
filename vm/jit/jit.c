@@ -219,15 +219,17 @@ static void *grow(void *items, size_t *cap, size_t count, size_t need, size_t si
 /* Why `on` keeps a function out:
    - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
      exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
-     from compiled code, and only when none of its instructions leaves ("none" otherwise).
+     from compiled code, and only when none of its own instructions leaves ("none" otherwise). A call of a callee
+     without code does not keep it out: that call is one CALL exit, as the call of the function itself is when it has
+     none. Such a call still leaves for the loops that call the function, as the callee's exit unwinds them.
    - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
      stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
      ran slower compiled. A builtin that may park counts AGC_JIT_PARK_WEIGHT round trips (builtin_trips).
-   A CALL leaves when its callee may not get code, which depends on the callee's own calls, so the decision is a fixed
-   point: every function starts callable, and a function that drops out counts one more leaving instruction in each
+   A CALL leaves when its callee may leave, which depends on the callee's own calls, so the decision is a fixed point:
+   every function starts callable, and a function that starts to leave counts one more leaving instruction in each
    region that calls it. Innermost loops never overlap, so each instruction is in at most one region, and each call
-   site is counted once, when its callee drops: the work follows the program's size, whatever the order of the
-   functions or the size of a caller. */
+   site is counted once, when its callee starts to leave: the work follows the program's size, whatever the order of
+   the functions or the size of a caller. */
 size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *calling) {
   uint8_t kinds[AGC_FUSED_END];
   for (uint32_t op = 0; op < AGC_FUSED_END; op++) kinds[op] = op_kind(op);
@@ -313,13 +315,18 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
   memcpy(fill, first, (n + 1) * sizeof *fill);
   uint32_t *by_callee = agc_alloc_atomic(agc_size_mul(site_count + 1, sizeof *by_callee));
   for (size_t s = 0; s < site_count; s++) by_callee[fill[sites[s].callee]++] = sites[s].region;
-  /* The stack holds each function that dropped, once, until its call sites are counted. */
+  /* A function LEAVES when it dropped, or when it has no loop and calls a function that leaves: its call leaves then,
+     as the callee's exit unwinds it, but it stays callable (Why, above). The stack holds each function that leaves,
+     once, until its call sites are counted. */
+  bool *leaves = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *leaves));
+  memset(leaves, 0, n * sizeof *leaves);
   uint32_t *stack = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *stack));
   size_t top = 0;
   for (size_t r = 0; r < region_count; r++) {
     uint32_t k = regions[r].owner;
     if (callable[k] && (uint64_t)regions[r].out * AGC_JIT_SPACING > regions[r].size) {
       callable[k] = false;
+      leaves[k] = true;
       stack[top++] = k;
     }
   }
@@ -327,10 +334,11 @@ size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *
     uint32_t g = stack[--top];
     for (uint32_t e = first[g]; e < first[g + 1]; e++) {
       region *r = &regions[by_callee[e]];
-      r->out++;
-      if (callable[r->owner] && (uint64_t)r->out * AGC_JIT_SPACING > r->size) {
-        callable[r->owner] = false;
-        stack[top++] = r->owner;
+      uint32_t k = r->owner;
+      if (looped[k] && callable[k] && (uint64_t)++r->out * AGC_JIT_SPACING > r->size) callable[k] = false;
+      if (!leaves[k] && (!callable[k] || !looped[k])) {
+        leaves[k] = true;
+        stack[top++] = k;
       }
     }
     work += first[g + 1] - first[g];
