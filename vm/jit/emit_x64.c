@@ -51,21 +51,6 @@ enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7
 #define TASK_FIELD(name) ((int64_t)offsetof(agc_task, name))
 #define FIELD_SIZE(type, name) sizeof(((type *)0)->name)
 
-/* agc_emit_call writes a frame as four dwords, a byte and a qword at these offsets, and indexes the frames by a
-   shift of 5; it reads frame_count, frame_capacity and depth as dwords and reg_capacity as a qword. */
-_Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
-_Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 4 && offsetof(agc_frame, base) == 8 &&
-                 offsetof(agc_frame, ret) == 12 && offsetof(agc_frame, tail) == 16 &&
-                 offsetof(agc_frame, native) == 24,
-               "the native CALL writes the frame at these offsets");
-_Static_assert(FIELD_SIZE(agc_frame, pc) == 4 && FIELD_SIZE(agc_frame, base) == 4 && FIELD_SIZE(agc_frame, ret) == 4 &&
-                 FIELD_SIZE(agc_frame, function) == 4 && FIELD_SIZE(agc_frame, tail) == 1 &&
-                 sizeof(agc_native *) == 8,
-               "the native CALL writes the frame fields with these sizes");
-_Static_assert(FIELD_SIZE(agc_task, frame_count) == 4 && FIELD_SIZE(agc_task, frame_capacity) == 4 &&
-                 FIELD_SIZE(agc_task, depth) == 4 && FIELD_SIZE(agc_task, reg_capacity) == 8,
-               "the native CALL reads the task's counts with these sizes");
-
 _Static_assert(FIELD_SIZE(agc_string, chars) == 8, "a plain leaf's one-character check compares chars as a qword");
 
 /* The two shapes of the opcode helpers (agc_op_* in core.h). */

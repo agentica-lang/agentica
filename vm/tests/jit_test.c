@@ -124,14 +124,11 @@ static AGC_JIT_CALLER void code_memory(void) {
 #endif
 
 #if AGC_JIT_HOST
-/* The tests of x86-64 encodings and sizes, and of native calls in compiled code, which arm64 does not make yet
-   (#756): there each call takes its exit. vm/tests/jit_a64_test.c checks the arm64 words. */
+/* The tests of x86-64 encodings and sizes; vm/tests/jit_a64_test.c checks the arm64 words. */
 #if defined(__x86_64__) || defined(_M_X64)
 #define X64 1
-#define NATIVE_CALLS 1
 #else
 #define X64 0
-#define NATIVE_CALLS 0
 #endif
 
 /* N, as a count of the JIT's trace counters (transitions, turns, leaves): a build with the trace points compiled out
@@ -1741,13 +1738,13 @@ int main(void) {
   if (X64) cap_inside_an_offset();
   if (X64) bytes();
   call_return_exits();
-  if (NATIVE_CALLS) native_calls();
-  if (NATIVE_CALLS) native_leaf_calls();
+  native_calls();
+  native_leaf_calls();
   plain_leaf_calls();
   string_code_calls();
-  if (NATIVE_CALLS) native_tail_calls();
-  if (NATIVE_CALLS) wide_tail_calls();
-  if (NATIVE_CALLS) call_values();
+  native_tail_calls();
+  wide_tail_calls();
+  call_values();
   direct_calls();
   loops_and_steps();
   int_rules();

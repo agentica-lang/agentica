@@ -245,8 +245,9 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
   arguments. `on` counts a self TAIL_CALL within that limit as a loop
   (`backward` in `jit.c`).
 - Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, only in a build with
-  `AGENTICA_JIT_ARM64=1`, no native calls yet; `jit_a64_test.c` checks its
-  words on any machine, the `jit-arm64` CI job runs it).
+  `AGENTICA_JIT_ARM64=1`; `jit_a64_test.c` checks its words on any machine,
+  the `jit-arm64` CI job runs it). On arm64 a code slot is read with `ldar`
+  and new code is entered after `isb`.
 - A new instruction with code needs: a case in `has_code` and in the walk, its
   `agc_emit_*` in both emitters, a case in `jit_test.c`, `jit_a64_test.c` and
   `tests/test_vm_jit.py`. Compiled

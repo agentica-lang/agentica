@@ -284,7 +284,7 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 /* Private to vm/jit/, the C tests and the libFuzzer entry point (vm/fuzz_libfuzzer.c) from here. */
 
 /* The architectures that have an emitter: x86-64 (emit_x64.c), and arm64 on Linux and macOS (emit_a64.c) in a build
-   with AGENTICA_JIT_ARM64=1 (-DAGC_JIT_ARM64), until its native calls land (#756). Elsewhere the JIT compiles
+   with AGENTICA_JIT_ARM64=1 (-DAGC_JIT_ARM64), until it is on by default (#756). Elsewhere the JIT compiles
    nothing. */
 #if defined(__x86_64__) || defined(_M_X64)
 #define AGC_JIT_HOST 1
@@ -306,6 +306,24 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #define AGC_JIT_NATIVE_ENTRY 7
 #endif
 #define AGC_JIT_NATIVE_DEPTH 256
+
+/* Both emitters' native CALL writes a frame as four dwords, a byte and a qword at these offsets, and indexes the
+   frames by a shift of 5; it reads frame_count, frame_capacity and depth as dwords and reg_capacity as a qword. */
+#if AGC_JIT_HOST
+#define AGC_JIT_FIELD_SIZE(type, name) sizeof(((type *)0)->name)
+_Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
+_Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 4 && offsetof(agc_frame, base) == 8 &&
+                 offsetof(agc_frame, ret) == 12 && offsetof(agc_frame, tail) == 16 &&
+                 offsetof(agc_frame, native) == 24,
+               "the native CALL writes the frame at these offsets");
+_Static_assert(AGC_JIT_FIELD_SIZE(agc_frame, pc) == 4 && AGC_JIT_FIELD_SIZE(agc_frame, base) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_frame, ret) == 4 && AGC_JIT_FIELD_SIZE(agc_frame, function) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_frame, tail) == 1 && sizeof(agc_native *) == 8,
+               "the native CALL writes the frame fields with these sizes");
+_Static_assert(AGC_JIT_FIELD_SIZE(agc_task, frame_count) == 4 && AGC_JIT_FIELD_SIZE(agc_task, frame_capacity) == 4 &&
+                 AGC_JIT_FIELD_SIZE(agc_task, depth) == 4 && AGC_JIT_FIELD_SIZE(agc_task, reg_capacity) == 8,
+               "the native CALL reads the task's counts with these sizes");
+#endif
 
 /* Before a thread runs compiled code, which another thread may have written and sealed: on arm64 the seal's cache
    maintenance reaches every core, but a core may still hold instructions it fetched before, so the thread that runs
