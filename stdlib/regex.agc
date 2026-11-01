@@ -3,8 +3,8 @@
 ## Import it with `import Regex from "std/regex"`. `Regex.compile` turns a pattern into a `Regex.Regex`; `match?`,
 ## `match`, `find_all`, `replace` and `split` search a text with it. The syntax is the subset of RE2 and Go (no
 ## backreferences, no lookaround), the match is leftmost-first, and positions count characters. A search runs a Pike
-## VM over the code points: its cost grows with the text length times the pattern size, whatever the input. A
-## compile error starts with the place, for example `character 9: missing ')' for the group at character 1`;
+## VM over the code points, in the VM: its cost grows with the text length times the pattern size, whatever the
+## input. A compile error starts with the place, for example `character 9: missing ')' for the group at character 1`;
 ## characters count from 1. Nothing halts.
 
 MAX_PATTERN = 4096
@@ -13,12 +13,7 @@ MAX_INSTS = 10000
 MAX_DEPTH = 256
 MAX_GROUPS = 256
 MAX_CODE = 0x10FFFF
-# A closure longer than this is walked at match time instead of being listed in Program.ends.
-MAX_CLOSURE = 64
-# The prefix search reads the text in windows of at most this many characters.
-MAX_WINDOW = 8192
-# Instruction codes of `Program.ops`. RESTART is one extra instruction after MATCH: the thread that starts a new
-# attempt at the next character, always the last (lowest priority) of a thread list.
+# Instruction codes of `Program.ops`, as vm/regex.c reads them.
 OP_CHAR = 0
 OP_CLASS = 1
 OP_ANY = 2
@@ -28,7 +23,6 @@ OP_JUMP = 5
 OP_SAVE = 6
 OP_ASSERT = 7
 OP_MATCH = 8
-OP_RESTART = 9
 # Kinds of OP_ASSERT.
 BEGIN_TEXT = 0
 END_TEXT = 1
@@ -36,6 +30,11 @@ BEGIN_LINE = 2
 END_LINE = 3
 WORD_EDGE = 4
 NOT_WORD_EDGE = 5
+# What RegexEngine.search returns: the end of a match ([] for none), the groups of the first match, or the groups of
+# every match one after the other.
+MODE_TEST = 0
+MODE_FIRST = 1
+MODE_ALL = 2
 # Classes as sorted, disjoint [low, high] pairs of code points.
 DIGIT_RANGES = [48, 57]
 WORD_RANGES = [48, 57, 65, 90, 95, 95, 97, 122]
@@ -75,15 +74,10 @@ export struct Group
 end
 
 # The compiled pattern. Instruction pc is (ops[pc], xs[pc], ys[pc]): CHAR code, CLASS index into classes, SPLIT
-# preferred-pc other-pc, JUMP pc, SAVE slot, ASSERT kind. `first` holds, for each ASCII code and at 128 for any
-# other, whether a match can start with it; it is empty when that tells nothing (a match can be empty). `tables`
-# holds the ASCII part of each class as 128 Bools. `prefix` is the text every match starts with ("" when none).
-# `lead` holds the ASSERT kinds every match starts with, `lead_slots` the SAVE slots among them, and `body` the pc
-# after them, where an attempt starts once the lead holds. `ends[pc]` lists, in priority order, the instructions that
-# consume a character (or MATCH) reached from pc through SPLIT, JUMP and SAVE, and `saves[pc]` the SAVE slots on the
-# way to each; `ends[pc]` is empty when the way meets an ASSERT or is too long, and the matcher then walks it.
-# `seal` is always empty: JSON.decode cannot build a Set, so it cannot build a Regex either, and `compile` stays the
-# only maker of a Program (an importer cannot name the type or update a value of it).
+# preferred-pc other-pc, JUMP pc, SAVE slot, ASSERT kind. The last instruction is MATCH. RegexEngine.search
+# (vm/regex.c) runs it and checks it first. `seal` is always empty: JSON.decode cannot build a Set, so it cannot build
+# a Regex either, and `compile` stays the only maker of a Program (an importer cannot name the type or update a value
+# of it).
 struct Program
   ops: List[Int]
   xs: List[Int]
@@ -91,17 +85,6 @@ struct Program
   classes: List[List[Int]]
   ncap: Int
   names: Map[String, Int]
-  first: List[Bool]
-  tables: List[List[Bool]]
-  prefix: String
-  lead: List[Int]
-  lead_slots: List[Int]
-  body: Int
-  anchored: Bool
-  line_start: Bool
-  restart: Int
-  ends: List[List[Int]]
-  saves: List[List[List[Int]]]
   seal: Set[Int]
 end
 
@@ -182,11 +165,6 @@ struct FlagScan
   scoped: Bool
 end
 
-struct Closure
-  ends: List[Int]
-  saves: List[List[Int]]
-end
-
 ## Parses and compiles a pattern. An error starts with `character N: `, N counted from 1: this prefix is a contract,
 ## since the checker reads it to place CHECK-INVALID-REGEX in a regex literal (compiler/check/check_regex.agc). Limits:
 ## 4096 characters, a repetition count of 1000, 10000 instructions after repetitions are expanded, groups nested 256
@@ -211,23 +189,30 @@ end
 
 ## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
 export def match?(text: String, re: Regex) -> Bool
-  return search(re.program, text, codes_of(text), 0, false).size > 0
+  return run(text, re.program, MODE_TEST).size > 0
 end
 
 ## The leftmost-first match in `text`, or `error("no match")`.
 export def match(text: String, re: Regex) -> Result[Match]
-  caps = search(re.program, text, codes_of(text), 0, true)
+  caps = run(text, re.program, MODE_FIRST)
   if caps.size == 0
     return error("no match")
   end
-  return ok(make_match(text, caps, re.program.names))
+  return ok(make_match(text, caps, 0, re.program))
 end
 
 ## Every match from left to right, without overlaps. After an empty match the search moves one character on, and an
 ## empty match right where the previous match ended is dropped (Go's rule).
 export def find_all(text: String, re: Regex) -> List[Match]
-  names = re.program.names
-  return all_caps(re.program, text, codes_of(text)).map do |caps| make_match(text, caps, names) end
+  prog = re.program
+  caps = run(text, prog, MODE_ALL)
+  found: List[Match] = []
+  at = 0
+  while at < caps.size
+    found = found.push(make_match(text, caps, at, prog))
+    at += prog.ncap
+  end
+  return found
 end
 
 ## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
@@ -235,39 +220,47 @@ end
 ## "". The template is checked before any text is replaced: another `$` form or a missing group is an error.
 export def replace(text: String, re: Regex, template: String) -> Result[String]
   pieces = try parse_template(template, re.program)
-  codes = codes_of(text)
+  ncap = re.program.ncap
+  caps = run(text, re.program, MODE_ALL)
   out: List[String] = []
   last = 0
-  for caps in all_caps(re.program, text, codes)
-    out = out.push(slice(text, last, caps[0]))
+  at = 0
+  while at < caps.size
+    out = out.push(slice(text, last, caps[at]))
     for piece in pieces
       case piece
         Piece.Text(s) -> out = out.push(s)
         Piece.Ref(g) ->
-          if caps[2 * g] >= 0 and caps[2 * g + 1] >= caps[2 * g]
-            out = out.push(slice(text, caps[2 * g], caps[2 * g + 1]))
+          start = caps[at + 2 * g]
+          stop = caps[at + 2 * g + 1]
+          if start >= 0 and stop >= start
+            out = out.push(slice(text, start, stop))
           end
       end
     end
-    last = caps[1]
+    last = caps[at + 1]
+    at += ncap
   end
-  out = out.push(slice(text, last, codes.size))
+  out = out.push(slice(text, last, text.length))
   return ok(out.join(""))
 end
 
 ## The parts of `text` between the matches that take at least one character. Empty parts are kept, and an empty
 ## match separates nothing.
 export def split(text: String, re: Regex) -> List[String]
-  codes = codes_of(text)
+  ncap = re.program.ncap
+  caps = run(text, re.program, MODE_ALL)
   parts: List[String] = []
   last = 0
-  for caps in all_caps(re.program, text, codes)
-    if caps[1] > caps[0]
-      parts = parts.push(slice(text, last, caps[0]))
-      last = caps[1]
+  at = 0
+  while at < caps.size
+    if caps[at + 1] > caps[at]
+      parts = parts.push(slice(text, last, caps[at]))
+      last = caps[at + 1]
     end
+    at += ncap
   end
-  return parts.push(slice(text, last, codes.size))
+  return parts.push(slice(text, last, text.length))
 end
 
 ## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
@@ -826,20 +819,6 @@ def build(node: Node, groups: Int, names: Map[String, Int]) -> Program
   code = emit(Code(ops: [], xs: [], ys: [], classes: []), OP_SAVE, 0, 0)
   code = emit(emit_node(code, node), OP_SAVE, 1, 0)
   code = emit(code, OP_MATCH, 0, 0)
-  restart = code.ops.size
-  code = emit(code, OP_RESTART, 0, 0)
-  body = 0
-  lead: List[Int] = []
-  lead_slots: List[Int] = []
-  while code.ops[body] == OP_SAVE or code.ops[body] == OP_ASSERT
-    if code.ops[body] == OP_SAVE
-      lead_slots = lead_slots.push(code.xs[body])
-    else
-      lead = lead.push(code.xs[body])
-    end
-    body += 1
-  end
-  closures = (0...code.ops.size).to_a.map do |pc| closure_of(code, pc, body) end
   return Program(
     ops: code.ops,
     xs: code.xs,
@@ -847,85 +826,8 @@ def build(node: Node, groups: Int, names: Map[String, Int]) -> Program
     classes: code.classes,
     ncap: 2 * (groups + 1),
     names: names,
-    first: first_set(code),
-    tables: code.classes.map do |ranges| ascii_table(ranges) end,
-    prefix: prefix_of(code, body),
-    lead: lead,
-    lead_slots: lead_slots,
-    body: body,
-    anchored: lead.any? do |kind| kind == BEGIN_TEXT end,
-    line_start: lead.any? do |kind| kind == BEGIN_LINE end,
-    restart: restart,
-    ends: closures.map do |c| c.ends end,
-    saves: closures.map do |c| c.saves end,
     seal: Set.new([]),
   )
-end
-
-# The instructions that consume a character (or MATCH) reached from pc by empty moves, as Program.ends describes.
-# Only `body` and the pcs that follow a consuming instruction start a closure; the others get an empty one.
-def closure_of(code: Code, start: Int, body: Int) -> Closure
-  walked = Closure(ends: [], saves: [])
-  if start >= code.ops.size - 1 or (start != body and (start == 0 or code.ops[start - 1] > OP_ANY_NL))
-    return walked
-  end
-  seen = List.repeat(false, code.ops.size)
-  ends: List[Int] = []
-  saves: List[List[Int]] = []
-  stack_pc: List[Int] = []
-  stack_saves: List[List[Int]] = []
-  cur = start
-  slots: List[Int] = []
-  visits = 0
-  while true
-    moved = false
-    if !seen[cur]
-      seen = seen.set(cur, true)
-      visits += 1
-      op = code.ops[cur]
-      if visits > MAX_CLOSURE or op == OP_ASSERT
-        return walked
-      elsif op == OP_SPLIT
-        stack_pc = stack_pc.push(code.ys[cur])
-        stack_saves = stack_saves.push(slots)
-        cur = code.xs[cur]
-        moved = true
-      elsif op == OP_JUMP
-        cur = code.xs[cur]
-        moved = true
-      elsif op == OP_SAVE
-        slots = slots.push(code.xs[cur])
-        cur += 1
-        moved = true
-      else
-        ends = ends.push(cur)
-        saves = saves.push(slots)
-      end
-    end
-    if !moved
-      if stack_pc.size == 0
-        break
-      end
-      cur = stack_pc.last
-      slots = stack_saves.last
-      stack_pc = stack_pc.take(stack_pc.size - 1)
-      stack_saves = stack_saves.take(stack_saves.size - 1)
-    end
-  end
-  return Closure(ends: ends, saves: saves)
-end
-
-# The characters every match starts with: the CHAR instructions in a row from the start, past SAVEs.
-def prefix_of(code: Code, body: Int) -> String
-  out: List[String] = []
-  pc = body
-  while code.ops[pc] == OP_SAVE or code.ops[pc] == OP_CHAR
-    if code.ops[pc] == OP_CHAR
-      out = out.push(String.from_code(code.xs[pc]))
-    end
-    pc += 1
-  end
-  return out.join("")
 end
 
 def emit(code: Code, op: Int, x: Int, y: Int) -> Code
@@ -1042,370 +944,21 @@ def set_split(code: Code, at: Int, body: Int, exit: Int, greedy: Bool) -> Code
   return code.with(xs: code.xs.set(at, exit), ys: code.ys.set(at, body))
 end
 
-# The characters a match can start with (see Program), found by following the empty moves from the start.
-def first_set(code: Code) -> List[Bool]
-  table = List.repeat(false, 129)
-  seen = List.repeat(false, code.ops.size)
-  work = [0]
-  while work.size > 0
-    pc = work.last
-    work = work.take(work.size - 1)
-    if seen[pc]
-      next
-    end
-    seen = seen.set(pc, true)
-    op = code.ops[pc]
-    if op == OP_SPLIT
-      work = work.push(code.ys[pc]).push(code.xs[pc])
-    elsif op == OP_JUMP
-      work = work.push(code.xs[pc])
-    elsif op == OP_SAVE or op == OP_ASSERT
-      work = work.push(pc + 1)
-    elsif op == OP_CHAR
-      table = mark(table, [code.xs[pc], code.xs[pc]])
-    elsif op == OP_CLASS
-      table = mark(table, code.classes[code.xs[pc]])
-    elsif op == OP_ANY
-      table = mark(table, [0, 9, 11, MAX_CODE])
-    else
-      return []
-    end
-  end
-  if table.all? do |b| b end
-    return []
-  end
-  return table
+# A search with the compiled program: see MODE_TEST, MODE_FIRST and MODE_ALL. Each match gives `ncap` positions, two
+# per group, -1 for a group that did not take part.
+def run(text: String, prog: Program, mode: Int) -> List[Int]
+  return RegexEngine.search(text, prog.ops, prog.xs, prog.ys, prog.classes, prog.ncap, mode)
 end
 
-def ascii_table(ranges: List[Int]) -> List[Bool]
-  return mark(List.repeat(false, 129), ranges).take(128)
-end
-
-def mark(table: List[Bool], ranges: List[Int]) -> List[Bool]
-  out = table
-  i = 0
-  while i < ranges.size
-    c = ranges[i]
-    while c <= ranges[i + 1] and c < 128
-      out = out.set(c, true)
-      c += 1
-    end
-    if ranges[i + 1] >= 128
-      out = out.set(128, true)
-    end
-    i += 2
+# The match whose positions start at caps[at].
+def make_match(text: String, caps: List[Int], at: Int, prog: Program) -> Match
+  groups: List[Group] = []
+  slot = at
+  while slot < at + prog.ncap
+    groups = groups.push(make_group(text, caps[slot], caps[slot + 1]))
+    slot += 2
   end
-  return out
-end
-
-# The code points of the text: its bytes when it is ASCII, which is quicker.
-def codes_of(text: String) -> List[Int]
-  bytes = text.bytes
-  if bytes.size == text.length
-    return bytes.to_a
-  end
-  return text.split("").map do |c| c.code end
-end
-
-# The capture positions of the leftmost-first match that starts at `from` or later: two per group, -1 for a group
-# that did not take part; [] when nothing matches. With `keep` false no positions are kept and any match gives one
-# item.
-#
-# The Pike VM: `cpc` and `ccaps` are the threads at the character p, in priority order, each pc at most once. One
-# step moves every thread over codes[p] into the next list and follows the empty moves at once, in priority order:
-# from the list of Program.ends when there is one, else by walking SPLIT, JUMP, SAVE and ASSERT. `marks[pc] == q`
-# says pc is already in the list for position q. A thread at MATCH ends the search for every thread after it. The
-# RESTART thread, always last, starts a new attempt at the next character while nothing has matched. The loops are
-# written out in one function because they are hot.
-def search(prog: Program, text: String, codes: List[Int], from: Int, keep: Bool) -> List[Int]
-  n = codes.size
-  ops = prog.ops
-  xs = prog.xs
-  ys = prog.ys
-  first = prog.first
-  tables = prog.tables
-  ends = prog.ends
-  saves = prog.saves
-  restart = prog.restart
-  body = prog.body
-  lead = prog.lead
-  line_start = prog.line_start
-  no_caps: List[Int] = []
-  start_caps = no_caps
-  if keep
-    start_caps = List.repeat(-1, prog.ncap)
-  end
-  marks = List.repeat(-1, restart + 1)
-  stack_pc = List.repeat(0, restart + 1)
-  stack_caps = List.repeat(start_caps, restart + 1)
-  cpc = [restart]
-  ccaps = [no_caps]
-  ccount = 1
-  found = no_caps
-  p = from - 1
-  while ccount > 0
-    if ccount == 1 and cpc[0] == restart
-      # No thread is running: skip to the next place a match can start.
-      s = skip(prog, text, codes, p + 1)
-      if s < 0
-        return found
-      end
-      p = s - 1
-    end
-    c = -1
-    if p >= 0 and p < n
-      c = codes[p]
-    end
-    q = p + 1
-    npc: List[Int] = []
-    ncaps: List[List[Int]] = []
-    ncount = 0
-    i = 0
-    while i < ccount
-      pc = cpc[i]
-      op = ops[pc]
-      caps = ccaps[i]
-      target = -1
-      if op == OP_CHAR
-        if c == xs[pc]
-          target = pc + 1
-        end
-      elsif op == OP_CLASS
-        if c >= 128 and in_class(prog.classes[xs[pc]], c)
-          target = pc + 1
-        elsif c >= 0 and c < 128 and tables[xs[pc]][c]
-          target = pc + 1
-        end
-      elsif op == OP_MATCH
-        found = caps
-        break
-      elsif op == OP_ANY
-        if c >= 0 and c != 10
-          target = pc + 1
-        end
-      elsif op == OP_ANY_NL
-        if c >= 0
-          target = pc + 1
-        end
-      elsif q <= n
-        # RESTART: a new attempt at q, only where a match can start.
-        starts = first.size == 0 and !(line_start and q > 0 and codes[q - 1] != 10)
-        if !starts and q < n and !(line_start and q > 0 and codes[q - 1] != 10)
-          cq = codes[q]
-          starts = (cq < 128 and first[cq]) or (cq >= 128 and first[128])
-        end
-        if starts and (lead.size == 0 or lead_holds?(lead, codes, n, q))
-          target = body
-          if keep
-            caps = start_caps
-            for slot in prog.lead_slots
-              caps = caps.set(slot, q)
-            end
-          end
-        end
-      end
-      listed = no_caps
-      if target >= 0
-        listed = ends[target]
-      end
-      size = listed.size
-      if size > 0
-        j = 0
-        while j < size
-          t = listed[j]
-          if marks[t] != q
-            marks = marks.set(t, q)
-            if !keep and ops[t] == OP_MATCH
-              return [q]
-            end
-            tcaps = caps
-            if keep
-              for slot in saves[target][j]
-                tcaps = tcaps.set(slot, q)
-              end
-            end
-            npc = npc.push(t)
-            ncaps = ncaps.push(tcaps)
-            ncount += 1
-          end
-          j += 1
-        end
-      elsif target >= 0
-        cur = target
-        top = 0
-        while true
-          moved = false
-          if marks[cur] != q
-            marks = marks.set(cur, q)
-            cop = ops[cur]
-            if cop == OP_SPLIT
-              stack_pc = stack_pc.set(top, ys[cur])
-              stack_caps = stack_caps.set(top, caps)
-              top += 1
-              cur = xs[cur]
-              moved = true
-            elsif cop == OP_JUMP
-              cur = xs[cur]
-              moved = true
-            elsif cop == OP_SAVE
-              if keep
-                caps = caps.set(xs[cur], q)
-              end
-              cur += 1
-              moved = true
-            elsif cop == OP_ASSERT
-              if assert_at(xs[cur], codes, n, q)
-                cur += 1
-                moved = true
-              end
-            elsif cop == OP_MATCH and !keep
-              return [q]
-            else
-              npc = npc.push(cur)
-              ncaps = ncaps.push(caps)
-              ncount += 1
-            end
-          end
-          if !moved
-            if top == 0
-              break
-            end
-            top -= 1
-            cur = stack_pc[top]
-            caps = stack_caps[top]
-          end
-        end
-      end
-      if op == OP_RESTART and q < n and !prog.anchored
-        npc = npc.push(restart)
-        ncaps = ncaps.push(no_caps)
-        ncount += 1
-      end
-      i += 1
-    end
-    cpc = npc
-    ccaps = ncaps
-    ccount = ncount
-    p = q
-  end
-  return found
-end
-
-# The first position at or after `from` where a match may start, or -1: past a newline when the pattern starts with
-# `(?m)^`, at the prefix when there is one, else at a character of the first set.
-def skip(prog: Program, text: String, codes: List[Int], from: Int) -> Int
-  n = codes.size
-  first = prog.first
-  s = from
-  if prog.line_start and s > 0 and s <= n and codes[s - 1] != 10
-    s = find_prefix(text, n, "\n", s)
-    if s < 0
-      return -1
-    end
-    s += 1
-  end
-  if prog.prefix != ""
-    return find_prefix(text, n, prog.prefix, s)
-  elsif first.size == 0
-    if s > n
-      return -1
-    end
-    return s
-  end
-  while s < n and !((codes[s] < 128 and first[codes[s]]) or (codes[s] >= 128 and first[128]))
-    s += 1
-  end
-  if s >= n
-    return -1
-  end
-  return s
-end
-
-def lead_holds?(lead: List[Int], codes: List[Int], n: Int, q: Int) -> Bool
-  return lead.all? do |kind| assert_at(kind, codes, n, q) end
-end
-
-# The first index at or after `from` where `prefix` starts, or -1. String.index_of does the scan, one window at a
-# time, so a long text is never copied whole; the window grows while nothing is found, so a near prefix costs little.
-def find_prefix(text: String, n: Int, prefix: String, from: Int) -> Int
-  size = prefix.length
-  s = from
-  window = 64 + size
-  while s + size <= n
-    width = min_of(window, n - s)
-    case String.slice(text, s, width).index_of(prefix)
-      some(at) -> return s + at
-      none -> s += width - size + 1
-    end
-    window = min_of(window * 2, MAX_WINDOW)
-  end
-  return -1
-end
-
-def in_class(ranges: List[Int], c: Int) -> Bool
-  i = 0
-  size = ranges.size
-  while i < size
-    if c < ranges[i]
-      return false
-    elsif c <= ranges[i + 1]
-      return true
-    end
-    i += 2
-  end
-  return false
-end
-
-def assert_at(kind: Int, codes: List[Int], n: Int, q: Int) -> Bool
-  if kind == BEGIN_TEXT
-    return q == 0
-  elsif kind == END_TEXT
-    return q == n
-  elsif kind == BEGIN_LINE
-    return q == 0 or codes[q - 1] == 10
-  elsif kind == END_LINE
-    return q == n or codes[q] == 10
-  end
-  before = q > 0 and word?(codes[q - 1])
-  after = q < n and word?(codes[q])
-  if kind == WORD_EDGE
-    return before != after
-  end
-  return before == after
-end
-
-def word?(c: Int) -> Bool
-  return c < 128 and WORD_ASCII[c]
-end
-
-# The capture lists of every match, as find_all describes.
-def all_caps(prog: Program, text: String, codes: List[Int]) -> List[List[Int]]
-  n = codes.size
-  found: List[List[Int]] = []
-  pos = 0
-  prev_end = -1
-  while pos <= n
-    caps = search(prog, text, codes, pos, true)
-    if caps.size == 0
-      break
-    end
-    if caps[1] == pos
-      if caps[0] != prev_end
-        found = found.push(caps)
-      end
-      pos += 1
-    else
-      found = found.push(caps)
-      pos = caps[1]
-    end
-    prev_end = caps[1]
-  end
-  return found
-end
-
-def make_match(text: String, caps: List[Int], names: Map[String, Int]) -> Match
-  groups = (0...(caps.size / 2)).to_a.map do |g| make_group(text, caps[2 * g], caps[2 * g + 1]) end
-  return Match(text: groups[0].text, start: groups[0].start, stop: groups[0].stop, groups: groups, names: names)
+  return Match(text: groups[0].text, start: groups[0].start, stop: groups[0].stop, groups: groups, names: prog.names)
 end
 
 def make_group(text: String, start: Int, stop: Int) -> Group

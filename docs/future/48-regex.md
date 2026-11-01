@@ -3,9 +3,9 @@
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
 backtracking (48.2), std first (48.3), after the bootstrap (§18, done), and a
 Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records it.
-48a (`stdlib/regex.agc`) and 48b (the literal, `docs/grammar/04-lexical.md`) are
-built; 48c is not. The decisions are in
-48.10; its four open questions were answered with the recommendations (A).
+48a, 48b and 48c are built (`stdlib/regex.agc`, the literal in
+`docs/grammar/04-lexical.md`, `vm/regex.c`). The decisions are in 48.10; its
+four open questions were answered with the recommendations (A).
 
 The Ruby-style `Regex` was a "later utility" in [pending
 roadmap](../roadmap/pending-general-programming-and-mcp.md).
@@ -93,7 +93,7 @@ ten words, a 1 MB log scan and the ReDoS pattern of 48.8.
 the 48a numbers, for example a simple pattern more than 30 times slower than
 Python `re` on the same machine. The owner confirms it in the 48a PR.
 
-The C step, when it comes:
+The C step (48c):
 
 - The API and its results do not change, including the error texts. Only step
   counts change, as the std-first rule says.
@@ -105,8 +105,8 @@ The C step, when it comes:
   sees, and the ReDoS test of 48.8 still holds.
 - Its thread lists live in a GC object that bytecode cannot reach. Its compiled
   program needs its own layout, which exception 4 of the std-first rule allows.
-- Its entry point goes under a builtin module such as `String`, never under
-  `Regex`, the std alias.
+- Its entry point is `RegexEngine.search`, in a std-only builtin module as
+  `HttpWire` is, never under `Regex`, the std alias.
 
 ### 48.4 Syntax supported
 

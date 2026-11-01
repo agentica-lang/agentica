@@ -119,6 +119,6 @@ A compile error starts with the character where it is, counted from 1: `characte
 
 ## Cost
 
-Every loop of the matcher charges steps, so a long search shares the machine with other tasks and `--max-steps` stops it with `RUNTIME-STEP-LIMIT`. A search on a text of n characters with a pattern of m instructions and g groups costs O(n·m·g) steps, and `match?` O(n·m). `find_all`, `replace` and `split` run one search per match. `(a+)+$`, which takes exponential time in a backtracking matcher, takes linear time here. To stop a search after some time, run it in a task and await it with a timeout (`Task.await(task, timeout_ms)`).
+The matcher runs inside the VM and hands the machine back after each chunk of the text, so a long search shares it with other tasks and `--max-steps` stops it with `RUNTIME-STEP-LIMIT`. A search on a text of n characters with a pattern of m instructions and g groups takes O(n·m·g) time, and `match?` O(n·m). `(a+)+$`, which takes exponential time in a backtracking matcher, takes linear time here. To stop a search after some time, run it in a task and await it with a timeout (`Task.await(task, timeout_ms)`).
 
 `find_all` returns every match at once, so a pattern that matches every character makes one `Match` per character. Compile a run-time pattern once, outside the loop that uses it; a literal is built once already.

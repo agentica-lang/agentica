@@ -79,14 +79,14 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `HttpServerOptions`, `HttpWire`, `IO`, `Int`, `JSON`, `Json`, `JsonField`,
 `KDF`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`, `LogRegistry`, `Map`,
 `Nil`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Profile`, `Random`,
-`Range`, `Result`, `SecureRandom`, `Set`, `Socket`, `Std`, `String`,
-`StructMember`, `System`, `TCP`, `TLS`, `Task`, `Test`, `TestCase`, `Time`,
-`TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. `HTTP`
-is not reserved: it is the usual alias of `std/http`. `ok`, `error`, `some` and
-`none` are names, but cannot be declared as functions, variables, parameters,
-loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds for `puts`,
-`print`, `gets` and `gets!` as variables, parameters, loop variables and pattern
-bindings.
+`Range`, `RegexEngine`, `Result`, `SecureRandom`, `Set`, `Socket`, `Std`,
+`String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`, `Test`, `TestCase`,
+`Time`, `TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`.
+`HTTP` is not reserved: it is the usual alias of `std/http`. `ok`, `error`,
+`some` and `none` are names, but cannot be declared as functions, variables,
+parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds
+for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables
+and pattern bindings.
 
 A trailing `?` or `!` belongs to a lowercase name, whatever follows it:
 `contains? (s, part)` is valid. `!` is not a suffix before `=`, so `a!=b` is `a
