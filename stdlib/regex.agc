@@ -227,7 +227,7 @@ export def find_all(text: String, re: Regex) -> List[Match]
   return all_caps(re.program, text, codes_of(text)).map do |caps| make_match(text, caps, names) end
 end
 
-## Replaces every match, with the matches of `find_all`. In `template`, `$0` is the whole match, `$N` group N (the
+## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
 ## longest run of digits), `${N}` and `${name}` a group, and `$$` a dollar sign; a group that did not take part gives
 ## "". The template is checked before any text is replaced: another `$` form or a missing group is an error.
 export def replace(text: String, re: Regex, template: String) -> Result[String]
@@ -267,7 +267,7 @@ export def split(text: String, re: Regex) -> List[String]
   return parts.push(slice(text, last, codes.size))
 end
 
-## A pattern that matches `text` literally: a backslash goes before each of `\ . + * ? ( ) | [ ] { } ^ $`.
+## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
 export def escape(text: String) -> String
   return text.split("").map(&escape_char).join("")
 end
