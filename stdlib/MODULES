@@ -17,6 +17,7 @@ prelude/map.agc
 prelude/optional.agc
 prelude/string.agc
 queue.agc
+regex.agc
 test/child.agc
 test/report.agc
 test/runner.agc

@@ -275,6 +275,22 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   toml-test JSON (TOML 1.0.0, `tests/fixtures/toml-test/`) and with `tomllib`;
   `.gitattributes` marks both fixture folders `-text` to keep CRLF.
 
+## std/regex
+
+- `std/regex` (`stdlib/regex.agc`) is pure Agentica, no C (§48, phase 48a):
+  parser to a `Node` tree, compiler to the parallel `ops`/`xs`/`ys` lists of
+  `Program`, and a Pike VM in one hot `search` function. `Program.ends` lists
+  the closure of each pc when it meets no ASSERT, so the VM walks only the
+  rest. `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123).
+  A `prefix` is found with `String.index_of` over windows of the text.
+- `Program` is private and holds an empty `Set` (`seal`) so that
+  `JSON.decode` cannot build a `Regex`: `compile` is the only maker, and the
+  matcher trusts the program.
+- Tests: `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`,
+  Go's empty-match rules applied to its spans; a slow generated tier), checks
+  error positions and the ReDoS step budget; golden `std-regex` pins the Go
+  rules. The benchmark pair is `benchmarks/programs/regex.agc`.
+
 ## Comments and style in stdlib/
 
 As in `references/frontend.md` ("Comments and style"): a module `##` doc block

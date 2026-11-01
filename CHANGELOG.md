@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/regex`: regular expressions in linear time, with the RE2 syntax
+  (`Regex.match`, `find_all`, `replace`, `split`).
+
 ### Changed
 
 - Code under the JIT that unwraps Optionals (`unwrap!`) or builds Map literals

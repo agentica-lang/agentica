@@ -3,7 +3,8 @@
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
 backtracking (48.2), std first (48.3), after the bootstrap (§18, done), and a
 Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records it.
-Nothing is implemented. The decisions are in 48.10, with four open questions.
+48a is built (`stdlib/regex.agc`); 48b and 48c are not. The decisions are in
+48.10; its four open questions were answered with the recommendations (A).
 
 The Ruby-style `Regex` was a "later utility" in [pending
 roadmap](../roadmap/pending-general-programming-and-mcp.md).
