@@ -28,6 +28,7 @@ TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
 TLS.connect(host: String, port: Int, context: TlsContext, timeout_ms: Int) -> Result[Socket]
 TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
+TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket]
 
 TlsClientOptions(ca_file: String = "", cert_file: String = "", key_file: String = "",
                  alpn: List[String] = [])
@@ -41,7 +42,14 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   `RUNTIME-TLS-CONTEXT-ROLE`.
 - TLS listeners and sockets use the same TCP calls (`TCP.accept`, `TCP.send`,
   `TCP.recv_bytes`, `TCP.read_line`, `TCP.close`, `TCP.close_listener`,
-  `TCP.local_port`); only `TLS.connect` and `TLS.listen` differ.
+  `TCP.local_port`); only `TLS.connect`, `TLS.listen` and `TLS.upgrade`
+  differ.
+- `TLS.upgrade` starts TLS on an open TCP socket (STARTTLS) and returns a new
+  TLS socket: a client context checks `host`, a server context takes `""`
+  (another host is `RUNTIME-TLS-CONTEXT-ROLE`). After its argument checks the
+  plain socket is closed, whatever the handshake does. Unread bytes in the
+  plain socket (`network: data came before the TLS handshake`) or a send in
+  progress fail it; a timeout closes the connection.
 - Port 0 on listen picks an assigned port. Listen binds every address the host
   resolves to, on one port (`localhost` takes `127.0.0.1` and `::1`); addresses
   the system cannot use are skipped. Ports are 1..65535 to connect and 0..65535

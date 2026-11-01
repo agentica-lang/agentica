@@ -59,8 +59,8 @@ Weighed later (no fixed order):
 15. `Set[T]` and `Queue[T]` (row 12; `Set` is done).
 16. HTTP streaming, 20e to 20g
     ([§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), with
-    `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a and
-    ALPN, 19c, are done).
+    `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a,
+    19b and ALPN, 19c, are done).
 17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
 18. `agentica help std/MODULE` (row 22b, part 2).
 19. The Windows issues
@@ -126,8 +126,8 @@ Weighed later (no fixed order):
   - **Next work:** New features, VM-only: the streaming items of phase 20 (20e
     and 20f; 20g, the streamed server response, is built,
     [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)),
-    built on channels; `TlsContext` (19a) and ALPN (19c, owner 2026-10-16: the
-    HTTP client stays small and opens its low layers,
+    built on channels; `TlsContext` (19a), `TLS.upgrade` (19b) and ALPN (19c,
+    owner 2026-10-16: the HTTP client stays small and opens its low layers,
     [§30.13](../future/30-hybrid-http.md)) are done
     ([§29](../future/29-tls-context.md#29-tls-contexts))
   - **Outcome:** Programs stream HTTP bodies through channels, set up TLS with a

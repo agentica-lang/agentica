@@ -58,12 +58,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   demand) in one pool job; `agc_tls_context_take` checks the role
   (`RUNTIME-TLS-CONTEXT-ROLE`) and takes a count.
 - A TLS socket or listener is the same `net` with `secure` set. `TLS.connect`
-  and `TLS.listen` take a context's config and connect or listen as TCP
-  does. The read callback feeds ciphertext to the session, runs
-  the handshake, and decrypts into `agc_inbuf`, so line and byte reads, limits,
-  locks and timeouts are the TCP ones. Sends encrypt 16 KiB at a time, one
-  `agc_stream_write` per piece. Children in a handshake hang off their request
-  (`handshakes`), and closing the listener closes them.
+  and `TLS.listen` take a context's config and connect or listen as TCP does.
+  The read callback feeds ciphertext to the session, runs the handshake, and
+  decrypts into `agc_inbuf`, so line and byte reads, limits, locks and timeouts
+  are the TCP ones. `TLS.upgrade` moves a plain `net`'s libuv handle
+  (`tcp_link`, its `owner` and one `callbacks` count) to a new TLS `net` in its
+  START step (`begin_upgrade`); the request holds the plain `net` as its
+  `child`, and `drop_request` gives its count back. Sends encrypt 16 KiB at a
+  time, one `agc_stream_write` per piece. Children in a handshake hang off their
+  request (`handshakes`), and closing the listener closes them.
 
 ## Child channel
 
