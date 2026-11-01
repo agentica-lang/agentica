@@ -174,6 +174,17 @@ parses the module, so its imports need not exist; only a module that re-exports
 a name is linked, as `outline` below. Declarations without `export` are left
 out. A lex or parse error exits 1, an unreadable path exits 2.
 
+`agentica help std/MODULE[.NAME] [--json]` reads a `std/` module the way `doc`
+does. `std/MODULE` lists its exports, each with its signature and summary (the
+first paragraph of its doc); `std/MODULE.NAME` prints that export's signature
+and whole doc, and a struct's fields or an enum's variants. With `--json` a
+module is `{module, doc, items: [{kind, name, summary}]}` and a name has the
+`help NAME --json` fields that apply (`name`, `arity`, `parameters`, `result`,
+`signature`), `description` (the whole doc or null), `summary`, `kind` and
+`module`, and no `effects`. A module or name that does not exist is
+`QUERY-NOT-FOUND`, with a "did you mean" over the exports for a name; a name
+that is empty after the dot is `QUERY-USAGE`; both exit 2.
+
 `agentica outline FILE [--json] [--stdin FILE]` lists the top-level declarations
 of one file in source order, private ones too: imports, functions, structs with
 their fields, enums with their variants, type aliases, resources and constants,

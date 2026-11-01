@@ -62,12 +62,11 @@ Weighed later (no fixed order):
     `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a,
     19b and ALPN, 19c, are done).
 17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
-18. `agentica help std/MODULE` (row 22b, part 2).
-19. The Windows issues
+18. The Windows issues
     [#474](https://github.com/agentica-lang/agentica/issues/474),
     [#462](https://github.com/agentica-lang/agentica/issues/462) and
     [#457](https://github.com/agentica-lang/agentica/issues/457).
-20. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
+19. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
 
 ### Done rows
 
@@ -94,6 +93,8 @@ Weighed later (no fixed order):
   9 to 12).
 - **7.2a:** doc comments (22a, [§32](../future/32-doc-comments.md)) and digit
   separators (phase 23, the grammar's literals).
+- **22b:** `agentica doc PATH` and `agentica help std/MODULE[.NAME]`
+  ([§32.5 and §32.6](../future/32-doc-comments.md)).
 - **7.2.4 to 7.2.6:** binary data (phase 13,
   [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)), stack traces
   (14b), and `System.env` and `Path.real` for the self-hosted front end.
@@ -117,10 +118,6 @@ Weighed later (no fixed order):
 - **7.5, part:** logging (14c), `std/logger` on the std-only `LogRegistry`.
 
 ### Pending rows
-
-- **Order:** 22b
-  - **Next work:** part 2, `agentica help std/MODULE`, front end only
-    ([§32.6](../future/32-doc-comments.md)).
 
 - **Order:** 7.4
   - **Next work:** New features, VM-only: the streaming items of phase 20 (20e

@@ -1,7 +1,7 @@
 ## 32. Doc comments
 
-**Status:** 22a and `agentica doc` (§32.5, part 1 of 22b) are built; `agentica
-help` for `std/` (§32.6) is not (roadmap [row 22b](../roadmap/README.md)).
+**Status:** 22a, `agentica doc` (§32.5) and `agentica help` for `std/` (§32.6)
+are built (roadmap [row 22b](../roadmap/README.md)).
 Decided on 2026-10-12: documentation comments are `##` lines, in the style of
 Rust's `///`. The `##` syntax, the `DOC` token and the `std/`
 docs of 22a are in the grammar

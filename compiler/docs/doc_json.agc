@@ -53,6 +53,36 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
   return JSON.object(fields)
 end
 
+## The object of `agentica help std/MODULE.NAME --json`: the fields `help NAME --json` has for a builtin that apply
+## (`name`, `arity`, `parameters`, `result`, `signature`, `description` as the whole doc or null), `summary`, `kind`
+## and `module`, and the `fields` of a struct or the `variants` of an enum. It has no span and no `effects`.
+export def help_json(module: String, item: Model.Item) -> Json
+  fields: Map[String, Json] = {
+    "name": JSON.from(item.name),
+    "kind": JSON.from(item.kind),
+    "module": JSON.from(module),
+    "signature": JSON.from(item.signature),
+    "description": text_json(item.doc),
+    "summary": text_json(item.summary),
+  }
+  if item.kind == "function"
+    fields = fields.put("arity", JSON.from(item.parameters.size))
+    fields = fields.put(
+      "parameters",
+      JSON.array(item.parameters.map do |parameter: Model.Parameter| parameter_json(parameter) end),
+    )
+    fields = fields.put("result", JSON.from(item.result))
+  elsif item.kind == "struct"
+    members_json = item.fields.map do |member: Model.Field| field_json(module, member, false) end
+    fields = fields.put("fields", JSON.array(members_json))
+  elsif item.kind == "enum"
+    variants_json = item.variants.map do |variant: Model.Variant| variant_json(module, variant, false) end
+    fields = fields.put("variants", JSON.array(variants_json))
+  end
+
+  return JSON.object(fields)
+end
+
 ## `{file, range}`: the two keys a diagnostic puts at its top level, in an object of their own.
 export def span_json(module: String, range: DiagnosticModel.Region) -> Json
   return JSON.object({"file": JSON.from(module), "range": DiagnosticJson.range(range)})

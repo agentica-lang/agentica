@@ -22,6 +22,18 @@ export def text(module: String, documented: Model.Module) -> String
   return "#{blocks.join("\n\n")}\n"
 end
 
+## One list line per field or variant: `signature` and, when it has a doc, a dash and the doc. `agentica help std/`
+## prints the same lines.
+export def part_lines(detail: Model.Detail) -> List[String]
+  case detail
+    Model.Detail.Struct(fields) ->
+      return fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
+    Model.Detail.Enum(variants) -> return variants.map do |variant: Model.Variant| variant_line(variant) end
+    Model.Detail.Function(_, _) -> return []
+    Model.Detail.Plain -> return []
+  end
+end
+
 # The blocks of one item, each separated from the next by a blank line: the heading, the doc, the list of its parts.
 def item_blocks(item: Model.Item) -> List[String]
   blocks = ["## `#{item.signature}`"]
@@ -36,17 +48,6 @@ def item_blocks(item: Model.Item) -> List[String]
   end
 
   return blocks
-end
-
-# One list line per field or variant: `signature` and, when it has a doc, a dash and the doc.
-def part_lines(detail: Model.Detail) -> List[String]
-  case detail
-    Model.Detail.Struct(fields) ->
-      return fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
-    Model.Detail.Enum(variants) -> return variants.map do |variant: Model.Variant| variant_line(variant) end
-    Model.Detail.Function(_, _) -> return []
-    Model.Detail.Plain -> return []
-  end
 end
 
 # `name: Type`, with ` = default` as written when the field has one.

@@ -108,8 +108,8 @@ design.
 - §: 32
   - Title: Doc comments
   - File: [`32-doc-comments.md`](32-doc-comments.md)
-  - Status: 22a built (row 7.2a); `agentica doc` built (row 22b, part 1);
-    `agentica help` for `std/` planned (row 22b, part 2)
+  - Status: 22a built (row 7.2a); `agentica doc` and `agentica help` for
+    `std/` built (row 22b)
 
 - §: 34
   - Title: Shared small values in the VM

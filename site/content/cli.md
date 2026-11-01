@@ -66,6 +66,8 @@ agentica doc std/queue    # a file path works too; --json prints one JSON object
 
 It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file, so the module's imports need not exist. Declarations without `export` are left out.
 
+To learn one module, `agentica help std/queue` lists its exports with a one-line summary each, and `agentica help std/queue.pop` prints the signature and the whole doc of one export (a struct's fields or an enum's variants too). `--json` prints one JSON object. A module or name that does not exist is `QUERY-NOT-FOUND` (exit 2); for a name it offers the closest export.
+
 ## Query the code
 
 `outline`, `type-at`, `symbol` and `refs` answer questions about the code, for editors and agents. None of them runs the program. Each prints text, or one JSON object with `--json`. Exit codes: `0` answered, `1` the code has an error (its first diagnostic is the answer), `2` a bad question or an unreadable file. The `QUERY-` codes are `QUERY-USAGE` (bad arguments or file), `QUERY-NO-EXPRESSION` (no expression at the position), `QUERY-NOT-FOUND` and `QUERY-AMBIGUOUS-NAME`; see [Diagnostics](/reference/diagnostics/).

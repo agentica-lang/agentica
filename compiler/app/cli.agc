@@ -54,6 +54,7 @@ import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
 import CliFmt from "cli_fmt"
 import Help from "cli_help"
+import HelpStd from "cli_help_std"
 import Install from "cli_install"
 import Launch from "cli_launch"
 import Options from "cli_options"
@@ -101,7 +102,7 @@ def dispatch(session: Session) -> Int
   if first == "test"
     return test(session, words.drop(1))
   elsif first == "help"
-    return emit(Help.help(words, session.options.style))
+    return help(session, words)
   elsif first == "doc"
     return doc(session, words)
   elsif first == "fmt"
@@ -143,6 +144,15 @@ def dispatch(session: Session) -> Int
   end
 
   return program(session, first, rest)
+end
+
+# `help`: the builtins from the catalog, or a module of `std/` as `doc` reads it.
+def help(session: Session, words: List[String]) -> Int
+  if HelpStd.asks?(words)
+    return answered(session, HelpStd.run(words, session.options.style, session.settings), "")
+  end
+
+  return emit(Help.help(words, session.options.style))
 end
 
 # `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
