@@ -25,7 +25,7 @@ struct Regex.Group  # text, start, stop, matched; "" and -1 when not matched
   `(...)`, `(?:...)`, `(?P<n>...)` or `(?<n>...)`, `|`, `* + ? {n} {n,}
   {n,m}` and lazy `*?`, flags `(?i)` (ASCII), `(?m)`, `(?s)`, `(?i:...)`. A
   `{` that starts no repetition is literal. No backreferences, lookaround,
-  `\pL`: `compile` errors.
+  `\pL`, `[[:alpha:]]`, `\a`, `\0`: `compile` errors.
 - `^ $` are text anchors (not Ruby's line anchors): use `(?m)^` for lines.
   `.` skips `\n` unless `(?s)`. `$` never matches before a final newline.
 - `find_all`, `replace`: after an empty match move one character; drop an

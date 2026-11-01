@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 158435,
+  "steps": 164562,
   "stdout": [
     "a|ab: \"a\" at 0-1, groups [\"a@0\"]",
     "false",
@@ -15,6 +15,9 @@
     "a(?i)b: \"aB\" at 1-3, groups [\"aB@1\"]",
     "(?i)a(?-i)b(?i)c: \"AbC\" at 0-3, groups [\"AbC@0\"]",
     "\\x{22}: \"\\\"\" at 1-2, groups [\"\\\"@1\"]",
+    "0-0",
+    "1-3",
+    "error(\"no group named \\\"x\\\"\")",
     "0-0 1-1 2-3 4-4",
     "replace \"-\": \"-a-b-d-\"",
     "[\"a\", \"bc\"]",
@@ -38,6 +41,7 @@
     "\"\\\\x{D800}\": character 1: \\x{D800} is not a Unicode scalar value",
     "\"\\\\pL\": character 1: \\p is not supported yet",
     "\"a{,3}\": ok",
+    "\"[[:alpha:]]\": character 2: POSIX classes such as [:alpha:] are not supported",
     ""
   ],
   "stderr": []

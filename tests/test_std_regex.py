@@ -346,6 +346,10 @@ ERRORS = [
     ("\\Qa\\E", 1, "\\Q...\\E is not supported"),
     ("\\Z", 1, "invalid escape \\Z"),
     ("[\\b]", 2, "invalid escape \\b"),
+    ("[[:alpha:]]", 2, "POSIX classes such as [:alpha:] are not supported"),
+    ("[a[:digit:]b]", 3, "POSIX classes"),
+    ("\\a", 1, "invalid escape \\a"),
+    ("\\0", 1, "invalid escape \\0"),
     ("(" * 257 + ")" * 257, 257, "groups nest more than 256 levels"),
     ("()" * 257, 513, "more than 256 groups"),
     ("a" * 4097, 4097, "longer than 4096 characters"),
@@ -414,7 +418,7 @@ def test_a_pathological_pattern_runs_in_linear_steps_and_stops_at_the_step_limit
     bytecode = compile_text(REDOS, "redos", tmp_path)
     program_size = 10
     for size in (2000, 8000):
-        # The two searches take about 120 steps per character and instruction.
+        # Each search takes about 60 steps per character and instruction (120 for the two).
         budget = 240 * size * program_size
         result = run_vm(bytecode, "--max-steps", str(budget), args=[str(size)])
         assert result.code == 0 and result.stdout.splitlines() == ["false", "false"], (size, result.stderr)

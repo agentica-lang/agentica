@@ -64,6 +64,13 @@ def main() -> Void
   show_match("xaB", "a(?i)b")
   show_match("AbC", "(?i)a(?-i)b(?i)c")
   show_match("x\"y", "\\x{22}")
+  # \B matches in the empty text, as in Go (Python finds nothing there).
+  puts(spans("", "\\B"))
+  # [: starts a POSIX class only when a :] follows; [[:] is a class of [ and :.
+  puts(spans("a[:b", "[[:]+"))
+  # named checks the index, so a Match built by JSON.decode cannot make it halt.
+  forged = JSON.decode("{\"text\":\"a\",\"start\":0,\"stop\":1,\"groups\":[],\"names\":{\"x\":5}}", Regex.Match)
+  puts(Regex.named(forged.unwrap!, "x"))
   # Zero-length matches: Go's rule.
   puts(spans("abxd", "x*"))
   show_replace("abxd", "x*", "-")
@@ -93,4 +100,5 @@ def main() -> Void
   show_compile("\\x{D800}")
   show_compile("\\pL")
   show_compile("a{,3}")
+  show_compile("[[:alpha:]]")
 end

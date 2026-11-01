@@ -50,6 +50,7 @@ SPECIAL = Set.new(["\\", ".", "+", "*", "?", "(", ")", "|", "[", "]", "{", "}", 
 export struct Regex
   ## The pattern it was compiled from.
   source: String
+  ## Private: only `compile` makes it.
   program: Program
 end
 
@@ -275,8 +276,8 @@ end
 ## The group of `m` with that name, or an error when the pattern has no such group.
 export def named(m: Match, name: String) -> Result[Group]
   case m.names.get(name)
-    some(index) -> return ok(m.groups[index])
-    none -> return error("no group named \"#{name}\"")
+    some(index) if index >= 0 and index < m.groups.size -> return ok(m.groups[index])
+    _ -> return error("no group named \"#{name}\"")
   end
 end
 
@@ -577,6 +578,8 @@ def parse_class(pat: Pat, st: St) -> Result[Out]
       return error(place(pat.n, "missing ']' for the class at character #{open + 1}"))
     elsif c == "]" and !first
       break
+    elsif c == "[" and ch(pat, p + 1) == ":" and closes_posix?(pat, p + 2)
+      return error(place(p, "POSIX classes such as [:alpha:] are not supported"))
     end
     first = false
     low = try class_item(pat, p)
@@ -605,6 +608,18 @@ def parse_class(pat: Pat, st: St) -> Result[Out]
     set = complement(set)
   end
   return ok(Out(node: Node.Class(set), st: st.with(pos: p + 1)))
+end
+
+# Whether a `:]` follows in the class, so that `[:` starts a POSIX class such as `[:alpha:]` (as Go reads it).
+def closes_posix?(pat: Pat, pos: Int) -> Bool
+  p = pos
+  while p + 1 < pat.n and pat.chars[p] != "]"
+    if pat.chars[p] == ":" and pat.chars[p + 1] == "]"
+      return true
+    end
+    p += 1
+  end
+  return false
 end
 
 # One item of a class: a code point, or a class escape such as `\d` (code -1).

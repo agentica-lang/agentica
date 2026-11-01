@@ -72,7 +72,7 @@ struct Regex.Group
 end
 ```
 
-Groups are numbered from 1 by their opening parenthesis. `Regex.named(m, name)` reads a named group, and an unknown name is an error. A `Regex.Regex` holds the pattern as `source`; only `compile` makes one.
+Groups are numbered from 1 by their opening parenthesis. `Regex.named(m, name)` reads a named group, and an unknown name is an error. A `Regex.Regex` holds the pattern as `source`; only `compile` makes one. Printing a `Regex.Regex` shows `source` first, then its compiled program.
 
 - `match?` says whether the pattern matches anywhere. It keeps no groups, so it is the cheapest search.
 - `match` gives the leftmost-first match, or `error("no match")`. Among alternatives the first that matches wins: `a|ab` on `ab` gives `a`.
@@ -98,9 +98,9 @@ Watch the two forms that look alike: in an Agentica string `"#{name}"` puts the 
 - Repetition: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`, each lazy with a `?` after it (`*?`). A `{` that starts no repetition is literal: `a{,3}` matches the text `a{,3}`.
 - Flags: `(?i)` ignores case (ASCII letters only), `(?m)` makes `^` and `$` work on lines, `(?s)` lets `.` match a newline. `(?i-s)` turns flags on and off, and `(?i:...)` sets them for a group. A flag set in the middle of a group lasts to the end of that group.
 
-Not supported, each an error from `compile`: backreferences (`\1`), lookahead and lookbehind, atomic groups, possessive repetitions, `\Q...\E` and Unicode classes such as `\pL`.
+Not supported, each an error from `compile`: backreferences (`\1`), lookahead and lookbehind, atomic groups, possessive repetitions, `\Q...\E`, Unicode classes such as `\pL`, POSIX classes such as `[[:alpha:]]`, the escapes `\a` and `\0`, octal escapes, and `\b` inside a class.
 
-Where it differs from Ruby: `^` and `$` are text anchors, not line anchors (write `(?m)^` for a line start), and `(?m)` means lines, not "dot matches newline" (`(?s)` here). Where it differs from Python's `re`: `$` does not match before a final newline, `\d \w \s \b` are ASCII as with `re.ASCII`, and the empty-match rule of `find_all` and `split` follows Go.
+Where it differs from Ruby: `^` and `$` are text anchors, not line anchors (write `(?m)^` for a line start), and `(?m)` means lines, not "dot matches newline" (`(?s)` here). Where it differs from Python's `re`: `$` does not match before a final newline, `\d \w \s \b` are ASCII as with `re.ASCII`, `\B` matches in the empty text, as in Go, and the empty-match rule of `find_all` and `split` follows Go.
 
 ## Errors and limits
 
