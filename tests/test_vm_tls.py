@@ -13,7 +13,7 @@ import threading
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli,
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli,
                                  compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
@@ -117,6 +117,34 @@ def main() -> Void
   TCP.send(socket, "hello #{TCP.read_line(socket, 10000).unwrap!}\\n", 10000).unwrap!
   TCP.close(socket)
   puts("done")
+end
+"""
+
+ALPN_CLIENT_PROGRAM = """\
+def offer(port: Int, ca: String, alpn: List[String]) -> Result[String]
+  socket = try TLS.connect("localhost", port, try TLS.client_context(TlsClientOptions(ca_file: ca, alpn: alpn)), 5000)
+  line = try TCP.read_line(socket, 5000)
+  return ok("#{TLS.alpn(socket)} #{line}")
+end
+
+def main() -> Void
+  port = String.to_int!(IO.gets().unwrap!)
+  ca = "#{System.args()[0]}/ca.pem"
+  IO.inspect(offer(port, ca, ["http/1.1"]))
+  IO.inspect(offer(port, ca, ["spdy/3"]))
+end
+"""
+
+ALPN_SERVER_PROGRAM = """\
+def main() -> Void
+  dir = System.args()[0]
+  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: ["h2", "http/1.1"])
+  listener = TLS.listen("127.0.0.1", 0, TLS.server_context(options).unwrap!).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  puts(TLS.alpn(TCP.accept(listener, 10000).unwrap!))
+  IO.flush()
+  puts(TCP.accept(listener, 10000).ok?)
 end
 """
 
@@ -610,6 +638,22 @@ def test_starttls_both_ways_against_python_data_before_the_handshake_and_a_hands
     assert vm.wait() == 0, vm.stderr_text()
 
 
+def test_alpn_against_python_on_both_sides_the_servers_choice_none_and_a_refusal(tmp_path, adopt):
+    server, port = python_server(adopt, "alpn")
+    result = run_text(tmp_path, "alpn-client", ALPN_CLIENT_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, 'ok("http/1.1 http/1.1")\nok(" ")\n'), result.stderr
+    assert server.wait() == 0
+    vm = adopt(start_vm(compile_text(ALPN_SERVER_PROGRAM, "alpn-server", tmp_path), CERTS))
+    port = vm.next_line()
+    chosen = run([PYTHON, PYTHON_PEER, "alpn-client", port, "http/1.1,h2"], timeout=scaled(30))
+    assert (chosen.code, chosen.stdout) == (0, "h2\n"), chosen.stderr
+    assert vm.next_line() == "h2"
+    refused = run([PYTHON, PYTHON_PEER, "alpn-client", port, "spdy/3"], timeout=scaled(30))
+    assert (refused.code, refused.stdout) == (0, "refused\n"), refused.stderr
+    assert vm.next_line() == "false"
+    assert vm.wait() == 0, vm.stderr_text()
+
+
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
@@ -843,3 +887,36 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
         start, end = problem["range"]["start"], problem["range"]["end"]
         line = program.read_text().splitlines()[start["line"] - 1]
         assert (start["line"], line[start["column"] - 1:end["column"] - 1]) == (7, covers), result.stderr
+
+
+# std/http speaks only HTTP/1.1, so a context whose alpn could agree on another protocol halts each of its paths at
+# the argument that carries the context, in std/http; ["http/1.1"] is taken.
+@pytest.mark.parametrize("name, call, covers", [
+    ("HTTP.client", 'HTTP.client(HttpClientOptions(tls: some(client(["h2", "http/1.1"]))))', "options"),
+    ("HTTP.start", 'HTTP.start("https://localhost:1", HttpClientOptions(tls: some(client(["h2"]))))', "context"),
+    ("HTTP.listen_tls", 'HTTP.listen_tls("127.0.0.1", 0, server(["h2"]), &answer)', "listener"),
+    ("HTTP.client on http/1.1", 'HTTP.client(HttpClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
+])
+def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp_path, name, call, covers):
+    program = tmp_path / "main.agc"
+    program.write_text(
+        'import HTTP from "std/http"\n\n'
+        "def client(alpn: List[String]) -> TlsContext\n"
+        "  return TLS.client_context(TlsClientOptions(alpn: alpn)).unwrap!\nend\n\n"
+        "def server(alpn: List[String]) -> TlsContext\n"
+        "  dir = System.args()[0]\n"
+        '  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: alpn)\n'
+        "  return TLS.server_context(options).unwrap!\nend\n\n"
+        "def answer(request: HttpRequest) -> Result[HttpResponse]\n"
+        "  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))\nend\n\n"
+        f"def main() -> Void\n  IO.inspect({call})\nend\n", encoding="utf-8")
+    result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
+    if covers is None:
+        assert (result.code, result.stdout) == (0, "true\n"), result.stderr
+        return
+    assert result.code == 1, name
+    problem = json.loads(result.stderr)
+    assert (problem["code"], problem["file"]) == ("RUNTIME-TLS-CONTEXT-ALPN", "std/http.agc"), result.stderr
+    start, end = problem["range"]["start"], problem["range"]["end"]
+    line = (ROOT / "stdlib" / "http.agc").read_text(encoding="utf-8").splitlines()[start["line"] - 1]
+    assert line[start["column"] - 1:end["column"] - 1] == covers, (name, line)
