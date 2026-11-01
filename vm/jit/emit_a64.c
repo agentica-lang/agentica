@@ -795,7 +795,8 @@ void A64(return)(agc_emitter *e, uint32_t a, uint32_t pc) {
 }
 
 /* b from FROM to TO, both byte offsets in the code, which is at most AGC_JIT_CODE_CAP long: in range of the 26-bit
-   word offset either way. */
+   word offset either way. The entry's movz/movk carry the table's distance in 32 bits, which the cap also bounds. */
+_Static_assert(AGC_JIT_CODE_CAP < (128u << 20), "a b reaches 128 MiB either way: every target in the code is in range");
 static uint32_t b_to(size_t from, size_t to) {
   int64_t words = ((int64_t)to - (int64_t)from) / 4;
   return 0x14000000u | ((uint32_t)words & 0x3FFFFFFu);
