@@ -41,7 +41,7 @@ env:
 # One build, many runners (references/ci.md, "Pull requests"): `build` compiles dist/agentica and the C test programs once and
 # uploads dist/ and build/; the shards download it (.github/actions/use-build) and run `make test`, `make test-slow` and the
 # other checks, so no shard compiles. When C changed, `sanitizer-build` does the same for the sanitizer, ThreadSanitizer
-# and GC stress binaries. `test` and `vm-sanitizers` are the last jobs: they need every job of their half and fail when one
+# and GC stress binaries, and `jit-arm64` builds and tests on an arm64 runner. `test` and `vm-sanitizers` are the last jobs: they need every job of their half and fail when one
 # failed or was cancelled, so a branch protection rule names only those two checks.
 jobs:
   warm-third-party:
@@ -543,10 +543,31 @@ jobs:
           targets: dist/agentica
       - run: make vm-layers
 
+  # The JIT on Linux ARM64 (#756), on an arm64 runner that builds its own binary: the C tests (code memory is mapped,
+  # sealed and run there) and the goldens with AGENTICA_JIT=always, then half the shards with `off`. Until arm64 has an
+  # emitter, every mode runs the interpreter.
+  jit-arm64:
+    needs: changes
+    if: ${{ needs.changes.outputs.c != 'false' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+      - name: The C tests, building the VM from the sources
+        run: make -j"$(nproc)" vm-test
+      - name: The goldens and their --max-steps sweeps with AGENTICA_JIT=always, then half the golden shards with the JIT off
+        run: make vm-jit-test
+
   # The check that branch protection names for the C half. It passes when C did not change (every job above is skipped then)
   # and fails when a job of the half failed or was cancelled.
   vm-sanitizers:
-    needs: [changes, sanitizer-build, tsan-build, lint-fuzz, sanitizer-tests, tsan-run, vm-layers]
+    needs: [changes, sanitizer-build, tsan-build, lint-fuzz, sanitizer-tests, tsan-run, vm-layers, jit-arm64]
     if: ${{ always() && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
