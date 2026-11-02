@@ -31,6 +31,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   now gets machine code when compiled code calls it.
 - A disabled `Logger.debug` (or `info`, `warning`, `err`) call is cheaper,
   above all under the JIT.
+- `CHECK-IMPORT-IO` for a relative import says that an import is relative to
+  the importing file and names the path it tried; when the same path from the
+  project folder has the file, the help gives the form to write (`"../src/lib"`).
 
 ### Fixed
 
