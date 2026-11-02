@@ -114,18 +114,20 @@ struct Proxy
   login: String
 end
 
-# The kind of handler a server calls: one per `listen` form, and `Serving` for `serve`, whose app decides per request.
-enum Route
-  Whole(Handler)
-  Streaming(StreamHandler)
-  Uploading(UploadHandler)
-  Sockets(UpgradeHandler)
-  Serving(App)
+# How a server reads a request before its app runs. `whole` reads the body first, at most `max_body_bytes`, and hands
+# it to the app in the request, with an empty `RequestBody`: the promise of `listen`, `listen_stream` and
+# `listen_websocket`, whose apps wrap their handler. Otherwise the body goes to the app as it arrives, at most 256 MiB
+# (`serve`, `listen_upload`). `upgrades` lets a WebSocket handshake through to the app; every other server answers an
+# `Upgrade` header 501.
+struct Reads
+  whole: Bool
+  upgrades: Bool
 end
 
 struct Service
   server: HttpServer
-  route: Route
+  app: App
+  reads: Reads
   options: HttpServerOptions
 end
 
@@ -876,7 +878,7 @@ export def listen(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, Route.Whole(handler), options))
+  return ok(start_server(listener, whole_app(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but over TLS, with the certificate and key of `tls`, a server context
@@ -896,7 +898,7 @@ export def listen_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, Route.Whole(handler), options))
+  return ok(start_server(listener, whole_app(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
@@ -916,7 +918,7 @@ export def listen_stream(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, Route.Streaming(handler), options))
+  return ok(start_server(listener, stream_app(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen_stream`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -935,7 +937,7 @@ export def listen_stream_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, Route.Streaming(handler), options))
+  return ok(start_server(listener, stream_app(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but the handler gets the body of the request on a channel (`RequestBody`) as it arrives, for an
@@ -957,7 +959,7 @@ export def listen_upload(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, Route.Uploading(handler), options))
+  return ok(start_server(listener, upload_app(handler), Reads(whole: false, upgrades: false), options))
 end
 
 ## Like `listen_upload`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -976,7 +978,7 @@ export def listen_upload_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, Route.Uploading(handler), options))
+  return ok(start_server(listener, upload_app(handler), Reads(whole: false, upgrades: false), options))
 end
 
 ## Collects the body of an upload for a handler of `listen_upload` that wants it whole, so one server can serve small
@@ -1023,7 +1025,7 @@ export def listen_websocket(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, Route.Sockets(handler), options))
+  return ok(start_server(listener, socket_app(handler), Reads(whole: true, upgrades: true), options))
 end
 
 ## Like `listen_websocket`, but over TLS (`wss`), with the certificate and key of `tls`, a server context. `options` is
@@ -1042,7 +1044,7 @@ export def listen_websocket_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, Route.Sockets(handler), options))
+  return ok(start_server(listener, socket_app(handler), Reads(whole: true, upgrades: true), options))
 end
 
 ## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
@@ -1091,7 +1093,7 @@ export def serve(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, Route.Serving(app), options))
+  return ok(start_server(listener, app, Reads(whole: false, upgrades: true), options))
 end
 
 ## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
@@ -1110,7 +1112,7 @@ export def serve_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, Route.Serving(app), options))
+  return ok(start_server(listener, app, Reads(whole: false, upgrades: true), options))
 end
 
 ## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
@@ -2231,10 +2233,44 @@ def parse_url(url: String) -> Result[Target]
   return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
-def start_server(listener: Listener, route: Route, options: HttpServerOptions) -> HttpServer
+def start_server(listener: Listener, app: App, reads: Reads, options: HttpServerOptions) -> HttpServer
   return HttpWire.server(listener, options.max_connections) do |server|
-    accept_all(Service(server: server, route: route, options: options))
+    accept_all(Service(server: server, app: app, reads: reads, options: options))
   end
+end
+
+# The apps of the `listen` forms: each calls its handler and wraps the answer. The body is in the request (whole reads)
+# or on the channel (`listen_upload`).
+def whole_app(handler: Handler) -> App
+  return serving() do |request, body| answer_whole(handler, request) end
+end
+
+def answer_whole(handler: Handler, request: HttpRequest) -> Result[Answer]
+  return ok(Answer.Whole(try handler.call(request)))
+end
+
+def stream_app(handler: StreamHandler) -> App
+  return serving() do |request, body| answer_streamed(handler, request) end
+end
+
+def answer_streamed(handler: StreamHandler, request: HttpRequest) -> Result[Answer]
+  return ok(Answer.Stream(try handler.call(request)))
+end
+
+def upload_app(handler: UploadHandler) -> App
+  return serving() do |request, body| answer_uploaded(handler, request, body) end
+end
+
+def answer_uploaded(handler: UploadHandler, request: HttpRequest, body: RequestBody) -> Result[Answer]
+  return ok(Answer.Whole(try handler.call(request, body)))
+end
+
+def socket_app(handler: UpgradeHandler) -> App
+  return serving() do |request, body| answer_upgraded(handler, request) end
+end
+
+def answer_upgraded(handler: UpgradeHandler, request: HttpRequest) -> Result[Answer]
+  return ok(Answer.Upgrade(try handler.call(request)))
 end
 
 def accept_all(service: Service) -> Void
@@ -2252,10 +2288,12 @@ def serve_connection(socket: Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
+  # The body of every request whose body is read whole first: a closed channel and an ended task, made once.
+  empty = RequestBody(pieces: closed_pieces(), done: Task.spawn(&nothing_left, 0))
   while true
-    case start_request(socket, rest, wait_ms, options, body_limit(service), upgrades?(service.route))
+    case start_request(socket, rest, wait_ms, options, body_limit(service), service.reads.upgrades)
       ok(reading) ->
-        sent = answer_request(reading, service)
+        sent = answer_request(reading, service, empty)
         if not sent.keep
           return
         end
@@ -2266,39 +2304,37 @@ def serve_connection(socket: Socket, service: Service) -> Void
   end
 end
 
-# The largest body the head of a request may announce: a body that goes to the handler as it arrives may be up to
-# 256 MiB, and a body read whole before the handler runs is held to `max_body_bytes`.
+# The largest body the head of a request may announce: a body that goes to the app as it arrives may be up to
+# 256 MiB, and a body read whole before the app runs is held to `max_body_bytes`.
 def body_limit(service: Service) -> Int
-  case service.route
-    Route.Uploading(_) -> return DOWNLOAD_MAX_BYTES
-    Route.Serving(_) -> return DOWNLOAD_MAX_BYTES
-    _ -> return service.options.max_body_bytes
+  if service.reads.whole
+    return service.options.max_body_bytes
+  end
+  return DOWNLOAD_MAX_BYTES
+end
+
+# One request whose head is read: the app gets the body as it arrives, or the request with its whole body and `empty`.
+# A body that cannot be read was already answered (or the connection is gone), so the connection ends.
+def answer_request(reading: Reading, service: Service, empty: RequestBody) -> Sent
+  if not service.reads.whole
+    return answer_app(reading, service.app, service.options)
+  end
+  case whole_request(reading)
+    ok(incoming) ->
+      result = service.app.call(incoming.request, empty)
+      return send_answer(reading.socket, incoming.request, result, true, incoming.rest, service.options)
+    error(_) -> return Sent(keep: false, rest: NO_BYTES)
   end
 end
 
-# Whether the head may carry a WebSocket handshake: only a route that can upgrade takes one, and every other route
-# answers an `Upgrade` header 501.
-def upgrades?(route: Route) -> Bool
-  case route
-    Route.Sockets(_) -> return true
-    Route.Serving(_) -> return true
-    _ -> return false
-  end
+def closed_pieces() -> Channel[Bytes]
+  pieces: Channel[Bytes] = Channel.new(1)
+  pieces.close
+  return pieces
 end
 
-# One request whose head is read. An upload route and an app get the body as it arrives; every other route gets the
-# request with its whole body. A body that cannot be read was already answered (or the connection is gone), so the
-# connection ends.
-def answer_request(reading: Reading, service: Service) -> Sent
-  case service.route
-    Route.Uploading(handler) -> return answer_upload(reading, handler, service.options)
-    Route.Serving(app) -> return answer_app(reading, app, service.options)
-    _ ->
-      case whole_request(reading)
-        ok(incoming) -> return answer(reading.socket, incoming, service)
-        error(_) -> return Sent(keep: false, rest: NO_BYTES)
-      end
-  end
+def nothing_left(n: Int) -> Result[Void]
+  return ok()
 end
 
 # The whole body of a request whose head is read. `rest` of the result holds the bytes a chunked body read past its
@@ -2397,48 +2433,6 @@ def read_done(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
   head = reading.head
   request = HttpRequest(method: head.method, target: head.target, path: head.path, headers: head.headers, body: body)
   return ok(Incoming(request: request, rest: rest))
-end
-
-# A request whose body goes to the handler as it arrives. A task reads the body from the socket while the handler runs.
-# The connection stays only when the body was read whole by the time the handler returned: the task sends `rest` (the
-# bytes it read past the body) only then, and before it closes the pieces. Otherwise (the handler answered first, or
-# the body failed) the answer says `Connection: close`, and after it the task is cancelled, the input is drained and
-# the connection closes.
-def answer_upload(reading: Reading, handler: UploadHandler, options: HttpServerOptions) -> Sent
-  socket = reading.socket
-  head = reading.head
-  pieces: Channel[Bytes] = Channel.new(UPLOAD_PIECES)
-  left: Channel[Bytes] = Channel.new(1)
-  feeder = Task.spawn(
-    &feed_request,
-    Feeding(reading: reading, step_ms: options.request_timeout_ms, pieces: pieces, rest: left),
-  )
-  request = HttpRequest(
-    method: head.method,
-    target: head.target,
-    path: head.path,
-    headers: head.headers,
-    body: NO_BYTES,
-  )
-  result = handler.call(request, RequestBody(pieces: pieces, done: feeder))
-  pieces.close
-  past = left.recv(0)
-  whole = Result.ok?(past)
-  keep = false
-  case result
-    ok(response) -> keep = reply_whole(socket, request, closing_unless(response, whole), options.request_timeout_ms)
-    error(message) ->
-      IO.warn("http: handler error: #{message}")
-      failed(socket, request, options.request_timeout_ms)
-  end
-  if whole
-    Task.await(feeder)
-    return Sent(keep: keep, rest: Result.unwrap_or(past, NO_BYTES))
-  end
-  Task.cancel(feeder)
-  drain(socket, Time.monotonic_ms() + ANSWER_MS)
-  TCP.close(socket)
-  return Sent(keep: false, rest: NO_BYTES)
 end
 
 # The response, with `Connection: close` added unless the body of the request was read whole.
@@ -2666,19 +2660,6 @@ end
 
 def replying(handler: Handler, request: HttpRequest) -> Result[Upgrade]
   return ok(Upgrade.Reply(try handler.call(request)))
-end
-
-# One request of a `listen_websocket` server: the handler's answer, or the upgrade, after which the connection is the
-# WebSocket's and never serves another request.
-def answer_socket(socket: Socket, incoming: Incoming, handler: UpgradeHandler, options: HttpServerOptions) -> Sent
-  request = incoming.request
-  case handler.call(request)
-    ok(upgrade) -> return answer_upgrade(socket, incoming, upgrade, options)
-    error(message) ->
-      IO.warn("http: handler error: #{message}")
-      failed(socket, request, options.request_timeout_ms)
-      return Sent(keep: false, rest: NO_BYTES)
-  end
 end
 
 def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options: HttpServerOptions) -> Sent
@@ -3260,33 +3241,6 @@ def drain(socket: Socket, deadline: Int) -> Void
         end
       error(_) -> return
     end
-  end
-end
-
-def answer(socket: Socket, incoming: Incoming, service: Service) -> Sent
-  options = service.options
-  case service.route
-    Route.Whole(handler) ->
-      keep = false
-      case handler.call(incoming.request)
-        ok(response) -> keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
-        error(message) ->
-          IO.warn("http: handler error: #{message}")
-          failed(socket, incoming.request, options.request_timeout_ms)
-      end
-      return Sent(keep: keep, rest: incoming.rest)
-    Route.Streaming(handler) ->
-      case handler.call(incoming.request)
-        ok(response) -> return answer_stream(socket, incoming, response, options)
-        error(message) ->
-          IO.warn("http: handler error: #{message}")
-          failed(socket, incoming.request, options.request_timeout_ms)
-      end
-      return Sent(keep: false, rest: NO_BYTES)
-    Route.Sockets(handler) -> return answer_socket(socket, incoming, handler, options)
-    # An upload route and an app are served by answer_upload and answer_app, which `answer_request` calls instead.
-    Route.Uploading(_) -> return Sent(keep: false, rest: NO_BYTES)
-    Route.Serving(_) -> return Sent(keep: false, rest: NO_BYTES)
   end
 end
 
