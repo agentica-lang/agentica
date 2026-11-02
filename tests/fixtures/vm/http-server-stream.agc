@@ -52,7 +52,9 @@ def say_stopped(feed: Feed) -> Void
   end
 end
 
-# A HEAD request has no body: the server closes the channel without reading it.
+# A HEAD request has no body: the server closes the channel without reading it. The responses that the server refuses
+# (a body with a 204, headers of its own) have the same producer: it sends nothing, and waits for the close, so that no
+# timer of it is still running when main returns, where it would race with the end of the run and change its steps.
 def head_only(feed: Feed) -> Void
   wait_closed(feed)
   say_stopped(feed)
@@ -135,11 +137,11 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/binary" -> return stream(hub, &binary, 200)
       "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
       "/large" -> return stream(hub, &large, 200)
-      "/length" -> return stream_with(hub, &short, 200, [Header(name: "Content-Length", value: "3")])
-      "/framing" -> return stream_with(hub, &short, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
+      "/length" -> return stream_with(hub, &head_only, 200, [Header(name: "Content-Length", value: "3")])
+      "/framing" -> return stream_with(hub, &head_only, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
       "/quiet" -> return stream(hub, &quiet, 200)
       "/slow" -> return stream(hub, &slow, 200)
-      "/nobody" -> return stream(hub, &gated, 204)
+      "/nobody" -> return stream(hub, &head_only, 204)
       "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n".bytes)))
       "/fail" -> return error("the handler failed")
       _ -> return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("".bytes)))
