@@ -71,6 +71,7 @@ Read only what the task needs.
 | `html.md` | `std/html` (HTML escaping) |
 | `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
 | `mime.md` | `std/mime` (media type of a file) |
+| `utc.md` | `std/utc` (Unix ms to UTC date and RFC 3339 text) |
 | `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |

@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/utc` turns Unix milliseconds into the date and time in UTC and into RFC
+  3339 text, as Ruby's `Time#utc.iso8601` does (`UTC.iso8601(Time.now_ms)`).
+
 ## [0.21.0] - 2026-11-02
 
 ### Added
