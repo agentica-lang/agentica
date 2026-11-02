@@ -1,12 +1,9 @@
 # Roadmap: foundations (phases 1 to 5n, complete)
 
-Phases 1 to 5n and the completed foundations for general programming and MCP.
-The language they define is specified in [`docs/grammar.md`](../grammar.md) and
-its files in `docs/grammar/`, and the tests of each stage are in
+The language is specified in [`docs/grammar.md`](../grammar.md) and tested in
 `tests/test_*.py`. The current order is in [`README.md`](README.md).
 
-**Still open from this period** (both tracked here until they are done or
-dropped):
+**Still open from this period:**
 
 - [ ] Phase 5d3, the rest of the agent API: the measurement of `--ai` and labels
   against plain text on the `binary` arm (`docs/eval.md`). The commands `symbol`
@@ -19,12 +16,8 @@ dropped):
 
 ## Done
 
-Phases 1 to 5n and 6a (lexer, parser, checker, CLI, the agent API of `agentica
-check`, `Result` and `try`, JSON, TCP, TLS, HTTP, function values, tasks, the
-collection primitives and the first evaluation, `docs/eval.md`) are specified
-in the grammar and tested in `tests/test_*.py`; git history keeps the per-phase
-records. Internal checker cases that should never happen have their own code,
-`CHECK-INTERNAL`. The stage and diagnostic-code rules are in `AGENTS.md`.
+Phases 1 to 5n and 6a are specified in the grammar and tested; git history keeps
+the per-phase records.
 
 **Decisions of this period** (all closed):
 

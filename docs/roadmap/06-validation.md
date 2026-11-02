@@ -1,10 +1,9 @@
 ## Phase 6: Validate the language design
 
 **Done (phases 6a/6b):** agent rounds 1–8 with the task set under
-`tests/eval/`, recorded in `docs/eval.md`, revising the grammar before
-adding implementation exceptions (the acceptance rule,
-[§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms)). Details
-under Phase 5d3 and 6a in [`01-foundations.md`](01-foundations.md).
+`tests/eval/`, recorded in `docs/eval.md` (the acceptance rule:
+[§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms)). Open items:
+5d3 and 6a in [`01-foundations.md`](01-foundations.md).
 
 ### Phase 6c: Agentica against typed Python
 
@@ -17,11 +16,9 @@ arm. A pilot comes first, at order step 7.2.2 (decided by the owner on
 step 11 (multicore) does not wait for it.
 
 - [x] Pilot (order step 7.2.2, rounds 9 to 11 of `docs/eval.md`), the typed
-  Python arm (`mypy --strict`, "The typed Python arm" of `docs/eval.md`; a
-  solution that fails the checker counts as a failing run), and the harder tasks
-  t9 to t20 (modify a program, a type change across a program, error handling,
-  a broken integration; hermetic), each with hidden tests and reference
-  solutions in both languages (`--check-references`).
+  Python arm (`mypy --strict`; a solution that fails the checker counts as a
+  failing run), and the harder tasks t9 to t20, each with hidden tests and
+  reference solutions in both languages (`--check-references`).
 - [ ] Run the Agentica skill arm and the typed Python arm with the same model
   and budget, with enough reps per cell that the spread between reps is smaller
   than the differences reported (round 1 had too few). Measure hidden tests
@@ -38,7 +35,6 @@ step 11 (multicore) does not wait for it.
   but is inconclusive: `query_runs` was 0 in all 225 runs, so `skill` and
   `skill-nocli` did not differ; repeat after the skill presents the commands
   differently.
-- [x] Record the results in `docs/eval.md` (round 13, 2026-10-22).
 
 **Done when:** the results show, per task kind, whether agents pass more hidden
 tests or spend fewer tokens and repairs in Agentica than in typed Python, and

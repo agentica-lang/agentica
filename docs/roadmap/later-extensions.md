@@ -1,28 +1,11 @@
 ## Later extensions
 
-- [x] Faster maps (done before JSON, 5f): hash-backed maps with
-  insertion-order keys.
 - [ ] SIMD in the VM ([`docs/future/19-simd.md` section
   19](../future/19-simd.md#19-simd-in-the-vm)), on demand (order row 19). Using
   libc `memcpy`/`memcmp`/`memchr` in place of hand loops needs no profiling and
   can land at any time.
-- [x] `Crypto` module ([`docs/future/20-crypto.md` section
-  20](../future/20-crypto.md#20-crypto-module)), on `Bytes` (#805): the
-  `Digest` hashes, `HMAC`, `SecureRandom`, AES-256-GCM, PBKDF2 and scrypt
-  (#455, #757), and Triple DES CBC and CMAC (#825).
-
-### Enums and pattern matching: implemented
-
-- [x] Generic enums, enum-qualified variants, qualified imported names
-  (`Domain.Option.Some`) and `case expression do ... -> ... end` with
-  exhaustiveness checks; the rules are in the grammar.
 - [ ] Define normative designs for generics, methods, FFI, async, or actors
   before implementing them.
-- [x] Complete lightweight I/O concurrency before networking in phase 5j2.
-  Channels are built
-  ([§27.2](../future/27-iteration-and-concurrency.md#272-channels)); the
-  remaining decisions are in
-  [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions).
 
 ### Open decisions
 
