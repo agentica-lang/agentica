@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-02
+
 ### Added
 
 - `std/utc` turns Unix milliseconds into the date and time in UTC and into RFC
@@ -48,6 +50,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   handshake now reaches the app, where `listen`, `listen_stream` and
   `listen_upload` answered it 501.
 
+### Fixed
+
+- An `HTTP.serve` server that is closing no longer answers 400 to a valid
+  request: a request with no body gets its answer, and one whose body the close
+  cut short gets none.
+
 ## [0.21.0] - 2026-11-02
 
 ### Added
@@ -77,9 +85,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- An `HTTP.serve` server that is closing no longer answers 400 to a valid
-  request: a request with no body gets its answer, and one whose body the close
-  cut short gets none.
 - Compiling deeply nested `some(...)` or `ok(...)` calls or list literals, with
   or without a type annotation, takes time in proportion to the depth (900
   levels of `some`: from 0.13 s to 0.05 s).
@@ -951,7 +956,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.21.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.22.0...HEAD
+[0.22.0]: https://github.com/agentica-lang/agentica/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
