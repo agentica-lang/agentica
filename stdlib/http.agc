@@ -1075,8 +1075,9 @@ end
 ## serves in the background, as `listen` does. `app` gets each request with its body on a channel (as `listen_upload`
 ## gives it) and answers with a whole response, a stream or a WebSocket upgrade (`Answer`). The body is at most
 ## 256 MiB: `max_body_bytes` of `options` does not apply here, and a route that wants less counts the bytes or calls
-## `read_all`. The connection serves the next request only when the body was read whole by the time `app` returned;
-## otherwise the answer says `Connection: close`, and an upgrade is refused. `options` is optional and defaults to
+## `read_all`. The connection serves the next request only when the body was read whole by the time `app` returned
+## (a body that had all arrived counts, read or not); otherwise the answer says `Connection: close`, and an upgrade is
+## refused. The server sets no limit on the time of `app`. `options` is optional and defaults to
 ## `HttpServerOptions()`.
 export def serve(
   host: String,
@@ -1114,12 +1115,16 @@ export def serve_tls(
 end
 
 ## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
-## `max_body_bytes` (1 MiB unless given, 0 or more), and `handler` gets the request with it; its response is the
-## `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413 and one that did
-## not arrive whole (the client left, a bad chunk, a timeout) 400, both with `Connection: close` and without calling
-## `handler`.
+## `max_body_bytes` (1 MiB unless given; a negative one counts as 0), and `handler` gets the request with it; its
+## response is the `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413
+## and a bad chunk 400, both with `Connection: close` and without calling `handler`; a body cut or stalled (the client
+## left, a timeout) closes the connection. The server sets no limit on the time of `handler`.
 export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
-  return serving() do |request, body| whole_answer(handler, max_body_bytes, request, body) end
+  limit = max_body_bytes
+  if limit < 0
+    limit = 0
+  end
+  return serving() do |request, body| whole_answer(handler, limit, request, body) end
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
@@ -2451,10 +2456,12 @@ def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
 end
 
 # One request of a `serve` server. A task feeds the body to the app as it arrives, as for an upload route, and the
-# answer goes out as a whole response, a stream or an upgrade. A request with no body counts as read whole at once,
-# so a route that never looks at the body keeps the connection. Otherwise the connection stays only when the feeder
-# had finished by the time the app returned; if not, the answer says `Connection: close`, an upgrade is refused, and
-# after the answer the feeder is cancelled, the input drained and the connection closed.
+# answer goes out as a whole response, a stream or an upgrade. When the app returns, the pieces close and the server
+# waits for the feeder's last word, at most ANSWER_MS: the bytes read past a whole body, or the close of `left` when
+# the body failed or the closed pieces stopped it. So a body that was all there (an empty chunked one, say) counts as
+# read whatever the app did with it, and a request with no body counts as read at once. Otherwise the answer says
+# `Connection: close`, an upgrade is refused, and after the answer the feeder is cancelled, the input drained and the
+# connection closed.
 def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   socket = reading.socket
   head = reading.head
@@ -2473,7 +2480,7 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   )
   result = app.call(request, RequestBody(pieces: pieces, done: feeder))
   pieces.close
-  past = left.recv(0)
+  past = left.recv(ANSWER_MS)
   bodiless = not head.chunked and head.length == 0
   whole = bodiless or Result.ok?(past)
   sent = send_answer(socket, request, result, whole, Result.unwrap_or(past, NO_BYTES), options)
@@ -2541,9 +2548,6 @@ end
 
 # The answer of `app(handler)`: the body read whole (a 413 or a 400 when it cannot be), then the handler's response.
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
-  if max_body_bytes < 0
-    return error("http: max_body_bytes must be 0 or more")
-  end
   if announced_length(request.headers) > max_body_bytes
     return ok(Answer.Whole(closing_answer(413)))
   end
@@ -3141,6 +3145,7 @@ def feed_request(feeding: Feeding) -> Result[Void]
       return ok()
     error(message) ->
       feeding.pieces.close
+      feeding.rest.close
       return error(message)
   end
 end

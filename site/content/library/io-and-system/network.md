@@ -846,10 +846,10 @@ Each `listen` form above serves one kind of route. `serve` serves every kind on 
 A middleware of an `App` is a function from an `App` to an `App`, as for a `Handler`.
 
 - The body arrives as `listen_upload` gives it: up to 64 KiB a piece, 8 pieces held, at most 256 MiB. `max_body_bytes` of `options` does not apply. A route that wants the body whole calls `HTTP.read_all`.
-- `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes`, and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, and a body that did not arrive whole gets a `400`. Both answers come with `Connection: close`, and `handler` is not called.
-- The connection serves the next request only when the body was read whole by the time the app returned. A request with no body counts as read. Otherwise the answer gets `Connection: close` and the connection closes after it.
+- `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, and a bad chunk gets a `400`. Both answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.
+- The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise the answer gets `Connection: close` and the connection closes after it.
 - An upgrade needs the whole body first. An `Accept` while the body is still unread gets a `500` and a close, with `http: invalid response: ...` on stderr.
-- A handler error is the `500` of `listen`. Every other rule (the options, the bad requests, `HTTP.wait` and `HTTP.close_server`) is the same as for the other forms.
+- A handler error is the `500` of `listen`. As with `listen`, the server sets no limit on the time of the app. Every other rule (the options, the bad requests, `HTTP.wait` and `HTTP.close_server`) is the same as for the other forms.
 
 A server with a page, a file sent in pieces, an upload and a WebSocket on one port:
 

@@ -460,9 +460,10 @@ end
 ```
 
 - `HTTP.app(handler, max_body_bytes)` reads the body whole (1 MiB unless
-  given) and calls the `Handler`: over the limit is a 413, a cut body a 400,
-  both closing. `max_body_bytes` of `HttpServerOptions` does not apply to
-  `serve`; the body is at most 256 MiB.
-- The connection is kept only when the body was read whole when the app
-  returned (a request with no body counts as read). An `Accept` before the
-  body is read is a 500. A middleware is `App -> App`.
+  given, a negative limit counts as 0) and calls the `Handler`: over the limit
+  is a 413, a bad chunk a 400, both closing; a cut or stalled body closes the
+  connection. `max_body_bytes` of `HttpServerOptions` does not apply to
+  `serve`; the body is at most 256 MiB. The app has no time limit.
+- The connection is kept only when the whole body had arrived when the app
+  returned, read or not (no body, or an empty chunked one, keeps it). An
+  `Accept` before that is a 500. A middleware is `App -> App`.
