@@ -2442,7 +2442,14 @@ end
 
 def read_done(reading: Reading, body: Bytes, rest: Bytes) -> Result[Incoming]
   head = reading.head
-  request = HttpRequest(method: head.method, target: head.target, path: head.path, headers: head.headers, body: body)
+  request = HttpRequest(
+    method: head.method,
+    target: head.target,
+    path: head.path,
+    headers: head.headers,
+    body: body,
+    remote_addr: TCP.remote_address(reading.socket),
+  )
   return ok(Incoming(request: request, rest: rest))
 end
 
@@ -2477,6 +2484,7 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
     path: head.path,
     headers: head.headers,
     body: NO_BYTES,
+    remote_addr: TCP.remote_address(socket),
   )
   result = app.call(request, RequestBody(pieces: pieces, done: feeder))
   pieces.close
@@ -2559,6 +2567,7 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
         path: request.path,
         headers: request.headers,
         body: data,
+        remote_addr: request.remote_addr,
       )
       return ok(Answer.Whole(try handler.call(whole)))
     error(message) ->

@@ -6,14 +6,18 @@ sockets and http.client (fixtures/http-server-peer.py) and Node http clients
 (fixtures/http-server-peer.js). Everything is on 127.0.0.1 with port 0; the
 certificates are the ones in fixtures/tls.
 """
+import http.client
 import json
+import os
 import socket
+import ssl
 import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, optional_tool, output_lines, run,
-                                 run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, compile_text, optional_tool,
+                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
+from tests.test_vm_tcp import ipv6_localhost
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -1362,6 +1366,73 @@ def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte
         assert sent < 64 * 1024 * 1024
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
+
+
+REMOTE_ADDR_PROGRAM = """\
+import HTTP from "std/http"
+
+def plain(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: request.remote_addr.bytes))
+end
+
+def stream(request: HttpRequest) -> Result[HTTP.StreamResponse]
+  return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(request.remote_addr.bytes)))
+end
+
+def upload(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+  try HTTP.read_all(body, 1024)
+  return plain(request)
+end
+
+def websocket(request: HttpRequest) -> Result[HTTP.Upgrade]
+  return HTTP.upgrade_only(&plain).call(request)
+end
+
+def main() -> Void
+  certs = System.args()[0]
+  tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
+  servers = [
+    HTTP.listen("localhost", 0, &plain).unwrap!,
+    HTTP.listen_stream("localhost", 0, &stream).unwrap!,
+    HTTP.listen_upload("localhost", 0, &upload).unwrap!,
+    HTTP.listen_websocket("localhost", 0, &websocket).unwrap!,
+    HTTP.listen_tls("localhost", 0, tls, &plain).unwrap!,
+  ]
+  ports = servers.map do |server| HTTP.local_port(server).to_s end
+  puts(ports.join(" "))
+  IO.flush()
+  IO.gets()
+  servers.each do |server| HTTP.close_server(server) end
+end
+"""
+
+
+def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_port(tmp_path, adopt):
+    """http.client from 127.0.0.1 and ::1 (where IPv6 localhost exists; CI must have it) to listen, listen_stream,
+    listen_upload, listen_websocket and listen_tls on localhost: each handler answers request.remote_addr."""
+    hosts = ["127.0.0.1"]
+    if ipv6_localhost():
+        hosts.append("::1")
+    elif os.environ.get("CI"):
+        pytest.fail("no IPv6 localhost on this CI runner")
+    vm = adopt(start_vm(compile_text(REMOTE_ADDR_PROGRAM, "remote-addr", tmp_path), CERTS, stdin=True))
+    ports = [int(port) for port in vm.next_line().split()]
+    context = ssl.create_default_context(cafile=str(CERTS / "ca.pem"))
+    context.check_hostname = False  # the certificate names localhost, and the client dials an address
+    seen = []
+    for host in hosts:
+        for kind, port in zip(["listen", "stream", "upload", "websocket", "tls"], ports):
+            if kind == "tls":
+                connection = http.client.HTTPSConnection(host, port, timeout=scaled(10), context=context)
+            else:
+                connection = http.client.HTTPConnection(host, port, timeout=scaled(10))
+            connection.request("POST", "/", body=b"x")
+            response = connection.getresponse()
+            seen.append((kind, response.status, response.read().decode()))
+            connection.close()
+    assert seen == [(kind, 200, host) for host in hosts for kind in ["listen", "stream", "upload", "websocket", "tls"]]
+    vm.close_stdin()
+    assert vm.wait() == 0, vm.stderr_text()
 
 
 # One `serve` server for every kind of route: a page through `HTTP.app` (with a 16-byte body limit), a file sent in

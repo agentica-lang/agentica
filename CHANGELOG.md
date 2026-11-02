@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
+- `std/http` servers give the handler the client's IP address in
+  `request.remote_addr` (Rack's `REMOTE_ADDR`).
 
 ### Changed
 
