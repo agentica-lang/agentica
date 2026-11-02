@@ -43,6 +43,32 @@ TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 
 `connect` opens a connection to a server. `accept` waits for the next client of a listener.
 
+### TCP.remote_address
+
+```text
+TCP.remote_address(socket: Socket) -> String
+```
+
+The IP address of the other side, without the port: `"127.0.0.1"` or `"::1"`, like Rack's `REMOTE_ADDR`. An IPv4 client of an IPv6 listener shows as IPv4 (`"127.0.0.1"`, not `"::ffff:127.0.0.1"`). The IPv6 scope id is dropped, so link-local peers (`fe80::...`) on different interfaces can look the same. A closed socket gives `""`. TLS sockets have it too.
+
+```agentica
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  client = TCP.connect("127.0.0.1", TCP.local_port(listener), 2000).unwrap!
+  server = TCP.accept(listener, 2000).unwrap!
+  puts(TCP.remote_address(server))
+  TCP.close(server)
+  IO.inspect(TCP.remote_address(server))
+  TCP.close(client)
+  TCP.close_listener(listener)
+end
+```
+
+```output
+127.0.0.1
+""
+```
+
 ### TCP.send and TCP.read_line
 
 ```text

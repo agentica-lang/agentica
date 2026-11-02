@@ -74,6 +74,7 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "path", type: Types.Type.String),
       Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
       Model.Named(name: "body", type: Types.Type.Bytes),
+      Model.Named(name: "remote_addr", type: Types.Type.String, default: Model.Default.Text("")),
     ],
   ),
   Model.Record(
@@ -4562,6 +4563,16 @@ ROWS_47: List[Model.Builtin] = [
     implementation: "TCP.local_port",
     effects: ["network"],
     description: "Return the actual listening port.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "TCP.remote_address",
+    parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+    result: Types.Type.String,
+    rule: Model.Rule.Plain,
+    implementation: "TCP.remote_address",
+    effects: ["network"],
+    description: "Return the peer's IP address (\"127.0.0.1\", \"::1\") without the port, or \"\" when closed.",
     alternatives: [],
   ),
   Model.Builtin(

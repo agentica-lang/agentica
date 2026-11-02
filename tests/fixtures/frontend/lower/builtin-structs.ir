@@ -2,7 +2,7 @@ program 0:1:1-17:1 entry=1 globals=0
 source 0 "builtin-structs.agc" chars=512
 struct s0 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
 struct s1 "Header" ["name","value"] types=[String, String]
-struct s2 "HttpRequest" ["method","target","path","headers","body"]
+struct s2 "HttpRequest" ["method","target","path","headers","body","remote_addr"]
 struct s3 "HttpResponse" ["status","headers","body"]
 struct s4 "ProcessOutput" ["stdout","stderr","truncated"] types=[String, String, Bool]
 fn0 "handle" params=1 captures=0 slots=6 @ 0:1:1-5:1
@@ -29,7 +29,7 @@ fn0 "handle" params=1 captures=0 slots=6 @ 0:1:1-5:1
     return r2 @ 0:3:3-4:1
     const r2 void @ 0:1:1-5:1
     return r2 @ 0:1:1-5:1
-fn1 "main" params=0 captures=0 slots=7 entry @ 0:6:1-17:1
+fn1 "main" params=0 captures=0 slots=8 entry @ 0:6:1-17:1
     step @ 0:7:3-8:1
     step @ 0:7:14-7:102
     step @ 0:7:21-7:101
@@ -44,6 +44,8 @@ fn1 "main" params=0 captures=0 slots=7 entry @ 0:6:1-17:1
     step @ 0:7:91-7:100
     step @ 0:7:91-7:94
     const r6 bytes:"x" @ 0:7:91-7:100
+    step @ 0:7:21-7:101
+    const r7 "" @ 0:7:21-7:101
     struct r1 r2 s2 @ 0:7:21-7:101
     call r1 fn0 @ 0:7:14-7:102
     move r0 r1 @ 0:7:14-7:102
