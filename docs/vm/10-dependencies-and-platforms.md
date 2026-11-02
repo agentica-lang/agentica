@@ -12,12 +12,10 @@ HTTP code.
 
 The release (`release.yml`, 11) builds one native archive per system on a
 runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser,
-zlib and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`,
-`AGENTICA_ZLIB=vendored`).
-The system libraries that remain are the C library of each system: glibc (at
-most 2.28 symbols), libSystem on macOS, and on Windows the system DLLs with the
-Universal C Runtime, which is part of Windows 10. `tools/release-check.sh`
-reads the real format of each binary (ELF, Mach-O, PE) and fails on a wrong
+zlib and OpenSSL statically (the three `vendored` modes). The system libraries
+that remain are the C library of each system: glibc (at most 2.28 symbols),
+libSystem on macOS, and on Windows the system DLLs with the Universal C Runtime,
+which is part of Windows 10. `tools/release-check.sh` fails on a wrong
 architecture, a library outside that list or missing hardening.
 
 - **Dependency:** C compiler
@@ -62,28 +60,22 @@ architecture, a library outside that list or missing hardening.
 
 - **Dependency:** libffi
   - **Choice:** Vendored submodule `vm/third_party/libffi` (MIT), tag v3.8.0.
-    It calls the C functions of `extern` blocks. Built on Linux x86_64, Linux
-    arm64 (little-endian, the `AARCH64` target, plus the `closures.c` and
-    `tramp.c` that its closure setup links against), Windows x64 (MinGW gcc,
-    the `X86_WIN64` target: `ffiw64.c` and `win64.S`) and macOS (Apple clang; x86_64 as on
-    Linux, arm64 with the `AARCH64` target and the trampoline table that libffi
-    turns on for Apple arm64): the sources that libffi's `configure.host`
-    lists for the target are compiled per mode into `$(VM_BUILD)/ffi/`, with
-    the `ffi.h` and `fficonfig.h` that its configure script would write made by
-    `mk/vm.mk`, and linked statically. Only `vm/ffi_libffi.c` includes `ffi.h`.
+    It calls the C functions of `extern` blocks. Built on Linux (x86_64,
+    arm64), Windows x64 and macOS (x86_64, arm64): the sources that libffi's
+    `configure.host` lists for the target are compiled per mode into
+    `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
+    script would write made by `mk/vm.mk`, and linked statically. Only
+    `vm/ffi_libffi.c` includes `ffi.h`.
 
 - **Dependency:** zlib
   - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
     permission to use for any purpose with attribution, no copyleft), tag
     v1.3.1. With `AGENTICA_ZLIB=vendored` (the release, and the default off
-    Linux) only the codec side is built, without configure and without
-    the `gz*` file API: `adler32`, `crc32`, `deflate`, `inffast`,
-    `inflate`, `inftrees`, `trees` and `zutil` compile per mode into
-    `$(VM_BUILD)/zlib/` and link
-    statically. The Linux default, `system`, links the distro's zlib 1.2.0
-    or newer dynamically instead, as OpenSSL does (10.0). `Zlib`
-    compresses and decompresses through either behind the adapter
-    (`vm/zlib_codec.c`); only that file includes `zlib.h` (15.5).
+    Linux) only the codec side is built, without configure and without the `gz*`
+    file API. The Linux default, `system`, links the distro's zlib 1.2.0 or
+    newer dynamically instead (11). `Zlib` compresses and decompresses through
+    either behind the adapter (`vm/zlib_codec.c`); only that file includes
+    `zlib.h` (15.5).
 
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
@@ -105,72 +97,47 @@ and `NOTICE` with the third-party licenses.
 
 ### 10.0 Building and linking OpenSSL
 
-`AGENTICA_OPENSSL` picks the OpenSSL build.
-
-- **`system`** (the default) links the system OpenSSL dynamically, with the
-  flags of `pkg-config --cflags --libs openssl`. The stamp
-  `$(VM_BUILD)/openssl-system` runs before any `vm/*.c` compile. It stops with a
-  clear message when `pkg-config` or the package is missing, or when the version
-  is older than `OSSL_MIN` (3.0.0). `vm/tls_openssl.c` also stops with `#error`
-  on an older OpenSSL or on LibreSSL. The stamp holds the version and flags, so
-  a new system OpenSSL relinks. No Perl and no cache are involved.
-- **`vendored`** builds the pinned submodule and links it statically. The
-  release uses it, so the shipped VM needs only glibc's own libraries
-  (`readelf -d` shows no `libssl` or `libcrypto`) and runs on any glibc 2.28
-  system. Pull request CI jobs use `system`, except the `test` job, which links
-  one vendored release-mode binary from a cached OpenSSL so this path stays
-  tested (11). The same split applies to libgc through `AGENTICA_GC` and to
-  zlib through `AGENTICA_ZLIB` (11).
-
-The mode is not remembered. Pass `AGENTICA_OPENSSL=vendored` to every make
-command, or export it. `build/vm/flags` records the mode, so switching it
-relinks the VM.
+`AGENTICA_OPENSSL` picks `system` (the default: the system OpenSSL 3.0 or newer,
+dynamically, so a fresh checkout does not spend minutes building OpenSSL) or
+`vendored` (the pinned submodule, statically). The stamp, the mode flags and the
+CI split are in §11. `vm/tls_openssl.c` also stops with `#error` on an older
+OpenSSL or on LibreSSL. The release uses `vendored`, so the shipped VM needs only
+glibc's own libraries and runs on any glibc 2.28 system.
 
 The vendored build:
 
 - Configure runs out of tree in `$(VM_BUILD)/openssl/` with the mode's compiler
   (`VM_CC`: `cc`, `clang` for `SANITIZE=1`, `zig cc` in the release), then
-  `make build_libs`. The parent make's `MAKEFLAGS`, `CC`, `CFLAGS`, `LDFLAGS`
-  and similar variables are cleared with `env -u`, so nothing from the parent
-  leaks in. The output goes to `configure.log` and `build.log`. It needs Perl 5
-  with its core modules (`IPC::Cmd`; on Debian the `perl` package). The rule
-  stops with a clear message when they are missing.
-- Options (`OSSL_OPTS` in mk/vm.mk): static libraries only, no loadable
-  code, no legacy provider, no automatic `openssl.cnf` loading, no parts TLS
-  does not use, and `no-deprecated`, so only the 3.x API is visible. The
-  libraries are PIC, so the PIE link works.
-- Flags per mode: the release adds
-  `-fstack-protector-strong -D_FORTIFY_SOURCE=2`; the GC-stress mode adds `-g`;
-  the sanitizer mode builds with clang and `-g -fno-omit-frame-pointer` but
-  without `-fsanitize`. An instrumented OpenSSL would make the sanitizer job
+  `make build_libs`. The parent's `MAKEFLAGS`, `CC`, `CFLAGS` and `LDFLAGS` are
+  cleared with `env -u`, so nothing leaks in. It needs Perl 5 with its core
+  modules (`IPC::Cmd`), and the rule stops with a message when they are missing.
+- Options (`OSSL_OPTS` in `mk/vm.mk`): static libraries only, no loadable code,
+  no legacy provider, no automatic `openssl.cnf` loading, no parts TLS does not
+  use, and `no-deprecated`, so only the 3.x API is visible. The libraries are
+  PIC, so the PIE link works.
+- The sanitizer mode builds OpenSSL with clang and `-g -fno-omit-frame-pointer`
+  but without `-fsanitize`: an instrumented OpenSSL would make the sanitizer job
   much slower. ASan still wraps OpenSSL's `memcpy` and friends, so an overflow
   into a buffer the VM hands to OpenSSL is still caught.
-- The stamp `$(VM_BUILD)/openssl-flags` holds the Configure and sub-make command
-  lines, the compiler version, `VERSION.dat` and the submodule commit. A change
-  to any of them rebuilds. The libraries depend only on the stamp, not on source
-  times, so toggling `TRACE` or touching sources never rebuilds OpenSSL. libgc,
-  yyjson, picohttpparser and libuv follow the same model (11). `make vm-openssl`
-  builds only the libraries. After editing OpenSSL sources by hand, remove
-  `$(VM_BUILD)/openssl`.
-- Headers: `vm/*.c` see the generated headers through `-I`. Only the OpenSSL
-  adapter files include them (layer rule 5, §15.5).
-- Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`.
-  The built-in `OPENSSLDIR` points at the build machine, and the VM may end with
+- The libraries depend only on the stamp (`$(VM_BUILD)/openssl-flags`: command
+  lines, compiler version, `VERSION.dat`, submodule commit), not on source
+  times, so toggling `TRACE` or touching sources never rebuilds OpenSSL. After
+  editing OpenSSL sources by hand, remove `$(VM_BUILD)/openssl`.
+- Only the OpenSSL adapter files include its headers (layer rule 5, §15.5).
+- Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`:
+  the built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security
   level 2 as minimums.
-- Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`,
-  `git add` it and rebuild. The changed `VERSION.dat` changes the stamp and the
-  CI keys. Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS
-  line is a reviewed change of its own.
+- Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`, `git add`
+  it and rebuild. The changed `VERSION.dat` changes the stamp and the CI keys.
+  Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS line is a
+  reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more for
   `dist/agentica`.
-- System and vendored builds are exercised on Linux, macOS and Windows. The
-  Platforms jobs link the vendored OpenSSL statically on macOS (Intel and
-  ARM) and Windows, and `make vendored-check` fails if the binary loads
-  OpenSSL, libgc or `msys-2.0.dll`. The TLS adapter and the native trust
-  stores (10.3) build on every system, TLS sockets run on every system over
-  TCP, and `std/http` (HTTP and HTTPS) runs on every system over both.
+- TLS sockets and `std/http` (HTTP and HTTPS) run on every system, with the
+  native trust stores (10.3). `make vendored-check` fails if the binary loads
+  OpenSSL, libgc or `msys-2.0.dll`.
 
 ### 10.1 Event loop: libuv, not libevent
 
