@@ -164,7 +164,7 @@ A flag wins over its environment variable.
 
 ## Bytecode cache
 
-`agentica FILE.agc` and `agentica test` keep the compiled program of each root file in `_build/bytecode/` and read it back while the sources are the same. A program that imports `std/analysis` then starts in about a tenth of a second instead of six.
+`agentica FILE.agc` and `agentica test` keep the compiled program of each root file in `_build/bytecode/` and read it back while the sources are the same.
 
 - An entry holds the SHA-256 of every source file (`agentica.toml` and `agentica.lock` too), how each import was found, and the version and build of the binary. Any change compiles the program again and replaces the entry.
 - `_build/` is in the project folder (the nearest `agentica.toml`) or, for a file outside a project, beside the file. Nothing deletes old entries: remove the folder when you like, and put `_build/` in your `.gitignore`.
@@ -178,7 +178,7 @@ A flag wins over its environment variable.
 
 - The root file and the text of `--stdin` are always checked in full. Entries are written only after a program checks.
 - It follows the rules of the bytecode cache: the same folder choice, the same ownership checks, and `--no-cache` turns it off. A damaged entry is ignored. `outline`, `refs` and `symbol` do not use it.
-- The first run after a change writes the entries and is a little slower; the next ones are several times faster.
+- The first run after a change writes the entries; the next ones read them.
 
 ## Test
 
