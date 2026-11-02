@@ -208,9 +208,10 @@ flush. **When `main` ends, the program ends.** The steps are:
    or the DLLs' detach code, which could wait for it. Each final flush of the
    C streams stdout and stderr (`agc_stdio_flush`) skips a stream whose lock
    another thread holds, so its buffered native bytes may be lost. Linux and
-   macOS try the lock (`ftrylockfile`); once they hold it, `fflush` can still
-   block on the descriptor. Windows has no try-lock: it flushes on a thread of
-   its own and stops waiting after 100 ms.
+   macOS try the lock (`ftrylockfile`). Windows has no try-lock: a thread of
+   its own takes the lock and flushes, and the run waits at most 100 ms for it
+   to get the lock. Once a flush holds the lock, `fflush` can still block on
+   the descriptor.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read

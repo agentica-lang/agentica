@@ -32,11 +32,15 @@ static void hold(void *arg) {
 
 int main(void) {
   assert(uv_sem_init(&held, 0) == 0 && uv_sem_init(&release, 0) == 0);
+  /* Bytes wait in the buffer of stdout, so its flush has a write to make (the UCRT's fflush does not even take the
+     lock of a stream with no buffer). */
+  assert(setvbuf(stdout, NULL, _IOFBF, 4096) == 0);
+  assert(fputs("stdio_flush: buffered\n", stdout) >= 0);
   uv_thread_t holder;
   assert(uv_thread_create(&holder, hold, stdout) == 0);
   uv_sem_wait(&held);
   assert(agc_stdio_flush(stdout) == AGC_STDIO_BUSY);
-  /* Asked again while the lock is still held (on Windows the first flush still waits on its thread). */
+  /* Asked again while the lock is still held (on Windows the first flush still waits for it on its thread). */
   assert(agc_stdio_flush(stdout) == AGC_STDIO_BUSY);
   assert(agc_stdio_flush(stderr) == AGC_STDIO_FLUSHED);
   uv_sem_post(&release);

@@ -197,9 +197,9 @@ end
   never returns holds a pool thread; once `--schedulers` are stuck, later
   compute calls wait. The function must be safe to call from another thread.
   At process end, the final flush skips C stdout or stderr while a native call
-  holds its lock; its buffered C bytes may be lost. On Linux and macOS a flush
-  that got the lock can still block on the output descriptor; on Windows it
-  waits at most 100 ms.
+  holds its lock; its buffered C bytes may be lost (Windows waits at most
+  100 ms for the lock). A flush that got the lock can still block on the
+  output descriptor.
 - `Native.wait_readable(fd: Int, timeout_ms: Int) -> Result[Void]` and
   `Native.wait_writable` park the task until a descriptor of native code (a
   library's socket) can be read or written; other tasks run. For libraries in

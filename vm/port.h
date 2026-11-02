@@ -830,16 +830,17 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
    take closes it and gives the text (malloc'd) and its length; false when text was lost. */
 FILE *agc_memstream_open(agc_memstream **ms);
 bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len);
+#endif
 /* A flush of the C stream stdout or stderr at the end of a run, which never waits for long on its lock: a compute call
-   may hold it, blocked in a write to a pipe nobody reads (#616). BUSY when another thread holds the lock (Linux and
-   macOS: ftrylockfile), or, on Windows, which has no try-lock, when a flush on a thread of its own has not ended
-   within AGC_STDIO_FLUSH_WAIT_MS: that thread is left to the exit, and a later call while it runs is BUSY at once.
+   may hold it, blocked in a write to a pipe nobody reads (#616). BUSY when another thread holds the lock (POSIX:
+   ftrylockfile), or, on Windows, which has no try-lock, when a thread of its own has not taken the lock within
+   AGC_STDIO_FLUSH_WAIT_MS: that thread is left to the exit, and a later call while it runs is BUSY at once.
+   Once it has the lock, the flush waits for its write.
    Only native code writes to these buffers (the VM writes its own output through vm/output.c), so a busy stream
    loses at most what native code left in its buffer. FAILED when fflush fails. */
 typedef enum { AGC_STDIO_FLUSHED, AGC_STDIO_BUSY, AGC_STDIO_FAILED } agc_stdio_flush_result;
 #define AGC_STDIO_FLUSH_WAIT_MS 100
 agc_stdio_flush_result agc_stdio_flush(FILE *stream);
-#endif
 #ifdef _WIN32
 /* The reader of Windows stdin (vm/stdio_windows.c): a thread of its own makes one blocking read at a time, so a read
    that waits for input keeps no pool thread. new makes it for FD (no thread yet). read asks for up to ROOM bytes and
