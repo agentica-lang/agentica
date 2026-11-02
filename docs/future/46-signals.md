@@ -36,8 +36,8 @@ default action. A second signal is recorded until the children are stopped; a
   grandchild holding the stderr pipe delays it.
 - The VM has no `uv_signal_t` watcher for the stop signals; libuv has its own
   inside `uv_spawn` (SIGCHLD). A past hang came from a program reading the
-  loop's signal pipes; the guard is `private_pipe` in `vm/files.c` (PR #162). Any
-  new watcher must respect it and libuv's shared signal lock.
+  loop's signal pipes; the guard is `private_pipe` in `vm/files.c` (PR #162).
+  Any new watcher must respect it and libuv's shared signal lock.
 - The VM reaps only the children libuv spawned, so a grandchild re-parented to a
   VM running as PID 1 stays a zombie (`docker run --init` avoids this).
 
@@ -136,14 +136,14 @@ change); (B) move them to `System.subscribe(signals)` and
 - **The masks and the handler.** The VM keeps two atomic masks, one bit per
   signal number: `subscribed` (written by the loop, read by the handler) and
   `pending` (set by the handler for a subscribed signal, which then wakes the
-  loop with the existing `uv_async_send`). The loop clears the bit and offers the
-  value to each subscription with a send that never waits. The subscription
+  loop with the existing `uv_async_send`). The loop clears the bit and offers
+  the value to each subscription with a send that never waits. The subscription
   table belongs to the I/O thread and changes by a request through the inbox
   (`docs/vm/16-architecture.md`). A signal with no subscription takes the stop
-  path as today. No `uv_signal_t` watcher is added: libuv's watchers share a lock
-  and a pipe (46.1), and libuv restores the default action when it stops the
-  last watcher of a signal, so the VM would have to reinstall its handler each
-  time.
+  path as today. No `uv_signal_t` watcher is added: libuv's watchers share a
+  lock and a pipe (46.1), and libuv restores the default action when it stops
+  the last watcher of a signal, so the VM would have to reinstall its handler
+  each time.
 - **The stop set.** `stop_signals[]` in `vm/loop.c` grows from INT, TERM and HUP
   to USR1, USR2 and QUIT, and `agc_io_block_stop` blocks the same list in
   worker threads. Without a subscription USR1 and USR2 now take the stop path
@@ -184,8 +184,8 @@ its parent's SIGKILL.
 
 `STOP_GRACE_SECONDS` bounds only the default path (a second default stop while
 the children are stopped). A handled signal never arms it, so a program that
-handles TERM and needs ten seconds of cleanup is not cut. The alarm can still cut
-a program on its default path, for example on a second Quit. The parent's
+handles TERM and needs ten seconds of cleanup is not cut. The alarm can still
+cut a program on its default path, for example on a second Quit. The parent's
 SIGKILL is the parent's timer (`STOP_TIMEOUT` in the gh-runner script); the VM
 adds no deadline for a handled stop.
 
@@ -391,8 +391,8 @@ error and stays ignored.
   on EINTR (46.3.2); Quit takes the `_exit(131)` path (46.3.3). **Breaking:**
   `Signal` becomes a reserved builtin name.
 - **46b: sending.** `Process.signal`, `spawn_group`, `signal_group` and
-  `System.signal`, with the pidfd probe and `--deny-run`; the group close and the
-  end-of-run group kill for group children.
+  `System.signal`, with the pidfd probe and `--deny-run`; the group close and
+  the end-of-run group kill for group children.
 - **46d: graceful HTTP stop.** A drain in `std/http` (stop accepting, wait for
   the handlers up to a deadline), in Agentica, after 46b by the owner's order.
   (46c, the Racket driver, is gone: an ordinary run is the process of the
@@ -400,30 +400,30 @@ error and stays ignored.
 - Outside §46: `File.copy` that keeps the mode, `System.hostname`, PID 1
   reaping (46.8, question 10).
 
-### 46.8 Decisions
+### 46.8 Open questions
 
 Decided on 2026-10-15 as recommended, except question 12. Options not taken are
 named.
 
 1. **API shape:** a `Signal.channel` subscription, which queues values from the
-   moment it is made. Not a blocking `Signal.wait(names, timeout_ms)`: it drops a
-   signal that arrives before the call and needs a task per wait point.
+   moment it is made. Not a blocking `Signal.wait(names, timeout_ms)`: it drops
+   a signal that arrives before the call and needs a task per wait point.
 2. **Names:** the builtin enum `Signal` (a typo is a check error), as
    `LogLevel` does; not strings.
-3. **Later signals:** (B), the program decides: while a subscription exists every
-   Term, Int, Hup, Usr1 and Usr2 goes to the channel, and Quit is the force path
-   (stops the children, flushes, exit 131). It matches the gh-runner and Go's
-   `signal.Notify`, and the VM never leaves a child behind. The hard stop belongs
-   to the parent (Docker's SIGKILL after 10 seconds, `Process.close`). The cost:
-   a direct `agentica run` can only be stopped by Quit or SIGKILL, and Ctrl-\ is
-   less known than Ctrl-C twice, so the site page must say so. Not (A) (as
-   today) and not (C) (a repeat of the same signal within 3 seconds forces the
-   exit; the fallback if Ctrl-C twice must work).
+3. **Later signals:** (B), the program decides: while a subscription exists
+   every Term, Int, Hup, Usr1 and Usr2 goes to the channel, and Quit is the
+   force path (stops the children, flushes, exit 131). It matches the gh-runner
+   and Go's `signal.Notify`, and the VM never leaves a child behind. The hard
+   stop belongs to the parent (Docker's SIGKILL after 10 seconds,
+   `Process.close`). The cost: a direct `agentica run` can only be stopped by
+   Quit or SIGKILL, and Ctrl-\ is less known than Ctrl-C twice, so the site page
+   must say so. Not (A) (as today) and not (C) (a repeat of the same signal
+   within 3 seconds forces the exit; the fallback if Ctrl-C twice must work).
 4. **Grace alarm:** kept for the default path only; a handled stop has no VM
    deadline. Not a grace per subscription.
 5. **Permissions:** no flag for subscribing (it affects only the program);
-   `--deny-run` for `spawn_group` and `System.signal` (a pid signal reaches other
-   processes, the class `--deny-run` covers). Not a new `--deny-signal`.
+   `--deny-run` for `spawn_group` and `System.signal` (a pid signal reaches
+   other processes, the class `--deny-run` covers). Not a new `--deny-signal`.
 6. **SIGHUP reload:** delivery only. HUP can be subscribed to; the VM reloads
    nothing and the program decides.
 7. (Moot: no Racket driver.)
@@ -433,8 +433,8 @@ named.
    program does not own).
 9. **Stdin of group children:** inherited, as Python does (the program must not
    read stdin while such a child runs); not `/dev/null`.
-10. **Reaping orphans as PID 1:** document `docker run --init`; the VM would need
-    `waitpid` on pids it does not own, a separate decision.
+10. **Reaping orphans as PID 1:** document `docker run --init`; the VM would
+    need `waitpid` on pids it does not own, a separate decision.
 11. **No pidfd:** refuse with `error("signal: pidfd is unavailable")`. Not
     `kill()` after the name check: the window can signal a stranger. The
     gh-runner still ends after its deadline, since the group kill reaches a

@@ -13,8 +13,8 @@ their reasons.
 ### 48.1 Background
 
 Strings have no raw form (`"\d"` is `LEX-INVALID-ESCAPE`), positions count
-characters, not bytes, and a builtin runs to its end once started, so a C matcher
-without a stepper could hold the scheduler for a whole scan
+characters, not bytes, and a builtin runs to its end once started, so a C
+matcher without a stepper could hold the scheduler for a whole scan
 (`docs/vm/10-io-scheduler.md`, "Builtins").
 ### 48.2 Engine choice
 
@@ -81,8 +81,8 @@ module as `HttpWire` is, never under the `Regex` alias):
 - It is a stepper, the protocol of `File.each_line`
   (`docs/vm/03-ir-and-bytecode.md` §4.3): each resume advances a bounded number
   of characters, charges one STEP and a turn cost per character. The turn cost
-  never touches `--max-steps` (`docs/vm/10-io-scheduler.md`), so the STEP is what
-  the budget sees and the ReDoS test still holds.
+  never touches `--max-steps` (`docs/vm/10-io-scheduler.md`), so the STEP is
+  what the budget sees and the ReDoS test still holds.
 - Its thread lists live in a GC object that bytecode cannot reach, and its
   program has its own layout (exception 4 of the std-first rule).
 ### 48.4 Syntax supported
@@ -131,9 +131,9 @@ signatures and error messages are on the site page.
   `groups[0]` is the whole match; `names` maps a group name to its index; a
   group that did not take part has `""`, -1, -1 and `matched: false`).
   `Regex.Regex` holds the source and a compiled program of a private type
-  `Program`: an importer cannot name or build it (`docs/grammar/05b-modules.md`),
-  so no program can make a bad `Regex`. That relies on an exported struct
-  having a private field type, which 48a checks.
+  `Program`: an importer cannot name or build it
+  (`docs/grammar/05b-modules.md`), so no program can make a bad `Regex`. That
+  relies on an exported struct having a private field type, which 48a checks.
 - Limits are compile errors, never halts: pattern over 4096 characters,
   repetition count over 1000, over 10000 instructions after expansion, nesting
   over 256 levels, over 256 groups (proposals, tuned in 48a).
@@ -221,7 +221,7 @@ matcher checks the same flag between resumes.
 
 Not planned: raw string literals.
 
-### 48.10 Decisions
+### 48.10 Decisions and open questions
 
 **Decided by the owner on 2026-10-15:**
 
@@ -255,4 +255,5 @@ Not planned: raw string literals.
 
 One PR per item of 48.9, each with its own tests and docs. Done when: a program
 searches, extracts, replaces and splits text with a pattern, literal or string;
-no pattern stalls the VM past its step budget; the tests of §48.6 and §48.8 pass.
+no pattern stalls the VM past its step budget; the tests of §48.6 and §48.8
+pass.

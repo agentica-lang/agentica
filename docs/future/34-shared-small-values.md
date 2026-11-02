@@ -50,6 +50,6 @@ Left out, after a measurement or because the gain is small:
   per I/O operation), and the `[]` of a Json array (`agc_json_container` has no
   vm).
 
-Every shared path keeps the turn cost it had, since the cost rule reads sizes and
-not objects. Tests: `shared_strings`, `shared_empties` and the keys test in
+Every shared path keeps the turn cost it had, since the cost rule reads sizes
+and not objects. Tests: `shared_strings`, `shared_empties` and the keys test in
 `vm/tests`, and the golden `shared-small-values`.

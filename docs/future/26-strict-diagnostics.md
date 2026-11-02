@@ -117,13 +117,13 @@ every `Alias.name` through the file's imports and rewrites it to `@N::name`, so
 the checker gets one merged program with no imports left.
 
 **What counts as a use.** Every place where `resolve` finds the alias, for any
-kind of name: a call (also without parentheses), a function value (`&Text.shout`),
-a type in an annotation, parameter, field or JSON type argument, a construction,
-an enum variant as a value or a pattern, and an enum type. A use inside a
-function that is never called counts: the rule is about the file's text.
-**Re-exports** (`docs/grammar/05b-modules.md`): `export Url.parse` counts as a
-use of `Url` (the check marks it via `Declarations.reexports_of`), so a facade
-that only re-exports needs no fake call.
+kind of name: a call (also without parentheses), a function value
+(`&Text.shout`), a type in an annotation, parameter, field or JSON type
+argument, a construction, an enum variant as a value or a pattern, and an enum
+type. A use inside a function that is never called counts: the rule is about the
+file's text. **Re-exports** (`docs/grammar/05b-modules.md`): `export Url.parse`
+counts as a use of `Url` (the check marks it via `Declarations.reexports_of`),
+so a facade that only re-exports needs no fake call.
 
 **No side effects to keep.** An import has no effect besides its names (a module
 has no top-level statements or state), so removing an unused one never changes
@@ -136,8 +136,8 @@ so the fix belongs in the package.
 
 - **A mistyped alias is not an unused import.** With `import Text from "text"`
   and a call `Txet.shout("hi")`, the real mistake is the call. The check skips a
-  file that has a two-part function name whose first part is not an alias and not
-  a builtin call (`IO.inspect`, `String.length` are valid), and the checker
+  file that has a two-part function name whose first part is not an alias and
+  not a builtin call (`IO.inspect`, `String.length` are valid), and the checker
   reports `CHECK-UNKNOWN-NAME` with its "did you mean" help.
 - **An alias used without its member.** An alias is never a name on its own, so
   a one-part type or enum name equal to an alias is a mistake, most often a
@@ -153,8 +153,8 @@ so the fix belongs in the package.
   the 16a PR as a small change.
 - **Order.** Imports are checked in source order, files in link order (root
   first), and the first alias never used is reported. Errors found while
-  rewriting (`CHECK-IMPORT-NAME`) come first, and every linker error comes before
-  every checker error.
+  rewriting (`CHECK-IMPORT-NAME`) come first, and every linker error comes
+  before every checker error.
 
 **Help:** `remove import JsonUtil from "json_util"`, the whole line; there is no
 "use it" hint, since the linker cannot know what the code meant to call.
@@ -205,15 +205,15 @@ the outer variable it captures, since a block can read but never assign captured
 values (`CHECK-CAPTURED-ASSIGNMENT`).
 
 - **Compound assignment is not a read.** A read of `x` inside the value of an
-  assignment to `x` itself does not count: `x += 1`, `x = x + 1` and
-  `xs = xs.push(v)` alone do not make `x` or `xs` used (the parser turns `x += 1`
-  into `x = x + 1`, `parse_compound`). This holds in nested blocks too:
-  `xs = xs.map do |v| v + xs.length end` alone leaves `xs` unused. Values are
-  immutable, so the new value of `x` leaves such an assignment only through a
-  later read; a counter only incremented, or a list only appended to, is lost
-  work and usually a bug. Rust warns the same way. A call in such a value still
-  runs; if a loop calls a function with effects only to feed its own state
-  (`n = tick(n)`), the name is `_n`.
+  assignment to `x` itself does not count: `x += 1`, `x = x + 1` and `xs =
+  xs.push(v)` alone do not make `x` or `xs` used (the parser turns `x += 1` into
+  `x = x + 1`, `parse_compound`). This holds in nested blocks too: `xs = xs.map
+  do |v| v + xs.length end` alone leaves `xs` unused. Values are immutable, so
+  the new value of `x` leaves such an assignment only through a later read; a
+  counter only incremented, or a list only appended to, is lost work and usually
+  a bug. Rust warns the same way. A call in such a value still runs; if a loop
+  calls a function with effects only to feed its own state (`n = tick(n)`), the
+  name is `_n`.
 - **Reassignment before any read.** The rule is per variable, not per
   assignment: `x = 1`, `x = 2`, `puts(x)` is valid. Finding the dead first value
   needs a flow analysis that the checker does not do (and Go does not reject it
@@ -304,8 +304,8 @@ the analysis does not look into loops or calls. Not terminators:
 - `while true ... end` without a `break` (the grammar: a loop does not by itself
   guarantee a return), and `try`, which leaves early only on an error.
 
-Branches are checked as their own blocks: `if c` with a `return` and no `else` is
-not a terminator, but a statement after the `return` inside that branch is
+Branches are checked as their own blocks: `if c` with a `return` and no `else`
+is not a terminator, but a statement after the `return` inside that branch is
 unreachable.
 
 **Where.** In the checker, which already walks the block structure and has the

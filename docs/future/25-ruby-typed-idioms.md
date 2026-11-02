@@ -189,13 +189,13 @@ def read_lines(path: String) -> Result[List[String]]
 end
 ```
 
-**`File.eof?`** comes with this item:
-`File.eof?(handle: FileHandle, timeout_ms: Int) -> Result[Bool]` (unlike
-`IO.eof?`, so the loop needs `try`). It peeks at the next byte, with the timeout
-and handle-lock rules of the other `File` stream functions, and errors for a
-handle that is closed or not open for reading. It is a builtin under exception 1
-of the std-first rule (it touches the OS). Without it a loop must tell the end of
-the file from invalid UTF-8 by the error text of `File.read_line`.
+**`File.eof?`** comes with this item: `File.eof?(handle: FileHandle, timeout_ms:
+Int) -> Result[Bool]` (unlike `IO.eof?`, so the loop needs `try`). It peeks at
+the next byte, with the timeout and handle-lock rules of the other `File` stream
+functions, and errors for a handle that is closed or not open for reading. It is
+a builtin under exception 1 of the std-first rule (it touches the OS). Without
+it a loop must tell the end of the file from invalid UTF-8 by the error text of
+`File.read_line`.
 
 **API:** one more arity of the existing builtin (the catalog already has arity
 overloads, `Map.get`):
@@ -301,18 +301,18 @@ a format chosen at run time picks between literals.
 - `format` has a catalog entry in `compiler/catalog/builtins_data.agc` marked
   "checker-handled, variadic": the number of arguments depends on the literal,
   so the checker checks the call itself. The entry is needed because the linker
-  keeps a call name unchanged only when `builtin-ref` finds it (otherwise it adds
-  the module prefix `@N::`); it also covers the name reservation and `agentica
-  help format`. Only the function name is reserved: a user `def format` is
-  `CHECK-REDEFINED-NAME` (breaking, accepted before 1.0); variables, parameters
-  and fields named `format` stay valid.
+  keeps a call name unchanged only when `builtin-ref` finds it (otherwise it
+  adds the module prefix `@N::`); it also covers the name reservation and
+  `agentica help format`. Only the function name is reserved: a user `def
+  format` is `CHECK-REDEFINED-NAME` (breaking, accepted before 1.0); variables,
+  parameters and fields named `format` stay valid.
 - The first argument must be a plain one-line string literal, without `#{...}`
   and not a heredoc: `CHECK-FORMAT-LITERAL`, with a help to use interpolation.
 - A bad conversion (unknown type or flag, a trailing `%`, `precision` on `d`,
   `x` or `s`, `0` on `s`, a width or precision out of range) is
   `CHECK-FORMAT-SPEC` at the conversion's span inside the literal.
-- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type
-  (a `%s` argument without `to_s`, such as an `Fn`, a task or a handle, included)
+- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type (a
+  `%s` argument without `to_s`, such as an `Fn`, a task or a handle, included)
   is `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its
   conversion.
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows

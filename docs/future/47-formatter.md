@@ -324,7 +324,7 @@ they fit.
   edit of `format_text`; outside the order of row 7.9, it waits for the language
   server (§43.1).
 
-### 47.9 Decisions
+### 47.9 Open questions
 
 Answered by the owner on 2026-10-31: every recommendation. Options not taken
 are named.
@@ -353,8 +353,8 @@ are named.
    check (47.5); the rules nest and comments need line suffixes, which direct
    string building cannot give.
 9. **Who enforces the width:** `agentica check` (`CHECK-LINE-TOO-LONG`), the one
-   enforcer, which also covers the lines `fmt` cannot break; `fmt --check` covers
-   layout only.
+   enforcer, which also covers the lines `fmt` cannot break; `fmt --check`
+   covers layout only.
 
 ### 47.10 Implementation (row 7.9)
 

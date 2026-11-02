@@ -47,17 +47,17 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
 **Decisions:**
 
 - **Options records, not arguments.** A context is built from one immutable
-  record per role, as `HTTP.client_options()` and `HttpClientOptions` work. A new
-  option is a new field, never a new argument or builder, so default parameter
-  values never have to change these calls. A new field breaks code that
-  constructs the record with every field named, so the skill teaches `with`
+  record per role, as `HTTP.client_options()` and `HttpClientOptions` work. A
+  new option is a new field, never a new argument or builder, so default
+  parameter values never have to change these calls. A new field breaks code
+  that constructs the record with every field named, so the skill teaches `with`
   (15c): `TlsClientOptions().with(ca_file: "ca.pem")`.
 - **One type, two roles.** `TlsContext` is one opaque type, like `SSLContext`,
   with its role fixed at creation. Two types would catch a mix-up at check time
   but double the names for a mistake that fails at the first call anyway. A
-  server context passed to `TLS.connect` or `HTTP.client`, or a client context to
-  `TLS.listen` or `HTTP.listen_tls`, is a program bug, not an I/O failure, so it
-  is the diagnostic `RUNTIME-TLS-CONTEXT-ROLE` at the context argument (for
+  server context passed to `TLS.connect` or `HTTP.client`, or a client context
+  to `TLS.listen` or `HTTP.listen_tls`, is a program bug, not an I/O failure, so
+  it is the diagnostic `RUNTIME-TLS-CONTEXT-ROLE` at the context argument (for
   `std/http` functions the span points inside `std/http.agc`, and the message
   names the `HTTP` function).
 - **Errors come early.** `client_context` and `server_context` read and check
@@ -66,11 +66,12 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
   and an empty `cert_file` or `key_file` are `error` results there, not at the
   first connect or accept. An empty `ca_file` means system trust; a non-empty
   one replaces it. Trust is loaded once, into the context.
-- **Per connection:** `TLS.connect` and `TLS.upgrade` set SNI and `SSL_set1_host`
-  from `host` (an IP literal goes through `X509_VERIFY_PARAM_set1_ip_asc` and
-  sends no SNI). The context holds no hostname, so one context serves every host.
-- **Fixed policy, no knobs:** verification, the hostname check, the version floor,
-  ciphers and groups of §10.3 (29.7).
+- **Per connection:** `TLS.connect` and `TLS.upgrade` set SNI and
+  `SSL_set1_host` from `host` (an IP literal goes through
+  `X509_VERIFY_PARAM_set1_ip_asc` and sends no SNI). The context holds no
+  hostname, so one context serves every host.
+- **Fixed policy, no knobs:** verification, the hostname check, the version
+  floor, ciphers and groups of §10.3 (29.7).
 - **No defaults, no close.** No call is better with a default parameter (the
   system-trust case is `TLS.client_context(TlsClientOptions())`). A context has
   no `close`: it holds no socket or descriptor, only memory, and a context a
@@ -96,14 +97,14 @@ handshake over an open TCP socket and returns a new TLS socket.
 - **Role from the context.** A client context is the client side and checks
   `host` as `TLS.connect` does; a server context is the server side and `host`
   must be `""` (`RUNTIME-TLS-CONTEXT-ROLE` otherwise, at the `host` argument).
-- **The old socket is consumed**, on success and on failure: any later call on it
-  returns "network: socket is closed". The call fails if the socket's input
+- **The old socket is consumed**, on success and on failure: any later call on
+  it returns "network: socket is closed". The call fails if the socket's input
   buffer is not empty (the peer sent data before the handshake, which STARTTLS
   forbids). A timeout closes the connection.
 - **Only TCP sockets:** upgrading a TLS socket is an `error` result.
 - **Why here and not in phase 20.** HTTPS is TLS from the first byte, `CONNECT`
-  proxies and HTTP `Upgrade` are rejected (501, §10.6), and it needs a context to
-  carry the trust or the key pair.
+  proxies and HTTP `Upgrade` are rejected (501, §10.6), and it needs a context
+  to carry the trust or the key pair.
 
 ### 29.4 HTTP takes contexts
 
@@ -127,8 +128,9 @@ context forms (the hint table of `grammar.md` §7), and `TlsContext`,
 
 - **Values.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, printed `<TlsContext>`) is a
   small GC object with the role and a pointer to a `malloc`'d native record that
-  holds the `SSL_CTX *` and no GC pointer (`docs/vm/05-values-execution-builtins.md`
-  §5.3; a GC object pointing to `malloc` memory is the allowed direction).
+  holds the `SSL_CTX *` and no GC pointer
+  (`docs/vm/05-values-execution-builtins.md` §5.3; a GC object pointing to
+  `malloc` memory is the allowed direction).
 - **Connections hold their own reference.** `SSL_new` takes a reference on its
   `SSL_CTX`, so a socket stays valid when the program drops its last reference
   to the context, and the memory is freed when the last socket is. An
@@ -205,7 +207,15 @@ existing context.
 ### 29.8 Tests
 
 VM only: golden fixtures with the test CA of `tests/fixtures/tls/` and
-independent Python `ssl` peers on port 0 (the hostname and CA cases of §10.3, and
-STARTTLS both ways). Two behaviors need their own test: a `ca_file` replaced on
-disk after the context is built does not change that context, and a context
+independent Python `ssl` peers on port 0 (the hostname and CA cases of §10.3,
+and STARTTLS both ways). Two behaviors need their own test: a `ca_file` replaced
+on disk after the context is built does not change that context, and a context
 dropped while a socket made from it is open stays valid until the socket closes.
+
+### 29.9 Implementation (row 7.4)
+
+19a (`TlsContext`, one breaking step), 19b (`TLS.upgrade`) and 19c (ALPN) are
+done; the other options of §29.7 are not in this phase. Done when a program
+builds one client and one server context at start-up and shares them, `TLS`,
+`HTTP.client` and `HTTP.listen_tls` take only contexts, and STARTTLS works
+against Python on both sides.

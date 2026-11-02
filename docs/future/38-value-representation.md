@@ -24,8 +24,8 @@ mk/vm.mk) and reads heap objects, stack and roots only at 8-byte aligned offsets
 
 ### 38.2 Alternatives weighed
 
-- **Packed struct (12 or 9 bytes): rejected.** Boehm reads only aligned words, so
-  in an array of 12-byte values every second payload (seven of eight with 9
+- **Packed struct (12 or 9 bytes): rejected.** Boehm reads only aligned words,
+  so in an array of 12-byte values every second payload (seven of eight with 9
   bytes) is invisible and a live object would be freed: the blocker. Also
   unaligned loads across cache lines, no atomic access, traps on some
   architectures, and a small gain (25% or 44%) with worse calls: a struct with
@@ -40,8 +40,8 @@ mk/vm.mk) and reads heap objects, stack and roots only at 8-byte aligned offsets
   change, and Floats need heap boxes (Ruby's flonum keeps most inline).
 - **Struct of arrays (9 bytes).** A separate array of 1-byte tags beside the
   8-byte payloads keeps alignment and GC visibility, but every container (lists,
-  structs, enum payloads, captures, `Result`, Json, registers) manages two arrays
-  and rebuilds an `agc_value` on every read.
+  structs, enum payloads, captures, `Result`, Json, registers) manages two
+  arrays and rebuilds an `agc_value` on every read.
 
 ### 38.6 Direction: use the static types
 

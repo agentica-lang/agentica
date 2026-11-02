@@ -62,9 +62,9 @@ site generator can read it. Decisions:
 - **Parse only.** It lexes and parses one module and does not resolve imports or
   type-check, so it cannot fail on a dependency. A module that re-exports a name
   is linked to list the original declaration with its doc; if it does not link,
-  it lists no re-export. A `std/` name reads the copy embedded in the binary, and
-  a `PATH` that starts with `std/` always names an embedded module (`std/prelude/`
-  and paths with `.`, `..` or empty parts exit 2).
+  it lists no re-export. A `std/` name reads the copy embedded in the binary,
+  and a `PATH` that starts with `std/` always names an embedded module
+  (`std/prelude/` and paths with `.`, `..` or empty parts exit 2).
 - **Signatures** are one normalized line built from the AST in the form the
   builtin catalog uses (`add(a: Int, b: Int = 2) -> Int`, `struct QueueState`,
   `enum Option[T]`); types print as written, so an import alias such as
@@ -77,9 +77,9 @@ site generator can read it. Decisions:
 
 `agentica help std/MODULE[.NAME] [--json]` reads a module as `doc` does and uses
 the builtin help fields that apply, with `description` set to the whole doc and
-`summary` added, and no `effects` (grammar, `06b-builtins.md`). An unknown module
-or name exits 2, with "did you mean" over the module's exports. Builtins keep
-the catalog help; user files are served by `agentica doc file.agc`.
+`summary` added, and no `effects` (grammar, `06b-builtins.md`). An unknown
+module or name exits 2, with "did you mean" over the module's exports. Builtins
+keep the catalog help; user files are served by `agentica doc file.agc`.
 
 ### 32.8 Later, to evaluate
 

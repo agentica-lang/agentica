@@ -413,8 +413,8 @@ section. `Time.monotonic_ns` (41.10) landed alone, as a builtin row.
 ### 41.14 Docs of the implementation PR
 
 The grammar, the programming skill (`references/dates.md`), a site page and a
-**Breaking:** CHANGELOG entry for the reserved names. When the feature lands, §41
-leaves `docs/future/`.
+**Breaking:** CHANGELOG entry for the reserved names. When the feature lands,
+§41 leaves `docs/future/`.
 
 ### 41.15 Tests
 

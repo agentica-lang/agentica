@@ -3,8 +3,8 @@
 **Status:** built: the simple, synchronous HTTP of roadmap phase 20 (client 20a,
 cancellation core 20b, server 20c; a call sends a whole request and gets a whole
 response, decided by the user on 2026-10-12, since a `Bytes` body is simple for
-programs and keeps all byte work in C) and the streaming items on channels
-(20e `HTTP.open`, 20f `HTTP.upload`, 20g streamed responses). The contract is the
+programs and keeps all byte work in C) and the streaming items on channels (20e
+`HTTP.open`, 20f `HTTP.upload`, 20g streamed responses). The contract is the
 grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md)) and the
 [network page](../../site/content/library/io-and-system/network.md); the parsing
 rules, design, errors and tests are in
@@ -47,20 +47,20 @@ Left out until a program needs it: an upload and a streamed response in one call
 The client stays small on purpose: connection, TLS, the per-origin pool,
 keep-alive, one deadline and size limits. Redirects, cookies, compression, a DNS
 cache, HTTP/2 and a "renew after N requests" rule are not added to the C client
-(a server that wants to recycle a connection sends `Connection: close`, which the
-client honors). Like Python's `urllib` and `http.client`, it instead exposes its
-lower layers, so a program or a library written in Agentica can build what it
-needs:
+(a server that wants to recycle a connection sends `Connection: close`, which
+the client honors). Like Python's `urllib` and `http.client`, it instead exposes
+its lower layers, so a program or a library written in Agentica can build what
+it needs:
 
 1. **ALPN in TLS** (item 19c, §29.7): the `alpn` option and `TLS.alpn(socket)`.
    Without it an HTTP/2 or gRPC library written in Agentica cannot reach HTTPS
    servers, which offer `h2` only through ALPN; with it such a library needs
    only the public `TCP`, `TLS`, `std/binary` and `Bytes`.
-2. **A public HTTP/1.1 connection**: open one connection outside the pool, send a
-   request, read the response head, then the body piece by piece, like
+2. **A public HTTP/1.1 connection**: open one connection outside the pool, send
+   a request, read the response head, then the body piece by piece, like
    `http.client.HTTPConnection` (`HTTP.start`; `HTTP.open` is its channel form).
-   The design keeps the connection usable for a second request when the body
-   was read to the end. `HTTP.get` and the pooled client stay the easy layer on top;
+   The design keeps the connection usable for a second request when the body was
+   read to the end. `HTTP.get` and the pooled client stay the easy layer on top;
    `HttpWire` stays private to `std/http`.
 
 Redirects and cookies, if a program needs them, are a loop over a request in

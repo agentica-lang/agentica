@@ -12,11 +12,11 @@ error `Result` that names the missing feature. An algorithm left out of a
 system build (a FIPS-only OpenSSL has no MD5, SHA-1 or scrypt) stops the call
 with `RUNTIME-INTERNAL`, as any failed library call does.
 
-**Landed:** `Digest` (`md5`, `sha1`, `sha256`, `sha512`, each with a `_hexdigest`
-form, through `vm/digest_openssl.c`), HMAC-SHA256 and HMAC-SHA512, `SecureRandom`
-(`random_bytes`, `hex`, `uuid`, from `RAND_bytes`), AES-256-GCM (`Cipher`, the tag
-appended to the ciphertext), and PBKDF2-HMAC-SHA256 and scrypt (`KDF`), all on
-`Bytes` (0.17.0, #805); signatures are in
+**Landed:** `Digest` (`md5`, `sha1`, `sha256`, `sha512`, each with a
+`_hexdigest` form, through `vm/digest_openssl.c`), HMAC-SHA256 and HMAC-SHA512,
+`SecureRandom` (`random_bytes`, `hex`, `uuid`, from `RAND_bytes`), AES-256-GCM
+(`Cipher`, the tag appended to the ciphertext), and PBKDF2-HMAC-SHA256 and
+scrypt (`KDF`), all on `Bytes` (0.17.0, #805); signatures are in
 `site/content/library/text-and-data/crypto.md`. Names follow Ruby's
 (`OpenSSL::Cipher.new("aes-256-gcm")`, `OpenSSL::KDF.pbkdf2_hmac`), flattened as
 `Digest` and `HMAC` are (`Digest::SHA256.hexdigest` is

@@ -55,7 +55,8 @@ language or the VM. The isolation decisions are in [`docs/bdd.md`](../bdd.md),
   examples/hello.agc` at most 30 ms and 30 MB of peak RSS; `agentica check
   stdlib/bdd/gherkin.agc` at most 100 ms. The owner decided on 2026-10-15 that
   the bootstrap goes ahead even if the front end is slower than Racket, so these
-  are measured after it (roadmap row 3, [`docs/vm-benchmarks.md`](../vm-benchmarks.md)).
+  are measured after it (roadmap row 3,
+  [`docs/vm-benchmarks.md`](../vm-benchmarks.md)).
 - **Same results, same diagnostics:** every golden and test passes with no
   `make goldens` diff, and every diagnostic keeps its code and span.
 

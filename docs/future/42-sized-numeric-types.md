@@ -464,21 +464,21 @@ With (C), the operations are:
 
 ### 42.12 Storage (§38.6)
 
-**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type
-at its element width (1 byte for `Int8` and `UInt8`, 2 for the 16-bit types, 4
-for the 32-bit types and `Float32`, 8 for `Int`, `UInt64` and `Float`), with no
-tag per item. The list header holds the element kind, so the paths that have no
+**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type at
+its element width (1 byte for `Int8` and `UInt8`, 2 for the 16-bit types, 4 for
+the 32-bit types and `Float32`, 8 for `Int`, `UInt64` and `Float`), with no tag
+per item. The list header holds the element kind, so the paths that have no
 static type (`inspect`, `to_s`, `JSON.encode`, `List.sort`, equality; §42.11)
 read the width from the list, and a read rebuilds the `agc_value` (§38.6, item
-1). `Int` and `Float` lists are already unboxed at 8 bytes (§17.12), so step 4 is
-for `UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost about
-10 MB, against about 160 MB with 16-byte items.
+1). `Int` and `Float` lists are already unboxed at 8 bytes (§17.12), so step 4
+is for `UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost
+about 10 MB, against about 160 MB with 16-byte items.
 
 **Why not earlier.** It touches every container that holds values, and the
-persistent vector (§17.12) would need leaves of more widths. §38.7 says to change
-the value layout only when a measurement says so. The criterion: a program that
-reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for its task,
-measured with the benchmark script, and the list items are the limit.
+persistent vector (§17.12) would need leaves of more widths. §38.7 says to
+change the value layout only when a measurement says so. The criterion: a
+program that reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for
+its task, measured with the benchmark script, and the list items are the limit.
 ### 42.13 Phasing and tests
 
 Each step is one or more PRs. Each PR holds its own contracts, with its own
@@ -541,16 +541,16 @@ Not planned:
 - **Implicit numeric promotion or widening**, and **operator overloading to make
   conversions implicit** (§6 says there is none): a second rule would make
   conversion errors invisible to agents.
-- **A `Byte` alias** (§42.4) and **an unsigned `Int`** (`UInt64` covers the range
-  above `Int`).
+- **A `Byte` alias** (§42.4) and **an unsigned `Int`** (`UInt64` covers the
+  range above `Int`).
 - **A target-dependent `Int` width.** The owner confirmed `Int` and `Float` stay
   64-bit on every target; a 32-bit option could be revisited only if an old
   32-bit architecture becomes a target (none is planned). Rationale (the
   author's): the VM stores `Int` as `int64_t` and `Float` as `double`, which C
   provides on 32-bit CPUs too, but a 32-bit build must compute `Float` in
-  hardware double (SSE2, VFP; x87 gives other results), and a 32-bit `Int` option
-  would make one program overflow on one target and not another, and `.agcb`
-  files would not move between them.
+  hardware double (SSE2, VFP; x87 gives other results), and a 32-bit `Int`
+  option would make one program overflow on one target and not another, and
+  `.agcb` files would not move between them.
 
 ### 42.17 Questions for the owner
 

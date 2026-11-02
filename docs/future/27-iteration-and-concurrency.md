@@ -66,8 +66,8 @@ task, at most `limit` at a time, each item with its own timeout, and get one
   processes) already returns `Result`, so `Fn[A, R]` would give
   `List[Result[Result[T]]]`. With one level, the block's own `error(...)` and a
   timeout are both one `error`; a block that returns `error("task: timed out")`
-  itself looks like a timeout, which is accepted, since both mean no value. `try`
-  works in the block by a checker rule for builtins whose block result is
+  itself looks like a timeout, which is accepted, since both mean no value.
+  `try` works in the block by a checker rule for builtins whose block result is
   `Result[T]` with `T` inferred (`Slot.InferResult`: `R` comes from the expected
   type of the call, else from the body); `File.open` with a block (§25.9) reuses
   it.
@@ -85,14 +85,14 @@ task, at most `limit` at a time, each item with its own timeout, and get one
   rules][task-rules]): its slot gets `error("task crashed: ...")`.
 - **Cancellation.** The caller cannot leave a `Task.map` call early; in-flight
   items stop early only at their own timeout, or when the run ends (rules: the
-  grammar, `docs/vm/10-io-scheduler.md` §10.2.1, `docs/vm/14-core-invariants.md`).
-  The choices behind them: a timed-out item's work is everything it started,
-  running descendants included (a task that ends hands its running children to
-  its parent, so a cancel only walks down); an I/O operation in flight is
-  detached, never closed, so a timed-out item cannot close a handle that other
-  items share; handles the cancelled task opened close with it. The skill
-  teaches: open handles inside the item, and give a handle that many tasks need
-  to one owner task (27.5).
+  grammar, `docs/vm/10-io-scheduler.md` §10.2.1,
+  `docs/vm/14-core-invariants.md`). The choices behind them: a timed-out item's
+  work is everything it started, running descendants included (a task that ends
+  hands its running children to its parent, so a cancel only walks down); an I/O
+  operation in flight is detached, never closed, so a timed-out item cannot
+  close a handle that other items share; handles the cancelled task opened close
+  with it. The skill teaches: open handles inside the item, and give a handle
+  that many tasks need to one owner task (27.5).
 - **Public cancel (built, owner decision of 2026-10-20).**
   `Task.cancel(task: Task[R]) -> Void` runs the same cancel on the task it names
   (contract:
@@ -116,9 +116,8 @@ the std-first rule (time).
 
 ### 27.2 Channels
 
-A bounded buffer that tasks
-send values into and receive values from, so producer and consumer pipelines
-work. The contract is in
+A bounded buffer that tasks send values into and receive values from, so
+producer and consumer pipelines work. The contract is in
 [`library/concurrency/channel.md`](../../site/content/library/concurrency/channel.md);
 the VM design (waits, reservations, close, owner, fairness) is in
 `docs/vm/10-io-scheduler.md` §10.2.2 ("Channel waits", `vm/channel.c`).

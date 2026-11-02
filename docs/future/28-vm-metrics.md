@@ -477,11 +477,12 @@ non-atomic add per allocation. The 18d PR must show that it passes the overhead
 check of 28.8, or change rule 4 first, with the reason.
 
 **Open.** How the allocation path finds the running task's counter: `agc_alloc`
-takes no scheduler, and `vm/` has no mutable globals (`docs/vm/10-io-multicore.md`
-§10.2.3). Options: a new parameter on the allocation functions (every caller
-changes); a thread-local variable (one documented exception to the no-globals
-rule); or counting in the callers that have the scheduler (builtins and
-opcodes), which misses allocations made deeper in helpers.
+takes no scheduler, and `vm/` has no mutable globals
+(`docs/vm/10-io-multicore.md` §10.2.3). Options: a new parameter on the
+allocation functions (every caller changes); a thread-local variable (one
+documented exception to the no-globals rule); or counting in the callers that
+have the scheduler (builtins and opcodes), which misses allocations made deeper
+in helpers.
 
 ### 28.13 Implementation (row 7.7)
 

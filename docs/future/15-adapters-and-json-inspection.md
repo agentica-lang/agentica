@@ -26,27 +26,27 @@ end
   parentheses is a call too (`s.run do |x| ... end` calls the `Fn` field `run`
   with the block as its only argument). A bare `s.run` with no block is still
   the field value. In `case`, `while` and `for` headers a `do` belongs to the
-  header (`grammar.md`), so `for x in s.gen do` reads the field; write `(s.gen do
-  ... end)` to call it.
+  header (`grammar.md`), so `for x in s.gen do` reads the field; write `(s.gen
+  do ... end)` to call it.
 - No ambiguity with methods: structs have no user methods (decided against,
   [section 25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c)). Section
   25.3 bans `Fn` fields named `with`, so `value.with(...)` stays the struct
   update. A `Fn` field named `to_s` or `inspect` cannot clash with the builtin,
   since a struct with a `Fn` field is not printable. Today `s.put(a, b)` is
-  `CHECK-UNKNOWN-METHOD` ("put is a function field; call it with .put.call(...)"),
-  so no valid program changes meaning.
+  `CHECK-UNKNOWN-METHOD` ("put is a function field; call it with
+  .put.call(...)"), so no valid program changes meaning.
 - On a generic struct the rule applies after substitution (`b: Box[Fn[Int,
   Int]]`, `b.value(1)`). Arity and type errors are those of `.call`
   (`CHECK-ARITY`, `CHECK-TYPE-MISMATCH`); a name that is not a field, or a field
   that is not a `Fn`, stays `CHECK-UNKNOWN-METHOD`.
 - **Adapter pattern:** a struct of `Fn` fields is the interface; a function such
   as `disk_storage(dir)` is one implementation whose blocks capture `dir`, and
-  code like `save_note` does not know the backend. A disk backend checks each key
-  with an allow-list before it builds a path (`error("bad key")` otherwise); a
-  memory backend can be read-only (`put` returns `error("read-only")`). A block
-  can only be the last argument of a call, so each block goes through a small
-  function that returns it (`getter(f)`) until standalone lambdas land ([section
-  25.5](25-ruby-typed-idioms.md#255-standalone-lambdas)).
+  code like `save_note` does not know the backend. A disk backend checks each
+  key with an allow-list before it builds a path (`error("bad key")` otherwise);
+  a memory backend can be read-only (`put` returns `error("read-only")`). A
+  block can only be the last argument of a call, so each block goes through a
+  small function that returns it (`getter(f)`) until standalone lambdas land
+  ([section 25.5](25-ruby-typed-idioms.md#255-standalone-lambdas)).
 - **Facade pattern:** a file module that exports a few functions and hides the
   rest; no new syntax. A facade or adapter must check a name with an allow-list
   before using it in a path: not empty, only ASCII letters, digits, `-` and `_`,
@@ -59,9 +59,9 @@ end
 
 ### 15.2 `JSON.kind`
 
-Open: the built `JSON.kind(j) -> String` (`site/content/library/text-and-data/json.md`)
-already uses this name, so the enum form below needs another name, or replaces
-it.
+Open: the built `JSON.kind(j) -> String`
+(`site/content/library/text-and-data/json.md`) already uses this name, so the
+enum form below needs another name, or replaces it.
 
 - `JSON.kind(j: Json) -> JsonValue`, also the method `j.kind`. It looks one
   level into a `Json` and never fails.
@@ -106,27 +106,29 @@ it.
 - It works with the existing `case`, with no grammar change; variants are
   qualified (`JsonValue.JsonInt(n)`). `JsonValue` values are for reading (`to_s`
   and `inspect` like other enums) and stay out of all four JSON type functions:
-  `JSON.encode` and `JSON.from` reject it with `CHECK-NOT-ENCODABLE`, `JSON.decode`
-  and `JSON.schema` with `CHECK-NOT-DECODABLE`. `JsonValue` becomes a reserved
-  name (`CHECK-REDEFINED-NAME`; breaking, say so in the changelog).
+  `JSON.encode` and `JSON.from` reject it with `CHECK-NOT-ENCODABLE`,
+  `JSON.decode` and `JSON.schema` with `CHECK-NOT-DECODABLE`. `JsonValue`
+  becomes a reserved name (`CHECK-REDEFINED-NAME`; breaking, say so in the
+  changelog).
 - The recommended path is still `JSON.decode` into typed structs; `kind` is the
   low-level tool for unknown shapes (a generic pretty printer, free-form config,
   a reply whose shape depends on a field). A general `typeof` or type-pattern
-  `case` is not planned: static types make the answer constant, and `Json` is the
-  only dynamic value.
+  `case` is not planned: static types make the answer constant, and `Json` is
+  the only dynamic value.
 - Diagnostics: none new (a non-`Json` argument is `CHECK-TYPE-MISMATCH`, a
   missing variant `CHECK-NON-EXHAUSTIVE-CASE`).
 - Front end: `JsonValue` is the first builtin enum, so the checker's enum table
   and import linking need a path for it, like the `Result` exception. VM: a
   builtin entry of the enum table with this fixed variant order, written to the
   bytecode only when a program uses it. The VM Json tree already has a
-  big-integer node kept as decimal text (`docs/vm/05-values-execution-builtins.md`
-  §5), which `kind` maps to `JsonBigInt`; `1e400` stays the existing `JSON number
-  is not finite` error. The rule holds for every JSON builtin that reads the
-  tree: `JSON.float` on a big integer gives the nearest float (an error when not
-  finite); `JSON.encode` writes the exact decimal text; typed decode fails for an
-  `Int` target and takes the float for a `Float` target when finite. `-0` is
-  `JsonInt(0)`; `-0.0` is `JsonFloat(0.0)`.
+  big-integer node kept as decimal text
+  (`docs/vm/05-values-execution-builtins.md` §5), which `kind` maps to
+  `JsonBigInt`; `1e400` stays the existing `JSON number is not finite` error.
+  The rule holds for every JSON builtin that reads the tree: `JSON.float` on a
+  big integer gives the nearest float (an error when not finite); `JSON.encode`
+  writes the exact decimal text; typed decode fails for an `Int` target and
+  takes the float for a `Float` target when finite. `-0` is `JsonInt(0)`; `-0.0`
+  is `JsonFloat(0.0)`.
 
 ### 15.4 JSON for enums
 
