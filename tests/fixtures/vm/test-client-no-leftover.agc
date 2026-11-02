@@ -5,7 +5,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
   url = "http://127.0.0.1:#{HTTP.local_port(server)}/"
   Test.run([
     Test.test("a client made in a test leaves no task behind") do

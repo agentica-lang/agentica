@@ -896,7 +896,7 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
 @pytest.mark.parametrize("name, call, covers", [
     ("HTTP.client", 'HTTP.client(HttpClientOptions(tls: some(client(["h2", "http/1.1"]))))', "options"),
     ("HTTP.start", 'HTTP.start("https://localhost:1", HttpClientOptions(tls: some(client(["h2"]))))', "context"),
-    ("HTTP.listen_tls", 'HTTP.listen_tls("127.0.0.1", 0, server(["h2"]), &answer)', "listener"),
+    ("HTTP.serve_tls", 'HTTP.serve_tls("127.0.0.1", 0, server(["h2"]), HTTP.app(&answer))', "listener"),
     ("HTTP.client on http/1.1", 'HTTP.client(HttpClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
 ])
 def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp_path, name, call, covers):

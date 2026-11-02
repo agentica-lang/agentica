@@ -8,7 +8,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
   if System.args().length == 1 and System.args()[0] == "serve"
     puts(HTTP.local_port(server))
     IO.flush()

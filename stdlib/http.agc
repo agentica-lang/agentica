@@ -38,7 +38,7 @@ BY_CHUNKS = 1
 BY_CLOSE = 2
 # How many pieces a Stream holds before its task waits for the reader.
 STREAM_PIECES = 8
-# How many pieces of a request body a handler of listen_upload can leave unread before the server waits.
+# How many pieces of a request body an app can leave unread before the server waits.
 UPLOAD_PIECES = 8
 CLIENT_CLOSED = "http: client is closed"
 CONNECTION_OVER = "http: the connection is closed"
@@ -102,6 +102,9 @@ DOWNLOAD_MAX_BYTES = 268435456
 CLIENT_MAX_BODY = 67108864
 # The error of `read_all` for a body over its limit, which `app` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
+# The start of the error of a chunked body with a line or trailer section over the head limits, which `app` answers
+# 431, as the server answers such a head.
+FIELDS_TOO_LARGE = "http: request fields too large: "
 
 struct Target
   scheme: String
@@ -365,7 +368,7 @@ export struct StreamResponse
   length: Optional[Int] = none
 end
 
-## The function that `listen` and `listen_tls` call for each request: the request in, the whole response out. A
+## A route that takes the request whole: the request in, the whole response out. `app` makes an `App` from it. A
 ## middleware is a function from a `Handler` to a `Handler`.
 export type Handler = Fn[HttpRequest, Result[HttpResponse]]
 
@@ -373,12 +376,11 @@ export type Handler = Fn[HttpRequest, Result[HttpResponse]]
 ## body arrives on a channel out.
 export type StreamHandler = Fn[HttpRequest, Result[StreamResponse]]
 
-## The body of a request that arrives on a channel, for a handler of `listen_upload`: the `pieces` channel (`Bytes` of
-## any content, up to 64 KiB each, never empty, a chunked body already decoded) and the `done` task that feeds it. The
-## task closes the channel on every path, so the handler runs the usual receive loop until the closed error and then
-## awaits `done`: `ok` means the body arrived whole, an `error` says why it did not (the client left, a bad chunk, a
-## timeout, a body over 256 MiB). A handler that answers before it has read the whole body ends the connection after
-## its answer.
+## The body of a request as it arrives, on a channel, for an `App`: the `pieces` channel (`Bytes` of any content, up
+## to 64 KiB each, never empty, a chunked body already decoded) and the `done` task that feeds it. The task closes the
+## channel on every path, so the app runs the usual receive loop until the closed error and then awaits `done`: `ok`
+## means the body arrived whole, an `error` says why it did not (the client left, a bad chunk, a timeout, a body over
+## `max_body_bytes`). An app that answers before the whole body arrived ends the connection after its answer.
 export struct RequestBody
   pieces: Channel[Bytes]
   done: Task[Result[Void]]
@@ -434,8 +436,8 @@ export struct WebSocketOptions
   protocols: List[String] = []
 end
 
-## What a handler of `listen_websocket` decides for a request: `Reply` answers it as `listen` does (and the connection
-## serves the next request), `Accept` upgrades it. Make an `Accept` with `accept_websocket`.
+## What `accept_websocket` decides for a request, for an `Answer.Upgrade`: `Reply` answers it as a whole response (and
+## the connection serves the next request), `Accept` upgrades it. Make an `Accept` with `accept_websocket`.
 export enum Upgrade
   Reply(HttpResponse)
   Accept(WebSocketSession, WebSocketOptions, String, String)
@@ -446,7 +448,7 @@ end
 export type UpgradeHandler = Fn[HttpRequest, Result[Upgrade]]
 
 ## What an `App` returns for a request. `Whole` is a whole response, as a `Handler` returns. `Stream` is a response
-## whose body arrives on a channel, as a `StreamHandler` returns. `Upgrade` is what `accept_websocket` makes: its
+## whose body arrives on a channel. `Upgrade` is what `accept_websocket` makes: its
 ## `Accept` runs a WebSocket on the connection, and its `Reply` (a request that is no handshake) is sent as `Whole`.
 export enum Answer
   Whole(HttpResponse)
@@ -1009,10 +1011,10 @@ export def listen_upload_tls(
   return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false, capped: false), options))
 end
 
-## Collects the body of an upload for a handler of `listen_upload` that wants it whole, so one server can serve small
-## routes simply next to the big ones: the pieces of `body` joined, at most `max_bytes` (0 or more), after the end of
-## the body was checked. It is an `error` when the body is longer than `max_bytes` (the handler then answers 413, and
-## the server closes the connection after that answer) and when `done` says the body did not arrive whole.
+## Collects the body for an `App` that wants it whole, so one server can serve small routes simply next to the big
+## ones: the pieces of `body` joined, at most `max_bytes` (0 or more), after the end of the body was checked. It is an
+## `error` when the body is longer than `max_bytes` (the app then answers 413, and the server closes the connection
+## after that answer) and when `done` says the body did not arrive whole.
 export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
   if max_bytes < 0
     return error("http: max_bytes must be 0 or more")
@@ -1104,14 +1106,16 @@ export def upgrade_only(handler: Handler) -> UpgradeHandler
 end
 
 ## Starts an HTTP server on `host` and `port` that serves every kind of route on one port, and returns at once; it
-## serves in the background, as `listen` does. `app` gets each request with its body on a channel (as `listen_upload`
-## gives it) and answers with a whole response, a stream or a WebSocket upgrade (`Answer`). Every body is at most
-## `max_body_bytes` of `options` (1 MiB unless raised, up to 256 MiB): a request whose `Content-Length` is larger is
-## answered 413 before `app` runs and before any `100 Continue`. A route that wants less counts the bytes or calls
-## `read_all`. The connection serves the next request only when the body was read whole by the time `app` returned
-## (a body that had all arrived counts, read or not); otherwise the answer says `Connection: close`, and an upgrade is
-## refused. The server sets no limit on the time of `app`. `options` is optional and defaults to
-## `HttpServerOptions()`.
+## serves in the background. Port 0 picks a free port, which `local_port` returns. The server closes when the task that
+## called `serve` ends. `app` gets each request with its body on a channel (`RequestBody`) and answers with a whole
+## response, a stream or a WebSocket upgrade (`Answer`); `app(handler)` makes one from a `Handler`, for a route that
+## takes the request whole. Every body is at most `max_body_bytes` of `options` (1 MiB unless raised, up to 256 MiB): a
+## request whose `Content-Length` is larger is answered 413 before `app` runs and before any `100 Continue`. A route
+## that wants less counts the bytes or calls `read_all`. The connection serves the next request only when the body was
+## read whole by the time `app` returned (a body that had all arrived counts, read or not); otherwise the answer says
+## `Connection: close`, and an upgrade is refused. The server sets no limit on the time of `app`. `options` is optional
+## and defaults to `HttpServerOptions()`: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
+## bodies.
 export def serve(
   host: String,
   port: Int,
@@ -1151,9 +1155,10 @@ end
 
 ## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
 ## `max_body_bytes` (1 MiB unless given; a negative one counts as 0), and `handler` gets the request with it; its
-## response is the `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413
-## and a bad chunk 400, both with `Connection: close` and without calling `handler`; a body cut or stalled (the client
-## left, a timeout) closes the connection. The server sets no limit on the time of `handler`.
+## response is the `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413,
+## a chunk line or trailer section over the head limits 431 and a bad chunk 400, all with `Connection: close` and
+## without calling `handler`; a body cut or stalled (the client left, a timeout) closes the connection. The server sets
+## no limit on the time of `handler`.
 export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
   limit = max_body_bytes
   if limit < 0
@@ -1163,7 +1168,7 @@ export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
-## text or file. The server then answers with `Content-Length`, as `listen` does.
+## text or file. The server then answers with `Content-Length`, as for a whole response.
 export def whole(data: Bytes) -> Channel[Bytes]
   body: Channel[Bytes] = Channel.new(1)
   if not data.empty?
@@ -2599,7 +2604,8 @@ def serving(f: App) -> App
   return f
 end
 
-# The answer of `app(handler)`: the body read whole (a 413 or a 400 when it cannot be), then the handler's response.
+# The answer of `app(handler)`: the body read whole (a 413, a 431 or a 400 when it cannot be), then the handler's
+# response.
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
   if announced_length(request.headers) > max_body_bytes
     return ok(Answer.Whole(closing_answer(413)))
@@ -2618,6 +2624,9 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
     error(message) ->
       if message == BODY_TOO_LONG
         return ok(Answer.Whole(closing_answer(413)))
+      end
+      if String.starts_with?(message, FIELDS_TOO_LARGE)
+        return ok(Answer.Whole(closing_answer(431)))
       end
       return ok(Answer.Whole(closing_answer(400)))
   end
@@ -3234,10 +3243,13 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
 end
 
 # The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
-# BODY_TOO_LONG, as `read_all` says it, so `app` answers it 413.
+# BODY_TOO_LONG, as `read_all` says it, so `app` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
 def feed_problem(problem: String) -> String
   if String.starts_with?(problem, "413")
     return BODY_TOO_LONG
+  end
+  if String.starts_with?(problem, "431")
+    return FIELDS_TOO_LARGE + rest_of(problem, 4)
   end
   return "http: #{rest_of(problem, 4)}"
 end
@@ -3331,9 +3343,9 @@ def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, ti
   return false
 end
 
-# A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for
-# listen. Otherwise the head goes now, with chunked framing (or with the Content-Length of `length` and no framing),
-# and each piece follows as it arrives.
+# A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for a
+# whole response. Otherwise the head goes now, with chunked framing (or with the Content-Length of `length` and no
+# framing), and each piece follows as it arrives.
 def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, options: HttpServerOptions) -> Sent
   request = incoming.request
   timeout = options.request_timeout_ms

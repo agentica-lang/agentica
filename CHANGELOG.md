@@ -16,7 +16,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
 - `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
-  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
+  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler` and answers a body
+  it cannot read 413, 431 or 400, as `listen` does. A WebSocket handshake
+  reaches the app, where the `listen` forms other than `listen_websocket`
+  answer it 501.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
 - EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,

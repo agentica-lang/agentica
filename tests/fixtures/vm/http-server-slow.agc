@@ -21,7 +21,7 @@ end
 def main() -> Void
   side = TCP.listen("127.0.0.1", 0).unwrap!
   options = HttpServerOptions(request_timeout_ms: 100, idle_timeout_ms: 100, max_connections: 2, max_body_bytes: 64)
-  server = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   IO.inspect(fetch(base + "/slow").unwrap!.body)
   Task.spawn(&fetch, base + "/hang?#{TCP.local_port(side)}")

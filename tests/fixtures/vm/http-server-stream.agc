@@ -127,6 +127,34 @@ def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpReques
   return f
 end
 
+def app_of(f: HTTP.App) -> HTTP.App
+  return f
+end
+
+# The answer for a body that `HTTP.read_all` could not read, as `HTTP.app` gives it: 413 over the limit, 431 for a
+# chunk line or trailer section over the head limits, 400 otherwise.
+def refused(message: String) -> HTTP.Answer
+  status = 400
+  if message == "http: body exceeds max_bytes"
+    status = 413
+  elsif String.starts_with?(message, "http: request fields too large")
+    status = 431
+  end
+  return HTTP.Answer.Whole(HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: "".bytes))
+end
+
+# The body read first, then the stream of the route.
+def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  case HTTP.read_all(body, 1024)
+    ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
+    error(message) -> return ok(refused(message))
+  end
+end
+
+def streamed(route: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> HTTP.App
+  return app_of() do |request, body| stream_answer(route, request, body) end
+end
+
 def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
   return handler_of() do |request|
     case request.path
@@ -209,7 +237,7 @@ end
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
   options = HttpServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
-  server = HTTP.listen_stream("127.0.0.1", 0, routes(hub), options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, streamed(routes(hub)), options).unwrap!
   port = HTTP.local_port(server)
 
   puts("-- each piece arrives before the producer sends the next one, and the connection is kept")

@@ -1,4 +1,4 @@
-"""The VM's WebSocket server (HTTP.listen_websocket) against fixtures/websocket_client.py, a RFC 6455 client of its own.
+"""The VM's WebSocket server (HTTP.serve) against fixtures/websocket_client.py, a RFC 6455 client of its own.
 
 One VM program serves every route. The client writes frames by hand, so the tests send what a correct client never
 would and read the close codes the server answers with. Everything is on 127.0.0.1 with port 0.
@@ -129,14 +129,18 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
     return HTTP.accept_websocket(request, &failing)
   end
 
-  return HTTP.upgrade_only(&plain).call(request)
+  return ok(HTTP.Upgrade.Reply(try plain(request)))
+end
+
+def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  return ok(HTTP.Answer.Upgrade(try route(request)))
 end
 
 def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 16)
-  server = Result.unwrap!(HTTP.listen_websocket("127.0.0.1", 0, &route, options))
+  server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_websocket_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &route, options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -224,7 +228,7 @@ def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_
         assert "sec-websocket-protocol" not in c.connect("/protocol")
         assert c.message() == (TEXT, b"protocol []")
     assert vm.next_line() == "closed 1006 connection lost"
-    # A route that does not upgrade answers as listen does, on a connection that stays: here a handshake follows.
+    # A route that does not upgrade answers a whole response, on a connection that stays: here a handshake follows.
     with Client(port, timeout=scaled(10)) as c:
         assert c.request("/plain", upgrade=False, version=None, key="none")[0] == 200
         assert c.request("/plain", upgrade=False, version=None, key="none")[0] == 200

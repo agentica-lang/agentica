@@ -440,7 +440,7 @@ and HTTP on the VM. Reasons:
   The VM's endpoint is safe because every label value is a fixed C string;
   mixing in program labels would lose that.
 - A program that needs its own metrics can already serve them: once HTTP runs on
-  the VM, `HTTP.listen` on its own port with a `/metrics` route, building the
+  the VM, `HTTP.serve` on its own port with a `/metrics` route, building the
   text itself. Prometheus scrapes two targets (the VM's port and the program's
   port); that is normal.
 

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 5277,
+  "steps": 5748,
   "stdout": [
     "channel> {\"event\":\"pass\"}",
     "channel> {\"event\":\"pass\"}",
