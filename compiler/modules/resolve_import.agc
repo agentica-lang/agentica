@@ -177,7 +177,7 @@ def beside(
     try Packages.stay_inside(importer.origin, written, site)
   end
 
-  target = try relative(workspace, build.libs_dir, importer.key, file, site)
+  target = try relative(workspace, build.libs_dir, importer, file, site)
   if importer.origin.root != ""
     name = try Packages.stay_inside(importer.origin, target, site)
   end
@@ -293,37 +293,73 @@ end
 
 # The file next to the importing one. A missing last part is accepted and a missing folder is refused
 # (CHECK-IMPORT-IO "cannot resolve import"); a missing file is found by the read ("cannot read import"), which this
-# reports at once. project_dir is the folder of the manifest (else of the root file): the help names the path tried
-# from there.
+# reports at once. project_dir is the folder of the manifest (else of the root file): for a file of the project the
+# help names the path tried from there, and for a file of a package from the package folder.
 def relative(
   workspace: Workspace.Workspace,
   project_dir: String,
-  key: String,
+  importer: Importer,
   file: String,
   site: Failure.Site,
 ) -> Result[String]
-  if file.starts_with?("/") or file.contains?(String.from_code(0))
-    return error(io_failure_help(site, "cannot resolve import", not_relative_help()))
+  if file.starts_with?("/")
+    return error(io_failure_help(site, "cannot resolve import", Diag.Help.Hint("an import path is never absolute")))
+  elsif file.contains?(String.from_code(0))
+    return error(io_failure(site, "cannot resolve import"))
   end
 
+  key = importer.key
   folder = Paths.directory_of(key)
   inner = Paths.directory_of(file)
   if inner != ""
     folder = Paths.join(folder, inner)
   end
 
-  help = tried_help(workspace, project_dir, key, file)
   parent = workspace.real_path.call(folder)
   if !parent.ok? or !workspace.directory_exists.call(parent.unwrap!)
+    help = tried_help(workspace, project_dir, importer, file, site)
     return error(io_failure_help(site, "cannot resolve import", help))
   end
 
   target = workspace.real_path.call(Paths.join(parent.unwrap!, Paths.last_part(file)))
   if !target.ok?
+    help = tried_help(workspace, project_dir, importer, file, site)
     return error(io_failure_help(site, "cannot read import", help))
   end
 
   return ok(target.unwrap!)
+end
+
+# The help of a relative import that found no file: that an import is relative to the importing file, and the path
+# tried, from the base folder (the project folder, or the package folder for a file of a package). When the same path
+# from the base folder names a file inside it, the form from the importing file is suggested ("src/lib" in
+# tools/x.agc: "../src/lib"); inside a package the suggestion must also pass the check that keeps an import in it.
+def tried_help(
+  workspace: Workspace.Workspace,
+  project_dir: String,
+  importer: Importer,
+  file: String,
+  site: Failure.Site,
+) -> Diag.Help
+  base = project_dir
+  if importer.origin.root != ""
+    base = importer.origin.root
+  end
+
+  folder = Paths.directory_of(importer.key)
+  here = folded_from(importer.key, Paths.join(folder, file))
+  text = "an import is relative to the importing file; no file at \"#{Paths.stored_name(base, here)}\""
+  from_base = folded_from(importer.key, Paths.join(base, file))
+  if base != "" and from_base != here and Paths.inside?(base, from_base) and workspace.file_exists.call(from_base)
+    if importer.origin.root == "" or Packages.stay_inside(importer.origin, from_base, site).ok?
+      written = Paths.stored_name(folder, from_base)
+      fix = written.slice(0, written.length - 4)
+      named = file.slice(0, file.length - 4)
+      text = "#{text}; the file \"#{named}\" of the #{base_name(importer)} folder is \"#{fix}\" from here"
+    end
+  end
+
+  return Diag.Help.Hint(text)
 end
 
 # `Paths.folded` drops the "/" that a rooted path starts with: put it back, as `like` has it.
@@ -336,24 +372,10 @@ def folded_from(like: String, path: String) -> String
   return folded
 end
 
-def not_relative_help() -> Diag.Help
-  return Diag.Help.Hint("an import path is relative to the importing file, never absolute")
-end
-
-# The help of a relative import that found no file: the path tried, from the project folder, and that an import is
-# relative to the importing file. When the same path from the project folder names a file, the form from the importing
-# file is suggested ("src/lib" in tools/x.agc: "../src/lib").
-def tried_help(workspace: Workspace.Workspace, project_dir: String, key: String, file: String) -> Diag.Help
-  folder = Paths.directory_of(key)
-  here = folded_from(key, Paths.join(folder, file))
-  text = "an import is relative to the importing file; no file at \"#{Paths.stored_name(project_dir, here)}\""
-  from_project = folded_from(key, Paths.join(project_dir, file))
-  if project_dir != "" and from_project != here and workspace.file_exists.call(from_project)
-    written = Paths.stored_name(folder, from_project)
-    fix = written.slice(0, written.length - 4)
-    named = file.slice(0, file.length - 4)
-    text = "#{text}; the file \"#{named}\" of the project folder is \"#{fix}\" from here"
+def base_name(importer: Importer) -> String
+  if importer.origin.root == ""
+    return "project"
   end
 
-  return Diag.Help.Hint(text)
+  return "package"
 end
