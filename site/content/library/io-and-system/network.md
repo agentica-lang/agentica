@@ -921,17 +921,22 @@ def main() -> Void
 end
 ```
 
-### Single-route forms
+### Moving from the listen forms
 
-```text
-HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
-```
+Up to 0.21.0, each kind of route had its own server form. Each old form and its new one, where `handler` is the old handler:
 
-Each of these serves one kind of route, and each has a `_tls` form that takes a server `TlsContext` after the port. They will be removed: use `serve` with an app. `listen(host, port, handler, options)` is `serve(host, port, HTTP.app(handler, options.max_body_bytes), options)`, except that it answers a WebSocket handshake `501`. `HTTP.StreamHandler` (`Fn[HttpRequest, Result[HTTP.StreamResponse]]`), `HTTP.UploadHandler` (`Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]`) and `HTTP.UpgradeHandler` (`Fn[HttpRequest, Result[HTTP.Upgrade]]`) are their handlers. `listen_upload` takes bodies up to 256 MiB whatever `max_body_bytes` says.
+| Before | Now |
+|---|---|
+| `HTTP.listen(host, port, handler, options)` | `HTTP.serve(host, port, HTTP.app(handler, options.max_body_bytes), options)` |
+| `HTTP.listen_stream(host, port, handler, options)` | `HTTP.serve` with an app that returns `ok(HTTP.Answer.Stream(try handler.call(request)))` |
+| `HTTP.listen_upload(host, port, handler, options)` | `HTTP.serve` with an app that returns `ok(HTTP.Answer.Whole(try handler.call(request, body)))`, and `max_body_bytes` raised for big uploads |
+| `HTTP.listen_websocket(host, port, handler, options)` | `HTTP.serve` with an app that returns `ok(HTTP.Answer.Upgrade(try handler.call(request)))` |
+| `HTTP.upgrade_only(handler).call(request)` | `HTTP.app(handler).call(request, body)` |
+| the `_tls` form of each | `HTTP.serve_tls(host, port, tls, app, options)` |
+
+- `HTTP.StreamHandler`, `HTTP.UploadHandler` and `HTTP.UpgradeHandler` are gone: an app is an `HTTP.App`, and a route that takes the request whole is an `HTTP.Handler`.
+- `listen_stream` and `listen_websocket` read the body before the handler ran. An app that answers a stream or an upgrade before it read a body that is still coming closes the connection after it (an upgrade is then a `500`); call `HTTP.read_all` first where a request has a body.
+- A WebSocket handshake reaches the app on every `serve` server; the `listen` forms other than `listen_websocket` answered it `501`. A route that does not upgrade answers it as any other request.
 
 ### HTTP.wait and HTTP.close_server
 

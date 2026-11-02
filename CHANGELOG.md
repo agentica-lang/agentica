@@ -27,14 +27,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `HTTP.listen_upload` keeps the connection when the whole body had arrived
-  by the time the handler returned, even if the handler did not read it (an
-  empty chunked body, say). A handler that answers before any of the body
-  arrived now answers up to 100 ms later.
 - `HttpServerOptions.max_body_bytes` may be up to 256 MiB, and `HTTP.serve`
   caps every request body with it (1 MiB by default): a larger
   `Content-Length` is answered 413 before the app runs, with no
   `100 Continue` first.
+
+### Removed
+
+- **Breaking:** `HTTP.listen`, `listen_stream`, `listen_upload`,
+  `listen_websocket`, their `_tls` forms, `HTTP.upgrade_only` and the types
+  `HTTP.StreamHandler`, `UploadHandler` and `UpgradeHandler`: `HTTP.serve`
+  serves every kind of route, `HTTP.serve(host, port, HTTP.app(&handle),
+  options)` for a handler (the network page has the table). A WebSocket
+  handshake now reaches the app instead of getting a 501.
 
 ## [0.21.0] - 2026-11-02
 
