@@ -16,11 +16,13 @@
 import Source from "source"
 import Types from "types"
 
-## The names that the expansion of an `<<~EAG` template gives its two locals (eag.agc): the list of text pieces and the
-## parameter of the block that holds it. They have a `#`, which no identifier has, so a template can neither write
-## nor read them; the checker tells them from user names to explain an error of a template.
+## The names that the expansion of an `<<~EAG` template gives its locals (eag.agc): the list of text pieces and the
+## parameter of the block that holds it, and the escaper when the template names one. They have a `#`, which no
+## identifier has, so a template can neither write nor read them; the checker tells them from user names to explain an
+## error of a template.
 export EAG_PIECES = "eag#t"
 export EAG_SEED = "eag#n"
+export EAG_ESCAPER = "eag#e"
 
 ## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its decimal digits
 ## (a hex, binary or octal literal far past 2^64 keeps its prefix and digits instead, `0x1ff...`), with a leading -

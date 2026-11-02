@@ -48,9 +48,6 @@ Weighed later (no fixed order):
 
 7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
    (row 7.10).
-8. The JIT (row 9.1, [§6.4](../vm/05-values-execution-builtins.md#64-jit)); it
-   needs 8.1, 7.7 and 9, and comes after the FFI. What is left:
-   [#756](https://github.com/agentica-lang/agentica/issues/756).
 12. UDP [#450](https://github.com/agentica-lang/agentica/issues/450) (row 7.5):
     it leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
@@ -115,6 +112,9 @@ Weighed later (no fixed order):
 - **8, 8.2, 8.3:** faster lists (8d), the prelude and the Enumerable methods
   (15f; `format`, 15k, is deferred to row 7.6), and the VM start-up cut
   ([vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83)).
+- **9.1 (item 8):** the JIT (7m): x86-64 and arm64 emitters, `--jit on` by
+  default. The known limits are in
+  [§6.4](../vm/05-values-execution-builtins.md#64-jit), "Known limits".
 - **11:** multicore schedulers (`docs/vm/16-architecture.md` §16.9).
 - **17:** shared tables (phase 9): `ATS[K, V]`, the grammar's
   [Shared tables](../grammar/06c-tasks-and-tests.md#shared-tables-ats).
@@ -205,13 +205,6 @@ Weighed later (no fixed order):
     runner (7g); it also reads the VM metrics of phase 18 while the load runs
   - **Outcome:** Requests/s, p50/p99 latency (also while a CPU-bound task runs),
     peak memory and real start-up, against Python as an outside reference
-
-- **Order:** 9.1
-  - **Next work:** JIT (7m, `docs/vm/05-values-execution-builtins.md`
-    §6.4): required; its place
-    and prerequisites are item 8 above. JIT code must follow the multicore
-    rules of row 11 (§16)
-  - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 10
   - **Next work:** The full 6c evaluation round, with the semantic CLI of row

@@ -1,0 +1,6 @@
+def page(n: Int) -> String
+  return <<~EAG
+    a
+    <%@ escape &EAG.html_escape %>
+  EAG
+end

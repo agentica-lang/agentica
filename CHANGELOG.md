@@ -28,6 +28,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   needing `import EAG from "std/eag"`; `EAG.html_escape` is Ruby's
   `ERB::Util.html_escape`. A heredoc named `EAG` is now a template, not plain
   text, and may have one line.
+- An EAG template can name an escaper: `<%@ escape &F %>` on its first line,
+  with `F` a `Fn[String, String]`, escapes every `<%= %>`; `<%== %>` stays raw.
 
 ### Changed
 
