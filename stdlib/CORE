@@ -94,6 +94,7 @@ query/symbol_paths.agc
 query/type_at.agc
 query/type_at_json.agc
 syntax/ast.agc
+syntax/eag.agc
 syntax/lexer.agc
 syntax/parse_base.agc
 syntax/parser.agc

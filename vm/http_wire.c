@@ -17,8 +17,8 @@
 #include <string.h>
 #include <time.h>
 
-/* The widest body HttpWire takes: std/http caps the bodies of the client and the
-   server at 64 MiB itself, and only a file download may use up to this. */
+/* The widest body HttpWire takes: std/http caps the bodies of the client at 64 MiB
+   itself, and a server's max_body_bytes and a file download may use up to this. */
 #define MAX_BODY ((int64_t)256 * 1024 * 1024)
 
 typedef struct {

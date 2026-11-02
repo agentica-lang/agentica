@@ -6,6 +6,7 @@ bdd/match.agc
 bdd/tags.agc
 binary.agc
 cookie.agc
+eag.agc
 html.agc
 http.agc
 logger.agc

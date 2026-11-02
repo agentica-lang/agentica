@@ -191,6 +191,10 @@ export def describe(token: Tokens.Token) -> String
     return "a newline"
   end
 
+  if token.kind == "interp-end" and token.lexeme == "%>"
+    return "\"%>\""
+  end
+
   if token.kind == "interp-middle" or token.kind == "interp-end"
     return "\"}\""
   end
