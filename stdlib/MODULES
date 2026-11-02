@@ -26,3 +26,4 @@ toml.agc
 uri.agc
 internal/archive_zip.agc
 internal/websocket.agc
+utc.agc

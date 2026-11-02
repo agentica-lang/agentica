@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`Regex.match`, `find_all`, `replace`, `split`), matched inside the VM.
 - Regex literals `/pattern/flags` (flags `i` and `m`), checked when the
   program is compiled; the file imports `std/regex`.
+- `std/utc` turns Unix milliseconds into the date and time in UTC and into RFC
+  3339 text, as Ruby's `Time#utc.iso8601` does (`UTC.iso8601(Time.now_ms)`).
 
 ### Changed
 
