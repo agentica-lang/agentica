@@ -9,9 +9,9 @@ has landed. `std/utc` (`UTC.parts`, `UTC.iso8601`) is the stopgap until the
 milliseconds; a year outside 1 to 9999 is an error, where `std/utc` writes it
 with its sign; and `Time.format` always writes six fraction digits, where
 `UTC.iso8601` takes a count (0 to 9). The rest adds no grammar syntax: new
-builtin types and new functions of the existing `Time` module. Every name here is a proposal for the
-owner to review. The precision is microseconds, as the owner decided on
-2026-10-15 (41.8).
+builtin types and new functions of the existing `Time` module. Every name here
+is a proposal for the owner to review. The precision is microseconds, as the
+owner decided on 2026-10-15 (41.8).
 
 Programs compute with dates and times: a due date, the timestamp of a log
 line (the grammar's logging section), an expiry, a time from a JSON API.
