@@ -17,9 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler` and answers a body
-  it cannot read 413, 431 or 400, as `listen` does. A WebSocket handshake
-  reaches the app, where the `listen` forms other than `listen_websocket`
-  answer it 501.
+  it cannot read 413, 431 or 400.
+- `HTTP.refusal(message)` is the answer for a body that `HTTP.read_all` could
+  not read (413, 431 or 400, closing), as `HTTP.app` gives it, for a route that
+  reads the body itself.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
 - EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,

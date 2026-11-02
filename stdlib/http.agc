@@ -100,10 +100,10 @@ CRLF = "\r\n".bytes
 # two must match.
 DOWNLOAD_MAX_BYTES = 268435456
 CLIENT_MAX_BODY = 67108864
-# The error of `read_all` for a body over its limit, which `app` answers 413.
+# The error of `read_all` for a body over its limit, which `refusal` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
-# The start of the error of a chunked body with a line or trailer section over the head limits, which `app` answers
-# 431, as the server answers such a head.
+# The start of the error of a chunked body with a line or trailer section over the head limits, which `refusal`
+# answers 431, as the server answers such a head.
 FIELDS_TOO_LARGE = "http: request fields too large: "
 
 struct Target
@@ -965,6 +965,21 @@ export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
     limit = 0
   end
   return serving() do |request, body| whole_answer(handler, limit, request, body) end
+end
+
+## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
+## (the error `"http: body exceeds max_bytes"`), 431 for a chunk line or trailer section over the head limits (an
+## error that starts with `"http: request fields too large"`), 400 for any other (a bad chunk, a body cut or stalled).
+## It is a whole response with `Connection: close` and no body. `app` answers so; a route that reads the body itself,
+## before a stream for one, returns `ok(refusal(message))` for the error.
+export def refusal(message: String) -> Answer
+  if message == BODY_TOO_LONG
+    return Answer.Whole(closing_answer(413))
+  end
+  if String.starts_with?(message, FIELDS_TOO_LARGE)
+    return Answer.Whole(closing_answer(431))
+  end
+  return Answer.Whole(closing_answer(400))
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
@@ -2259,7 +2274,7 @@ def serving(f: App) -> App
   return f
 end
 
-# The answer of `app(handler)`: the body read whole (a 413, a 431 or a 400 when it cannot be), then the handler's
+# The answer of `app(handler)`: the body read whole (the `refusal` of its error when it cannot be), then the handler's
 # response.
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
   if announced_length(request.headers) > max_body_bytes
@@ -2276,14 +2291,7 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
         remote_addr: request.remote_addr,
       )
       return ok(Answer.Whole(try handler.call(whole)))
-    error(message) ->
-      if message == BODY_TOO_LONG
-        return ok(Answer.Whole(closing_answer(413)))
-      end
-      if String.starts_with?(message, FIELDS_TOO_LARGE)
-        return ok(Answer.Whole(closing_answer(431)))
-      end
-      return ok(Answer.Whole(closing_answer(400)))
+    error(message) -> return ok(refusal(message))
   end
 end
 
@@ -2321,27 +2329,27 @@ end
 def handshake_problem(request: HttpRequest) -> Optional[HttpResponse]
   headers = request.headers
   if request.method != "GET"
-    return some(refusal(400, "a WebSocket handshake is a GET", []))
+    return some(handshake_refusal(400, "a WebSocket handshake is a GET", []))
   end
 
   if not listed?(headers, "upgrade", "websocket") or not listed?(headers, "connection", "upgrade")
-    return some(refusal(400, "not a WebSocket handshake", []))
+    return some(handshake_refusal(400, "not a WebSocket handshake", []))
   end
 
   if not listed?(headers, "sec-websocket-version", WS_VERSION)
     version = [Header(name: "Sec-WebSocket-Version", value: WS_VERSION)]
-    return some(refusal(426, "unsupported WebSocket version", version))
+    return some(handshake_refusal(426, "unsupported WebSocket version", version))
   end
 
   keys = header_values(headers, "sec-websocket-key")
   if keys.size != 1 or not WebSocketWire.valid_key?(keys[0].strip)
-    return some(refusal(400, "invalid Sec-WebSocket-Key", []))
+    return some(handshake_refusal(400, "invalid Sec-WebSocket-Key", []))
   end
 
   return none
 end
 
-def refusal(status: Int, reason: String, headers: List[Header]) -> HttpResponse
+def handshake_refusal(status: Int, reason: String, headers: List[Header]) -> HttpResponse
   return HttpResponse(status: status, headers: headers, body: reason.bytes)
 end
 
@@ -2890,7 +2898,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
 end
 
 # The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
-# BODY_TOO_LONG, as `read_all` says it, so `app` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
+# BODY_TOO_LONG, as `read_all` says it, so `refusal` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
 def feed_problem(problem: String) -> String
   if String.starts_with?(problem, "413")
     return BODY_TOO_LONG

@@ -724,6 +724,7 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 
 ```text
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
+HTTP.refusal(message: String) -> HTTP.Answer
 ```
 
 The app gets the body on a channel, so an upload too big to hold, or one the app stores as it comes (a file), never has to be in memory whole. It is the server side of [`HTTP.upload`](#httpopen-and-httpupload).
@@ -735,7 +736,8 @@ The app gets the body on a channel, so an upload too big to hold, or one the app
 - `Expect: 100-continue` within the cap is answered with `100` before the app runs, so an app cannot refuse an upload before the client sends the body.
 - `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the app has not taken), not the time of the whole upload.
 - The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise (an app that answers first, with a `413` or a `401`, or a body that failed) the answer gets `Connection: close` and the connection closes after it, so a client still sending may see the close before it reads the answer.
-- `HTTP.read_all(body, max_bytes)` collects the body for a route that wants it whole: it returns the pieces joined as a `Result[Bytes]`, or an `error` (it awaits `done`). The error is `"http: body exceeds max_bytes"` for a body longer than `max_bytes` or the cap (answer `413`), starts with `"http: request fields too large"` for a chunk line or trailer section over the head limits (answer `431`), and is any other text for a body that is bad or did not arrive whole (answer `400`). `HTTP.app` does this for a `Handler`; a route that answers otherwise maps the error itself, as the stream route below does.
+- `HTTP.read_all(body, max_bytes)` collects the body for a route that wants it whole: it returns the pieces joined as a `Result[Bytes]`, or an `error` when the body is longer than `max_bytes` or the cap, or did not arrive whole (it awaits `done`).
+- `HTTP.refusal(message)` is the answer for that error: `413` for a body over its limit, `431` for a chunk line or trailer section over the head limits, and `400` for any other (a bad chunk, a body cut or stalled), a whole response with `Connection: close` and no body. `HTTP.app` answers so for a `Handler`; a route that reads the body itself returns `ok(HTTP.refusal(message))`, as the stream route below does.
 
 A server that counts an upload, and the client call that streams one to it:
 
@@ -795,22 +797,10 @@ For a body that is not ready when the handler returns: events, tokens as a model
 - A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
 - A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds the send of each piece (and of a whole body sent with `Content-Length`): a client that stops reading for that long is cut off, and the channel closes.
 - `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for a whole response, and the channel closes.
-- A body that is still coming when the app answers closes the connection after the stream, as for every answer. A stream route that takes a body reads it first and answers a body it cannot read as `HTTP.app` would:
+- A body that is still coming when the app answers closes the connection after the stream, as for every answer. A stream route that takes a body reads it first, and answers a body it cannot read with [`HTTP.refusal`](#request-bodies), as `HTTP.app` does:
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
-
-# The answer for a body that `HTTP.read_all` could not read, as `HTTP.app` gives it.
-def refused(message: String) -> HTTP.Answer
-  status = 400
-  if message == "http: body exceeds max_bytes"
-    status = 413
-  elsif String.starts_with?(message, "http: request fields too large")
-    status = 431
-  end
-
-  return HTTP.Answer.Whole(HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: "".bytes))
-end
 
 def echoed(data: Bytes) -> HTTP.Answer
   return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(data)))
@@ -819,7 +809,7 @@ end
 def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 65536)
     ok(data) -> return ok(echoed(data))
-    error(message) -> return ok(refused(message))
+    error(message) -> return ok(HTTP.refusal(message))
   end
 end
 
@@ -971,7 +961,7 @@ Up to 0.21.0, each kind of route had its own server form. Each old form and its 
 | the `_tls` form of each | `HTTP.serve_tls(host, port, tls, app, options)` |
 
 - `HTTP.StreamHandler`, `HTTP.UploadHandler` and `HTTP.UpgradeHandler` are gone: an app is an `HTTP.App`, and a route that takes the request whole is an `HTTP.Handler`.
-- `listen_stream` and `listen_websocket` read the body before the handler ran. An app that answers a stream or an upgrade before it read a body that is still coming closes the connection after it (an upgrade is then a `500`); call `HTTP.read_all` first where a request has a body.
+- `listen_stream` and `listen_websocket` read the body before the handler ran. An app that answers a stream or an upgrade before it read a body that is still coming closes the connection after it (an upgrade is then a `500`); call `HTTP.read_all` first where a request has a body, and answer its error with `HTTP.refusal`.
 - A WebSocket handshake reaches the app on every `serve` server; the `listen` forms other than `listen_websocket` answered it `501`. A route that does not upgrade answers it as any other request.
 
 ### HTTP.wait and HTTP.close_server

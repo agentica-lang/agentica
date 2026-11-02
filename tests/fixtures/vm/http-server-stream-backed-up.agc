@@ -51,23 +51,11 @@ def app_of(f: HTTP.App) -> HTTP.App
   return f
 end
 
-# The answer for a body that `HTTP.read_all` could not read, as `HTTP.app` gives it: 413 over the limit, 431 for a
-# chunk line or trailer section over the head limits, 400 otherwise.
-def refused(message: String) -> HTTP.Answer
-  status = 400
-  if message == "http: body exceeds max_bytes"
-    status = 413
-  elsif String.starts_with?(message, "http: request fields too large")
-    status = 431
-  end
-  return HTTP.Answer.Whole(HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: "".bytes))
-end
-
-# The body read first, then the stream of the route.
+# The body read first (a body that cannot be read is refused as HTTP.app does), then the stream of the route.
 def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
-    error(message) -> return ok(refused(message))
+    error(message) -> return ok(HTTP.refusal(message))
   end
 end
 

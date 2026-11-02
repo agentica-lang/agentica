@@ -222,6 +222,7 @@ HTTP.Answer: Whole(HttpResponse), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgr
 
 HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
+HTTP.refusal(message: String) -> HTTP.Answer
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
@@ -353,13 +354,11 @@ end
   otherwise the answer carries `Connection: close`.
 - `Expect: 100-continue` within the cap gets its `100` before the app runs: an
   app cannot refuse an upload before the body is sent.
-- `HTTP.read_all(body, max_bytes)` collects the body, or is an `error`:
-  `"http: body exceeds max_bytes"` past `max_bytes` or the cap (answer 413),
-  a text starting `"http: request fields too large"` for a chunk line or
-  trailer over the head limits (431), any other text for a bad or cut body
-  (400). `HTTP.app` answers so; a stream route that reads a body maps the error
-  to that `Whole` answer itself, with `Connection: close`. `HTTP.upload` is the
-  client that streams to it.
+- `HTTP.read_all(body, max_bytes)` collects the body, or is an `error` (past
+  `max_bytes` or the cap, a bad chunk, a cut body). `HTTP.refusal(message)` is
+  the answer for that error, as `HTTP.app` gives it (413, 431 or 400, closing):
+  a route that reads the body itself, a stream route say, returns
+  `ok(HTTP.refusal(message))`. `HTTP.upload` is the client that streams to it.
 
 ### Streaming a response (SSE, tokens, big bodies)
 
