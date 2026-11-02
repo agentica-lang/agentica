@@ -31,40 +31,38 @@ diagnostic is an error or it does not exist. There are three reasons:
    Warnings would need a list of diagnostics next to a successful result, which
    breaks that contract for every stage and for `--json`.
 
-**What the principle covers.** It covers the diagnostics of the language stages:
-`LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-` and `RUNTIME-`. Output of the
-runtime and the tools that is not a diagnostic about the program's code is
-outside it: the VM tracer's lines (`AGENTICA_VM_TRACE`), the CLI's one-line
-fallback notice, and what a program itself writes to stderr with `IO.warn`.
+**What the principle covers.** The diagnostics of the language stages (`LEX-`,
+`PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-`, `RUNTIME-`). Runtime and tool output
+that is not a diagnostic about the program's code is outside it: the VM tracer's
+lines, the CLI's one-line fallback notice, and what a program writes with
+`IO.warn`.
 
-So a new check is either an error with a stable code or it is not added. A check
+A new check is either an error with a stable code or it is not added; it
 becomes an error only when the case is almost always a mistake and the fix is
 local and mechanical (remove a line, or rename to a `_` name). Checks that fail
 this test are not added (26.5).
 
-**Deprecations.** Deprecation warnings may be considered only after 1.0, when
-there are users whose code must keep working while they move. Before 1.0, a
-change in behavior is a breaking change: it lands as an error, the implementing
-PR migrates the repo, and the `CHANGELOG.md` lists it under "Changed".
+**Deprecations.** Deprecation warnings may be considered only after 1.0. Before
+1.0 a change in behavior lands as an error, the implementing PR migrates the
+repo, and `CHANGELOG.md` lists it under "Changed".
 
-**No switch to turn them off.** There is no flag such as `--allow-unused`: a
-check that can be turned off is a warning by another name, and it would give two
-accepted ways again. The discard `_` (`_ = f(...)`, `for _ in ...`, `|_, v|`,
-`error(_)`) is the one way to drop a value on purpose, and a name that starts
-with `_` is the one way to keep a name that is unused on purpose (26.2).
+**No switch to turn them off.** A check that can be turned off is a warning by
+another name, and gives two accepted ways again. The discard `_` (`_ = f(...)`,
+`for _ in ...`, `|_, v|`, `error(_)`) is the one way to drop a value on purpose,
+and a name that starts with `_` is the one way to keep a name that is unused on
+purpose (26.2).
 
-**How it lands.** Each item is its own small PR, in the order 26.1, 26.3, 26.2,
-26.4: the two small migrations first; 26.2 after 26.3, so a read in dead code
-never has to be counted; 26.4 last, because its one explicit discard, `_ =
-f(...)`, already exists (#381), and before 26.2 a `sent = f(...)` would silence
-26.4 and leave no trace. All four are front end only (the linker for 26.1, the
-checker for the rest): the bytecode format and the VM do not change. Each PR is
-a breaking change and migrates the repo in the same PR (`examples/`, `stdlib/`,
-`benchmarks/`, `tests/`, the site blocks, the skill examples), adds a CHANGELOG
-"Changed" entry, and tests the code and the span through the CLI. The 26.1
-entry also speaks to package authors: an unused import in a `pkg/` library fails
-the build of every program that uses it. The "Diagnostics for agents" section of
-the grammar gets the no-warnings principle with the first item that lands.
+**How it lands.** One small PR per item, in the order 26.1, 26.3, 26.2, 26.4:
+the two small migrations first; 26.2 after 26.3, so a read in dead code never
+has to be counted; 26.4 last, because its explicit discard `_ = f(...)` already
+exists (#381), and before 26.2 a `sent = f(...)` would silence 26.4 and leave no
+trace. All four are front end only (the linker for 26.1, the checker for the
+rest). Each PR is a breaking change that migrates the repo (`examples/`,
+`stdlib/`, `benchmarks/`, `tests/`, the site blocks, the skill examples), adds a
+CHANGELOG "Changed" entry, and tests the code and the span through the CLI. The
+26.1 entry also speaks to package authors: an unused import in a `pkg/` library
+fails the build of every program that uses it. The grammar's "Diagnostics for
+agents" section gets the no-warnings principle with the first item that lands.
 
 - **§:** 26.1
   - **Item:** Unused imports
@@ -114,83 +112,52 @@ the import alias "JsonUtil" is never used
 **Rule:** an import whose alias is never used in its file is
 `CHECK-UNUSED-IMPORT`, at the alias.
 
-**Why the linker.** The linker is the only stage that sees import aliases. It
-resolves every `Alias.name` of a file through that file's imports (`resolve`,
-`compiler/modules/`) and rewrites it to the target's identity (`@N::name`); the
-checker then gets one merged program with no imports left. So the checker
-cannot tell which alias a name came from, and the linker must decide.
+**Why the linker.** It is the only stage that sees import aliases: it resolves
+every `Alias.name` through the file's imports and rewrites it to `@N::name`, so
+the checker gets one merged program with no imports left.
 
-**What counts as a use.** Every place where `resolve` finds the alias in the
-file's imports (the alias is marked there), for any kind of name: a call
-(`Text.shout(...)`, also without parentheses), a function value
-(`&Text.shout`), a type in an annotation, a parameter, a field or a JSON type
-argument (`Models.User`), a construction (`Models.User(name: "Ana")`), an enum
-variant as a value or a pattern (`Domain.Option.Some(x)`), and an enum type
-(`Domain.Option[Int]`). A use inside a function that is never called still
-counts: the rule is about the file's text, not about what runs.
+**What counts as a use.** Every place where `resolve` finds the alias, for any
+kind of name: a call (also without parentheses), a function value (`&Text.shout`),
+a type in an annotation, parameter, field or JSON type argument, a construction,
+an enum variant as a value or a pattern, and an enum type. A use inside a
+function that is never called counts: the rule is about the file's text.
+**Re-exports** (`docs/grammar/05b-modules.md`): `export Url.parse` counts as a
+use of `Url` (the check marks it via `Declarations.reexports_of`), so a facade
+that only re-exports needs no fake call.
 
-**Re-exports** (`docs/grammar/05b-modules.md`, roadmap 15b, built):
-`export Url.parse` counts as a use of `Url`. A facade file that only re-exports
-is the main use of re-exports, and it must not need a fake call to keep its
-imports. 15b landed before this item, so the check marks the alias as used when
-a re-export names it (`Declarations.reexports_of`), and its tests include a
-facade that only re-exports.
-
-**No side effects to keep.** An import has no effect besides its names: a module
-has no top-level statements and no module state (`grammar.md`, "File modules and
-imports"). So removing an unused import never changes what a program does.
-
-**Every module.** The rule holds for every linked file: the root, relative
-imports, `pkg/` libraries and the embedded `std/` modules. Each file is checked
-against its own imports, once, even when several files import it. There is no
-exemption for `pkg/` dependencies: one rule everywhere, as in Go, and a package
-with a stray import is broken for every user, so the fix belongs in the package,
-not in each program that uses it.
+**No side effects to keep.** An import has no effect besides its names (a module
+has no top-level statements or state), so removing an unused one never changes
+what a program does. The rule holds for every linked file (root, relative
+imports, `pkg/` libraries, embedded `std/`), each against its own imports, with
+no exemption for `pkg/`: a package with a stray import is broken for every user,
+so the fix belongs in the package.
 
 **Edge cases:**
 
-- **A mistyped alias is not an unused import.** In `import Text from "text"`
-  with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real
-  mistake is the call. The linker already passes a two-part function name whose
-  first part is not an alias to the checker unchanged, so the checker reports
-  it with its stable code. So the unused-import check skips a file that has any
-  such name that is not a builtin call (`IO.inspect` and `String.length` are
-  valid calls of that shape), and the checker reports `CHECK-UNKNOWN-NAME`, as
-  today, with its "did you mean" help over functions and builtins.
-- **An alias used without its member.** An import alias is never a name on its
-  own: the linker already forbids an alias that collides with a declaration of
-  the file or a builtin type name, so a one-part type or enum name equal to an
-  alias is always a mistake, most often a missing member. Two shapes:
-  - a type, construction or type expression: `u: User`, a parameter
-    `def show(u: User)`, `User(name: "Ana")`, or `User` alone as a value, all
-    with `import User from "user"`;
-  - an enum variant without the enum's name: with `import Domain from
-    "domain"`, the call `Domain.Some(1)` and the pattern `Domain.Some(x)` (the
-    parser reads them as the variant `Some` of an enum named `Domain`).
+- **A mistyped alias is not an unused import.** With `import Text from "text"`
+  and a call `Txet.shout("hi")`, the real mistake is the call. The check skips a
+  file that has a two-part function name whose first part is not an alias and not
+  a builtin call (`IO.inspect`, `String.length` are valid), and the checker
+  reports `CHECK-UNKNOWN-NAME` with its "did you mean" help.
+- **An alias used without its member.** An alias is never a name on its own, so
+  a one-part type or enum name equal to an alias is a mistake, most often a
+  missing member: `u: User`, `User(name: "Ana")`, or `Domain.Some(1)` and the
+  pattern `Domain.Some(x)` (the parser reads the variant `Some` of an enum named
+  `Domain`). Today the checker reports `CHECK-UNKNOWN-TYPE` or
+  `CHECK-PATTERN-TYPE` and the alias is never marked, so 26.1 alone would add a
+  wrong "remove import" error. The linker therefore stops with
+  `CHECK-IMPORT-NAME` at that span, with help `write User.<Type>` or `write
+  Domain.<Enum>.Some(...)`, naming the declaration when the module exports it
+  (`write User.User`) or, for a variant, the enum when exactly one exported enum
+  has it. This is better than today's diagnostics on its own, so it can land in
+  the 16a PR as a small change.
+- **Order.** Imports are checked in source order, files in link order (root
+  first), and the first alias never used is reported. Errors found while
+  rewriting (`CHECK-IMPORT-NAME`) come first, and every linker error comes before
+  every checker error.
 
-  Today the checker reports `CHECK-UNKNOWN-TYPE` (for the enum call, "unknown
-  enum") or `CHECK-PATTERN-TYPE` (for the pattern), and the alias is never
-  marked, so 26.1 alone would add a wrong "remove import" error. So the linker
-  stops right away with `CHECK-IMPORT-NAME` at that span. The help shows the
-  missing member: `write User.<Type>` or `write Domain.<Enum>.Some(...)`. When
-  the imported module exports a declaration with that name, the help names it
-  (`write User.User`); for a variant, when exactly one exported enum has a
-  variant of that name, the help names the enum (`write
-  Domain.Option.Some(...)`). This is better than today's diagnostics even
-  without the unused-import rule, so it can land in the 16a PR as its own small
-  change.
-- **Order.** Each file's imports are checked in source order, files in link
-  order (the root first), and the first alias never used is reported. Errors
-  found while rewriting come first: an unknown or private imported name
-  (`CHECK-IMPORT-NAME`) in a file is reported before an unused import. A
-  mistyped alias in a call is not a rewriting error; it is the checker's
-  `CHECK-UNKNOWN-NAME`, and the rule above keeps the unused import from hiding
-  it. Apart from that case, every linker error comes before every checker
-  error, since the linker runs first.
-
-**Help idea:** `remove import JsonUtil from "json_util"`, which names the whole
-line, as in the example above. There is no "use it" hint: the linker cannot know
-what the code meant to call.
+**Help:** `remove import JsonUtil from "json_util"`, the whole line; there is no
+"use it" hint, since the linker cannot know what the code meant to call.
 
 ### 26.2 Unused variables
 
@@ -233,37 +200,26 @@ name starts with `_`.
   (26.5).
 
 **What "read" means.** A variable is read when its name is evaluated as an
-expression anywhere in its scope: in a condition, an argument, an operand, an
-interpolation, an index, a `return`, or the value of an assignment to another
-variable. A read inside a block (or lambda) counts for the outer variable it
-captures, since a block can read captured values but never assign them
-(`CHECK-CAPTURED-ASSIGNMENT`).
+expression anywhere in its scope. A read inside a block (or lambda) counts for
+the outer variable it captures, since a block can read but never assign captured
+values (`CHECK-CAPTURED-ASSIGNMENT`).
 
 - **Compound assignment is not a read.** A read of `x` inside the value of an
   assignment to `x` itself does not count: `x += 1`, `x = x + 1` and
-  `xs = xs.push(v)` alone do not make `x` or `xs` used. The parser already
-  turns `x += 1` into `x = x + 1` (`parse_compound`,
-  `compiler/syntax/parser.agc`), so both forms get the same answer. This holds
-  in nested blocks too: while the value of `x = ...` is checked, a read of `x`
-  inside a block in that value does not count either, so `xs = xs.map do |v| v +
-  xs.length end` alone leaves `xs` unused. The reason: values are immutable, so
-  the only way the new value of `x` leaves such an assignment is through a later
-  read of `x`. A counter that is only incremented, or a list that is only
-  appended to, is lost work, and usually a bug (the result was meant to be
-  printed or returned). Rust warns the same way (`variable is assigned to, but
-  never used`). A call in such a value still runs; if a loop calls a function
-  with effects only to feed its own state (`n = tick(n)`), the name is `_n`.
-
+  `xs = xs.push(v)` alone do not make `x` or `xs` used (the parser turns `x += 1`
+  into `x = x + 1`, `parse_compound`). This holds in nested blocks too:
+  `xs = xs.map do |v| v + xs.length end` alone leaves `xs` unused. Values are
+  immutable, so the new value of `x` leaves such an assignment only through a
+  later read; a counter only incremented, or a list only appended to, is lost
+  work and usually a bug. Rust warns the same way. A call in such a value still
+  runs; if a loop calls a function with effects only to feed its own state
+  (`n = tick(n)`), the name is `_n`.
 - **Reassignment before any read.** The rule is per variable, not per
-  assignment: `x = 1`, then `x = 2`, then `puts(x)` is valid. The first value is
-  never read, but finding that needs a flow analysis of every path; the checker
-  does not do one, and Go does not reject it either. A variable is unused only
-  when no read of it exists at all.
-
-- **Code that never runs.** A read in a statement after a `return` does not
-  count. 26.3 lands before this item, so the checker rejects that statement
-  first and the question never comes up.
-
+  assignment: `x = 1`, `x = 2`, `puts(x)` is valid. Finding the dead first value
+  needs a flow analysis that the checker does not do (and Go does not reject it
+  either).
+- **Code that never runs.** A read after a `return` does not count; 26.3 lands
+  first, so the checker rejects that statement before the question arises.
 **`_` names.** Names that start with `_` and have more after it are already
 valid: `NAME = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }` (`grammar.md`,
 "Literals"; the lexer at `compiler/syntax/lexer.agc`). A variable whose name
@@ -287,16 +243,13 @@ assign a `Result` from `send` or `close` and never look at it (the impact list),
 show why the help matters.
 
 **Span and order.** The span is where the variable is introduced: the assignment
-statement that introduces it (the span `CHECK-SHADOWED-NAME` uses), the block
-parameter, the `for` variable or the pattern binding (the parser records a span
-for each of the last two). The check runs at the end of each function, after its
-body is checked and after its `CHECK-MISSING-RETURN` check, so every other error
-in the function comes first, including the `CHECK-MISSING-RETURN` of the blocks
-inside it. It reports the unused name whose span starts first in the source (by
-source offset), not the one introduced first: in `ys = xs.map do |v| 1 end`, the
-block parameter `v` is introduced before `ys` (the value is checked before the
-name is introduced), but `ys` starts first, so `ys` is reported. Functions are
-checked in the linked program's order.
+statement (as `CHECK-SHADOWED-NAME` uses), the block parameter, the `for`
+variable or the pattern binding. The check runs at the end of each function,
+after its body and its `CHECK-MISSING-RETURN` check, so every other error in the
+function comes first. It reports the unused name whose span starts first in the
+source, not the one introduced first: in `ys = xs.map do |v| 1 end` the block
+parameter `v` is introduced before `ys`, but `ys` starts first, so `ys` is
+reported. Functions are checked in the linked program's order.
 
 **Help ideas**, by kind:
 
@@ -337,47 +290,35 @@ This is a new code, apart from the existing `CHECK-UNREACHABLE-CASE-ARM` (a
 `case` arm that an earlier arm already covers, `compiler/check/check_stmt.agc`),
 which does not change.
 
-**Terminators**, kept to what the checker already knows:
-
-- `return`, `break` and `next`;
-- an `if` with an `else` whose every branch ends in a terminator, and a `case`
-  whose every arm ends in a terminator (any mix: one arm may `return` and
-  another `break`).
-
-That is the same idea as the "must return on every path" rule (`block_returns?`,
-`compiler/check/check_flow.agc`, behind `CHECK-MISSING-RETURN`), widened from
-`return` to `break` and `next`, since those end a block too. Like that rule, the
-analysis does not look into loops or calls. These are not terminators:
+**Terminators**, kept to what the checker already knows: `return`, `break` and
+`next`; an `if` with an `else` whose every branch ends in a terminator; a `case`
+whose every arm does (any mix). It is the "must return on every path" rule
+(`block_returns?`, `compiler/check/check_flow.agc`, behind
+`CHECK-MISSING-RETURN`) widened from `return` to `break` and `next`, and like it
+the analysis does not look into loops or calls. Not terminators:
 
 - `System.exit(...)` and calls that can halt (`gets!`, `unwrap!`, any `!`
-  function): to the checker they are calls with a type, and it has no "never
-  returns" type. A `-> Int` function that ends with `System.exit(1)` still needs
-  a `return` after it today, so treating the call as a terminator would make the
-  two rules disagree.
-- `while true ... end` without a `break`: `grammar.md` says "a loop does not by
-  itself guarantee a return", and the same holds here.
-- `try`, which leaves early only on an error.
+  function): the checker has no "never returns" type, and a `-> Int` function
+  that ends with `System.exit(1)` still needs a `return`, so the two rules would
+  disagree.
+- `while true ... end` without a `break` (the grammar: a loop does not by itself
+  guarantee a return), and `try`, which leaves early only on an error.
 
-Branches inside a block are checked as their own blocks: `if c` with a `return`
-and no `else` is not a terminator, but a statement after the `return` inside
-that branch is unreachable.
+Branches are checked as their own blocks: `if c` with a `return` and no `else` is
+not a terminator, but a statement after the `return` inside that branch is
+unreachable.
 
-**Where.** In the checker, because the rule needs the block structure that it
-already walks and the same "ends on every path" logic as the
-`CHECK-MISSING-RETURN` rule; the linker does not look at statements. Blocks and
-lambdas check each statement, then, before the next one, fail if the one just
-checked is a terminator. So errors before the terminator come first, and the
-unreachable statement itself is not checked.
+**Where.** In the checker, which already walks the block structure and has the
+"ends on every path" logic. Each statement is checked and then, before the next
+one, the checker fails if the one just checked is a terminator; so errors before
+the terminator come first and the unreachable statement is not checked. After
+this item a terminator can only be the last statement of its block, so
+`block_returns?` may look at the last statement only (`contains_return?` stays a
+deep search for `missing_return_help`).
 
-After this item a terminator can only be the last statement of its block, so
-`block_returns?` may look at the last statement only. `contains_return?` stays a
-deep search: `missing_return_help` uses it.
-
-**Help idea:**
-`this statement never runs, because the block ends at the return on line 5;
-remove it, or move it before the return`.
-For a `case` or `if`:
-`every branch of the case above ends with return, break or next`.
+**Help:** `this statement never runs, because the block ends at the return on
+line 5; remove it, or move it before the return`; for a `case` or `if`: `every
+branch of the case above ends with return, break or next`.
 
 ### 26.4 Ignored `Result` values
 
