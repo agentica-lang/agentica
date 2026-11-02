@@ -238,7 +238,10 @@ Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
 | `TLS.connect(host, port, "ca.pem", ms)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)` |
 | `TLS.connect(host, port, ca, ms, cert, key)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: cert, key_file: key)).unwrap!, ms)` |
 | `TLS.listen(host, port, cert, key)` | `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)` |
-| `HTTP.listen_tls(host, port, cert, key, handler)` (and the `stream`, `upload` and `websocket` forms) | `HTTP.serve_tls(host, port, server_context, HTTP.app(handler))` |
+| `HTTP.listen_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, HTTP.app(handler))` |
+| `HTTP.listen_stream_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that answers `HTTP.Answer.Stream` ([streamed responses](#streamed-responses-and-server-sent-events)) |
+| `HTTP.listen_upload_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that reads `body` and answers `HTTP.Answer.Whole` ([request bodies](#request-bodies)) |
+| `HTTP.listen_websocket_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that answers `HTTP.Answer.Upgrade` ([WebSockets](#websockets)) |
 | `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
 | `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
 
@@ -732,7 +735,7 @@ The app gets the body on a channel, so an upload too big to hold, or one the app
 - `Expect: 100-continue` within the cap is answered with `100` before the app runs, so an app cannot refuse an upload before the client sends the body.
 - `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the app has not taken), not the time of the whole upload.
 - The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise (an app that answers first, with a `413` or a `401`, or a body that failed) the answer gets `Connection: close` and the connection closes after it, so a client still sending may see the close before it reads the answer.
-- `HTTP.read_all(body, max_bytes)` collects the body for a route that wants it whole: it returns the pieces joined as a `Result[Bytes]`, an `error` when the body is longer than `max_bytes` (answer `413`) or did not arrive whole (it awaits `done`). `HTTP.app` does this for a `Handler`.
+- `HTTP.read_all(body, max_bytes)` collects the body for a route that wants it whole: it returns the pieces joined as a `Result[Bytes]`, or an `error` (it awaits `done`). The error is `"http: body exceeds max_bytes"` for a body longer than `max_bytes` or the cap (answer `413`), starts with `"http: request fields too large"` for a chunk line or trailer section over the head limits (answer `431`), and is any other text for a body that is bad or did not arrive whole (answer `400`). `HTTP.app` does this for a `Handler`; a route that answers otherwise maps the error itself, as the stream route below does.
 
 A server that counts an upload, and the client call that streams one to it:
 
@@ -792,7 +795,40 @@ For a body that is not ready when the handler returns: events, tokens as a model
 - A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
 - A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds the send of each piece (and of a whole body sent with `Content-Length`): a client that stops reading for that long is cut off, and the channel closes.
 - `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for a whole response, and the channel closes.
-- A body that is still coming when the app answers closes the connection after the stream, as for every answer.
+- A body that is still coming when the app answers closes the connection after the stream, as for every answer. A stream route that takes a body reads it first and answers a body it cannot read as `HTTP.app` would:
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+# The answer for a body that `HTTP.read_all` could not read, as `HTTP.app` gives it.
+def refused(message: String) -> HTTP.Answer
+  status = 400
+  if message == "http: body exceeds max_bytes"
+    status = 413
+  elsif String.starts_with?(message, "http: request fields too large")
+    status = 431
+  end
+
+  return HTTP.Answer.Whole(HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: "".bytes))
+end
+
+def echoed(data: Bytes) -> HTTP.Answer
+  return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(data)))
+end
+
+def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  case HTTP.read_all(body, 65536)
+    ok(data) -> return ok(echoed(data))
+    error(message) -> return ok(refused(message))
+  end
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 8080, &handle).unwrap!
+  HTTP.wait(server).unwrap!
+end
+```
+
 - The server speaks HTTP/1.1 only: an HTTP/1.0 request gets a 505 before the app runs.
 
 Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pieces are `data: ...` lines ended by a blank line:
