@@ -125,9 +125,9 @@ export, are `CHECK-IMPORT-NAME` at the member, with a `did you mean` help for a
 near export, as for a function. A constant is no function and no type:
 `Limits.LIMIT()` and `x: Limits.LIMIT` are `CHECK-TYPE-MISMATCH`. An imported
 name must not collide with a constant of the file, and two constants of the same
-name are `CHECK-REDEFINED-NAME`, as for any declaration. A constant is never changed, so
-there is no shared state between modules: the value an importer reads is the
-value the declaring file computed.
+name are `CHECK-REDEFINED-NAME`, as for any declaration. A constant is never
+changed, so there is no shared state between modules: the value an importer
+reads is the value the declaring file computed.
 
 Only the root file supplies the executable `main() -> Void`; imported `main`
 functions do not run. Imported calls and tasks share the program's step budget
