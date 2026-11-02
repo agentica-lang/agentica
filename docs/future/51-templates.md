@@ -29,12 +29,12 @@ The lexer keeps the lines of an `<<~EAG` body in one `eag` token. The parser
 expands it (`compiler/syntax/eag.agc`) into the tokens of
 
 ```agentica
-[0].map do |__n: Int|
-  __t: List[String] = []
-  __t = __t.push("text")
-  __t = __t.push("#{code}")
+[0].map do |eag#n: Int|
+  eag#t: List[String] = []
+  eag#t = eag#t.push("text")
+  eag#t = eag#t.push("#{code}")
   <statement of a tag>
-  __t.join("")
+  eag#t.join("")
 end.first
 ```
 
@@ -48,11 +48,20 @@ work inside it. The literal is an `Ast.EagLit` node that wraps the expression,
 so the linker can ask for the import and the formatter can print the template as
 written.
 
+The two names have a `#`, which no identifier has, so a tag can neither write
+them nor read them (the regex literal names its constants `regex#<id>` the same
+way); the checker tells them from user names to explain two errors.
+
 What follows from the block:
 
 - A tag cannot assign a variable of the function
-  (`CHECK-CAPTURED-ASSIGNMENT`, at the tag); a variable made in a tag stays in
-  the template.
+  (`CHECK-CAPTURED-ASSIGNMENT`, at the tag, with a message about the template);
+  a variable made in a tag stays in the template.
+- A block inside a tag cannot write output, since writing is an assignment of
+  the list of pieces: `<% items.each do |i| %>` with `<%= i %>` is the same
+  error, with the help to loop with `for i in items`. A way to make `each do`
+  work would need a mutable cell or a block that returns its pieces; neither is
+  in the language.
 - A tag cannot `return` from the function.
 - The cost of a template is that of the code it expands to: one list of pieces
   and one `join`.
@@ -66,6 +75,8 @@ What follows from the block:
   (`%`, `<>`, `>`). `<>` is nearly the rule for a line with one tag (the next
   item).
 - Escaping by default.
+- `agentica type-at` and `refs` at a position inside a tag: the literal holds
+  its expansion for the checker, but the query walkers do not descend into it.
 
 ### 51.4 Differences from Ruby's ERB
 

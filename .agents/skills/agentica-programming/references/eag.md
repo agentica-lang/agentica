@@ -27,7 +27,9 @@ EAG.html_escape(value: String) -> String   # & < > " ' ; Ruby's ERB::Util.html_e
 - `<% stmt %>`: `if/elsif/else/for/while/case/end` or any statement. A tag
   must close its blocks (`PARSE-EAG-BLOCK`). A template is a block, so a tag
   cannot assign a variable of the function (`CHECK-CAPTURED-ASSIGNMENT`): use
-  a variable made in the template, or build the value before.
+  a variable made in the template, or build the value before. Output cannot
+  be written from a block in a tag either: `<% items.each do |i| %>` with
+  `<%= i %>` is `CHECK-CAPTURED-ASSIGNMENT`; loop with `for i in items`.
 - `<%# note %>` dropped; `<%%` is `<%`; `-%>` removes the next line break;
   `<%-` removes the spaces before it. A line with only one `<% %>` or `<%# %>`
   tag vanishes whole (Ruby's `trim_mode: "-"` does not do that).

@@ -293,15 +293,18 @@ with no escape and no `#{}`. The tags:
   before the tag when only spaces come before it on its line.
 - A line that holds only one `<% %>` or `<%# %>` tag and spaces is removed
   whole. This is the one rule that is not Ruby's `trim_mode: "-"`.
-- A tag ends at the first `%>` on its line (`LEX-UNTERMINATED-EAG-TAG`).
+- A tag ends at the first `%>` on its line (`PARSE-EAG-UNTERMINATED-TAG`).
 
 The parser makes the template an expression that builds the text, from tokens
 that keep their places in the file, so every diagnostic about a tag has its
 place in the template; the checker checks it as ordinary code. A tag sees the
 names of the function and, since the template is a block of the function, cannot
-assign them (`CHECK-CAPTURED-ASSIGNMENT`). The literal is an expression that can
-stand anywhere one can. The file must import `std/eag` in any form, or the
-literal is `CHECK-EAG-IMPORT`.
+assign them (`CHECK-CAPTURED-ASSIGNMENT`, with a message about the template); a
+block inside a tag, such as `items.each do |i|`, cannot write output for the
+same reason, so a loop is `for i in items`. The names the expansion uses have a
+`#`, which no identifier has. `agentica type-at` and `refs` do not look inside a
+tag yet. The literal is an expression that can stand anywhere one can. The file
+must import `std/eag` in any form, or the literal is `CHECK-EAG-IMPORT`.
 
 ### Regex literals
 

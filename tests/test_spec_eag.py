@@ -30,6 +30,8 @@ TEMPLATE = '''<h1><%= title %></h1>
   <p><%= name %> <%= n %></p>
     <%- end -%>
 A literal <%% tag, #{raw} \\n and 100%> text.
+ab  <%- k = 5 %>cd
+    <%- k = 6 %>ef
 
 <% if flag %>flag<% end %> and <%= title + "!" -%>
 tail
@@ -92,8 +94,9 @@ def peer_render(template, scope):
                     else:
                         add(word)
             elif piece and not alone:
-                text = piece.lstrip(" \t") if first and kind_is_trim(pieces) else piece
-                add("_out.append(%r)" % text)
+                # `<%-` removes the spaces before it when only spaces come before it on its line.
+                if not (first and piece.strip() == "" and kind_is_trim(pieces)):
+                    add("_out.append(%r)" % piece)
             first = False
         if not alone and not trimmed:
             add("_out.append('\\n')")
@@ -191,10 +194,10 @@ end
 
 
 @pytest.mark.parametrize("body, code, needle", [
-    ("a\n    <%= n\n", "LEX-UNTERMINATED-EAG-TAG", "<%= n"),
+    ("a\n    <%= n\n", "PARSE-EAG-UNTERMINATED-TAG", "<%= n"),
     ("<% if n > 1 %>\n    a\n", "PARSE-EAG-BLOCK", "if n > 1"),
     ("a\n    <% end %>\n", "PARSE-EAG-BLOCK", "end %>"),
-    ("a\n    <%= n + %>\n", "PARSE-UNEXPECTED-TOKEN", "n + "),
+    ("a\n    <%= n + %>\n", "PARSE-UNEXPECTED-TOKEN", " n + "),
     ("a\n    <%= puts(\"x\") %>\n", "CHECK-VOID-VALUE", "puts"),
 ])
 def test_template_diagnostics_carry_a_span_in_the_template(tmp_path, body, code, needle):
@@ -202,6 +205,50 @@ def test_template_diagnostics_carry_a_span_in_the_template(tmp_path, body, code,
     source += "\ndef main() -> Void\n  puts(page(1))\nend\n"
     diagnostic = problem(check(write(tmp_path, source)), code, 1)
     assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == where(source, needle)
+
+
+def test_a_block_of_a_tag_cannot_write_the_output(tmp_path):
+    source = '''import EAG from "std/eag"
+
+def page(items: List[String]) -> String
+  return <<~EAG
+    <% items.each do |i| %>
+    <%= i %>
+    <% end %>
+  EAG
+end
+
+def main() -> Void
+  puts(page([]))
+end
+'''
+    diagnostic = problem(check(write(tmp_path, source)), "CHECK-CAPTURED-ASSIGNMENT", 1)
+    line, column = where(source, "<%= i %>")
+    # The span is the code of the tag that writes, and the text speaks of the template, not of its inner names.
+    assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == (line, column + 3)
+    assert "eag#" not in diagnostic["message"] + diagnostic.get("help", "")
+    # A `for` loop writes the output.
+    fixed = source.replace("<% items.each do |i| %>", "<% for i in items %>")
+    assert check(write(tmp_path, fixed, "d.agc")).code == 0
+
+
+def test_an_empty_output_tag_is_reported_at_the_tag(tmp_path):
+    source = '''import EAG from "std/eag"
+
+def page() -> String
+  return <<~EAG
+    a <%=  %>
+    b
+  EAG
+end
+
+def main() -> Void
+  puts(page())
+end
+'''
+    diagnostic = problem(check(write(tmp_path, source)), "PARSE-UNEXPECTED-TOKEN", 1)
+    line, column = where(source, "<%=")
+    assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == (line, column + 3)
 
 
 def test_the_formatter_keeps_a_template_as_written(tmp_path):

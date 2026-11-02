@@ -148,7 +148,7 @@ is a rule:
     its name
 
 - **Written:** a `<%` tag with no `%>` on its line in an `<<~EAG` template
-  (`LEX-UNTERMINATED-EAG-TAG`)
+  (`PARSE-EAG-UNTERMINATED-TAG`)
   - **Help:** end the tag with `%>` on the same line; write `<%%` for the text
     `<%`
 

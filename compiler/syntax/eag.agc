@@ -9,30 +9,27 @@
 ##
 ## The expansion is
 ##
-##     [0].map do |__n: Int|
-##       __t: List[String] = []
-##       __t = __t.push("text")
-##       __t = __t.push("#{code}")
+##     [0].map do |eag#n: Int|
+##       eag#t: List[String] = []
+##       eag#t = eag#t.push("text")
+##       eag#t = eag#t.push("#{code}")
 ##       <statement>
-##       __t.join("")
+##       eag#t.join("")
 ##     end.first
 ##
 ## which is an expression anywhere, since the language has no block expression, whose locals do not leak, and whose
-## statements may be `if`, `for` or any other. Every token of a tag is lexed again from the tag's own text and keeps
-## its place in the template; the tokens that glue them together take the place of their tag, or of the opener.
+## statements may be `if`, `for` or any other. The two names have a `#`, which no identifier has, so a tag can neither
+## write them nor read them. Every token of a tag is lexed again from the tag's own text and keeps its place in the
+## template; the tokens that glue them together take the place of their tag, or of the opener.
 
 import Diag from "../diagnostics/diagnostic"
+import Ast from "ast"
 import Lexer from "lexer"
 import Source from "source"
 import Tokens from "token"
 
-# The names of the two locals of the expansion: the list of text pieces and the parameter of the block that holds it.
-# They start with `__`, as the private names of the compiler do.
-PIECES = "__t"
-SEED = "__n"
-
 # The code of the error for a tag with no end on its line.
-UNTERMINATED_TAG = "LEX-UNTERMINATED-EAG-TAG"
+UNTERMINATED_TAG = "PARSE-EAG-UNTERMINATED-TAG"
 
 # The code of the error for a tag whose `end` has nothing to close, or whose block the template never ends. The blocks
 # are counted here, from the first word of a tag (`if`, `for`, `while`, `case`) and its `do`s, so that a template that
@@ -51,18 +48,18 @@ struct Part
   trim: Bool
 end
 
-# What the lines so far gave: the tokens, the text that waits to become one push, and the place of each block of a tag
-# that no `end` has closed yet.
+# What the lines so far gave: the tokens, the text that waits to become one push (in pieces, joined when it is used),
+# and the place of each block of a tag that no `end` has closed yet.
 struct Built
   tokens: List[Tokens.Token]
-  text: String
+  text: List[String]
   open: List[Source.Span]
 end
 
 ## The tokens of the expression for the template `body`, opened by the token `opener`, ending with an EOF token; or the
-## first problem of a tag: `LEX-UNTERMINATED-EAG-TAG`, or the lexer's own for the code of a tag.
+## first problem of a tag: `PARSE-EAG-UNTERMINATED-TAG`, `PARSE-EAG-BLOCK`, or the lexer's own for the code of a tag.
 export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[List[Tokens.Token]]
-  built = Built(tokens: [], text: "", open: [])
+  built = Built(tokens: [], text: [], open: [])
   for line in body.lines
     case line_built(opener.span, body.indent, line, built)
       Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
@@ -75,7 +72,6 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
   end
 
   at = opener.span
-  kept = flush(built, at).tokens
   head = [
     word("left-bracket", "[", at),
     number(0, at),
@@ -84,12 +80,12 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     name("map", at),
     word("do", "do", at),
     word("pipe", "|", at),
-    name(SEED, at),
+    name(Ast.EAG_SEED, at),
     word("colon", ":", at),
     word("type-name", "Int", at),
     word("pipe", "|", at),
     word("NL", "\n", at),
-    name(PIECES, at),
+    name(Ast.EAG_PIECES, at),
     word("colon", ":", at),
     word("type-name", "List", at),
     word("left-bracket", "[", at),
@@ -101,7 +97,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     word("NL", "\n", at),
   ]
   tail = [
-    name(PIECES, at),
+    name(Ast.EAG_PIECES, at),
     word("dot", ".", at),
     name("join", at),
     word("left-paren", "(", at),
@@ -113,7 +109,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     name("first", at),
     word("EOF", "", at),
   ]
-  return Diag.Outcome.Done(head.concat(kept).concat(tail))
+  return Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
 # One body line: its parts become tokens (and text, which the next tag or the end turns into a push).
@@ -129,70 +125,76 @@ def line_built(at: Source.Span, indent: Int, line: Tokens.EagLine, built: Built)
   end
 end
 
-# The parts of the line after `cut` leading characters: text and tags, in order.
+# The parts of the line after `cut` leading characters: text and tags, in order. The line is cut at each `<%` once, so
+# the work is linear in its length. `column` is the index, in the cut line, of the `<%` that starts the piece at hand.
 def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
-  shown = line.text.slice(cut, line.text.length - cut)
+  pieces = line.text.slice(cut, line.text.length - cut).split("<%")
   parts: List[Part] = []
-  buffer = ""
-  at = 0
-  while at < shown.length
-    found = shown.slice(at, shown.length - at).index_of("<%")
-    if found.none?
-      buffer = buffer + shown.slice(at, shown.length - at)
-      at = shown.length
+  buffer = [pieces[0]]
+  column = pieces[0].length
+  at = 1
+  while at < pieces.size
+    piece = pieces[at]
+    mark = ""
+    if piece.length > 0
+      mark = piece.slice(0, 1)
+    end
+
+    if mark == "%"
+      # `<%%` is the text `<%`.
+      buffer = buffer.push("<%").push(piece.slice(1, piece.length - 1))
+      column += 2 + piece.length
+      at += 1
     else
-      open_at = at + found.unwrap!
-      buffer = buffer + shown.slice(at, found.unwrap!)
-      mark = ""
-      if open_at + 2 < shown.length
-        mark = shown.slice(open_at + 2, 1)
+      width = 0
+      kind = "stmt"
+      if mark == "=" or mark == "#" or mark == "-"
+        width = 1
       end
 
-      if mark == "%"
-        buffer = "#{buffer}<%"
-        at = open_at + 3
-      else
-        width = 2
-        kind = "stmt"
-        if mark == "=" or mark == "#" or mark == "-"
-          width = 3
-        end
-
-        if mark == "="
-          kind = "expr"
-        elsif mark == "#"
-          kind = "comment"
-        end
-
-        code_at = open_at + width
-        closed = shown.slice(code_at, shown.length - code_at).index_of("%>")
-        if closed.none?
-          return Diag.Outcome.Failed(unterminated_tag(line, cut + open_at))
-        end
-
-        code = shown.slice(code_at, closed.unwrap!)
-        trim = code.ends_with?("-")
-        if trim
-          code = code.slice(0, code.length - 1)
-        end
-
-        if mark == "-" and parts.size == 0 and buffer.strip == ""
-          buffer = ""
-        end
-
-        if buffer != ""
-          parts = parts.push(Part(kind: "text", text: buffer, start: 0, trim: false))
-          buffer = ""
-        end
-
-        parts = parts.push(Part(kind: kind, text: code, start: cut + code_at, trim: trim))
-        at = code_at + closed.unwrap! + 2
+      if mark == "="
+        kind = "expr"
+      elsif mark == "#"
+        kind = "comment"
       end
+
+      # A tag ends at the first `%>`, even when its code holds a `<%`, which the cut above split in two.
+      inside = piece.slice(width, piece.length - width)
+      while !inside.include?("%>") and at + 1 < pieces.size
+        at += 1
+        inside = "#{inside}<%#{pieces[at]}"
+      end
+
+      closed = inside.index_of("%>")
+      if closed.none?
+        return Diag.Outcome.Failed(unterminated_tag(line, cut + column))
+      end
+
+      code = inside.slice(0, closed.unwrap!)
+      trim = code.ends_with?("-")
+      if trim
+        code = code.slice(0, code.length - 1)
+      end
+
+      before = buffer.join("")
+      if mark == "-" and parts.size == 0 and before.strip == ""
+        before = ""
+      end
+
+      if before != ""
+        parts = parts.push(Part(kind: "text", text: before, start: 0, trim: false))
+      end
+
+      parts = parts.push(Part(kind: kind, text: code, start: cut + column + 2 + width, trim: trim))
+      buffer = [inside.slice(closed.unwrap! + 2, inside.length - closed.unwrap! - 2)]
+      column += 2 + width + inside.length
+      at += 1
     end
   end
 
-  if buffer != ""
-    parts = parts.push(Part(kind: "text", text: buffer, start: 0, trim: false))
+  rest = buffer.join("")
+  if rest != ""
+    parts = parts.push(Part(kind: "text", text: rest, start: 0, trim: false))
   end
 
   return Diag.Outcome.Done(parts)
@@ -223,7 +225,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
   for part in parts
     if part.kind == "text"
       if !alone
-        current = current.with(text: current.text + part.text)
+        current = current.with(text: current.text.push(part.text))
       end
     elsif part.kind != "comment"
       case code_tokens(line, part)
@@ -231,7 +233,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
         Diag.Outcome.Done(code) ->
           case counted(current, part, code)
             Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-            Diag.Outcome.Done(open) -> current = with_code(at, current.with(open: open), part, code)
+            Diag.Outcome.Done(open) -> current = with_code(at, line, current.with(open: open), part, code)
           end
       end
     end
@@ -239,7 +241,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
 
   trimmed = parts.size > 0 and parts[parts.size - 1].kind != "text" and parts[parts.size - 1].trim
   if !alone and !trimmed
-    current = current.with(text: current.text + "\n")
+    current = current.with(text: current.text.push("\n"))
   end
 
   return Diag.Outcome.Done(current)
@@ -250,9 +252,8 @@ def blank_around?(parts: List[Part]) -> Bool
   return parts.all? do |part: Part| part.kind != "text" or part.text.strip == "" end
 end
 
-# The blocks still open after the code of a tag: one more for each opener word at its start and each `do`, one
-# fewer for
-# each `end`. An `end` with no block open is the error.
+# The blocks still open after the code of a tag: one more for each opener word at its start and each `do`, one fewer
+# for each `end`. An `end` with no block open is the error.
 def counted(built: Built, part: Part, code: List[Tokens.Token]) -> Diag.Outcome[List[Source.Span]]
   if part.kind != "stmt" or code.size == 0
     return Diag.Outcome.Done(built.open)
@@ -297,35 +298,43 @@ def unclosed(at: Source.Span) -> Diag.Diagnostic
   )
 end
 
-# The tokens of a tag after the text before it: `__t = __t.push("#{code}")` for `<%=`, the code and a line break for
-# `<% %>`. A tag without code gives none, but an empty `<%= %>` keeps the glue, so the parser reports it.
-def with_code(at: Source.Span, built: Built, part: Part, code: List[Tokens.Token]) -> Built
+# The tokens of a tag after the text before it: `eag#t = eag#t.push("#{code}")` for `<%=`, the code and a line break
+# for `<% %>`. A tag without code gives none, but an empty `<%= %>` keeps the glue, so the parser reports it at the
+# tag.
+def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, code: List[Tokens.Token]) -> Built
   flushed = flush(built, at)
   if part.kind == "stmt"
     if code.size == 0
       return flushed
     end
 
-    return flushed.with(tokens: flushed.tokens.concat(code).push(word("NL", "\n", code[code.size - 1].span)))
+    return flushed.with(tokens: appended(flushed.tokens, code).push(word("NL", "\n", code[code.size - 1].span)))
   end
 
-  here = at
-  if code.size > 0
-    here = Source.Span(start: code[0].span.start, stop: code[code.size - 1].span.stop)
-  end
-
+  here = tag_span(line, part)
   opened = Tokens.Token(kind: "interp-start", lexeme: "<%=", value: Tokens.Value.Text(""), span: here)
   closed = Tokens.Token(kind: "interp-end", lexeme: "%>", value: Tokens.Value.Text(""), span: here)
-  pushed = push_head(here).push(opened).concat(code).push(closed).push(word("right-paren", ")", here))
-  return flushed.with(tokens: flushed.tokens.concat(pushed).push(word("NL", "\n", here)))
+  pushed = appended(push_head(here).push(opened), code).push(closed).push(word("right-paren", ")", here))
+  return flushed.with(tokens: appended(flushed.tokens, pushed).push(word("NL", "\n", here)))
 end
 
-# The tokens `__t = __t.push(`.
+# The place of the code of a tag in the template, empty code included.
+def tag_span(line: Tokens.EagLine, part: Part) -> Source.Span
+  start = Source.Position(offset: line.start.offset + part.start, line: line.start.line, column: part.start + 1)
+  stop = Source.Position(
+    offset: start.offset + part.text.length,
+    line: start.line,
+    column: start.column + part.text.length,
+  )
+  return Source.Span(start: start, stop: stop)
+end
+
+# The tokens `eag#t = eag#t.push(`.
 def push_head(at: Source.Span) -> List[Tokens.Token]
   return [
-    name(PIECES, at),
+    name(Ast.EAG_PIECES, at),
     word("assign", "=", at),
-    name(PIECES, at),
+    name(Ast.EAG_PIECES, at),
     word("dot", ".", at),
     name("push", at),
     word("left-paren", "(", at),
@@ -334,13 +343,13 @@ end
 
 # The pending text as one push of a string, when there is any.
 def flush(built: Built, at: Source.Span) -> Built
-  if built.text == ""
+  if built.text.size == 0
     return built
   end
 
-  literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text), span: at)
+  literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text.join("")), span: at)
   pushed = push_head(at).push(literal).push(word("right-paren", ")", at)).push(word("NL", "\n", at))
-  return built.with(tokens: built.tokens.concat(pushed), text: "")
+  return built.with(tokens: appended(built.tokens, pushed), text: [])
 end
 
 # The tokens of the code of a tag, lexed from its own text and moved to where it stands in the template, without the
@@ -367,6 +376,16 @@ def moved(origin: Source.Position, at: Source.Position) -> Source.Position
     line: origin.line + at.line - 1,
     column: origin.column + at.column - 1,
   )
+end
+
+# The list with the items added at its end, one `push` each: `concat` would copy the whole token list for every tag.
+def appended(list: List[Tokens.Token], items: List[Tokens.Token]) -> List[Tokens.Token]
+  out = list
+  for item in items
+    out = out.push(item)
+  end
+
+  return out
 end
 
 def word(kind: String, lexeme: String, at: Source.Span) -> Tokens.Token
