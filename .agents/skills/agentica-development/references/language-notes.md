@@ -85,55 +85,47 @@ section for the area you are changing.
 ## File modules
 
 - The linker (`compiler/modules/declarations.agc`, called by `modules.agc`)
-  checks the declaration order of each file (`CHECK-DECL-ORDER`: imports,
-  constants, structs and enums, `export def`, `def`) when it visits it, before
-  linking, so the root, imported files, `std/` modules and BDD files all follow
-  it. The checker never sees it: the linked program has lost the file
+  checks the declaration order of each file (`CHECK-DECL-ORDER`) when it visits
+  it, before linking, so the root, imported files, `std/` modules and BDD files
+  all follow it. The checker never sees it: the linked program has lost the file
   boundaries. `compiler/` files and every new `.agc` keep the order.
-- The linker (`compiler/modules/modules.agc`, `resolve.agc`, `rewrite.agc`)
-  links parsed files before checking: canonical paths deduplicate imports and
-  detect cycles; aliases resolve only exported declarations. Dependencies get
-  unique internal identities while root names remain stable for CLI entrypoints.
-  Preserve every original span when rewriting nodes; never restart evaluation
-  for imported calls/tasks. Imports resolve relative to their source, not cwd.
-  An import path has no extension: `module_file` (`import_path.agc`) appends
-  `.agc` before resolving, so module keys, std/ registry keys and span source
-  names stay real `.agc` file names; a path ending in `.agc` gives
-  `CHECK-IMPORT-PATH` with a help showing the path without it, and an empty
-  path, a trailing `/` or a dot in the last part give the same code. Imported
-  types get an internal `@N::Name` identity; human text (printing,
-  `to_s`/`inspect`, checker messages through the type printer and `display_name`
-  on struct, enum and function names, the VM tables) shows it through
-  `display_name` in `compiler/syntax/types.agc`, so `Point` from any module
+- The linker (`modules.agc`, `resolve.agc`, `rewrite.agc`) links parsed files
+  before checking: canonical paths deduplicate imports and detect cycles;
+  aliases resolve only exported declarations. Dependencies get unique internal
+  identities while root names stay stable for CLI entrypoints. Preserve every
+  original span when rewriting nodes; never restart evaluation for imported
+  calls or tasks. Imports resolve relative to their source, not cwd. An import
+  path has no extension: `module_file` (`import_path.agc`) appends `.agc`, so
+  module keys, std/ registry keys and span source names stay real file names;
+  `CHECK-IMPORT-PATH` covers a path ending in `.agc`, an empty path, a trailing
+  `/` or a dot in the last part.
+- Imported types get an internal `@N::Name` identity; human text (printing,
+  `to_s`/`inspect`, checker messages through the type printer, the VM tables)
+  shows `display_name` (`compiler/syntax/types.agc`), so `Point` from any module
   prints `Point`; `did_you_mean` keeps only candidates with the same `@N::`
-  prefix as the name (builtins are shared) and suggests their display names.
-  Keys stay linked: `JSON.schema` `$defs` keys and `$ref`s keep the `@N::` name
-  so two imported `Point`s never collide. Alias/declaration collisions and
-  builtin-name redefinitions are rejected before renaming. as is contextual,
-  import/export are keywords.
+  prefix (builtins are shared). Keys stay linked: `JSON.schema` `$defs` keys and
+  `$ref`s keep the `@N::` name so two imported `Point`s never collide.
+  Alias/declaration collisions and builtin-name redefinitions are rejected
+  before renaming. `as` is contextual, `import`/`export` are keywords.
 - CLI check/run/dump/compile and the BDD driver's step program share this
   resolver. Raw import/export nodes passed directly to check give
-  CHECK-MODULE-CONTEXT. Exported signatures may mention private types; importers
-  cannot name/construct those types. `std/` reads the Agentica sources embedded
-  in the binary (`stdlib/MODULES`, `gen-embedded.sh`), with virtual source names
-  and no filesystem fallback. Add shipped modules to `stdlib/MODULES`. `pkg/`
-  searches entrypoint-local agc_libs, absolute AGENTICA_PATH roots, user data
-  and Unix system data (`library_roots` in resolve_import.agc holds the Windows
-  rules: `;`, drive and UNC roots, LOCALAPPDATA, no system roots); first
-  existing file wins. Skip missing candidates before normalizing the path (it
-  fails for absent parent directories); validate namespace components and
-  canonical symlink containment. Other paths remain source-relative, unless
-  their first part is a package name the importing file declares (the project's
-  manifest, or the package's own for a package file; `package_import.agc`). Then
-  the files come from `deps/<name>/` beside `agentica.toml`, hashed once per
-  build, and a package file may not import outside its package. `agc_libs/` of
-  `pkg/` sits beside `agentica.toml` when there is one. No package registry,
-  wildcard imports, module state, cycles, or receiver attachment.
-- Linking/visibility and cross-file diagnostics are tested through `--json
-  check` in the `tests/test_spec_*.py` modules and against the frozen goldens in
+  `CHECK-MODULE-CONTEXT`. Exported signatures may mention private types;
+  importers cannot name or construct them. `std/` reads the sources embedded in
+  the binary (`stdlib/MODULES`, `gen-embedded.sh`), with virtual source names
+  and no filesystem fallback; add shipped modules to `stdlib/MODULES`. `pkg/`
+  search order: `programming` skill `references/modules.md`; the Windows rules
+  are in `library_roots` (`resolve_import.agc`). Skip missing candidates before
+  normalizing the path (it fails for absent parent directories); validate
+  namespace components and canonical symlink containment. Other paths stay
+  source-relative, unless their first part is a package name the importing file
+  declares (`package_import.agc`): the files then come from `deps/<name>/`
+  beside `agentica.toml`, hashed once per build, and a package file may not
+  import outside its package.
+- Linking, visibility and cross-file diagnostics are tested through `--json
+  check` in `tests/test_spec_*.py` and against the frozen goldens in
   `tests/test_frontend_modules.py`. Unknown dotted calls without a matching
-  import alias pass to the checker so misspelled builtin calls retain
-  CHECK-UNKNOWN-NAME; unknown qualified type aliases remain CHECK-IMPORT-NAME.
+  import alias pass to the checker so misspelled builtin calls keep
+  `CHECK-UNKNOWN-NAME`; unknown qualified type aliases stay `CHECK-IMPORT-NAME`.
 
 ## Methods on builtin types
 
