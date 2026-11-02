@@ -48,18 +48,19 @@ struct Part
   trim: Bool
 end
 
-# What the lines so far gave: the tokens, the text that waits to become one push (in pieces, joined when it is used),
-# and the place of each block of a tag that no `end` has closed yet.
+# What the lines so far gave: the tokens, the text that waits to become one push (in pieces, joined when it is used)
+# with the line where it starts, and the place of each block of a tag that no `end` has closed yet.
 struct Built
   tokens: List[Tokens.Token]
   text: List[String]
+  text_at: Source.Span
   open: List[Source.Span]
 end
 
 ## The tokens of the expression for the template `body`, opened by the token `opener`, ending with an EOF token; or the
 ## first problem of a tag: `PARSE-EAG-UNTERMINATED-TAG`, `PARSE-EAG-BLOCK`, or the lexer's own for the code of a tag.
 export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[List[Tokens.Token]]
-  built = Built(tokens: [], text: [], open: [])
+  built = Built(tokens: [], text: [], text_at: opener.span, open: [])
   for line in body.lines
     case line_built(opener.span, body.indent, line, built)
       Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
@@ -129,6 +130,17 @@ end
 # the work is linear in its length. `column` is the index, in the cut line, of the `<%` that starts the piece at hand.
 def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
   pieces = line.text.slice(cut, line.text.length - cut).split("<%")
+  # The last piece with a `%>`: a tag whose code has none before it, and no later piece has one, never ends.
+  last_closing = 0
+  index = 0
+  while index < pieces.size
+    if pieces[index].include?("%>")
+      last_closing = index
+    end
+
+    index += 1
+  end
+
   parts: List[Part] = []
   buffer = [pieces[0]]
   column = pieces[0].length
@@ -158,17 +170,25 @@ def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
         kind = "comment"
       end
 
-      # A tag ends at the first `%>`, even when its code holds a `<%`, which the cut above split in two.
+      # A tag ends at the first `%>`, even when its code holds a `<%`, which the cut above split in two: the pieces up
+      # to the one with the `%>` are joined once.
       inside = piece.slice(width, piece.length - width)
-      while !inside.include?("%>") and at + 1 < pieces.size
+      if !inside.include?("%>")
+        if last_closing <= at
+          return Diag.Outcome.Failed(unterminated_tag(line, cut + column))
+        end
+
+        chunks = [inside]
         at += 1
-        inside = "#{inside}<%#{pieces[at]}"
+        while !pieces[at].include?("%>")
+          chunks = chunks.push(pieces[at])
+          at += 1
+        end
+
+        inside = chunks.push(pieces[at]).join("<%")
       end
 
       closed = inside.index_of("%>")
-      if closed.none?
-        return Diag.Outcome.Failed(unterminated_tag(line, cut + column))
-      end
 
       code = inside.slice(0, closed.unwrap!)
       trim = code.ends_with?("-")
@@ -225,7 +245,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
   for part in parts
     if part.kind == "text"
       if !alone
-        current = current.with(text: current.text.push(part.text))
+        current = current.with(text: current.text.push(part.text), text_at: text_start(current, line))
       end
     elsif part.kind != "comment"
       case code_tokens(line, part)
@@ -241,10 +261,21 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
 
   trimmed = parts.size > 0 and parts[parts.size - 1].kind != "text" and parts[parts.size - 1].trim
   if !alone and !trimmed
-    current = current.with(text: current.text.push("\n"))
+    current = current.with(text: current.text.push("\n"), text_at: text_start(current, line))
   end
 
   return Diag.Outcome.Done(current)
+end
+
+# The place where the waiting text starts: the line of its first piece, so the push of a text has that line's place.
+def text_start(built: Built, line: Tokens.EagLine) -> Source.Span
+  if built.text.size > 0
+    return built.text_at
+  end
+
+  start = line.start
+  stop = Source.Position(offset: start.offset + line.text.length, line: start.line, column: line.text.length + 1)
+  return Source.Span(start: start, stop: stop)
 end
 
 # Whether the text parts of a line are all spaces.
@@ -347,8 +378,9 @@ def flush(built: Built, at: Source.Span) -> Built
     return built
   end
 
-  literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text.join("")), span: at)
-  pushed = push_head(at).push(literal).push(word("right-paren", ")", at)).push(word("NL", "\n", at))
+  where = built.text_at
+  literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text.join("")), span: where)
+  pushed = push_head(where).push(literal).push(word("right-paren", ")", where)).push(word("NL", "\n", where))
   return built.with(tokens: appended(built.tokens, pushed), text: [])
 end
 

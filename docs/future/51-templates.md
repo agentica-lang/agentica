@@ -75,8 +75,11 @@ What follows from the block:
   (`%`, `<>`, `>`). `<>` is nearly the rule for a line with one tag (the next
   item).
 - Escaping by default.
-- `agentica type-at` and `refs` at a position inside a tag: the literal holds
-  its expansion for the checker, but the query walkers do not descend into it.
+- `agentica type-at` and `refs` at a position inside a tag are
+  `QUERY-NO-EXPRESSION`: the literal holds its expansion for the checker, but
+  the position search does not descend into it. `refs` by name, or from a
+  declaration, does find the names a tag uses; the calls the expansion makes
+  (`map`, `push`, `join`, `first`) are not listed, as they are not in the text.
 
 ### 51.4 Differences from Ruby's ERB
 

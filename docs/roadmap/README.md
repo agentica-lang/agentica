@@ -96,8 +96,8 @@ Weighed later (no fixed order):
 - **22b:** `agentica doc PATH` and `agentica help std/MODULE[.NAME]`
   ([§32.5 and §32.6](../future/32-doc-comments.md)).
 - **7.13:** EAG templates, the `<<~EAG` heredoc and `std/eag`
-  ([§51](../future/51-templates.md)); `type-at` and `refs` do not look inside a
-  tag yet.
+  ([§51](../future/51-templates.md)); `type-at` and `refs` at a position
+  inside a tag do not work yet.
 - **7.2.4 to 7.2.6:** binary data (phase 13,
   [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)), stack traces
   (14b), and `System.env` and `Path.real` for the self-hosted front end.

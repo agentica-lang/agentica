@@ -25,40 +25,40 @@ program #71 0:1:1-355:22:1
                   type: type-ref #17 137:9:10-143:9:16 name="List"
                     arg: type-ref #16 137:9:10-143:9:16 name="String"
                   value: list-lit #18 137:9:10-143:9:16 type=List(String)
-                body: binding #23 137:9:10-143:9:16 name="eag#t"
-                  value: method-call #22 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
-                    target: name-ref #20 137:9:10-143:9:16 name="eag#t" type=List(String)
-                    arg: literal #21 137:9:10-143:9:16 value=string:"<h1>" type=String
+                body: binding #23 144:10:1-185:10:42 name="eag#t"
+                  value: method-call #22 144:10:1-185:10:42 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #20 144:10:1-185:10:42 name="eag#t" type=List(String)
+                    arg: literal #21 144:10:1-185:10:42 value=string:"<h1>" type=String
                 body: binding #29 155:10:12-178:10:35 name="eag#t"
                   value: method-call #28 155:10:12-178:10:35 name="push" type=List(String) resolved=call("List.append", List(String))
                     target: name-ref #24 155:10:12-178:10:35 name="eag#t" type=List(String)
                     arg: interpolation #27 155:10:12-178:10:35 type=String
                       part: call #26 156:10:13-177:10:34 name="@2::html_escape" piped=false type=String
                         arg: name-ref #25 172:10:29-176:10:33 name="name" type=String
-                body: binding #33 137:9:10-143:9:16 name="eag#t"
-                  value: method-call #32 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
-                    target: name-ref #30 137:9:10-143:9:16 name="eag#t" type=List(String)
-                    arg: literal #31 137:9:10-143:9:16 value=string:"</h1>\n" type=String
+                body: binding #33 144:10:1-185:10:42 name="eag#t"
+                  value: method-call #32 144:10:1-185:10:42 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #30 144:10:1-185:10:42 name="eag#t" type=List(String)
+                    arg: literal #31 144:10:1-185:10:42 value=string:"</h1>\n" type=String
                 body: for-stmt #53 193:11:8-295:15:11 variable="item"
                   iterable: name-ref #34 205:11:20-210:11:25 name="items" type=List(Struct(Item))
                   body: if-stmt #52 221:12:8-281:14:11
-                    branch: if-branch #51 221:12:8-143:9:16
+                    branch: if-branch #51 221:12:8-270:13:31
                       condition: field-access #36 224:12:11-236:12:23 name="visible" type=Bool
                         target: name-ref #35 224:12:11-228:12:15 name="item" type=Struct(Item)
-                      body: binding #40 137:9:10-143:9:16 name="eag#t"
-                        value: method-call #39 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
-                          target: name-ref #37 137:9:10-143:9:16 name="eag#t" type=List(String)
-                          arg: literal #38 137:9:10-143:9:16 value=string:"<li>" type=String
+                      body: binding #40 240:13:1-270:13:31 name="eag#t"
+                        value: method-call #39 240:13:1-270:13:31 name="push" type=List(String) resolved=call("List.append", List(String))
+                          target: name-ref #37 240:13:1-270:13:31 name="eag#t" type=List(String)
+                          arg: literal #38 240:13:1-270:13:31 value=string:"<li>" type=String
                       body: binding #46 251:13:12-263:13:24 name="eag#t"
                         value: method-call #45 251:13:12-263:13:24 name="push" type=List(String) resolved=call("List.append", List(String))
                           target: name-ref #41 251:13:12-263:13:24 name="eag#t" type=List(String)
                           arg: interpolation #44 251:13:12-263:13:24 type=String
                             part: field-access #43 252:13:13-262:13:23 name="title" type=String
                               target: name-ref #42 252:13:13-256:13:17 name="item" type=Struct(Item)
-                      body: binding #50 137:9:10-143:9:16 name="eag#t"
-                        value: method-call #49 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
-                          target: name-ref #47 137:9:10-143:9:16 name="eag#t" type=List(String)
-                          arg: literal #48 137:9:10-143:9:16 value=string:"</li>\n" type=String
+                      body: binding #50 240:13:1-270:13:31 name="eag#t"
+                        value: method-call #49 240:13:1-270:13:31 name="push" type=List(String) resolved=call("List.append", List(String))
+                          target: name-ref #47 240:13:1-270:13:31 name="eag#t" type=List(String)
+                          arg: literal #48 240:13:1-270:13:31 value=string:"</li>\n" type=String
                 body: expr-stmt #57 137:9:10-143:9:16
                   value: method-call #56 137:9:10-143:9:16 name="join" type=String resolved=call("String.join", List(String))
                     target: name-ref #54 137:9:10-143:9:16 name="eag#t" type=List(String)

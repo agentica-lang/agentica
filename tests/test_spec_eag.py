@@ -251,6 +251,41 @@ end
     assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == (line, column + 3)
 
 
+def test_a_line_of_many_open_tags_without_an_end_is_reported_at_once(tmp_path):
+    # Linear work: 40,000 `<%` and no `%>` is one error at the first, found without joining the line again and again.
+    source = 'import EAG from "std/eag"\n\ndef page() -> String\n  return <<~EAG\n    a %s\n  EAG\nend\n' % ("<% x " * 40000)
+    diagnostic = problem(check(write(tmp_path, source)), "PARSE-EAG-UNTERMINATED-TAG", 1)
+    assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == where(source, "<% x ")
+
+
+def test_refs_finds_the_names_a_tag_uses_and_none_of_the_expansion(tmp_path):
+    path = write(tmp_path, '''import EAG from "std/eag"
+
+def page(names: List[String]) -> String
+  return <<~EAG
+    a
+    <% for name in names %>
+    <%= name.upcase %>
+    <% end %>
+  EAG
+end
+
+def main() -> Void
+  puts(page([]))
+end
+''')
+    def references(name):
+        result = run(cli() + ["--json", "refs", name, str(path)], env=vm_environment())
+        assert result.code == 0, result.stderr
+        # std/eag imports std/html, whose own calls are not the template's.
+        return [item for item in json.loads(result.stdout)["references"] if item["span"]["file"].endswith(path.name)]
+
+    assert [item["span"]["range"]["start"]["line"] for item in references("String.upcase")] == [7]
+    # The calls of the expansion (`map`, `first`, `join`, `push`) belong to no line of the template.
+    for hidden in ("List.map", "List.first", "String.join", "List.append"):
+        assert references(hidden) == []
+
+
 def test_the_formatter_keeps_a_template_as_written(tmp_path):
     path = write(tmp_path, PROGRAM % indented(TEMPLATE))
     result = run(cli() + ["fmt", "--check", str(path)], env=vm_environment())

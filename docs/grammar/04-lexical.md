@@ -302,9 +302,10 @@ names of the function and, since the template is a block of the function, cannot
 assign them (`CHECK-CAPTURED-ASSIGNMENT`, with a message about the template); a
 block inside a tag, such as `items.each do |i|`, cannot write output for the
 same reason, so a loop is `for i in items`. The names the expansion uses have a
-`#`, which no identifier has. `agentica type-at` and `refs` do not look inside a
-tag yet. The literal is an expression that can stand anywhere one can. The file
-must import `std/eag` in any form, or the literal is `CHECK-EAG-IMPORT`.
+`#`, which no identifier has. `agentica type-at` and `refs` at a position inside
+a tag are `QUERY-NO-EXPRESSION` yet; `refs` by name finds the names a tag uses.
+The literal is an expression that can stand anywhere one can. The file must
+import `std/eag` in any form, or the literal is `CHECK-EAG-IMPORT`.
 
 ### Regex literals
 

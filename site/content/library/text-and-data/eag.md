@@ -50,6 +50,6 @@ end
 - `<%# note %>` is dropped. `<%%` is the text `<%`. `-%>` removes the line break after the tag, and `<%-` removes the spaces before the tag when only spaces come before it on its line (Ruby's `trim_mode: "-"`).
 - One rule is not Ruby's `trim_mode: "-"`: a line that holds only one `<% %>` or `<%# %>` tag and spaces is removed whole, so a loop leaves no blank lines.
 - The body is raw text: no `\n` or other escape and no `#{}`. The common indentation is removed, as for any `<<~` heredoc, and a body may be one line. A tag ends on its line, at the first `%>` (`PARSE-EAG-UNTERMINATED-TAG`).
-- A template is an expression, so it can be returned, assigned, passed as an argument or followed by a method (`<<~EAG.length`). An error in a tag has the place of the tag in the template. `agentica type-at` and `refs` at a position inside a tag do not work yet.
+- A template is an expression, so it can be returned, assigned, passed as an argument or followed by a method (`<<~EAG.length`). An error in a tag has the place of the tag in the template. `agentica type-at` and `refs` at a position inside a tag do not work yet (`QUERY-NO-EXPRESSION`); `refs` by name finds the names a tag uses.
 
 `html_escape` replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as `ERB::Util.html_escape` does. It takes a `String`; call `to_s` on another value first. Ruby's alias `h` does not exist here.
