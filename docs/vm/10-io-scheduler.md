@@ -57,16 +57,10 @@ section says how the scheduler and the loop keep them.
   from `--max-steps` (`steps_left`). The task yields at the next instruction if
   its turn is spent. File builtins charge nothing: their work is I/O, at most 1
   MiB per call.
-- **Test switches** (tests only). `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` keeps
-  stdout and stderr on the blocking `FILE` fallback (10.2.2), so that path is
-  tested on Linux. `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge.
-  It changes only when tasks switch, never output, step counts or diagnostics,
-  so `make vm-latency` can show that the latency test fails without the rule.
-  `AGENTICA_VM_TEST_SHARED=1` calls `agc_share`, so a run on one scheduler takes
-  every lock (§16.9). `AGENTICA_VM_TEST_FRONT_END_JIT=on|always` runs the front
-  end with that JIT mode (`make vm-jit-self-compile`).
-  `AGENTICA_VM_TEST_JIT_BUDGET=N` gives the JIT a compile budget of N units
-  instead of `AGC_JIT_BUDGET`, so a small program can spend it.
+- **Test switches** (tests only; `rg AGENTICA_VM_TEST_ vm tests mk` lists them).
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge. It changes only
+  when tasks switch, never output, step counts or diagnostics, so
+  `make vm-latency` can show that the latency test fails without the rule.
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
   compute. Tasks woken during a `NOWAIT` go behind the queued ones. With N=1 the
@@ -86,15 +80,13 @@ section says how the scheduler and the loop keep them.
     the run may stop up to (N-1) turn budgets early.
   - There are no per-task step quotas. Per-task memory quotas are out of scope,
     since the Boehm heap is shared. Only a global heap limit is possible (13).
-- **As built.** The turn and its budget code are in `vm/interp.c`.
-  `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9). Under
-  `no_files` (the fuzzer) every sleep yields, and a channel, `Task.await` or
-  `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin EOF is delivered
-  once to every task that waited for the read, so a TTY reader never waits for a
-  second Ctrl-D. `Task.await` parks the caller with *retry*: when the target
-  ends, each waiter re-runs its builtin and gets the cached result. Stdin reads
-  use the same retry (a wake is only a hint, 10.2.3). A task whose bottom frame
-  returns, or leaves through `try`, is done.
+- **Retry.** `Task.sleep(0)` yields; `Task.sleep(n)` is a timer of the task
+  (§16.9). Under `no_files` (the fuzzer) every sleep yields, and a channel,
+  `Task.await` or `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin EOF
+  is delivered once to every task that waited for the read, so a TTY reader
+  never waits for a second Ctrl-D. `Task.await` and stdin reads park the caller
+  with *retry*: on a wake (only a hint, 10.2.3) the waiter re-runs its builtin
+  and gets the cached result.
 - **Await cycles (17b).** A task can receive its own handle over a channel, or
   hide it in a closure, so awaits can form a cycle. Each task waits on at most
   one task (`awaiting`). Before `Task.await` parks, it follows the chain from
@@ -122,7 +114,7 @@ section says how the scheduler and the loop keep them.
   timeout the target is untouched, and a later crash or cancel of it does not
   reach the caller.
 - **Ending with `main`.** When `main` returns, ready and parked tasks never run
-  again, and the exit path (End of run) does not wait for their jobs. A
+  again, and the exit path (§14.4) does not wait for their jobs. A
   `System.exit`, a failure in `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL`
   in any task end the run at once.
 - **Crashes (phase 24, [task rules][task-rules]).** A failure in a task crashes
@@ -139,14 +131,14 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")`. Either entry marks the crash observed. If `main`
   returns with a crash that no await observed, the run prints one summary line
   and exits with code 1.
-- **Owners (phase 24, 24b).** The rule, the owner record, the one close path and
-  the one hand-off, `Task.spawn_owning` (with `HttpWire.spawn`, 10.7.2), are in
-  §14.5. What each kind does at the close: a socket, listener or TLS socket is
-  disowned. A process closes with `shut`, which only signals (§10.4 Close),
-  never with the release that kills every child. A file closes by an `OP_CLOSE`
-  job, and a server by `close_server`. The process guard, job resources, stream
-  locks and `HttpClient` have no owner. `agc_task_spawn_owning` walks its
-  argument without `rt->sync` (§16.9, "One coarse lock").
+- **Owners (phase 24, 24b).** The rule, the one close path and the one hand-off
+  are in §14.5. What each kind does at the close: a socket, listener or TLS
+  socket is disowned. A process closes with `shut`, which only signals (§10.4
+  Close), never with the release that kills every child. A file closes by an
+  `OP_CLOSE` job, and a server by `close_server`. The process guard, job
+  resources, stream locks and `HttpClient` have no owner.
+  `agc_task_spawn_owning` walks its argument without `rt->sync` (§16.9, "One
+  coarse lock").
   - A file's close is an `OP_CLOSE` job with no task. It waits while another job
     holds the file, also a detached one (`agc_io_finish` and `end_detached` pass
     the lock on first). A file that is closing gives every caller the closed
@@ -218,10 +210,8 @@ section says how the scheduler and the loop keep them.
   plain await cycles halt before they park (`Task.await` above). For N>1 see
   §16.9, "Stall".
 - **Multi-task runs.** A runaway multi-task run must stop with
-  `RUNTIME-STEP-LIMIT` (the black-box rule, §1). The `--max-steps` sweep (§12.1)
-  needs each limit to give the full outcome, or the step limit with stdout a
-  prefix of the full run. The task fixtures keep that deterministic: their step
-  counts do not depend on the clock.
+  `RUNTIME-STEP-LIMIT` (§1, §12.1). The task fixtures keep their step counts
+  independent of the clock.
 
 #### 10.2.2 The loop
 
@@ -274,54 +264,45 @@ section says how the scheduler and the loop keep them.
   line already buffered. On Windows no `File` call waits on the loop: `probe`
   refuses a named pipe or a device with `ENOTSUP`, and the call closes it
   (§14.1).
-- **End of run: one exit path.** However the run ends (`main` returns,
-  `System.exit`, a runtime error, the step limit, a stop signal),
-  `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else
-  (§14.4):
-  1. kill the children and reap them (§14.4, step 1; 10.4, Close);
-  2. one non-blocking TLS `close_notify` on each TLS session that finished its
-     handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1). Each
-     TCP socket and listener still open is then closed the way a close from a
-     task closes it, so the peer reads the end of input: Windows resets a
-     socket left to the exit while a read is pending;
-  3. flush the blocking stdout and stderr (`fflush`, retried on `EINTR`), then
-     queue the diagnostic of a failed run as a kept notice (10.2.2), so the wait
-     below covers it. Close every open file, and wait for their flush jobs and
-     for the stdout and stderr buffers to drain. The wait first drains the pool
-     jobs that have already finished. It is bounded by the flush limit (§14.4),
-     so a FIFO whose reader stopped cannot keep the run open for ever. When it
-     runs out, the VM prints
-     `agentica: file data may not be written: the flush took longer than MS ms`
-     (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). The exit code
-     does not change. Then free what native code still owns, within the same
-     deadline (§14.4, step 3; the compute calls not started were dropped
-     before step 1); a free that does not end in time turns the warning into
-     `native resources may not be freed` (both, joined by `and`, when the files
-     ran out too);
-  4. print what is only known now without blocking (the flush-timeout warning, a
-     `RUNTIME-INTERNAL` diagnostic for a stdout or stderr write error), and end
-     with `_exit`, so libuv's destructor never joins the pool. These go through
-     `agc_notice_end` as final notices (Notices, below). No task, socket or pool
-     job other than those of step 3 is waited for. Killing the children first
-     means data buffered for a FIFO's reader is lost. A file close that fails
-     here prints `agentica: file data may not be written: the flush failed
-     (CODE: message)` (or `{"flush_failed":"CODE","warning":...}`); the exit
-     code does not change. `agc_io_close`, which closes every resource and frees
-     the loop, is only for the in-process harnesses.
+- **End of run: one exit path.** However the run ends, `agc_launch_settle` in
+  `vm/launch.c` takes the steps of §14.4 and nothing else. What the loop adds:
+  - Before the files, each TLS session that finished its handshake (TCP sockets,
+    10.3; `HttpClient` connections, 10.7.1) gets one non-blocking `close_notify`.
+    Each TCP socket and listener still open is then closed the way a close from
+    a task closes it, so the peer reads the end of input: Windows resets a
+    socket left to the exit while a read is pending.
+  - The blocking stdout and stderr are flushed (`fflush`, retried on `EINTR`),
+    then the diagnostic of a failed run is queued as a kept notice (Notices), so
+    the wait covers it. The wait closes every open file and drains the finished
+    pool jobs, then the flush jobs and the stdout and stderr buffers. It is
+    bounded by the flush limit, so a FIFO whose reader stopped cannot keep the
+    run open for ever. When it runs out, the VM prints
+    `agentica: file data may not be written: the flush took longer than MS ms`
+    (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`). A native free
+    that does not end in the same deadline turns it into `native resources may
+    not be freed` (both, joined by `and`, when the files ran out too). A file
+    close that fails prints `agentica: file data may not be written: the flush
+    failed (CODE: message)` (or `{"flush_failed":"CODE","warning":...}`). The
+    exit code never changes.
+  - What is only known now (the warnings, a `RUNTIME-INTERNAL` diagnostic for a
+    stdout or stderr write error) goes out without blocking through
+    `agc_notice_end` as final notices, and the run ends with `_exit`, so libuv's
+    destructor never joins the pool. Killing the children first means data
+    buffered for a FIFO's reader is lost. `agc_io_close`, which closes every
+    resource and frees the loop, is only for the in-process harnesses.
 - **Stop signals.** One `sigaction` handler covers `SIGINT`, `SIGTERM` and
-  `SIGHUP`, except a signal the VM started ignored (`nohup`). Its state is one
+  `SIGHUP`, except a signal the VM started ignored (`nohup`), over one
   process-wide record (`stop_status()` in `vm/loop.c`, lock-free atomics). The
   first signal is stored and wakes the loop. The scheduler checks it after every
   turn, before it waits and before it reports a stall, and the run ends as an
-  exit with code 128 + signal. `end_run` runs the steps above, then raises the
+  exit with code 128 + signal: `end_run` runs the steps above, then raises the
   signal again with its default action. A second signal ends the VM at once
-  (§14.4), but only after the children are stopped. Until then it is only
+  (§14.4), but only after the children are stopped; until then it is only
   recorded. A 3-second grace timer (`STOP_GRACE_SECONDS`) backs this up. A
   driven VM (`--driver-pid`) whose driver is gone treats even the first signal
-  as a second one. The handler has no `SA_RESTART`, so a blocking fallback
-  write that nobody reads returns `EINTR`. The run then ends as the stop (128 +
-  signal, no diagnostic), and that write is not retried. A stream on the loop
-  has no blocked write. A CPU-bound task delays the stop by at most one turn.
+  as a second one. The handler has no `SA_RESTART`, so a blocking fallback write
+  that nobody reads returns `EINTR` and is not retried; a stream on the loop has
+  no blocked write. A CPU-bound task delays the stop by at most one turn.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight), a
   `next_owner` task, and a FIFO of waiting tasks, all in GC memory. Every handle
   builtin (`read_bytes`, `read_line`, `write`, `write_bytes`, `flush`, `close`)

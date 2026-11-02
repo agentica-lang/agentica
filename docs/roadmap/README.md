@@ -60,7 +60,7 @@ Weighed later (no fixed order):
   `std/` and `pkg/`, and the Ruby-style ergonomics
   ([§25](../future/25-ruby-typed-idioms.md)).
 - **5 to 7:** the C VM core with the Boehm GC
-  (`docs/vm/12-testing-and-pr-plan.md` §12.2), tasks with the fairness rule
+  (§12.2 of `docs/vm/12-testing-and-pr-plan.md`), tasks with the fairness rule
   (`docs/vm/10-io-scheduler.md` §10.2.1), and the VM as the default backend.
 - **7.1:** processes, VM tracing (14a), TCP, TLS, HTTP 20a and BDD in Agentica
   ([phase 21](21-bdd-in-agentica.md), [`docs/bdd.md`](../bdd.md)).
