@@ -36,15 +36,10 @@ time the timed parks; run them at `--size 8` to compare a change near the
 timers, under the same rule. A new program needs `def
 scale() -> Int` returning 1 (the script rewrites it for `--size`), a
 deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
-The HTTP sanity check is apart: `python3 benchmarks/http_bench.py` (Python
-3.10 or newer) compares `examples/http_server.agc serve` on `dist/agentica run`
-with Node `http`, a Python asyncio server and Python's `ThreadingHTTPServer`
-(servers in `benchmarks/http.js` and `--serve`), all loaded by the same Node
-keep-alive client (`benchmarks/http.js client`, 4 processes), interleaved per
-round, pinned with `taskset`, and each round starts only after a 5 s
-`/proc/stat` sample shows `--min-idle` of all CPUs idle (repeated otherwise) and
-is marked disturbed when outside CPU use during it is above `--max-outside`;
-record numbers only from an idle machine, in the last section of
+The HTTP sanity check is apart: `python3 benchmarks/http_bench.py` (Python 3.10
+or newer) compares `examples/http_server.agc serve` with Node, asyncio and
+`ThreadingHTTPServer` servers under one keep-alive client, interleaved and
+pinned; record numbers only from an idle machine, in the last section of
 `docs/vm-benchmarks.md`.
 
 ## Speed work
@@ -61,8 +56,6 @@ record numbers only from an idle machine, in the last section of
   without the profile, run the old and the new binary alternately (A B A B, a
   few rounds of several runs), take the median of the round medians, record the
   load average (`uptime`) and say "measured under load" above 2.
-- On the development machine `perf` is blocked (`perf_event_paranoid` is 3,
-  no root), and valgrind and gdb are not installed: the profiler is the tool.
 - Start-up: a hello check is bound by memory it touches. Build
   like the release (`AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored`), because
   the default links the system libgc and OpenSSL as shared libraries, and the

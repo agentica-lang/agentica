@@ -279,101 +279,48 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Tests and peers
 
+Read the test files for the cases; these are the rules behind them.
+
 - Processes: `tests/test_vm_diff_8.py` checks that no grandchild outlives its
-  run: a VM child that started `sleep`, closed by `Process.close` or by a
-  `read_line` timeout, must leave no pid behind. It also covers a child that
-  ignores `SIGTERM` (close returns at once, the timer's `SIGKILL` and the
-  end-of-run deadline finish it) and one that dies on `SIGTERM` right before
-  `main` returns. Signal tests (`tests/test_vm_stop.py`,
-  `tests/test_vm_diff_8.py`) signal with `os.kill` and bound every wait. Each
-  run must end with `end code=0 signal=0` in the `io` trace. Captured children
-  run `std/bdd`'s scenario VMs: never block in their close (only the end-of-run
-  cleanup may wait, bounded), and send `SIGTERM` first, since the child VM's
-  exit path stops the programs it started. Native regression tests use
-  `vm/tests/process_test.c`, with their own C executable as the child.
-- Golden fixtures with children keep their step counts independent of timing:
-  wait for an event (`wait`, a read, `output`) before a call whose result
-  depends on it. After a stream timeout the VM answers "process is closed";
-  fixtures avoid that path.
-- TCP: `tests/test_vm_tcp.py` runs in the macOS and Windows jobs of
-  `platforms.yml`; its `system error:` texts come from `system_error()`. The
-  `tcp-*` fixtures are their own peers (a listener and its clients in one
-  program), print only from `main` after its awaits, and read bytes only after
-  the writer is done, since `recv_bytes` returns what has arrived. A connect
-  timeout has no hermetic test (it needs an address that drops SYNs), so it was
-  checked by hand. A golden fixture that needs a write to stay parked sends one
-  String far larger than the loopback buffers (64 MiB), never a loop of sends:
-  the sends that complete depend on kernel buffer sizes, and so would the step
-  count. Windows takes even a 32 MiB send whole, so the pytest case that needs a
-  timed-out send loops bounded (`CLIENT_PROGRAM` in `tests/test_vm_tcp.py`).
-- TLS: `tests/test_vm_tls.py` runs each case once, with short timeouts, small
-  payloads and no sleeps, in the macOS and Windows jobs. Its waiters case blocks
-  the CA file on a FIFO (on Windows a named pipe, `BlockingFile`). Peers print
-  LF on Windows too (`sys.stdout.reconfigure(newline="\n")`). Keep TLS goldens
-  few and small (`tls-echo`, `tls-errors`): every `--max-steps` sweep run does a
-  handshake. The `tls-*` fixtures take `@fixtures/tls` in `.args`, which
-  `fixture_arg` (`tests/vm_diff_support.py`) makes absolute, since tests and
-  `make goldens` run from different directories. Certificates come from
-  `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or newer for the expired one).
-- HTTP client: the `http-client-service` and `test-client-no-leftover` fixtures
-  hold the service task's rules. The `http-*` fixtures are their own peers (only
-  `main` prints), and the std/http URL parser costs about 500 steps per call, so
-  the sweep samples them. Other cases go in `tests/test_vm_http.py`, which
-  starts one Python peer per client case (`tests/fixtures/http-peer.py`) and
-  runs three programs once. Python 3 (standard library only) is required in CI,
-  as Node is for TCP: with `CI` set, a missing interpreter fails the test;
-  locally it skips. Bumping picohttpparser: check out the new tag inside
+  run (a child that started `sleep`, closed by `Process.close` or a `read_line`
+  timeout; one that ignores `SIGTERM`; one that dies on `SIGTERM` right before
+  `main` returns). Signal tests (`tests/test_vm_stop.py`, `test_vm_diff_8.py`)
+  signal with `os.kill` and bound every wait; each run must end with `end
+  code=0 signal=0` in the `io` trace. Captured children run `std/bdd`'s
+  scenario VMs: never block in their close (only the bounded end-of-run cleanup
+  may wait), and send `SIGTERM` first, since the child VM's exit path stops the
+  programs it started. C tests use `vm/tests/process_test.c` with their own
+  executable as the child.
+- Golden fixtures keep their step counts independent of timing: wait for an
+  event (`wait`, a read, `output`) before a call whose result depends on it;
+  avoid the "process is closed" path after a stream timeout. The `tcp-*`,
+  `http-*` and `http-server*` fixtures are their own peers (a listener and its
+  clients in one program), print only from `main` after its awaits, and read
+  bytes only after the writer is done, since `recv_bytes` returns what has
+  arrived. A golden that needs a write to stay parked sends one String far
+  larger than the loopback buffers (64 MiB), never a loop of sends (the sends
+  that complete depend on kernel buffers). A connect timeout has no hermetic
+  test (it needs an address that drops SYNs).
+- `tests/test_vm_tcp.py`, `test_vm_tls.py`, `test_vm_http.py` run in the macOS
+  and Windows jobs of `platforms.yml`; use short timeouts, small payloads, no
+  sleeps, and one case per behavior. Node (TCP, TLS, HTTP server) and Python 3
+  (TLS, HTTP) are required in CI and skipped locally. Peers print LF on
+  Windows too (`sys.stdout.reconfigure(newline="\n")`); a waiters case blocks
+  the CA file on a FIFO (a named pipe on Windows, `BlockingFile`).
+- Keep TLS goldens few and small (`tls-echo`, `tls-errors`): every `--max-steps`
+  sweep run does a handshake. The `tls-*` fixtures take `@fixtures/tls` in
+  `.args` (`fixture_arg` in `tests/vm_diff_support.py` makes it absolute);
+  certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
+  newer for the expired one). The std/http URL parser costs about 500 steps per
+  call, so the sweep samples the `http-*` fixtures.
+- HTTP server tests: every server is `HTTP.serve` (or `serve_tls`) on port 0
+  with the ports on its first line; closing its stdin ends it. A side `TCP`
+  listener tells `main` that a handler started, so the close, slow-handler and
+  `main`-returns cases do not depend on timing. Hostile requests, pipelining,
+  `max_connections` and the bounded flood run against
+  `tests/fixtures/http-server-peer.py` and `.js`; streams, uploads, WebSocket
+  (`tests/test_vm_websocket.py` with its own RFC 6455 client) and the proxy
+  (`tests/test_vm_http_proxy.py`) have their own peers in `tests/fixtures/`.
+- Bumping picohttpparser: check out the new tag inside
   `vm/third_party/picohttpparser`, `git add` it, and rerun
   `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
-- HTTP server: every server of the tests is `HTTP.serve` (or `serve_tls`).
-  `tests/test_vm_http.py` starts a VM server (plain and TLS, port 0, ports on
-  its first line) and runs `tests/fixtures/http-server-peer.py` (hostile
-  requests of §10.6 on a raw socket, `Expect`, pipelining, `max_connections`,
-  TLS, a flood that must stay bounded) and `tests/fixtures/http-server-peer.js`
-  (Node). Closing its stdin ends the server. Node and Python are required in CI.
-  The module also runs in the macOS and Windows jobs; the flood case reads the
-  VM's memory with `ps`, or on Windows with `GetProcessMemoryInfo` (ctypes).
-  `http-server*` fixtures are their own peers, and a side `TCP` listener tells
-  `main` that a handler started, so the close, slow-handler and `main`-returns
-  cases do not depend on timing. `http-server-owner-crash` crashes the task that
-  owns a live server (`Task.spawn_owning`); `http-server-owner-cancel` cancels
-  it, which frees the port.
-- HTTP streamed responses (`Answer.Stream`): `http-server-stream` is a golden
-  whose client is a raw socket in the program, and a gate channel makes the
-  producer wait until main has read a piece, so no sleep decides the order of
-  the output. `tests/test_vm_http.py` also starts a streaming VM server (plain
-  and TLS) for `tests/fixtures/http-stream-peer.py`, where `http.client` reads
-  the chunks as they arrive and times them, leaves mid-stream and sends
-  HTTP/1.0.
-- HTTP streamed requests (`RequestBody`): `tests/test_vm_http.py` runs one VM
-  server program (`UPLOAD_SERVER_PROGRAM`, one and four schedulers, plus TLS)
-  against a raw socket client: a 3 MiB body with a slow handler (backpressure),
-  keep-alive, a chunked body with a pipelined request in one write, an early
-  answer, a 413, a cut body, a bad chunk, `Expect: 100-continue`, the step
-  timeout and `HTTP.read_all`.
-- HTTP WebSocket (`Answer.Upgrade`): `tests/test_vm_websocket.py` runs one VM
-  server program (`SERVER_PROGRAM`, also with four schedulers and over TLS)
-  against `tests/fixtures/websocket_client.py`, a RFC 6455 client of its own
-  that writes frames by hand: messages of every length form, fragments with a
-  ping between them, both close handshakes, a table of broken frames and the
-  close code of each (1002, 1007, 1009), refused handshakes (400, 426, 501),
-  `idle_ms`, `ping_ms`, a peer that leaves and a close that is not answered.
-  `vm/tests/http_wire_test.c` has the head check that lets only a `GET` with one
-  `Upgrade: websocket` through.
-- HTTP client through a proxy (`HttpClientOptions.proxy`):
-  `tests/test_vm_http_proxy.py` runs one VM program against
-  `tests/fixtures/http-proxy-peer.py`, a stdlib forward proxy that refuses any
-  request target that is not in absolute form, with two origins. It asserts the
-  request line and `Host` the proxy saw for each client call, the one pooled
-  proxy connection for two origins, two clients with two proxies, an IPv6
-  literal, a proxy that is down, and the bad-proxy error. A third,
-  locked proxy answers 407 unless `Proxy-Authorization` is the Basic login of
-  `us@er` and `p:ss/w` (written in percent-encoding in the URL); the second
-  test asserts the header of each call, the 407 errors, and that the password
-  is in no output, error or trace. The peer also relays `CONNECT` (it refuses
-  port 9 with 403) to two TLS origins, and a third test runs every `https`
-  call (client, `get_response`, `post_response`, `open`, `upload`, `download`,
-  `start`) through it with `tls: some(context)` and with the system trust
-  (`SSL_CERT_FILE`): one tunnel per target, the login on the `CONNECT` only,
-  the 407 of the locked proxy, the target's own 407 as a response, a
-  certificate that fails inside the tunnel, a refused tunnel and a down proxy.

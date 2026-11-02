@@ -103,8 +103,6 @@ optional `fixture.env` (`AGENTICA_PATH=`, `XDG_DATA_HOME=`, where `@/` is the
 fixture folder), and `fixture.links` (`LINK TARGET`, made as symlinks in a
 copy).
 
-The exact text of each stage is what its golden holds (above).
-
 ## Rules for the code
 
 - Spans and positions: `references/stages.md` ("Conventions"). Node ids follow
@@ -192,11 +190,9 @@ is Ruby's when Ruby has one; another habit gets a diagnostic with a `help:`.
 
 ### Add a diagnostic code
 
-Pick a stage prefix (`LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-`,
-`RUNTIME-`). Raise it with the stage helper (`Base.bail`, `Failure.problem`) and
-a span. Test the code and the location (`start`, `covers` from `--json check`),
-as in `tests/test_spec_checker_rest.py`. A `help:` writes builtins in the Ruby
-form (`s.strip`), never the internal name.
+Raise it with the stage helper (`Base.bail`, `Failure.problem`) and a span.
+Test the code and the location (`start`, `covers` from `--json check`), as in
+`tests/test_spec_checker_rest.py`.
 
 ### Add a builtin rule
 
@@ -210,27 +206,17 @@ A trailing option of a Plain row is a default, not a second row:
 "Builtin defaults" above). Use an alternative form only for another rule or
 another result type (`Map.get`).
 
-### Add an opcode
+### Add an opcode or a pipeline stage
 
-Add an entry in `OPCODES` in `bytecode_tables.agc` and `agc_opcode` in
-`vm/value.h`, in the same order. Lower it in `lower_*.agc`, `vm/loader.c` and
-`vm/interp.c`. See "Refreeze" for the stage order.
-
-### Add a pipeline stage
-
-Create `compiler/<context>/<stage>.agc` with one entry point that returns the
-next data or one diagnostic. Wire it in `compiler/app/pipeline.agc`. Add an
-entry program that prints its text form (like `check.agc`), and the tests
-(`tests/test_frontend_<stage>.py`, a spec module). `make test` discovers them.
+See "Where new code goes" in SKILL.md; for an opcode, "Refreeze" has the stage
+order. A new stage also needs an entry program that prints its text form (like
+`check.agc`).
 
 ### Add tests
 
 A language rule runs `cli() + ["--json", "check", path]` in
-`tests/test_spec_<area>.py`. Assert the code and, when relevant, `start` and the
-covered text, never message text. Many small cases go in
-`tests/fixtures/spec/checker-rest.json` (program lines, `code`, optional
-`start`, `covers`, `help`, `expected`, `actual`, `function`, `callee`,
-`labels`). Cover the happy path, the error path and the new behavior.
+`tests/test_spec_<area>.py`; many small cases go in
+`tests/fixtures/spec/checker-rest.json`.
 
 ### Speed change to a stage (differential run against master)
 
@@ -274,41 +260,27 @@ only hashes; to see an output, run the stage by hand.
 ### Frozen comparisons
 
 The slow tiers compare the stages with the frozen outputs in
-`tests/fixtures/frontend/frozen/` (`tests/test_frontend_<stage>.py`, run through
-the product CLI). Fast cases: the bytes of examples, id ranges, invalid UTF-8,
-limit scenarios and id numbering; the rest are `@slow`. Helpers:
-`tests/frontend_support.py`, and `tests/frontend_cases.py` for inputs built from
-formulas.
+`tests/fixtures/frontend/frozen/` (`tests/test_frontend_<stage>.py`, through the
+product CLI); helpers in `tests/frontend_support.py` and `frontend_cases.py`.
 
-- `frozen/corpus/*.json` is a fixed snapshot of inputs (examples, stdlib,
-  fixtures, `compiler/`, old checker programs, site code blocks). A new
-  `stdlib/` file is not in it.
-- Seeded inputs are checked in (`lexer/generated.json`, `parser/generated.json`,
-  `check/mutated.json`, `modules/mutated.json`). Formula inputs (nesting shapes,
-  chains of 3,000 files, files over 1 MiB, programs of 300 and 1,000 functions)
-  are rebuilt by Python; the SHA-256 in the manifest must match, or the test
-  fails as a test bug.
-- Manifests `frozen/<stage>/<set>.sha256` hold, per input, the output's and the
-  input's SHA-256 and size, and the key. Small outputs are text (`*.expected`).
-  `.agcb` files hash without the length and the version text, so a release does
-  not change the freeze. Other lists: `frozen/modules/stdlib-registry.expected`
-  (a new `stdlib/` file is one line), `frozen/check/tables.expected` (a copy of
-  `check_tables.agc`).
-- Every input has a golden next to its fixture, and no golden is left over.
-  `builtins_data.agc` is not compared with a fresh generation (it is
-  hand-edited). Section and opcode coverage read the lowering goldens, which
-  cannot tell the `types` and `decodable` sections apart.
-- Fixtures that Python reads live are frozen with derived results:
-  `modules/<name>/` (hashes in `modules/ids.sha256`), `limits/limits.agc` (it
-  imports the live `compiler/`), `parser/synthetic.input`, `hello.input`, and
-  `bytecode/*.agc` (`bytecode/fast.sha256`). Editing one, or a `compiler/` file
-  that `limits.agc` imports, changes a frozen hash: refreeze and inspect the
+- `frozen/corpus/*.json` is a fixed snapshot of inputs (a new `stdlib/` file is
+  not in it). Seeded inputs are checked in; formula inputs are rebuilt by
+  Python and their SHA-256 in the manifest must match, or the test is buggy.
+- Manifests `frozen/<stage>/<set>.sha256` hold the output's and the input's
+  SHA-256 and size. `.agcb` files hash without the length and the version text,
+  so a release does not change the freeze. `stdlib-registry.expected` (a new
+  `stdlib/` file is one line) and `check/tables.expected` (a copy of
+  `check_tables.agc`) are the other lists.
+- Every input has a golden and no golden is left over. `builtins_data.agc` is
+  hand-edited, so it is not compared with a fresh generation.
+- Fixtures that Python reads live are frozen with derived results
+  (`modules/<name>/`, `limits/limits.agc`, which imports the live `compiler/`,
+  `parser/synthetic.input`, `bytecode/*.agc`): editing one, or a `compiler/`
+  file `limits.agc` imports, changes a frozen hash. Refreeze and inspect the
   diff.
 
 ## Agentica gotchas
 
-- Declaration order (`CHECK-DECL-ORDER`) and doc placement
-  (`PARSE-DETACHED-DOC`): `agentica-code-guidelines`.
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`). Compare types
   with `Types.same?`; an enum cannot be compared with `==`.
 - The VM call depth is 10,000 frames. Recurse on the tree only with a bounded
@@ -332,32 +304,24 @@ the parser rejects it (`PARSE-UNEXPECTED-TOKEN` at the dot, or at the line break
 after an operator). Do not use the form in `compiler/` until
 `bootstrap/stage0.agcb` lexes it.
 
-Top-level declarations need a blank line after `end`
-(`PARSE-MISSING-BLANK-LINE`). A `##` block is one `DOC` followed by the NL of
-its last line, not a blank line; a blank line and a `#` line both give one `NL`.
-Stray text after `end` is `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end
-their top-level `end` with `end\n\n`.
+A `##` block is one `DOC` followed by the NL of its last line, not a blank line.
+Inline test programs end their top-level `end` with `end\n\n`
+(`PARSE-MISSING-BLANK-LINE`).
 
 ## Comments and style
 
-Style and comments follow `.agents/skills/agentica-code-guidelines/`. Each
-`def`, `struct` or `enum` you add or touch in `compiler/**/*.agc` gets a `##`
-block, as in `stdlib/queue.agc`; the first `##` block, followed by a blank line,
-is the module doc. Lines are at most 119 characters, comments included
-(`[style]` of `compiler/agentica.toml`: `CHECK-LINE-TOO-LONG` in the build and
-in `make check-compiler`). The pipe-chain rule is not linted; reviews
-check it.
+Style and comments follow `.agents/skills/agentica-code-guidelines/`: a `##`
+block on each `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc`
+(`[style]` of `compiler/agentica.toml` sets the 119-column limit,
+`CHECK-LINE-TOO-LONG` in `make check-compiler`).
 
 ## The command line in Agentica
 
-`Cli.run(settings, words, hand_off) -> Int` reads the options
-(`cli_options.agc`, first error wins) and runs a command through `pipeline.agc`,
-which the BDD driver shares. A command never prints: it returns a `Reply` (code,
-stdout, stderr), and `cli.agc` writes it. `hand_off` calls `FrontEnd.hand_off`,
-so an ordinary run stays in the binary's process, with no child or temporary
-file. `agentica run` is answered in C (`vm/agentica.c`) when it is the first
-word; `cli.agc` answers a later `run` with a usage error. `cli_text.agc` keeps
-the help texts as data. Forms: `references/stages.md`.
+`Cli.run` (`references/stages.md`, "Command line") runs a command through
+`pipeline.agc`, which the BDD driver shares. A command never prints: it returns
+a `Reply` (code, stdout, stderr), and `cli.agc` writes it. `hand_off` calls
+`FrontEnd.hand_off`, so an ordinary run stays in the binary's process.
+`cli_text.agc` keeps the help texts as data.
 
 To run a `compiler/` change without the build chain:
 `dist/agentica run -- build/stage/stage2.agcb --version V --stdlib stdlib --self PATH -- WORDS`

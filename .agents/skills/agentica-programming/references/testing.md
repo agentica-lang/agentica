@@ -99,14 +99,11 @@ end
   per test (`RUNTIME-TEST-TIMEOUT`). `System.exit`, a step limit or a timeout in
   a test ends the file's run: the rest is not executed. A front-end error in a
   test file is a file error; the other files still run.
-- A passed test's output is dropped. Output is the last 64 Ki characters; stdout
-  is limited to 1 MiB per test (unread stdout too), stderr to 1 MiB for the
-  whole file (past it the file fails, not the test, when the file exits within 2
-  seconds of the cut; a file still running then is reported as the running test
-  failing with `RUNTIME-BDD-OUTPUT-LIMIT`). A file that prints more than 1 MiB
-  before `Test.run` has listed its tests is a file error with that code. A test
-  that times out keeps what it printed (at most the 1 MiB limit); one that
-  prints more than 1 MiB without ending fails at once with
-  `RUNTIME-BDD-OUTPUT-LIMIT` and shows no output if it was still running. The
-  run always has a seed; `--seed N` replays it (the report shows the seed when
-  the run fails).
+- A passed test's output is dropped; a failed one shows the last 64 Ki
+  characters. Stdout is limited to 1 MiB per test (unread stdout too) and stderr
+  to 1 MiB for the whole file: past a limit the running test fails (or the
+  file, when it exits within 2 seconds of the cut) with
+  `RUNTIME-BDD-OUTPUT-LIMIT`; a file that prints more than 1 MiB before
+  `Test.run` has listed its tests is a file error with that code. A test that
+  times out keeps what it printed. The run always has a seed; `--seed N` replays
+  it (the report shows the seed when the run fails).

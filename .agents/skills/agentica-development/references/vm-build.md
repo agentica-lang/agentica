@@ -6,44 +6,32 @@ Read first: `references/vm.md`.
 
 ## Commands
 
+`make help` and the comments of `mk/*.mk` list every target. The ones that need
+a note:
+
 ```sh
-git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser, openssl and libffi after a clone or a bump
-make                                 # dist/agentica, the one binary, from bootstrap/stage0.agcb (Linux: the system libgc, OpenSSL 3 and zlib from pkg-config, dynamic: Debian libgc-dev libssl-dev zlib1g-dev pkg-config)
-make AGENTICA_GC=vendored            # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
-make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
-make AGENTICA_ZLIB=vendored          # zlib from the submodule instead, static, built per mode with the eight codec sources; the release and non-Linux hosts build this way
-make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
-make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
-make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser, libuv and (Linux and macOS on x86_64 and arm64, Windows x64) libffi for this mode
-make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
-make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
-make stage1 stage2 stage3            # the front end stages in build/stage/ (the chain: references/ci.md)
-make fixed-point                     # stage2 == stage3, and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `checks` (part of `test`) and in `sanitizer-build`
-make stage0                          # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
-make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
-make CCACHE=                         # without ccache (used when installed and its cache dir is writable)
+git submodule update --init          # bdwgc, yyjson, libuv, picohttpparser, openssl, libffi
+make                                 # dist/agentica from bootstrap/stage0.agcb (Linux: system libgc, OpenSSL 3, zlib via pkg-config; Debian: libgc-dev libssl-dev zlib1g-dev pkg-config)
+make AGENTICA_GC=vendored            # libgc from the submodule, static (release, GC-stress, non-Linux hosts)
+make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule, static, built once per mode (needs Perl; a few minutes the first time; the release)
+make AGENTICA_ZLIB=vendored          # zlib from the submodule, static (release, non-Linux hosts)
+make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # OpenSSL build key; CI caches by its hash (vm-third-party-key: the others)
+make fixed-point                     # stage2 == stage3, and dist/agentica compiling the front end gives stage2 again
+make stage0                          # refresh bootstrap/stage0.agcb (references/ci.md, "Refreshing stage0")
+make CCACHE=                         # without ccache
 make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
-make vm-test TRACE=0                 # trace points compiled out (still type-checked); `agentica run --version` says "trace off"
+make vm-test TRACE=0                 # trace points compiled out (still type-checked)
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
-AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # the step profile at the end of the run; folded stacks and Profile.measure: agentica-programming, references/performance.md
-make vm-libfuzz                      # libFuzzer target: LIBFUZZ=1 objects (clang, coverage hooks, ASan+UBSan) in build/vm/libfuzz/
-make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run from the compiled fixtures; failures in build/vm/libfuzz/crashes/ (60 s per C PR; fuzz.yml by hand); on Linux x86-64 each accepted input also runs with the JIT (always, on) and must match the interpreter (docs/vm/11-build-ci-supply-chain.md, Fuzzing)
-make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests under TSan
-make vm-tsan-run                     # a TSan agentica running tests/test_vm_multicore.py and the modules of test-multicore-modules
-make vm-jit-test                     # goldens with AGENTICA_JIT=always, then half the shards with off; the other JIT targets: references/ci.md
-make test-multicore                  # tests/test_vm_multicore.py (--schedulers 4), then test-multicore-modules
-make layout-check BASE=REV           # the layout of plain_turn (the --jit off loop) against REV (references/ci.md)
-make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
-make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tests.md`)
-make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
-make goldens FIXTURES="name ..."     # only those fixtures (names without .agc, step-limited/ ones too); an unknown name exits 2
+AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # step profile at the end; folded stacks and Profile.measure: agentica-programming, references/performance.md
+make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run; failures in build/vm/libfuzz/crashes/ (docs/vm/11-build-ci-supply-chain.md, Fuzzing)
+make vm-gc-stress                    # GC_STRESS=1 (collect every 64 allocations), vm-test and the goldens
+make vm-tsan / vm-tsan-run           # TSAN=1 build, no libgc: the threaded C tests / tests/test_vm_multicore.py under TSan
+make goldens FIXTURES="name ..."     # rewrite tests/fixtures/vm/**/*.expected (all, or only those fixtures; an unknown name exits 2); review the diff
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures
-make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
+make vm-lint CLANG_TIDY=path         # clang-tidy 19+ over vm/*.c and vm/tests/*.c; any warning fails
 AGENTICA_REQUIRE_VM=1 make vm-diff-test JOBS=4
 dist/agentica compile prog.agc -o prog.agcb && dist/agentica run -- prog.agcb
 dist/agentica --dump-ir prog.agc
-dist/agentica prog.agc               # front end + VM in one step, in one process
 ```
 
 - CI runs `vm-sanitizers` only for the VM paths listed in the `changes` job
@@ -211,32 +199,19 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   include `uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
   `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
-- Platforms: `mk/vm.mk` picks Linux, macOS (`uname -s` is `Darwin`) or
-  Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
-  default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
-  `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
-  only drops `-pie` and RELRO. On Windows `vm/agentica.rc` (the
-  `longPathAware` manifest) is compiled with `windres`, derived from `CC`
-  (`WINDRES=` overrides it), and replaces MinGW's default manifest. Every
-  binary target ends in `$(EXE)` (`.exe` on Windows); the front end is
-  embedded as ELF, Mach-O or COFF data. The
-  `platforms.yml` matrix is in `references/ci.md`. Platform code follows
+- Platforms: `mk/vm.mk` picks Linux, macOS or Windows (MSYS2 UCRT64) in one
+  block; every binary target ends in `$(EXE)`, and `vm/agentica.rc` (the
+  `longPathAware` manifest) replaces MinGW's default on Windows. The
+  `platforms.yml` matrix is in `references/ci.md`; platform code follows
   "Platform code" in `references/vm-c.md`.
 
 ## Submodules
 
-Under `vm/third_party/`; `git submodule status` shows the pins.
-
-- `bdwgc`: Boehm GC.
-- `libuv` (MIT): its Linux sources build into `$(VM_BUILD)/libuv.a`.
-- `openssl` (Apache-2.0, shallow): with `AGENTICA_OPENSSL=vendored` (the
-  release) built static on Linux per build mode into `$(VM_BUILD)/openssl/`
-  (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md`
-  §10.0); the default `AGENTICA_OPENSSL=system` links the system OpenSSL 3.
-- `yyjson` (MIT): only its reader is built, into `$(VM_BUILD)/yyjson.o`.
-- `picohttpparser` (MIT or Perl, dual; the MIT notice is at the top of
-  `picohttpparser.h`): built like yyjson, into `$(VM_BUILD)/picohttpparser.o`;
-  only `vm/http_pico.c` includes its header.
+Under `vm/third_party/` (`git submodule status` shows the pins). `openssl` is
+built static per mode only with `AGENTICA_OPENSSL=vendored`
+(`docs/vm/10-dependencies-and-platforms.md` §10.0); `yyjson` builds only its
+reader; `picohttpparser` (MIT or Perl; the MIT notice is at the top of its
+header) is included only by `vm/http_pico.c`.
 
 ## Gotchas
 

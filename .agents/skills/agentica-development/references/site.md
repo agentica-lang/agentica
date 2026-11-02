@@ -16,19 +16,14 @@ rule that a site page shows.
   minified with the JS and HTML.
 - `make site` needs Dart Sass's `sass` on PATH or in
   `~/.local/opt/dart-sass`.
-- `make site` also needs Node; it installs `site/highlight/node_modules` with
-  `npm ci` when the package files change. After Hugo,
-  `site/highlight/highlight.mjs` colors every `agentica` block with the
-  TextMate grammar of agc-tmlanguage, copied to
-  `site/highlight/agentica.tmLanguage.json` (the source commit is the
-  `grammar` field of its `package.json`). Each token gets the Chroma class
-  whose color it should have, so `_code.scss` styles both. The script fails
-  when it finds no block. `render-codeblock.html` wraps each block in
-  `div.agc-code` for it and fails the build when such a block has Hugo
-  highlight options (`linenos`, `hl_lines`); the script fails on a block of
-  another shape or an unknown HTML entity, or when an entry of `CLASSES`
-  colors no token. `make site-serve` skips the script, so there the blocks
-  keep Hugo's Ruby colors.
+- `make site` also needs Node: after Hugo, `site/highlight/highlight.mjs` colors
+  every `agentica` block with the TextMate grammar of agc-tmlanguage (copied to
+  `site/highlight/agentica.tmLanguage.json`; its `package.json` `grammar` field
+  is the source commit). `render-codeblock.html` wraps each block in
+  `div.agc-code` for it and fails the build on Hugo highlight options
+  (`linenos`, `hl_lines`); the script fails on a block of another shape, an
+  unknown HTML entity or a `CLASSES` entry that colors no token.
+  `make site-serve` skips the script.
 - To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
   agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
 
@@ -46,13 +41,8 @@ rule that a site page shows.
 
 ## Search
 
-- `layouts/home.search.json` builds `/search.json` at build time (the
-  `search` output format of the home page in `hugo.toml`), with one entry per
-  page and the plain text split at each `h2`/`h3`, so results link to the
-  heading anchor. Never edit it by hand.
-- The UI is `_partials/search.html`, `assets/js/search.js` and
-  `assets/scss/_search.scss`: plain JS, no library; the index loads on first
-  focus.
+`/search.json` is built from `layouts/home.search.json` (never edit it by hand);
+the UI is plain JS in `assets/js/`.
 
 ## Content
 
@@ -97,20 +87,14 @@ rule that a site page shows.
 
 ## Markdown and llms.txt
 
-- Every page is also published as Markdown next to its HTML
-  (`/tour/variables/index.md`, Hugo's `markdown` output format and
-  `layouts/all.markdown.md`). `_partials/markdown-links.html` points links at
-  the other pages' `.md` URLs; it skips top-level ``` fences, backtick code
-  spans and images, but not `~~~` fences, fences of 4 or more backticks, or
-  indented fences, and `home.llms.txt` fails the build if that rewrite changes
-  (`markdown-links-check.html`).
-- Fence attributes become plain text: `{expect="CHECK-X"}` adds ``Does not
-  compile: `error[CHECK-X]` `` after the block (`RUNTIME-X`: ``Runtime error:
-  ...``), and `{file="a.agc"}` adds ``File `a.agc`:`` before it unless the
-  prose right above already ends with `` `a.agc`: ``.
-- The home page also renders `/llms.txt` (an index) and `/llms-full.txt` (every
-  page's Markdown with its source URL), in the order of
-  `_partials/llms-groups.html`, with absolute URLs from `baseURL`.
+Every page is also published as Markdown (`layouts/all.markdown.md`;
+`_partials/markdown-links.html` rewrites links to `.md` URLs, and
+`home.llms.txt` fails the build if that rewrite changes). It skips top-level
+``` fences, code spans and images, but not `~~~` or 4-backtick fences. Fence
+attributes become plain text: `{expect="CHECK-X"}` adds ``Does not compile:
+`error[CHECK-X]` `` after the block, `{file="a.agc"}` adds ``File `a.agc`:``
+before it. `/llms.txt` and `/llms-full.txt` come from
+`_partials/llms-groups.html`.
 
 ## Examples are tests
 
