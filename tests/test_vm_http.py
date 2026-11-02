@@ -1366,7 +1366,7 @@ def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte
 
 # One `serve` server for every kind of route: a page through `HTTP.app` (with a 16-byte body limit), a file sent in
 # pieces with its length, an upload counted as it arrives, and a WebSocket echo. Each upload and WebSocket end goes to
-# stdout.
+# stdout. Every body is at most 2 MiB (`max_body_bytes`).
 SERVE_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -1452,7 +1452,12 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 10000, max_connections: 16)
+  options = HttpServerOptions(
+    request_timeout_ms: 5000,
+    idle_timeout_ms: 10000,
+    max_connections: 16,
+    max_body_bytes: 2097152,
+  )
   server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
   certs = System.args()[0]
   tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
@@ -1530,6 +1535,29 @@ def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_p
     conn.close()
     finish_serve(vm)
 
+
+def test_serve_refuses_a_body_over_max_body_bytes_before_the_app_and_before_100_continue(tmp_path, adopt):
+    """HTTP.serve: a Content-Length over max_body_bytes (2 MiB in SERVE_PROGRAM) with Expect: 100-continue gets a 413
+    that closes, with no 100 first and no app run; a body within the cap gets its 100 and reaches the app."""
+    vm, port, _ = start_serve(tmp_path, adopt)
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+        conn.sendall(b"PUT /upload HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 2097153\r\n\r\n")
+        head, _ = raw_answer(conn, True)
+        assert head.split(b" ")[1] == b"413", head
+        assert b"\r\nconnection: close" in head, head
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+        conn.sendall(b"PUT /upload HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n")
+        head, rest = raw_answer(conn, False)
+        assert head.startswith(b"http/1.1 100"), head
+        conn.sendall(b"abcd")
+        got = rest
+        while not got.endswith(b"stored 4"):
+            more = conn.recv(65536)
+            assert more, "the connection closed: %r" % got
+            got += more
+        assert b"http/1.1 200" in got.lower(), got
+    assert vm.next_line() == "stored 4", "only the body within the cap reached the app"
+    finish_serve(vm)
 
 def start_serve(tmp_path, adopt, flags=()):
     source = tmp_path / "serve.agc"

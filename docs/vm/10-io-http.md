@@ -85,15 +85,17 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   bounded. `idle_timeout_ms` is the wait for the next request on a kept-alive
   connection (server), and how long an idle pooled connection is kept (client).
 - **Body limit and memory.** `max_body_bytes` defaults to 1 MiB on both sides
-  and may be raised to 64 MiB. A body is held in C once and in its `Bytes`
-  once, so body memory is at most `max_body_bytes` ×
-  `max_connections` × 4 (512 MiB with the server defaults). A program that
-  raises `max_body_bytes` must lower `max_connections`. A body over the limit
-  is an `error` on the client, and a 413 on the server, before the handler
-  runs. `HttpWire` itself takes up to 256 MiB, which only a file download
-  (`HTTP.download`, streamed in pieces of at most 1 MiB) may
-  use: the transfer stops at its `max_total_bytes`, the file never grows past
-  it, and a failed download keeps the partial file.
+  and may be raised to 64 MiB on the client and 256 MiB on the server (where
+  `serve` caps every body with it, also the ones it streams to the app). A body
+  read whole is held in C once and in its `Bytes` once, so body memory is at
+  most `max_body_bytes` × `max_connections` × 4 (512 MiB with the server
+  defaults). A program that raises `max_body_bytes` must lower
+  `max_connections`. A body over the limit is an `error` on the client, and a
+  413 on the server, before the handler runs. `HttpWire` itself takes up to 256
+  MiB, which only a file download (`HTTP.download`, streamed in pieces of at
+  most 1 MiB) and a request body streamed to a server handler may use; for a
+  download the transfer stops at its `max_total_bytes`, the file never grows
+  past it, and a failed download keeps the partial file.
 - **Bodies are bytes.** The client keeps a response body as it came, a handler
   gets the request body as it came and returns `Bytes`; `HTTP.text` decodes
   it in the `charset` of `Content-Type` when `Bytes.decode` knows it (UTF-8

@@ -625,7 +625,7 @@ Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(
 | `request_timeout_ms` | 30 s | the first request on a connection, each whole request from its first byte, and the sending of each response (the handler has no time limit) |
 | `idle_timeout_ms` | 30 s | the wait between requests on a kept connection |
 | `max_connections` | 128 | connections over it wait until one closes |
-| `max_body_bytes` | 1 MiB | each connection can hold about four times this in memory, so lower `max_connections` when you raise it |
+| `max_body_bytes` | 1 MiB | at most 256 MiB; a body read whole takes about four times this in memory per connection, so lower `max_connections` when you raise it |
 
 Bad requests never reach the handler: the server answers and closes the connection.
 
@@ -871,7 +871,7 @@ Each `listen` form above serves one kind of route. `serve` serves every kind on 
 
 A middleware of an `App` is a function from an `App` to an `App`, as for a `Handler`.
 
-- The body arrives as `listen_upload` gives it: up to 64 KiB a piece, 8 pieces held, at most 256 MiB. `max_body_bytes` of `options` does not apply. A route that wants the body whole calls `HTTP.read_all`.
+- The body arrives as `listen_upload` gives it: up to 64 KiB a piece, 8 pieces held. Every body is at most `max_body_bytes` of `options` (1 MiB by default; raise it, up to 256 MiB, for uploads). A request whose `Content-Length` is larger gets the `413` of `listen` before the app runs, with no `100 Continue` first, so a client that waits for it never sends the body. A route that wants the body whole calls `HTTP.read_all`.
 - `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, and a bad chunk gets a `400`. Both answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.
 - The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise the answer gets `Connection: close` and the connection closes after it.
 - An upgrade needs the whole body first. An `Accept` while the body is still unread gets a `500` and a close, with `http: invalid response: ...` on stderr.
