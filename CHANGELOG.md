@@ -10,6 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
+  WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
+  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
+
+## [0.21.0] - 2026-11-02
+
+### Added
+
 - `agentica help std/MODULE` lists the exports of a standard library module
   with their summaries, and `agentica help std/MODULE.NAME` prints one export
   with its signature and `##` doc (`--json` too).
@@ -17,9 +25,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`Regex.match`, `find_all`, `replace`, `split`), matched inside the VM.
 - Regex literals `/pattern/flags` (flags `i` and `m`), checked when the
   program is compiled; the file imports `std/regex`.
-- `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
-  WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
-  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 
 ### Changed
 
@@ -909,7 +914,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.20.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.21.0...HEAD
+[0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
 [0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
