@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
+#include <process.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,15 @@
 /* How many times the close of the stdin reader tries to cancel a read that has not ended. The tries are uv_sleep(1)
    apart, which is Sleep(1): about one timer tick (some 15.6 ms), so the close waits at most about 150 ms. */
 #define CANCEL_TRIES 10
+
+/* The flush of one standard C stream on a thread of its own (agc_stdio_flush): THREAD while it may still run, LOCKED,
+   an event the thread sets once it holds the stream's lock, and RESULT, an agc_stdio_flush_result, once it ended. Only
+   the main thread starts one, at the end of the run, and it closes both handles once the thread has ended. */
+typedef struct {
+  FILE *stream;
+  HANDLE thread, locked;
+  atomic_int result;
+} stdio_flusher;
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
    Windows worker thread and an overlapped one with I/O completion ports; no write waits for a reader on the loop. */
@@ -545,6 +555,61 @@ void agc_stdin_close(agc_stdin_reader *r) {
     uv_sleep(1);
   }
   uv_close((uv_handle_t *)&r->wake, reader_closed);
+}
+
+static stdio_flusher flushers[2];
+
+/* The UCRT's fflush skips the lock of a stream that has no buffer yet, so the thread takes the lock itself: the event
+   then says that the stream is the thread's, whatever its buffer. The lock is recursive, so fflush takes it again. */
+static unsigned __stdcall flush_stream(void *arg) {
+  stdio_flusher *f = arg;
+  int result = AGC_STDIO_FLUSHED;
+  _lock_file(f->stream);
+  SetEvent(f->locked);
+  while (fflush(f->stream) != 0) {
+    if (errno != EINTR) {
+      result = AGC_STDIO_FAILED;
+      break;
+    }
+    clearerr(f->stream);
+  }
+  _unlock_file(f->stream);
+  atomic_store(&f->result, result);
+  return 0;
+}
+
+/* The result of F's thread, which has ended, and its handles closed. */
+static agc_stdio_flush_result flusher_end(stdio_flusher *f) {
+  CloseHandle(f->thread);
+  CloseHandle(f->locked);
+  f->thread = f->locked = NULL;
+  return (agc_stdio_flush_result)atomic_load(&f->result);
+}
+
+agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
+  stdio_flusher *f = &flushers[stream == stderr];
+  /* A thread that an earlier call left still waits for the lock or writes. Once it has ended, its result counts: a
+     write that failed after its caller stopped waiting still fails the run. */
+  if (f->thread) {
+    if (WaitForSingleObject(f->thread, 0) == WAIT_TIMEOUT) return AGC_STDIO_BUSY;
+    if (flusher_end(f) == AGC_STDIO_FAILED) return AGC_STDIO_FAILED;
+  }
+  f->stream = stream;
+  atomic_store(&f->result, AGC_STDIO_FAILED);
+  /* The UCRT has no try-lock for a FILE, so a thread of its own waits for the lock, and the run waits at most
+     AGC_STDIO_FLUSH_WAIT_MS for it to get it; then, as ftrylockfile and fflush do on POSIX, for the write. A thread
+     that cannot start leaves the stream unflushed, as a held lock does. */
+  f->locked = CreateEventW(NULL, TRUE, FALSE, NULL);
+  if (!f->locked) return AGC_STDIO_BUSY;
+  f->thread = (HANDLE)_beginthreadex(NULL, 0, flush_stream, f, 0, NULL);
+  if (!f->thread) {
+    CloseHandle(f->locked);
+    f->locked = NULL;
+    return AGC_STDIO_BUSY;
+  }
+  if (WaitForSingleObject(f->locked, AGC_STDIO_FLUSH_WAIT_MS) != WAIT_OBJECT_0) return AGC_STDIO_BUSY;
+  WaitForSingleObject(f->thread, INFINITE);
+  return flusher_end(f);
 }
 
 void agc_exit_now(unsigned code) {

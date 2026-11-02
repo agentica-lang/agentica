@@ -37,7 +37,8 @@ EXTRAS_SHARD = 8
 # Fixtures pinned to a shard because they are costly; the others rotate over shards 1 to 7.
 HEAVY_FIXTURES = {
     "files-large.agc": 1, "process-limits.agc": 1, "tcp-exit.agc": 2, "json-decode-deep.agc": 3, "map-large.agc": 3,
-    "http-server-slow.agc": 4, "http-server-stream.agc": 4, "task-concurrent.agc": 5, "tcp-limits.agc": 5, "tcp-tasks.agc": 5,
+    "http-server-slow.agc": 4, "http-server-stream.agc": 4, "http-server-stream-backed-up.agc": 4,
+    "task-concurrent.agc": 5, "tcp-limits.agc": 5, "tcp-tasks.agc": 5,
     "process-timeouts.agc": 6, "callback-overflow.agc": 7, "tcp-errors.agc": 7}
 LIGHT_SHARD_ROTATION = (1, 2, 3, 4, 5, 6, 7)
 
@@ -60,6 +61,12 @@ SAMPLED_SWEEP = SWEEP_MODE == "sampled"
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
 ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc", "http-server-stream.agc"}
+
+# A fixture whose step count the kernel changes from run to run: how many pieces its socket buffers take before a send
+# waits changes with the system, and so does the work per piece, in both directions. A limit at T, the golden's count,
+# must finish and one at T - 1 must stop only for a fixture whose runs take exactly T steps, so the limits swept for
+# these are 1, T / 4, T / 2 and the last (the allowance, check_step_allowance, still holds the finish to 10 % over T).
+KERNEL_TIMED_FIXTURES = {"http-server-stream-backed-up.agc"}
 
 # What a run that outlived its time limit reports in place of an exit code.
 TIMEOUT = "timeout"
@@ -679,6 +686,8 @@ def total_steps(limited):
 def fixture_limits(name, steps):
     """The --max-steps limits of a fixture, around the step count T of its golden (the check of the allowance proves
     that the VM's own count is not above it)."""
+    if name in KERNEL_TIMED_FIXTURES:
+        return sorted({1, steps // 4, steps // 2, last_limit(steps)})
     if SWEEP_MODE == "ends" or (name in ENDS_ONLY_FIXTURES and SWEEP_MODE != "full"):
         return end_limits(steps)
     return sampled_limits(steps, name) if SAMPLED_SWEEP else sweep_limits(steps)

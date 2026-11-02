@@ -3,7 +3,7 @@
   "private": true,
   "description": "Highlights the agentica code blocks of the built site with the TextMate grammar of agentica-lang/agc-tmlanguage",
   "type": "module",
-  "grammar": "https://github.com/agentica-lang/agc-tmlanguage/blob/bbba2c3df6858bce6cdfbf574b4ac7cae9a0ecf1/syntaxes/agentica.tmLanguage.json",
+  "grammar": "https://github.com/agentica-lang/agc-tmlanguage/blob/83af2cb5f5a60dbcd2dcae83891b398f9bf0b723/syntaxes/agentica.tmLanguage.json",
   "dependencies": {
     "vscode-oniguruma": "2.0.1",
     "vscode-textmate": "9.3.2"

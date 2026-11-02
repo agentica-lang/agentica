@@ -15,6 +15,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   needing `import EAG from "std/eag"`; `EAG.html_escape` is Ruby's
   `ERB::Util.html_escape`. A heredoc named `EAG` is now a template, not plain
   text, and may have one line.
+
+## [0.21.0] - 2026-11-02
+
+### Added
+
 - `agentica help std/MODULE` lists the exports of a standard library module
   with their summaries, and `agentica help std/MODULE.NAME` prints one export
   with its signature and `##` doc (`--json` too).
@@ -34,12 +39,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   now gets machine code when compiled code calls it.
 - A disabled `Logger.debug` (or `info`, `warning`, `err`) call is cheaper,
   above all under the JIT.
+- `CHECK-IMPORT-IO` for a relative import says that an import is relative to
+  the importing file and names the path it tried; when the same path from the
+  project folder has the file, the help gives the form to write (`"../src/lib"`).
 
 ### Fixed
 
 - Compiling deeply nested `some(...)` or `ok(...)` calls or list literals, with
   or without a type annotation, takes time in proportion to the depth (900
   levels of `some`: from 0.13 s to 0.05 s).
+- On macOS and Windows, the end of a run no longer hangs when a `compute def`
+  call holds the lock of C `stdout` or `stderr` (blocked writing to a pipe
+  nobody reads); that stream's buffered native output may be lost, as on Linux.
 
 ## [0.20.0] - 2026-11-01
 
@@ -905,7 +916,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.20.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.21.0...HEAD
+[0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
 [0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
