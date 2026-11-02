@@ -36,38 +36,26 @@ end
 
   `parse_port` is a helper of the same file.
 
-- **How (no text scanning)**: the front end parses the file as always. A
-  small pass after parsing looks at the top-level function declarations of the
-  root file. When the file is a test file and has no `main`, the pass adds a
-  `main` declaration equivalent to `def main() -> Void` with
-  `Test.run([Test.test("parses port", &test_parses_port), ...])`. The test
-  name is the function name without `test_`, with `_` turned into spaces.
-  - The pass belongs in the linker stage: it runs in
-    `compiler/modules/linker.agc` after `Modules.load` and before
-    `rewrite_all`, so the generated code goes through the same rewrite and the
-    same checker as any code. A pass after the linker would also have to change
-    `Linked`.
-  - Only functions declared in that file count, not imported ones. A `test_`
-    in a comment or a string never counts, because the pass reads
-    declarations, not text.
-  - The generated nodes take their spans from the test function they stand for,
-    so a diagnostic about them is reported at that function. Their node ids
-    must fall inside the numbering that `Linked.ids` counts, because the checker
-    sizes its type table from it.
-  - The checker then checks the generated code like any code, so a wrong
-    signature gets a normal diagnostic at the test function. Proposed codes:
-    - `CHECK-TEST-SIGNATURE`: a `test_*` function with parameters, or a
-      return type other than `Result[Void]`. At the function.
-    - `CHECK-TEST-MAIN`: a file with both a `main` and `test_*` functions.
-      This is an error, not a rule where `main` wins, so a forgotten `main`
-      never hides tests. At `main`.
-    - A function named just `test_` has an empty test name. The PR gives it
-      an error too (proposed `CHECK-TEST-NAME`).
-  - The PR decides which stage emits each code. This design fixes the codes
-    and their spans.
-  - The runner, the protocol, tasks per test, timeouts, `--only`, seeds and
-    the report do not change. The lowering, the bytecode and the VM do not
-    change.
+- **How (no text scanning)**: a small pass after parsing looks at the top-level
+  function declarations of the root file. When the file is a test file and has no
+  `main`, it adds a `main` equivalent to `def main() -> Void` with
+  `Test.run([Test.test("parses port", &test_parses_port), ...])`; the name is the
+  function name without `test_`, with `_` turned into spaces.
+  - The pass belongs in the linker stage (`compiler/modules/linker.agc`, after
+    `Modules.load` and before `rewrite_all`), so the generated code goes through
+    the same rewrite and checker as any code; a later pass would also have to
+    change `Linked`. Only functions declared in that file count (a `test_` in a
+    comment or string never does). The generated nodes take the spans of the test
+    function they stand for, and their ids must fall inside the numbering that
+    `Linked.ids` counts (the checker sizes its type table from it).
+  - Proposed codes (the PR decides which stage emits each; this design fixes the
+    codes and spans): `CHECK-TEST-SIGNATURE` for a `test_*` function with
+    parameters or a result other than `Result[Void]`, at the function;
+    `CHECK-TEST-MAIN` for a file with both a `main` and `test_*` functions, at
+    `main` (an error, not "main wins", so a forgotten `main` never hides tests);
+    `CHECK-TEST-NAME` for a function named just `test_`.
+  - The runner, protocol, tasks per test, timeouts, `--only`, seeds and report do
+    not change, and neither do the lowering, the bytecode or the VM.
 
 - **How the driver knows it is a test file**: `agentica test` decides by name,
   in the driver only (§50.1). The front end gets that fact as a flag of the

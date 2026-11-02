@@ -14,13 +14,12 @@ decision, of the method, and of what remains; live status is in
 - While syntax was still changing, maintaining two front ends would double the
   work of every language change. Racket stayed the parity reference until 7i;
   golden-output tests replaced it when the evaluator was removed.
-- Self-hosting gives the one-file distribution and dogfooding: the compiler
-  becomes the biggest Agentica program there is.
-- Baseline, measured on 2026-10-13 with Racket CS 9.3: `raco exe --orig-exe`
-  gave a 68 MB executable that still started in about 570–630 ms, and the
-  release was about 89 MB in three files. Loading the VM as a shared library
-  through the FFI was rejected (two garbage collectors, clashes over `exit` and
-  stdio).
+- Self-hosting gives the one-file distribution and dogfooding: the compiler is
+  the biggest Agentica program there is.
+- Baseline (2026-10-13, Racket CS 9.3): `raco exe --orig-exe` gave a 68 MB
+  executable that still started in about 570 to 630 ms; the release was about
+  89 MB in three files. Loading the VM as a shared library through the FFI was
+  rejected (two garbage collectors, clashes over `exit` and stdio).
 
 ### 18.2 Bootstrap
 
@@ -31,16 +30,14 @@ compiled by Racket, later by `bootstrap/stage0.agcb`), stage2 (self-hosted,
 byte-identical to stage1), then Embed (stage2 goes into the binary as data).
 Determinism is a requirement: no timestamps, and source paths relative to the
 entry file's folder. Refresh, fixed-point and format-version rules are in the
-development skill's `references/ci.md`, "The checks of ci.yml…".
+development skill's `references/ci.md`.
 
 ### 18.3 Port
 
-Done (lexer, parser, modules and linker, builtin catalog and checker, lowering,
-bytecode writer, BDD driver, command line and single binary); the record is in
-git history (PRs #237 to #313). Source paths are stored relative to the entry
-file's folder. Each stage carries its diagnostics and dumps (`--dump`,
-`--dump-ir`), so a compiler bug is visible as a runtime error in `compiler/`,
-reported as an internal code with a stack trace.
+Done (PRs #237 to #313; the record is in git history). Source paths are stored
+relative to the entry file's folder. Each stage carries its diagnostics and
+dumps (`--dump`, `--dump-ir`), so a compiler bug is a runtime error in
+`compiler/`, reported as an internal code with a stack trace.
 
 ### 18.4 Prerequisites
 
@@ -57,11 +54,9 @@ language or the VM. The isolation decisions are in [`docs/bdd.md`](../bdd.md),
 - **Fast start (a target, not a condition; open).** `agentica check
   examples/hello.agc` at most 30 ms and 30 MB of peak RSS; `agentica check
   stdlib/bdd/gherkin.agc` at most 100 ms. The owner decided on 2026-10-15 that
-  the bootstrap goes ahead even if the Agentica front end is slower than
-  Racket, so these numbers are measured after it and are not a condition. The
-  speed pass and the current numbers are roadmap row 3 and
-  [`docs/vm-benchmarks.md`](../vm-benchmarks.md).
-- **Same results, same diagnostics.** Every golden and test passes with no
+  the bootstrap goes ahead even if the front end is slower than Racket, so these
+  are measured after it (roadmap row 3, [`docs/vm-benchmarks.md`](../vm-benchmarks.md)).
+- **Same results, same diagnostics:** every golden and test passes with no
   `make goldens` diff, and every diagnostic keeps its code and span.
 
 ### 18.6 Order
