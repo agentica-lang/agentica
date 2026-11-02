@@ -15,6 +15,7 @@ import io
 import json
 import os
 import tarfile
+import time
 import urllib.request
 
 import pytest
@@ -583,5 +584,11 @@ def test_success_leaves_no_temporary_download(setup, tmp_path):
 def test_deadline_stops_a_slow_server(setup, tmp_path):
     root = cache(tmp_path / "c0")
     sha = digest(setup["lib_tar"])
-    assert fetch(setup, root, setup["plain"] + "/slow", sha, MEMBER, "400") == (
-        "err", "PKG-FETCH", FILE, KEY + ".url")
+    started = time.monotonic()
+    answer = fetch(setup, root, setup["plain"] + "/slow", sha, MEMBER, "1000")
+    # The deadline starts with the fetch, and the cache steps before the download take from 10 to 30 ms, more on a loaded
+    # runner. A deadline that falls in them is told for the entry (`native.demo`), one that falls in the download for its
+    # url (`native.demo.url`): both are the deadline stopping the fetch, so the test takes either. What it proves is
+    # that the fetch stopped at the deadline and did not wait for the slow server, which answers after 5 s.
+    assert answer in [("err", "PKG-FETCH", FILE, KEY), ("err", "PKG-FETCH", FILE, KEY + ".url")]
+    assert time.monotonic() - started < 4.5
