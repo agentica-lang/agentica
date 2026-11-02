@@ -5,85 +5,40 @@ programs are valid and how they run.
 
 ### Types and inference
 
-- **Type:** `Int`
-  - **Rule:** Signed 64-bit integer; overflow is a runtime error
-
-- **Type:** `Float`
-  - **Rule:** IEEE 754 binary64
-
-- **Type:** `Bool`
-  - **Rule:** Only `true` and `false`; there is no truthiness
-
-- **Type:** `String`
-  - **Rule:** Unicode text; concatenation with `+`
-
-- **Type:** `Bytes`
-  - **Rule:** Immutable byte string, one byte for each item (`0..255`); no
-    literal (§6, "Bytes")
-
-- **Type:** `Nil`
-  - **Rule:** A single data value, `nil`
-
-- **Type:** `Void`
-  - **Rule:** Completion without a usable value; no literal
-
-- **Type:** `List[T]`
-  - **Rule:** Homogeneous, immutable list; `Int` indexes from zero
-
-- **Type:** `Map[K, V]`
-  - **Rule:** Homogeneous, immutable map; the key `K` is `Int`, `String` or
-    `Bytes`; keeps insertion order
-
-- **Type:** `Set[T]`
-  - **Rule:** Immutable set of distinct `Int`, `String` or `Bytes` values;
-    keeps first-insertion order
-
-- **Type:** `Result[T]`
-  - **Rule:** `ok(value)`, or `error(message)` with a `String` message
-
-- **Type:** `Optional[T]`
-  - **Rule:** `some(value)`, or `none` for a value that is missing
-
-- **Type:** `Json`
-  - **Rule:** Opaque JSON value, used through the `JSON` module
-
-- **Type:** `Range`
-  - **Rule:** Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it
-
-- **Type:** `Fn[A, ..., R]`
-  - **Rule:** Function value; the last type is its return, the others are its
-    parameters
-
-- **Type:** `Task[R]`
-  - **Rule:** Opaque lightweight task with one result type
-
-- **Type:** `Await[T]`
-  - **Rule:** Builtin enum of a timed `Task.await`: `Await.Done(value)` or
-    `Await.TimedOut`; matched with `case` like a user enum
-
-- **Type:** `LogLevel`
-  - **Rule:** Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`,
-    `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case`
-    like a user enum
-
-- **Type:** `LogEvent`
-  - **Rule:** Builtin record of `std/logger` that a log handler receives:
-    `level: LogLevel`, `message: String`, `fields: Map[String, String]`,
-    `time_ms: Int` and `task: Int`; it is not JSON-decodable
-
-- **Type:** `StructMember`
-  - **Rule:** Builtin record of `Type.members`: `name: String` and
-    `type: String`, the field name and its type written as source
-
-- **Type:** `Channel[T]`
-  - **Rule:** Opaque bounded queue of `T` values that tasks send into and
-    receive from
-
-- **Type:** `Enum[T, ...]`
-  - **Rule:** User-declared nominal sum type
-
-- **Type:** Declared struct
-  - **Rule:** Nominal type with typed, immutable fields
+- `Int`: Signed 64-bit integer; overflow is a runtime error
+- `Float`: IEEE 754 binary64
+- `Bool`: Only `true` and `false`; there is no truthiness
+- `String`: Unicode text; concatenation with `+`
+- `Bytes`: Immutable byte string, one byte for each item (`0..255`); no literal
+  (§6, "Bytes")
+- `Nil`: A single data value, `nil`
+- `Void`: Completion without a usable value; no literal
+- `List[T]`: Homogeneous, immutable list; `Int` indexes from zero
+- `Map[K, V]`: Homogeneous, immutable map; the key `K` is `Int`, `String` or
+  `Bytes`; keeps insertion order
+- `Set[T]`: Immutable set of distinct `Int`, `String` or `Bytes` values; keeps
+  first-insertion order
+- `Result[T]`: `ok(value)`, or `error(message)` with a `String` message
+- `Optional[T]`: `some(value)`, or `none` for a value that is missing
+- `Json`: Opaque JSON value, used through the `JSON` module
+- `Range`: Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it
+- `Fn[A, ..., R]`: Function value; the last type is its return, the others are
+  its parameters
+- `Task[R]`: Opaque lightweight task with one result type
+- `Await[T]`: Builtin enum of a timed `Task.await`: `Await.Done(value)` or
+  `Await.TimedOut`; matched with `case` like a user enum
+- `LogLevel`: Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`,
+  `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case`
+  like a user enum
+- `LogEvent`: Builtin record of `std/logger` that a log handler receives:
+  `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms:
+  Int` and `task: Int`; it is not JSON-decodable
+- `StructMember`: Builtin record of `Type.members`: `name: String` and `type:
+  String`, the field name and its type written as source
+- `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
+  receive from
+- `Enum[T, ...]`: User-declared nominal sum type
+- Declared struct: Nominal type with typed, immutable fields
 
 Parameters and function return types need annotations. Local variables may be
 inferred from the initializer, as in `count = 3`. An empty list, map or
