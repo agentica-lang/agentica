@@ -325,33 +325,33 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   locally it skips. Bumping picohttpparser: check out the new tag inside
   `vm/third_party/picohttpparser`, `git add` it, and rerun
   `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
-- HTTP server: `tests/test_vm_http.py` starts a VM server (plain and TLS, port
-  0, ports on its first line) and runs `tests/fixtures/http-server-peer.py`
-  (hostile requests of §10.6 on a raw socket, `Expect`, pipelining,
-  `max_connections`, TLS, a flood that must stay bounded) and
-  `tests/fixtures/http-server-peer.js` (Node). Closing its stdin ends the
-  server. Node and Python are required in CI. The module also runs in the macOS
-  and Windows jobs; the flood case reads the VM's memory with `ps`, or on
-  Windows with `GetProcessMemoryInfo` (ctypes). `http-server*` fixtures are
-  their own peers, and a side `TCP` listener tells `main` that a handler
-  started, so the close, slow-handler and `main`-returns cases do not depend on
-  timing. `http-server-owner-crash` crashes the task that owns a live server
-  (`Task.spawn_owning`); `http-server-owner-cancel` cancels it, which frees the
-  port.
-- HTTP streamed responses (`listen_stream`): `http-server-stream` is a golden
+- HTTP server: every server of the tests is `HTTP.serve` (or `serve_tls`).
+  `tests/test_vm_http.py` starts a VM server (plain and TLS, port 0, ports on
+  its first line) and runs `tests/fixtures/http-server-peer.py` (hostile
+  requests of §10.6 on a raw socket, `Expect`, pipelining, `max_connections`,
+  TLS, a flood that must stay bounded) and `tests/fixtures/http-server-peer.js`
+  (Node). Closing its stdin ends the server. Node and Python are required in CI.
+  The module also runs in the macOS and Windows jobs; the flood case reads the
+  VM's memory with `ps`, or on Windows with `GetProcessMemoryInfo` (ctypes).
+  `http-server*` fixtures are their own peers, and a side `TCP` listener tells
+  `main` that a handler started, so the close, slow-handler and `main`-returns
+  cases do not depend on timing. `http-server-owner-crash` crashes the task that
+  owns a live server (`Task.spawn_owning`); `http-server-owner-cancel` cancels
+  it, which frees the port.
+- HTTP streamed responses (`Answer.Stream`): `http-server-stream` is a golden
   whose client is a raw socket in the program, and a gate channel makes the
   producer wait until main has read a piece, so no sleep decides the order of
   the output. `tests/test_vm_http.py` also starts a streaming VM server (plain
   and TLS) for `tests/fixtures/http-stream-peer.py`, where `http.client` reads
   the chunks as they arrive and times them, leaves mid-stream and sends
   HTTP/1.0.
-- HTTP streamed requests (`listen_upload`): `tests/test_vm_http.py` runs one VM
+- HTTP streamed requests (`RequestBody`): `tests/test_vm_http.py` runs one VM
   server program (`UPLOAD_SERVER_PROGRAM`, one and four schedulers, plus TLS)
   against a raw socket client: a 3 MiB body with a slow handler (backpressure),
   keep-alive, a chunked body with a pipelined request in one write, an early
   answer, a 413, a cut body, a bad chunk, `Expect: 100-continue`, the step
   timeout and `HTTP.read_all`.
-- HTTP WebSocket (`listen_websocket`): `tests/test_vm_websocket.py` runs one VM
+- HTTP WebSocket (`Answer.Upgrade`): `tests/test_vm_websocket.py` runs one VM
   server program (`SERVER_PROGRAM`, also with four schedulers and over TLS)
   against `tests/fixtures/websocket_client.py`, a RFC 6455 client of its own
   that writes frames by hand: messages of every length form, fragments with a

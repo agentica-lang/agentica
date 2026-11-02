@@ -83,21 +83,13 @@ closes the connection (never back to the pool) and ends with an error.
 - **Job:** Upload a body produced as it goes, or bigger than 64 MiB
   - **The one form:** `HTTP.upload`
 
-- **Job:** A server whose every route answers with one whole text
-  - **The one form:** `HTTP.listen`
-
-- **Job:** A server with at least one route that streams (SSE, big downloads)
-  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(data)` for its
-    other routes (built)
-
-- **Job:** A server whose routes take uploads too big to hold
-  - **The one form:** `HTTP.listen_upload`, with `HTTP.read_all(body, max)` for
-    its small routes (built)
-
-- **Job:** A server whose routes upgrade to a WebSocket
-  - **The one form:** `HTTP.listen_websocket`, with `HTTP.accept_websocket` for
-    the routes that upgrade and `HTTP.upgrade_only(handler)` for the others
-    (built)
+- **Job:** A server, whatever its routes do (whole answers, streams, uploads
+  too big to hold, WebSockets)
+  - **The one form:** `HTTP.serve`, whose `HTTP.App` answers each request;
+    `HTTP.app(handler)` for the routes that take the request whole,
+    `HTTP.read_all(body, max)` for small bodies and `HTTP.accept_websocket` for
+    the routes that upgrade (built). The `listen` forms, one per kind of route,
+    are replaced by it.
 
 The checker cannot stop `HTTP.open` on a small response, so these pass the
 one-way test by job, as `Task.map` and channels do (§27): each form exists for

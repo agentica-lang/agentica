@@ -168,7 +168,7 @@ A `TlsContext` is the TLS setup of one role, built once and shared by every sock
   | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
 
 - A server context needs PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
-- `alpn` lists the protocols that ALPN negotiates in the handshake (`["h2", "http/1.1"]`), for a library that speaks HTTP/2 or gRPC on a TLS socket. A client offers them; a server picks the first of its own that the client offers too, and refuses the handshake when none is in common (a client that offers none gets none). `TLS.alpn(socket)` returns the protocol picked, or `""`. Each name is 1 to 255 bytes and the list at most 65535 bytes (each name takes one byte more), checked when the context is built. `HTTP.client`, `HTTP.start` and the `HTTP.listen_*_tls` forms speak HTTP/1.1 only: a context whose `alpn` is not `[]` or `["http/1.1"]` stops the program with `RUNTIME-TLS-CONTEXT-ALPN`.
+- `alpn` lists the protocols that ALPN negotiates in the handshake (`["h2", "http/1.1"]`), for a library that speaks HTTP/2 or gRPC on a TLS socket. A client offers them; a server picks the first of its own that the client offers too, and refuses the handshake when none is in common (a client that offers none gets none). `TLS.alpn(socket)` returns the protocol picked, or `""`. Each name is 1 to 255 bytes and the list at most 65535 bytes (each name takes one byte more), checked when the context is built. `HTTP.client`, `HTTP.start` and `HTTP.serve_tls` speak HTTP/1.1 only: a context whose `alpn` is not `[]` or `["http/1.1"]` stops the program with `RUNTIME-TLS-CONTEXT-ALPN`.
 - A client context sends a client certificate when `cert_file` and `key_file` name PEM files, checked as for a server. Leave both empty to send none; giving only one is an error.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 
@@ -238,7 +238,7 @@ Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
 | `TLS.connect(host, port, "ca.pem", ms)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)` |
 | `TLS.connect(host, port, ca, ms, cert, key)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: cert, key_file: key)).unwrap!, ms)` |
 | `TLS.listen(host, port, cert, key)` | `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)` |
-| `HTTP.listen_tls(host, port, cert, key, handler)` (and the `stream`, `upload` and `websocket` forms) | `HTTP.listen_tls(host, port, server_context, handler)` |
+| `HTTP.listen_tls(host, port, cert, key, handler)` (and the `stream`, `upload` and `websocket` forms) | `HTTP.serve_tls(host, port, server_context, HTTP.app(handler))` |
 | `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
 | `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
 
@@ -508,18 +508,22 @@ end
 
 ## HTTP server
 
-The server is in `std/http` too: a handler takes the whole request and returns the whole response. It runs one task per connection, with keep-alive.
+The server is in `std/http` too. `serve` serves every kind of route on one port: pages, files sent in pieces, uploads and WebSockets. It runs one task per connection, with keep-alive.
 
-### HTTP.listen
+### HTTP.serve
 
 ```text
-HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
 HTTP.local_port(server: HttpServer) -> Int
 ```
 
-- `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
-- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase), `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`) and `remote_addr`, the client's IP address without the port (`"127.0.0.1"`, `"::1"`, as [`TCP.remote_address`](#tcpremote_address) gives it; Rack's `REMOTE_ADDR`). Every server form fills `remote_addr`; behind a proxy it is the proxy's address. It defaults to `""` in `HttpRequest(...)`.
+- `serve` returns at once and serves in the background; `serve_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
+- The app, an `HTTP.App`, decides for each request how to read the body and how to answer. `HTTP.App` is `Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`: it gets the request with an empty `body` and the body on a channel ([request bodies](#request-bodies)).
+- `HTTP.Answer` is an enum. `Answer.Whole(response)` answers with an `HttpResponse`. `Answer.Stream(response)` sends an `HTTP.StreamResponse`, whose body arrives on a channel ([streamed responses](#streamed-responses-and-server-sent-events)). `Answer.Upgrade(upgrade)` takes what [`accept_websocket`](#websockets) returns: its `Accept` runs the WebSocket on the connection, and its `Reply` is sent as `Whole`.
+- `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (1 MiB unless given, whatever the server's cap; a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, a chunk line or trailer section over the head limits a `431`, and a bad chunk a `400`. These answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.
+- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase), `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`) and `remote_addr`, the client's IP address without the port (`"127.0.0.1"`, `"::1"`, as [`TCP.remote_address`](#tcpremote_address) gives it; Rack's `REMOTE_ADDR`). The server fills `remote_addr`; behind a proxy it is the proxy's address. It defaults to `""` in `HttpRequest(...)`.
 
 A server that fetches its own page:
 
@@ -535,7 +539,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
   client = HTTP.client().unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   response = HTTP.get(client, base + "/").unwrap!
@@ -552,330 +556,6 @@ end
 ```
 
 The server adds `Content-Length` (not on 204 and 304, whose body must be empty), a `Date` header unless the handler set one, and `Connection: close` when the request or response asked for it. `HEAD` gets the headers without the body.
-
-#### Handler and middleware
-
-`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. `HTTP.UpgradeHandler` is the one of [`listen_websocket`](#httplisten_websocket), whose handler answers or upgrades. `HTTP.App` is the one of [`serve`](#httpserve), which serves all these kinds of route on one port. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
-
-A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result.
-
-```agentica
-import HTTP from "std/http"
-
-def handler(f: HTTP.Handler) -> HTTP.Handler
-  return f
-end
-
-def hello(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
-end
-
-def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
-  response = next.call(request)
-  case response
-    ok(answer) -> puts("#{request.method} #{request.path} #{answer.status}")
-    error(_) -> puts("#{request.method} #{request.path} failed")
-  end
-
-  return response
-end
-
-# Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
-def logged(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request| log_answer(next, request) end
-end
-
-def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
-  if HTTP.header_values(request.headers, "authorization").empty?
-    return ok(HttpResponse(status: 401, headers: [], body: "".bytes))
-  end
-
-  return next.call(request)
-end
-
-# Answers 401 to a request without an Authorization header, and does not call the next handler.
-def guarded(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request| authorized(next, request) end
-end
-
-def main() -> Void
-  app = logged(guarded(&hello))
-  open = HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes)
-  signed = HttpRequest(method: "GET", target: "/", path: "/", headers: [Header(name: "authorization", value: "token")], body: "".bytes)
-  app.call(open)
-  app.call(signed)
-end
-```
-
-```output
-GET / 401
-GET / 200
-```
-
-Handler errors:
-
-- A handler returning `error(message)` gives the client a 500 with an empty body and closes the connection. stderr gets `http: handler error: <message>`.
-- A response that cannot be sent gets the same 500 and close, with `http: invalid response: <reason>` on stderr: status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304.
-- A runtime error in a handler ends only its connection. The program goes on but exits with code 1 at the end, as for any unawaited task crash.
-
-Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(max_connections: 16)` changes one, and a call without `options` uses them all. The same checks as the client options apply.
-
-| Option | Default | Bounds |
-|---|---|---|
-| `request_timeout_ms` | 30 s | the first request on a connection, each whole request from its first byte, and the sending of each response (the handler has no time limit) |
-| `idle_timeout_ms` | 30 s | the wait between requests on a kept connection |
-| `max_connections` | 128 | connections over it wait until one closes |
-| `max_body_bytes` | 1 MiB | at most 256 MiB; a body read whole takes about four times this in memory per connection, so lower `max_connections` when you raise it |
-
-Bad requests never reach the handler: the server answers and closes the connection.
-
-| Status | Cause |
-|---|---|
-| 400 | malformed |
-| 413 | a body over `max_body_bytes` |
-| 417 | an `Expect` other than `100-continue` |
-| 431 | headers too long or too many |
-| 501 | `CONNECT`, or `Upgrade` (except a WebSocket handshake on a `listen_websocket` or `serve` server) |
-| 505 | not `HTTP/1.1` |
-
-Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
-
-### HTTP.listen_stream and Server-Sent Events
-
-```text
-HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.whole(data: Bytes) -> Channel[Bytes]
-
-HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
-```
-
-For a body that is not ready when the handler returns: events, tokens as a model makes them, a big file. The handler returns a `StreamResponse` whose `body` is a [channel](/library/concurrency/task/), and a task it started sends the pieces and closes the channel at the end.
-
-- The server sends the head at once, then each piece as it arrives, as one flushed chunk (`Transfer-Encoding: chunked`), and ends the body when the channel closes. The handler sets neither `Content-Length` nor `Transfer-Encoding`. The pieces are `Bytes`, sent as they are with no UTF-8 check, so a stream can carry a file or any binary data (a piece over 512 KiB is split into several chunks). An empty piece is skipped.
-- A body whose size is known up front (a big file read in pieces) sets `length: some(n)`. The head then has `Content-Length: n` and the pieces go out raw, with no chunk framing. A body that ends short of `n`, or a piece that would pass `n`, closes the connection, so the client sees an incomplete body and never reads past the length. The body ends as soon as `n` bytes are sent, without waiting for the channel to close, so the connection serves the next request at once: the server closes the channel then, and a producer that goes on gets `error("channel: closed")` and stops. A piece after the body is full is not read; a piece that crosses `n` is the cut above. A closed body whose size is not `n` is the 500 of `listen`, as is a `length` on a 204 or 304 answer. `HEAD` gets the head with the length and no body.
-- A route that answers with one text or file uses `body: HTTP.whole(data)`, a closed channel holding that `Bytes` (`"text".bytes` for a text). The server then sends `Content-Length`, as `listen` does. It does the same for any body that is already closed when the handler returns.
-- The server reads the connection for the whole stream. When the client's input ends (it left, or it only half-closed its sending side) or a send fails, the server closes the channel, so the producer's next `send` returns `error("channel: closed")` and it stops. A producer that sends rarely can look at `body.closed?` as well. The body is then cut without its last chunk, so the client sees an incomplete body, not a finished one. Only the producer closing the channel ends the body cleanly.
-- The producer must close the channel on every path. A producer that never closes it holds the stream until the client leaves: there is no maximum age.
-- Bytes the client sends during the stream (a pipelined request) are dropped, and the connection closes when the stream ends; the server keeps watching, so a client that leaves later is still noticed.
-- A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
-- A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds the send of each piece (and of a whole body sent with `Content-Length`): a client that stops reading for that long is cut off, and the channel closes.
-- `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for `listen`, and the channel closes.
-- The server speaks HTTP/1.1 only: an HTTP/1.0 request gets a 505 before any handler runs, streaming or not.
-
-Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pieces are `data: ...` lines ended by a blank line:
-
-```agentica
-import HTTP from "std/http"
-
-def produce(events: Channel[Bytes]) -> Void
-  for n in 1..3
-    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
-      break
-    end
-
-    Task.sleep(100)
-  end
-
-  events.close
-end
-
-def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
-  if request.method == "GET" and request.path == "/events"
-    events: Channel[Bytes] = Channel.new(8)
-    Task.spawn(&produce, events)
-    headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
-    return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
-  end
-
-  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n".bytes)))
-end
-
-def main() -> Void
-  server = HTTP.listen_stream("127.0.0.1", 0, &handle).unwrap!
-  client = HTTP.client().unwrap!
-  base = "http://127.0.0.1:#{HTTP.local_port(server)}"
-  response = HTTP.get(client, base + "/events").unwrap!
-  puts(HTTP.header_values(response.headers, "transfer-encoding"))
-  puts(HTTP.text(response.body, response.headers).unwrap!)
-  puts(HTTP.get(client, base + "/missing").unwrap!.status)
-  HTTP.close_client(client)
-  HTTP.close_server(server)
-end
-```
-
-```output
-["chunked"]
-data: tick 1
-
-data: tick 2
-
-data: tick 3
-
-
-404
-```
-
-`HTTP.get` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
-
-### HTTP.listen_upload
-
-```text
-HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_upload_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
-```
-
-`listen` reads the whole body before the handler runs. For an upload too big to hold, or one the handler stores as it comes (a file), `listen_upload` gives the handler the body on a channel. It is the server side of [`HTTP.upload`](#httpopen-and-httpupload), and it has the shape of `listen_stream`: another kind of handler, not a field of `HttpRequest`, so `HttpRequest`, `HTTP.Handler` and every existing handler stay as they are.
-
-`HTTP.UploadHandler` is `Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]`: it gets the request with an empty `body`, the `HTTP.RequestBody`, and returns the whole response, as a `Handler` does.
-
-- `HTTP.RequestBody` has `pieces` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task of the server feeds `pieces` with the body as it arrives (up to 64 KiB each, never empty, a chunked body already decoded) and closes it on every path. A request with no body gets a closed channel at once.
-- The handler runs the usual receive loop until the closed error, then awaits `done`: `ok` means the whole body arrived, and an `error` says why it did not (the client left, a bad chunk, a timeout). A channel can only end, so `done` is the only way to tell a whole body from a cut one: always await it.
-- The channel holds 8 pieces. A handler that reads slowly makes the server wait, and the client's data waits in the socket, so memory stays bounded.
-- `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the handler has not taken), not the time of the whole upload. `max_body_bytes` does not apply: a streamed body is at most 256 MiB, and a handler that wants less counts the bytes and answers `413`.
-- The connection stays for the next request only when the whole body had arrived by the time the handler returned. Otherwise (a handler that answers first, with a `413` or a `401`, or a body that failed) the answer gets a `Connection: close` header and the connection closes after it, so a client still sending may see the close before it reads the answer.
-- `Expect: 100-continue` is answered with `100` before the handler runs, so a handler cannot refuse an upload before the client sends the body. The checks that come before the handler still answer first: a body over 256 MiB (`413`), and a `Transfer-Encoding` or `Content-Length` that is not valid.
-- `HTTP.read_all(body, max_bytes)` collects the body for a handler that wants it whole, so one `listen_upload` server can serve its small routes simply: it returns the pieces joined as a `Result[Bytes]`, an `error` when the body is longer than `max_bytes` (answer `413`) or did not arrive whole (it awaits `done`).
-- The handler's `error(message)` is a 500 as for `listen`. Routes that need the whole body in memory are simpler with `listen`.
-
-A server that counts an upload, and the client call that streams one to it:
-
-```agentica
-import HTTP from "std/http"
-
-def count(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
-  total = 0
-  while true
-    case body.pieces.recv(5000)
-      ok(piece) -> total = total + piece.size
-      error(_) -> break
-    end
-  end
-
-  try Task.await(body.done)
-  return ok(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes))
-end
-
-def feed(into: Channel[Bytes]) -> Void
-  into.send("hello ".bytes, 1000)
-  into.send("world".bytes, 1000)
-  into.close
-end
-
-def main() -> Void
-  server = HTTP.listen_upload("127.0.0.1", 0, &count).unwrap!
-  into: Channel[Bytes] = Channel.new(2)
-  Task.spawn(&feed, into)
-  url = "http://127.0.0.1:#{HTTP.local_port(server)}/"
-  response = HTTP.upload("PUT", url, into).unwrap!
-  puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
-  HTTP.close_server(server)
-end
-```
-
-```output
-200 11 bytes
-```
-
-### HTTP.listen_websocket
-
-```text
-HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.listen_websocket_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
-HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
-```
-
-`listen_websocket` serves HTTP/1.1 as `listen` does and also upgrades a request to a WebSocket (RFC 6455). It is a fourth kind of handler next to `listen`, `listen_stream` and `listen_upload`, so `HTTP.Handler` and every existing handler stay as they are. Every other `listen` form answers a request with an `Upgrade` header 501, as before.
-
-`HTTP.UpgradeHandler` is `Fn[HttpRequest, Result[HTTP.Upgrade]]`. `HTTP.Upgrade` is an enum: `Upgrade.Reply(response)` answers the request as `listen` does (and the connection serves the next request), and `Upgrade.Accept(...)` upgrades it; make an `Accept` with `accept_websocket`, never by hand. `upgrade_only` makes an `UpgradeHandler` from an ordinary `Handler`, so a server mixes its plain routes and its WebSocket routes, and a router such as Bond's is wrapped once.
-
-- `accept_websocket(request, session, options)` checks the handshake: a `GET` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key` that is 16 bytes in base64. A request that is not one gets an `Upgrade.Reply`: `426` with `Sec-WebSocket-Version: 13` for another version, `400` for the rest. The head reader lets only a `GET` with one `Upgrade: websocket` through, so any other `Upgrade` (`h2c`, a `POST`) is the `501` of every server. A route that does not call `accept_websocket` ignores the headers.
-- `session` is a `HTTP.WebSocketSession`, `Fn[HTTP.WebSocket, Result[Void]]`. The server writes the `101` answer and runs it in the task of the connection. When it returns, the server sends a close frame (code 1000, or 1011 and a warning for an `error`) unless the session already sent one, waits for the peer's close frame, and closes the connection.
-- `HTTP.WebSocket` has `incoming` and `outgoing`, both `Channel[HTTP.Message]` of 8 messages, and `protocol`, the subprotocol that was agreed on (`""` for none). A handler that does not read makes the server stop reading the socket, and one that sends faster than the peer reads waits in `send`. A session must keep taking messages from `incoming` (or end): while it does not, the server does not read the socket, so pings and the peer's close go unanswered. `incoming` closes after the `Close` message, and `outgoing` closes when the connection is over, so a send then is an `error`.
-- `HTTP.Message` is `Text(String)`, `Binary(Bytes)`, `Ping(Bytes)`, `Pong(Bytes)` and `Close(Int, String)`, the code and the reason. A received `Text` or `Binary` is a whole message: the fragments are joined, and a text message is checked as UTF-8. The server answers every received ping with a pong and does not hand it on; a `Pong` is handed on. A `Ping` or `Pong` carries at most 125 bytes (more is cut).
-- A `Close` is the last message the handler receives, whatever ended the connection: the peer's close frame with its code and reason, a frame that broke the rules (the code of the answer: 1002, 1007 or 1009), or the loss of the connection (code 1006, since no close frame came). Sending `Close(code, reason)` starts the close handshake; a code that cannot be sent (below 1000, 1004 to 1006, 1015 to 2999, past 4999) is sent as 1011, and a reason is cut to 123 bytes.
-- The server checks every frame of the peer: it must be masked, with no reserved bit, a known opcode, a control frame whole and of at most 125 bytes, fragments in order, text as UTF-8 and a close code that a peer may send. A broken frame is answered with a close frame (1002 protocol error, 1007 invalid data, 1009 too big) and the connection ends. The server never masks its frames and accepts no extension, so nothing is compressed.
-- `HTTP.WebSocketOptions` has `max_message_bytes` (default 1 MiB, 1 to 256 MiB: a message past it, in one frame or joined from fragments, closes with 1009, and a frame that announces it is refused before its payload is read), `idle_ms` (default 0, no limit but a year, since a read that times out closes the socket: the longest the server waits for the peer to send anything, after which the connection is dropped and the handler gets `Close` with 1006), `ping_ms` (default 0, none: the server sends a ping after that many milliseconds with nothing to write, so with `ping_ms` below `idle_ms` the pongs keep a live peer) and `close_ms` (default 5000: how long the server waits for the peer's answer to its close frame) and `protocols` (the subprotocols it speaks, in order of preference: the first one the client offered in `Sec-WebSocket-Protocol` is agreed on).
-- `request_timeout_ms` of `HttpServerOptions` bounds the handshake and each write of a frame. A WebSocket counts against `max_connections` for as long as it lives. `idle_timeout_ms` does not apply after the upgrade.
-- The server does not check `Origin`. A browser sends it with every handshake, and a handler that serves pages of its own should compare it with `HTTP.header_values(request.headers, "origin")` before it accepts, since a page of another site can open a WebSocket to it with the visitor's cookies.
-- Known limit: the mask of a frame is taken off in a loop over the bytes, at about 7 MB/s, so a message of a few MiB costs a fraction of a second of its connection's task. Keep `max_message_bytes` at what the application needs.
-
-An echo server that mixes a plain route and a WebSocket route:
-
-```agentica {mode="check"}
-import HTTP from "std/http"
-
-def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
-  case message
-    HTTP.Message.Text(text) ->
-      try ws.outgoing.send(HTTP.Message.Text("echo: #{text}"), 5000)
-      return ok(true)
-    HTTP.Message.Binary(data) ->
-      try ws.outgoing.send(HTTP.Message.Binary(data), 5000)
-      return ok(true)
-    HTTP.Message.Close(_, _) -> return ok(false)
-    _ -> return ok(true)
-  end
-end
-
-def echo(ws: HTTP.WebSocket) -> Result[Void]
-  while true
-    case ws.incoming.recv(60000)
-      ok(message) ->
-        if not try relay(ws, message)
-          return ok()
-        end
-
-      error(_) -> return ok()
-    end
-  end
-
-  return ok()
-end
-
-def home(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
-end
-
-def route(request: HttpRequest) -> Result[HTTP.Upgrade]
-  if request.path == "/echo"
-    return HTTP.accept_websocket(request, &echo)
-  end
-
-  return HTTP.upgrade_only(&home).call(request)
-end
-
-def main() -> Void
-  server = HTTP.listen_websocket("127.0.0.1", 8080, &route).unwrap!
-  HTTP.wait(server)
-end
-```
-
-### HTTP.serve
-
-```text
-HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
-```
-
-Each `listen` form above serves one kind of route. `serve` serves every kind on one port: pages, files sent in pieces, uploads and WebSockets. Its handler, an `HTTP.App`, decides for each request how to read the body and how to answer.
-
-`HTTP.App` is `Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`. It gets the request with an empty `body` and the body on a channel, as an [`UploadHandler`](#httplisten_upload) does. `HTTP.Answer` is an enum:
-
-- `Answer.Whole(response)` answers with an `HttpResponse`, as a `Handler` does.
-- `Answer.Stream(response)` sends an `HTTP.StreamResponse`, with the rules of [`listen_stream`](#httplisten_stream-and-server-sent-events).
-- `Answer.Upgrade(upgrade)` takes what [`accept_websocket`](#httplisten_websocket) returns: its `Accept` runs the WebSocket on the connection, and its `Reply` is sent as `Whole`.
-
-A middleware of an `App` is a function from an `App` to an `App`, as for a `Handler`.
-
-- The body arrives as `listen_upload` gives it: up to 64 KiB a piece, 8 pieces held. Every body is at most `max_body_bytes` of `options` (1 MiB by default; raise it, up to 256 MiB, for uploads). `HTTP.app` keeps its own limit (1 MiB unless given), so a route under it that takes larger bodies raises both. A request whose `Content-Length` is larger gets the `413` of `listen` before the app runs, with no `100 Continue` first, so a client that waits for it never sends the body. A route that wants the body whole calls `HTTP.read_all`.
-- `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (1 MiB unless given, whatever the server's cap; a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, and a bad chunk gets a `400`. Both answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.
-- The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise the answer gets `Connection: close` and the connection closes after it.
-- An upgrade needs the whole body first. An `Accept` while the body is still unread gets a `500` and a close, with `http: invalid response: ...` on stderr.
-- A handler error is the `500` of `listen`. As with `listen`, the server sets no limit on the time of the app. Every other rule (the options, the bad requests, `HTTP.wait` and `HTTP.close_server`) is the same as for the other forms.
 
 A server with a page, a file sent in pieces, an upload and a WebSocket on one port:
 
@@ -950,6 +630,309 @@ def main() -> Void
 end
 ```
 
+#### Handler and middleware
+
+`HTTP.Handler` is the type of a route that takes the request whole: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.App` is the type of the app of `serve`. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
+
+A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result. A middleware of an `App` is a function from an `App` to an `App` in the same way.
+
+```agentica
+import HTTP from "std/http"
+
+def handler(f: HTTP.Handler) -> HTTP.Handler
+  return f
+end
+
+def hello(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
+end
+
+def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  response = next.call(request)
+  case response
+    ok(answer) -> puts("#{request.method} #{request.path} #{answer.status}")
+    error(_) -> puts("#{request.method} #{request.path} failed")
+  end
+
+  return response
+end
+
+# Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
+def logged(next: HTTP.Handler) -> HTTP.Handler
+  return handler() do |request| log_answer(next, request) end
+end
+
+def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
+  if HTTP.header_values(request.headers, "authorization").empty?
+    return ok(HttpResponse(status: 401, headers: [], body: "".bytes))
+  end
+
+  return next.call(request)
+end
+
+# Answers 401 to a request without an Authorization header, and does not call the next handler.
+def guarded(next: HTTP.Handler) -> HTTP.Handler
+  return handler() do |request| authorized(next, request) end
+end
+
+def main() -> Void
+  app = logged(guarded(&hello))
+  open = HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes)
+  signed = HttpRequest(method: "GET", target: "/", path: "/", headers: [Header(name: "authorization", value: "token")], body: "".bytes)
+  app.call(open)
+  app.call(signed)
+end
+```
+
+```output
+GET / 401
+GET / 200
+```
+
+App and handler errors:
+
+- An app or handler returning `error(message)` gives the client a 500 with an empty body and closes the connection. stderr gets `http: handler error: <message>`.
+- A response that cannot be sent gets the same 500 and close, with `http: invalid response: <reason>` on stderr: status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304.
+- A runtime error in an app or handler ends only its connection. The program goes on but exits with code 1 at the end, as for any unawaited task crash.
+
+Every field of `HttpServerOptions` has the default below, so `HttpServerOptions(max_connections: 16)` changes one, and a call without `options` uses them all. The same checks as the client options apply.
+
+| Option | Default | Bounds |
+|---|---|---|
+| `request_timeout_ms` | 30 s | the first request on a connection, each whole request from its first byte, and the sending of each response (the app has no time limit) |
+| `idle_timeout_ms` | 30 s | the wait between requests on a kept connection |
+| `max_connections` | 128 | connections over it wait until one closes |
+| `max_body_bytes` | 1 MiB | at most 256 MiB; a body read whole takes about four times this in memory per connection, so lower `max_connections` when you raise it |
+
+Bad requests never reach the app: the server answers and closes the connection.
+
+| Status | Cause |
+|---|---|
+| 400 | malformed |
+| 413 | a body over `max_body_bytes` |
+| 417 | an `Expect` other than `100-continue` |
+| 431 | headers too long or too many |
+| 501 | `CONNECT`, or an `Upgrade` other than a WebSocket handshake |
+| 505 | not `HTTP/1.1` |
+
+Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
+
+### Request bodies
+
+```text
+HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
+```
+
+The app gets the body on a channel, so an upload too big to hold, or one the app stores as it comes (a file), never has to be in memory whole. It is the server side of [`HTTP.upload`](#httpopen-and-httpupload).
+
+- `HTTP.RequestBody` has `pieces` (a `Channel[Bytes]`) and `done` (a `Task[Result[Void]]`). A task of the server feeds `pieces` with the body as it arrives (up to 64 KiB each, never empty, a chunked body already decoded) and closes it on every path. A request with no body gets a closed channel at once.
+- The app runs the usual receive loop until the closed error, then awaits `done`: `ok` means the whole body arrived, and an `error` says why it did not (the client left, a bad chunk, a timeout, a body over the cap). A channel can only end, so `done` is the only way to tell a whole body from a cut one: always await it.
+- The channel holds 8 pieces. An app that reads slowly makes the server wait, and the client's data waits in the socket, so memory stays bounded.
+- Every body is at most `max_body_bytes` of `options` (1 MiB by default; raise it, up to 256 MiB, for uploads). `HTTP.app` keeps its own limit (1 MiB unless given), so a route under it that takes larger bodies raises both. A request whose `Content-Length` is larger gets a `413` before the app runs, with no `100 Continue` first, so a client that waits for it never sends the body. A chunked body that grows past the cap ends `done` with the error of `read_all`, which `HTTP.app` answers `413`.
+- `Expect: 100-continue` within the cap is answered with `100` before the app runs, so an app cannot refuse an upload before the client sends the body.
+- `request_timeout_ms` is the wait of each step (each read of the socket, and each piece the app has not taken), not the time of the whole upload.
+- The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise (an app that answers first, with a `413` or a `401`, or a body that failed) the answer gets `Connection: close` and the connection closes after it, so a client still sending may see the close before it reads the answer.
+- `HTTP.read_all(body, max_bytes)` collects the body for a route that wants it whole: it returns the pieces joined as a `Result[Bytes]`, an `error` when the body is longer than `max_bytes` (answer `413`) or did not arrive whole (it awaits `done`). `HTTP.app` does this for a `Handler`.
+
+A server that counts an upload, and the client call that streams one to it:
+
+```agentica
+import HTTP from "std/http"
+
+def count(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  try Task.await(body.done)
+  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
+end
+
+def feed(into: Channel[Bytes]) -> Void
+  into.send("hello ".bytes, 1000)
+  into.send("world".bytes, 1000)
+  into.close
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, &count).unwrap!
+  into: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&feed, into)
+  url = "http://127.0.0.1:#{HTTP.local_port(server)}/"
+  response = HTTP.upload("PUT", url, into).unwrap!
+  puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
+  HTTP.close_server(server)
+end
+```
+
+```output
+200 11 bytes
+```
+
+### Streamed responses and Server-Sent Events
+
+```text
+HTTP.whole(data: Bytes) -> Channel[Bytes]
+
+HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
+```
+
+For a body that is not ready when the handler returns: events, tokens as a model makes them, a big file. The app answers `Answer.Stream` with a `StreamResponse` whose `body` is a [channel](/library/concurrency/task/), and a task it started sends the pieces and closes the channel at the end.
+
+- The server sends the head at once, then each piece as it arrives, as one flushed chunk (`Transfer-Encoding: chunked`), and ends the body when the channel closes. The app sets neither `Content-Length` nor `Transfer-Encoding`. The pieces are `Bytes`, sent as they are with no UTF-8 check, so a stream can carry a file or any binary data (a piece over 512 KiB is split into several chunks). An empty piece is skipped.
+- A body whose size is known up front (a big file read in pieces) sets `length: some(n)`. The head then has `Content-Length: n` and the pieces go out raw, with no chunk framing. A body that ends short of `n`, or a piece that would pass `n`, closes the connection, so the client sees an incomplete body and never reads past the length. The body ends as soon as `n` bytes are sent, without waiting for the channel to close, so the connection serves the next request at once: the server closes the channel then, and a producer that goes on gets `error("channel: closed")` and stops. A piece after the body is full is not read; a piece that crosses `n` is the cut above. A closed body whose size is not `n` is the 500 of an invalid response, as is a `length` on a 204 or 304 answer. `HEAD` gets the head with the length and no body.
+- A route that answers with one text or file uses `body: HTTP.whole(data)`, a closed channel holding that `Bytes` (`"text".bytes` for a text). The server then sends `Content-Length`, as for a whole response. It does the same for any body that is already closed when the app returns.
+- The server reads the connection for the whole stream. When the client's input ends (it left, or it only half-closed its sending side) or a send fails, the server closes the channel, so the producer's next `send` returns `error("channel: closed")` and it stops. A producer that sends rarely can look at `body.closed?` as well. The body is then cut without its last chunk, so the client sees an incomplete body, not a finished one. Only the producer closing the channel ends the body cleanly.
+- The producer must close the channel on every path. A producer that never closes it holds the stream until the client leaves: there is no maximum age.
+- Bytes the client sends during the stream (a pipelined request) are dropped, and the connection closes when the stream ends; the server keeps watching, so a client that leaves later is still noticed.
+- A bounded channel (`Channel.new(8)`) is the backpressure: a client that reads slowly makes the server wait, and so the producer's `send` waits.
+- A slow producer is not an error. The wait for the next piece has no time limit, and `idle_timeout_ms` counts only between requests, from the end of a stream. `request_timeout_ms` bounds the send of each piece (and of a whole body sent with `Content-Length`): a client that stops reading for that long is cut off, and the channel closes.
+- `HEAD` gets the head and the channel closes at once. A 204 or 304 status with a body that is still open, or any other response that cannot be sent, is the same 500 as for a whole response, and the channel closes.
+- A body that is still coming when the app answers closes the connection after the stream, as for every answer.
+- The server speaks HTTP/1.1 only: an HTTP/1.0 request gets a 505 before the app runs.
+
+Server-Sent Events are a stream with `Content-Type: text/event-stream` whose pieces are `data: ...` lines ended by a blank line:
+
+```agentica
+import HTTP from "std/http"
+
+def produce(events: Channel[Bytes]) -> Void
+  for n in 1..3
+    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
+      break
+    end
+
+    Task.sleep(100)
+  end
+
+  events.close
+end
+
+def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.method == "GET" and request.path == "/events"
+    events: Channel[Bytes] = Channel.new(8)
+    Task.spawn(&produce, events)
+    headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
+    return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
+  end
+
+  return ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 0, &handle).unwrap!
+  client = HTTP.client().unwrap!
+  base = "http://127.0.0.1:#{HTTP.local_port(server)}"
+  response = HTTP.get(client, base + "/events").unwrap!
+  puts(HTTP.header_values(response.headers, "transfer-encoding"))
+  puts(HTTP.text(response.body, response.headers).unwrap!)
+  puts(HTTP.get(client, base + "/missing").unwrap!.status)
+  HTTP.close_client(client)
+  HTTP.close_server(server)
+end
+```
+
+```output
+["chunked"]
+data: tick 1
+
+data: tick 2
+
+data: tick 3
+
+
+404
+```
+
+`HTTP.get` waits for the whole body, so the client above sees the events together; a browser's `EventSource` or `curl -N` sees each one as it is sent.
+
+### WebSockets
+
+```text
+HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
+```
+
+`serve` upgrades a request to a WebSocket (RFC 6455) when the app answers `Answer.Upgrade` with what `accept_websocket` returns. `HTTP.Upgrade` is an enum: `Upgrade.Accept(...)` upgrades the request, and `Upgrade.Reply(response)` answers it as a whole response (and the connection serves the next request); make an `Accept` with `accept_websocket`, never by hand.
+
+- `accept_websocket(request, session, options)` checks the handshake: a `GET` with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key` that is 16 bytes in base64. A request that is not one gets an `Upgrade.Reply`: `426` with `Sec-WebSocket-Version: 13` for another version, `400` for the rest. The head reader lets only a `GET` with one `Upgrade: websocket` through, so any other `Upgrade` (`h2c`, a `POST`) is a `501`. A route that does not call `accept_websocket` ignores the headers and answers as usual.
+- `session` is a `HTTP.WebSocketSession`, `Fn[HTTP.WebSocket, Result[Void]]`. The server writes the `101` answer and runs it in the task of the connection. When it returns, the server sends a close frame (code 1000, or 1011 and a warning for an `error`) unless the session already sent one, waits for the peer's close frame, and closes the connection.
+- An upgrade needs the whole body first. An `Accept` while the body is still unread gets a `500` and a close, with `http: invalid response: ...` on stderr.
+- `HTTP.WebSocket` has `incoming` and `outgoing`, both `Channel[HTTP.Message]` of 8 messages, and `protocol`, the subprotocol that was agreed on (`""` for none). A session that does not read makes the server stop reading the socket, and one that sends faster than the peer reads waits in `send`. A session must keep taking messages from `incoming` (or end): while it does not, the server does not read the socket, so pings and the peer's close go unanswered. `incoming` closes after the `Close` message, and `outgoing` closes when the connection is over, so a send then is an `error`.
+- `HTTP.Message` is `Text(String)`, `Binary(Bytes)`, `Ping(Bytes)`, `Pong(Bytes)` and `Close(Int, String)`, the code and the reason. A received `Text` or `Binary` is a whole message: the fragments are joined, and a text message is checked as UTF-8. The server answers every received ping with a pong and does not hand it on; a `Pong` is handed on. A `Ping` or `Pong` carries at most 125 bytes (more is cut).
+- A `Close` is the last message the session receives, whatever ended the connection: the peer's close frame with its code and reason, a frame that broke the rules (the code of the answer: 1002, 1007 or 1009), or the loss of the connection (code 1006, since no close frame came). Sending `Close(code, reason)` starts the close handshake; a code that cannot be sent (below 1000, 1004 to 1006, 1015 to 2999, past 4999) is sent as 1011, and a reason is cut to 123 bytes.
+- The server checks every frame of the peer: it must be masked, with no reserved bit, a known opcode, a control frame whole and of at most 125 bytes, fragments in order, text as UTF-8 and a close code that a peer may send. A broken frame is answered with a close frame (1002 protocol error, 1007 invalid data, 1009 too big) and the connection ends. The server never masks its frames and accepts no extension, so nothing is compressed.
+- `HTTP.WebSocketOptions` has `max_message_bytes` (default 1 MiB, 1 to 256 MiB: a message past it, in one frame or joined from fragments, closes with 1009, and a frame that announces it is refused before its payload is read), `idle_ms` (default 0, no limit but a year, since a read that times out closes the socket: the longest the server waits for the peer to send anything, after which the connection is dropped and the session gets `Close` with 1006), `ping_ms` (default 0, none: the server sends a ping after that many milliseconds with nothing to write, so with `ping_ms` below `idle_ms` the pongs keep a live peer) and `close_ms` (default 5000: how long the server waits for the peer's answer to its close frame) and `protocols` (the subprotocols it speaks, in order of preference: the first one the client offered in `Sec-WebSocket-Protocol` is agreed on).
+- `request_timeout_ms` of `HttpServerOptions` bounds the handshake and each write of a frame. A WebSocket counts against `max_connections` for as long as it lives. `idle_timeout_ms` does not apply after the upgrade.
+- The server does not check `Origin`. A browser sends it with every handshake, and an app that serves pages of its own should compare it with `HTTP.header_values(request.headers, "origin")` before it accepts, since a page of another site can open a WebSocket to it with the visitor's cookies.
+- Known limit: the mask of a frame is taken off in a loop over the bytes, at about 7 MB/s, so a message of a few MiB costs a fraction of a second of its connection's task. Keep `max_message_bytes` at what the application needs.
+
+An echo server that mixes a plain route and a WebSocket route:
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
+  case message
+    HTTP.Message.Text(text) ->
+      try ws.outgoing.send(HTTP.Message.Text("echo: #{text}"), 5000)
+      return ok(true)
+    HTTP.Message.Binary(data) ->
+      try ws.outgoing.send(HTTP.Message.Binary(data), 5000)
+      return ok(true)
+    HTTP.Message.Close(_, _) -> return ok(false)
+    _ -> return ok(true)
+  end
+end
+
+def echo(ws: HTTP.WebSocket) -> Result[Void]
+  while true
+    case ws.incoming.recv(60000)
+      ok(message) ->
+        if not try relay(ws, message)
+          return ok()
+        end
+
+      error(_) -> return ok()
+    end
+  end
+
+  return ok()
+end
+
+def home(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
+end
+
+def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.path == "/echo"
+    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
+  end
+
+  return HTTP.app(&home).call(request, body)
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 8080, &route).unwrap!
+  HTTP.wait(server)
+end
+```
+
+### Single-route forms
+
+```text
+HTTP.listen(host: String, port: Int, handler: HTTP.Handler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_stream(host: String, port: Int, handler: HTTP.StreamHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_upload(host: String, port: Int, handler: HTTP.UploadHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
+```
+
+Each of these serves one kind of route, and each has a `_tls` form that takes a server `TlsContext` after the port. They will be removed: use `serve` with an app. `listen(host, port, handler, options)` is `serve(host, port, HTTP.app(handler, options.max_body_bytes), options)`, except that it answers a WebSocket handshake `501`. `HTTP.StreamHandler` (`Fn[HttpRequest, Result[HTTP.StreamResponse]]`), `HTTP.UploadHandler` (`Fn[HttpRequest, HTTP.RequestBody, Result[HttpResponse]]`) and `HTTP.UpgradeHandler` (`Fn[HttpRequest, Result[HTTP.Upgrade]]`) are their handlers. `listen_upload` takes bodies up to 256 MiB whatever `max_body_bytes` says.
+
 ### HTTP.wait and HTTP.close_server
 
 ```text
@@ -957,9 +940,9 @@ HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 ```
 
-- `close_server` stops accepting, closes every connection and cancels the running handlers and their tasks. Calling it again does nothing.
-- `wait` returns `ok()` once the server is closed and its handlers and their tasks have ended. A program that only serves waits on it. When `main` returns, the server stops.
-- A server belongs to the task that called `HTTP.listen` and closes (freeing its port) when that task ends, so call `listen` in the task that keeps it, such as `main`. Each connection belongs to the task that serves it.
+- `close_server` stops accepting, closes every connection and cancels the running apps and their tasks. Calling it again does nothing.
+- `wait` returns `ok()` once the server is closed and its apps and their tasks have ended. A program that only serves waits on it. When `main` returns, the server stops.
+- A server belongs to the task that called `HTTP.serve` and closes (freeing its port) when that task ends, so call `serve` in the task that keeps it, such as `main`. Each connection belongs to the task that serves it.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
@@ -970,7 +953,7 @@ end
 
 def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 10000, max_connections: 64, max_body_bytes: 65536)
-  server = HTTP.listen("0.0.0.0", 8080, &handle, options).unwrap!
+  server = HTTP.serve("0.0.0.0", 8080, HTTP.app(&handle), options).unwrap!
   puts("listening on #{HTTP.local_port(server)}")
   IO.flush()
   HTTP.wait(server).unwrap!
