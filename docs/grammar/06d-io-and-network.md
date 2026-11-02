@@ -60,65 +60,18 @@ extern "libm.so.6"
 end
 ```
 
-- The C types are the integers `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`
-  (`int8_t` to `int64_t`), `C.UInt8`, `C.UInt16`, `C.UInt32` (`uint8_t` to
-  `uint32_t`) and `C.Long` (`long`: 32 bits on Windows, 64 on Linux and
-  macOS), each an `Int` in Agentica, `C.Double` (`double`, `Float`), `C.Float`
-  (a 32-bit `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a
-  `const char *`, `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function
-  pointer) and the resources and structs of the block; a result may also be
-  `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A function takes at
-  most 64 parameters (`PARSE-EXTERN-ARITY`).
-- A signed integer result is sign-extended and an unsigned one zero-extended,
-  so a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit
-  type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as
-  `C.Long` (`C.UInt64` and `C.ULong` are `PARSE-EXTERN-TYPE`).
-- The library is a plain string literal: a name without `/`, which the system
-  loader looks up, or an absolute path; anything else is `PARSE-EXTERN-LIBRARY`.
-  A library, dependency or function that cannot be found is
-  `RUNTIME-NATIVE-LOAD` at the extern function. A package names its libraries in
-  its manifest (`[native.NAME]`, 05b-modules.md).
-- `Native.load("NAME") -> Result[Void]` opens a library before its first call.
-  Its argument is a string literal that means what `extern "NAME"` means;
-  anything else is `CHECK-NATIVE-LOAD` at the argument.
-- `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
-  It has no `==`, and `IO.inspect` prints `<C.Pointer>`. `C.Bytes` is a
-  parameter only (as a result it is `PARSE-EXTERN-TYPE`): a `Bytes`.
-- A function declared `-> Db`, for a `resource Db, free: db_close` of the block,
-  gives a `Result[Db]`. A `def` of the free function in the same block is
-  `PARSE-EXTERN-FREE`. `to_s` of a resource is `CHECK-TYPE-MISMATCH`, and its
-  JSON encoding is `CHECK-NOT-ENCODABLE`, as for other handles. An `out`
-  parameter makes the call return a record, with the C result as `result` and
-  each value C left in a slot as the field of its name. A `struct` of the block
-  is a record, copied both ways. `Native.closed?(x)` and `Native.size_of(Name)`
-  take a resource or buffer and a struct name; any other argument is
-  `CHECK-TYPE-MISMATCH`.
-- `Native.callback(Name, &function)` gives the callback `Name` of the block, a
-  resource. `Name` that is not a callback is `CHECK-TYPE-MISMATCH` at it. The
-  function is a declared function named with `&`: an `Fn` value or a function of
-  an extern block is `CHECK-NATIVE-CALLBACK` at it. It takes and returns the
-  Agentica types of the callback's C types; anything else is
-  `CHECK-TYPE-MISMATCH` at it. When C calls the callback during a native call,
-  the function runs in the task of that call and C waits for its value; a NULL
-  `C.String` argument is `""`, and a result outside its C type is
-  `RUNTIME-INTEGER-OVERFLOW`. A wait in the callback (a `compute def` call
-  included) is `RUNTIME-NATIVE-CALLBACK` at it. A failure or an exit in the
-  callback gives C zero, and zero from every later callback of that call
-  without running it; the native call then fails or exits the same way once C
-  returns. A callback that C calls from a thread of its own, or from the free
-  function of a resource, runs nothing and gives zero; one from a `compute def`
-  on the pool does too, and that call is then `RUNTIME-NATIVE-CALLBACK`. A
-  callback stops, giving zero, when its task is cancelled or the run ends, and
-  callbacks nest at most 128 deep (`RUNTIME-STACK-OVERFLOW`). C must not call a
-  callback after its close.
-- Native code is allowed by default and can start programs itself.
-  `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
-  `--deny-*` flag, or `--sandbox`) refuses a program that declares any extern
-  function or calls a `Native.*` builtin before anything runs:
-  `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica test` such a test file is a
-  file error with that code.
-- Elsewhere than Linux and macOS (x86_64 and arm64) and Windows x64, such a
-  program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2;
-  `check`, `compile` and the queries work on every system.
+The rules (the C types and the codes of a bad one, the library string and
+`Native.load`, resources, callbacks, `--deny-native`, the systems that run
+native code) are in those pages. The language fixes these:
+
+- `C.UInt64` and `C.ULong` do not exist (`PARSE-EXTERN-TYPE`): declare a
+  `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`.
+- `C.Pointer` is a builtin type that any code may hold, with no `==`. A
+  resource has no `to_s` (`CHECK-TYPE-MISMATCH`) and no JSON encoding
+  (`CHECK-NOT-ENCODABLE`), as other handles.
+- `Native.closed?(x)` and `Native.size_of(Name)` take a resource or buffer and a
+  struct name; any other argument is `CHECK-TYPE-MISMATCH`.
+- `Native.callback(Name, &function)` takes a declared function named with `&`:
+  an `Fn` value or a function of an extern block is `CHECK-NATIVE-CALLBACK`.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.
