@@ -746,10 +746,24 @@ def app_of(f: HTTP.App) -> HTTP.App
   return f
 end
 
+# The answer for a body that `HTTP.read_all` could not read, as `HTTP.app` gives it: 413 over the limit, 431 for a
+# chunk line or trailer section over the head limits, 400 otherwise.
+def refused(message: String) -> HTTP.Answer
+  status = 400
+  if message == "http: body exceeds max_bytes"
+    status = 413
+  elsif String.starts_with?(message, "http: request fields too large")
+    status = 431
+  end
+  return HTTP.Answer.Whole(HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: "".bytes))
+end
+
 # The body read first, then the stream of the route.
 def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
-  try HTTP.read_all(body, 1024)
-  return ok(HTTP.Answer.Stream(try route.call(request)))
+  case HTTP.read_all(body, 1024)
+    ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
+    error(message) -> return ok(refused(message))
+  end
 end
 
 def streamed(said: Channel[String]) -> HTTP.App
@@ -1131,6 +1145,14 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
     peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS)], timeout=scaled(120))
     assert peer.code == 0, peer.stderr
     assert output_lines(peer.stdout) == STREAM_PYTHON_LINES
+    # A body the stream route cannot read gets the answer HTTP.app gives, not a 500: over the 1024-byte limit, a bad
+    # chunk.
+    chunked = b"POST /whole HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+    for body, status in [(b"401\r\n" + b"a" * 1025 + b"\r\n0\r\n\r\n", b"413"), (b"zz\r\nab\r\n0\r\n\r\n", b"400")]:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
+            conn.sendall(chunked + body)
+            head, _ = raw_answer(conn, True)
+            assert head.split(b" ")[1] == status and b"\r\nconnection: close" in head, head
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
     assert vm.next_line() == "ok()"

@@ -353,9 +353,13 @@ end
   otherwise the answer carries `Connection: close`.
 - `Expect: 100-continue` within the cap gets its `100` before the app runs: an
   app cannot refuse an upload before the body is sent.
-- `HTTP.read_all(body, max_bytes)` collects the body (an `error` past
-  `max_bytes`, or when `done` is an error). `HTTP.upload` is the client that
-  streams to it.
+- `HTTP.read_all(body, max_bytes)` collects the body, or is an `error`:
+  `"http: body exceeds max_bytes"` past `max_bytes` or the cap (answer 413),
+  a text starting `"http: request fields too large"` for a chunk line or
+  trailer over the head limits (431), any other text for a bad or cut body
+  (400). `HTTP.app` answers so; a stream route that reads a body maps the error
+  to that `Whole` answer itself, with `Connection: close`. `HTTP.upload` is the
+  client that streams to it.
 
 ### Streaming a response (SSE, tokens, big bodies)
 
