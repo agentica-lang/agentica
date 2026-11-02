@@ -94,10 +94,11 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   after one with a default (only a last `Fn` parameter may); a default that is
   not a constant (a literal, `true`, `false`, `nil`, `none`, `[]`, `{}` or a
   payload-less enum variant).
-- `CHECK-EMPTY-LIST-TYPE`, `-EMPTY-MAP-TYPE`, `-EMPTY-SET-TYPE`,
-  `CHECK-RESULT-TYPE`, `CHECK-OPTIONAL-TYPE`, `CHECK-EXPECTED-TYPE`: `[]`, `{}`,
-  `Set.new([])`, `error(...)`, `none`, `Channel.new(n)` or `ATS.new()` with no
-  expected type: annotate the variable or parameter.
+- `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
+  expected type.
+- `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
+- `CHECK-OPTIONAL-TYPE`: a `none` without an expected Optional type.
+- `CHECK-EXPECTED-TYPE`: `Channel.new(n)` or `ATS.new()` with no expected type.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
 - `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a
@@ -116,8 +117,8 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   `ATS` key that is not `Int` or `String`.
 - `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or
   holds a `Fn`, `Task`, `Channel`, handle or table anywhere inside.
-- `CHECK-SET-ELEMENT-TYPE`: a `Set` element type that is not `Int`, `String` or
-  `Bytes`.
+- `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`: a `Set` element type that is
+  not `Int`, `String` or `Bytes`; `Set.new([])` with no expected type.
 - `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
   `CHECK-IMPORT-NAME`: a missing or unreadable import; an invalid path (with
   `.agc` or another extension too); a cycle; an unknown or private imported
@@ -140,31 +141,39 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
   (`queries.md`).
 - `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
-  `deps/<name>/` or the cache are not the ones the lock hashes, or one is a
-  symbolic link or submodule, or the package's `agentica.toml` is not a regular
-  file. Run `agentica install` again (for the cache, remove its folder first).
-- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`: a package opens a library that
-  its `agentica.toml` declares under `[native.NAME]`, but the table has no entry
-  for this system (add `linux`, `macos` or `windows`) or its `file` is not in
-  the package.
+  `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
+  the lock hashes (edited, added or missing), or one is a symbolic link or
+  submodule, or the package's `agentica.toml` is not a regular file. Run
+  `agentica install` again for `deps/`; remove the cache folder and run it for
+  the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
+- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`: a file of a package opens a
+  library that its `agentica.toml` declares under `[native.NAME]`, but the
+  table has no entry for this system (key `native.NAME`: add `linux`, `macos`
+  or `windows`), or its `file` is not in the package (key
+  `native.NAME.linux.file`). The file is the package's `agentica.toml`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
-  `agentica install` failed: git failed (its message is in the help), the tag
-  or commit does not exist, a path is unsafe or a file is over 1 MiB (16 MiB in
-  all), or the cache cannot be written; the tag moved to another commit than
-  `agentica.lock` (the lock is not changed); two package paths differ only in
-  case; no `agentica.toml`. The report names the file and the key path.
+  `agentica install` failed: git did not start or failed, the tag or commit does
+  not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
+  the cache cannot be written (`PKG-FETCH`, git's message in the help); the tag
+  now points to another commit than `agentica.lock` (the lock is not changed);
+  two package paths differ only in case; no `agentica.toml` was found. The
+  report names the file and the key path of the entry, such as `package[0].tag`.
 - `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT`,
-  `PKG-WRITE`: `agentica add` or `update` stopped (before writing, except
-  `PKG-WRITE`): the name is a dependency already (change its pin, then `update
-  NAME`); `update NAME` names no dependency; the manifest layout is beyond the
-  one-line edit (write the line by hand); or a file cannot be written.
+  `PKG-WRITE`: `agentica add` or `update` stopped before it wrote anything
+  (except `PKG-WRITE`): the name is a dependency already (change its pin in
+  `agentica.toml`, then `update NAME`); `update NAME` names no dependency of the
+  manifest; the manifest has a layout the one-line edit cannot handle (write the
+  line by hand); or `agentica.lock` or `agentica.toml` cannot be written. Fetch
+  errors of a new pin are the codes of `install`, at `dependencies.<name>.git`
+  (or `.tag`, `.ref`). Writing `deps/` gives `PKG-WRITE` too, at the file
+  it cannot write.
 - `CHECK-IMPORT-RENAME`: `import {A as b}` where the new name breaks the case
   rule of what it renames (struct or enum capitalized, function lowercase,
   constant a constant name).
 - `CHECK-CONSTANT-EXPRESSION`: a constant uses a call of your own function,
   `&f`, a block outside a builtin call, `while`, or a builtin with effects.
-- `CHECK-CONSTANT-TYPE`: a constant whose type is not data (`Channel`, `Task`,
-  `ATS`, `Fn`, handles, `Void`).
+- `CHECK-CONSTANT-TYPE`: a constant expression whose type is not data
+  (`Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
 - `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a

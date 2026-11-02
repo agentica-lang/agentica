@@ -35,18 +35,12 @@ Items 1 to 4 (FFI-a, cached bytecode, packages
 
 Weighed later (no fixed order):
 
-7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
-   (row 7.10).
 12. UDP [#450](https://github.com/agentica-lang/agentica/issues/450) (row 7.5):
     it leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
 14. Test functions [§50](../future/50-test-functions.md#50-test-functions)
     (row 7.11).
 15. `Set[T]` and `Queue[T]` (row 12; `Set` is done).
-16. HTTP streaming, 20e to 20g
-    ([§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), with
-    `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a,
-    19b and ALPN, 19c, are done).
 17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
 19. The Windows issues
     [#474](https://github.com/agentica-lang/agentica/issues/474),
@@ -94,6 +88,13 @@ Weighed later (no fixed order):
 - **7.3:** iteration and concurrency
   ([§27](../future/27-iteration-and-concurrency.md)): `Task.map`, channels,
   `Task.await` with a timeout, `File.each_line`, `Lazy[T]`.
+- **7.4:** HTTP streaming (20e to 20g:
+  [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)) and TLS
+  contexts, `TLS.upgrade` and ALPN (19a to 19c,
+  [§29](../future/29-tls-context.md#29-tls-contexts)).
+- **7.10:** regular expressions
+  ([§48](../future/48-regex.md#48-regular-expressions), 48a to 48c; 48d,
+  Unicode classes, is planned).
 - **7.5a:** default parameter values. **7.12:** type aliases (49a, 49b).
 - **8, 8.2, 8.3:** faster lists (8d), the prelude and the Enumerable methods
   (15f; `format`, 15k, is deferred to row 7.6), and the VM start-up cut
@@ -106,17 +107,6 @@ Weighed later (no fixed order):
 - **7.5, part:** logging (14c), `std/logger` on the std-only `LogRegistry`.
 
 ### Pending rows
-
-- **Order:** 7.4
-  - **Next work:** the streaming items of phase 20 (20e and 20f; 20g, the
-    streamed server response, is built,
-    [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), built on
-    channels. `TlsContext` (19a), `TLS.upgrade` (19b) and ALPN (19c; the HTTP
-    client stays small and opens its low layers, owner 2026-10-16,
-    [§30.13](../future/30-hybrid-http.md)) are done
-    ([§29](../future/29-tls-context.md#29-tls-contexts))
-  - **Outcome:** Programs stream HTTP bodies through channels, set up TLS with a
-    `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
 
 - **Order:** 7.5
   - **Next work:** UDP (leaves the core plan, item 12 above)
@@ -159,14 +149,6 @@ Weighed later (no fixed order):
     are done; 47d, the LSP hook, waits for the language server (§43, not
     scheduled).
   - **Outcome:** Every `.agc` file has one layout, checked in CI
-
-- **Order:** 7.10
-  - **Next work:** Item 7 above;
-    [§48](../future/48-regex.md#48-regular-expressions). 48a to 48c are done:
-    `std/regex` in Agentica (a linear-time Pike VM, no backtracking), the regex
-    literal `/pattern/flags`, and the matcher in C (`vm/regex.c`).
-  - **Outcome:** A program searches, extracts, replaces and splits text with a
-    pattern, and no pattern can stall the VM
 
 - **Order:** 7.11
   - **Next work:** Planned (item 14 above;

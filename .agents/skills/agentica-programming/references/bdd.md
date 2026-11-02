@@ -166,27 +166,35 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 
 ## Diagnostics
 
-`agentica test` reports the first problem of each kind with a stable code; the
-help line says the fix:
+`agentica test` reports the first problem of each kind with a stable code:
 
-- `PARSE-GHERKIN-*`: the `.feature` file breaks the Gherkin subset (header,
-  step, argument, table, examples, tags, empty, parameter, unsupported).
-- `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`: no pattern matches; more than
-  one does. `CHECK-BDD-EMPTY`: no `.feature` or `*_test.agc` found, or no name
-  matches `--only`.
+- `PARSE-GHERKIN-HEADER`, `PARSE-GHERKIN-STEP`, `PARSE-GHERKIN-ARGUMENT`,
+  `PARSE-GHERKIN-TABLE`, `PARSE-GHERKIN-EXAMPLES`, `PARSE-GHERKIN-TAGS`,
+  `PARSE-GHERKIN-EMPTY`, `PARSE-GHERKIN-PARAMETER`, `PARSE-GHERKIN-UNSUPPORTED`:
+  the `.feature` file breaks the supported Gherkin subset (section order, a step
+  outside a scenario, a Doc String or table in the wrong place, bad Examples,
+  misplaced tags, a Feature without scenarios or a Background without steps, an
+  Examples column missing for a `<parameter>`, a non-English keyword).
+- `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY`: no step
+  pattern matches; more than one matches; no `.feature` or `*_test.agc` files
+  found (or no name matches `--only`).
 - `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION`: an expectation failed; a
   `Then` step or a whole scenario made no BDD assertion.
-- `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`: a deadline passed or a
-  bad timeout; a step called `System.exit` or its child ended without a
-  diagnostic.
-- `RUNTIME-BDD-CONTEXT`, `-PROGRAM`, `-JSON`: a missing Doc String or table; a
-  stream call before a program started, a second program, a step program that
-  never calls `BDD.run`, a missing `.agc`; a JSON expectation that is not JSON.
-- `RUNTIME-BDD-DUPLICATE`, `-PATTERN`, `-PENDING-TASKS`: a pattern used twice
-  or invalid (at the step program's first line); tasks left running.
-- `RUNTIME-BDD-OUTPUT-LIMIT`, `-IO`, `-INFRA`, `-USAGE`: output over 1 MiB; a
-  stream failure or a feature file or step line over 1 MiB; a missing
-  executable, VM or path, unreadable folder or step program; bad usage.
+- `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`: an operation or the
+  scenario passed its deadline, or got a bad timeout; a step called
+  `System.exit` or its child ended without a diagnostic.
+- `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON`: a missing
+  Doc String or table, a stream call before a program started, a second program,
+  a step program that never calls `BDD.run`; a missing `.agc` program; a JSON
+  expectation that is not valid JSON.
+- `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS`: a
+  pattern used twice, an invalid pattern (both at the step program's first
+  line); tasks left running by a handler or by `main` before `BDD.run`.
+- `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`,
+  `RUNTIME-BDD-USAGE`: program or handler output over 1 MiB; a stream I/O
+  failure, a feature file or step line over 1 MiB; a missing executable, VM or
+  feature path, an unreadable folder or broken `.feature` link, a step program
+  that cannot be read; bad command-line usage, such as two `--steps`.
 
 A step program that does not compile is a file error with its own diagnostic
 (for example `CHECK-TYPE-MISMATCH` for a handler of the wrong type). A crash in

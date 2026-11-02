@@ -52,12 +52,40 @@ end
 
 ### 32.5 `agentica doc`
 
-The command, its exit codes and what it prints are in
-[`06b-builtins.md`](../grammar/06b-builtins.md); the Markdown and `--json` forms
-(`{module, doc, items}`, each item `{kind, name, signature, summary, doc, span}`
-plus parameters, fields or variants by kind) are documented in
-`compiler/docs/doc_json.agc`, and the format is stable so agents and a future
-site generator can read it. Decisions:
+The command, its exit codes and the Markdown form are in
+[`06b-builtins.md`](../grammar/06b-builtins.md). The `--json` form is the
+contract that `compiler/docs/doc_json.agc` and `tests/test_spec_doc.py` cite:
+
+- `agentica doc PATH --json` prints the same data as one JSON object. The format
+  is stable, so agents and a future site generator can read it. Each field means
+  the same wherever it appears:
+  - top level: `{module, doc, items}`;
+  - `module`: `PATH` as the user typed it, a file path or a `std/` name;
+  - `doc`: the whole doc text with the `##` markers removed and its leading and
+    trailing blank lines dropped, or `null`. At the top level it is the module
+    doc;
+  - `summary`: the first paragraph of `doc` on one line, each line trimmed, or
+    `null` when there is none;
+  - `items`: one object per export, in source order:
+    `{kind, name, signature, summary, doc, span}`;
+  - `kind`: `"function"`, `"struct"`, `"enum"`, `"alias"` or `"constant"`;
+  - `signature`: the line above; an alias is `type Grid[T] = List[List[T]]`
+    and a constant is `LIMIT: Int` (`LIMIT` without a written type);
+  - `span`: the declaration's span, from `export` to the end of the
+    declaration, not its `##` block: an object
+    `{file, range: {start: {line, column}, end: {line, column}}}`, the two keys
+    a diagnostic JSON puts at its top level, in an object of their own. Lines
+    and columns start at 1 and `end` is exclusive, as in a diagnostic;
+  - a function item also has `parameters`, a list of `{name, type, default}`
+    (`default` is the source text of the default value, or `null`), and
+    `result`, its result type;
+  - a struct item also has `fields`: `[{name, type, default, doc}]`, with
+    `default` as for a parameter;
+  - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with
+    `payload` empty for a variant without one;
+  - every type is a string, printed as written.
+
+Decisions:
 
 - **Parse only.** It lexes and parses one module and does not resolve imports or
   type-check, so it cannot fail on a dependency. A module that re-exports a name
