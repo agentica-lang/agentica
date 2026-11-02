@@ -1311,6 +1311,29 @@ def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_th
     assert vm.stderr_text() == "http: handler error: the handler failed\n"
 
 
+def test_upload_server_keeps_the_connection_for_a_body_that_arrived_but_was_not_read(tmp_path, adopt):
+    """listen_upload: a handler that ignores the body answers a GET and then an empty chunked POST on one connection,
+    and neither answer closes it."""
+    source = tmp_path / "upload-server.agc"
+    source.write_text(UPLOAD_SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "upload-server.agcb"), CERTS, stdin=True))
+    port = int(vm.next_line().split()[0])
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+        for request in [b"GET /early HTTP/1.1\r\nHost: x\r\n\r\n",
+                        b"POST /early HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"]:
+            conn.sendall(request)
+            got = b""
+            while not got.endswith(b"early"):
+                more = conn.recv(65536)
+                assert more, "the connection closed: %r" % got
+                got += more
+            head = got.partition(b"\r\n\r\n")[0].lower()
+            assert head.startswith(b"http/1.1 200") and b"connection: close" not in head, head
+            assert vm.next_line() == "/early"
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+
+
 def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte_limit(tmp_path, adopt):
     """After a 413 the server drops input only up to a limit, so a peer that keeps sending is cut off long before
     the request deadline (2 s in SERVER_PROGRAM) and cannot make the server read for all of it."""

@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 9160,
+  "stdout": [
+    "HTTP/1.1 200 OK | Content-Type: text/plain | Transfer-Encoding: chunked",
+    "producer was held back: true, then: channel: closed",
+    "ok()",
+    ""
+  ],
+  "stderr": []
+}

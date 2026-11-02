@@ -878,7 +878,7 @@ export def listen(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, whole_app(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but over TLS, with the certificate and key of `tls`, a server context
@@ -898,7 +898,7 @@ export def listen_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, whole_app(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
@@ -918,7 +918,7 @@ export def listen_stream(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, stream_app(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen_stream`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -937,7 +937,7 @@ export def listen_stream_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, stream_app(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false), options))
 end
 
 ## Like `listen`, but the handler gets the body of the request on a channel (`RequestBody`) as it arrives, for an
@@ -959,7 +959,7 @@ export def listen_upload(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, upload_app(handler), Reads(whole: false, upgrades: false), options))
+  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false), options))
 end
 
 ## Like `listen_upload`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -978,7 +978,7 @@ export def listen_upload_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, upload_app(handler), Reads(whole: false, upgrades: false), options))
+  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false), options))
 end
 
 ## Collects the body of an upload for a handler of `listen_upload` that wants it whole, so one server can serve small
@@ -1025,7 +1025,7 @@ export def listen_websocket(
     options.max_body_bytes,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, socket_app(handler), Reads(whole: true, upgrades: true), options))
+  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true), options))
 end
 
 ## Like `listen_websocket`, but over TLS (`wss`), with the certificate and key of `tls`, a server context. `options` is
@@ -1044,7 +1044,7 @@ export def listen_websocket_tls(
     options.max_body_bytes,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, socket_app(handler), Reads(whole: true, upgrades: true), options))
+  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true), options))
 end
 
 ## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
@@ -2246,7 +2246,7 @@ end
 
 # The apps of the `listen` forms: each calls its handler and wraps the answer. The body is in the request (whole reads)
 # or on the channel (`listen_upload`).
-def whole_app(handler: Handler) -> App
+def wrap_whole(handler: Handler) -> App
   return serving() do |request, body| answer_whole(handler, request) end
 end
 
@@ -2254,7 +2254,7 @@ def answer_whole(handler: Handler, request: HttpRequest) -> Result[Answer]
   return ok(Answer.Whole(try handler.call(request)))
 end
 
-def stream_app(handler: StreamHandler) -> App
+def wrap_stream(handler: StreamHandler) -> App
   return serving() do |request, body| answer_streamed(handler, request) end
 end
 
@@ -2262,7 +2262,7 @@ def answer_streamed(handler: StreamHandler, request: HttpRequest) -> Result[Answ
   return ok(Answer.Stream(try handler.call(request)))
 end
 
-def upload_app(handler: UploadHandler) -> App
+def wrap_upload(handler: UploadHandler) -> App
   return serving() do |request, body| answer_uploaded(handler, request, body) end
 end
 
@@ -2270,7 +2270,7 @@ def answer_uploaded(handler: UploadHandler, request: HttpRequest, body: RequestB
   return ok(Answer.Whole(try handler.call(request, body)))
 end
 
-def socket_app(handler: UpgradeHandler) -> App
+def wrap_socket(handler: UpgradeHandler) -> App
   return serving() do |request, body| answer_upgraded(handler, request) end
 end
 
@@ -2293,8 +2293,12 @@ def serve_connection(socket: Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
-  # The body of every request whose body is read whole first: a closed channel and an ended task, made once.
-  empty = RequestBody(pieces: closed_pieces(), done: Task.spawn(&nothing_left, 0))
+  # Made once, for a server that reads each body whole first: the empty body its app gets, a closed channel and an
+  # ended task.
+  empty: Optional[RequestBody] = none
+  if service.reads.whole
+    empty = some(RequestBody(pieces: closed_pieces(), done: Task.spawn(&nothing_left, 0)))
+  end
   while true
     case start_request(socket, rest, wait_ms, options, body_limit(service), service.reads.upgrades)
       ok(reading) ->
@@ -2318,17 +2322,19 @@ def body_limit(service: Service) -> Int
   return DOWNLOAD_MAX_BYTES
 end
 
-# One request whose head is read: the app gets the body as it arrives, or the request with its whole body and `empty`.
-# A body that cannot be read was already answered (or the connection is gone), so the connection ends.
-def answer_request(reading: Reading, service: Service, empty: RequestBody) -> Sent
-  if not service.reads.whole
-    return answer_app(reading, service.app, service.options)
-  end
-  case whole_request(reading)
-    ok(incoming) ->
-      result = service.app.call(incoming.request, empty)
-      return send_answer(reading.socket, incoming.request, result, true, incoming.rest, service.options)
-    error(_) -> return Sent(keep: false, rest: NO_BYTES)
+# One request whose head is read. A server that reads bodies whole (`empty` is the empty body it hands on) calls the
+# app with the request and its whole body; the others give the app the body as it arrives. A body that cannot be read
+# was already answered (or the connection is gone), so the connection ends.
+def answer_request(reading: Reading, service: Service, empty: Optional[RequestBody]) -> Sent
+  case empty
+    some(body) ->
+      case whole_request(reading)
+        ok(incoming) ->
+          result = service.app.call(incoming.request, body)
+          return send_answer(reading.socket, incoming.request, result, true, incoming.rest, service.options)
+        error(_) -> return Sent(keep: false, rest: NO_BYTES)
+      end
+    none -> return answer_app(reading, service.app, service.options)
   end
 end
 
@@ -2449,13 +2455,13 @@ def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
   return HttpResponse(status: response.status, headers: headers, body: response.body)
 end
 
-# One request of a `serve` server. A task feeds the body to the app as it arrives, as for an upload route, and the
-# answer goes out as a whole response, a stream or an upgrade. When the app returns, the pieces close and the server
-# waits for the feeder's last word, at most ANSWER_MS: the bytes read past a whole body, or the close of `left` when
-# the body failed or the closed pieces stopped it. So a body that was all there (an empty chunked one, say) counts as
-# read whatever the app did with it, and a request with no body counts as read at once. Otherwise the answer says
-# `Connection: close`, an upgrade is refused, and after the answer the feeder is cancelled, the input drained and the
-# connection closed.
+# One request whose body goes to the app as it arrives (`serve`, `listen_upload`): a task feeds it on a channel,
+# and the answer goes out as a whole response, a stream or an upgrade. When the app returns, the pieces close and the
+# server waits for the feeder's last word, at most ANSWER_MS: the bytes read past a whole body, or the close of `left`
+# when the body failed or the closed pieces stopped it. So a body that was all there (an empty chunked one, say)
+# counts as read whatever the app did with it, and a request with no body counts as read at once. Otherwise the
+# answer says `Connection: close`, an upgrade is refused, and after the answer the feeder is cancelled, the input
+# drained and the connection closed.
 def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   socket = reading.socket
   head = reading.head
