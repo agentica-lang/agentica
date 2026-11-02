@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   3339 text, as Ruby's `Time#utc.iso8601` does (`UTC.iso8601(Time.now_ms)`).
 - `TCP.remote_address(socket)` returns the peer's IP address without the port
   (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
+- `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
+  WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
+  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 
 ## [0.21.0] - 2026-11-02
 

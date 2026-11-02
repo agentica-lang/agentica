@@ -555,7 +555,7 @@ The server adds `Content-Length` (not on 204 and 304, whose body must be empty),
 
 #### Handler and middleware
 
-`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. `HTTP.UpgradeHandler` is the one of [`listen_websocket`](#httplisten_websocket), whose handler answers or upgrades. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
+`HTTP.Handler` is the type of a handler, the whole contract between a server and an application: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.StreamHandler` is the same for `listen_stream` and `listen_stream_tls`, with `Result[HTTP.StreamResponse]`. `HTTP.UploadHandler` is the one of [`listen_upload`](#httplisten_upload), which also gets the body on a channel. `HTTP.UpgradeHandler` is the one of [`listen_websocket`](#httplisten_websocket), whose handler answers or upgrades. `HTTP.App` is the one of [`serve`](#httpserve), which serves all these kinds of route on one port. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
 
 A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result.
 
@@ -635,7 +635,7 @@ Bad requests never reach the handler: the server answers and closes the connecti
 | 413 | a body over `max_body_bytes` |
 | 417 | an `Expect` other than `100-continue` |
 | 431 | headers too long or too many |
-| 501 | `CONNECT`, or `Upgrade` (except a WebSocket handshake on a `listen_websocket` server) |
+| 501 | `CONNECT`, or `Upgrade` (except a WebSocket handshake on a `listen_websocket` or `serve` server) |
 | 505 | not `HTTP/1.1` |
 
 Before closing, the server drops up to 256 KiB of the peer's remaining input, so the answer is not lost to a reset. A client still sending a large body after a 413 may see a connection reset instead.
@@ -850,6 +850,103 @@ end
 def main() -> Void
   server = HTTP.listen_websocket("127.0.0.1", 8080, &route).unwrap!
   HTTP.wait(server)
+end
+```
+
+### HTTP.serve
+
+```text
+HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
+```
+
+Each `listen` form above serves one kind of route. `serve` serves every kind on one port: pages, files sent in pieces, uploads and WebSockets. Its handler, an `HTTP.App`, decides for each request how to read the body and how to answer.
+
+`HTTP.App` is `Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`. It gets the request with an empty `body` and the body on a channel, as an [`UploadHandler`](#httplisten_upload) does. `HTTP.Answer` is an enum:
+
+- `Answer.Whole(response)` answers with an `HttpResponse`, as a `Handler` does.
+- `Answer.Stream(response)` sends an `HTTP.StreamResponse`, with the rules of [`listen_stream`](#httplisten_stream-and-server-sent-events).
+- `Answer.Upgrade(upgrade)` takes what [`accept_websocket`](#httplisten_websocket) returns: its `Accept` runs the WebSocket on the connection, and its `Reply` is sent as `Whole`.
+
+A middleware of an `App` is a function from an `App` to an `App`, as for a `Handler`.
+
+- The body arrives as `listen_upload` gives it: up to 64 KiB a piece, 8 pieces held, at most 256 MiB. `max_body_bytes` of `options` does not apply. A route that wants the body whole calls `HTTP.read_all`.
+- `HTTP.app(handler, max_body_bytes)` makes an `App` from a `Handler`, for routes that take the request whole. It reads the body first, at most `max_body_bytes` (a negative limit counts as 0), and calls `handler` with it. A body that is larger, by its `Content-Length` or as it arrives, gets a `413`, and a bad chunk gets a `400`. Both answers come with `Connection: close`, and `handler` is not called. A body that is cut or stalls (the client left, a timeout) closes the connection.
+- The connection serves the next request only when the whole body had arrived by the time the app returned, read or not: a request with no body or an empty chunked body keeps it. Otherwise the answer gets `Connection: close` and the connection closes after it.
+- An upgrade needs the whole body first. An `Accept` while the body is still unread gets a `500` and a close, with `http: invalid response: ...` on stderr.
+- A handler error is the `500` of `listen`. As with `listen`, the server sets no limit on the time of the app. Every other rule (the options, the bad requests, `HTTP.wait` and `HTTP.close_server`) is the same as for the other forms.
+
+A server with a page, a file sent in pieces, an upload and a WebSocket on one port:
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def page(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
+end
+
+def produce(pieces: Channel[Bytes]) -> Void
+  for n in 1..4
+    if not Result.ok?(pieces.send("part #{n}\n".bytes, 5000))
+      break
+    end
+  end
+
+  pieces.close
+end
+
+def file() -> HTTP.Answer
+  pieces: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&produce, pieces)
+  return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: pieces, length: some(28)))
+end
+
+def upload(body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  try Task.await(body.done)
+  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
+end
+
+def echo(ws: HTTP.WebSocket) -> Result[Void]
+  while true
+    case ws.incoming.recv(60000)
+      ok(HTTP.Message.Text(text)) -> try ws.outgoing.send(HTTP.Message.Text(text), 5000)
+      ok(HTTP.Message.Close(_, _)) -> return ok()
+      ok(_) -> next
+      error(_) -> return ok()
+    end
+  end
+
+  return ok()
+end
+
+def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.path == "/ws"
+    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
+  end
+
+  if request.path == "/file"
+    return ok(file())
+  end
+
+  if request.path == "/upload"
+    return upload(body)
+  end
+
+  return HTTP.app(&page).call(request, body)
+end
+
+def main() -> Void
+  server = HTTP.serve("127.0.0.1", 8080, &route).unwrap!
+  HTTP.wait(server).unwrap!
 end
 ```
 
