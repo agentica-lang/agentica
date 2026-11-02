@@ -6,6 +6,8 @@
 ## synchronously, in the task that logs, so a line is written when the call returns. A handler error is the error of
 ## the task that logged. The registry lives in the VM and belongs to one run.
 
+import UTC from "std/utc"
+
 struct JsonLine
   time: String
   level: String
@@ -142,42 +144,7 @@ end
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
 ## A year outside 0 to 9999 is written with its sign and at least four digits.
 export def time_text(ms: Int) -> String
-  # Floor division written so that no intermediate product leaves the Int range, even at Int.min.
-  days = ms / 86400000
-  rest = ms % 86400000
-  if rest < 0
-    days -= 1
-    rest += 86400000
-  end
-  # Days to a calendar date by eras of 400 years, counted from 0000-03-01 so the leap day ends the year.
-  z = days + 719468
-  era = z / 146097
-  if z % 146097 < 0
-    era -= 1
-  end
-  doe = z - era * 146097
-  yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
-  doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
-  shifted = (5 * doy + 2) / 153
-  day = doy - (153 * shifted + 2) / 5 + 1
-  month = shifted + 3
-  year = yoe + era * 400
-  if shifted >= 10
-    month = shifted - 9
-    year += 1
-  end
-  sign = ""
-  if year < 0
-    sign = "-"
-    year = 0 - year
-  end
-  hour = rest / 3600000
-  minute = (rest % 3600000) / 60000
-  second = (rest % 60000) / 1000
-  milli = rest % 1000
-  date = "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}"
-  clock = "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}"
-  return "#{date}T#{clock}Z"
+  return UTC.iso8601(ms, 3)
 end
 
 # The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
@@ -269,12 +236,4 @@ def field_token(text: String) -> String
     return text
   end
   return one_line(JSON.encode(text))
-end
-
-def pad(n: Int, width: Int) -> String
-  text = n.to_s
-  while text.length < width
-    text = "0#{text}"
-  end
-  return text
 end
