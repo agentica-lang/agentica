@@ -13,7 +13,6 @@ import json
 import os
 import platform
 import re
-import select
 import signal
 import subprocess
 import textwrap
@@ -29,8 +28,6 @@ MACOS = TARGET_OS == "darwin"
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() in ("x86_64", "aarch64")) or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux and macOS (x86_64 and arm64) and Windows x64 only")
-# Keep native non-Linux platforms in the test body to report #616 as an open gap, not host-only.
-NATIVE_STDIO_CASES = host_only(not NATIVE, "native calls are unsupported on this system")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
 # macOS libSystem (in the dyld shared cache, not on disk).
@@ -599,16 +596,51 @@ end
     assert (result.code, result.stdout, result.stderr) == (code, "1\n", "")
 
 
-def capture_stdio_ready(read_streams, process, captured):
-    readable, _, _ = select.select(read_streams, [], [], 0.05)
-    for stream in readable:
-        name = "stdout" if stream is process.stdout else "stderr"
-        chunk = os.read(stream.fileno(), 65536)
-        if not chunk:
-            read_streams.remove(stream)
-        else:
-            captured[name].extend(chunk)
-    return b"done\n" in captured["stdout"]
+class StdioCapture:
+    """Reads a child's stdout and stderr to their ends on threads of their own (select takes no pipes on Windows). A
+    locked stream may carry a flood of native writes, so it keeps only the first 64 KiB of each stream and says whether
+    a stream ever carried one of NEEDLES."""
+
+    KEEP = 1 << 16
+
+    def __init__(self, process, needles):
+        self.needles = needles
+        self.lock = threading.Lock()
+        self.head = {"stdout": bytearray(), "stderr": bytearray()}
+        self.found = {"stdout": set(), "stderr": set()}
+        self.threads = {name: threading.Thread(target=self.read, args=(stream, name), daemon=True)
+                        for name, stream in (("stdout", process.stdout), ("stderr", process.stderr))}
+        for thread in self.threads.values():
+            thread.start()
+
+    def read(self, stream, name):
+        tail = b""
+        while chunk := stream.read1(65536):
+            # The tail keeps a needle that a chunk boundary cuts.
+            window = tail + chunk
+            with self.lock:
+                self.found[name].update(needle for needle in self.needles if needle in window)
+                if len(self.head[name]) < self.KEEP:
+                    self.head[name].extend(chunk[:self.KEEP - len(self.head[name])])
+            tail = window[-64:]
+
+    def has(self, name, needle):
+        with self.lock:
+            return needle in self.found[name]
+
+    def ended(self, name):
+        return not self.threads[name].is_alive()
+
+    def join(self, seconds):
+        for thread in self.threads.values():
+            thread.join(seconds)
+
+
+def wait_until(condition, seconds):
+    deadline = time.monotonic() + seconds
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return condition()
 
 
 def marker_is(path, expected):
@@ -618,13 +650,13 @@ def marker_is(path, expected):
         return False
 
 
-def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker, released_marker=None, tsan_support=None):
+def run_stdio_shutdown(source, lock_marker, main_marker, released_marker=None, tsan_support=None):
     diagnostic = tsan_support is not None
     owned_fds = []
     release_read = release_write = gate_read = gate_write = None
     try:
         env = vm_environment()
-        spawn_options = {"start_new_session": True}
+        spawn_options = {} if WINDOWS else {"start_new_session": True}
         if diagnostic:
             release_read, release_write = os.pipe2(os.O_CLOEXEC)
             owned_fds.extend((release_read, release_write))
@@ -650,41 +682,32 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker, released
             os.close(fd)
             owned_fds.remove(fd)
 
-    captured = {"stdout": bytearray(), "stderr": bytearray()}
-    stdout_done = False
-    read_streams = [process.stdout, process.stderr]
-    deadline = time.monotonic() + scaled(5)
+    capture = StdioCapture(process, [b"done\n", b"native-free\n"])
     try:
-        while not marker_is(lock_marker, b"locked") and process.poll() is None and time.monotonic() < deadline:
-            capture_stdio_ready(read_streams, process, captured)
-        assert marker_is(lock_marker, b"locked"), "native code did not acquire and mark the FILE lock"
+        assert wait_until(lambda: marker_is(lock_marker, b"locked") or process.poll() is not None, scaled(5)) and \
+            marker_is(lock_marker, b"locked"), "native code did not acquire and mark the FILE lock"
         time.sleep(scaled(0.25))
         process.stdin.write(b"x")
         process.stdin.close()
-        deadline = time.monotonic() + scaled(5)
-        while not main_marker.exists() and process.poll() is None and time.monotonic() < deadline:
-            stdout_done = capture_stdio_ready(read_streams, process, captured) or stdout_done
-        assert main_marker.exists(), "main did not reach the file marker after puts"
+        assert wait_until(lambda: main_marker.exists() or process.poll() is not None, scaled(5)) and \
+            main_marker.exists(), "main did not reach the file marker after puts"
         # The VM may write done and exit before this reads it, so read until done or the end of stdout, not the exit.
-        deadline = time.monotonic() + scaled(3)
-        while not stdout_done and process.stdout in read_streams and time.monotonic() < deadline:
-            stdout_done = capture_stdio_ready(read_streams, process, captured)
-        assert stdout_done, f"VM stdout did not deliver done: {bytes(captured['stdout'])!r}"
-        deadline = time.monotonic() + scaled(3)
-        while process.poll() is None and time.monotonic() < deadline:
-            capture_stdio_ready(read_streams, process, captured)
-        assert process.poll() is not None, "settlement waited for the native FILE lock"
-        deadline = time.monotonic() + scaled(1)
-        while read_streams and time.monotonic() < deadline:
-            capture_stdio_ready(read_streams, process, captured)
+        assert wait_until(lambda: capture.has("stdout", b"done\n") or capture.ended("stdout"), scaled(3)) and \
+            capture.has("stdout", b"done\n"), f"VM stdout did not deliver done: {bytes(capture.head['stdout'])!r}"
+        assert wait_until(lambda: process.poll() is not None, scaled(3)), "settlement waited for the native FILE lock"
+        capture.join(scaled(1))
         if diagnostic:
             assert released_marker is not None and marker_is(released_marker, b"released"), \
                 "native lock owner did not acknowledge TSan's finalization release"
-        return process.returncode, captured
+        return process.returncode, capture
     finally:
         if process.poll() is None:
-            os.killpg(process.pid, signal.SIGKILL)
+            if WINDOWS:
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
             process.wait()
+        capture.join(scaled(1))
         for stream in (process.stdin, process.stdout, process.stderr):
             if stream is not None:
                 stream.close()
@@ -692,7 +715,7 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker, released
             os.close(fd)
 
 
-@NATIVE_STDIO_CASES
+@NATIVE_CALLS
 @pytest.mark.parametrize("locked_stream, stream_id", [("stdout", 1), ("stderr", 2)])
 @pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(7)", 7)])
 def test_settlement_skips_a_locked_c_standard_stream(tmp_path, peer, tsan_stdio_support,
@@ -733,15 +756,11 @@ end
            main_marker=literal(tmp_path / "main-reached"), free_stream_id=3 - stream_id, ending=ending)
     source = program(tmp_path, main)
     assert agentica("check", source).code == 0
-    if not TARGET_OS.startswith("linux"):
-        host = "Windows" if WINDOWS else "macOS"
-        pytest.skip(f"known-issue: #616 {host} final C stdio flush remains blocking with a compute-held stream")
-    result, captured = run_stdio_shutdown(source, locked_stream, tmp_path / "locked", tmp_path / "main-reached",
-                                          tmp_path / "released" if tsan_stdio_support else None,
-                                          tsan_stdio_support)
+    result, capture = run_stdio_shutdown(source, tmp_path / "locked", tmp_path / "main-reached",
+                                         tmp_path / "released" if tsan_stdio_support else None, tsan_stdio_support)
     assert result == code
-    assert b"done\n" in captured["stdout"]
-    assert b"native-free\n" in captured[free_stream]
+    assert capture.has("stdout", b"done\n")
+    assert capture.has(free_stream, b"native-free\n")
 
 
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are

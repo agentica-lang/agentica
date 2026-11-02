@@ -104,6 +104,24 @@ def test_a_member_reads_its_sibling_from_the_folder_and_an_edit_there_is_seen_wi
     assert (ran.code, ran.stdout) == (0, "sqlite+common v2\n"), ran.stderr
 
 
+def test_a_missing_import_in_a_member_is_import_io_in_the_member_and_its_help_does_not_leave_the_package(
+        ws, remotes, tmp_path):
+    repo = tmp_path / "repo"
+    files = files_of(remotes)
+    # `db` is a file of the project (sqlite/db.agc), not of the member `common` that asks for it.
+    files["common/util.agc"] = 'import Db from "db"\n\n' + shout("v1")
+    lay_out(repo, files)
+    sqlite = repo / "sqlite"
+    updated, problem = at(sqlite, ws, remotes, "--json", "update")
+    assert (updated.code, problem) == (0, None), updated.stderr
+    result, problem = at(sqlite, ws, remotes, "--json", "check", "main.agc")
+    assert result.code == 1 and problem["code"] == "CHECK-IMPORT-IO", result.stderr
+    assert Path(problem["file"]) == (repo / "common" / "util.agc").resolve()
+    assert problem["range"]["start"] == {"line": 1, "column": 1}
+    # The path of the project is not offered: it would leave the package (CHECK-IMPORT-PATH).
+    assert ".." not in problem.get("help", "")
+
+
 def test_the_same_member_from_outside_the_repository_goes_through_the_cache_and_deps_and_the_table_is_ignored(
         ws, remotes, tmp_path):
     # The packages carry a `[workspace]` table that no workspace reads: it is not even checked.
