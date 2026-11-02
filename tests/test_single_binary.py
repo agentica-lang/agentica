@@ -382,7 +382,7 @@ def test_the_front_end_gets_the_embedded_std_sources(tmp_path, name):
     work = tmp_path
     front = front_end(work)
     got = agentica("--front-end", front, "std", name)
-    assert (got.code, got.stdout) == (0, (STDLIB / name).read_text())
+    assert (got.code, got.stdout) == (0, (STDLIB / name).read_text(encoding="utf-8"))
 
 
 def test_the_front_end_reports_a_missing_std_source(tmp_path):

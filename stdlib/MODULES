@@ -25,5 +25,6 @@ test/runner.agc
 test/units.agc
 toml.agc
 uri.agc
+utc.agc
 internal/archive_zip.agc
 internal/websocket.agc

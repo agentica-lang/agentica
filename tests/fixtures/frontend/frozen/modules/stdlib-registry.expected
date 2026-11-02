@@ -27,3 +27,4 @@ std/test/runner.agc
 std/test/units.agc
 std/toml.agc
 std/uri.agc
+std/utc.agc

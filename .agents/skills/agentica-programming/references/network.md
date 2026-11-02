@@ -23,6 +23,7 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
+TCP.remote_address(socket: Socket) -> String
 TLS.alpn(socket: Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
@@ -54,6 +55,10 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   resolves to, on one port (`localhost` takes `127.0.0.1` and `::1`); addresses
   the system cannot use are skipped. Ports are 1..65535 to connect and 0..65535
   to listen. A host with NUL is an error.
+- `TCP.remote_address` is the peer's IP without the port (`"127.0.0.1"`,
+  `"::1"`; an IPv4 peer of an IPv6 listener shows as IPv4; the IPv6 scope id
+  is dropped, so link-local peers on different interfaces look the same), `""`
+  once closed; TLS sockets too.
 - TLS (1.2 or later) verifies certificates and hostnames; verification cannot be
   turned off. An empty `ca_file` uses system trust: `SSL_CERT_FILE`, else the
   platform store (the CA bundle on Linux; the Security roots and Keychain trust
@@ -224,11 +229,16 @@ HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, opt
 HTTP.listen_websocket_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
+HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
+HTTP.Answer: Whole(HttpResponse), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgrade)
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
 HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
 HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [])
 
-HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
+HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes,
+            remote_addr: String = "")
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
 HttpServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
 ```
@@ -267,8 +277,10 @@ end
   and serve in the background. Port 0 picks a free port, which `local_port`
   returns. Each connection runs in its own task, with keep-alive.
 - `target` is the request target as sent; `path` is the part before `?`. Header
-  names are lowercase and the body is `Bytes`, as the client sent it. A handler
-  gets no other argument: pass data through the request, a file or a socket.
+  names are lowercase and the body is `Bytes`, as the client sent it.
+  `remote_addr` is the client's IP without the port (`"127.0.0.1"`, `"::1"`),
+  in every server form; behind a proxy it is the proxy's. A handler gets no
+  other argument: pass data through the request, a file or a socket.
 - The server adds `Content-Length` (not on 204 and 304, which need an empty
   body), `Date` unless the handler set it, and `Connection: close` when asked;
   `HEAD` gets no body.
@@ -432,3 +444,34 @@ end
   `HTTP.header_values(request.headers, "origin")` before accepting when the
   server serves pages. The other `listen` forms answer an `Upgrade` 501.
 - Unmasking runs at about 7 MB/s: keep `max_message_bytes` small.
+
+### Every kind of route on one port (`serve`)
+
+Each `listen` form serves one kind of route. When one server needs pages,
+streamed files, uploads and WebSockets, use `serve`. Its `HTTP.App` is
+`Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`: the request (empty
+`body`) and the body on a channel, as for `listen_upload`.
+
+```ruby
+def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.path == "/ws"
+    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
+  end
+  if request.path == "/upload"
+    return store(body)                # receive loop, await body.done, Answer.Whole
+  end
+  if request.path == "/file"
+    return ok(HTTP.Answer.Stream(file_response()))  # a StreamResponse
+  end
+  return HTTP.app(&page).call(request, body)        # a plain Handler
+end
+```
+
+- `HTTP.app(handler, max_body_bytes)` reads the body whole (1 MiB unless
+  given, a negative limit counts as 0) and calls the `Handler`: over the limit
+  is a 413, a bad chunk a 400, both closing; a cut or stalled body closes the
+  connection. `max_body_bytes` of `HttpServerOptions` does not apply to
+  `serve`; the body is at most 256 MiB. The app has no time limit.
+- The connection is kept only when the whole body had arrived when the app
+  returned, read or not (no body, or an empty chunked one, keeps it). An
+  `Accept` before that is a 500. A middleware is `App -> App`.
