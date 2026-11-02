@@ -519,7 +519,7 @@ HTTP.local_port(server: HttpServer) -> Int
 ```
 
 - `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a server `TlsContext` (`TLS.server_context`). Port 0 picks a free port (`local_port`).
-- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase) and `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`).
+- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase), `body` (`Bytes`, exactly as the client sent it, whichever the framing; decode text with [`HTTP.text`](#httptext) and `request.headers`) and `remote_addr`, the client's IP address without the port (`"127.0.0.1"`, `"::1"`, as [`TCP.remote_address`](#tcpremote_address) gives it; Rack's `REMOTE_ADDR`). Every server form fills `remote_addr`; behind a proxy it is the proxy's address. It defaults to `""` in `HttpRequest(...)`.
 
 A server that fetches its own page:
 

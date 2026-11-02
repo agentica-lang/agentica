@@ -237,7 +237,8 @@ HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message],
 HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
 HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [])
 
-HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes)
+HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes,
+            remote_addr: String = "")
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
 HttpServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
 ```
@@ -276,8 +277,10 @@ end
   and serve in the background. Port 0 picks a free port, which `local_port`
   returns. Each connection runs in its own task, with keep-alive.
 - `target` is the request target as sent; `path` is the part before `?`. Header
-  names are lowercase and the body is `Bytes`, as the client sent it. A handler
-  gets no other argument: pass data through the request, a file or a socket.
+  names are lowercase and the body is `Bytes`, as the client sent it.
+  `remote_addr` is the client's IP without the port (`"127.0.0.1"`, `"::1"`),
+  in every server form; behind a proxy it is the proxy's. A handler gets no
+  other argument: pass data through the request, a file or a socket.
 - The server adds `Content-Length` (not on 204 and 304, which need an empty
   body), `Date` unless the handler set it, and `Connection: close` when asked;
   `HEAD` gets no body.
