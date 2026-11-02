@@ -281,40 +281,18 @@ end
 The lexer keeps the body lines as written in one `eag` token (the rules of a
 heredoc apply: the indentation, the end line, `LEX-HEREDOC-INDENT`,
 `LEX-UNTERMINATED-HEREDOC`; a body may be one line or empty). The text is raw,
-with no escape and no `#{}`. The tags:
-
-- `<%= code %>` inserts the value of `code`, as `"#{code}"` does; the output is
-  raw, as the output of ERB is.
-- `<%== code %>` inserts the value as it is, whatever the escaper of the
-  template is.
-- `<% code %>` is a statement or the head of one (`if`, `elsif`, `else`, `for`,
-  `while`, `case`, `end`, a call with `do`). The tags of a template close their
-  own blocks (`PARSE-EAG-BLOCK`).
-- `<%# note %>` is dropped, and `<%%` is the text `<%`.
-- `-%>` removes the line break after the tag, and `<%-` removes the spaces
-  before the tag when only spaces come before it on its line.
-- A line that holds only one `<% %>` or `<%# %>` tag and spaces is removed
-  whole. This is the one rule that is not Ruby's `trim_mode: "-"`.
-- A tag ends at the first `%>` on its line (`PARSE-EAG-UNTERMINATED-TAG`).
-- `<%@ escape function %>` on the first line of the body gives the template an
-  escaper: every `<%= %>` of the template inserts `function.call("#{code}")`
-  instead (`<%==` stays raw). `function` is any expression of type
-  `Fn[String, String]`, as `&EAG.html_escape`; another type is
-  `CHECK-TYPE-MISMATCH` at the function. `escape` is the only directive word;
-  a directive with another word or no function, not on the first line, or given
-  twice is `PARSE-EAG-DIRECTIVE`. Alone on its line it is removed whole.
+with no escape and no `#{}`. The tags (`<%= %>`, `<%== %>`, `<% %>`, `<%# %>`,
+`<%%`, `-%>`, `<%-`, the `<%@ escape %>` directive), the trimming rules and
+their codes (`PARSE-EAG-BLOCK`, `PARSE-EAG-UNTERMINATED-TAG`,
+`PARSE-EAG-DIRECTIVE`) are in the
+[`std/eag` page](../../site/content/library/text-and-data/eag.md).
 
 The parser makes the template an expression that builds the text, from tokens
 that keep their places in the file, so every diagnostic about a tag has its
-place in the template; the checker checks it as ordinary code. A tag sees the
-names of the function and, since the template is a block of the function, cannot
-assign them (`CHECK-CAPTURED-ASSIGNMENT`, with a message about the template); a
-block inside a tag, such as `items.each do |i|`, cannot write output for the
-same reason, so a loop is `for i in items`. The names the expansion uses have a
-`#`, which no identifier has. `agentica type-at` and `refs` at a position inside
-a tag are `QUERY-NO-EXPRESSION` yet; `refs` by name finds the names a tag uses.
-The literal is an expression that can stand anywhere one can. The file must
-import `std/eag` in any form, or the literal is `CHECK-EAG-IMPORT`.
+place in the template; the checker checks it as ordinary code, so the literal
+can stand anywhere an expression can. The names the expansion uses have a `#`,
+which no identifier has. The file must import `std/eag` in any form, or the
+literal is `CHECK-EAG-IMPORT`.
 
 ### Regex literals
 

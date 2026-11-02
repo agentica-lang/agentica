@@ -119,321 +119,230 @@ code, never the help text. A method hint is given only when the suggested method
 exists for the receiver's type. The diagnostics below carry a code whose trigger
 is a rule:
 
-- **Written:** `x = 1;` (`LEX-UNEXPECTED-CHAR`)
-  - **Help:** no semicolons: end the statement with a newline
-
-- **Written:** `'+'`, `'abc'`, `` `abc` `` (`LEX-UNEXPECTED-CHAR`)
-  - **Help:** strings use double quotes; a character is a one-character String:
-    `"+"`
-
-- **Written:** bytes that are not valid UTF-8 in a source file
-  (`LEX-INVALID-UTF8`)
-  - **Help:** source files are UTF-8: save the file as UTF-8 text
-
-- **Written:** `xs << x` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** lists are immutable and have no `<<`: `xs = xs.push(x)`
-
-- **Written:** `<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name`
-  (`LEX-UNEXPECTED-CHAR`)
-  - **Help:** the only heredoc is `<<~NAME`, with the name in capitals; `\#`
-    writes a `#` that starts no interpolation
-
-- **Written:** a heredoc with one line of text or none (`LEX-HEREDOC-ONE-LINE`)
-  - **Help:** a heredoc is for two lines or more; write one line as a string
-    literal, `"text\n"`
-
-- **Written:** a tab in the indentation of a heredoc (`LEX-HEREDOC-INDENT`), a
-  heredoc with no end line (`LEX-UNTERMINATED-HEREDOC`)
-  - **Help:** indent with spaces; end the heredoc with a line that holds only
-    its name
-
-- **Written:** a `<%` tag with no `%>` on its line in an `<<~EAG` template
+- `x = 1;` (`LEX-UNEXPECTED-CHAR`)
+  Help: no semicolons: end the statement with a newline
+- `'+'`, `'abc'`, `` `abc` `` (`LEX-UNEXPECTED-CHAR`)
+  Help: strings use double quotes; a character is a one-character String: `"+"`
+- bytes that are not valid UTF-8 in a source file (`LEX-INVALID-UTF8`)
+  Help: source files are UTF-8: save the file as UTF-8 text
+- `xs << x` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: lists are immutable and have no `<<`: `xs = xs.push(x)`
+- `<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name` (`LEX-UNEXPECTED-CHAR`)
+  Help: the only heredoc is `<<~NAME`, with the name in capitals; `\#` writes a
+  `#` that starts no interpolation
+- a heredoc with one line of text or none (`LEX-HEREDOC-ONE-LINE`)
+  Help: a heredoc is for two lines or more; write one line as a string literal,
+  `"text\n"`
+- a tab in the indentation of a heredoc (`LEX-HEREDOC-INDENT`), a heredoc with
+  no end line (`LEX-UNTERMINATED-HEREDOC`)
+  Help: indent with spaces; end the heredoc with a line that holds only its name
+- a `<%` tag with no `%>` on its line in an `<<~EAG` template
   (`PARSE-EAG-UNTERMINATED-TAG`)
-  - **Help:** end the tag with `%>` on the same line; write `<%%` for the text
-    `<%`
-
-- **Written:** an `<% end %>` with nothing to close, or an `<% if %>`,
-  `<% for %>`, `<% while %>`, `<% case %>` or a tag with `do` that the template
-  never ends (`PARSE-EAG-BLOCK`)
-  - **Help:** a template closes its own blocks
-
-- **Written:** a `<%@ %>` directive of an `<<~EAG` template that is not
-  `escape function`, is not on the first line of the body, or comes twice
-  (`PARSE-EAG-DIRECTIVE`)
-  - **Help:** write `<%@ escape &EAG.html_escape %>` alone on the first line
-
-- **Written:** an `<<~EAG` template in a file that does not import `std/eag`
+  Help: end the tag with `%>` on the same line; write `<%%` for the text `<%`
+- an `<% end %>` with nothing to close, or an `<% if %>`, `<% for %>`, `<% while
+  %>`, `<% case %>` or a tag with `do` that the template never ends
+  (`PARSE-EAG-BLOCK`)
+  Help: a template closes its own blocks
+- a `<%@ %>` directive of an `<<~EAG` template that is not `escape function`, is
+  not on the first line of the body, or comes twice (`PARSE-EAG-DIRECTIVE`)
+  Help: write `<%@ escape &EAG.html_escape %>` alone on the first line
+- an `<<~EAG` template in a file that does not import `std/eag`
   (`CHECK-EAG-IMPORT`)
-  - **Help:** add `import EAG from "std/eag"`; any import of `std/eag` will do
-
-- **Written:** `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** comments start with `#`; `4 // 2` has no `//` operator, `/` on two
-    Ints truncates
-
-- **Written:** `/a+` with no closing `/` on the line, or a line that starts
-  with `/ 2` (`LEX-UNTERMINATED-REGEX`)
-  - **Help:** end the pattern with `/` on the same line; for a division put the
-    `/` at the end of the line before, or wrap the expression in parentheses
-
-- **Written:** `/a[/]b/` (`LEX-UNTERMINATED-REGEX`)
-  - **Help:** write a slash in a class with a backslash, `[\/]`
-
-- **Written:** `/#{name}/` (`LEX-REGEX-INTERPOLATION`)
-  - **Help:** build a pattern at run time with `Regex.compile(text)`; `\#{`
-    matches the text `#{`
-
-- **Written:** `/a/x`, `/a/ii` (`LEX-REGEX-FLAG`)
-  - **Help:** the flags are `i` (ignore case) and `m` (`.` matches a newline),
-    each once
-
-- **Written:** `/a+/` in a file that does not import `std/regex`
-  (`CHECK-REGEX-IMPORT`)
-  - **Help:** add `import Regex from "std/regex"`; any import of `std/regex`
-    will do
-
-- **Written:** `/ab)/`, `/a{2,1}/` (`CHECK-INVALID-REGEX`)
-  - **Help:** the pattern syntax is that of `std/regex`; escape a literal
-    character with a backslash, such as `\.` or `\/`
-
-- **Written:** `puts /x/` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** a `/` after a name is division; a call needs parentheses to take
-    a regex, `puts(/x/)`
-
-- **Written:** a `##` doc block that is not directly above a `def`, `struct`,
-  `enum`, field or variant (`PARSE-DETACHED-DOC`)
-  - **Help:** put the doc block on the lines just above what it documents, with
-    no blank line or `#` comment between; use `#` for a note that documents
-    nothing
-
-- **Written:** a function before a `struct`, `enum` or type alias, a private
-  `def` before an `export def`, a constant after a declaration that is not an
-  import or a constant, an `import` after a declaration (`CHECK-DECL-ORDER`)
-  - **Help:** keep the file order: module doc and imports, then constants, then
-    `struct`, `enum` and type aliases, then `export def`, then `def`
-
-- **Written:** `Limit = 1`, `X = 1`, `maxDepth = 1` at the top level
-  (`PARSE-CONSTANT-NAME`)
-  - **Help:** a constant name is capitals, digits and `_`, at least two
-    characters: `LIMIT`; the help suggests `MAX_DEPTH` for `MaxDepth`
-
-- **Written:** `LIMIT = make()` with a `def`, `&make`, a `while` loop, or a
-  builtin with effects such as `IO.gets!()` in a constant
-  (`CHECK-CONSTANT-EXPRESSION`)
-  - **Help:** a constant is built from literals, constructors, operators, other
-    constants and builtins without effects; compute anything else in a function
-
-- **Written:** `JOBS: Channel[Int] = Channel.new(1)` in a constant
-  (`CHECK-CONSTANT-TYPE`)
-  - **Help:** a constant holds data: numbers, text, collections, structs and
-    enums of those; functions, tasks, channels, handles and tables are not
-    data
-
-- **Written:** `A = B + 1` with `B = A + 1` (`CHECK-CONSTANT-CYCLE`)
-  - **Help:** break the loop; the help lists the constants around it, `A -> B ->
-    A`
-
-- **Written:** `case x` with `LIMIT -> ...` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** a constant is not a pattern; compare with `if x == LIMIT`
-
-- **Written:** `LIMIT = 2` or `LIMIT += 1` inside a function
+  Help: add `import EAG from "std/eag"`; any import of `std/eag` will do
+- `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints
+  truncates
+- `/a+` with no closing `/` on the line, or a line that starts with `/ 2`
+  (`LEX-UNTERMINATED-REGEX`)
+  Help: end the pattern with `/` on the same line; for a division put the `/` at
+  the end of the line before, or wrap the expression in parentheses
+- `/a[/]b/` (`LEX-UNTERMINATED-REGEX`)
+  Help: write a slash in a class with a backslash, `[\/]`
+- `/#{name}/` (`LEX-REGEX-INTERPOLATION`)
+  Help: build a pattern at run time with `Regex.compile(text)`; `\#{` matches
+  the text `#{`
+- `/a/x`, `/a/ii` (`LEX-REGEX-FLAG`)
+  Help: the flags are `i` (ignore case) and `m` (`.` matches a newline), each
+  once
+- `/a+/` in a file that does not import `std/regex` (`CHECK-REGEX-IMPORT`)
+  Help: add `import Regex from "std/regex"`; any import of `std/regex` will do
+- `/ab)/`, `/a{2,1}/` (`CHECK-INVALID-REGEX`)
+  Help: the pattern syntax is that of `std/regex`; escape a literal character
+  with a backslash, such as `\.` or `\/`
+- `puts /x/` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: a `/` after a name is division; a call needs parentheses to take a
+  regex, `puts(/x/)`
+- a `##` doc block that is not directly above a `def`, `struct`, `enum`, field
+  or variant (`PARSE-DETACHED-DOC`)
+  Help: put the doc block on the lines just above what it documents, with no
+  blank line or `#` comment between; use `#` for a note that documents nothing
+- a function before a `struct`, `enum` or type alias, a private `def` before an
+  `export def`, a constant after a declaration that is not an import or a
+  constant, an `import` after a declaration (`CHECK-DECL-ORDER`)
+  Help: keep the file order: module doc and imports, then constants, then
+  `struct`, `enum` and type aliases, then `export def`, then `def`
+- `Limit = 1`, `X = 1`, `maxDepth = 1` at the top level (`PARSE-CONSTANT-NAME`)
+  Help: a constant name is capitals, digits and `_`, at least two characters:
+  `LIMIT`; the help suggests `MAX_DEPTH` for `MaxDepth`
+- `LIMIT = make()` with a `def`, `&make`, a `while` loop, or a builtin with
+  effects such as `IO.gets!()` in a constant (`CHECK-CONSTANT-EXPRESSION`)
+  Help: a constant is built from literals, constructors, operators, other
+  constants and builtins without effects; compute anything else in a function
+- `JOBS: Channel[Int] = Channel.new(1)` in a constant (`CHECK-CONSTANT-TYPE`)
+  Help: a constant holds data: numbers, text, collections, structs and enums of
+  those; functions, tasks, channels, handles and tables are not data
+- `A = B + 1` with `B = A + 1` (`CHECK-CONSTANT-CYCLE`)
+  Help: break the loop; the help lists the constants around it, `A -> B -> A`
+- `case x` with `LIMIT -> ...` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: a constant is not a pattern; compare with `if x == LIMIT`
+- `LIMIT = 2` or `LIMIT += 1` inside a function
   (`PARSE-INVALID-ASSIGNMENT-TARGET`)
-  - **Help:** constants are set at the top level and never change; use a local
-    with a lowercase name
-
-- **Written:** `Limits.MAX()` or `x: Limits.MAX` for a constant `MAX`
-  (`CHECK-TYPE-MISMATCH`)
-  - **Help:** none; a constant is read as `Limits.MAX`, with no parentheses, and
-    is not a type
-
-- **Written:** code nested more than 1,000 levels deep (`PARSE-TOO-DEEP`):
-  parentheses, brackets, blocks, statements, prefix operators, type arguments,
-  or a chain of operators or `.` suffixes that, with the nesting around it,
-  passes 1,000 levels
-  - **Help:** split the code into smaller functions, or name the parts of a long
-    expression with bindings
-
-- **Written:** a tree of expressions and statements more than 1,000 levels deep,
-  or an alias expansion with more than 1,000 type references (`CHECK-TOO-DEEP`):
-  every expression and statement inside another counts one level, and the tree
-  can be deeper than the parser's count, because the right operand of the first
+  Help: constants are set at the top level and never change; use a local with a
+  lowercase name
+- `Limits.MAX()` or `x: Limits.MAX` for a constant `MAX` (`CHECK-TYPE-MISMATCH`)
+  Help: none; a constant is read as `Limits.MAX`, with no parentheses, and is
+  not a type
+- code nested more than 1,000 levels deep (`PARSE-TOO-DEEP`): parentheses,
+  brackets, blocks, statements, prefix operators, type arguments, or a chain of
+  operators or `.` suffixes that, with the nesting around it, passes 1,000
+  levels
+  Help: split the code into smaller functions, or name the parts of a long
+  expression with bindings
+- a tree of expressions and statements more than 1,000 levels deep, or an alias
+  expansion with more than 1,000 type references (`CHECK-TOO-DEEP`): every
+  expression and statement inside another counts one level, and the tree can be
+  deeper than the parser's count, because the right operand of the first
   operator of a chain hangs below the whole chain (`x + (x + (...) + x + x) + x
   + x`)
-  - **Help:** split the code into smaller functions, name the parts of a long
-    expression with bindings, or simplify the alias chain
-
-- **Written:** a statement or an extra `end` at the top level
-  (`PARSE-TOP-LEVEL-STATEMENT`)
-  - **Help:** statements go inside `def main() -> Void ... end`; an extra `end`
-    closes nothing; a stray `else` or `elsif` has no matching `if`; a file holds
-    only `def`, `struct`, `enum`, type aliases (`type Name = Type`), `import`,
-    `export` and constants (`NAME = value`)
-
-- **Written:** `user.with()`, `user.with(31)`, `user.with(age)`
-  (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** a struct update names each field it changes, one or more:
-    `user.with(age: 31)`
-
-- **Written:** `x.with(age: 31)` where `x` is not a struct
-  (`CHECK-UNKNOWN-METHOD`)
-  - **Help:** `with` copies a struct with some fields changed; the value before
-    `.with` must be a struct
-
-- **Written:** `CONFIG.with()` on a constant of a struct type
-  (`CHECK-UNKNOWN-METHOD`; a lowercase `user.with()` is
-  `PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** `with` needs the fields to change, as in `.with(field: value)`;
-    the help lists the fields
-
-- **Written:** a field named `with` of type `Fn[...]` or of a type parameter
+  Help: split the code into smaller functions, name the parts of a long
+  expression with bindings, or simplify the alias chain
+- a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`)
+  Help: statements go inside `def main() -> Void ... end`; an extra `end` closes
+  nothing; a stray `else` or `elsif` has no matching `if`; a file holds only
+  `def`, `struct`, `enum`, type aliases (`type Name = Type`), `import`, `export`
+  and constants (`NAME = value`)
+- `user.with()`, `user.with(31)`, `user.with(age)` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: a struct update names each field it changes, one or more:
+  `user.with(age: 31)`
+- `x.with(age: 31)` where `x` is not a struct (`CHECK-UNKNOWN-METHOD`)
+  Help: `with` copies a struct with some fields changed; the value before
+  `.with` must be a struct
+- `CONFIG.with()` on a constant of a struct type (`CHECK-UNKNOWN-METHOD`; a
+  lowercase `user.with()` is `PARSE-UNEXPECTED-TOKEN`)
+  Help: `with` needs the fields to change, as in `.with(field: value)`; the help
+  lists the fields
+- a field named `with` of type `Fn[...]` or of a type parameter
   (`CHECK-REDEFINED-NAME`)
-  - **Help:** rename the field: `value.with(...)` is always the struct update
-
-- **Written:** `Box` or `Box[Int, Int]` for `struct Box[T]`
-  (`CHECK-UNKNOWN-TYPE`)
-  - **Help:** the message says how many type arguments the struct expects
-    (`struct Box expects 1 type argument(s), found 2`)
-
-- **Written:** `Box(value: [])` with no expected type, or a type parameter that
-  no field value fixes (`CHECK-ENUM-TYPE-INFERENCE`)
-  - **Help:** give the struct a type where it is used, such as a variable with
-    a type annotation
-
-- **Written:** `first_or([], [])`, `empty_of()` with no expected type, or `f =
-  &first_or`, for generic functions (`CHECK-ENUM-TYPE-INFERENCE`)
-  - **Help:** give the call a type where it is used, such as a variable with a
-    type annotation, or an argument that shows it; a reference needs the `Fn`
-    type, as in `f: Fn[List[Int], Int, Int] = &first_or`
-
-- **Written:** a type parameter of a function named like a struct, enum or alias
-  of the file, as in `def f[Item](x: Item)` beside `struct Item`
-  (`CHECK-REDEFINED-NAME`)
-  - **Help:** rename the type parameter
-
-- **Written:** a parameter without a default after one with a default, such as
-  `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)
-  - **Help:** give `b` a default, or move the parameters with a default to the
-    end; only a last `Fn` parameter may stay without one, so a block can fill it
-
-- **Written:** a default that is not a constant, such as `b: Int = make()`, `b:
-  Int = a`, `b: Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`)
-  - **Help:** a default is a literal, `true`, `false`, `nil`, `none`, `[]`,
-    `{}`, an enum variant without a payload or, for a parameter, a struct with
-    no arguments; make the parameter required and pass the value at the call
-
-- **Written:** `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)`
-  (`CHECK-ARITY`)
-  - **Help:** a call takes from the number of parameters without a default to
-    the number of all parameters (`1 to 2 arguments`)
-
-- **Written:** `s[0]` on a String (`CHECK-NOT-INDEXABLE`)
-  - **Help:** `s.at(i)`, `s.slice(start, length)`, or `s.split("")`
-
-- **Written:** `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`)
-  - **Help:** `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s`
-    for String and number
-
-- **Written:** `a < b` on Strings (`CHECK-TYPE-MISMATCH`)
-  - **Help:** `< <= > >=` take numbers only; compare with `==` and `!=`, order a
-    list with `xs.sort`
-
-- **Written:** `m = {}`, `xs = []`, `s = Set.new([])` (`CHECK-EMPTY-MAP-TYPE`,
+  Help: rename the field: `value.with(...)` is always the struct update
+- `Box` or `Box[Int, Int]` for `struct Box[T]` (`CHECK-UNKNOWN-TYPE`)
+  Help: the message says how many type arguments the struct expects (`struct Box
+  expects 1 type argument(s), found 2`)
+- `Box(value: [])` with no expected type, or a type parameter that no field
+  value fixes (`CHECK-ENUM-TYPE-INFERENCE`)
+  Help: give the struct a type where it is used, such as a variable with a type
+  annotation
+- `first_or([], [])`, `empty_of()` with no expected type, or `f = &first_or`,
+  for generic functions (`CHECK-ENUM-TYPE-INFERENCE`)
+  Help: give the call a type where it is used, such as a variable with a type
+  annotation, or an argument that shows it; a reference needs the `Fn` type, as
+  in `f: Fn[List[Int], Int, Int] = &first_or`
+- a type parameter of a function named like a struct, enum or alias of the file,
+  as in `def f[Item](x: Item)` beside `struct Item` (`CHECK-REDEFINED-NAME`)
+  Help: rename the type parameter
+- a parameter without a default after one with a default, such as `def f(a: Int
+  = 1, b: Int)` (`CHECK-DEFAULT-ORDER`)
+  Help: give `b` a default, or move the parameters with a default to the end;
+  only a last `Fn` parameter may stay without one, so a block can fill it
+- a default that is not a constant, such as `b: Int = make()`, `b: Int = a`, `b:
+  Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`)
+  Help: a default is a literal, `true`, `false`, `nil`, `none`, `[]`, `{}`, an
+  enum variant without a payload or, for a parameter, a struct with no
+  arguments; make the parameter required and pass the value at the call
+- `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)` (`CHECK-ARITY`)
+  Help: a call takes from the number of parameters without a default to the
+  number of all parameters (`1 to 2 arguments`)
+- `s[0]` on a String (`CHECK-NOT-INDEXABLE`)
+  Help: `s.at(i)`, `s.slice(start, length)`, or `s.split("")`
+- `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`)
+  Help: `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s` for
+  String and number
+- `a < b` on Strings (`CHECK-TYPE-MISMATCH`)
+  Help: `< <= > >=` take numbers only; compare with `==` and `!=`, order a list
+  with `xs.sort`
+- `m = {}`, `xs = []`, `s = Set.new([])` (`CHECK-EMPTY-MAP-TYPE`,
   `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-SET-TYPE`)
-  - **Help:** annotate: `m: Map[String, Int] = {}`, `s: Set[Int] = Set.new([])`
-
-- **Written:** a loop, `if` or `case` as the last statement
-  (`CHECK-MISSING-RETURN`)
-  - **Help:** a loop is not a return; each branch or arm must return, or return
-    after it
-
-- **Written:** `while x {`, `if x {`, `else {`, `for x in xs {`, `case x {`,
-  `def f() -> T {`, `do \|x\| {` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** blocks have no braces: `while cond` ... `end`
-
-- **Written:** a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed
-  `{` (`LEX-UNCLOSED-DELIMITER`)
-  - **Help:** blocks end with `end`, not `}`
-
-- **Written:** `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g`
+  Help: annotate: `m: Map[String, Int] = {}`, `s: Set[Int] = Set.new([])`
+- a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`)
+  Help: a loop is not a return; each branch or arm must return, or return after
+  it
+- `while x {`, `if x {`, `else {`, `for x in xs {`, `case x {`, `def f() -> T
+  {`, `do \|x\| {` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: blocks have no braces: `while cond` ... `end`
+- a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed `{`
+  (`LEX-UNCLOSED-DELIMITER`)
+  Help: blocks end with `end`, not `}`
+- `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g`
   (`PARSE-PIPE-TARGET`)
-  - **Help:** a call with parentheses on the right; wrap the expression in
-    parentheses and use `.` on the result: `(x \|> f()).unwrap!`
-
-- **Written:** `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
-  - **Help:** the method form: `x.strip`
-
-- **Written:** `import` followed by a string, the path-first form of earlier
-  versions (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** `import Models from "models"`: the alias comes first, then `from`
-    and the path
-
-- **Written:** `import Mod, {name} from "path"`, `import {} from "path"`,
-  `import {a b} from "path"` (`PARSE-UNEXPECTED-TOKEN`)
-  - **Help:** one line does one thing: write `import Mod from "path"` and
-    `import {name} from "path"` on two lines; a name list has at least one name,
-    with commas between names
-
-- **Written:** `import {Token as token} from "path"`, `import {lex as Lex} from
-  "path"`, `import {MAX as Max} from "path"` (`CHECK-IMPORT-RENAME`)
-  - **Help:** a struct or an enum is renamed to a type name (a capital first
-    letter), a function to a lowercase name and a constant to another constant
-    name (capitals and underscores)
-
-- **Written:** an imported name (or the new name after `as`) that is also a
-  declaration of the file, an alias, another imported name, a builtin function
-  such as `puts` or a reserved type name such as `Int` (`CHECK-REDEFINED-NAME`)
-  - **Help:** rename the import: `import {name as other} from "path"`
-
-- **Written:** `M.nme` or `import {nme} from "path"` when module `M` exports
-  `name` (`CHECK-IMPORT-NAME`)
-  - **Help:** the help suggests the closest export of `M` (`did you mean
-    "name"?`); it never suggests a private name, and it stays empty when no
-    export is close
-
-- **Written:** `Logger.error(...)` (`CHECK-IMPORT-NAME`)
-  - **Help:** `Logger.err(...)`; `error` is a reserved name, so the function for
-    the error level is `err`
-
-- **Written:** `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`,
-  `HTTP.write_bytes` with the import (`CHECK-IMPORT-NAME`)
-  - **Help:** a handler that returns its whole response: `return
-    ok(HttpResponse(status: 200, headers: [], body: text.bytes))`
-
-- **Written:** `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`)
-  - **Help:** `def handle(request: HttpRequest) -> Result[HttpResponse]`
-
-- **Written:** a type alias cycle (`CHECK-TYPE-ALIAS-CYCLE`)
-  - **Help:** break the cycle; aliases expand to the type they name, so `type
-    Names = List[String]` is valid
-
-- **Written:** `Matrix` or `Matrix[Int, Int]` for `type Matrix[T] = ...`, or
-  `Names[Int]` for `type Names = ...` (`CHECK-UNKNOWN-TYPE`)
-  - **Help:** the message says how many type arguments the alias expects
-    (`type alias Matrix expects 1 type argument(s), found 2`, or `takes no type
-    arguments`); an alias is never a partial application
-
-- **Written:** `type Box[T, T] = ...` or `type Box[Int] = ...`
-  (`CHECK-REDEFINED-NAME`)
-  - **Help:** a type parameter of an alias, like one of an enum, is not repeated
-    and is not a reserved type name
-
-- **Written:** `enum E[Item] V(Items) end` when `type Items = List[Item]` names
-  a struct `Item` (`CHECK-UNKNOWN-TYPE`)
-  - **Help:** rename the type parameter; it would hide the type the alias names
-
-- **Written:** `Grid(...)` when `Grid` is a type alias (`CHECK-UNKNOWN-TYPE`)
-  - **Help:** construct the struct named by the alias, or use a value of the
-    aliased builtin type
-
-- **Written:** `File.foreach(path, n, ms).each do |line| ... end`, with no step
-  between the source and `.each`, written as one chain (`CHECK-LAZY-NO-STEP`)
-  - **Help:** `File.each_line(path, buffer_bytes, timeout_ms) do |line| ...
-    end`; keep `File.foreach` for a chain with a step
-
-- **Written:** `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`)
-  - **Help:** annotate it: `ch: Channel[Int] = Channel.new(8)`
-
-- **Written:** `ATS.new()` with no expected type (`CHECK-EXPECTED-TYPE`)
-  - **Help:** annotate it: `hits: ATS[String, Int] = ATS.new()`
+  Help: a call with parentheses on the right; wrap the expression in parentheses
+  and use `.` on the result: `(x \|> f()).unwrap!`
+- `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
+  Help: the method form: `x.strip`
+- `import` followed by a string, the path-first form of earlier versions
+  (`PARSE-UNEXPECTED-TOKEN`)
+  Help: `import Models from "models"`: the alias comes first, then `from` and
+  the path
+- `import Mod, {name} from "path"`, `import {} from "path"`, `import {a b} from
+  "path"` (`PARSE-UNEXPECTED-TOKEN`)
+  Help: one line does one thing: write `import Mod from "path"` and `import
+  {name} from "path"` on two lines; a name list has at least one name, with
+  commas between names
+- `import {Token as token} from "path"`, `import {lex as Lex} from "path"`,
+  `import {MAX as Max} from "path"` (`CHECK-IMPORT-RENAME`)
+  Help: a struct or an enum is renamed to a type name (a capital first letter),
+  a function to a lowercase name and a constant to another constant name
+  (capitals and underscores)
+- an imported name (or the new name after `as`) that is also a declaration of
+  the file, an alias, another imported name, a builtin function such as `puts`
+  or a reserved type name such as `Int` (`CHECK-REDEFINED-NAME`)
+  Help: rename the import: `import {name as other} from "path"`
+- `M.nme` or `import {nme} from "path"` when module `M` exports `name`
+  (`CHECK-IMPORT-NAME`)
+  Help: the help suggests the closest export of `M` (`did you mean "name"?`); it
+  never suggests a private name, and it stays empty when no export is close
+- `Logger.error(...)` (`CHECK-IMPORT-NAME`)
+  Help: `Logger.err(...)`; `error` is a reserved name, so the function for the
+  error level is `err`
+- `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`
+  with the import (`CHECK-IMPORT-NAME`)
+  Help: a handler that returns its whole response: `return
+  ok(HttpResponse(status: 200, headers: [], body: text.bytes))`
+- `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`)
+  Help: `def handle(request: HttpRequest) -> Result[HttpResponse]`
+- a type alias cycle (`CHECK-TYPE-ALIAS-CYCLE`)
+  Help: break the cycle; aliases expand to the type they name, so `type Names =
+  List[String]` is valid
+- `Matrix` or `Matrix[Int, Int]` for `type Matrix[T] = ...`, or `Names[Int]` for
+  `type Names = ...` (`CHECK-UNKNOWN-TYPE`)
+  Help: the message says how many type arguments the alias expects (`type alias
+  Matrix expects 1 type argument(s), found 2`, or `takes no type arguments`); an
+  alias is never a partial application
+- `type Box[T, T] = ...` or `type Box[Int] = ...` (`CHECK-REDEFINED-NAME`)
+  Help: a type parameter of an alias, like one of an enum, is not repeated and
+  is not a reserved type name
+- `enum E[Item] V(Items) end` when `type Items = List[Item]` names a struct
+  `Item` (`CHECK-UNKNOWN-TYPE`)
+  Help: rename the type parameter; it would hide the type the alias names
+- `Grid(...)` when `Grid` is a type alias (`CHECK-UNKNOWN-TYPE`)
+  Help: construct the struct named by the alias, or use a value of the aliased
+  builtin type
+- `File.foreach(path, n, ms).each do |line| ... end`, with no step between the
+  source and `.each`, written as one chain (`CHECK-LAZY-NO-STEP`)
+  Help: `File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end`; keep
+  `File.foreach` for a chain with a step
+- `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`)
+  Help: annotate it: `ch: Channel[Int] = Channel.new(8)`
+- `ATS.new()` with no expected type (`CHECK-EXPECTED-TYPE`)
+  Help: annotate it: `hits: ATS[String, Int] = ATS.new()`
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks:
 the frames of a stack are Agentica functions.

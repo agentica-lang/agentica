@@ -47,44 +47,20 @@ language and the checker:
 
 `Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values
 into and receive values from, and a handle: assigning or passing it shares the
-same channel. The functions (`new`, `send`, `recv`, `close`, `closed?`,
-`empty?`), the timeouts, the order of waiters and the ownership of a channel are
-in the
+same channel. The functions, the timeouts, the order of waiters, the ownership
+of a channel and the checker rules (the type `T`, the expected type of
+`Channel.new`, what `puts`, `==` and JSON do with a channel) are in the
 [`Channel` page](../../site/content/library/concurrency/channel.md).
-
-- `T` is any type a variable can have, so `Channel[Void]` is `CHECK-VOID-TYPE`.
-  A user `struct`, `enum` or import alias named `Channel` is
-  `CHECK-REDEFINED-NAME`.
-- `Channel.new` needs an expected type, from an annotation, a parameter, a field
-  or a return type, else `CHECK-EXPECTED-TYPE` at the call.
-- `puts`, `print`, interpolation and `==` on a channel are
-  `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a JSON encoding
-  of a struct with a channel field is `CHECK-NOT-ENCODABLE`.
 
 ### Shared tables (ATS)
 
-`ATS` (Agentica Table Storage) is reserved: a user `struct`, `enum` or import
-alias named `ATS` is `CHECK-REDEFINED-NAME`. An `ATS[K, V]` is a mutable table
+`ATS` (Agentica Table Storage) is reserved. An `ATS[K, V]` is a mutable table
 that tasks share through a handle, the role of Erlang's ETS: values stay
 immutable, and a table is the one place where shared data changes in place. The
-functions, atomicity, costs and lifetime are in the
+functions, atomicity, costs, lifetime and the checker rules (where a table may
+be held, the types `K` and `V`, the expected type of `ATS.new`, the effects of
+its functions) are in the
 [`ATS` page](../../site/content/library/concurrency/ats.md).
-
-- A table is a handle, never copied. It may be a struct field, a list element, a
-  `Map` value, or a `Task.spawn` argument or result, but not a value inside a
-  table. A constant cannot hold one (`CHECK-CONSTANT-TYPE`).
-- Keys are `Int` or `String`, else `CHECK-MAP-KEY-TYPE`. `V` must be a data type
-  that is not `Nil`, else `CHECK-ATS-VALUE` at the value type; the test is deep
-  and refuses `Fn`, `Task`, `Channel`, every handle, `Lazy` and `ATS` itself.
-  `V` as `Void` is `CHECK-VOID-TYPE`, and a type parameter is refused as `V`.
-- `ATS.new` needs an expected type, like `Channel.new` (`CHECK-EXPECTED-TYPE`).
-  `ATS.add` works only on a table whose values are `Int`
-  (`CHECK-TYPE-MISMATCH`).
-- `puts`, `print`, interpolation and `==` on a table are `CHECK-TYPE-MISMATCH`,
-  `.to_s` is `CHECK-UNKNOWN-METHOD`, and a JSON encoding of a struct with a
-  table field is `CHECK-NOT-ENCODABLE`.
-- `ATS.put`, `put_new`, `delete` and `add` carry the `concurrency` effect, so
-  an ignored `put_new` or `add` is not `CHECK-UNUSED-VALUE`.
 
 ### Unit tests (`Test`)
 

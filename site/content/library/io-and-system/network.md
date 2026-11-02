@@ -238,10 +238,7 @@ Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
 | `TLS.connect(host, port, "ca.pem", ms)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)` |
 | `TLS.connect(host, port, ca, ms, cert, key)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: cert, key_file: key)).unwrap!, ms)` |
 | `TLS.listen(host, port, cert, key)` | `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)` |
-| `HTTP.listen_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, HTTP.app(handler))` |
-| `HTTP.listen_stream_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that answers `HTTP.Answer.Stream` ([streamed responses](#streamed-responses-and-server-sent-events)) |
-| `HTTP.listen_upload_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that reads `body` and answers `HTTP.Answer.Whole` ([request bodies](#request-bodies)) |
-| `HTTP.listen_websocket_tls(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with an app that answers `HTTP.Answer.Upgrade` ([WebSockets](#websockets)) |
+| `HTTP.listen_tls`, `listen_stream_tls`, `listen_upload_tls` and `listen_websocket_tls` `(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with the app of the matching form in [Moving from the listen forms](#moving-from-the-listen-forms) |
 | `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
 | `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
 
