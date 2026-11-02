@@ -91,9 +91,9 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   most `max_body_bytes` × `max_connections` × 4 (512 MiB with the server
   defaults). A program that raises `max_body_bytes` must lower
   `max_connections`. A body over the limit is an `error` on the client, and a
-  413 on the server, before the handler runs. `HttpWire` itself takes up to 256
+  413 on the server, before the app runs. `HttpWire` itself takes up to 256
   MiB, which only a file download (`HTTP.download`, streamed in pieces of at
-  most 1 MiB) and a request body streamed to a server handler may use; for a
+  most 1 MiB) and a server's `max_body_bytes` may use; for a
   download the transfer stops at its `max_total_bytes`, the file never grows
   past it, and a failed download keeps the partial file.
 - **Bodies are bytes.** The client keeps a response body as it came, a handler
@@ -102,14 +102,16 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   without one; any other charset is an error). The server never
   answers 400 for the content of a body, only for its framing.
   `Content-Encoding` stays raw.
-- **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`.
+- **The app returns its answer**, `Fn[HttpRequest, RequestBody, Result[Answer]]`
+  (a `Handler`, `Fn[HttpRequest, Result[HttpResponse]]`, under `HTTP.app`).
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).
 - **Response framing** is always `Content-Length`, never chunked, never
   trailers. `HEAD` gets the head and no body, with the `Content-Length` of the
   body it would have sent. 204 and 304 get no body and no `Content-Length`, and
-  a non-empty body with them is a 500. The request body is read in full before
-  the handler runs, so keep-alive needs no "was the body consumed?" rule.
+  a non-empty body with them is a 500. Under `HTTP.app` the request body is
+  read in full before the handler runs; otherwise keep-alive follows whether the
+  body had all arrived when the app returned (10.7.2).
 - **Incoming framing** is complete: chunked request bodies, and chunked or
   close-delimited response bodies, are decoded in full, within the limits.
 - **Requests the client sends** carry `Content-Length` when the body is not
@@ -125,7 +127,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   close.
 - **Server.** One task per connection, and requests on one connection run one at
   a time. `Upgrade` and `CONNECT` get 501 (a WebSocket handshake is the one
-  `Upgrade` a `listen_websocket` server takes, 10.7.2), and `HTTP/1.1` only is
+  `Upgrade` that reaches the app, 10.7.2), and `HTTP/1.1` only is
   accepted. At most `max_connections` connections are open at once, and an
   extra one waits in the kernel's backlog. `HTTP.wait` returns only after
   `HTTP.close_server`. When `main` returns or the run fails, every server and
@@ -146,7 +148,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB
   for a client and 256 MiB for a server. A bad record is an `error` result.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
-  (`none`: system trust), and the `listen_*_tls` forms a server one.
+  (`none`: system trust), and `serve_tls` a server one.
 
 #### 10.7.1 As built: the client (20a)
 
@@ -385,72 +387,65 @@ Properties of the client that no test checks:
   (`vm/tests/task_cancel_test.c`).
 
 - `std/http` runs the accept loop in the group. For each socket it spawns the
-  connection loop: read a request, run the handler, then write the response.
+  connection loop: read a request's head, run the app, then write its answer.
   The loop ends when the write returns anything but `ok(true)`.
-- A `listen_stream` server runs the same loop with a handler that returns a
-  `StreamResponse`. A body channel that is already closed with its pieces
-  buffered is the whole body: it goes out with `Content-Length`, in the head of
-  the same encoding. Pieces are `Bytes` and go out with `TCP.send_bytes`, so no
-  UTF-8 check runs on them. Otherwise the head is `encode_response` of the same
-  status and headers with an empty body, its `Content-Length: 0` swapped for
-  `Transfer-Encoding: chunked` (so the head checks and the C code are the same),
-  and the connection task sends the pieces as it takes them from the channel.
-  With `length: some(n)` the head carries `Content-Length: n` in place of the
-  chunked header and the pieces go out raw; the pump counts the bytes, cuts the
-  connection when the body ends short or a piece would pass `n`, sends no last
-  chunk and ends the body when it is full: it reads the watcher before the last
-  byte goes out, as it does before a last chunk, closes the channel, and does
-  not wait for the producer to close, since the client has its bytes and may
-  send its next request at once. A length of 0 never streams: it goes out like
-  an empty closed body, since the head is then the whole answer. A watcher task,
-  spawned in the group, loops on `TCP.recv_bytes` for the whole stream: the end
-  of the client's input (or a read error) sets a one-slot `left` channel and
-  closes the body channel, which wakes the connection task and fails the
-  producer's next `send`, with no write needed; the pump then sees `left` and
-  does not send the last chunk, so the client sees a cut body. Bytes read while
-  the stream runs are dropped and set a `sent` channel: a socket read cannot be
-  stopped without losing bytes (the cancel of a read that has completed drops
-  its result), so the bytes of a pipelined request are not kept and the
-  connection closes at the end of the stream, after `close_write` and a drain
-  (as does `Connection: close`, or a request already in the buffer). When the
-  stream has ended with nothing read, the watcher's pending read is the wait for
-  the next request: its bytes go back as the start of the request, and the
-  connection task waits for them at most `idle_timeout_ms`. `take_ready` and the
-  pump read the end of the body from the receive's own error (`channel:
-  closed`), not from a later `closed?`. HTTP/1.0 never gets here: the parser
-  answers 505.
-- A `listen_upload` server reads the head (and the framing checks: 413 over
-  256 MiB, 400, 411, 417 and the `100 Continue`) the same way, then spawns a
-  feeder task and calls the handler with `RequestBody(pieces, done)`. The
-  feeder reads the socket in steps of at most 64 KiB (the wait of each is
-  `request_timeout_ms`, also for a piece the handler has not taken) and sends
-  each piece, chunked bodies decoded, into an 8-slot channel, so memory per
-  connection is about 512 KiB. It sends the bytes it read past the body to a
-  one-slot `rest` channel, then closes `pieces`, and its result is `done`. When
-  the handler returns, the server closes `pieces` and looks at `rest` without
-  waiting: a value means the body was read whole, so the answer goes out as it
-  is and the connection serves the next request, starting from `rest`. No value
-  means the handler answered early or the body failed: the answer gets
+- The connection loop reads the head (and the framing checks: 413 over
+  `max_body_bytes`, before any `100 Continue`, then 400, 411, 417 and the
+  `100 Continue`), lets a WebSocket handshake through, then spawns a feeder
+  task and calls the app with `RequestBody(pieces, done)`. The feeder reads the
+  socket in steps of at most 64 KiB (the wait of each is `request_timeout_ms`,
+  also for a piece the app has not taken) and sends each piece, chunked bodies
+  decoded, into an 8-slot channel, so memory per connection is about 512 KiB. A
+  chunked body that grows past `max_body_bytes` fails `done` with the error of
+  `read_all`. The feeder sends the bytes it read past the body to a one-slot
+  `rest` channel, then closes `pieces`, and its result is `done`. When the app
+  returns, the server closes `pieces` and waits for `rest` at most the answer
+  time: the feeder sends the bytes past a whole body, and closes `rest` when the
+  body failed or the closed `pieces` stopped it. So a body that had all arrived
+  (an empty chunked one) counts as read whether the app read it or not, and a
+  request with no body counts as read at once. Then the connection serves the
+  next request, starting from `rest`. Otherwise the answer gets
   `Connection: close`, the feeder is cancelled, the input is drained for at most
   the answer time and the connection closes. `HTTP.read_all` is a receive loop
-  over `pieces` with a byte limit that awaits `done`.
-- A `serve` server reads the head as a `listen_upload` server does, with the
-  WebSocket handshake let through, and calls the app with the same feeder.
-  Its bodies are capped at `max_body_bytes`: a larger `Content-Length` gets
-  the 413 from the head, before the app and any `100 Continue`, and a chunked
-  body that grows past it fails `done` with the error of `read_all`.
-  When the app returns, the server closes `pieces` and waits for `rest` at
-  most the answer time: the feeder sends the bytes past a whole body, and
-  closes `rest` when the body failed or the closed `pieces` stopped it. So a
-  body that had all arrived (an empty chunked one) counts as read whether the
-  app read it or not, and a request with no body counts as read at once.
-  The answer goes out as a `listen` answer (`Whole`, with `Connection: close`
-  unless the body was read whole), as a stream (`Stream`, with the same
-  header) or as an upgrade (`Upgrade`, only when the body was read whole;
-  otherwise an `Accept` is a 500 and a `Reply` closes after it).
-- A `listen_websocket` server reads the request whole, as `listen` does, and
-  calls the handler, which answers (`Upgrade.Reply`, served as a `listen`
-  answer, the connection kept) or upgrades. An upgrade writes the 101 head
+  over `pieces` with a byte limit that awaits `done`, and `HTTP.app` reads the
+  body with it before it calls its handler.
+- The answer goes out as a whole response (`Whole`, with `Connection: close`
+  unless the body was read whole), as a stream (`Stream`, with the same header)
+  or as an upgrade (`Upgrade`, only when the body was read whole; otherwise an
+  `Accept` is a 500 and a `Reply` closes after it).
+- A `Stream` answer carries a `StreamResponse`. A body channel that is already
+  closed with its pieces buffered is the whole body: it goes out with
+  `Content-Length`, in the head of the same encoding. Pieces are `Bytes` and go
+  out with `TCP.send_bytes`, so no UTF-8 check runs on them. Otherwise the head
+  is `encode_response` of the same status and headers with an empty body, its
+  `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
+  checks and the C code are the same), and the connection task sends the pieces
+  as it takes them from the channel. With `length: some(n)` the head carries
+  `Content-Length: n` in place of the chunked header and the pieces go out raw;
+  the pump counts the bytes, cuts the connection when the body ends short or a
+  piece would pass `n`, sends no last chunk and ends the body when it is full:
+  it reads the watcher before the last byte goes out, as it does before a last
+  chunk, closes the channel, and does not wait for the producer to close, since
+  the client has its bytes and may send its next request at once. A length of 0
+  never streams: it goes out like an empty closed body, since the head is then
+  the whole answer. A watcher task, spawned in the group, loops on
+  `TCP.recv_bytes` for the whole stream: the end of the client's input (or a
+  read error) sets a one-slot `left` channel and closes the body channel, which
+  wakes the connection task and fails the producer's next `send`, with no write
+  needed; the pump then sees `left` and does not send the last chunk, so the
+  client sees a cut body. Bytes read while the stream runs are dropped and set a
+  `sent` channel: a socket read cannot be stopped without losing bytes (the
+  cancel of a read that has completed drops its result), so the bytes of a
+  pipelined request are not kept and the connection closes at the end of the
+  stream, after `close_write` and a drain (as does `Connection: close`, or a
+  request already in the buffer). When the stream has ended with nothing read,
+  the watcher's pending read is the wait for the next request: its bytes go back
+  as the start of the request, and the connection task waits for them at most
+  `idle_timeout_ms`. `take_ready` and the pump read the end of the body from the
+  receive's own error (`channel: closed`), not from a later `closed?`. HTTP/1.0
+  never gets here: the parser answers 505.
+- An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
+  kept) or an `Accept`. An `Accept` writes the 101 head
   by hand (`Sec-WebSocket-Accept` is the base64 of `Digest.sha1` of the key and
   the GUID of RFC 6455), then runs the session in the connection task with
   three tasks around it. The reader is the only task that reads the socket: it
@@ -495,8 +490,8 @@ Properties of the client that no test checks:
   - **Who:** C
   - **Answer:** 505, then close
 
-- **Case:** `CONNECT`, `Upgrade` (except a `GET` with one `Upgrade: websocket`
-  on a `listen_websocket` route), a `Transfer-Encoding` other than one `chunked`
+- **Case:** `CONNECT`, `Upgrade` (except a `GET` with one `Upgrade: websocket`,
+  which goes on to the app), a `Transfer-Encoding` other than one `chunked`
   - **Who:** C
   - **Answer:** 501, then close
 

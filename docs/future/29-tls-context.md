@@ -195,6 +195,7 @@ HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: Fn[Htt
   client.
 - `HTTP.listen_tls` and `HTTP.listen_stream_tls` (20g) take a server context
   instead of `cert_file` and `key_file`.
+  Both are replaced by `serve_tls`, which takes the same server context.
 - The client (`docs/vm/10-io-http.md` §10.7.1) keeps the context in its options
   and its workers call `TLS.connect` with it. This replaces the std-only handle
   of #394, where `HttpWire.connect_tls` builds one `SSL_CTX` per client from its

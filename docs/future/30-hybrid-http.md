@@ -65,8 +65,8 @@ closes the connection (never back to the pool) and ends with an error.
   producer: the closure or task that feeds the channel carries whatever data it
   needs. The chunked encoder for requests comes back in C for it.
 - **20g Streamed responses** (server, SSE included) is built:
-  `HTTP.listen_stream`, `HTTP.listen_stream_tls`, `HTTP.StreamResponse` and
-  `HTTP.whole`
+  `HTTP.StreamResponse` and `HTTP.whole`, now the `Answer.Stream` of
+  `HTTP.serve` (first built as `HTTP.listen_stream`)
   (the [network page](../../site/content/library/io-and-system/network.md), and
   [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.7.2). Its body
   is a `Channel[Bytes]`; a piece over 512 KiB is split into chunks.

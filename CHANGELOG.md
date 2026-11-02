@@ -17,9 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler` and answers a body
-  it cannot read 413, 431 or 400, as `listen` does. A WebSocket handshake
-  reaches the app, where the `listen` forms other than `listen_websocket`
-  answer it 501.
+  it cannot read 413, 431 or 400.
+- `HTTP.body_refusal(message)` is the answer for a body that `HTTP.read_all`
+  could not read (413, 431 or 400, closing), as `HTTP.app` gives it, for a
+  route that reads the body itself.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
 - EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,
@@ -32,14 +33,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `HTTP.listen_upload` keeps the connection when the whole body had arrived
-  by the time the handler returned, even if the handler did not read it (an
-  empty chunked body, say). A handler that answers before any of the body
-  arrived now answers up to 100 ms later.
 - `HttpServerOptions.max_body_bytes` may be up to 256 MiB, and `HTTP.serve`
   caps every request body with it (1 MiB by default): a larger
   `Content-Length` is answered 413 before the app runs, with no
   `100 Continue` first.
+
+### Removed
+
+- **Breaking:** `HTTP.listen`, `listen_stream`, `listen_upload`,
+  `listen_websocket`, their `_tls` forms, `HTTP.upgrade_only` and the types
+  `HTTP.StreamHandler`, `UploadHandler` and `UpgradeHandler`: `HTTP.serve`
+  serves every kind of route, `HTTP.serve(host, port, HTTP.app(&handle),
+  options)` for a handler (the network page has the table). A WebSocket
+  handshake now reaches the app, where `listen`, `listen_stream` and
+  `listen_upload` answered it 501.
 
 ## [0.21.0] - 2026-11-02
 
