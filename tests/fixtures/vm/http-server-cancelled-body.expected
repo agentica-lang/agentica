@@ -1,10 +1,14 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 1211,
+  "steps": 3826,
   "stdout": [
-    "HTTP/1.1 200 OK",
+    "HTTP/1.1 200 OK [GET /cut 0]",
+    "HTTP/1.1 200 OK []",
+    "HTTP/1.1 200 OK [POST /cut 0]",
     "closed",
+    "closed",
+    "HTTP/1.1 200 OK [POST /keep 2]",
     "true",
     ""
   ],

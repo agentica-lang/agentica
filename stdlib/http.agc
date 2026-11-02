@@ -125,6 +125,7 @@ struct Service
   server: HttpServer
   app: App
   options: HttpServerOptions
+  ended: Task[Result[Void]]
 end
 
 # How a request was answered: whether the connection stays, and the bytes already read of its next request.
@@ -2108,8 +2109,12 @@ def parse_url(url: String) -> Result[Target]
 end
 
 def start_server(listener: Listener, app: App, options: HttpServerOptions) -> HttpServer
+  # The `done` of every request with no body. It ends here, in the caller's task: `close_server` cancels the
+  # server's tasks, and a task of its own could end cancelled before it ran.
+  ended = Task.spawn(&no_body)
+  Task.await(ended)
   return HttpWire.server(listener, options.max_connections) do |server|
-    accept_all(Service(server: server, app: app, options: options))
+    accept_all(Service(server: server, app: app, options: options, ended: ended))
   end
 end
 
@@ -2131,7 +2136,7 @@ def serve_connection(socket: Socket, service: Service) -> Void
   while true
     case start_request(socket, rest, wait_ms, options)
       ok(reading) ->
-        sent = answer_app(reading, service.app, options)
+        sent = answer_app(reading, service)
         if not sent.keep
           return
         end
@@ -2192,15 +2197,11 @@ end
 # closed pieces stopped it. So a body that was all there (an empty chunked one, say) counts as read whatever the app
 # did with it, and a request with no body counts as read at once. Otherwise the answer says `Connection: close`, an
 # upgrade is refused, and after the answer the feeder is cancelled, the input drained and the connection closed.
-def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
+def answer_app(reading: Reading, service: Service) -> Sent
+  app = service.app
+  options = service.options
   socket = reading.socket
   head = reading.head
-  pieces: Channel[Bytes] = Channel.new(UPLOAD_PIECES)
-  left: Channel[Bytes] = Channel.new(1)
-  feeder = Task.spawn(
-    &feed_request,
-    Feeding(reading: reading, step_ms: options.request_timeout_ms, pieces: pieces, rest: left),
-  )
   request = HttpRequest(
     method: head.method,
     target: head.target,
@@ -2209,17 +2210,28 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
     body: NO_BYTES,
     remote_addr: TCP.remote_address(socket),
   )
+  if not head.chunked and head.length == 0
+    # Nothing to feed: the app gets closed pieces and a task that has already ended ok, so `read_all` waits for
+    # nothing that a closing server could cancel.
+    body = RequestBody(pieces: closed_pieces(), done: service.ended)
+    return send_answer(socket, request, app.call(request, body), true, NO_BYTES, options)
+  end
+  pieces: Channel[Bytes] = Channel.new(UPLOAD_PIECES)
+  left: Channel[Bytes] = Channel.new(1)
+  feeder = Task.spawn(
+    &feed_request,
+    Feeding(reading: reading, step_ms: options.request_timeout_ms, pieces: pieces, rest: left),
+  )
   result = app.call(request, RequestBody(pieces: pieces, done: feeder))
   pieces.close
   past = left.recv(ANSWER_MS)
-  bodiless = not head.chunked and head.length == 0
-  if not bodiless and cancelled?(feeder)
-    # Only a closing server cancels the feeder, and then no answer goes out: the app read a body that is gone (`app`
-    # answers 400 for it). A request with no body never waits for the feeder, so its answer stands.
+  if cancelled?(feeder)
+    # A closing server cancels the feeder (or the app did), and then no answer goes out: the app read a body that is
+    # gone (`app` answers 400 for it).
     TCP.close(socket)
     return Sent(keep: false, rest: NO_BYTES)
   end
-  whole = bodiless or Result.ok?(past)
+  whole = Result.ok?(past)
   sent = send_answer(socket, request, result, whole, Result.unwrap_or(past, NO_BYTES), options)
   if whole
     Task.await(feeder)
@@ -2229,6 +2241,18 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   drain(socket, Time.monotonic_ms() + ANSWER_MS)
   TCP.close(socket)
   return Sent(keep: false, rest: NO_BYTES)
+end
+
+# The pieces of a request with no body.
+def closed_pieces() -> Channel[Bytes]
+  pieces: Channel[Bytes] = Channel.new(1)
+  pieces.close
+  return pieces
+end
+
+# The feeder of a request with no body.
+def no_body() -> Result[Void]
+  return ok()
 end
 
 # Whether the feeder ended cancelled. A feeder that still reads a body the app left unread gets 1 ms before it counts
@@ -2301,11 +2325,6 @@ end
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
   if announced_length(request.headers) > max_body_bytes
     return ok(Answer.Whole(closing_answer(413)))
-  end
-  # A request with neither a length nor chunks has no body (a request body never ends with the connection): the
-  # handler runs at once, without awaiting the feeder, which a closing server may cancel.
-  if announced_length(request.headers) == 0 and header_values(request.headers, "transfer-encoding").empty?
-    return ok(Answer.Whole(try handler.call(request)))
   end
   case read_all(body, max_body_bytes)
     ok(data) ->
