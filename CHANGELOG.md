@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-02
+
 ### Added
 
 - `agentica help std/MODULE` lists the exports of a standard library module
@@ -900,7 +902,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.20.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.21.0...HEAD
+[0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
 [0.19.0]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.3...0.19.0
 [0.19.0-beta.3]: https://github.com/agentica-lang/agentica/compare/0.19.0-beta.2...0.19.0-beta.3
