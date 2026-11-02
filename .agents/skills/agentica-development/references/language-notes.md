@@ -50,9 +50,6 @@ section for the area you are changing.
   last; `Map.values` follows `Map.keys` order.
 - Catalog entries with several signatures (Map.get): `references/stages.md`
   (Builtin catalog).
-- A step-limit stop is not an "unsolvable" answer: the algorithm examples
-  (`knight-tour`, `traveling-salesman`, `maze-bfs`) keep their sizes small and
-  their tests validate complete routes and known optimal costs.
 
 ## Ranges and sets
 
@@ -221,19 +218,14 @@ section for the area you are changing.
   `CHECK-UNKNOWN-NAME` (names and calls), `CHECK-UNKNOWN-METHOD` and a bare type
   name such as `None`. `conversion_help` explains a `Result[T]` found where `T`
   is expected. `foreign_kind_methods` maps a (receiver kind, method name) pair
-  to a help text for names that need more than one method (`chars`, `matches?`);
-  `missing_return_help`, the `same!` operand help, and the
-  `CHECK-NOT-INDEXABLE`/`CHECK-EMPTY-*` helps are concrete too. The lexer hints
-  `'` and the parser hints `//`, `/*`, a top-level statement or extra `end`,
-  `elif`/`elseif` and `else if`, `let`/`var`/`val`/`const`/`match` used as
-  keywords, `when`, `then`, lambdas, `loop do`, and other habits (`rg 'bail'
-  compiler/syntax/`; the parser's `bail` takes a help). Tests assert the code
-  and a regexp on the help, never the full text. For an unknown plain name the
-  checker prefers did-you-mean over `foreign_names`, so `next` near a visible
-  `nexts` still suggests `nexts`. The linker's failures take a help too (an
-  unknown alias in expression position says it is neither an import nor a local
-  enum; `Result.X` without parentheses names the Result spellings; in a type or
-  pattern it only suggests the import).
+  to a help text. Other habits (`'`, `//`, `elif`, `let`, `match`, lambdas,
+  `loop do`) are hints in the lexer and parser (`rg 'bail' compiler/syntax/`;
+  `bail` takes a help). Tests assert the code and a regexp on the help, never
+  the full text. For an unknown plain name the checker prefers did-you-mean over
+  `foreign_names`, so `next` near a visible `nexts` still suggests `nexts`. The
+  linker's failures take a help too (an unknown alias in expression position
+  says it is neither an import nor a local enum; `Result.X` without parentheses
+  names the Result spellings; in a type or pattern it only suggests the import).
 - `break`/`next` are contextual: the parser makes a `LoopControl` node only when
   the name is followed by NL, `end` or EOF, so they still work as variable
   names. The checker's loop depth is reset per function and per block
@@ -254,19 +246,15 @@ section for the area you are changing.
 
 ## Enums and pattern matching
 
-- `EnumDecl` and `EnumVariant` live in `ast.agc`; `CaseStmt`, `CaseArm`,
-  `WildcardPattern`, `LiteralPattern`, `VariantPattern`, and `EnumConstructor`
-  are the matching nodes. The parser maps `true`/`false`/`nil` patterns to
-  literal values, just like expression literals. `VariantPattern.slots` is a
-  `List[Slot]`: `Bind(name)`, `Skip` (`_`) or `Nested(pattern)`. Names and `_`
-  have no node ids, so a program without nested patterns numbers its nodes as
-  before; a nested pattern node gets its id before its parent variant
-  (post-order), and `CaseArm.guard` is parsed after the pattern ids and before
-  the body. A nested variant counts one nesting level in `parse_base.agc`
-  (`PARSE-TOO-DEEP`). The lowering tests a nested slot by reading the payload
-  into a temporary register (`read_payload`) and testing that, then binds; the
-  guard is lowered after the bindings with a `jump-if-false` to the same skip
-  label as a failed test.
+- `VariantPattern.slots` is a `List[Slot]`: `Bind(name)`, `Skip` (`_`) or
+  `Nested(pattern)`. Names and `_` have no node ids, so a program without nested
+  patterns numbers its nodes as before; a nested pattern node gets its id before
+  its parent variant (post-order), and `CaseArm.guard` is parsed after the
+  pattern ids and before the body. A nested variant counts one nesting level in
+  `parse_base.agc` (`PARSE-TOO-DEEP`). The lowering tests a nested slot by
+  reading the payload into a temporary register (`read_payload`) and testing
+  that, then binds; the guard is lowered after the bindings with a
+  `jump-if-false` to the same skip label as a failed test.
 - Generic type variables exist only while resolving an enum's payload or a
   struct's field declarations. Preserve those names while the module linker
   rewrites type references (`rewrite_payload`); otherwise `T` becomes a
