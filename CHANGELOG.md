@@ -18,9 +18,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler` and answers a body
   it cannot read 413, 431 or 400.
-- `HTTP.refusal(message)` is the answer for a body that `HTTP.read_all` could
-  not read (413, 431 or 400, closing), as `HTTP.app` gives it, for a route that
-  reads the body itself.
+- `HTTP.body_refusal(message)` is the answer for a body that `HTTP.read_all`
+  could not read (413, 431 or 400, closing), as `HTTP.app` gives it, for a
+  route that reads the body itself.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
 - EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,
@@ -45,7 +45,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.StreamHandler`, `UploadHandler` and `UpgradeHandler`: `HTTP.serve`
   serves every kind of route, `HTTP.serve(host, port, HTTP.app(&handle),
   options)` for a handler (the network page has the table). A WebSocket
-  handshake now reaches the app instead of getting a 501.
+  handshake now reaches the app, where `listen`, `listen_stream` and
+  `listen_upload` answered it 501.
 
 ## [0.21.0] - 2026-11-02
 

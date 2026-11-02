@@ -269,7 +269,10 @@ class TestModuleRules:
     def test_removed_std_http_server_calls_are_rejected_by_name(self):
         cases = [("  HTTP.respond(1, 200, [], \"hi\", 1000)\n", True),
                  ("  HTTP.begin(1, 200, [], 1000)\n", True),
+                 ("  HTTP.listen(\"127.0.0.1\", 0, 1)\n", True),
+                 ("  HTTP.listen_stream_tls(\"127.0.0.1\", 0, 1, 2)\n", True),
                  ("  HTTP.listen_upload(\"127.0.0.1\", 0, 1)\n", True),
+                 ("  HTTP.upgrade_only(1)\n", True),
                  ("  x: HTTP.UpgradeHandler = nil\n", True),
                  ("  HTTP.nothing(1)\n", False)]
         results = self.checks([({"root.agc": 'import HTTP from "std/http"\ndef main() -> Void\n' + body + "end\n\n"},

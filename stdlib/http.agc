@@ -100,10 +100,10 @@ CRLF = "\r\n".bytes
 # two must match.
 DOWNLOAD_MAX_BYTES = 268435456
 CLIENT_MAX_BODY = 67108864
-# The error of `read_all` for a body over its limit, which `refusal` answers 413.
+# The error of `read_all` for a body over its limit, which `body_refusal` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
-# The start of the error of a chunked body with a line or trailer section over the head limits, which `refusal`
-# answers 431, as the server answers such a head.
+# The start of the error of a chunked body with a line or trailer section over the head limits, which
+# `body_refusal` answers 431, as the server answers such a head.
 FIELDS_TOO_LARGE = "http: request fields too large: "
 
 struct Target
@@ -969,10 +969,11 @@ end
 
 ## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
 ## (the error `"http: body exceeds max_bytes"`), 431 for a chunk line or trailer section over the head limits (an
-## error that starts with `"http: request fields too large"`), 400 for any other (a bad chunk, a body cut or stalled).
+## error that starts with `"http: request fields too large: "`), 400 for any other (a bad chunk, a body cut or
+## stalled).
 ## It is a whole response with `Connection: close` and no body. `app` answers so; a route that reads the body itself,
-## before a stream for one, returns `ok(refusal(message))` for the error.
-export def refusal(message: String) -> Answer
+## before a stream for one, returns `ok(body_refusal(message))` for the error.
+export def body_refusal(message: String) -> Answer
   if message == BODY_TOO_LONG
     return Answer.Whole(closing_answer(413))
   end
@@ -2274,8 +2275,8 @@ def serving(f: App) -> App
   return f
 end
 
-# The answer of `app(handler)`: the body read whole (the `refusal` of its error when it cannot be), then the handler's
-# response.
+# The answer of `app(handler)`: the body read whole (the `body_refusal` of its error when it cannot be), then the
+# handler's response.
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
   if announced_length(request.headers) > max_body_bytes
     return ok(Answer.Whole(closing_answer(413)))
@@ -2291,7 +2292,7 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
         remote_addr: request.remote_addr,
       )
       return ok(Answer.Whole(try handler.call(whole)))
-    error(message) -> return ok(refusal(message))
+    error(message) -> return ok(body_refusal(message))
   end
 end
 
@@ -2898,7 +2899,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
 end
 
 # The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
-# BODY_TOO_LONG, as `read_all` says it, so `refusal` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
+# BODY_TOO_LONG, as `read_all` says it, so `body_refusal` answers it 413, and a 431 starts with FIELDS_TOO_LARGE.
 def feed_problem(problem: String) -> String
   if String.starts_with?(problem, "413")
     return BODY_TOO_LONG

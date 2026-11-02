@@ -55,7 +55,7 @@ end
 def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
-    error(message) -> return ok(HTTP.refusal(message))
+    error(message) -> return ok(HTTP.body_refusal(message))
   end
 end
 
