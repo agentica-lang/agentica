@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-IO 0:1:1-29:2:1 "cannot resolve import" - file="root.agc"
+ERROR CHECK-IMPORT-IO 0:1:1-29:2:1 "cannot resolve import" "an import is relative to the importing file; no file at \"root.agc/x.agc\"" file="root.agc"
