@@ -173,7 +173,13 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   rerun with that `AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=...`. Local
   `make test`, the release and the weekly `sweep.yml` keep the full sweep.
   `AGENTICA_SWEEP=ends` (`make test-shared`) runs only the ends, as do the
-  fixtures of `ENDS_ONLY_FIXTURES` in every mode (costly runs).
+  fixtures of `ENDS_ONLY_FIXTURES` in every mode (costly runs). A fixture
+  whose steps change with the timing or the kernel is in `SLOW_TAIL_FIXTURES`
+  (no limit at `T`: its runs may take a few more steps) or
+  `KERNEL_TIMED_FIXTURES` (only the limits 1 and the last); the reason is in
+  `tests/vm_diff_support.py`. Make a fixture's step count independent of time
+  first: wait on a channel, never loop with `Task.sleep` until something
+  changes, and read a known size with `read_line`, not a `recv_bytes` loop.
   A new fixture needs its golden: run `make goldens`, read the new `.expected`
   by hand, and commit it; a changed golden is a reviewed behaviour change.
   `make goldens` refuses a run that timed out, died by a signal or ends in
