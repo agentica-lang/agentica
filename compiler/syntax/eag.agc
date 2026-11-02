@@ -7,6 +7,11 @@
 ## lines; `<%-` removes the spaces before the tag when only spaces come before it on its line. The text is raw: no
 ## escape and no `#{}`. A tag ends on the line where it starts, at the first `%>`, as in Ruby's ERB.
 ##
+## `<%== code %>` always inserts the value as it is. A directive `<%@ escape function %>` on the first line gives the
+## template an escaper, a `Fn[String, String]` that every `<%= %>` applies to its text: the block binds the function,
+## `eag#e: Fn[String, String] = function`, and the push is `eag#t.push(eag#e.call("#{code}"))`, so the checker sees
+## ordinary code and reports a function of another type at the directive.
+##
 ## The expansion is
 ##
 ##     [0].map do |eag#n: Int|
@@ -39,7 +44,14 @@ UNBALANCED = "PARSE-EAG-BLOCK"
 # The words that open a block when they start the code of a tag.
 OPENERS = Set.new(["if", "for", "while", "case"])
 
-# One part of a body line: `kind` is "text", "expr", "stmt" or "comment"; `text` is the text or the code of the tag;
+# The code of the error for a directive that is not `escape function`, is not on the first line, or is given twice.
+DIRECTIVE = "PARSE-EAG-DIRECTIVE"
+
+# The one word that a directive takes.
+ESCAPE = "escape"
+
+# One part of a body line: `kind` is "text", "expr" (`<%=`), "raw" (`<%==`), "stmt", "comment" or "directive"; `text`
+# is the text or the code of the tag;
 # `start` is the index of the code in the line as written; `trim` is whether the tag ended with `-%>`.
 struct Part
   kind: String
@@ -49,22 +61,35 @@ struct Part
 end
 
 # What the lines so far gave: the tokens, the text that waits to become one push (in pieces, joined when it is used)
-# with the line where it starts, and the place of each block of a tag that no `end` has closed yet.
+# with the line where it starts, the place of each block of a tag that no `end` has closed yet, whether the line at
+# hand is the first of the body, and the escaper of the template: the tokens of its function (none when the template
+# has no escaper) and the place of its directive.
 struct Built
   tokens: List[Tokens.Token]
   text: List[String]
   text_at: Source.Span
   open: List[Source.Span]
+  first: Bool
+  escaper: List[Tokens.Token]
+  escaper_at: Source.Span
 end
 
 ## The tokens of the expression for the template `body`, opened by the token `opener`, ending with an EOF token; or the
 ## first problem of a tag: `PARSE-EAG-UNTERMINATED-TAG`, `PARSE-EAG-BLOCK`, or the lexer's own for the code of a tag.
 export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[List[Tokens.Token]]
-  built = Built(tokens: [], text: [], text_at: opener.span, open: [])
+  built = Built(
+    tokens: [],
+    text: [],
+    text_at: opener.span,
+    open: [],
+    first: true,
+    escaper: [],
+    escaper_at: opener.span,
+  )
   for line in body.lines
     case line_built(opener.span, body.indent, line, built)
       Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-      Diag.Outcome.Done(next) -> built = next
+      Diag.Outcome.Done(next) -> built = next.with(first: false)
     end
   end
 
@@ -73,30 +98,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
   end
 
   at = opener.span
-  head = [
-    word("left-bracket", "[", at),
-    number(0, at),
-    word("right-bracket", "]", at),
-    word("dot", ".", at),
-    name("map", at),
-    word("do", "do", at),
-    word("pipe", "|", at),
-    name(Ast.EAG_SEED, at),
-    word("colon", ":", at),
-    word("type-name", "Int", at),
-    word("pipe", "|", at),
-    word("NL", "\n", at),
-    name(Ast.EAG_PIECES, at),
-    word("colon", ":", at),
-    word("type-name", "List", at),
-    word("left-bracket", "[", at),
-    word("type-name", "String", at),
-    word("right-bracket", "]", at),
-    word("assign", "=", at),
-    word("left-bracket", "[", at),
-    word("right-bracket", "]", at),
-    word("NL", "\n", at),
-  ]
+  head = block_head(built, at)
   tail = [
     name(Ast.EAG_PIECES, at),
     word("dot", ".", at),
@@ -111,6 +113,58 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     word("EOF", "", at),
   ]
   return Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
+end
+
+# The tokens up to the first line of the block: `[0].map do |eag#n: Int|`, then the binding of the escaper when the
+# template has one, `eag#e: Fn[String, String] = function`, and the list of pieces `eag#t: List[String] = []`. The
+# binding stands at the place of the directive, and the tokens of the function keep theirs, so the checker reports a
+# function of another type there.
+def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
+  head = [
+    word("left-bracket", "[", at),
+    number(0, at),
+    word("right-bracket", "]", at),
+    word("dot", ".", at),
+    name("map", at),
+    word("do", "do", at),
+    word("pipe", "|", at),
+    name(Ast.EAG_SEED, at),
+    word("colon", ":", at),
+    word("type-name", "Int", at),
+    word("pipe", "|", at),
+    word("NL", "\n", at),
+  ]
+  if built.escaper.size > 0
+    here = built.escaper_at
+    bound = [
+      name(Ast.EAG_ESCAPER, here),
+      word("colon", ":", here),
+      word("type-name", "Fn", here),
+      word("left-bracket", "[", here),
+      word("type-name", "String", here),
+      word("comma", ",", here),
+      word("type-name", "String", here),
+      word("right-bracket", "]", here),
+      word("assign", "=", here),
+    ]
+    head = appended(appended(head, bound), built.escaper).push(word("NL", "\n", here))
+  end
+
+  return appended(
+    head,
+    [
+      name(Ast.EAG_PIECES, at),
+      word("colon", ":", at),
+      word("type-name", "List", at),
+      word("left-bracket", "[", at),
+      word("type-name", "String", at),
+      word("right-bracket", "]", at),
+      word("assign", "=", at),
+      word("left-bracket", "[", at),
+      word("right-bracket", "]", at),
+      word("NL", "\n", at),
+    ],
+  )
 end
 
 # One body line: its parts become tokens (and text, which the next tag or the end turns into a push).
@@ -160,14 +214,20 @@ def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
     else
       width = 0
       kind = "stmt"
-      if mark == "=" or mark == "#" or mark == "-"
+      if mark == "=" or mark == "#" or mark == "-" or mark == "@"
         width = 1
       end
 
       if mark == "="
         kind = "expr"
+        if piece.slice(1, 1) == "="
+          kind = "raw"
+          width = 2
+        end
       elsif mark == "#"
         kind = "comment"
+      elsif mark == "@"
+        kind = "directive"
       end
 
       # A tag ends at the first `%>`, even when its code holds a `<%`, which the cut above split in two: the pieces up
@@ -240,12 +300,17 @@ end
 # gives nothing else; any other line ends with a line break, unless its last tag ended with `-%>`.
 def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built) -> Diag.Outcome[Built]
   tags = parts.select do |part: Part| part.kind != "text" end
-  alone = tags.size == 1 and tags[0].kind != "expr" and blank_around?(parts)
+  alone = tags.size == 1 and !writes?(tags[0]) and blank_around?(parts)
   current = built
   for part in parts
     if part.kind == "text"
       if !alone
         current = current.with(text: current.text.push(part.text), text_at: text_start(current, line))
+      end
+    elsif part.kind == "directive"
+      case directed(line, part, current)
+        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(next) -> current = next
       end
     elsif part.kind != "comment"
       case code_tokens(line, part)
@@ -265,6 +330,45 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
   end
 
   return Diag.Outcome.Done(current)
+end
+
+# Whether a tag writes its value into the output.
+def writes?(part: Part) -> Bool
+  return part.kind == "expr" or part.kind == "raw"
+end
+
+# The template with the escaper that the directive `<%@ escape function %>` names. A directive is valid on the first
+# line of the body, once, and holds the word `escape` and the tokens of a function.
+def directed(line: Tokens.EagLine, part: Part, built: Built) -> Diag.Outcome[Built]
+  here = tag_span(line, part)
+  if !built.first
+    return Diag.Outcome.Failed(directive_error("an escape directive belongs on the first line of the template", here))
+  end
+
+  if built.escaper.size > 0
+    return Diag.Outcome.Failed(directive_error("this template already has an escape directive", here))
+  end
+
+  case code_tokens(line, part)
+    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(code) ->
+      if code.size < 2 or code[0].kind != "name" or code[0].lexeme != ESCAPE
+        return Diag.Outcome.Failed(
+          directive_error("a directive is <%@ escape function %>, with the function to apply", here),
+        )
+      end
+
+      return Diag.Outcome.Done(built.with(escaper: code.drop(1), escaper_at: here))
+  end
+end
+
+def directive_error(message: String, at: Source.Span) -> Diag.Diagnostic
+  return Diag.fail(
+    DIRECTIVE,
+    message,
+    at,
+    Diag.Help.Hint("write <%@ escape &function %> alone on the first line, as in <%@ escape &EAG.html_escape %>"),
+  )
 end
 
 # The place where the waiting text starts: the line of its first piece, so the push of a text has that line's place.
@@ -329,9 +433,9 @@ def unclosed(at: Source.Span) -> Diag.Diagnostic
   )
 end
 
-# The tokens of a tag after the text before it: `eag#t = eag#t.push("#{code}")` for `<%=`, the code and a line break
-# for `<% %>`. A tag without code gives none, but an empty `<%= %>` keeps the glue, so the parser reports it at the
-# tag.
+# The tokens of a tag after the text before it: `eag#t = eag#t.push("#{code}")` for `<%=` and `<%==` (for `<%=` with an
+# escaper, `eag#e.call("#{code}")` stands inside the push), the code and a line break for `<% %>`. A tag without code
+# gives none, but an empty `<%= %>` keeps the glue, so the parser reports it at the tag.
 def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, code: List[Tokens.Token]) -> Built
   flushed = flush(built, at)
   if part.kind == "stmt"
@@ -345,7 +449,17 @@ def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, c
   here = tag_span(line, part)
   opened = Tokens.Token(kind: "interp-start", lexeme: "<%=", value: Tokens.Value.Text(""), span: here)
   closed = Tokens.Token(kind: "interp-end", lexeme: "%>", value: Tokens.Value.Text(""), span: here)
-  pushed = appended(push_head(here).push(opened), code).push(closed).push(word("right-paren", ")", here))
+  head = push_head(here)
+  tail = [closed, word("right-paren", ")", here)]
+  if part.kind == "expr" and built.escaper.size > 0
+    head = appended(
+      head,
+      [name(Ast.EAG_ESCAPER, here), word("dot", ".", here), name("call", here), word("left-paren", "(", here)],
+    )
+    tail = [closed, word("right-paren", ")", here), word("right-paren", ")", here)]
+  end
+
+  pushed = appended(appended(head.push(opened), code), tail)
   return flushed.with(tokens: appended(flushed.tokens, pushed).push(word("NL", "\n", here)))
 end
 
