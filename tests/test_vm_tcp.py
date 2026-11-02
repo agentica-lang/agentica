@@ -139,9 +139,10 @@ def main() -> Void
   while line != "end"
     socket = Result.unwrap!(TCP.accept(listener, 10000))
     line = Result.unwrap!(TCP.read_line(socket, 10000))
-    puts(line)
-    IO.flush()
+    peer = TCP.remote_address(socket)
     TCP.close(socket)
+    puts("#{line} #{peer} [#{TCP.remote_address(socket)}]")
+    IO.flush()
   end
   TCP.close_listener(listener)
 end
@@ -303,7 +304,7 @@ def test_task_closes_the_connections_it_owns_when_it_crashes_or_returns(tmp_path
     assert vm.wait() == 0, vm.stderr_text()
 
 
-def test_listener_on_localhost_takes_ipv4_and_ipv6_clients(tmp_path, adopt):
+def test_listener_on_localhost_takes_ipv4_and_ipv6_clients_and_knows_their_address(tmp_path, adopt):
     ipv6 = ipv6_localhost()
     vm = adopt(start_vm(compile_text(LOCALHOST_PROGRAM, "localhost", tmp_path)))
     port = int(vm.next_line())
@@ -313,12 +314,12 @@ def test_listener_on_localhost_takes_ipv4_and_ipv6_clients(tmp_path, adopt):
             connection.sendall((text + "\n").encode())
 
     send_line("127.0.0.1", "v4")
-    assert vm.next_line() == "v4"
+    assert vm.next_line() == "v4 127.0.0.1 []"
     if ipv6:
         send_line("::1", "v6")
-        assert vm.next_line() == "v6"
+        assert vm.next_line() == "v6 ::1 []"
     send_line("127.0.0.1", "end")
-    assert vm.next_line() == "end"
+    assert vm.next_line() == "end 127.0.0.1 []"
     assert vm.wait() == 0, vm.stderr_text()
 
 

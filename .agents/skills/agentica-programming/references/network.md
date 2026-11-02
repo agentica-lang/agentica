@@ -23,6 +23,7 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
+TCP.remote_address(socket: Socket) -> String
 TLS.alpn(socket: Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
@@ -54,6 +55,10 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   resolves to, on one port (`localhost` takes `127.0.0.1` and `::1`); addresses
   the system cannot use are skipped. Ports are 1..65535 to connect and 0..65535
   to listen. A host with NUL is an error.
+- `TCP.remote_address` is the peer's IP without the port (`"127.0.0.1"`,
+  `"::1"`; an IPv4 peer of an IPv6 listener shows as IPv4; the IPv6 scope id
+  is dropped, so link-local peers on different interfaces look the same), `""`
+  once closed; TLS sockets too.
 - TLS (1.2 or later) verifies certificates and hostnames; verification cannot be
   turned off. An empty `ca_file` uses system trust: `SSL_CERT_FILE`, else the
   platform store (the CA bundle on Linux; the Security roots and Keychain trust

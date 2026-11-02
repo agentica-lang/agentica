@@ -320,6 +320,7 @@ TCP.listen
 TCP.local_port
 TCP.read_line
 TCP.recv_bytes.bytes
+TCP.remote_address
 TCP.send
 TCP.send_bytes.bytes
 TLS.alpn
