@@ -116,19 +116,14 @@ byte of a file with a type table, an Updates section or Globals.
   nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
   program that is relative and does not start with `std/`, once, right after
   the load (`agc_program_set_source_root`), so diagnostics, stack traces, task
-  crash lines and test reports all print the joined name (the 256-byte cut of
-  stack lines applies to it). No `/` is added when DIR already ends in one. A
-  name that starts with `std/` is a standard module; the front end writes a
-  user file under a `std/` folder as `./std/NAME.agc`, which is joined. A
-  leading `./` is dropped from every name that is joined, not only from that
-  one: with DIR `r`, `./x.agc` prints as `r/x.agc`. An absolute name is left
-  as it is. The bytes added over all names are capped at 64 MiB; past it the
-  VM exits 2 with `--source-root is too long for this program`. The `.agcb`
+  crash lines and test reports all print the joined name. A name that starts
+  with `std/` is a standard module; the front end writes a user file under a
+  `std/` folder as `./std/NAME.agc`, which is joined. A leading `./` is dropped
+  from every joined name, and an absolute name is left as it is. The bytes added
+  over all names are capped at 64 MiB; past it the VM exits 2. The `.agcb`
   stores names relative to the folder of the entry file (4.6); `agentica`
-  passes that folder as the user would type it, relative to the working
-  directory, unless the entry is in it. Without the option the stored name
-  prints. DIR is not normalized: an imported file above the root prints as
-  `DIR/../shared/x.agc`.
+  passes that folder as the user would type it. DIR is not normalized: an
+  imported file above the root prints as `DIR/../shared/x.agc`.
 - `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the
   buffered output of stdout and stderr (10.2.2, End of run). The environment
   variable `AGENTICA_FLUSH_TIMEOUT_MS` is read by the VM, so `agentica` and
@@ -197,17 +192,13 @@ byte of a file with a type table, an Updates section or Globals.
 - `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
   the front end (`compiler/bdd/bdd_driver.agc`). It compiles the test files to a
   private run directory and starts the runner with `agentica run
-  --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own). The runner
-  starts one VM per scenario or test file with the same command. The runner and
-  the default step program are carried by the binary, compiled at build time
-  (see "The embedded data"). A front end that reads the `std/` sources from a
-  folder (`--stdlib`, the tests that fake the binary) compiles both into the run
-  directory instead and starts the runner with `-- runner.agcb CONFIG`. The
-  configuration names the step program in `steps_bytecode`; an empty name means
-  the default one, which the runner starts with `--embedded steps`. The first
-  binary of the bootstrap runs the driver of stage0, which compiles both from
-  the `std/` sources. A front end that stops with an error (a bug in the driver)
-  ends the process with status 2, never the 1 of a failed test run.
+  --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own), and the
+  runner starts one VM per scenario or test file the same way. The runner and
+  the default step program are carried by the binary (see "The embedded data");
+  a front end that reads the `std/` sources from a folder (`--stdlib`, the first
+  binary of the bootstrap) compiles both into the run directory instead
+  (`-- runner.agcb CONFIG`). A front end that stops with an error (a bug in the
+  driver) ends the process with status 2, never the 1 of a failed test run.
 - Parent death: on Windows, unless libuv cannot assign its job object (10.4),
   the VM and every child it starts are in one job that kills its members when
   the VM ends, so a child that is a VM stops its own (`PR_SET_PDEATHSIG` has no

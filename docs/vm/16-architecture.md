@@ -1,10 +1,9 @@
 ## 16. VM architecture
 
-**Status:** decided by the owner on 2026-10-13, row 7.2.1c of the
-[roadmap](../roadmap/README.md). This is the one picture of the threads, the
-queues and who owns what. The VM runs one scheduler per logical core by default;
-with N = 1 the scheduler and the loop share one thread. §16.9 says what differs,
-and this model also serves N = 1.
+**Status:** decided by the owner on 2026-10-13 (row 7.2.1c). This is the one
+picture of the threads, the queues and who owns what. The VM runs one scheduler
+per logical core by default; with N = 1 the scheduler and the loop share one
+thread (§16.9).
 
 The model has one loop, one run queue and no home scheduler for a task. A BEAM
 style design (one loop, run queue and resource registry per scheduler, a home

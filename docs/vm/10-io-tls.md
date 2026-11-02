@@ -11,10 +11,7 @@ reads no `openssl.cnf`, so both builds behave the same.
   WANT_READ, WANT_WRITE, CLOSED or ERROR. An error carries our code, an `errno`
   for a system error, and a short detail. The adapter drains OpenSSL's error
   queue, and OpenSSL never gets a GC pointer.
-- **Error codes** (`agc_tls_error` in `vm/tls.h`): `VERIFY_FAILED` is any verify
-  result other than untrusted, expired or hostname, `UNEXPECTED_EOF` is a peer
-  that closed during the handshake, and `PROTOCOL` is an error after the
-  handshake.
+- **Error codes** are `agc_tls_error` in `vm/tls.h`.
 - **Contexts.** A `TlsContext` (`AGC_T_TLS_CONTEXT`, `vm/tls_context.c`) holds
   one `agc_tls_config` of one role, which counts its owners: the context and
   each socket and listener made from it. So a dropped context stays valid
@@ -158,21 +155,14 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
   TLS socket (§10.2.2), and `HttpClient` connections get it too (10.7.1).
 - **Messages.** Only the `Result` error kind is fixed. A verify failure's detail
   reads `certificate verify failed: <X.509 text>` (the tests match it); other
-  details are OpenSSL's text. The VM's own prefixes are `ssl-connect:`,
-  `port->ssl-ports:`, `ssl-load-certificate-chain!:`, `ssl-load-private-key!:`
-  (also for a key that does not match the certificate) and
-  `ssl-load-verify-source!:` (for `ca_file`).
+  details are OpenSSL's text.
 - **Turn costs and fuzzing.** TLS sockets use the TCP builtins, so they charge
   by size (10.2.1). `TLS.connect`, `TLS.listen` and the context builds charge
   nothing. Under `no_files` they end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
-  other, with no socket, so it runs on all three systems. The platform trust
-  policies have their own tests (`vm/tests/tls_trust_darwin_test.c`,
-  `vm/tests/tls_trust_windows_test.c`). The goldens `tls-echo` and `tls-errors`
-  are their own peers. `tests/test_vm_tls.py` covers the rest against Node
-  (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`) on
-  all three systems. The certificates in `tests/fixtures/tls/` come from
-  `make-certs.sh`.
+  other on all three systems; the platform trust policies have their own C
+  tests; `tests/test_vm_tls.py` covers the rest against the Node and Python
+  peers in `tests/fixtures/` (certificates from `tests/fixtures/tls/make-certs.sh`).
 
 ### 10.3.1 TCP (as built)
 
@@ -232,8 +222,6 @@ texts.
   task parks until the callback. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `error writing to
   stream port` and leaves the socket open.
-- **Turn costs.** `send`, `send_bytes`, `recv_bytes` and `read_line` charge by
-  size (10.2.1), also when the call parks.
 - **Timeouts.** A timed-out read or write closes the socket. Waiting for the
   lock alone does not. A timed-out connect closes the half-open socket. After
   that, the next call returns `network: socket is closed` at once.
@@ -246,12 +234,10 @@ texts.
   (10.2.2) ends with `_exit`, so the OS closes them, also while operations are
   parked. A peer sees FIN, or RST when data was left unread. A DNS lookup still
   running in the pool is not waited for.
-- **Messages.** The VM's own texts start with `network:`: timeouts, closed
-  socket or listener, end of input, the line limit, the read size, byte values,
-  `port must be 1..65535` (connect) or `0..65535` (listen), and `host cannot
-  contain NUL`. Connect and listen failures are `tcp-connect: connection failed`
-  or `tcp-connect: host not found` (and `tcp-listen: ...`), with `hostname:` and
-  `port number:` lines and the system error.
+- **Messages.** The VM's own texts start with `network:`; connect and listen
+  failures start with `tcp-connect:` and `tcp-listen:`, with `hostname:` and
+  `port number:` lines and the system error. The size builtins charge by size
+  (10.2.1).
 - **Platforms.** The code is shared; libuv hides the socket types. What it does
   not hide:
   - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the message
