@@ -33,25 +33,18 @@ compiler/         # the front end (§18.3): one folder per context; a new file g
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md
-  value.h port.h core.h services.h  # the layer headers
-  list_impl.h     # private list layout: list.c, interp.c and vm/tests/list_test.c only
   value.c         # values and memory; the only file that includes gc.h or calls GC_*
   *_os.h *_posix.c *_windows.c  # a system difference sits behind an `_os.h` header with one file per system
   agentica.c      # main: `run`, else the front end in a first runtime, retired at the hand-off, then the program in a second
-  embedded.h      # the symbols of the generated embedded.s (references/vm-build.md)
-  jit/            # the JIT, core layer: jit.h (its one header), jit.c, emit_x64.c, emit_a64.c, mem_posix.c, mem_windows.c (references/vm-core.md)
-  third_party/    # submodules bdwgc, yyjson, libuv, picohttpparser, openssl, libffi, zlib (pins: docs/vm/10-dependencies-and-platforms.md)
+  jit/            # the JIT, core layer (references/vm-core.md)
+  third_party/    # the submodules (`git submodule status`)
   tests/          # C tests, plain asserts (references/vm-tests.md)
 tests/            # pytest modules test_<area>.py (VM tests: references/vm-tests.md)
   test_spec_<area>.py   # language rules through the CLI; helpers in spec_support.py
   test_frontend_<stage>.py  # Agentica stages against frozen outputs (references/frontend.md); frontend_support.py, frontend_cases.py
-  test_cli_forms.py     # CLI golden fixtures/cli/forms.json
   test_vm_diff_{1..8}.py  # golden shards; 8 is the command line, process, signal and path cases; vm_diff_support.py (references/vm-build.md)
-  test_style_*.py test_vm_style.py  # core purity, line width, C style
-  test_stdlib_modules.py  # stdlib/MODULES and stdlib/CORE
   test_conformance.py   # every module is in an area of tools/conformance.py (references/ci.md)
   agentica_test.py      # shared helpers (references/ci.md)
-  std/            # *_test.agc unit tests of the std/ modules
   fixtures/       # goldens and independent Node.js and Python peers
   bdd/            # feature specs and step handlers (references/bdd.md)
   eval/           # agent evaluation, not part of make test (references/bench-eval.md)

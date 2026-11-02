@@ -22,14 +22,9 @@ What the files cannot see, or how they must run:
   EXPIRED settle (same result on one thread).
 - `vm/tests/inbox_test.c` catches a lost wake, not the order of publish and
   send (which holds by construction).
-- `vm/tests/runq_test.c` orders by `agc_runq_stats` counts, never by time.
-- `vm/tests/task_wake_test.c` is the wake against the park path in C;
-  `threads_test.c` has the whole-run side.
 - `vm/tests/test_support.h`: `agc_test_deadline(seconds)` (an alarm, so a
   broken park path fails a test instead of hanging `make vm-test`; none on
   Windows).
-- `vm/tests/gc_thread_test.c` only runs the threads in the sanitizer build
-  (no collector there).
 - `vm/tests/text_test.c` and `map_test.c` build 1,000,000-deep values that
   overflow an 8 MB C stack if a printer recurses.
 - `vm/tests/tree_test.c`: every real removal runs in a scratch directory that
@@ -44,8 +39,6 @@ What the files cannot see, or how they must run:
   one pipe apart.
 - `tests/test_vm_stack.py` keeps the `<name>.stack.*` sidecars; `make goldens`
   rewrites them, read the diff by hand.
-- `tests/test_single_binary.py` needs only the binary, so the sanitizer job can
-  run it; the fixed point is a make step, not a test.
 - The golden shards: `references/vm-build.md`. Shard 8 runs the VM command
   line, the product CLI and the cases that need more than a fixture (process
   trees, signals, a FIFO, raw bytes in a path or an argument). Modules that

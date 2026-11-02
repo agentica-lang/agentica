@@ -164,10 +164,9 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
   `agc_utf8_chars`. Check order: buffer range, then timeout, then the path
   contract. A block error is the result, and the file closes with `OP_CLOSE`
   first; every path that opened the file passes CLOSE before END.
-- The io trace logs `file_open handle=N` on open and `file_close handle=N` when
-  the registry forgets a handle (at `File.close`, at the owner's end, or on a
-  timed-out job). A timed-out close can log twice; a handle still open at run
-  end logs no close. `tests/test_vm_lazy_io.py` checks these on every platform.
+- The io trace logs `file_open handle=N` and `file_close handle=N` when the
+  registry forgets a handle; a timed-out close can log twice, and a handle open
+  at run end logs no close.
 - `Lazy.write_lines` writes through `agc_line_writer`: `OP_OPEN_WRITE`, then
   each line and its LF into a handle buffer of `CHUNK` (64 KiB, not
   `WRITE_BUFFER`), a full buffer going out as one `OP_WRITE`, then
@@ -255,8 +254,6 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 - No new mutable `static` or global in `vm/` (rule and exceptions:
   `references/vm-c.md`). State goes in the runtime, scheduler or task struct;
   lazy init uses `pthread_once` or runs at start-up.
-- Limits: the 1 MiB per-call reads, the HTTP framing limits and the other caps
-  in `docs/vm/10-io-processes.md` stay as documented.
 
 ## Native Windows files
 
@@ -281,9 +278,7 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
   `vm/tools/check-layers.sh`. `file_io.h` stays forbidden to core files,
   adapters stay independent of VM values, and `make vm-layers` (with its
   planted-violation self-tests) runs before pushing changes to these boundaries.
-- `System.env` and `System.pid` live in `vm/system.c`, apart from process
-  spawning. Environment lookup keeps empty values, rejects NUL and `=`, and
-  hides the private channel marker (case-insensitively on Windows).
-  `vm/tests/system_test.c` runs on all hosts.
+- `System.env` lookup (`vm/system.c`) keeps empty values, rejects NUL and `=`,
+  and hides the private channel marker (case-insensitively on Windows).
 - Bytecode file reads are opened by `file_io.c` and consumed in `launch.c`;
   `agentica.c` has no native file APIs.
