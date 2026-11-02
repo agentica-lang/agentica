@@ -39,35 +39,16 @@
 
 ### 12.2 PR plan
 
-All items are done; `docs/roadmap/07-vm.md` is the active checklist. Keep these
-item numbers: other docs cite them.
-
-1. Vertical slice: Int/Bool, control flow, functions, loader, CLI and
-   differential tests.
-2. Float, comparisons and Float text (§2.2).
-3. Strings, printing, diagnostics, exit codes and GC stress.
-4. macOS and Windows C tests.
-5. Data: 5a Lists; 5b structs/enums/case; 5c Result/try; 5d Maps; 5e closures.
-6. Library: 6a IO/System; 6b String/List/Map/Float/Time/Random builtins.
-7. JSON: `parse`/encode/builders, then decode/schema (format v3, §4.6).
-8. Filesystem/libuv (`File`, `Dir`, `Path`) on Linux.
-9. Tasks and per-task `Random`, one scheduler.
-10. Processes, off with `--deny-run`.
-11. TCP (`Socket`, `Listener`).
-12. TLS with vendored OpenSSL.
-
-Also done, not numbered: ranges (8a), tail calls (`TAIL_CALL`, §4.3) and linked
-programs; the front end links modules, so the VM needed no new code.
+All items are done (`docs/roadmap/07-vm.md` is the active checklist); git
+history keeps the PR list.
 
 ### 12.3 Plan for HTTP and TlsContext
 
-Current status and remaining gates live in
+Status and remaining gates:
 [`docs/future/30-hybrid-http.md`](../future/30-hybrid-http.md) (§30, row 7.4)
 and [`docs/future/29-tls-context.md`](../future/29-tls-context.md) (§29.9, row
-7.4). Streaming and
-the HTTP benchmark precede `TlsContext`. Testing continues to follow §12.1:
-timing-free goldens, timeout tests in `tests/test_vm_http.py`, and standard-
-library-only peers.
+7.4). Testing follows §12.1: timing-free goldens, timeout tests in
+`tests/test_vm_http.py`, and standard-library-only peers.
 
 ## 13. Open questions
 

@@ -1,8 +1,8 @@
 ## 15. VM layers
 
-**Status:** built (row 7.2.1b of the [roadmap](../roadmap/README.md),
-checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows the
-architecture note [§16](16-architecture.md).
+**Status:** built (row 7.2.1b; checklist in
+[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows the architecture
+note [§16](16-architecture.md).
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header
@@ -91,71 +91,36 @@ Notes on the choices:
 ### 15.2 The port
 
 The port is what a service needs from the core to do I/O and to wait, as §14
-allows. Its header, `port.h`, declares every function below.
+allows. `port.h` declares it (read it for the functions); it covers:
 
-- **Job:** park and wake a task
-  - **Functions:** `agc_task_park`, `agc_task_enqueue`, `agc_task_wake`,
-    `agc_task_wake_all`; `agc_task_stepper`, for a builtin that calls its block
-    and parks between the calls. The interpreter asks the stepper's
-    `agc_step_fn` what to do next (call the block, park, or end), so no C code
-    calls the interpreter (`docs/vm/03-ir-and-bytecode.md` §4.3)
+- parking and waking tasks, and `agc_task_stepper`, for a builtin that calls its
+  block and parks between the calls: the interpreter asks the stepper's
+  `agc_step_fn` what to do next (call the block, park, or end), so no C code
+  calls the interpreter (§4.3 of `03-ir-and-bytecode.md`);
+- submitting a job to the loop or the pool with its timeout (`agc_io_start` with
+  an `agc_io_kind`), and `agc_poller_*` for a descriptor on the loop;
+- registering, owning and closing a handle (`agc_register`, `agc_own`,
+  `agc_disown`, `agc_handle_wait`). A resource's `goodbye` hook runs through
+  `agc_io_goodbye` (`tcp.c` closes a socket with TLS `close_notify` first), and
+  `keep_detached` makes `discard` in `loop.c` leave a process alone when its
+  detached result is dropped;
+- spawning, cancelling, joining and observing tasks (`agc_task_spawn_*`,
+  `agc_task_cancel`, `agc_task_observe`), and groups: `agc_task_group` is a
+  parent node that never runs, and `agc_task_service` runs a task that owns a
+  handle under a root with no parent, so no caller's crash, cancel or end
+  reaches it, and `Task.pending_count` and `Test.test` leave it out. Its tasks
+  get an `end` hook and `hidden`, so no await observes them and their unobserved
+  crashes keep one entry per test (§10.2.1);
+- charging, failing and writing (`agc_charge`, `agc_fail`, `agc_write`).
+  `agc_write` returns false when the task must park and retry, and
+  `agc_output_waiting` tells a builtin that its text already waits in the
+  stream's FIFO, so it passes no text.
 
-- **Job:** submit a job (loop or pool), with its timeout
-  - **Functions:** `agc_io_start` with an `agc_io_kind` (`work`, `done`,
-    `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached`,
-    `agc_io_start_then` (a pool job's `more` step)
-
-- **Job:** wait on a descriptor on the loop
-  - **Functions:** `agc_poller_*` (a `uv_poll_t` that owns its descriptor)
-
-- **Job:** read standard input to its end (`FrontEnd.stdin_bytes`)
-  - **Functions:** `agc_input_whole`, so the front end uses the one stdin reader
-
-- **Job:** set a timer
-  - **Functions:** none of its own. An I/O deadline is the job's `timeout_ms`. A
-    deadline-only wait (`Task.sleep`) is a core task timer
-    (`agc_task_park_until`, §14.2). The other timers of §14.2 use libuv through
-    `agc_io_uv` and stay exceptions
-
-- **Job:** register, own and close a handle
-  - **Functions:** `agc_register`, `agc_own` (with an `agc_close_fn`),
-    `agc_disown` (a server takes its listener off its owner's list),
-    `agc_unregister`, `agc_resource_id`, `agc_handle_wait` (the handle's lock
-    FIFO); the resource's `goodbye` hook, called through `agc_io_goodbye`
-    (`tcp.c` sets it to close a socket, TLS `close_notify` first); and
-    `keep_detached`, which `process.c` sets so that `discard` in `loop.c` does
-    not release a process whose detached result is dropped
-
-- **Job:** reach the loop and signals
-  - **Functions:** `agc_io_uv`, `agc_io_block_stop` (around a fork or a thread
-    start). The stop-signal list is static in `loop.c`; no service reads it
-
-- **Job:** spawn, wait for, cancel and observe tasks
-  - **Functions:** `agc_task_spawn_test` (one test, seeded before it runs),
-    `agc_task_spawn_owning` (a task that gets a handle the caller owns;
-    `Task.spawn_owning` and `HttpWire.spawn` call it), `agc_task_spawn_seeded`
-    (under a parent, with the caller's random seed), `agc_task_owns`,
-    `agc_task_close_done`, `agc_task_cancel`, `agc_task_observe`,
-    `agc_report_unobserved`, `agc_task_join`
-
-- **Job:** task groups
-  - **Functions:** `agc_task_group` (a parent node that never runs) and
-    `agc_task_service`, which runs a task that owns a handle under a root with
-    no parent. No caller's crash, cancel or end reaches it, and
-    `Task.pending_count` and `Test.test` leave it out. `HttpWire.service` calls
-    it. Its tasks get an `end` hook (`agc_end_fn` with `end_data`) and `hidden`,
-    so no await observes them and their unobserved crashes keep one entry per
-    test (§10.2.1)
-
-- **Job:** charge, fail, write
-  - **Functions:** `agc_charge`, `agc_charge_bytes`, `agc_value_units`,
-    `agc_fail`, `agc_fail_text`, `agc_exit`, `agc_write`, `agc_output_waiting`,
-    `agc_drain`, `agc_flush`. `agc_write` returns false when the task must park
-    and retry. `agc_output_waiting` tells a builtin that its text already waits
-    in the stream's FIFO, so it passes no text
-
-- **Job:** program lookups
-  - **Functions:** `agc_builtin_struct`
+There is no timer function: an I/O deadline is the job's `timeout_ms`, a
+deadline-only wait (`Task.sleep`) is a core task timer (`agc_task_park_until`,
+§14.2), and the other timers of §14.2 use libuv through `agc_io_uv` and stay
+exceptions. `agc_io_block_stop` wraps a fork or a thread start, and
+`agc_input_whole` lets the front end use the one stdin reader.
 
 Behind the port are the two queues of
 [§16.4](16-architecture.md#164-two-directions): the run queue (a waking task is
@@ -293,90 +258,42 @@ and runs `vm/tools/check-layers.sh <object dir>` and its negative self-test,
     other than `list.c`, `interp.c` and `vm/tests/list_test.c`.
 
 The link rules (7, 8) are the authority: a declaration that rule 6 misses still
-fails there. Rules 1 to 6, 9 and 10 need no build and give a fast, readable
-error. An `rg` exit status of 2 (a bad pattern, a missing file) is a failure,
-not "no match", and so is a missing object. The link rules read ELF symbols. On
-macOS `nm` prints a leading `_` and has no `--defined-only`, so the script stops
-with a message off Linux instead of passing.
-
-The self-test runs on a temporary copy of the sources and objects. The unchanged
-copy must pass. Then it plants one violation at a time, and each must fail with
-its own message. Two plants are link ones: a core file that calls
-`agc_utf8_encode` through a typedef'd declaration (`plant_fn agc_utf8_encode;`),
-which rule 6 misses, so only rule 7 sees it, and an adapter that calls
-`agc_error_value` (rule 8). The planted object is rebuilt with the VM's flags
-first, so the script never reads a stale object. Run `make vm-layers` on the
-release objects locally too, to cover code that a configuration turns off.
+fails there. The other rules need no build and give a fast, readable error. The
+link rules read ELF symbols, so the script stops with a message off Linux
+instead of passing. The self-test plants one violation at a time in a temporary
+copy, and each must fail with its own message, including two link plants that
+only rules 7 and 8 see. Run `make vm-layers` on the release objects locally too,
+to cover code that a configuration turns off.
 
 ### 15.6 Violations found
 
-Each row is a place where the core names a service, or a layer reaches past
-the port (rule 7 of §15.5 checks them with `nm`). V1 to V5 are fixed; the
-others are accepted, with the reason.
+Places where the core names a service, or a layer reaches past the port (rule
+7 of §15.5 checks them with `nm`). V1 to V5 are fixed; the others are accepted.
 
-- **V1 to V5, fixed:**
-  - V1: the Json writer moved to the core (`json_value.c`).
-  - V2: the builtin table list moved to the driver file `builtin_tables.c`
-    (`agc_builtin_tables`, in the old order, since `agc_find_builtin` returns
-    the first match), the one place that wires the services in.
-  - V3: `discard` reads the resource field `keep_detached` instead of a tag.
-  - V4: `agc_error_value` moved to `value.c`.
-  - V5: `Test.run` waits through the port function `agc_task_join`.
-
-- **#:** V6
-  - **Where:** `testing.c` (`cancel_leftovers`, `unobserved_of`, `observe_test`)
-  - **What:** they walk `caller->children` and `rt->crashes` and read `t->test`
-  - **Fix:** **Accepted for now.** They only read, and every change goes through
-    `agc_task_cancel` and `agc_task_observe`. 24b's one hand-off form may give a
-    task group to replace them; if it does, they move behind the port then
-
-- **#:** V7
-  - **Where:** `loop.c` (`agc_owned_of`)
-  - **What:** the core reads the `state` field of `agc_socket`, `agc_listener`
-    and `agc_process`
-  - **Fix:** **Accepted**: ownership (§14.5) must find a value's resource, so
-    those values are declared in `value.h`
-
-- **#:** V8
-  - **Where:** `value.h` (`agc_tag`, `agc_as_*`), `value.c`, `text.c`
-  - **What:** the tag enum and the printed names (`<Socket>`, `<Process>`, ...)
-    of service values live in the core
-  - **Fix:** **Accepted**: one closed enum that the loader, `text.c` and
-    `equal.c` need; no service code is called
-
-- **#:** V9
-  - **Where:** `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`),
-    `task.c`
-  - **What:** service state in core structs (`agc_task`'s `test`, `note` and
-    `test_run`, `agc_vm.process_guard`) and the settings `deny_run`,
-    `drop_uring_env` and `no_files`
-  - **Fix:** **Accepted**: opaque pointers and settings, no calls. The driver
-    sets the settings
-
-- **#:** V11
-  - **Where:** `agentica.c`, `launch.c`
-  - **What:** the driver calls `agc_files_init`, `agc_files_close`,
-    `agc_parent_take`, `agc_tls_version` and `agc_json_version`
-  - **Fix:** **Accepted**: `agentica.c` is the driver
-
-- **#:** V12
-  - **Where:** `http_body.c`
-  - **What:** an adapter calls `agc_size_mul` and `agc_out_of_memory`
-  - **Fix:** **Accepted**: memory only, so out of memory keeps its exit code
-    (§6.3)
-
-- **#:** V13
-  - **Where:** `loop.c` (`agc_owned_of`), 20c
-  - **What:** the core reads the `state` field of `agc_http_server` too, so a
-    server passed to `Task.spawn_owning` can be handed over
-  - **Fix:** **Accepted with V7.** If it is ever wanted, the fix is a resource
-    found through a field the service sets, not a tag list in the core
-
-- **#:** V14
-  - **Where:** `task.c` (`quiet_slot`), 20c
-  - **What:** the crash list reads `hidden` and `t->test` to keep one entry per
-    test for HTTP connection tasks
-  - **Fix:** **Accepted with V6**: a flag the service sets, read by the core
+- **V1 to V5, fixed:** the Json writer moved to the core (`json_value.c`); the
+  builtin table list moved to the driver file `builtin_tables.c`
+  (`agc_builtin_tables`, in the old order, since `agc_find_builtin` returns the
+  first match; V2); `discard` reads the resource field `keep_detached` instead
+  of a tag; `agc_error_value` moved to `value.c`; `Test.run` waits through
+  `agc_task_join`.
+- **V6, accepted for now:** `testing.c` (`cancel_leftovers`, `unobserved_of`,
+  `observe_test`) walks `caller->children` and `rt->crashes` and reads
+  `t->test`. They only read, and every change goes through `agc_task_cancel` and
+  `agc_task_observe`. They move behind the port if a task group replaces them.
+- **V7, V13, accepted:** `loop.c` (`agc_owned_of`) reads the `state` field of
+  `agc_socket`, `agc_listener`, `agc_process` and `agc_http_server`, because
+  ownership (§14.5) must find a value's resource and those values are declared
+  in `value.h`. If more is wanted, the fix is a resource found through a field
+  the service sets, not a tag list in the core.
+- **V8, accepted:** the tag enum and the printed names of service values live in
+  the core: one closed enum that the loader, `text.c` and `equal.c` need.
+- **V9, V14, accepted:** service state in core structs (`agc_task`'s `test`,
+  `note` and `test_run`, `agc_vm.process_guard`, the settings `deny_run`,
+  `drop_uring_env` and `no_files`; `hidden` and `t->test` read by `quiet_slot`
+  in `task.c`): opaque pointers and settings, no calls. The driver sets them.
+- **V11, V12, accepted:** the driver (`agentica.c`, `launch.c`) calls service
+  init and version functions; `http_body.c` calls `agc_size_mul` and
+  `agc_out_of_memory` only, so out of memory keeps its exit code (§6.3).
 
 Not violations: `loader.c` calls `agc_find_builtin` (core), and the core's other
 cross-file calls stay inside the core.

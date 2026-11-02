@@ -11,13 +11,9 @@ that still apply.
   still depends on timer and pool timing. `--seed` does not imply one scheduler;
   at N>1 only per-task random values repeat (7.4). The thread split and shared
   queue are in §16.2–16.3.
-- **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
-  specified in §16.3.
-- **Waking.** State/results are published before enqueueing (§16.3–16.4):
-  the I/O thread on job completion, or a scheduler after await/lock completion
-  or cancellation. Release/acquire ordering or the per-task lock makes results
-  visible to the resumed scheduler. The park and wake protocol below handles
-  races while a task is still parking.
+- **Run queue, idle schedulers and waking:** §16.3 and §16.4 (results are
+  published before the task is enqueued). The park and wake protocol below
+  handles races while a task is still parking.
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
   atomics. The scheduler reads them at the end of each turn, never on the `STEP`
   paths (§10.2.1, One counter for both budgets), so the fast path touches no
@@ -43,25 +39,15 @@ that still apply.
   itself, and `run_task` sets RUNNING when a turn starts. A resumed task
   re-checks its condition, so a wake is only a hint. No wake is lost, and a task
   is queued at most once. Which waker wins is in §16.5.
-  As built (`vm/task.c`):
-  - `agc_task_parking` marks the running task PARKING before the builtin
-    registers anything: before it joins a waiter list or the FIFO of a stream,
-    posts a request or starts a job (`agc_io_start_then` marks before the job
-    exists). `agc_task_unpark` takes the task back to RUNNING, from PARKING or
-    WOKEN, when the wait turns out to be unneeded. `agc_task_park` only says
-    that the turn ends in a wait.
-  - The end of the turn (`agc_task_end_turn`, `agc_task_commit_park`) is in
-    §16.9, "Atomic task states".
-  - A yield after WOKEN does not skip anything the waker prepared. A task that
-    parked on a job has `parked` set, and `resume` takes the job's result and
-    writes it to `park_reg` when the task runs again, whichever way it got
-    there; a retry park (`agc_task_park(vm, true)`) runs the builtin again. So
-    for a park that does not retry (the job path) the waker never writes the
-    register, and WOKEN needs only the yield.
-  - The re-check of the wait condition after the registration belongs to each
-    builtin; with one thread it cannot change between the check and the
-    registration. Waiter lists and FIFOs that more than one thread touches get
-    their locks with those threads (§16.11).
+  In `vm/task.c`, `agc_task_parking` marks the task PARKING before the builtin
+  registers anything (`agc_io_start_then` marks before the job exists), and
+  `agc_task_unpark` takes it back to RUNNING when the wait turns out to be
+  unneeded; `agc_task_park` only says that the turn ends in a wait (the end of
+  the turn is in §16.9, "Atomic task states"). A task that parked on a job has
+  `parked` set, and `resume` takes the job's result and writes it to `park_reg`
+  whichever way the task got there, so for the job path the waker never writes
+  the register and WOKEN needs only the yield; a retry park runs the builtin
+  again. The re-check of the wait condition belongs to each builtin.
 - **Channels (17b).** A channel's waiter lists change under `rt->sync`, the one
   coarse lock (§16.9), never held across a park. Ring growth copies the slots
   under the lock: an accepted exception, bounded by the capacity and charged as
@@ -112,15 +98,11 @@ that still apply.
   - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2):
     the schedulers stop and the exit path (§14.4) runs on the I/O thread after
     it has joined them (§16.9, "Threads").
-- **I/O ownership.** Handles stay on the I/O loop. Schedulers request
-  operations through its inbox and tasks resume via the global queue, not a
-  handle-owning scheduler (§16.2, §16.4). The I/O thread also owns the state
-  that a socket's callbacks touch (buffers, TLS session, request slots), so a
-  socket needs no lock (§16.9).
-- **Stdin.** A handle on the I/O loop like any other. Reads from any scheduler
-  are requests. Each read stays whole, because the input keeps a FIFO of waiting
-  readers and serves one read at a time. No OS mutex or spinlock is held across
-  a park.
+- **I/O ownership.** Handles stay on the I/O loop, and so does the state that a
+  socket's callbacks touch, so a socket needs no lock (§16.2, §16.4, §16.9).
+  Stdin is a handle like any other: each read stays whole, because the input
+  keeps a FIFO of waiting readers and serves one read at a time. No OS mutex or
+  spinlock is held across a park.
 - **Output.** Streams to one target share a buffer, FIFO and lock, with the
   loop as sole writer. For N>1 a short lock protects each access and is never
   held across a park. Blocking fallbacks (§14.1) hold it across writes, retry
@@ -132,29 +114,22 @@ that still apply.
   so the loop stays alive with no other handle, and a request calls
   `uv_async_send` on it. At the end of the run it is unref'd, so an in-process
   harness can close the loop. The real binary ends with `_exit` and closes no
-  loop (Shutdown). With N=1 there is no inbox handle, and the "no active
-  handles" check of 10.2.1 still holds. `agc_io_share` makes the inbox (§16.9,
-  "The inbox").
-- **Stall check.** At N>1 the I/O thread runs it when it has nothing to do
-  (§16.9, "Stall"); it never uses `uv_run`'s return value.
-- **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
-  or free the loop (§14.4; §10.2.2, "End of run").
-- **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
-  `THREAD_LOCAL_ALLOC`; this holds for the vendored `gc.o` and the
-  distro's libgc, and `vm/value.c` defines `GC_THREADS` before it includes
-  `gc.h`. The threads libuv starts (the schedulers) register with
-  `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with
+  loop (§14.4: the real binary closes none). With N=1 there is no inbox handle,
+  and the "no active handles" check of 10.2.1 still holds. `agc_io_share` makes
+  the inbox (§16.9, "The inbox"). The stall check (§16.9, "Stall") never uses
+  `uv_run`'s return value.
+- **GC.** The build flags and the thread registration rules are in §11. The
+  schedulers register with `agc_gc_thread_enter` and leave with
   `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once after
-  `agc_init`, which also starts the mark threads. The libuv pool threads stay
-  unregistered on purpose, since they never touch GC memory; so does the Windows
-  stdin reader thread, which touches only `malloc` memory. With N=1 no one calls
-  `agc_gc_allow_threads`, so no mark thread exists. The runtime struct is GC
-  memory (`agc_vm_init` allocates it), reached from the `agc_vm` that stays on
-  the main thread's stack for the whole run. Where GC pointers may live (the run
-  queue, jobs, the inbox) is in §16.5, "GC rule". Collections stop the world.
-  That cost is accepted. Boehm stops threads with signals installed with
-  `SA_RESTART`. The VM's syscall paths retry on `EINTR`, and libuv signal
-  handling (`uv_signal_t`) must never take Boehm's suspend and restart signals.
+  `agc_init`, which also starts the mark threads (never with N=1). The libuv
+  pool threads and the Windows stdin reader stay unregistered on purpose: they
+  touch only `malloc` memory. The runtime struct is GC memory (`agc_vm_init`
+  allocates it), reached from the `agc_vm` that stays on the main thread's stack
+  for the whole run. Where GC pointers may live is in §16.5, "GC rule".
+  Collections stop the world; that cost is accepted. Boehm stops threads with
+  signals installed with `SA_RESTART`. The VM's syscall paths retry on `EINTR`,
+  and libuv signal handling (`uv_signal_t`) must never take Boehm's suspend and
+  restart signals.
   On Windows Boehm stops threads with `SuspendThread`, so a stopped thread may
   hold the `malloc` heap lock, and the collecting thread must not `malloc` until
   the world restarts. Its mark phase calls `signal(SIGSEGV, ...)`, and the UCRT
