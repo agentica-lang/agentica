@@ -77,6 +77,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- An `HTTP.serve` server that is closing no longer answers 400 to a valid
+  request: a request with no body gets its answer, and one whose body the close
+  cut short gets none.
 - Compiling deeply nested `some(...)` or `ok(...)` calls or list literals, with
   or without a type annotation, takes time in proportion to the depth (900
   levels of `some`: from 0.13 s to 0.05 s).
