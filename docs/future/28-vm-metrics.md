@@ -125,15 +125,12 @@ exception, registered only at the lazy start.
 - `agentica_vm_tasks_spawned_total` (counter): existing counter
   (`next_task_id - 1`, main included). Spawn rate.
 - `agentica_vm_tasks_finished_total` (counter): existing counter, `tasks_done`
-  while the run goes on (main is never in it, 28.1) and `tasks_done + 1` in the
-  end-of-run snapshot, once the run's outcome is known. "Finished" means the run
-  is over for that task: main counts as finished at the end however the run
-  ended (main returned, a child failed, or a task called `System.exit`). Finish
-  rate. While the run goes on, spawned minus finished is the live count, main
-  included, so it is at least 1 at every scrape. At the end it is the number of
-  tasks the run cut off: the ready and parked tasks cancelled when the run
-  ended, plus the child whose failure or `System.exit` ended the run, since such
-  a task never reaches `finish_task` and so is not in `tasks_done`.
+  while the run goes on (main is never in it) and `tasks_done + 1` in the
+  end-of-run snapshot: main counts as finished at the end however the run ended.
+  Finish rate. While the run goes on, spawned minus finished is the live count,
+  main included (at least 1 at every scrape); at the end it is the number of
+  tasks the run cut off (ready and parked tasks cancelled, plus the child whose
+  failure or `System.exit` ended the run, which never reaches `finish_task`).
 - `agentica_vm_tasks` (gauge, label `state`: `ready`, `parked`): derived.
   `ready` walks the run queue at the snapshot; `parked` is live (spawned minus
   finished, main included) minus ready (the snapshot is taken between turns, so
@@ -475,22 +472,20 @@ the rules of 28.2, except as noted under "Cost".
 allocators; heap snapshots; per-task Prometheus labels (task ids stay out of
 labels, 28.3).
 
-**Cost.** Rule 4 of 28.2 drops any metric that needs work on the hot path while
-nobody asks. The per-task add is that work: one non-atomic add per allocation.
-The 18d PR must show that it passes the overhead check of 28.8, or change rule 4
-first, with the reason (as 14 asks of its rules).
+**Cost.** The per-task add is the hot-path work that rule 4 of 28.2 drops: one
+non-atomic add per allocation. The 18d PR must show that it passes the overhead
+check of 28.8, or change rule 4 first, with the reason.
 
 **Open.** How the allocation path finds the running task's counter: `agc_alloc`
-takes no scheduler, and `vm/` has no mutable globals
-(`docs/vm/10-io-multicore.md` §10.2.3). Options: a new parameter on the
-allocation functions (every caller changes); a thread-local variable (one
-documented exception to the no-globals rule); or counting in the callers that
-have the scheduler (builtins and opcodes), which misses allocations made deeper
-in helpers.
+takes no scheduler, and `vm/` has no mutable globals (`docs/vm/10-io-multicore.md`
+§10.2.3). Options: a new parameter on the allocation functions (every caller
+changes); a thread-local variable (one documented exception to the no-globals
+rule); or counting in the callers that have the scheduler (builtins and
+opcodes), which misses allocations made deeper in helpers.
 
 ### 28.13 Implementation (row 7.7)
 
 Done when: Prometheus scrapes a running Agentica server and Grafana graphs GC,
 tasks, run-queue delay and I/O; a cron script leaves its exit code and totals in
-a `.prom` file; goldens give the same output with metrics on. A GC pause
-histogram and program-defined metrics are not in this phase (§28.11).
+a `.prom` file; goldens give the same output with metrics on (§28.11 lists what
+is not in this phase).
