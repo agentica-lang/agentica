@@ -300,7 +300,7 @@ with no escape and no `#{}`. The tags:
   escaper: every `<%= %>` of the template inserts `function.call("#{code}")`
   instead (`<%==` stays raw). `function` is any expression of type
   `Fn[String, String]`, as `&EAG.html_escape`; another type is
-  `CHECK-TYPE-MISMATCH` at the directive. `escape` is the only directive word;
+  `CHECK-TYPE-MISMATCH` at the function. `escape` is the only directive word;
   a directive with another word or no function, not on the first line, or given
   twice is `PARSE-EAG-DIRECTIVE`. Alone on its line it is removed whole.
 

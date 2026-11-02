@@ -253,10 +253,12 @@ def test_template_diagnostics_carry_a_span_in_the_template(tmp_path, body, code,
 
 
 @pytest.mark.parametrize("escaper, code, needle", [
-    ("&count", "CHECK-TYPE-MISMATCH", " escape &count"),
-    ("&join", "CHECK-TYPE-MISMATCH", " escape &join"),
-    ("3", "CHECK-TYPE-MISMATCH", " escape 3"),
+    ("&count", "CHECK-TYPE-MISMATCH", "&count"),
+    ("&join", "CHECK-TYPE-MISMATCH", "&join"),
+    ("3", "CHECK-TYPE-MISMATCH", "3 %>"),
     ("&nope", "CHECK-UNKNOWN-NAME", "&nope"),
+    # Two functions are not one expression: the binding of the escaper stops at the comma.
+    ("&count, &join", "PARSE-UNEXPECTED-TOKEN", ", &join"),
 ])
 def test_the_escaper_is_checked_as_a_function_from_string_to_string(tmp_path, escaper, code, needle):
     source = '''import EAG from "std/eag"
@@ -282,6 +284,29 @@ end
 ''' % escaper
     diagnostic = problem(check(write(tmp_path, source)), code, 1)
     assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == where(source, needle)
+
+
+def test_the_escaper_may_be_any_expression_of_the_type(tmp_path):
+    path = write(tmp_path, '''import EAG from "std/eag"
+
+def up(text: String) -> String
+  return text.upcase
+end
+
+def make() -> Fn[String, String]
+  return &up
+end
+
+def main() -> Void
+  puts(<<~EAG)
+    <%@ escape make() %>
+    a <%= "x" %> <%== "y" %>
+  EAG
+end
+''')
+    result = run(cli() + [str(path)], env=vm_environment())
+    assert result.code == 0, result.stderr
+    assert result.stdout == "a X y\n\n"
 
 
 def test_a_block_of_a_tag_cannot_write_the_output(tmp_path):

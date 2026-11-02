@@ -8,9 +8,9 @@
 ## escape and no `#{}`. A tag ends on the line where it starts, at the first `%>`, as in Ruby's ERB.
 ##
 ## `<%== code %>` always inserts the value as it is. A directive `<%@ escape function %>` on the first line gives the
-## template an escaper, a `Fn[String, String]` that every `<%= %>` applies to its text: the block then takes the
-## function as its parameter, from a list that holds it, and the push is `eag#t.push(eag#e.call("#{code}"))`, so the
-## checker sees ordinary code and the function is any value of that type.
+## template an escaper, a `Fn[String, String]` that every `<%= %>` applies to its text: the block binds the function,
+## `eag#e: Fn[String, String] = function`, and the push is `eag#t.push(eag#e.call("#{code}"))`, so the checker sees
+## ordinary code and reports a function of another type at the directive.
 ##
 ## The expansion is
 ##
@@ -97,13 +97,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     return Diag.Outcome.Failed(unclosed(built.open[built.open.size - 1]))
   end
 
-  # The glue of a template with an escaper stands at its directive, so that a function of another type is reported
-  # there; the glue of any other template stands at the opener.
   at = opener.span
-  if built.escaper.size > 0
-    at = built.escaper_at
-  end
-
   head = block_head(built, at)
   tail = [
     name(Ast.EAG_PIECES, at),
@@ -121,31 +115,44 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
   return Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
-# The tokens up to the first line of the block: `[0].map do |eag#n: Int|`, or the escaper in the list and the block
-# parameter of its type, then the list of pieces `eag#t: List[String] = []`.
+# The tokens up to the first line of the block: `[0].map do |eag#n: Int|`, then the binding of the escaper when the
+# template has one, `eag#e: Fn[String, String] = function`, and the list of pieces `eag#t: List[String] = []`. The
+# binding stands at the place of the directive, and the tokens of the function keep theirs, so the checker reports a
+# function of another type there.
 def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
-  opening = [word("left-bracket", "[", at), number(0, at), word("right-bracket", "]", at)]
-  param = [name(Ast.EAG_SEED, at), word("colon", ":", at), word("type-name", "Int", at)]
+  head = [
+    word("left-bracket", "[", at),
+    number(0, at),
+    word("right-bracket", "]", at),
+    word("dot", ".", at),
+    name("map", at),
+    word("do", "do", at),
+    word("pipe", "|", at),
+    name(Ast.EAG_SEED, at),
+    word("colon", ":", at),
+    word("type-name", "Int", at),
+    word("pipe", "|", at),
+    word("NL", "\n", at),
+  ]
   if built.escaper.size > 0
-    opening = appended([word("left-bracket", "[", at)], built.escaper).push(word("right-bracket", "]", at))
-    param = [
-      name(Ast.EAG_ESCAPER, at),
-      word("colon", ":", at),
-      word("type-name", "Fn", at),
-      word("left-bracket", "[", at),
-      word("type-name", "String", at),
-      word("comma", ",", at),
-      word("type-name", "String", at),
-      word("right-bracket", "]", at),
+    here = built.escaper_at
+    bound = [
+      name(Ast.EAG_ESCAPER, here),
+      word("colon", ":", here),
+      word("type-name", "Fn", here),
+      word("left-bracket", "[", here),
+      word("type-name", "String", here),
+      word("comma", ",", here),
+      word("type-name", "String", here),
+      word("right-bracket", "]", here),
+      word("assign", "=", here),
     ]
+    head = appended(appended(head, bound), built.escaper).push(word("NL", "\n", here))
   end
 
-  head = appended(opening, [word("dot", ".", at), name("map", at), word("do", "do", at), word("pipe", "|", at)])
   return appended(
-    appended(head, param),
+    head,
     [
-      word("pipe", "|", at),
-      word("NL", "\n", at),
       name(Ast.EAG_PIECES, at),
       word("colon", ":", at),
       word("type-name", "List", at),
@@ -426,11 +433,9 @@ def unclosed(at: Source.Span) -> Diag.Diagnostic
   )
 end
 
-# The tokens of a tag after the text before it: `eag#t = eag#t.push("#{code}")` for `<%=`
-# (`eag#e.call("#{code}")` inside
-# the push when the template has an escaper) and `<%==`, the code and a line break
-# for `<% %>`. A tag without code gives none, but an empty `<%= %>` keeps the glue, so the parser reports it at the
-# tag.
+# The tokens of a tag after the text before it: `eag#t = eag#t.push("#{code}")` for `<%=` and `<%==` (for `<%=` with an
+# escaper, `eag#e.call("#{code}")` stands inside the push), the code and a line break for `<% %>`. A tag without code
+# gives none, but an empty `<%= %>` keeps the glue, so the parser reports it at the tag.
 def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, code: List[Tokens.Token]) -> Built
   flushed = flush(built, at)
   if part.kind == "stmt"

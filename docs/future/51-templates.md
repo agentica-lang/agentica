@@ -101,12 +101,13 @@ business (Bond offers `Bond.escape`).
   its line, the directive is removed whole. `escape` is the only word.
 - With an escaper, `<%= code %>` pushes `escaper.call("#{code}")`, the escape of
   the text that ERB's `to_s` gives. `<%== code %>` always pushes the text as it
-  is, with or without an escaper, so adding an escaper needs no edit of the tags.
-- The expansion keeps the same shape: the escaper is the item of the list that
-  the block maps, `[function].map do |eag#e: Fn[String, String]|`, so the
-  checker sees ordinary code and a function of another type is
-  `CHECK-TYPE-MISMATCH` at the directive. `eag#e` is a hidden name like the
-  others. A directive with another word or no function, not on the first line
-  or given twice is `PARSE-EAG-DIRECTIVE`.
+  is, with or without an escaper, so adding an escaper needs no edit of the
+  tags.
+- The expansion keeps the same shape: the block binds the escaper,
+  `eag#e: Fn[String, String] = function`, so the checker sees ordinary code and
+  a function of another type is `CHECK-TYPE-MISMATCH` at the function. `eag#e`
+  is a hidden name like the others. A directive with another word or no
+  function, not on the first line or given twice is `PARSE-EAG-DIRECTIVE`; two
+  functions (`<%@ escape &a, &b %>`) are a parse error of the binding.
 - The hook takes text, not a value, so a type `Fn[T, String]` and a "safe
   string" type are not part of it: `<%==` is the way out.

@@ -98,11 +98,7 @@ end
 
 # Whether the block is the one that holds a template.
 def template_block?(capture: State.Capture) -> Bool
-  if capture.params.size != 1
-    return false
-  end
-
-  return capture.params[0].name == Ast.EAG_SEED or capture.params[0].name == Ast.EAG_ESCAPER
+  return capture.params.size == 1 and capture.params[0].name == Ast.EAG_SEED
 end
 
 def returns?(statement: Ast.Stmt) -> Bool

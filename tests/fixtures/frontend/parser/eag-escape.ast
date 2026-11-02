@@ -1,52 +1,55 @@
-program #51 0:1:1-208:11:1
+program #54 0:1:1-208:11:1
   declaration: import-decl #0 0:1:1-26:2:1 path="std/eag" alias="EAG"
-  declaration: function-decl #50 27:3:1-208:11:1 name="page"
+  declaration: function-decl #53 27:3:1-208:11:1 name="page"
     param: param #3 36:3:10-55:3:29 name="names"
       type: type-ref #2 43:3:17-55:3:29 name="List"
         arg: type-ref #1 48:3:22-54:3:28 name="String"
     result: type-ref #4 60:3:34-66:3:40 name="String"
-    body: return-stmt #49 69:4:3-83:5:1
-      value: eag-lit #48 76:4:10-82:4:16
-        call: field-access #47 90:5:8-115:5:33 name="first"
-          target: method-call #46 90:5:8-115:5:33 name="map"
-            target: list-lit #6 90:5:8-115:5:33
-              element: function-ref #5 98:5:16-114:5:32 name="EAG.html_escape"
-            arg: block-lit #45 90:5:8-115:5:33
-              param: block-param #10 90:5:8-115:5:33 name="eag#e"
-                type: type-ref #9 90:5:8-115:5:33 name="Fn"
-                  arg: type-ref #7 90:5:8-115:5:33 name="String"
-                  arg: type-ref #8 90:5:8-115:5:33 name="String"
-              body: binding #14 90:5:8-115:5:33 name="eag#t"
-                type: type-ref #12 90:5:8-115:5:33 name="List"
-                  arg: type-ref #11 90:5:8-115:5:33 name="String"
-                value: list-lit #13 90:5:8-115:5:33
-              body: for-stmt #40 125:6:8-194:8:11 variable="name"
-                iterable: name-ref #15 137:6:20-142:6:25 name="names"
-                body: binding #19 146:7:1-183:7:38 name="eag#t"
-                  value: method-call #18 146:7:1-183:7:38 name="push"
-                    target: name-ref #16 146:7:1-183:7:38 name="eag#t"
-                    arg: literal #17 146:7:1-183:7:38 value=string:"<li>"
-                body: binding #26 157:7:12-163:7:18 name="eag#t"
-                  value: method-call #25 157:7:12-163:7:18 name="push"
-                    target: name-ref #20 157:7:12-163:7:18 name="eag#t"
-                    arg: invoke #24 157:7:12-163:7:18
-                      target: name-ref #21 157:7:12-163:7:18 name="eag#e"
-                      arg: interpolation #23 157:7:12-163:7:18
-                        part: name-ref #22 158:7:13-162:7:17 name="name"
-                body: binding #30 146:7:1-183:7:38 name="eag#t"
-                  value: method-call #29 146:7:1-183:7:38 name="push"
-                    target: name-ref #27 146:7:1-183:7:38 name="eag#t"
-                    arg: literal #28 146:7:1-183:7:38 value=string:" "
-                body: binding #35 170:7:25-176:7:31 name="eag#t"
-                  value: method-call #34 170:7:25-176:7:31 name="push"
-                    target: name-ref #31 170:7:25-176:7:31 name="eag#t"
-                    arg: interpolation #33 170:7:25-176:7:31
-                      part: name-ref #32 171:7:26-175:7:30 name="name"
-                body: binding #39 146:7:1-183:7:38 name="eag#t"
-                  value: method-call #38 146:7:1-183:7:38 name="push"
-                    target: name-ref #36 146:7:1-183:7:38 name="eag#t"
-                    arg: literal #37 146:7:1-183:7:38 value=string:"</li>\n"
-              body: expr-stmt #44 90:5:8-115:5:33
-                value: method-call #43 90:5:8-115:5:33 name="join"
-                  target: name-ref #41 90:5:8-115:5:33 name="eag#t"
-                  arg: literal #42 90:5:8-115:5:33 value=string:""
+    body: return-stmt #52 69:4:3-83:5:1
+      value: eag-lit #51 76:4:10-82:4:16
+        call: field-access #50 76:4:10-82:4:16 name="first"
+          target: method-call #49 76:4:10-82:4:16 name="map"
+            target: list-lit #6 76:4:10-82:4:16
+              element: literal #5 76:4:10-82:4:16 value=int:0
+            arg: block-lit #48 76:4:10-82:4:16
+              param: block-param #8 76:4:10-82:4:16 name="eag#n"
+                type: type-ref #7 76:4:10-82:4:16 name="Int"
+              body: binding #13 90:5:8-115:5:33 name="eag#e"
+                type: type-ref #11 90:5:8-115:5:33 name="Fn"
+                  arg: type-ref #9 90:5:8-115:5:33 name="String"
+                  arg: type-ref #10 90:5:8-115:5:33 name="String"
+                value: function-ref #12 98:5:16-114:5:32 name="EAG.html_escape"
+              body: binding #17 76:4:10-82:4:16 name="eag#t"
+                type: type-ref #15 76:4:10-82:4:16 name="List"
+                  arg: type-ref #14 76:4:10-82:4:16 name="String"
+                value: list-lit #16 76:4:10-82:4:16
+              body: for-stmt #43 125:6:8-194:8:11 variable="name"
+                iterable: name-ref #18 137:6:20-142:6:25 name="names"
+                body: binding #22 146:7:1-183:7:38 name="eag#t"
+                  value: method-call #21 146:7:1-183:7:38 name="push"
+                    target: name-ref #19 146:7:1-183:7:38 name="eag#t"
+                    arg: literal #20 146:7:1-183:7:38 value=string:"<li>"
+                body: binding #29 157:7:12-163:7:18 name="eag#t"
+                  value: method-call #28 157:7:12-163:7:18 name="push"
+                    target: name-ref #23 157:7:12-163:7:18 name="eag#t"
+                    arg: invoke #27 157:7:12-163:7:18
+                      target: name-ref #24 157:7:12-163:7:18 name="eag#e"
+                      arg: interpolation #26 157:7:12-163:7:18
+                        part: name-ref #25 158:7:13-162:7:17 name="name"
+                body: binding #33 146:7:1-183:7:38 name="eag#t"
+                  value: method-call #32 146:7:1-183:7:38 name="push"
+                    target: name-ref #30 146:7:1-183:7:38 name="eag#t"
+                    arg: literal #31 146:7:1-183:7:38 value=string:" "
+                body: binding #38 170:7:25-176:7:31 name="eag#t"
+                  value: method-call #37 170:7:25-176:7:31 name="push"
+                    target: name-ref #34 170:7:25-176:7:31 name="eag#t"
+                    arg: interpolation #36 170:7:25-176:7:31
+                      part: name-ref #35 171:7:26-175:7:30 name="name"
+                body: binding #42 146:7:1-183:7:38 name="eag#t"
+                  value: method-call #41 146:7:1-183:7:38 name="push"
+                    target: name-ref #39 146:7:1-183:7:38 name="eag#t"
+                    arg: literal #40 146:7:1-183:7:38 value=string:"</li>\n"
+              body: expr-stmt #47 76:4:10-82:4:16
+                value: method-call #46 76:4:10-82:4:16 name="join"
+                  target: name-ref #44 76:4:10-82:4:16 name="eag#t"
+                  arg: literal #45 76:4:10-82:4:16 value=string:""

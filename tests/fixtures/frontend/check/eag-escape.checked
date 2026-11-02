@@ -1,79 +1,82 @@
-program #75 0:1:1-293:16:1
+program #78 0:1:1-293:16:1
   module "eag-escape.agc"
-    declaration: function-decl #67 27:3:1-247:12:1 name="page"
+    declaration: function-decl #70 27:3:1-247:12:1 name="page"
       param: param #2 36:3:10-48:3:22 name="name"
         type: type-ref #1 42:3:16-48:3:22 name="String"
       param: param #5 50:3:24-69:3:43 name="names"
         type: type-ref #4 57:3:31-69:3:43 name="List"
           arg: type-ref #3 62:3:36-68:3:42 name="String"
       result: type-ref #6 74:3:48-80:3:54 name="String"
-      body: return-stmt #66 83:4:3-97:5:1
-        value: eag-lit #65 90:4:10-96:4:16 type=String
-          call: field-access #64 104:5:8-129:5:33 name="first" type=String resolved=call("List.first", List(String))
-            target: method-call #63 104:5:8-129:5:33 name="map" type=List(String) resolved=call("List.map", List(Fn([String], String)))
-              target: list-lit #8 104:5:8-129:5:33 type=List(Fn([String], String))
-                element: function-ref #7 112:5:16-128:5:32 name="@2::html_escape" type=Fn([String], String)
-              arg: block-lit #62 104:5:8-129:5:33 type=Fn([Fn([String], String)], String)
-                param: block-param #12 104:5:8-129:5:33 name="eag#e"
-                  type: type-ref #11 104:5:8-129:5:33 name="Fn"
-                    arg: type-ref #9 104:5:8-129:5:33 name="String"
-                    arg: type-ref #10 104:5:8-129:5:33 name="String"
-                body: binding #16 104:5:8-129:5:33 name="eag#t"
-                  type: type-ref #14 104:5:8-129:5:33 name="List"
-                    arg: type-ref #13 104:5:8-129:5:33 name="String"
-                  value: list-lit #15 104:5:8-129:5:33 type=List(String)
-                body: binding #20 132:6:1-156:6:25 name="eag#t"
-                  value: method-call #19 132:6:1-156:6:25 name="push" type=List(String) resolved=call("List.append", List(String))
-                    target: name-ref #17 132:6:1-156:6:25 name="eag#t" type=List(String)
-                    arg: literal #18 132:6:1-156:6:25 value=string:"<h1>" type=String
-                body: binding #27 143:6:12-149:6:18 name="eag#t"
-                  value: method-call #26 143:6:12-149:6:18 name="push" type=List(String) resolved=call("List.append", List(String))
-                    target: name-ref #21 143:6:12-149:6:18 name="eag#t" type=List(String)
-                    arg: invoke #25 143:6:12-149:6:18 type=String
-                      target: name-ref #22 143:6:12-149:6:18 name="eag#e" type=Fn([String], String)
-                      arg: interpolation #24 143:6:12-149:6:18 type=String
-                        part: name-ref #23 144:6:13-148:6:17 name="name" type=String
-                body: binding #31 132:6:1-156:6:25 name="eag#t"
-                  value: method-call #30 132:6:1-156:6:25 name="push" type=List(String) resolved=call("List.append", List(String))
-                    target: name-ref #28 132:6:1-156:6:25 name="eag#t" type=List(String)
-                    arg: literal #29 132:6:1-156:6:25 value=string:"</h1>\n" type=String
-                body: for-stmt #57 164:7:8-233:9:11 variable="item"
-                  iterable: name-ref #32 176:7:20-181:7:25 name="names" type=List(String)
-                  body: binding #36 185:8:1-222:8:38 name="eag#t"
-                    value: method-call #35 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
-                      target: name-ref #33 185:8:1-222:8:38 name="eag#t" type=List(String)
-                      arg: literal #34 185:8:1-222:8:38 value=string:"<li>" type=String
-                  body: binding #43 196:8:12-202:8:18 name="eag#t"
-                    value: method-call #42 196:8:12-202:8:18 name="push" type=List(String) resolved=call("List.append", List(String))
-                      target: name-ref #37 196:8:12-202:8:18 name="eag#t" type=List(String)
-                      arg: invoke #41 196:8:12-202:8:18 type=String
-                        target: name-ref #38 196:8:12-202:8:18 name="eag#e" type=Fn([String], String)
-                        arg: interpolation #40 196:8:12-202:8:18 type=String
-                          part: name-ref #39 197:8:13-201:8:17 name="item" type=String
-                  body: binding #47 185:8:1-222:8:38 name="eag#t"
-                    value: method-call #46 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
-                      target: name-ref #44 185:8:1-222:8:38 name="eag#t" type=List(String)
-                      arg: literal #45 185:8:1-222:8:38 value=string:" " type=String
-                  body: binding #52 209:8:25-215:8:31 name="eag#t"
-                    value: method-call #51 209:8:25-215:8:31 name="push" type=List(String) resolved=call("List.append", List(String))
-                      target: name-ref #48 209:8:25-215:8:31 name="eag#t" type=List(String)
-                      arg: interpolation #50 209:8:25-215:8:31 type=String
-                        part: name-ref #49 210:8:26-214:8:30 name="item" type=String
-                  body: binding #56 185:8:1-222:8:38 name="eag#t"
-                    value: method-call #55 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
-                      target: name-ref #53 185:8:1-222:8:38 name="eag#t" type=List(String)
-                      arg: literal #54 185:8:1-222:8:38 value=string:"</li>\n" type=String
-                body: expr-stmt #61 104:5:8-129:5:33
-                  value: method-call #60 104:5:8-129:5:33 name="join" type=String resolved=call("String.join", List(String))
-                    target: name-ref #58 104:5:8-129:5:33 name="eag#t" type=List(String)
-                    arg: literal #59 104:5:8-129:5:33 value=string:"" type=String
-    declaration: function-decl #74 248:13:1-293:16:1 name="main"
-      result: type-ref #68 262:13:15-266:13:19 name="Void"
-      body: expr-stmt #73 269:14:3-289:15:1
-        value: call #72 269:14:3-288:14:22 name="puts" piped=false type=Void
-          arg: call #71 274:14:8-287:14:21 name="page" piped=false type=String
-            arg: literal #69 279:14:13-282:14:16 value=string:"a" type=String
-            arg: list-lit #70 284:14:18-286:14:20 type=List(String)
+      body: return-stmt #69 83:4:3-97:5:1
+        value: eag-lit #68 90:4:10-96:4:16 type=String
+          call: field-access #67 90:4:10-96:4:16 name="first" type=String resolved=call("List.first", List(String))
+            target: method-call #66 90:4:10-96:4:16 name="map" type=List(String) resolved=call("List.map", List(Int))
+              target: list-lit #8 90:4:10-96:4:16 type=List(Int)
+                element: literal #7 90:4:10-96:4:16 value=int:0 type=Int
+              arg: block-lit #65 90:4:10-96:4:16 type=Fn([Int], String)
+                param: block-param #10 90:4:10-96:4:16 name="eag#n"
+                  type: type-ref #9 90:4:10-96:4:16 name="Int"
+                body: binding #15 104:5:8-129:5:33 name="eag#e"
+                  type: type-ref #13 104:5:8-129:5:33 name="Fn"
+                    arg: type-ref #11 104:5:8-129:5:33 name="String"
+                    arg: type-ref #12 104:5:8-129:5:33 name="String"
+                  value: function-ref #14 112:5:16-128:5:32 name="@2::html_escape" type=Fn([String], String)
+                body: binding #19 90:4:10-96:4:16 name="eag#t"
+                  type: type-ref #17 90:4:10-96:4:16 name="List"
+                    arg: type-ref #16 90:4:10-96:4:16 name="String"
+                  value: list-lit #18 90:4:10-96:4:16 type=List(String)
+                body: binding #23 132:6:1-156:6:25 name="eag#t"
+                  value: method-call #22 132:6:1-156:6:25 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #20 132:6:1-156:6:25 name="eag#t" type=List(String)
+                    arg: literal #21 132:6:1-156:6:25 value=string:"<h1>" type=String
+                body: binding #30 143:6:12-149:6:18 name="eag#t"
+                  value: method-call #29 143:6:12-149:6:18 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #24 143:6:12-149:6:18 name="eag#t" type=List(String)
+                    arg: invoke #28 143:6:12-149:6:18 type=String
+                      target: name-ref #25 143:6:12-149:6:18 name="eag#e" type=Fn([String], String)
+                      arg: interpolation #27 143:6:12-149:6:18 type=String
+                        part: name-ref #26 144:6:13-148:6:17 name="name" type=String
+                body: binding #34 132:6:1-156:6:25 name="eag#t"
+                  value: method-call #33 132:6:1-156:6:25 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #31 132:6:1-156:6:25 name="eag#t" type=List(String)
+                    arg: literal #32 132:6:1-156:6:25 value=string:"</h1>\n" type=String
+                body: for-stmt #60 164:7:8-233:9:11 variable="item"
+                  iterable: name-ref #35 176:7:20-181:7:25 name="names" type=List(String)
+                  body: binding #39 185:8:1-222:8:38 name="eag#t"
+                    value: method-call #38 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
+                      target: name-ref #36 185:8:1-222:8:38 name="eag#t" type=List(String)
+                      arg: literal #37 185:8:1-222:8:38 value=string:"<li>" type=String
+                  body: binding #46 196:8:12-202:8:18 name="eag#t"
+                    value: method-call #45 196:8:12-202:8:18 name="push" type=List(String) resolved=call("List.append", List(String))
+                      target: name-ref #40 196:8:12-202:8:18 name="eag#t" type=List(String)
+                      arg: invoke #44 196:8:12-202:8:18 type=String
+                        target: name-ref #41 196:8:12-202:8:18 name="eag#e" type=Fn([String], String)
+                        arg: interpolation #43 196:8:12-202:8:18 type=String
+                          part: name-ref #42 197:8:13-201:8:17 name="item" type=String
+                  body: binding #50 185:8:1-222:8:38 name="eag#t"
+                    value: method-call #49 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
+                      target: name-ref #47 185:8:1-222:8:38 name="eag#t" type=List(String)
+                      arg: literal #48 185:8:1-222:8:38 value=string:" " type=String
+                  body: binding #55 209:8:25-215:8:31 name="eag#t"
+                    value: method-call #54 209:8:25-215:8:31 name="push" type=List(String) resolved=call("List.append", List(String))
+                      target: name-ref #51 209:8:25-215:8:31 name="eag#t" type=List(String)
+                      arg: interpolation #53 209:8:25-215:8:31 type=String
+                        part: name-ref #52 210:8:26-214:8:30 name="item" type=String
+                  body: binding #59 185:8:1-222:8:38 name="eag#t"
+                    value: method-call #58 185:8:1-222:8:38 name="push" type=List(String) resolved=call("List.append", List(String))
+                      target: name-ref #56 185:8:1-222:8:38 name="eag#t" type=List(String)
+                      arg: literal #57 185:8:1-222:8:38 value=string:"</li>\n" type=String
+                body: expr-stmt #64 90:4:10-96:4:16
+                  value: method-call #63 90:4:10-96:4:16 name="join" type=String resolved=call("String.join", List(String))
+                    target: name-ref #61 90:4:10-96:4:16 name="eag#t" type=List(String)
+                    arg: literal #62 90:4:10-96:4:16 value=string:"" type=String
+    declaration: function-decl #77 248:13:1-293:16:1 name="main"
+      result: type-ref #71 262:13:15-266:13:19 name="Void"
+      body: expr-stmt #76 269:14:3-289:15:1
+        value: call #75 269:14:3-288:14:22 name="puts" piped=false type=Void
+          arg: call #74 274:14:8-287:14:21 name="page" piped=false type=String
+            arg: literal #72 279:14:13-282:14:16 value=string:"a" type=String
+            arg: list-lit #73 284:14:18-286:14:20 type=List(String)
   module "std/eag.agc"
     declaration: function-decl #7 919:27:8-992:30:1 name="@2::html_escape"
       param: param #2 935:27:24-948:27:37 name="value"
@@ -206,12 +209,12 @@ program #75 0:1:1-293:16:1
       body: if-stmt #129 1931:55:3-2018:58:1
         branch: if-branch #128 1931:55:3-2012:57:1
           condition: method-call #121 1934:55:6-1959:55:31 name="key?" type=Bool resolved=call("Map.has_key?", Map(String, String))
-            target: const-ref #510 1934:55:6-1948:55:20 name="@3::NAMED_ENTITIES" type=Map(String, String)
+            target: const-ref #513 1934:55:6-1948:55:20 name="@3::NAMED_ENTITIES" type=Map(String, String)
             arg: name-ref #120 1954:55:26-1958:55:30 name="name" type=String
           body: return-stmt #127 1964:56:5-2012:57:1
             value: interpolation #126 1971:56:12-2011:56:52 type=String
               part: method-call #124 1974:56:15-2002:56:43 name="get" type=String resolved=call("Map.get", Map(String, String))
-                target: const-ref #513 1974:56:15-1988:56:29 name="@3::NAMED_ENTITIES" type=Map(String, String)
+                target: const-ref #516 1974:56:15-1988:56:29 name="@3::NAMED_ENTITIES" type=Map(String, String)
                 arg: name-ref #122 1993:56:34-1997:56:38 name="name" type=String
                 arg: literal #123 1999:56:40-2001:56:42 value=string:"" type=String
               part: name-ref #125 2005:56:46-2009:56:50 name="rest" type=String
