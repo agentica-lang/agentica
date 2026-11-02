@@ -14,8 +14,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   3339 text, as Ruby's `Time#utc.iso8601` does (`UTC.iso8601(Time.now_ms)`).
 - `TCP.remote_address(socket)` returns the peer's IP address without the port
   (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
+- `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
+  WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
+  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
+
+### Changed
+
+- `HTTP.listen_upload` keeps the connection when the whole body had arrived
+  by the time the handler returned, even if the handler did not read it (an
+  empty chunked body, say). A handler that answers before any of the body
+  arrived now answers up to 100 ms later.
 
 ## [0.21.0] - 2026-11-02
 
