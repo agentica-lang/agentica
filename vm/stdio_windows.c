@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
+#include <process.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,14 @@
 /* How many times the close of the stdin reader tries to cancel a read that has not ended. The tries are uv_sleep(1)
    apart, which is Sleep(1): about one timer tick (some 15.6 ms), so the close waits at most about 150 ms. */
 #define CANCEL_TRIES 10
+
+/* The flush of one standard C stream on a thread of its own (agc_stdio_flush): THREAD while it may still run, and
+   RESULT, an agc_stdio_flush_result, once it ended. Only the main thread starts one, at the end of the run. */
+typedef struct {
+  FILE *stream;
+  HANDLE thread;
+  atomic_int result;
+} stdio_flusher;
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
    Windows worker thread and an overlapped one with I/O completion ports; no write waits for a reader on the loop. */
@@ -545,6 +554,42 @@ void agc_stdin_close(agc_stdin_reader *r) {
     uv_sleep(1);
   }
   uv_close((uv_handle_t *)&r->wake, reader_closed);
+}
+
+static stdio_flusher flushers[2];
+
+static unsigned __stdcall flush_stream(void *arg) {
+  stdio_flusher *f = arg;
+  int result = AGC_STDIO_FLUSHED;
+  while (fflush(f->stream) != 0) {
+    if (errno != EINTR) {
+      result = AGC_STDIO_FAILED;
+      break;
+    }
+    clearerr(f->stream);
+  }
+  atomic_store(&f->result, result);
+  return 0;
+}
+
+agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
+  stdio_flusher *f = &flushers[stream == stderr];
+  if (f->thread) {
+    /* The last flush of this stream still waits for its lock. */
+    if (WaitForSingleObject(f->thread, 0) == WAIT_TIMEOUT) return AGC_STDIO_BUSY;
+    CloseHandle(f->thread);
+    f->thread = NULL;
+  }
+  f->stream = stream;
+  atomic_store(&f->result, AGC_STDIO_FAILED);
+  /* The UCRT has no try-lock for a FILE, so the flush waits for the lock on this thread, and the run waits for it at
+     most AGC_STDIO_FLUSH_WAIT_MS. A thread that cannot start leaves the stream unflushed, as a held lock does. */
+  f->thread = (HANDLE)_beginthreadex(NULL, 0, flush_stream, f, 0, NULL);
+  if (!f->thread) return AGC_STDIO_BUSY;
+  if (WaitForSingleObject(f->thread, AGC_STDIO_FLUSH_WAIT_MS) != WAIT_OBJECT_0) return AGC_STDIO_BUSY;
+  CloseHandle(f->thread);
+  f->thread = NULL;
+  return (agc_stdio_flush_result)atomic_load(&f->result);
 }
 
 void agc_exit_now(unsigned code) {

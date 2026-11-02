@@ -197,5 +197,25 @@ bool agc_memstream_take(FILE *file, agc_memstream *m, char **text, size_t *len) 
   free(m);
   return ok;
 }
+
+agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
+  int saved_errno = errno;
+  if (ftrylockfile(stream) != 0) {
+    errno = saved_errno;
+    return AGC_STDIO_BUSY;
+  }
+  bool ok = true;
+  while (fflush(stream) != 0) {
+    if (errno != EINTR) {
+      ok = false;
+      break;
+    }
+    clearerr(stream);
+  }
+  saved_errno = errno;
+  funlockfile(stream);
+  errno = saved_errno;
+  return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FAILED;
+}
 #endif
 #endif

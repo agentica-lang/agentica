@@ -170,22 +170,34 @@ int32_t peer_write_stalled(void) {
 
 int32_t peer_write_started(void) { return atomic_load(&stalled); }
 
-#ifndef _WIN32
-/* Holds a standard C stream lock and then blocks writing to its pipe, marking lock ownership independently. */
+static void lock_stream(FILE *stream) {
+#ifdef _WIN32
+  _lock_file(stream);
+#else
+  flockfile(stream);
+#endif
+}
+
+static void unlock_stream(FILE *stream) {
+#ifdef _WIN32
+  _unlock_file(stream);
+#else
+  funlockfile(stream);
+#endif
+}
+
+/* Holds the lock of stdout (WHICH 1) or stderr (2), writes "locked" to the file MARKER, then writes to the stream
+   forever, so the lock is never released (once nobody reads its pipe, inside a blocking write). */
 int32_t peer_hold_stdio(int32_t which, const char *marker) {
   FILE *stream = which == 1 ? stdout : stderr;
   static char block[1 << 16];
-  flockfile(stream);
+  lock_stream(stream);
   (void)fwrite("native-locked\n", 1, sizeof "native-locked\n" - 1, stream);
-  int fd = open(marker, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) {
-    funlockfile(stream);
-    return -1;
-  }
-  ssize_t written = write(fd, "locked", 6);
-  close(fd);
-  if (written != 6) {
-    funlockfile(stream);
+  FILE *mark = fopen(marker, "wb");
+  bool marked = mark && fwrite("locked", 1, 6, mark) == 6;
+  if (mark && fclose(mark) != 0) marked = false;
+  if (!marked) {
+    unlock_stream(stream);
     return -1;
   }
   for (;;) fwrite(block, 1, sizeof block, stream);
@@ -196,7 +208,6 @@ int32_t peer_buffer_stdio(int32_t which) {
   FILE *stream = which == 1 ? stdout : stderr;
   return (int32_t)fwrite("native-free\n", 1, sizeof "native-free\n" - 1, stream);
 }
-#endif
 
 #ifdef _WIN32
 /* For Native.wait_readable and wait_writable: a non-blocking connected pair of loopback TCP sockets that the peer owns,
