@@ -2178,58 +2178,61 @@ def accept_all(service: Service) -> Void
   end
 end
 
+# One task per connection: each request's head is read first, then `answer_request` decides how its body is read and
+# how it is answered. The first request may take `request_timeout_ms` to start, the next ones `idle_timeout_ms`.
 def serve(socket: Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
   while true
-    case service.route
-      Route.Uploading(handler) ->
-        case start_request(socket, rest, wait_ms, options, DOWNLOAD_MAX_BYTES, false)
-          ok(reading) ->
-            sent = answer_upload(reading, handler, options)
-            if not sent.keep
-              return
-            end
-            rest = sent.rest
-          error(_) -> return
+    case start_request(socket, rest, wait_ms, options, body_limit(service), upgrades?(service.route))
+      ok(reading) ->
+        sent = answer_request(reading, service)
+        if not sent.keep
+          return
         end
-      Route.Sockets(handler) ->
-        case read_request(socket, rest, wait_ms, options, true)
-          ok(incoming) ->
-            sent = answer_socket(socket, incoming, handler, options)
-            if not sent.keep
-              return
-            end
-            rest = sent.rest
-          error(_) -> return
-        end
-      _ ->
-        case read_request(socket, rest, wait_ms, options, false)
-          ok(incoming) ->
-            sent = answer(socket, incoming, service)
-            if not sent.keep
-              return
-            end
-            rest = sent.rest
-          error(_) -> return
-        end
+        rest = sent.rest
+      error(_) -> return
     end
     wait_ms = options.idle_timeout_ms
   end
 end
 
-# One whole request. rest holds the bytes the last chunked body read past its end. The first byte may take first_ms;
-# then the rest of the request has request_timeout_ms. A request that breaks the rules gets its error answer here, and
-# the result is the error.
-def read_request(
-  socket: Socket,
-  rest: Bytes,
-  first_ms: Int,
-  options: HttpServerOptions,
-  upgrades: Bool,
-) -> Result[Incoming]
-  reading = try start_request(socket, rest, first_ms, options, options.max_body_bytes, upgrades)
+# The largest body the head of a request may announce: a body that goes to the handler as it arrives may be up to
+# 256 MiB, and a body read whole before the handler runs is held to `max_body_bytes`.
+def body_limit(service: Service) -> Int
+  case service.route
+    Route.Uploading(_) -> return DOWNLOAD_MAX_BYTES
+    _ -> return service.options.max_body_bytes
+  end
+end
+
+# Whether the head may carry a WebSocket handshake: only a route that can upgrade takes one, and every other route
+# answers an `Upgrade` header 501.
+def upgrades?(route: Route) -> Bool
+  case route
+    Route.Sockets(_) -> return true
+    _ -> return false
+  end
+end
+
+# One request whose head is read. An upload route gets the body as it arrives; every other route gets the request
+# with its whole body. A body that cannot be read was already answered (or the connection is gone), so the connection
+# ends.
+def answer_request(reading: Reading, service: Service) -> Sent
+  case service.route
+    Route.Uploading(handler) -> return answer_upload(reading, handler, service.options)
+    _ ->
+      case whole_request(reading)
+        ok(incoming) -> return answer(reading.socket, incoming, service)
+        error(_) -> return Sent(keep: false, rest: NO_BYTES)
+      end
+  end
+end
+
+# The whole body of a request whose head is read. `rest` of the result holds the bytes a chunked body read past its
+# end. A body that breaks the rules gets its error answer here, and the result is the error.
+def whole_request(reading: Reading) -> Result[Incoming]
   if reading.head.chunked
     return read_chunked(reading)
   end
@@ -3081,10 +3084,9 @@ def answer(socket: Socket, incoming: Incoming, service: Service) -> Sent
           failed(socket, incoming.request, options.request_timeout_ms)
       end
       return Sent(keep: false, rest: NO_BYTES)
-    # An upload route is served by answer_upload, which `serve` calls before it gets here.
+    Route.Sockets(handler) -> return answer_socket(socket, incoming, handler, options)
+    # An upload route is served by answer_upload, which `answer_request` calls instead.
     Route.Uploading(_) -> return Sent(keep: false, rest: NO_BYTES)
-    # Likewise for `answer_socket`.
-    Route.Sockets(_) -> return Sent(keep: false, rest: NO_BYTES)
   end
 end
 
