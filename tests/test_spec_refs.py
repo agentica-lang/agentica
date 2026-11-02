@@ -303,6 +303,37 @@ def test_a_builtin_has_no_definition_and_lists_its_calls_and_method_calls(progra
     assert places(mapped) == [("orders.agc", *where(ORDERS, "names.map", 6), "call", "tally")]
 
 
+def test_every_written_call_form_is_listed_a_method_with_no_parentheses_and_a_piped_function(tmp_path):
+    # A node whose span is its name alone is made by a template expansion (syntax/eag.agc) and left out of refs; every
+    # written form has more than its name: a target before a method, the arguments of a call.
+    source = '''def double(x: Int) -> Int
+  return x * 2
+end
+
+def main() -> Void
+  names = ["a", "b"]
+  first = names.first
+  count = names.size
+  doubled = 5 |> double()
+  mapped = names.map do |n| n.upcase end
+  puts("#{first}#{count}#{doubled}#{mapped}")
+end
+'''
+    path = tmp_path / "forms.agc"
+    path.write_text(source, encoding="utf-8")
+
+    def lines(name):
+        result = run(cli() + ["--json", "refs", name, str(path)], env=vm_environment())
+        assert result.code == 0, result.stderr
+        return [start(found["span"])[0] for found in json.loads(result.stdout)["references"]]
+
+    assert lines("List.first") == [where(source, "names.first")[0]]
+    assert lines("List.size") == [where(source, "names.size")[0]]
+    assert lines("double") == [where(source, "|> double()")[0]]
+    assert lines("List.map") == [where(source, "names.map")[0]]
+    assert lines("String.upcase") == [where(source, "n.upcase")[0]]
+
+
 def test_every_returned_span_asked_back_gives_the_same_answer_and_type_at_agrees(program):
     names = [
         ("orders.agc", where(ORDERS, "Models.make", 8)),

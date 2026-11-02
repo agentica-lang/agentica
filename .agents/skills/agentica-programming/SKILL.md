@@ -73,6 +73,7 @@ Read only what the task needs.
 | `mime.md` | `std/mime` (media type of a file) |
 | `utc.md` | `std/utc` (Unix ms to UTC date and RFC 3339 text) |
 | `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
+| `eag.md` | `<<~EAG` templates (Agentica's ERB) and `std/eag` |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
 | `analysis.md` | compiler answers in a program (`std/analysis`) |

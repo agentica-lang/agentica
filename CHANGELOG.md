@@ -19,6 +19,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 - `std/http` servers give the handler the client's IP address in
   `request.remote_addr` (Rack's `REMOTE_ADDR`).
+- EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,
+  `<% %>`, `<%# %>`, `<%%` and `-%>`, checked with the code around it and
+  needing `import EAG from "std/eag"`; `EAG.html_escape` is Ruby's
+  `ERB::Util.html_escape`. A heredoc named `EAG` is now a template, not plain
+  text, and may have one line.
 
 ### Changed
 

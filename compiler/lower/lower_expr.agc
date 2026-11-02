@@ -60,6 +60,7 @@ export def lower_expression(
       end
 
       return lower_expression(cx, fx, node.call, want, false, known)
+    Ast.Expr.EagLit(node) -> return lower_expression(cx, fx, node.call, want, false, known)
     Ast.Expr.Unary(node) -> return lower_unary_checked(cx, fx, expr, node, want, known)
     Ast.Expr.FieldAccess(node) -> return lower_field_checked(cx, fx, expr, node, want, void, known)
     Ast.Expr.MethodCall(node) -> return lower_method_checked(cx, fx, expr, node, want, void, known)

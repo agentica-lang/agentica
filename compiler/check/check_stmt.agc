@@ -278,7 +278,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
             cx,
             st,
             "CHECK-CAPTURED-ASSIGNMENT",
-            "a block cannot assign to \"#{node.name}\", which belongs to the enclosing code",
+            Flow.captured_message(node.name, capture),
             node.span,
             Flow.captured_help(node.name, capture),
           ),

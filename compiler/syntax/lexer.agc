@@ -60,6 +60,10 @@ STRING_STOPS = Set.new(["\"", "#", "\\", "\n", "\r", ""])
 ## Where the plain text of a heredoc line ends: `#`, `\`, a line break, or the sentinel. A `"` is plain text there.
 HEREDOC_STOPS = Set.new(["#", "\\", "\n", "\r", ""])
 
+## The name of the heredoc whose body is a template (docs/future/51-templates.md): the lexer keeps its lines as written
+## in one `eag` token and the parser expands it (eag.agc).
+export EAG_HEREDOC = "EAG"
+
 ## The capitals that start a heredoc name. Never the sentinel, as for NAME_CHARS.
 HEREDOC_UPPER = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
 
@@ -131,7 +135,7 @@ ELLIPSIS = Op(kind: "dot-dot-dot", lexeme: "...", value: Tokens.Value.Text("..."
 ## a `/` after one is division; after any other token a `/` starts a regex literal.
 ENDS_EXPRESSION = Set.new([
   "name", "type-name", "integer", "float", "string", "interp-end", "right-paren", "right-bracket", "right-brace",
-  "end", "true", "false", "nil", "regex",
+  "end", "true", "false", "nil", "regex", "eag",
 ])
 
 ## The flags a regex literal may end with: `i` (ignore case) and `m` (`.` matches a newline).
@@ -1040,8 +1044,15 @@ def scan_heredoc(
   case heredoc_body(input, name, resume, line, line_start, opener)
     Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(body) ->
-      if body.lines.size < 2
+      # A template of one line has no string literal to write instead: it is `<%= ... %>` with no tag-free form.
+      if body.lines.size < 2 and name != EAG_HEREDOC
         return Diag.Outcome.Failed(heredoc_one_line(opener))
+      end
+
+      if name == EAG_HEREDOC
+        return Diag.Outcome.Done(
+          Heredoc(tokens: tokens.push(eag_token(input, body.lines, opener)), index: name_stop, resume: body.resume),
+        )
       end
 
       case heredoc_tokens(input, tokens, delimiters, body.lines, opener)
@@ -1118,6 +1129,20 @@ def heredoc_body(
   end
 
   return Diag.Outcome.Failed(unterminated_heredoc(opener, name))
+end
+
+# The token of an `<<~EAG` heredoc: its lexeme is the opener, and its value the lines as written with the indentation
+# to remove, so the tags keep their columns.
+def eag_token(input: Input, lines: List[BodyLine], opener: Source.Span) -> Tokens.Token
+  written = lines.map do |body: BodyLine|
+    Tokens.EagLine(
+      text: input.text.slice(body.start, body.stop - body.start),
+      start: Source.Position(offset: body.start, line: body.line, column: 1),
+    )
+  end
+
+  value = Tokens.Value.Eag(Tokens.EagBody(lines: written, indent: common_indent(lines)))
+  return token(input.text, "eag", value, opener.start, opener.stop)
 end
 
 # The string tokens of a heredoc: the text of its body lines with the common indentation removed, one `\n` after each
