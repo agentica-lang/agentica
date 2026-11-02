@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   program is compiled; the file imports `std/regex`.
 - `TCP.remote_address(socket)` returns the peer's IP address without the port
   (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
+- `std/http` servers give the handler the client's IP address in
+  `request.remote_addr` (Rack's `REMOTE_ADDR`).
 
 ### Changed
 
