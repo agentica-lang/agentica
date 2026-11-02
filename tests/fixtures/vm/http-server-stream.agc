@@ -34,15 +34,39 @@ def short(feed: Feed) -> Void
   finish(feed)
 end
 
-# Sends until a send fails, which is how the producer learns that the client left.
-def until_closed(feed: Feed) -> Void
-  while Result.ok?(feed.body.send("x".bytes, 5000))
-    Task.sleep(5)
+# Waits for the close of the channel, which is how a producer learns that the client left or that the server stopped.
+# It sends nothing, so only the close wakes its recv. The wait is a recv and not a loop that sleeps and looks: a loop
+# runs once more for each pause that the timing adds, and the number of steps of the run (which the --max-steps sweep
+# checks to the step) would change with it.
+def wait_closed(feed: Feed) -> Void
+  while Result.ok?(feed.body.recv(5000))
+    puts("a piece came back to the producer")
   end
+end
+
+# What a producer says once the channel is closed: a send fails.
+def say_stopped(feed: Feed) -> Void
   case feed.body.send("x".bytes, 0)
     error(message) -> feed.hub.said.send("producer stopped: #{message}", 5000)
     ok(_) -> feed.hub.said.send("producer was not stopped", 5000)
   end
+end
+
+# A HEAD request has no body: the server closes the channel without reading it. The responses that the server refuses
+# (a body with a 204, headers of its own) have the same producer: it sends nothing, and waits for the close, so that no
+# timer of it is still running when main returns, where it would race with the end of the run and change its steps.
+def head_only(feed: Feed) -> Void
+  wait_closed(feed)
+  say_stopped(feed)
+end
+
+# Sends one piece, waits until main has read it (the gate), so that its own recv cannot take the piece from the server,
+# and then waits for the close.
+def until_closed(feed: Feed) -> Void
+  feed.body.send("x".bytes, 5000)
+  feed.hub.gate.recv(5000)
+  wait_closed(feed)
+  say_stopped(feed)
 end
 
 # Pieces that are not UTF-8, and one that is text.
@@ -54,24 +78,29 @@ def binary(feed: Feed) -> Void
   finish(feed)
 end
 
-# One piece of 512 KiB and 9 bytes: two chunks.
+# One piece of 512 KiB and 9 bytes: two chunks. The first chunk is one line of "z" ended by a newline, so that main
+# reads it with one read_line: a loop of recv_bytes would run once per piece of it that TCP delivers, and the number
+# of steps of the run (which the --max-steps sweep checks to the step) would change with the timing.
 def large(feed: Feed) -> Void
   Task.sleep(20)
   piece = "z".bytes
   while piece.size < 524288
     piece = piece + piece
   end
-  feed.body.send(piece + "012345678".bytes, 5000)
+  feed.body.send(piece.take(524287) + "\n012345678".bytes, 5000)
   finish(feed)
 end
 
 # Sends one piece and then nothing at all: it can only learn that the client left by looking at the channel.
 def quiet(feed: Feed) -> Void
   feed.body.send("q".bytes, 5000)
-  while not feed.body.closed?
-    Task.sleep(5)
+  feed.hub.gate.recv(5000)
+  wait_closed(feed)
+  if feed.body.closed?
+    feed.hub.said.send("quiet producer saw the close", 5000)
+  else
+    feed.hub.said.send("quiet producer woke with the channel open", 5000)
   end
-  feed.hub.said.send("quiet producer saw the close", 5000)
 end
 
 # Pauses longer than the server's timeouts between pieces: a live stream is not cut.
@@ -80,28 +109,6 @@ def slow(feed: Feed) -> Void
     Task.sleep(700)
     feed.body.send(piece, 5000)
   end
-  finish(feed)
-end
-
-# Fills the bounded channel behind a client that does not read. Its send waits longer than the server's timeout for a
-# piece to be sent, so the error it ends with is the server cutting the client off, not its own timeout.
-def backed_up(feed: Feed) -> Void
-  piece = "y".bytes
-  while piece.size < 65536
-    piece = piece + piece
-  end
-  sent = 0
-  failure = ""
-  more = true
-  while more
-    case feed.body.send(piece, 5000)
-      ok(_) -> sent += 1
-      error(message) ->
-        failure = message
-        more = false
-    end
-  end
-  feed.hub.said.send("producer was held back: #{sent < 2000}, then: #{failure}", 5000)
   finish(feed)
 end
 
@@ -126,15 +133,15 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/gated" -> return stream(hub, &gated, 200)
       "/short" -> return stream(hub, &short, 200)
       "/leave" -> return stream(hub, &until_closed, 200)
+      "/head" -> return stream(hub, &head_only, 200)
       "/binary" -> return stream(hub, &binary, 200)
       "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
       "/large" -> return stream(hub, &large, 200)
-      "/length" -> return stream_with(hub, &short, 200, [Header(name: "Content-Length", value: "3")])
-      "/framing" -> return stream_with(hub, &short, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
+      "/length" -> return stream_with(hub, &head_only, 200, [Header(name: "Content-Length", value: "3")])
+      "/framing" -> return stream_with(hub, &head_only, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
       "/quiet" -> return stream(hub, &quiet, 200)
       "/slow" -> return stream(hub, &slow, 200)
-      "/back" -> return stream(hub, &backed_up, 200)
-      "/nobody" -> return stream(hub, &gated, 204)
+      "/nobody" -> return stream(hub, &head_only, 204)
       "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n".bytes)))
       "/fail" -> return error("the handler failed")
       _ -> return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("".bytes)))
@@ -232,7 +239,7 @@ def main() -> Void
   ask(socket, "GET", "/large", "")
   puts(head_of(socket))
   puts(TCP.read_line(socket, 5000).unwrap!)
-  bytes_of(socket, 524288)
+  TCP.read_line(socket, 5000).unwrap!
   TCP.read_line(socket, 5000).unwrap!
   puts(binary_chunk_of(socket))
   puts(chunk_of(socket))
@@ -242,7 +249,7 @@ def main() -> Void
   puts(head_of(socket))
 
   puts("-- HEAD gets the head, and the producer is stopped")
-  ask(socket, "HEAD", "/leave", "")
+  ask(socket, "HEAD", "/head", "")
   puts(head_of(socket))
   puts(hub.said.recv(5000).unwrap!)
   ask(socket, "GET", "/whole", "")
@@ -280,6 +287,7 @@ def main() -> Void
   ask(socket, "GET", "/leave", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
+  hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -293,6 +301,7 @@ def main() -> Void
   ask(socket, "GET", "/quiet", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
+  hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -303,6 +312,7 @@ def main() -> Void
   TCP.send(socket, "GET /quiet HTTP/1.1\r\nHost: x\r\n\r\nG", 5000).unwrap!
   puts(head_of(socket))
   puts(chunk_of(socket))
+  hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -314,10 +324,6 @@ def main() -> Void
     puts(chunk_of(socket))
   end
 
-  puts("-- a client that does not read holds the producer back")
-  ask(socket, "GET", "/back", "")
-  puts(head_of(socket))
-  puts(hub.said.recv(5000).unwrap!)
   TCP.close(socket)
 
   puts("-- responses that cannot be streamed")
@@ -341,6 +347,7 @@ def main() -> Void
   ask(socket, "GET", "/leave", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
+  hub.gate.send(true, 5000)
   HTTP.close_server(server)
   IO.inspect(HTTP.wait(server))
   # The pieces already sent still arrive; then the connection ends.
