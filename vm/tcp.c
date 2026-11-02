@@ -22,6 +22,8 @@
 #define BACKLOG 128
 #define BIND_TRIES 8
 #define PORT_TEXT 8
+/* Room for the text of an IPv6 address (INET6_ADDRSTRLEN is 46) and its NUL. */
+#define PEER_TEXT 64
 #define CIPHER_SIZE ((size_t)16384)
 #define TLS_CHUNK ((size_t)16384)
 #define NET(ptr, field) ((net *)(void *)((char *)(ptr) - offsetof(net, field)))
@@ -117,6 +119,10 @@ struct agc_conn {
   bool secure, setting_up, setup_failed, handshaken, tls_failed, flushing, raw_eof, clean_eof, half_closed;
   /* Made by TLS.upgrade (set before any other thread sees the net), on the server side when server_side. */
   bool upgraded, server_side;
+  /* The peer's IP address as text ("" when unknown), for TCP.remote_address: written once on the I/O thread when the
+     socket connects or is accepted (read_peer), before the request that hands the socket to a program finishes, and
+     never again, so a scheduler that holds the socket may read it. */
+  char peer[PEER_TEXT];
   agc_conn_watch watch;
   void *watcher;
 };
@@ -629,6 +635,33 @@ static void read_port(net *n, const tcp_link *k) {
   if (address.ss_family == AF_INET6) n->port = ntohs(((const struct sockaddr_in6 *)&address)->sin6_port);
 }
 
+/* The peer's address of a connected link, without the port. An IPv4 peer that a dual-stack IPv6 socket sees as
+   ::ffff:a.b.c.d is written a.b.c.d, as it would be on an IPv4 socket. I/O thread only. */
+static void read_peer(net *n, const tcp_link *k) {
+  struct sockaddr_storage address;
+  int len = sizeof address;
+  n->peer[0] = '\0';
+  if (uv_tcp_getpeername(&k->tcp, (struct sockaddr *)&address, &len)) return;
+  if (address.ss_family == AF_INET) {
+    if (uv_ip4_name((const struct sockaddr_in *)&address, n->peer, sizeof n->peer)) n->peer[0] = '\0';
+    return;
+  }
+  if (address.ss_family != AF_INET6) return;
+  const struct sockaddr_in6 *six = (const struct sockaddr_in6 *)&address;
+  static const uint8_t mapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
+  int rc;
+  if (!memcmp(six->sin6_addr.s6_addr, mapped, sizeof mapped)) {
+    struct sockaddr_in four;
+    memset(&four, 0, sizeof four);
+    four.sin_family = AF_INET;
+    memcpy(&four.sin_addr, six->sin6_addr.s6_addr + 12, 4);
+    rc = uv_ip4_name(&four, n->peer, sizeof n->peer);
+  } else {
+    rc = uv_ip6_name(six, n->peer, sizeof n->peer);
+  }
+  if (rc) n->peer[0] = '\0';
+}
+
 static void stop_reading(net *n) {
   if (!n->reading) return;
   uv_read_stop((uv_stream_t *)&n->conn->tcp);
@@ -843,6 +876,7 @@ static net *accept_link(net *l, tcp_link *k, int *rc) {
   }
   c->conn = link;
   c->connected = true;
+  read_peer(c, link);
   c->parent = l->id;
   uv_tcp_nodelay(&link->tcp, 1);
   return c;
@@ -1005,6 +1039,7 @@ static void connected(uv_connect_t *req, int status) {
   if (n->closed) return;
   if (status == 0) {
     n->connected = true;
+    read_peer(n, k);
     uv_tcp_nodelay(&k->tcp, 1);
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connected socket=%" PRIu64, n->id);
     if (n->secure) {
@@ -1466,6 +1501,7 @@ static bool begin_upgrade(void *data, agc_io_job *job) {
   n->callbacks++;
   n->conn = k;
   n->connected = true;
+  read_peer(n, k);
   shut(old, "upgrade");
   AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake socket=%" PRIu64 " listener=0 role=%s upgrade=%" PRIu64, n->id,
             n->server_side ? "server" : "client", old->id);
@@ -1703,6 +1739,15 @@ static agc_value builtin_alpn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(agc_utf8_decode((const uint8_t *)name, strlen(name), "?", true));
 }
 
+/* TCP.remote_address(socket): the peer's IP address, written when the socket connected or was accepted, or "" for a
+   closed socket or a peer the system could not name. */
+static agc_value builtin_remote_address(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const net *n = live(agc_as_socket(vm, args[0]));
+  if (!n || !n->peer[0]) return agc_string_value(vm->rt->empty_string);
+  return agc_string_value(agc_utf8_decode((const uint8_t *)n->peer, strlen(n->peer), "?", true));
+}
+
 static void half_close_step(void *data) { agc_conn_half_close(data); }
 
 /* HttpWire.close_write (std-only): the half-close of std/http's lingering
@@ -1888,6 +1933,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.listen", 2, builtin_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.accept", 2, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.remote_address", 1, builtin_remote_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

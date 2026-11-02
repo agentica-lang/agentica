@@ -356,7 +356,7 @@ static void put_date(agc_http_bytes *b, int64_t now_ms) {
    and only when the method is not HEAD (a 204 or 304 body is refused here). */
 static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct *request,
                                  const agc_struct *response, int64_t now_ms, bool *closes) {
-  if (request->n != 5 || response->n != 3) return "invalid response";
+  if (request->n != 6 || response->n != 3) return "invalid response";
   int64_t status = agc_as_int(vm, response->fields[0]);
   const agc_list *headers = agc_as_list(vm, response->fields[1]);
   const agc_bytes *body = agc_as_bytes(vm, response->fields[2]);

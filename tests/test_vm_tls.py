@@ -97,6 +97,7 @@ def main() -> Void
   socket = starttls(port, tls, 5000).unwrap!
   TCP.send(socket, "from agentica\\n", 5000).unwrap!
   puts(TCP.read_line(socket, 5000).unwrap!)
+  puts(TCP.remote_address(socket))
   TCP.close(socket)
   IO.inspect(starttls(port, tls, 5000))
   IO.inspect(starttls(port, tls, 300))
@@ -115,8 +116,9 @@ def main() -> Void
   TCP.send(plain, "220 ready\\n", 10000).unwrap!
   socket = TLS.upgrade(plain, server.unwrap!, "", 10000).unwrap!
   TCP.send(socket, "hello #{TCP.read_line(socket, 10000).unwrap!}\\n", 10000).unwrap!
+  peer = TCP.remote_address(socket)
   TCP.close(socket)
-  puts("done")
+  puts("done #{peer}")
 end
 """
 
@@ -626,7 +628,7 @@ def test_client_certificate_to_a_python_server_that_requires_one_and_refused_wit
 def test_starttls_both_ways_against_python_data_before_the_handshake_and_a_handshake_timeout(tmp_path, adopt):
     server, port = python_server(adopt, "starttls")
     result = run_text(tmp_path, "starttls-client", STARTTLS_CLIENT_PROGRAM, stdin=port + "\n")
-    assert (result.code, result.stdout) == (0, "220 ready\npython TLSv1.3 FROM AGENTICA\n220 ready\n"
+    assert (result.code, result.stdout) == (0, "220 ready\npython TLSv1.3 FROM AGENTICA\n127.0.0.1\n220 ready\n"
                                             'error("network: data came before the TLS handshake")\n220 ready\n'
                                             'error("network: operation timed out")\n'), result.stderr
     assert server.wait() == 0
@@ -634,7 +636,7 @@ def test_starttls_both_ways_against_python_data_before_the_handshake_and_a_hands
     python = run([PYTHON, PYTHON_PEER, "starttls-client", vm.next_line()], timeout=scaled(30))
     assert (python.code, python.stdout) == (0, "220 ready hello python TLSv1.3\n"), python.stderr
     assert vm.next_line() == "STARTTLS"
-    assert vm.next_line() == "done"
+    assert vm.next_line() == "done 127.0.0.1"
     assert vm.wait() == 0, vm.stderr_text()
 
 
