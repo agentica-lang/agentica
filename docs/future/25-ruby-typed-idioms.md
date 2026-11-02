@@ -8,43 +8,38 @@ operator `|>`). Planned, one PR per item (row 7.6 of the [roadmap
 order](../roadmap/README.md)): 25.4 (value equality, 15d), 25.5 (standalone
 lambdas, 15e) and 25.9 (`File.open` with a block, 15i), after phase 16 (section
 26), and 25.11 (`format`, 15k). Part B (25.12) lists ideas to evaluate later,
-and Part C (25.13) lists what was decided against. Decided by the user on
-2026-10-12. Done when: site examples run on the VM and evaluation confirms
-agents use the forms with the same diagnostic quality as the forms they replace.
+Part C (25.13) what was decided against. Decided by the user on 2026-10-12.
+Done when: site examples run on the VM and evaluation confirms agents use the
+forms with the same diagnostic quality as the forms they replace.
 
-Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
-that models already know, with this rule: accept a form when it is real Ruby (or
-a typed version of it) or when it makes Agentica consistent with itself, and
-keep static checking and immutable values. A form from another language is not
-accepted: its hint names the Agentica form, and a newly accepted form is checked
+Agentica is "Ruby with types" for LLM agents. Accept a form when it is real Ruby
+(or a typed version of it) or makes Agentica consistent with itself, keeping
+static checking and immutable values. A form from another language is not
+accepted: its hint names the Agentica form. A newly accepted form is checked
 with a second model in an evaluation round. Three limits do not move: no OOP (no
-classes, no inheritance, no user methods on user types), no user generics, and
-values stay immutable.
+classes, inheritance or user methods on user types), no user generics, and
+immutable values.
 
 **Principle: one way to do each thing.** Strictness wins, so agents are precise.
-A Ruby form is worth adding only when it does not create a second way to write
-something the language already has. Where it would, it is not accepted: the
-parser or the checker gives a diagnostic whose help shows the canonical form.
-The same principle is why Agentica has no warnings: a diagnostic is an error
-or it does not exist
+A Ruby form is added only when it does not create a second way to write
+something the language already has; otherwise the parser or the checker gives a
+diagnostic whose help shows the canonical form. The same principle is why there
+are no warnings: a diagnostic is an error or it does not exist
 ([section 26](26-strict-diagnostics.md#26-strict-diagnostics)).
 
 The test: a form fails when it only renames or negates an existing call, its
 callback, or a statement (an alias, `reject` for `filter` with `!`, `unless` for
 `if !`), or re-spells one call or statement. A method passes when the
 composition it replaces needs a loop, several calls, or a seed value or typed
-accumulator that the caller would otherwise have to choose. So `sum` (a `reduce`
-whose seed, `0` or `0.0`, the caller picks), `find`, `each_with_index`,
-`flat_map` and `Map.each` pass. `reject` fails, and so do the `Range` Enumerable
-methods (each is `to_a` and then one `List` call). By the same test `unless` and
-statement modifiers (re-spellings of `if`), `loop do` (`while true`), keyword
-arguments (a second way to pass the same argument) and new method aliases are in
-Part C.
+accumulator the caller would otherwise choose. So `sum`, `find`,
+`each_with_index`, `flat_map` and `Map.each` pass; `reject` and the `Range`
+Enumerable methods (each is `to_a` and then one `List` call) fail. By the same
+test `unless`, statement modifiers, `loop do`, keyword arguments and new method
+aliases are in Part C.
 
 **How an item lands.** Each remaining item changes the front end (`compiler/`)
 and runs on the VM; most are sugar that lowering turns into code the VM already
-runs, so the bytecode format does not change. A real program or an evaluation
-round must ask for it first.
+runs. A real program or an evaluation round must ask for it first.
 
 ### 25.4 Value equality for data
 
@@ -73,23 +68,18 @@ is:
   equal values, in any order (as Ruby's `Hash#==`); Results with the same tag
   and equal payloads (`error` compares the message).
 
-A struct may hold itself through a list or an enum (`children: List[Node]`), and
-types may refer to each other. The checker decides equality for each group of
-mutually recursive types together (a strongly connected component of the type
-graph): every type in the group has equality only if no type in the group has a
-field without equality, so a cycle does not make the answer depend on the order
-of the check. A result computed while an assumption about the group was still
-open is never cached. A generic enum's equality depends on its type arguments:
-`Option[Int]` has it, `Option[Fn[Int, Int]]` does not; a user enum is checked
-per use, with its type arguments filled in.
-
-`List.member?` (a prelude method) uses this wider equality: it takes any
+A struct may hold itself through a list or an enum (`children: List[Node]`). The
+checker decides equality for each group of mutually recursive types together (a
+strongly connected component): every type in the group has equality only if no
+type in it has a field without equality, so the answer does not depend on check
+order, and a result computed under an open assumption is never cached. A
+generic enum's equality depends on its type arguments (`Option[Int]` has it,
+`Option[Fn[Int, Int]]` does not). `List.member?` (a prelude method) takes any
 element type that has equality.
 
 Lists, maps and Results are in this item because a struct with a
-`tags: List[String]` field is common, and struct equality without them would
-rarely apply. `Json`, `Fn`, `Task` and handles (files, sockets, processes, HTTP
-values) have no equality.
+`tags: List[String]` field is common. `Json`, `Fn`, `Task` and handles have no
+equality.
 
 **Checker rules:** both sides must have the same type, and that type must have
 equality; otherwise `CHECK-TYPE-MISMATCH`, as today for structs. When a struct
@@ -114,15 +104,13 @@ a help that shows `xs.size == 0` (or `xs.size != 0`). `s == ""` stays valid,
 since `String` equality already exists.
 
 **VM:** `EQ` and `NE` compare structs, enums, lists, maps and Results by value
-with an explicit stack (no C recursion) and charge a turn cost for their work
+with an explicit stack (no C recursion) and charge a turn cost
 (`docs/vm/10-io-scheduler.md` §10.2.1). The checker rules out `Fn` and handles;
-as a backstop, `EQ` raises `RUNTIME-INTERNAL` if it meets one (a crafted
-`.agcb`). The wider meaning bumps the bytecode format version
-(`docs/vm/03-ir-and-bytecode.md` §4). Rejected: one generated equality function
-per type (the VM already knows the shape of every value) and a new `EQ_DEEP`
-opcode (the front end and the VM ship together). `case` patterns are unchanged.
-The deep compare `agc_equal` in `vm/equal.c` and the checker's `data-type?`
-already exist for `Test.eq`.
+as a backstop `EQ` raises `RUNTIME-INTERNAL` on one (a crafted `.agcb`). The
+wider meaning bumps the bytecode format version. Rejected: one generated
+equality function per type (the VM knows the shape of every value) and an
+`EQ_DEEP` opcode (the front end and the VM ship together). `case` patterns are
+unchanged; `agc_equal` (`vm/equal.c`) already exists for `Test.eq`.
 
 ### 25.5 Standalone lambdas
 
@@ -203,13 +191,11 @@ end
 
 **`File.eof?`** comes with this item:
 `File.eof?(handle: FileHandle, timeout_ms: Int) -> Result[Bool]` (unlike
-`IO.eof?`, which returns `Bool`, so the loop needs `try`) for a file handle. It
-peeks at the next byte without using it, with the timeout
-and handle-lock rules of the other `File` stream functions, and returns an error
-for a handle that is closed or not open for reading. It is a builtin under
-exception 1 of the std-first rule (it touches the OS). Without it, a loop has to
-tell the end of the file apart from invalid UTF-8 by the error text of
-`File.read_line`.
+`IO.eof?`, so the loop needs `try`). It peeks at the next byte, with the timeout
+and handle-lock rules of the other `File` stream functions, and errors for a
+handle that is closed or not open for reading. It is a builtin under exception 1
+of the std-first rule (it touches the OS). Without it a loop must tell the end of
+the file from invalid UTF-8 by the error text of `File.read_line`.
 
 **API:** one more arity of the existing builtin (the catalog already has arity
 overloads, `Map.get`):
@@ -252,10 +238,10 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
   process). Each is its own small item, added when a program needs it.
 
 **Lowering:** the call expands into the existing `File.open`, a call to the
-block's closure, `File.close` and the branches above; the only VM change is the
-appended `File.eof?`. It is a lowering, not a `std/` function, since that would
-have to be generic in `T`. A test checks the four outcomes (block `ok` or
-`error`, close `ok` or `error`).
+block's closure, `File.close` and the branches above; the only VM change is
+`File.eof?`. It is a lowering, not a `std/` function, since that would have to
+be generic in `T`. A test checks the four outcomes (block `ok` or `error`,
+close `ok` or `error`).
 
 ### 25.11 `format`
 
@@ -303,68 +289,50 @@ shows the interpolated string (`format("%s is %d", name, age)` gives
 `"#{name} is #{age}"`). `format("%.2f", x)` is the one public way to write a
 fixed number of digits.
 
-**The format string must be a literal, checked at compile time.** The checker
-cannot check a format string that is only known at run time, so the choice was a
-literal checked by the compiler or a format string at run time that returns a
-`Result[String]`. The literal is chosen: the checker then knows how many
-arguments there are and their types, so a mistake is a compile error with a span
-inside the string, the result is a plain `String`, and nearly all real format
-strings are literals. A program that needs a format chosen at run time picks
-between literals.
+**The format string must be a literal, checked at compile time.** The
+alternative was a run-time format string returning `Result[String]`. The literal
+is chosen: the checker then knows the arguments and their types, so a mistake
+is a compile error with a span inside the string, the result is a plain
+`String`, and nearly all real format strings are literals. A program that needs
+a format chosen at run time picks between literals.
 
 **Checker rules:**
 
-- `format` has a catalog entry in `compiler/catalog/builtins_data.agc` with a
-  "checker-handled, variadic" marker: the number of arguments depends on the
-  literal, so the checker checks the call itself, not against a fixed
-  signature. The entry is needed because the linker keeps a call name unchanged
-  only when `builtin-ref` finds it, and otherwise adds the module prefix
-  (`@N::`), so `format` in an imported module would be renamed. The one entry
-  covers linking, the name reservation (the linker's duplicate check uses
-  `builtin-ref`) and `agentica help format`. Only the function name is
-  reserved: a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change
-  accepted before 1.0. Variables, parameters and fields named `format` stay
-  valid, since `format(...)` is a call and a variable is not callable.
-
+- `format` has a catalog entry in `compiler/catalog/builtins_data.agc` marked
+  "checker-handled, variadic": the number of arguments depends on the literal,
+  so the checker checks the call itself. The entry is needed because the linker
+  keeps a call name unchanged only when `builtin-ref` finds it (otherwise it adds
+  the module prefix `@N::`); it also covers the name reservation and `agentica
+  help format`. Only the function name is reserved: a user `def format` is
+  `CHECK-REDEFINED-NAME` (breaking, accepted before 1.0); variables, parameters
+  and fields named `format` stay valid.
 - The first argument must be a plain one-line string literal, without `#{...}`
-  and not a heredoc: `CHECK-FORMAT-LITERAL` otherwise, with a help to use
-  interpolation for text that is built at run time.
-
-- A bad conversion (unknown type, an unknown flag, a `%` at the end, `precision`
-  on `d`, `x` or `s`, `0` on `s`, a width or precision out of range) is
-  `CHECK-FORMAT-SPEC`, with the span of the conversion inside the literal.
-
-- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type is
-  `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its
+  and not a heredoc: `CHECK-FORMAT-LITERAL`, with a help to use interpolation.
+- A bad conversion (unknown type or flag, a trailing `%`, `precision` on `d`,
+  `x` or `s`, `0` on `s`, a width or precision out of range) is
+  `CHECK-FORMAT-SPEC` at the conversion's span inside the literal.
+- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type
+  (a `%s` argument without `to_s`, such as an `Fn`, a task or a handle, included)
+  is `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its
   conversion.
-
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows
   `format(...)`.
+- `agentica help format` (and `--json`, with arity "2 or more") shows an entry
+  like a builtin's: the form `format(fmt: String literal, args...) -> String`,
+  the conversions and flags, and an example.
 
-- `agentica help format` shows a help entry like a builtin's: the form
-  `format(fmt: String literal, args...) -> String`, the conversions and flags,
-  and an example. `agentica help format --json` has the same fields as a builtin
-  (name, signature, effects: none, description), with the arity given as "2 or
-  more" (a format with no conversion is rejected).
-
-**Where the code lives.** Padding, decimal and hex text are Agentica code in
-the compiler prelude (`stdlib/prelude/format.agc`). One part is a builtin: the
-prelude-only `__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50,
-otherwise `RUNTIME-INVALID-COUNT`; NaN and the infinities give `NaN`, `Inf` and
-`-Inf`), because correct decimal rounding of a binary `Float` needs exact
-arithmetic (the VM calls `snprintf` with `%.*f`). Outside prelude modules it is
-`CHECK-UNKNOWN-NAME`, so `format("%.2f", x)` stays the one public way;
-`x.to_fixed(2)`, `x.round(2).to_s` and similar get `CHECK-UNKNOWN-METHOD` with
-a help that shows it. The smallest `Int` (`-9223372036854775808`) is a special
-case for `%d` with zero padding as well as for `%x`.
-
-**Lowering:** lowering turns each call into a concatenation of the literal
-parts and calls to the prelude functions, one per conversion, so no format
-string is parsed at run time. For each `%s` argument, lowering emits the
-`to_s` call at the call site, as interpolation does, and passes the resulting
-`String` to the prelude padding function. A `%s` argument without `to_s` (an
-`Fn`, a task, a handle) is `CHECK-TYPE-MISMATCH` at the argument, with a
-secondary span on its conversion. No VM change other than the new builtin.
+**Where the code lives.** Padding, decimal and hex text are Agentica code in the
+compiler prelude (`stdlib/prelude/format.agc`); lowering turns each call into a
+concatenation of the literal parts and one prelude call per conversion, so no
+format string is parsed at run time (a `%s` argument gets its `to_s` at the call
+site, as interpolation does). One part is a builtin: the prelude-only
+`__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise
+`RUNTIME-INVALID-COUNT`), because correct decimal rounding of a binary `Float`
+needs exact arithmetic (the VM calls `snprintf` with `%.*f`). Outside prelude
+modules it is `CHECK-UNKNOWN-NAME`, so `format("%.2f", x)` stays the one public
+way; `x.to_fixed(2)` and `x.round(2).to_s` get `CHECK-UNKNOWN-METHOD` with a
+help that shows it. The smallest `Int` is a special case for `%d` with zero
+padding and for `%x`.
 
 ### 25.12 To evaluate later (Part B)
 
