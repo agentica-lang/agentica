@@ -55,12 +55,14 @@ HEAVY_RACE = pytest.mark.parametrize(
 # process-close-crash prints the crashes of two tasks; process-close-cancel, test-assertions and test-crash-observed
 # count on Task.sleep(0) letting another task run first (a close that ends before its owner crashes, the tasks of a
 # test that crash before it returns). process-channel-close counts on Task.sleep(100) being long enough for its tasks
-# to build a 1 MB text and park before the close, which a ThreadSanitizer build is too slow for. The cases further down
+# to build a 1 MB text and park before the close, which a ThreadSanitizer build is too slow for. process-close-async
+# counts on its closer parking in Process.close so that the other task prints first; on another thread the closer's
+# kill and exit can end before that task runs. The cases further down
 # that wait on a line or a task's end instead (test_a_crash_cancels_a_task_inside_process_close..., ...channel_calls...,
 # ...observes_task_crashes...) keep that coverage at four schedulers.
 ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning",
-         "http-client-close-queued", "logger-tasks", "process-channel-close", "process-close-cancel",
-         "process-close-crash",
+         "http-client-close-queued", "logger-tasks", "process-channel-close", "process-close-async",
+         "process-close-cancel", "process-close-crash",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
          "task-file-close", "tcp-tasks", "test-assertions", "test-crash-observed", "test-run-task"}
 
