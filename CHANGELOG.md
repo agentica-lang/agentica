@@ -31,6 +31,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   by the time the handler returned, even if the handler did not read it (an
   empty chunked body, say). A handler that answers before any of the body
   arrived now answers up to 100 ms later.
+- `HttpServerOptions.max_body_bytes` may be up to 256 MiB, and `HTTP.serve`
+  caps every request body with it (1 MiB by default): a larger
+  `Content-Length` is answered 413 before the app runs, with no
+  `100 Continue` first.
 
 ## [0.21.0] - 2026-11-02
 

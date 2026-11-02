@@ -1435,9 +1435,10 @@ def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_
     assert vm.wait() == 0, vm.stderr_text()
 
 
-# One `serve` server for every kind of route: a page through `HTTP.app` (with a 16-byte body limit), a file sent in
-# pieces with its length, an upload counted as it arrives, and a WebSocket echo. Each upload and WebSocket end goes to
-# stdout.
+# One `serve` server for every kind of route: a page through `HTTP.app` (with a 16-byte body limit, and 4 MiB on /big),
+# a file sent in pieces with its length, an upload counted as it arrives (/upload, and /count, which answers 200 even
+# when the body failed), and a WebSocket echo. Each upload and WebSocket end goes to stdout. Every body is at most 2 MiB
+# (`max_body_bytes`).
 SERVE_PROGRAM = """\
 import HTTP from "std/http"
 
@@ -1486,6 +1487,26 @@ def store(body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "stored #{total}".bytes)))
 end
 
+# Counts the body as it arrives and says how `done` ended, then answers 200 whatever happened.
+def count(body: HTTP.RequestBody) -> HTTP.Answer
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  done = "ok"
+  case Task.await(body.done)
+    ok(_) -> done = "ok"
+    error(message) -> done = message
+  end
+  puts("counted #{total} #{done}")
+  IO.flush()
+  return HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "counted".bytes))
+end
+
 def echo(ws: HTTP.WebSocket) -> Result[Void]
   while true
     case ws.incoming.recv(10000)
@@ -1519,11 +1540,24 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
     return ok(HTTP.Answer.Whole(HttpResponse(status: 401, headers: [], body: "no".bytes)))
   end
 
+  if request.path == "/count"
+    return ok(count(body))
+  end
+
+  if request.path == "/big"
+    return HTTP.app(&page, 4194304).call(request, body)
+  end
+
   return HTTP.app(&page, 16).call(request, body)
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 10000, max_connections: 16)
+  options = HttpServerOptions(
+    request_timeout_ms: 5000,
+    idle_timeout_ms: 10000,
+    max_connections: 16,
+    max_body_bytes: 2097152,
+  )
   server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
   certs = System.args()[0]
   tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
@@ -1599,6 +1633,47 @@ def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_p
     assert ask("PUT", "/upload", iter([b"ab", b"cd"]), chunked=True) == (200, b"stored 4")
     assert vm.next_line() == "stored 4"
     conn.close()
+    finish_serve(vm)
+
+
+def test_serve_refuses_a_body_over_max_body_bytes_before_the_app_and_before_100_continue(tmp_path, adopt):
+    """HTTP.serve: a Content-Length over max_body_bytes (2 MiB in SERVE_PROGRAM) with Expect: 100-continue gets a 413
+    that closes, with no 100 first and no app run; a body within the cap gets its 100 and reaches the app. A chunked
+    body that grows past the cap reaches a raw app only up to the cap, and then `done` fails; under HTTP.app, whose own
+    limit is higher, it is a 413. Each of these answers closes the connection."""
+    vm, port, _ = start_serve(tmp_path, adopt)
+    cap = 2097152
+
+    def closing_status(request):
+        """Sends `request` and returns the status of the answer, which must close the connection."""
+        with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+            try:
+                conn.sendall(request)
+            except OSError:
+                pass  # the server may close before it took every byte; its answer is still read
+            head, _ = raw_answer(conn, True)
+            assert b"\r\nconnection: close" in head, head
+            return head.split(b" ")[1]
+
+    assert closing_status(b"PUT /upload HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n"
+                          b"Content-Length: %d\r\n\r\n" % (cap + 1)) == b"413"
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+        conn.sendall(b"PUT /upload HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n")
+        head, rest = raw_answer(conn, False)
+        assert head.startswith(b"http/1.1 100"), head
+        conn.sendall(b"abcd")
+        got = rest
+        while not got.endswith(b"stored 4"):
+            more = conn.recv(65536)
+            assert more, "the connection closed: %r" % got
+            got += more
+        assert b"http/1.1 200" in got.lower(), got
+    assert vm.next_line() == "stored 4", "only the body within the cap reached the app"
+    over = b"%x\r\n%s\r\n1\r\nz\r\n0\r\n\r\n" % (cap, b"x" * cap)
+    chunked = b"Host: x\r\nTransfer-Encoding: chunked\r\n\r\n"
+    assert closing_status(b"PUT /count HTTP/1.1\r\n" + chunked + over) == b"200"
+    assert vm.next_line() == "counted %d http: body exceeds max_bytes" % cap
+    assert closing_status(b"PUT /big HTTP/1.1\r\n" + chunked + over) == b"413"
     finish_serve(vm)
 
 

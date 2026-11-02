@@ -85,15 +85,17 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   bounded. `idle_timeout_ms` is the wait for the next request on a kept-alive
   connection (server), and how long an idle pooled connection is kept (client).
 - **Body limit and memory.** `max_body_bytes` defaults to 1 MiB on both sides
-  and may be raised to 64 MiB. A body is held in C once and in its `Bytes`
-  once, so body memory is at most `max_body_bytes` ×
-  `max_connections` × 4 (512 MiB with the server defaults). A program that
-  raises `max_body_bytes` must lower `max_connections`. A body over the limit
-  is an `error` on the client, and a 413 on the server, before the handler
-  runs. `HttpWire` itself takes up to 256 MiB, which only a file download
-  (`HTTP.download`, streamed in pieces of at most 1 MiB) may
-  use: the transfer stops at its `max_total_bytes`, the file never grows past
-  it, and a failed download keeps the partial file.
+  and may be raised to 64 MiB on the client and 256 MiB on the server (where
+  `serve` caps every body with it, also the ones it streams to the app). A body
+  read whole is held in C once and in its `Bytes` once, so body memory is at
+  most `max_body_bytes` × `max_connections` × 4 (512 MiB with the server
+  defaults). A program that raises `max_body_bytes` must lower
+  `max_connections`. A body over the limit is an `error` on the client, and a
+  413 on the server, before the handler runs. `HttpWire` itself takes up to 256
+  MiB, which only a file download (`HTTP.download`, streamed in pieces of at
+  most 1 MiB) and a request body streamed to a server handler may use; for a
+  download the transfer stops at its `max_total_bytes`, the file never grows
+  past it, and a failed download keeps the partial file.
 - **Bodies are bytes.** The client keeps a response body as it came, a handler
   gets the request body as it came and returns `Bytes`; `HTTP.text` decodes
   it in the `charset` of `Content-Type` when `Bytes.decode` knows it (UTF-8
@@ -140,9 +142,9 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   it out. The loader does not guard it: a crafted `.agcb` gets nothing `TCP` and
   `TLS` do not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is
   a reserved name.
-- **Options.** `HTTP.client` and `HTTP.listen` check every number first:
-  positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB. A
-  bad record is an `error` result.
+- **Options.** `HTTP.client` and the servers check every number first:
+  positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB
+  for a client and 256 MiB for a server. A bad record is an `error` result.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
   (`none`: system trust), and the `listen_*_tls` forms a server one.
 
@@ -434,6 +436,9 @@ Properties of the client that no test checks:
   over `pieces` with a byte limit that awaits `done`.
 - A `serve` server reads the head as a `listen_upload` server does, with the
   WebSocket handshake let through, and calls the app with the same feeder.
+  Its bodies are capped at `max_body_bytes`: a larger `Content-Length` gets
+  the 413 from the head, before the app and any `100 Continue`, and a chunked
+  body that grows past it fails `done` with the error of `read_all`.
   When the app returns, the server closes `pieces` and waits for `rest` at
   most the answer time: the feeder sends the bytes past a whole body, and
   closes `rest` when the body failed or the closed `pieces` stopped it. So a

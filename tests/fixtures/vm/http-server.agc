@@ -76,7 +76,7 @@ def main() -> Void
   bad = HttpServerOptions(request_timeout_ms: 0, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 16)
   IO.inspect(HTTP.listen("127.0.0.1", 0, &handle, bad))
   IO.inspect(HTTP.listen("127.0.0.1", 0, &handle, HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)))
-  IO.inspect(HTTP.listen("127.0.0.1", 0, &handle, HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 67108865)))
+  IO.inspect(HTTP.listen("127.0.0.1", 0, &handle, HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 268435457)))
   options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)
   server = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
   IO.inspect(server)

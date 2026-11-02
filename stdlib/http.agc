@@ -94,10 +94,12 @@ BAD_LOGIN = "http: the proxy user info must be user:password in percent-encoding
 NO_BODY = "a 204 or 304 response cannot have a body"
 WRONG_SIZE = "the body is not the length it was given"
 CRLF = "\r\n".bytes
-# The widest body a download may write, in bytes. The client and server bodies stay capped at 64 MiB by
-# check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
-# this value as a literal (a field default cannot name a constant), so the two must match.
+# The widest body a download may write, in bytes, and the ceiling of a server's `max_body_bytes`. A client's bodies
+# stay capped at CLIENT_MAX_BODY by check_options; only a download streamed to a file may use up to this.
+# DownloadOptions.max_total_bytes defaults to this value as a literal (a field default cannot name a constant), so the
+# two must match.
 DOWNLOAD_MAX_BYTES = 268435456
+CLIENT_MAX_BODY = 67108864
 # The error of `read_all` for a body over its limit, which `app` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
 
@@ -116,12 +118,14 @@ end
 
 # How a server reads a request before its app runs. `whole` reads the body first, at most `max_body_bytes`, and hands
 # it to the app in the request, with an empty `RequestBody`: the promise of `listen`, `listen_stream` and
-# `listen_websocket`, whose apps wrap their handler. Otherwise the body goes to the app as it arrives, at most 256 MiB
-# (`serve`, `listen_upload`). `upgrades` lets a WebSocket handshake through to the app; every other server answers an
-# `Upgrade` header 501.
+# `listen_websocket`, whose apps wrap their handler. Otherwise the body goes to the app as it arrives (`serve`,
+# `listen_upload`). `upgrades` lets a WebSocket handshake through to the app; every other server answers an `Upgrade`
+# header 501. `capped` holds every body to `max_body_bytes` from the head, so a larger one is answered 413 before the
+# app runs (and before any `100 Continue`); only `listen_upload` takes up to 256 MiB instead.
 struct Reads
   whole: Bool
   upgrades: Bool
+  capped: Bool
 end
 
 struct Service
@@ -496,7 +500,13 @@ end
 ## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
 ## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
-  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
@@ -679,7 +689,13 @@ end
 ## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
 ## `finish`. For whole requests use `get_response` or the pooled client instead.
 export def start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
-  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
   where = try parse_url(origin)
   if where.target != "/"
     return error("http: start takes an origin such as http://host:8080, with no path or query")
@@ -781,7 +797,13 @@ export def open(
   headers: List[Header] = [],
   options: HttpClientOptions = HttpClientOptions(),
 ) -> Result[Stream]
-  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
   where = try parse_url(url)
   conn = try connect_to(where, options)
   case send_request(conn, method, where.target, body, headers)
@@ -876,9 +898,10 @@ export def listen(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false, capped: true), options))
 end
 
 ## Like `listen`, but over TLS, with the certificate and key of `tls`, a server context
@@ -896,9 +919,10 @@ export def listen_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_whole(handler), Reads(whole: true, upgrades: false, capped: true), options))
 end
 
 ## Like `listen`, but the handler returns a `StreamResponse`, whose body is a channel the server sends as pieces arrive
@@ -916,9 +940,10 @@ export def listen_stream(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false, capped: true), options))
 end
 
 ## Like `listen_stream`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -935,9 +960,10 @@ export def listen_stream_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false), options))
+  return ok(start_server(listener, wrap_stream(handler), Reads(whole: true, upgrades: false, capped: true), options))
 end
 
 ## Like `listen`, but the handler gets the body of the request on a channel (`RequestBody`) as it arrives, for an
@@ -957,9 +983,10 @@ export def listen_upload(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false), options))
+  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false, capped: false), options))
 end
 
 ## Like `listen_upload`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional
@@ -976,9 +1003,10 @@ export def listen_upload_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false), options))
+  return ok(start_server(listener, wrap_upload(handler), Reads(whole: false, upgrades: false, capped: false), options))
 end
 
 ## Collects the body of an upload for a handler of `listen_upload` that wants it whole, so one server can serve small
@@ -1023,9 +1051,10 @@ export def listen_websocket(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true), options))
+  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true, capped: true), options))
 end
 
 ## Like `listen_websocket`, but over TLS (`wss`), with the certificate and key of `tls`, a server context. `options` is
@@ -1042,9 +1071,10 @@ export def listen_websocket_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true), options))
+  return ok(start_server(listener, wrap_socket(handler), Reads(whole: true, upgrades: true, capped: true), options))
 end
 
 ## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
@@ -1075,8 +1105,9 @@ end
 
 ## Starts an HTTP server on `host` and `port` that serves every kind of route on one port, and returns at once; it
 ## serves in the background, as `listen` does. `app` gets each request with its body on a channel (as `listen_upload`
-## gives it) and answers with a whole response, a stream or a WebSocket upgrade (`Answer`). The body is at most
-## 256 MiB: `max_body_bytes` of `options` does not apply here, and a route that wants less counts the bytes or calls
+## gives it) and answers with a whole response, a stream or a WebSocket upgrade (`Answer`). Every body is at most
+## `max_body_bytes` of `options` (1 MiB unless raised, up to 256 MiB): a request whose `Content-Length` is larger is
+## answered 413 before `app` runs and before any `100 Continue`. A route that wants less counts the bytes or calls
 ## `read_all`. The connection serves the next request only when the body was read whole by the time `app` returned
 ## (a body that had all arrived counts, read or not); otherwise the answer says `Connection: close`, and an upgrade is
 ## refused. The server sets no limit on the time of `app`. `options` is optional and defaults to
@@ -1092,9 +1123,10 @@ export def serve(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, app, Reads(whole: false, upgrades: true), options))
+  return ok(start_server(listener, app, Reads(whole: false, upgrades: true, capped: true), options))
 end
 
 ## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
@@ -1111,9 +1143,10 @@ export def serve_tls(
     options.idle_timeout_ms,
     options.max_connections,
     options.max_body_bytes,
+    DOWNLOAD_MAX_BYTES,
   )
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, app, Reads(whole: false, upgrades: true), options))
+  return ok(start_server(listener, app, Reads(whole: false, upgrades: true, capped: true), options))
 end
 
 ## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
@@ -1969,7 +2002,13 @@ def upload_whole(
   headers: List[Header],
   options: HttpClientOptions,
 ) -> Result[HttpResponse]
-  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  try check_options(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    CLIENT_MAX_BODY,
+  )
   if method != "POST" and method != "PUT" and method != "PATCH"
     return error("http: upload takes POST, PUT or PATCH")
   end
@@ -2107,15 +2146,22 @@ def read_whole(conn: Connection, most: Int) -> Result[Bytes]
   return error(TRUNCATED)
 end
 
-def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
+# `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, DOWNLOAD_MAX_BYTES for a server.
+def check_options(
+  timeout_ms: Int,
+  idle_timeout_ms: Int,
+  max_connections: Int,
+  max_body_bytes: Int,
+  most_body: Int,
+) -> Result[Void]
   if timeout_ms <= 0 or idle_timeout_ms <= 0 or max_connections <= 0 or max_body_bytes <= 0
     return error("http: every option must be positive")
   end
   if max_connections > 65536
     return error("http: max_connections must be at most 65536")
   end
-  if max_body_bytes > 67108864
-    return error("http: max_body_bytes must be at most 67108864")
+  if max_body_bytes > most_body
+    return error("http: max_body_bytes must be at most #{most_body}")
   end
   return ok()
 end
@@ -2313,10 +2359,9 @@ def serve_connection(socket: Socket, service: Service) -> Void
   end
 end
 
-# The largest body the head of a request may announce: a body that goes to the app as it arrives may be up to
-# 256 MiB, and a body read whole before the app runs is held to `max_body_bytes`.
+# The largest body the head of a request may announce: `max_body_bytes`, or 256 MiB for `listen_upload`.
 def body_limit(service: Service) -> Int
-  if service.reads.whole
+  if service.reads.capped
     return service.options.max_body_bytes
   end
   return DOWNLOAD_MAX_BYTES
@@ -3177,7 +3222,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
       data = try more_request(socket, FRAME_BYTES, deadline)
       case HttpWire.chunk(state, data, 0)
         ok(next) -> state = next
-        error(problem) -> return error("http: #{rest_of(problem, 4)}")
+        error(problem) -> return error(feed_problem(problem))
       end
       pieces = run_pieces(data, state.runs)
       if not pieces.empty?
@@ -3186,6 +3231,15 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
     end
   end
   return ok(data.drop(state.next))
+end
+
+# The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
+# BODY_TOO_LONG, as `read_all` says it, so `app` answers it 413.
+def feed_problem(problem: String) -> String
+  if String.starts_with?(problem, "413")
+    return BODY_TOO_LONG
+  end
+  return "http: #{rest_of(problem, 4)}"
 end
 
 def smaller(a: Int, b: Int) -> Int
