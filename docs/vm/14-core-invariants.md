@@ -205,10 +205,13 @@ flush. **When `main` ends, the program ends.** The steps are:
 4. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush
-   or the DLLs' detach code, which could wait for it. On Linux, each final C
-   stdio flush skips a stream whose lock is busy and may lose its buffered
-   native bytes. If the lock is acquired, `fflush` can still block on the
-   descriptor. macOS and Windows keep the blocking final flush.
+   or the DLLs' detach code, which could wait for it. Each final flush of the
+   C streams stdout and stderr (`agc_stdio_flush`) skips a stream whose lock
+   another thread holds, so its buffered native bytes may be lost. Linux and
+   macOS try the lock (`ftrylockfile`). Windows has no try-lock: a thread of
+   its own takes the lock and flushes, and the run waits at most 100 ms for it
+   to get the lock. Once a flush holds the lock, `fflush` can still block on
+   the descriptor.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
