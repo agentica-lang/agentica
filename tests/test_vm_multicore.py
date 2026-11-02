@@ -2689,8 +2689,8 @@ def main() -> Void
   clients = args[1].to_i!
   requests = args[2].to_i!
   options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
-  plain = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
-  secure = HTTP.listen_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options).unwrap!
+  plain = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
+  secure = HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options).unwrap!
   puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", clients, requests))
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
@@ -2754,7 +2754,7 @@ end
 
 def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 60000, idle_timeout_ms: 60000, max_connections: 1, max_body_bytes: 64)
-  server = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   port = HTTP.local_port(server)
   held = TCP.connect("127.0.0.1", port, 5000).unwrap!
   queued = TCP.connect("127.0.0.1", port, 5000).unwrap!
@@ -2808,7 +2808,7 @@ def main() -> Void
   Test.run([
     Test.test("wait returns once a busy handler has ended") do
       started = try TCP.listen("127.0.0.1", 0)
-      server = try HTTP.listen("127.0.0.1", 0, &spin)
+      server = try HTTP.serve("127.0.0.1", 0, HTTP.app(&spin))
       socket = try TCP.connect("127.0.0.1", HTTP.local_port(server), 5000)
       try TCP.send(socket, "GET /#{TCP.local_port(started)} HTTP/1.1\r\nHost: x\r\n\r\n", 5000)
       signal = try TCP.accept(started, 5000)

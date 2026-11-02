@@ -247,7 +247,7 @@ static server *open_server(const agc_http_server *hs) {
 }
 
 /* HttpWire.server(listener, max, f): a TLS listener whose alpn may agree on another protocol than HTTP/1.1 is
-   RUNTIME-TLS-CONTEXT-ALPN at the listener argument (in std/http's HTTP.listen_*_tls). */
+   RUNTIME-TLS-CONTEXT-ALPN at the listener argument (in std/http's HTTP.serve_tls). */
 static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_listener *lv = agc_as_listener(vm, args[0]);
   int64_t max = agc_as_int(vm, args[1]);

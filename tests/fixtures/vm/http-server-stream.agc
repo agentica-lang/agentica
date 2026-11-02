@@ -127,6 +127,20 @@ def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpReques
   return f
 end
 
+def app_of(f: HTTP.App) -> HTTP.App
+  return f
+end
+
+# The body read first, then the stream of the route.
+def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  try HTTP.read_all(body, 1024)
+  return ok(HTTP.Answer.Stream(try route.call(request)))
+end
+
+def streamed(route: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> HTTP.App
+  return app_of() do |request, body| stream_answer(route, request, body) end
+end
+
 def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
   return handler_of() do |request|
     case request.path
@@ -209,7 +223,7 @@ end
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
   options = HttpServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
-  server = HTTP.listen_stream("127.0.0.1", 0, routes(hub), options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, streamed(routes(hub)), options).unwrap!
   port = HTTP.local_port(server)
 
   puts("-- each piece arrives before the producer sends the next one, and the connection is kept")

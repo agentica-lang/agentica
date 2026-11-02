@@ -57,7 +57,7 @@ HOSTILE = [
     ("star-options", head(b"OPTIONS * HTTP/1.1", CLOSE)),
     ("bad-method", head(b"G(T / HTTP/1.1")),
     ("connect", head(b"CONNECT x:443 HTTP/1.1")),
-    ("upgrade", head(b"GET / HTTP/1.1", b"Upgrade: websocket", b"Connection: upgrade")),
+    ("upgrade", head(b"GET / HTTP/1.1", b"Upgrade: h2c", b"Connection: upgrade")),
     ("fold", head(b"GET / HTTP/1.1", b"X-A: one", b" two")),
     ("expect-other", head(b"POST / HTTP/1.1", b"Expect: 200-ok", b"Content-Length: 2") + b"ab"),
     ("over-limit", head(b"POST / HTTP/1.1", b"Content-Length: 1025")),

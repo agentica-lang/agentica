@@ -8,7 +8,7 @@ def main() -> Void
   ports: Channel[Int] = Channel.new(1)
   Test.run([
     Test.test("a server left listening is reported") do
-      server = HTTP.listen("127.0.0.1", 0, &handle).unwrap!
+      server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
       ports.send(HTTP.local_port(server), 5000)
       ok()
     end,

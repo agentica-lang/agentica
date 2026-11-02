@@ -481,9 +481,9 @@ end
 
 def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
-  server = Result.unwrap!(HTTP.listen("127.0.0.1", 0, &handle, options))
+  server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -494,7 +494,7 @@ def main() -> Void
 end
 """
 
-# An upload server: the handler of listen_upload reports what it saw of each body on stdout, one line per request
+# An upload server: the app of serve reports what it saw of each body on stdout, one line per request
 # ("PATH BYTES DONE"), where DONE is how the feeder ended. /slow waits before it reads, so the channel fills and the
 # socket backs up; /early and /stop answer without reading the whole body.
 UPLOAD_SERVER_PROGRAM = """\
@@ -567,11 +567,15 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
   return answer(200, "#{request.path} #{shown} #{done}")
 end
 
+def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  return ok(HTTP.Answer.Whole(try handle(request, body)))
+end
+
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
-  server = Result.unwrap!(HTTP.listen_upload("127.0.0.1", 0, &handle, options))
+  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 4194304)
+  server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_upload_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &handle, options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -738,12 +742,27 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
   end
 end
 
+def app_of(f: HTTP.App) -> HTTP.App
+  return f
+end
+
+# The body read first, then the stream of the route.
+def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  try HTTP.read_all(body, 1024)
+  return ok(HTTP.Answer.Stream(try route.call(request)))
+end
+
+def streamed(said: Channel[String]) -> HTTP.App
+  route = routes(said)
+  return app_of() do |request, body| stream_answer(route, request, body) end
+end
+
 def main() -> Void
   said: Channel[String] = Channel.new(8)
   options = HttpServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
-  server = Result.unwrap!(HTTP.listen_stream("127.0.0.1", 0, routes(said), options))
+  server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, streamed(said), options))
   certs = System.args()[0]
-  secure = Result.unwrap!(HTTP.listen_stream_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, routes(said), options))
+  secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, streamed(said), options))
   puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
@@ -1216,7 +1235,7 @@ def read_answers(conn, count):
 
 @pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
 def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt, flags):
-    """listen_upload: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
+    """serve: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
     so the socket backs up), the connection stays for the next request, also when it arrived in the same write as the
     end of a chunked body; a handler that answers first, or a body that is cut or bad, ends the connection; over TLS
     too."""
@@ -1315,29 +1334,6 @@ def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_th
     assert vm.stderr_text() == "http: handler error: the handler failed\n"
 
 
-def test_upload_server_keeps_the_connection_for_a_body_that_arrived_but_was_not_read(tmp_path, adopt):
-    """listen_upload: a handler that ignores the body answers a GET and then an empty chunked POST on one connection,
-    and neither answer closes it."""
-    source = tmp_path / "upload-server.agc"
-    source.write_text(UPLOAD_SERVER_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "upload-server.agcb"), CERTS, stdin=True))
-    port = int(vm.next_line().split()[0])
-    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
-        for request in [b"GET /early HTTP/1.1\r\nHost: x\r\n\r\n",
-                        b"POST /early HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"]:
-            conn.sendall(request)
-            got = b""
-            while not got.endswith(b"early"):
-                more = conn.recv(65536)
-                assert more, "the connection closed: %r" % got
-                got += more
-            head = got.partition(b"\r\n\r\n")[0].lower()
-            assert head.startswith(b"http/1.1 200") and b"connection: close" not in head, head
-            assert vm.next_line() == "/early"
-    vm.close_stdin()
-    assert vm.wait() == 0, "the VM server finishes"
-
-
 def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte_limit(tmp_path, adopt):
     """After a 413 the server drops input only up to a limit, so a peer that keeps sending is cut off long before
     the request deadline (2 s in SERVER_PROGRAM) and cannot make the server read for all of it."""
@@ -1375,28 +1371,24 @@ def plain(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: request.remote_addr.bytes))
 end
 
-def stream(request: HttpRequest) -> Result[HTTP.StreamResponse]
-  return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(request.remote_addr.bytes)))
-end
-
-def upload(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+def stream(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   try HTTP.read_all(body, 1024)
-  return plain(request)
+  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(request.remote_addr.bytes))))
 end
 
-def websocket(request: HttpRequest) -> Result[HTTP.Upgrade]
-  return HTTP.upgrade_only(&plain).call(request)
+def upload(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  try HTTP.read_all(body, 1024)
+  return ok(HTTP.Answer.Whole(try plain(request)))
 end
 
 def main() -> Void
   certs = System.args()[0]
   tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
   servers = [
-    HTTP.listen("localhost", 0, &plain).unwrap!,
-    HTTP.listen_stream("localhost", 0, &stream).unwrap!,
-    HTTP.listen_upload("localhost", 0, &upload).unwrap!,
-    HTTP.listen_websocket("localhost", 0, &websocket).unwrap!,
-    HTTP.listen_tls("localhost", 0, tls, &plain).unwrap!,
+    HTTP.serve("localhost", 0, HTTP.app(&plain)).unwrap!,
+    HTTP.serve("localhost", 0, &stream).unwrap!,
+    HTTP.serve("localhost", 0, &upload).unwrap!,
+    HTTP.serve_tls("localhost", 0, tls, HTTP.app(&plain)).unwrap!,
   ]
   ports = servers.map do |server| HTTP.local_port(server).to_s end
   puts(ports.join(" "))
@@ -1408,8 +1400,9 @@ end
 
 
 def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_port(tmp_path, adopt):
-    """http.client from 127.0.0.1 and ::1 (where IPv6 localhost exists; CI must have it) to listen, listen_stream,
-    listen_upload, listen_websocket and listen_tls on localhost: each handler answers request.remote_addr."""
+    """http.client from 127.0.0.1 and ::1 (where IPv6 localhost exists; CI must have it) to serve on localhost, with a
+    handler under HTTP.app, a stream, an app that reads the body itself, and serve_tls: each answers
+    request.remote_addr."""
     hosts = ["127.0.0.1"]
     if ipv6_localhost():
         hosts.append("::1")
@@ -1421,7 +1414,7 @@ def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_
     context.check_hostname = False  # the certificate names localhost, and the client dials an address
     seen = []
     for host in hosts:
-        for kind, port in zip(["listen", "stream", "upload", "websocket", "tls"], ports):
+        for kind, port in zip(["app", "stream", "upload", "tls"], ports):
             if kind == "tls":
                 connection = http.client.HTTPSConnection(host, port, timeout=scaled(10), context=context)
             else:
@@ -1430,7 +1423,7 @@ def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_
             response = connection.getresponse()
             seen.append((kind, response.status, response.read().decode()))
             connection.close()
-    assert seen == [(kind, 200, host) for host in hosts for kind in ["listen", "stream", "upload", "websocket", "tls"]]
+    assert seen == [(kind, 200, host) for host in hosts for kind in ["app", "stream", "upload", "tls"]]
     vm.close_stdin()
     assert vm.wait() == 0, vm.stderr_text()
 

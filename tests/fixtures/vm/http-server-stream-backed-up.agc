@@ -47,6 +47,20 @@ def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpReques
   return f
 end
 
+def app_of(f: HTTP.App) -> HTTP.App
+  return f
+end
+
+# The body read first, then the stream of the route.
+def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  try HTTP.read_all(body, 1024)
+  return ok(HTTP.Answer.Stream(try route.call(request)))
+end
+
+def streamed(route: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> HTTP.App
+  return app_of() do |request, body| stream_answer(route, request, body) end
+end
+
 # The status line and the headers, without the Date, which differs on every run.
 def head_of(socket: Socket) -> String
   lines: List[String] = []
@@ -63,7 +77,7 @@ end
 def main() -> Void
   said: Channel[String] = Channel.new(1)
   options = HttpServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
-  server = HTTP.listen_stream("127.0.0.1", 0, routes(said), options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, streamed(routes(said)), options).unwrap!
   socket = TCP.connect("127.0.0.1", HTTP.local_port(server), 5000).unwrap!
   TCP.send(socket, "GET / HTTP/1.1\r\nHost: x\r\n\r\n", 5000).unwrap!
   puts(head_of(socket))

@@ -13,19 +13,19 @@ def produce(events: Channel[Bytes]) -> Void
   events.close
 end
 
-def handle(request: HttpRequest) -> Result[HTTP.StreamResponse]
+def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   if request.method == "GET" and request.path == "/events"
     events: Channel[Bytes] = Channel.new(8)
     Task.spawn(&produce, events)
     headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
-    return ok(HTTP.StreamResponse(status: 200, headers: headers, body: events))
+    return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
   end
 
-  return ok(HTTP.StreamResponse(status: 404, headers: [], body: HTTP.whole("not found\n".bytes)))
+  return ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
 end
 
 def main() -> Void
-  server = HTTP.listen_stream("127.0.0.1", 0, &handle).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, &handle).unwrap!
   if System.args().length == 1 and System.args()[0] == "serve"
     puts(HTTP.local_port(server))
     IO.flush()

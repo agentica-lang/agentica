@@ -38,7 +38,7 @@ agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_fail
    context when SERVER and a client one otherwise (vm/tls_context.c). */
 void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at);
 /* RUNTIME-TLS-CONTEXT-ALPN at span AT unless CONFIG (NULL for plain TCP) agrees on no protocol but HTTP/1.1, the
-   only one std/http speaks (vm/tls_context.c): HTTP.client, HTTP.start and every HTTP.listen_*_tls ask it. */
+   only one std/http speaks (vm/tls_context.c): HTTP.client, HTTP.start and HTTP.serve_tls ask it. */
 void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at);
 /* The check, then one more count on the context's config, for the socket or listener that will use it. */
 agc_tls_config *agc_tls_context_take(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at);

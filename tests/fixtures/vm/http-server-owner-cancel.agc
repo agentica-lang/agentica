@@ -11,7 +11,7 @@ end
 
 def host(ports: Channel[Int]) -> Void
   options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
-  server = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
+  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   ports.send(HTTP.local_port(server), 5000)
   HTTP.wait(server)
   puts("never: the server owner was not cancelled")
