@@ -98,6 +98,8 @@ CRLF = "\r\n".bytes
 # check_options; only a download streamed to a file may use up to this. DownloadOptions.max_total_bytes defaults to
 # this value as a literal (a field default cannot name a constant), so the two must match.
 DOWNLOAD_MAX_BYTES = 268435456
+# The error of `read_all` for a body over its limit, which `app` answers 413.
+BODY_TOO_LONG = "http: body exceeds max_bytes"
 
 struct Target
   scheme: String
@@ -112,12 +114,13 @@ struct Proxy
   login: String
 end
 
-# What a server's handler returns: a whole response, or one whose body is a channel (listen_stream).
+# The kind of handler a server calls: one per `listen` form, and `Serving` for `serve`, whose app decides per request.
 enum Route
   Whole(Handler)
   Streaming(StreamHandler)
   Uploading(UploadHandler)
   Sockets(UpgradeHandler)
+  Serving(App)
 end
 
 struct Service
@@ -257,7 +260,7 @@ struct Attempt
   retry: Bool
 end
 
-struct Answer
+struct Pending
   socket: Socket
   job: HttpWire.Job
   max_body_bytes: Int
@@ -435,6 +438,20 @@ end
 ## The function that `listen_websocket` and `listen_websocket_tls` call for each request: the request in, a response
 ## or an upgrade out. `upgrade_only` makes one from a `Handler`.
 export type UpgradeHandler = Fn[HttpRequest, Result[Upgrade]]
+
+## What an `App` returns for a request. `Whole` is a whole response, as a `Handler` returns. `Stream` is a response
+## whose body arrives on a channel, as a `StreamHandler` returns. `Upgrade` is what `accept_websocket` makes: its
+## `Accept` runs a WebSocket on the connection, and its `Reply` (a request that is no handshake) is sent as `Whole`.
+export enum Answer
+  Whole(HttpResponse)
+  Stream(StreamResponse)
+  Upgrade(Upgrade)
+end
+
+## The function that `serve` and `serve_tls` call for each request: the request with an empty `body`, the
+## `RequestBody` that carries the body as it arrives, and the `Answer` out. A route that wants the body whole calls
+## `read_all`; `app` makes an `App` from a `Handler`. A middleware is a function from an `App` to an `App`.
+export type App = Fn[HttpRequest, RequestBody, Result[Answer]]
 
 # Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
 # `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
@@ -977,7 +994,7 @@ export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
       ok(piece) ->
         total = total + piece.size
         if total > max_bytes
-          return error("http: body exceeds max_bytes")
+          return error(BODY_TOO_LONG)
         end
         pieces = pieces.push(piece)
       error(_) -> break
@@ -1052,6 +1069,57 @@ end
 ## that upgrades calls `accept_websocket`; the others stay as they are.
 export def upgrade_only(handler: Handler) -> UpgradeHandler
   return upgrading() do |request| replying(handler, request) end
+end
+
+## Starts an HTTP server on `host` and `port` that serves every kind of route on one port, and returns at once; it
+## serves in the background, as `listen` does. `app` gets each request with its body on a channel (as `listen_upload`
+## gives it) and answers with a whole response, a stream or a WebSocket upgrade (`Answer`). The body is at most
+## 256 MiB: `max_body_bytes` of `options` does not apply here, and a route that wants less counts the bytes or calls
+## `read_all`. The connection serves the next request only when the body was read whole by the time `app` returned;
+## otherwise the answer says `Connection: close`, and an upgrade is refused. `options` is optional and defaults to
+## `HttpServerOptions()`.
+export def serve(
+  host: String,
+  port: Int,
+  app: App,
+  options: HttpServerOptions = HttpServerOptions(),
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
+  listener = try TCP.listen(host, port)
+  return ok(start_server(listener, Route.Serving(app), options))
+end
+
+## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
+## defaults to `HttpServerOptions()`.
+export def serve_tls(
+  host: String,
+  port: Int,
+  tls: TlsContext,
+  app: App,
+  options: HttpServerOptions = HttpServerOptions(),
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
+  listener = try TLS.listen(host, port, tls)
+  return ok(start_server(listener, Route.Serving(app), options))
+end
+
+## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
+## `max_body_bytes` (1 MiB unless given, 0 or more), and `handler` gets the request with it; its response is the
+## `Whole` answer. A body that is larger, by its `Content-Length` or as it arrives, is answered 413 and one that did
+## not arrive whole (the client left, a bad chunk, a timeout) 400, both with `Connection: close` and without calling
+## `handler`.
+export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
+  return serving() do |request, body| whole_answer(handler, max_body_bytes, request, body) end
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
@@ -2172,7 +2240,7 @@ end
 def accept_all(service: Service) -> Void
   while true
     case HttpWire.accept(service.server)
-      ok(socket) -> HttpWire.spawn(service.server, socket) do |s| serve(s, service) end
+      ok(socket) -> HttpWire.spawn(service.server, socket) do |s| serve_connection(s, service) end
       error(_) -> return
     end
   end
@@ -2180,7 +2248,7 @@ end
 
 # One task per connection: each request's head is read first, then `answer_request` decides how its body is read and
 # how it is answered. The first request may take `request_timeout_ms` to start, the next ones `idle_timeout_ms`.
-def serve(socket: Socket, service: Service) -> Void
+def serve_connection(socket: Socket, service: Service) -> Void
   options = service.options
   wait_ms = options.request_timeout_ms
   rest = NO_BYTES
@@ -2203,6 +2271,7 @@ end
 def body_limit(service: Service) -> Int
   case service.route
     Route.Uploading(_) -> return DOWNLOAD_MAX_BYTES
+    Route.Serving(_) -> return DOWNLOAD_MAX_BYTES
     _ -> return service.options.max_body_bytes
   end
 end
@@ -2212,16 +2281,18 @@ end
 def upgrades?(route: Route) -> Bool
   case route
     Route.Sockets(_) -> return true
+    Route.Serving(_) -> return true
     _ -> return false
   end
 end
 
-# One request whose head is read. An upload route gets the body as it arrives; every other route gets the request
-# with its whole body. A body that cannot be read was already answered (or the connection is gone), so the connection
-# ends.
+# One request whose head is read. An upload route and an app get the body as it arrives; every other route gets the
+# request with its whole body. A body that cannot be read was already answered (or the connection is gone), so the
+# connection ends.
 def answer_request(reading: Reading, service: Service) -> Sent
   case service.route
     Route.Uploading(handler) -> return answer_upload(reading, handler, service.options)
+    Route.Serving(app) -> return answer_app(reading, app, service.options)
     _ ->
       case whole_request(reading)
         ok(incoming) -> return answer(reading.socket, incoming, service)
@@ -2377,6 +2448,134 @@ def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
   end
   headers = response.headers.push(Header(name: "Connection", value: "close"))
   return HttpResponse(status: response.status, headers: headers, body: response.body)
+end
+
+# One request of a `serve` server. A task feeds the body to the app as it arrives, as for an upload route, and the
+# answer goes out as a whole response, a stream or an upgrade. A request with no body counts as read whole at once,
+# so a route that never looks at the body keeps the connection. Otherwise the connection stays only when the feeder
+# had finished by the time the app returned; if not, the answer says `Connection: close`, an upgrade is refused, and
+# after the answer the feeder is cancelled, the input drained and the connection closed.
+def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
+  socket = reading.socket
+  head = reading.head
+  pieces: Channel[Bytes] = Channel.new(UPLOAD_PIECES)
+  left: Channel[Bytes] = Channel.new(1)
+  feeder = Task.spawn(
+    &feed_request,
+    Feeding(reading: reading, step_ms: options.request_timeout_ms, pieces: pieces, rest: left),
+  )
+  request = HttpRequest(
+    method: head.method,
+    target: head.target,
+    path: head.path,
+    headers: head.headers,
+    body: NO_BYTES,
+  )
+  result = app.call(request, RequestBody(pieces: pieces, done: feeder))
+  pieces.close
+  past = left.recv(0)
+  bodiless = not head.chunked and head.length == 0
+  whole = bodiless or Result.ok?(past)
+  sent = send_answer(socket, request, result, whole, Result.unwrap_or(past, NO_BYTES), options)
+  if whole
+    Task.await(feeder)
+    return sent
+  end
+  Task.cancel(feeder)
+  drain(socket, Time.monotonic_ms() + ANSWER_MS)
+  TCP.close(socket)
+  return Sent(keep: false, rest: NO_BYTES)
+end
+
+# Sends the answer of an app. `whole` says whether the request body was read whole, and `rest` holds the bytes read
+# past it (the start of the next request). An upgrade needs the whole body: before that, the connection is not free
+# to change protocols, so an `Accept` is refused with a 500 and a `Reply` closes after it.
+def send_answer(
+  socket: Socket,
+  request: HttpRequest,
+  result: Result[Answer],
+  whole: Bool,
+  rest: Bytes,
+  options: HttpServerOptions,
+) -> Sent
+  timeout = options.request_timeout_ms
+  incoming = Incoming(request: request, rest: rest)
+  case result
+    ok(answer) ->
+      case answer
+        Answer.Whole(response) ->
+          keep = reply_whole(socket, request, closing_unless(response, whole), timeout)
+          return Sent(keep: keep, rest: rest)
+        Answer.Stream(response) ->
+          return answer_stream(socket, incoming, stream_closing_unless(response, whole), options)
+        Answer.Upgrade(upgrade) ->
+          if whole
+            return answer_upgrade(socket, incoming, upgrade, options)
+          end
+          case upgrade
+            Upgrade.Reply(response) -> reply_whole(socket, request, closing_unless(response, false), timeout)
+            Upgrade.Accept(_, _, _, _) ->
+              IO.warn("http: invalid response: an upgrade before the request body was read")
+              failed(socket, request, timeout)
+          end
+      end
+    error(message) ->
+      IO.warn("http: handler error: #{message}")
+      failed(socket, request, timeout)
+  end
+  return Sent(keep: false, rest: NO_BYTES)
+end
+
+# The streamed response, with `Connection: close` added unless the body of the request was read whole.
+def stream_closing_unless(response: StreamResponse, whole: Bool) -> StreamResponse
+  if whole
+    return response
+  end
+  headers = response.headers.push(Header(name: "Connection", value: "close"))
+  return StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
+end
+
+def serving(f: App) -> App
+  return f
+end
+
+# The answer of `app(handler)`: the body read whole (a 413 or a 400 when it cannot be), then the handler's response.
+def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
+  if max_body_bytes < 0
+    return error("http: max_body_bytes must be 0 or more")
+  end
+  if announced_length(request.headers) > max_body_bytes
+    return ok(Answer.Whole(closing_answer(413)))
+  end
+  case read_all(body, max_body_bytes)
+    ok(data) ->
+      whole = HttpRequest(
+        method: request.method,
+        target: request.target,
+        path: request.path,
+        headers: request.headers,
+        body: data,
+      )
+      return ok(Answer.Whole(try handler.call(whole)))
+    error(message) ->
+      if message == BODY_TOO_LONG
+        return ok(Answer.Whole(closing_answer(413)))
+      end
+      return ok(Answer.Whole(closing_answer(400)))
+  end
+end
+
+# The `Content-Length` of a request, 0 without one. The head reader has already checked it, so it is digits.
+def announced_length(headers: List[Header]) -> Int
+  values = header_values(headers, "content-length")
+  if values.empty? or not plain?(values[0], true)
+    return 0
+  end
+  return String.to_int!(values[0])
+end
+
+def closing_answer(status: Int) -> HttpResponse
+  return HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES)
 end
 
 # Checked at the listen call so a bad number is an error there, not a hang later.
@@ -3085,8 +3284,9 @@ def answer(socket: Socket, incoming: Incoming, service: Service) -> Sent
       end
       return Sent(keep: false, rest: NO_BYTES)
     Route.Sockets(handler) -> return answer_socket(socket, incoming, handler, options)
-    # An upload route is served by answer_upload, which `answer_request` calls instead.
+    # An upload route and an app are served by answer_upload and answer_app, which `answer_request` calls instead.
     Route.Uploading(_) -> return Sent(keep: false, rest: NO_BYTES)
+    Route.Serving(_) -> return Sent(keep: false, rest: NO_BYTES)
   end
 end
 
@@ -3777,7 +3977,7 @@ def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
   end
   case socket
     ok(s) ->
-      attempt = exchange(Answer(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes), reused)
+      attempt = exchange(Pending(socket: s, job: job, max_body_bytes: worker.options.max_body_bytes), reused)
       if not attempt.retry
         # A 407 ends the connection, as it does for `start`, `upload` and `download`.
         refused = ok_status?(attempt.answer, 407) and proxy_asked?(worker.options, job.scheme, 407)
@@ -3815,7 +4015,7 @@ end
 # Sends the request and reads the response. A large body is written by a task of its own while the response is
 # read, so an answer that comes before the upload ends (an early 413) is read; a small one fits in the socket's
 # buffers. A response read after the request failed to go out is still the answer.
-def exchange(answer: Answer, reused: Bool) -> Attempt
+def exchange(answer: Pending, reused: Bool) -> Attempt
   job = answer.job
   socket = answer.socket
   left = job.deadline - Time.monotonic_ms()
@@ -3846,7 +4046,7 @@ def exchange(answer: Answer, reused: Bool) -> Attempt
   return finish_exchange(answer, received, sent, reused)
 end
 
-def write_request(answer: Answer) -> Result[Void]
+def write_request(answer: Pending) -> Result[Void]
   left = answer.job.deadline - Time.monotonic_ms()
   if left <= 0
     return error(TIMED_OUT)
@@ -3856,7 +4056,7 @@ end
 
 # A failure before any byte of the response (the end of input, a read or a write error) is retried on a reused
 # connection. When the request did not go out and no response came, the write error is the answer.
-def finish_exchange(answer: Answer, received: Received, sent: Result[Void], reused: Bool) -> Attempt
+def finish_exchange(answer: Pending, received: Received, sent: Result[Void], reused: Bool) -> Attempt
   kept = received.kept and Result.ok?(sent)
   if not kept
     TCP.close(answer.socket)
@@ -3882,7 +4082,7 @@ def failed_read(message: String, started: Bool) -> Received
 end
 
 # The response head (after at most MAX_INTERIM interim ones) and its body.
-def read_response(answer: Answer) -> Received
+def read_response(answer: Pending) -> Received
   job = answer.job
   interim = 0
   while true
@@ -3914,7 +4114,7 @@ end
 # A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
 # are a server bug or a response nobody asked for, and the next call must not read them; after an end of input the
 # next call would fail. The body is the bytes the framing carries, whatever they hold.
-def read_response_body(answer: Answer, head: HttpWire.Response) -> Received
+def read_response_body(answer: Pending, head: HttpWire.Response) -> Received
   whole: Result[Whole] = error("")
   if head.chunked
     whole = read_chunked_body(answer)
@@ -3933,7 +4133,7 @@ def read_response_body(answer: Answer, head: HttpWire.Response) -> Received
   end
 end
 
-def read_length_body(answer: Answer, length: Int) -> Result[Whole]
+def read_length_body(answer: Pending, length: Int) -> Result[Whole]
   pieces: List[Bytes] = []
   left = length
   while left > 0
@@ -3949,7 +4149,7 @@ end
 
 # Bytes read past the end of the body, or still in the input after it, stop the connection from being kept. Framing
 # goes through the decoder, whose runs say which bytes of each framing read are body.
-def read_chunked_body(answer: Answer) -> Result[Whole]
+def read_chunked_body(answer: Pending) -> Result[Whole]
   deadline = answer.job.deadline
   framing = NO_BYTES
   state = HttpWire.chunked(answer.max_body_bytes)
@@ -3988,7 +4188,7 @@ def add_runs(pieces: List[Bytes], data: Bytes, runs: List[Int]) -> List[Bytes]
 end
 
 # Whether the socket's input holds no byte now and has not ended (HttpWire.idle? does not wait for input).
-def nothing_buffered(answer: Answer) -> Bool
+def nothing_buffered(answer: Pending) -> Bool
   case time_left(answer.socket, answer.job.deadline)
     ok(left) -> return Result.unwrap_or(HttpWire.idle?(answer.socket, left), false)
     error(_) -> return false
@@ -3996,7 +4196,7 @@ def nothing_buffered(answer: Answer) -> Bool
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
-def read_until_close(answer: Answer) -> Result[Whole]
+def read_until_close(answer: Pending) -> Result[Whole]
   pieces: List[Bytes] = []
   total = 0
   while true

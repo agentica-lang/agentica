@@ -224,6 +224,10 @@ HTTP.listen_websocket(host: String, port: Int, handler: HTTP.UpgradeHandler, opt
 HTTP.listen_websocket_tls(host: String, port: Int, tls: TlsContext, handler: HTTP.UpgradeHandler, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.upgrade_only(handler: HTTP.Handler) -> HTTP.UpgradeHandler
+HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
+HTTP.Answer: Whole(HttpResponse), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgrade)
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
 HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
 HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [])
@@ -432,3 +436,33 @@ end
   `HTTP.header_values(request.headers, "origin")` before accepting when the
   server serves pages. The other `listen` forms answer an `Upgrade` 501.
 - Unmasking runs at about 7 MB/s: keep `max_message_bytes` small.
+
+### Every kind of route on one port (`serve`)
+
+Each `listen` form serves one kind of route. When one server needs pages,
+streamed files, uploads and WebSockets, use `serve`. Its `HTTP.App` is
+`Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`: the request (empty
+`body`) and the body on a channel, as for `listen_upload`.
+
+```ruby
+def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.path == "/ws"
+    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
+  end
+  if request.path == "/upload"
+    return store(body)                # receive loop, await body.done, Answer.Whole
+  end
+  if request.path == "/file"
+    return ok(HTTP.Answer.Stream(file_response()))  # a StreamResponse
+  end
+  return HTTP.app(&page).call(request, body)        # a plain Handler
+end
+```
+
+- `HTTP.app(handler, max_body_bytes)` reads the body whole (1 MiB unless
+  given) and calls the `Handler`: over the limit is a 413, a cut body a 400,
+  both closing. `max_body_bytes` of `HttpServerOptions` does not apply to
+  `serve`; the body is at most 256 MiB.
+- The connection is kept only when the body was read whole when the app
+  returned (a request with no body counts as read). An `Accept` before the
+  body is read is a 500. A middleware is `App -> App`.

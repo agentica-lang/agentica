@@ -1339,3 +1339,186 @@ def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte
         assert sent < 64 * 1024 * 1024
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
+
+
+# One `serve` server for every kind of route: a page through `HTTP.app` (with a 16-byte body limit), a file sent in
+# pieces with its length, an upload counted as it arrives, and a WebSocket echo. Each upload and WebSocket end goes to
+# stdout.
+SERVE_PROGRAM = """\
+import HTTP from "std/http"
+
+def page(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "page #{request.method} #{request.path} #{request.body.size}".bytes))
+end
+
+# 1000 bytes of the digit n.
+def piece(n: Int) -> Bytes
+  text = ""
+  for i in 0..999
+    text = text + "#{n}"
+  end
+
+  return text.bytes
+end
+
+def produce(pieces: Channel[Bytes]) -> Void
+  for n in 0..9
+    if not Result.ok?(pieces.send(piece(n), 5000))
+      break
+    end
+  end
+
+  pieces.close
+end
+
+def file() -> HTTP.Answer
+  pieces: Channel[Bytes] = Channel.new(2)
+  Task.spawn(&produce, pieces)
+  return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: pieces, length: some(10000)))
+end
+
+def store(body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  total = 0
+  while true
+    case body.pieces.recv(5000)
+      ok(piece) -> total = total + piece.size
+      error(_) -> break
+    end
+  end
+
+  try Task.await(body.done)
+  puts("stored #{total}")
+  IO.flush()
+  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "stored #{total}".bytes)))
+end
+
+def echo(ws: HTTP.WebSocket) -> Result[Void]
+  while true
+    case ws.incoming.recv(10000)
+      ok(HTTP.Message.Text(text)) -> try ws.outgoing.send(HTTP.Message.Text("echo #{text}"), 5000)
+      ok(HTTP.Message.Close(code, _)) ->
+        puts("closed #{code}")
+        IO.flush()
+        return ok()
+      ok(_) -> puts("other")
+      error(_) -> return ok()
+    end
+  end
+
+  return ok()
+end
+
+def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+  if request.path == "/ws"
+    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
+  end
+
+  if request.path == "/file"
+    return ok(file())
+  end
+
+  if request.path == "/upload"
+    return store(body)
+  end
+
+  if request.path == "/early"
+    return ok(HTTP.Answer.Whole(HttpResponse(status: 401, headers: [], body: "no".bytes)))
+  end
+
+  return HTTP.app(&page, 16).call(request, body)
+end
+
+def main() -> Void
+  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 10000, max_connections: 16)
+  server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
+  puts(HTTP.local_port(server))
+  IO.flush()
+  IO.read()
+  HTTP.close_server(server)
+  IO.inspect(HTTP.wait(server))
+end
+"""
+
+
+@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
+def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_path, adopt, flags):
+    """HTTP.serve: on one keep-alive connection of http.client, a page, a file sent in pieces with its Content-Length,
+    an upload of either framing counted as it arrives, and a small POST read whole by HTTP.app; a body over the limit
+    of HTTP.app is a 413 that closes. Then a plain request and a WebSocket on one raw connection
+    (fixtures/websocket_client.py)."""
+    import http.client
+
+    from tests.fixtures.websocket_client import TEXT, Client
+
+    source = tmp_path / "serve.agc"
+    source.write_text(SERVE_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), flags=flags, stdin=True))
+    port = int(vm.next_line())
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(20))
+
+    def ask(method, path, body=None, chunked=False):
+        """The status and body of an answer, which must be framed by its Content-Length."""
+        conn.request(method, path, body=body, encode_chunked=chunked)
+        response = conn.getresponse()
+        data = response.read()
+        assert response.getheader("Content-Length") == str(len(data))
+        return response.status, data
+
+    assert ask("GET", "/") == (200, b"page GET / 0")
+    local = conn.sock.getsockname()
+    expected = b"".join(str(n).encode() * 1000 for n in range(10))
+    assert ask("GET", "/file") == (200, expected)
+    big = bytes(range(256)) * 4096
+    assert ask("PUT", "/upload", big) == (200, b"stored 1048576")
+    assert vm.next_line() == "stored 1048576"
+    assert ask("PUT", "/upload", iter([big, b"tail"]), chunked=True) == (200, b"stored 1048580")
+    assert vm.next_line() == "stored 1048580"
+    assert ask("POST", "/", b"hello") == (200, b"page POST / 5")
+    assert conn.sock.getsockname() == local, "every answer kept the connection"
+    conn.request("POST", "/", body=b"x" * 17)
+    response = conn.getresponse()
+    assert (response.status, response.getheader("Connection")) == (413, "close")
+    response.read()
+    conn.close()
+
+    with Client(port, timeout=scaled(10)) as c:
+        status, _, _ = c.request("/", upgrade=False, version=None, key="none")
+        assert status == 200
+        c.connect("/ws")
+        c.text("hi")
+        assert c.message() == (TEXT, b"echo hi")
+        c.close_with(1000)
+        assert c.close_frame() == (1000, "")
+        assert c.ended()
+    assert vm.next_line() == "closed 1000"
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+    assert vm.next_line() == "ok()"
+
+
+def test_serve_closes_a_connection_whose_body_was_not_read_and_refuses_to_upgrade_it(tmp_path, adopt):
+    """HTTP.serve: an answer that comes before the body was read says `Connection: close` and the connection ends; an
+    upgrade while the body is still unread is a 500 that closes, with a warning on stderr."""
+    source = tmp_path / "serve.agc"
+    source.write_text(SERVE_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), stdin=True))
+    port = int(vm.next_line())
+    upgrade = b"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
+    key = b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    for request, status in [(b"PUT /early HTTP/1.1\r\nHost: x\r\nContent-Length: 1000000\r\n\r\n" + b"x" * 1000, b"401"),
+                            (b"GET /ws HTTP/1.1\r\nHost: x\r\n" + upgrade + key + b"Content-Length: 10\r\n\r\n", b"500")]:
+        with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+            conn.sendall(request)
+            got = b""
+            while True:
+                more = conn.recv(65536)
+                if not more:
+                    break
+                got += more
+            head = got.partition(b"\r\n\r\n")[0].lower()
+            assert head.split(b" ")[1] == status, got
+            assert b"\r\nconnection: close" in head, got
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+    assert vm.next_line() == "ok()"
+    assert "http: invalid response: an upgrade before the request body was read" in vm.stderr_text()

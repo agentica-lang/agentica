@@ -17,6 +17,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`Regex.match`, `find_all`, `replace`, `split`), matched inside the VM.
 - Regex literals `/pattern/flags` (flags `i` and `m`), checked when the
   program is compiled; the file imports `std/regex`.
+- `HTTP.serve` (and `serve_tls`) serves pages, streamed files, uploads and
+  WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
+  an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 
 ### Changed
 
