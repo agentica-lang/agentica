@@ -61,12 +61,10 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   once closed; TLS sockets too.
 - TLS (1.2 or later) verifies certificates and hostnames; verification cannot be
   turned off. An empty `ca_file` uses system trust: `SSL_CERT_FILE`, else the
-  platform store (the CA bundle on Linux; the Security roots and Keychain trust
-  on macOS; the ROOT store on Windows, whose CA-store intermediates are never
-  trusted as roots and distrusted certificates are rejected), read once per
-  process, plus `SSL_CERT_DIR`. A nonempty one is a PEM CA file that replaces
-  system trust; a missing or empty file fails `TLS.client_context`. An IP
-  address host is checked against the certificate's IP addresses.
+  platform store (Linux CA bundle, macOS Keychain, Windows ROOT store), read
+  once per process, plus `SSL_CERT_DIR`. A nonempty one is a PEM CA file that
+  replaces system trust; a missing or empty file fails `TLS.client_context`. An
+  IP address host is checked against the certificate's IP addresses.
 - `alpn` (both options) lists the ALPN protocols: a client offers them, a
   server picks the first of its own that the client offers (none in common:
   the handshake fails; a client offering none gets none). `TLS.alpn(socket)`
@@ -130,23 +128,18 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   most `max_body_bytes`, with any content. `HttpClientOptions()`, the default,
   gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
   body limit and system CA trust (`tls: some(context)` takes a client context
-  instead). Options must be positive; `max_connections` is
-  at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the
-  whole call. `proxy: "http://host:port"` sends every `http://` request
-  through a forward proxy in absolute form (pooled by the proxy; also
-  `get_response`, `open`, `upload`, `download`, `start`); `https://` opens a
-  `CONNECT` tunnel to the target (one per target in a pool) and speaks TLS
-  inside it, verified against the target; a non-2xx answer to the `CONNECT`, a
-  failure after it and a proxy that cannot be reached are an `error` that names
+  instead). Options must be positive; `max_connections` is at most 65536 and
+  `max_body_bytes` at most 64 MiB. One `timeout_ms` covers the whole call.
+  `proxy: "http://host:port"` sends every `http://` request through a forward
+  proxy in absolute form (all client calls); `https://` opens a `CONNECT` tunnel
+  to the target and speaks TLS inside it, verified against the target. A failed
+  `CONNECT`, a failure after it or an unreachable proxy is an `error` that names
   the proxy. A `Proxy-Authorization` header you set in an `https` call goes to
-  the target, not to the proxy. User info (`http://user:pass@host:8080`,
-  percent-decoded, no colon in the user) is sent as `Proxy-Authorization:
-  Basic` to the proxy only, and a `407` is an `error` that names the proxy and
-  never the credentials. A client never reads the environment: pass
-  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules:
-  lower-case `http_proxy`/`https_proxy` first, `HTTP_PROXY` ignored in CGI,
-  `no_proxy` with `*`, domains, `:port`, IPs and IPv4 ranges; `""` is none; an
-  `https://` URL gets `https_proxy`).
+  the target. User info (`http://user:pass@host:8080`) is sent as
+  `Proxy-Authorization: Basic` to the proxy only; a `407` is an `error` that
+  never shows the credentials. A client never reads the environment: pass
+  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules, including
+  `no_proxy`; `""` is none).
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head
@@ -458,4 +451,3 @@ end
   version). It does not check `Origin`: compare
   `HTTP.header_values(request.headers, "origin")` before accepting when the
   server serves pages. Any other `Upgrade` (`h2c`, a `POST`) is a 501.
-- Unmasking runs at about 7 MB/s: keep `max_message_bytes` small.
