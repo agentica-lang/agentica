@@ -48,8 +48,24 @@ export def loop_help(type_name: String) -> String
   return "a loop does not count as a return; add \"return <value>\" of type #{type_name} after it"
 end
 
+## The message of CHECK-CAPTURED-ASSIGNMENT. A template is a block of its function (eag.agc), so two assignments get a
+## message of their own: a block of a tag that writes the output, and a tag that assigns a variable of the function.
+export def captured_message(name: String, capture: State.Capture) -> String
+  if name == Ast.EAG_PIECES
+    return "a block in a template cannot write output"
+  elsif template_block?(capture)
+    return "a template cannot assign \"#{name}\", a variable of the function"
+  end
+
+  return "a block cannot assign to \"#{name}\", which belongs to the enclosing code"
+end
+
 ## The help of CHECK-CAPTURED-ASSIGNMENT: a for loop can assign.
 export def captured_help(name: String, capture: State.Capture) -> String
+  if template_block?(capture)
+    return "compute it before the template, or use a new name inside it"
+  end
+
   element = "x"
   if capture.params.size == 1 and capture.params[0].name != "_"
     element = capture.params[0].name
@@ -61,6 +77,15 @@ export def captured_help(name: String, capture: State.Capture) -> String
     none -> path = path
   end
 
+  if name == Ast.EAG_PIECES
+    shown = "xs"
+    if path != "" and path.length <= 40
+      shown = path
+    end
+
+    return "a block cannot write the output of a template: use a for loop, for #{element} in #{shown} ... end"
+  end
+
   if path != "" and path.length <= 40
     return "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in #{path} ... end"
   end
@@ -69,6 +94,11 @@ export def captured_help(name: String, capture: State.Capture) -> String
     "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in xs ... end, " +
     "or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
   )
+end
+
+# Whether the block is the one that holds a template.
+def template_block?(capture: State.Capture) -> Bool
+  return capture.params.size == 1 and capture.params[0].name == Ast.EAG_SEED
 end
 
 def returns?(statement: Ast.Stmt) -> Bool

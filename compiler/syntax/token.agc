@@ -8,6 +8,19 @@ export struct DocBlock
   next: String
 end
 
+## One line of an `<<~EAG` body as written, without its line break, and where it starts (column 1).
+export struct EagLine
+  text: String
+  start: Source.Position
+end
+
+## The body of an `<<~EAG` heredoc: its lines as written and the number of spaces the squiggly form removes from each
+## (the fewest leading spaces of the lines that have text). The parser expands it (eag.agc).
+export struct EagBody
+  lines: List[EagLine]
+  indent: Int
+end
+
 ## The value a token carries besides its lexeme.
 export enum Value
   NoValue
@@ -16,6 +29,7 @@ export enum Value
   Huge(String)
   Real(Float)
   Doc(DocBlock)
+  Eag(EagBody)
 end
 
 ## A plain comment, which makes no token: its text from the `#` to the end of its line (the line break is not part of

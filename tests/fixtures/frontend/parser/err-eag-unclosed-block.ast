@@ -1,0 +1,1 @@
+ERROR PARSE-EAG-BLOCK 50:3:8-58:3:16 "this tag opens a block that the template never ends" "close it with a tag <% end %> before the end of the template"

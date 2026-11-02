@@ -1,0 +1,1 @@
+ERROR PARSE-EAG-BLOCK 56:4:8-59:4:11 "an end with no if, for, while, case or do to close in this template" "a template closes its own blocks: remove this end, or open the block in a tag before it"

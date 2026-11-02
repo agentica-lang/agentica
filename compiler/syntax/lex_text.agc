@@ -26,6 +26,7 @@ def value_text(token: Tokens.Token) -> String
     Tokens.Value.Huge(digits) -> return digits
     Tokens.Value.Real(number) -> return "bits:#{Float.to_bits(number)}"
     Tokens.Value.Doc(block) -> return "doc #{Text.quote(block.text)} #{block.next}"
+    Tokens.Value.Eag(body) -> return "eag #{body.indent} #{body.lines.size}"
   end
 end
 

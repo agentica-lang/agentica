@@ -344,8 +344,18 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
         field_sites(scan, node.type_name, node.args, "construct"),
       )
     Ast.Expr.Update(node) -> return field_sites(scan, struct_of(scan, node.target), node.args, "construct")
-    Ast.Expr.FieldAccess(node) -> return access_sites(scan, node.id, node.target, node.name, node.name_span)
-    Ast.Expr.MethodCall(node) -> return builtin_method_sites(scan, node.id, node.name_span)
+    Ast.Expr.FieldAccess(node) ->
+      if glue?(node.span, node.name_span)
+        return []
+      end
+
+      return access_sites(scan, node.id, node.target, node.name, node.name_span)
+    Ast.Expr.MethodCall(node) ->
+      if glue?(node.span, node.name_span)
+        return []
+      end
+
+      return builtin_method_sites(scan, node.id, node.name_span)
     Ast.Expr.BlockLit(node) ->
       out: List[Site] = []
       for param in node.params
@@ -355,6 +365,12 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
       return out
     _ -> return []
   end
+end
+
+# Whether a call or field access is made by the expansion of an `<<~EAG` template (syntax/eag.agc), which gives the
+# whole node and its name one span, the tag or the line. A written call has its target before its name.
+def glue?(span: Source.Span, name_span: Source.Span) -> Bool
+  return span.start.offset == name_span.start.offset and span.stop.offset == name_span.stop.offset
 end
 
 # `x.name`: a method that resolved to a builtin, else a field of the struct that the target is.

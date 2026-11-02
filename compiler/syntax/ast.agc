@@ -16,6 +16,12 @@
 import Source from "source"
 import Types from "types"
 
+## The names that the expansion of an `<<~EAG` template gives its two locals (eag.agc): the list of text pieces and the
+## parameter of the block that holds it. They have a `#`, which no identifier has, so a template can neither write
+## nor read them; the checker tells them from user names to explain an error of a template.
+export EAG_PIECES = "eag#t"
+export EAG_SEED = "eag#n"
+
 ## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its decimal digits
 ## (a hex, binary or octal literal far past 2^64 keeps its prefix and digits instead, `0x1ff...`), with a leading -
 ## when a pattern negates it.
@@ -419,6 +425,7 @@ export enum Expr
   Typed(TypedTarget)
   ConstRef(ConstRef)
   RegexLit(RegexLit)
+  EagLit(EagLit)
 end
 
 ## A number, string, true, false or nil.
@@ -636,6 +643,16 @@ export struct RegexLit
   span: Source.Span
 end
 
+## An `<<~EAG` template (docs/future/51-templates.md): `call` is the expression that builds its text, which the parser
+## makes from the body (eag.agc) with tokens that keep their places in the template. The literal stands for it in the
+## tree so that the linker can ask for the import of std/eag and the formatter can print the template as written.
+## `span` is the opener. The nodes of `call` take the ids before the literal's own.
+export struct EagLit
+  id: Int
+  call: Expr
+  span: Source.Span
+end
+
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
 ## checks it as the first argument without checking it twice. The parser never makes it. id
 ## and span are those of the receiver.
@@ -671,6 +688,7 @@ export def expr_id(expr: Expr) -> Int
     Expr.Typed(node) -> return node.id
     Expr.ConstRef(node) -> return node.id
     Expr.RegexLit(node) -> return node.id
+    Expr.EagLit(node) -> return node.id
   end
 end
 
@@ -699,6 +717,7 @@ export def expr_span(expr: Expr) -> Source.Span
     Expr.Typed(node) -> return node.span
     Expr.ConstRef(node) -> return node.span
     Expr.RegexLit(node) -> return node.span
+    Expr.EagLit(node) -> return node.span
   end
 end
 
