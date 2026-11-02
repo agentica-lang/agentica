@@ -483,9 +483,9 @@ one exit path are as in §16.1 to §16.6. What differs:
   fall between the first read and the CAS). If the CAS finds WOKEN, the
   scheduler queues the task, once.
 - **`--schedulers N`** (§10.2.3). The profile trace and
-  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one scheduler: the default count then
-  drops to 1, and a count above 1 chosen by the flag or the variable exits 2
-  before the program loads. The front end always runs on one scheduler, so its
+  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one scheduler: the default count
+  then drops to 1, and a count above 1 chosen by the flag or the variable exits
+  2 before the program loads. The front end always runs on one scheduler, so its
   output does not depend on the machine.
 - **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares the
   locks and the loop, lets threads register with the GC, makes one scheduler
@@ -614,8 +614,9 @@ one exit path are as in §16.1 to §16.6. What differs:
     the caller is not the owner, and `agc_sync_assert` fails the run with
     `RUNTIME-INTERNAL` when a mutator of a shared list runs without the lock
     (`rg agc_sync_assert vm/`). Not yet under the lock: the profiling counters.
-    A socket or a child needs no lock, since the I/O thread owns it. The owner of
-    a stream's lock is the calling thread's context, not the stream's own `vm`.
+    A socket or a child needs no lock, since the I/O thread owns it. The owner
+    of a stream's lock is the calling thread's context, not the stream's own
+    `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).
@@ -659,9 +660,9 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
   I/O thread owns a connection's `agc_conn.in` and its request slots (a
   process's too); a read request gets its line or bytes as a `malloc`'d copy cut
   on the I/O thread. Open: at N > 1 a read of bytes that are already buffered
-  still posts a request, and how the schedulers lock `rt->in` between them (stdin
-  is appended to `rt->in.buf` on a scheduler, §16.2). On the polled file path,
-  `expired` moves `o->st->buf` while the I/O thread may still run `ready`,
+  still posts a request, and how the schedulers lock `rt->in` between them
+  (stdin is appended to `rt->in.buf` on a scheduler, §16.2). On the polled file
+  path, `expired` moves `o->st->buf` while the I/O thread may still run `ready`,
   `step` and `send_rest`, so the poller pause must complete first.
 - **stdout and stderr on the loop** (decided, built; §10.2.2). An OS lock
   cannot be held across a park, so each stream has a short lock around its

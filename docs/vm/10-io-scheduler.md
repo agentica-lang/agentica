@@ -82,8 +82,8 @@ section says how the scheduler and the loop keep them.
     since the Boehm heap is shared. Only a global heap limit is possible (13).
 - **Retry.** `Task.sleep(0)` yields; `Task.sleep(n)` is a timer of the task
   (§16.9). Under `no_files` (the fuzzer) every sleep yields, and a channel,
-  `Task.await` or `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin EOF
-  is delivered once to every task that waited for the read, so a TTY reader
+  `Task.await` or `Task.map` timeout lasts 0 ms (`agc_timeout_length`). Stdin
+  EOF is delivered once to every task that waited for the read, so a TTY reader
   never waits for a second Ctrl-D. `Task.await` and stdin reads park the caller
   with *retry*: on a wake (only a hint, 10.2.3) the waiter re-runs its builtin
   and gets the cached result.
@@ -267,10 +267,10 @@ section says how the scheduler and the loop keep them.
 - **End of run: one exit path.** However the run ends, `agc_launch_settle` in
   `vm/launch.c` takes the steps of §14.4 and nothing else. What the loop adds:
   - Before the files, each TLS session that finished its handshake (TCP sockets,
-    10.3; `HttpClient` connections, 10.7.1) gets one non-blocking `close_notify`.
-    Each TCP socket and listener still open is then closed the way a close from
-    a task closes it, so the peer reads the end of input: Windows resets a
-    socket left to the exit while a read is pending.
+    10.3; `HttpClient` connections, 10.7.1) gets one non-blocking
+    `close_notify`. Each TCP socket and listener still open is then closed the
+    way a close from a task closes it, so the peer reads the end of input:
+    Windows resets a socket left to the exit while a read is pending.
   - The blocking stdout and stderr are flushed (`fflush`, retried on `EINTR`),
     then the diagnostic of a failed run is queued as a kept notice (Notices), so
     the wait covers it. The wait closes every open file and drains the finished

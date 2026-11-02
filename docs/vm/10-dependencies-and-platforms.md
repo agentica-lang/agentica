@@ -101,8 +101,8 @@ and `NOTICE` with the third-party licenses.
 dynamically, so a fresh checkout does not spend minutes building OpenSSL) or
 `vendored` (the pinned submodule, statically). The stamp, the mode flags and the
 CI split are in §11. `vm/tls_openssl.c` also stops with `#error` on an older
-OpenSSL or on LibreSSL. The release uses `vendored`, so the shipped VM needs only
-glibc's own libraries and runs on any glibc 2.28 system.
+OpenSSL or on LibreSSL. The release uses `vendored`, so the shipped VM needs
+only glibc's own libraries and runs on any glibc 2.28 system.
 
 The vendored build:
 
@@ -128,10 +128,10 @@ The vendored build:
   the built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security
   level 2 as minimums.
-- Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`, `git add`
-  it and rebuild. The changed `VERSION.dat` changes the stamp and the CI keys.
-  Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS line is a
-  reviewed change of its own.
+- Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`,
+  `git add` it and rebuild. The changed `VERSION.dat` changes the stamp and the
+  CI keys. Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS
+  line is a reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more for
   `dist/agentica`.

@@ -162,7 +162,8 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
   other on all three systems; the platform trust policies have their own C
   tests; `tests/test_vm_tls.py` covers the rest against the Node and Python
-  peers in `tests/fixtures/` (certificates from `tests/fixtures/tls/make-certs.sh`).
+  peers in `tests/fixtures/` (certificates from
+  `tests/fixtures/tls/make-certs.sh`).
 
 ### 10.3.1 TCP (as built)
 
