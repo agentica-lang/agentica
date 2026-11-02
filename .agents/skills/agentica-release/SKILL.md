@@ -56,8 +56,7 @@ branch such as `release/<version>`. Change only:
    the old stage0 cannot compile `compiler/`, follow "Refreshing stage0" in
    `.agents/skills/agentica-development/references/ci.md`.
 
-Wrap every build in
-`systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 -- <cmd>`.
+Wrap every build in a memory cap (`agentica-dev-workflow` §1).
 
 - The commit message, the PR title and the tag message are all
   `release version <version>`. The PR body lists the version, the date and the
@@ -78,10 +77,9 @@ git tag -a <version> -m "release version <version>" "$sha"
 git push origin <version>
 ```
 
-- The tag push starts `release.yml`: it checks the tag against `VERSION`,
-  builds, checks and smoke-tests the five archives, writes `SHA256SUMS`, and
-  `publish` creates the release with empty notes. The job chain is described
-  under "Release" in `.agents/skills/agentica-development/references/ci.md`.
+- The tag push starts `release.yml` (the job chain: "Release" in
+  `.agents/skills/agentica-development/references/ci.md`); `publish` creates the
+  release with empty notes.
 - Watch the run with one background loop: `gh run list --workflow
   release.yml -L 3`, then `gh run watch <id>`.
 - If a job fails before `publish`, nothing is public yet. Read the log, fix it
@@ -119,10 +117,8 @@ that its release link opens the release.
 
 ## 5. Post-release checks
 
-- The release page has the five archives (`linux-x86_64.tar.gz`,
-  `linux-arm64.tar.gz`, `macos-x86_64.tar.gz`, `macos-arm64.tar.gz`,
-  `windows-x86_64.zip`, each `agentica-<version>-…`) and `SHA256SUMS`. A beta
-  is Pre-release; a final release is Latest.
+- The release page has the five archives (`agentica-<version>-<platform>`) and
+  `SHA256SUMS`. A beta is Pre-release; a final release is Latest.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
