@@ -4,6 +4,8 @@ weight: 14
 description: The std/utc module, which turns Unix milliseconds into the civil date and time in UTC and into RFC 3339 text.
 ---
 
+This module is interim: the builtin `Time` functions of §41 (`Time.format`, `Time.from_unix`) replace it when they land.
+
 `std/utc` is written in Agentica: `import UTC from "std/utc"`. It reads the number of milliseconds since the Unix epoch, the value of `Time.now_ms()`, as a date and a time of day in UTC. The name `Time` belongs to the builtin, so the module has another one. `iso8601` is Ruby's `Time#utc.iso8601(n)` and the fields of `parts` are those of `Time#utc` (`year`, `month`, `day`, `hour`, `min`, `sec`, with the names written out). The calendar is the proleptic Gregorian one, Unix time has no leap seconds, and there are no time zones: every answer is UTC. Nothing in it halts, for any `Int`.
 
 ```ruby
@@ -37,4 +39,4 @@ end
 
 ## iso8601
 
-`iso8601` writes RFC 3339 text with the offset `Z`. With `fraction_digits` above 0 it adds that many digits of the second after a point, as Ruby's `iso8601(n)` does. The input has milliseconds, so digits after the third are `0`. A count below 0 is read as 0 and one above 9 as 9. A year outside 0 to 9999 is written with its sign and at least four digits (`-0001`, `10000`).
+`iso8601` writes RFC 3339 text with the offset `Z`. With `fraction_digits` above 0 it adds that many digits of the second after a point, as Ruby's `iso8601(n)` does. The input has milliseconds, so digits after the third are `0`. Ruby writes n digits for any n; this module clamps: a count below 0 is read as 0 and one above 9 as 9. A year outside 0 to 9999 is written with its sign and at least four digits (`-0001`, `10000`).

@@ -8,6 +8,7 @@ milliseconds.
 """
 import json
 import random
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -92,6 +93,16 @@ def test_fraction_digits_out_of_range_are_clamped_and_the_default_is_none(driver
     texts = [r["text"] for r in call(driver, [(ms, None), (ms, -5), (ms, 10), (ms, 400)])]
     assert texts == ["2026-09-21T14:13:22Z", "2026-09-21T14:13:22Z", "2026-09-21T14:13:22.345000000Z",
                      "2026-09-21T14:13:22.345000000Z"]
+
+
+def test_huge_digit_counts_are_clamped_and_return_at_once(driver):
+    # A count is clamped before the zeros are written, so Int.max does not loop for ever (the run has a timeout).
+    ms = 1_790_000_002_345
+    texts = [r["text"] for r in call(driver, [(ms, INT_MAX), (ms, INT_MIN), (0, INT_MAX), (INT_MIN, INT_MAX)])]
+    assert texts[0] == "2026-09-21T14:13:22.345000000Z"
+    assert texts[1] == "2026-09-21T14:13:22Z"
+    assert texts[2] == "1970-01-01T00:00:00.000000000Z"
+    assert re.fullmatch(r"-\d{4,}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}0{6}Z", texts[3]), texts[3]
 
 
 def test_years_outside_0_to_9999_have_a_sign_and_four_digits(driver):

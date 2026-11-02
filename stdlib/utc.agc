@@ -1,5 +1,7 @@
 ## The civil date and time in UTC of a count of milliseconds since the Unix epoch, the value of `Time.now_ms`.
 ##
+## Interim: the builtin `Time` functions of §41 (`Time.format`, `Time.from_unix`) replace this module when they land.
+##
 ## Import it with `import UTC from "std/utc"`. The name `Time` belongs to the builtin, so the module has another
 ## one. `parts` is the fields of Ruby's `Time#utc` (`year`, `month`, `day`, `hour`, `min`, `sec`, here with the
 ## names written out) and `iso8601` is Ruby's `Time#utc.iso8601(n)`. The calendar is the proleptic Gregorian one and
@@ -64,8 +66,9 @@ end
 
 ## Returns milliseconds since the Unix epoch as RFC 3339 text in UTC, such as `2026-10-12T10:15:02Z`. With
 ## `fraction_digits` above 0 the text has that many digits of the second after a point (`2026-10-12T10:15:02.345Z`),
-## as Ruby's `Time#iso8601(n)` does. A count below 0 is read as 0 and one above 9 as 9; digits past the third are 0,
-## since the input has milliseconds. A year outside 0 to 9999 is written with its sign and at least four digits.
+## as Ruby's `Time#iso8601(n)` does, except that Ruby writes n digits for any n and this clamps: a count below 0 is
+## read as 0 and one above 9 as 9. Digits past the third are 0, since the input has milliseconds. A year outside 0 to
+## 9999 is written with its sign and at least four digits.
 export def iso8601(ms: Int, fraction_digits: Int = 0) -> String
   p = parts(ms)
   sign = ""
@@ -81,15 +84,16 @@ end
 
 # The point and the digits of the second after it, or "" for no digits.
 def fraction(milli: Int, digits: Int) -> String
+  # Clamp before padding: the loop below must run at most 6 times, whatever the caller passes.
   if digits <= 0
     return ""
+  end
+  if digits > 9
+    digits = 9
   end
   text = pad(milli, 3)
   while text.length < digits
     text = "#{text}0"
-  end
-  if digits > 9
-    digits = 9
   end
   return ".#{text.slice(0, digits)}"
 end
