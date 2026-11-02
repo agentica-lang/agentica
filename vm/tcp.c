@@ -635,8 +635,9 @@ static void read_port(net *n, const tcp_link *k) {
   if (address.ss_family == AF_INET6) n->port = ntohs(((const struct sockaddr_in6 *)&address)->sin6_port);
 }
 
-/* The peer's address of a connected link, without the port. An IPv4 peer that a dual-stack IPv6 socket sees as
-   ::ffff:a.b.c.d is written a.b.c.d, as it would be on an IPv4 socket. I/O thread only. */
+/* The peer's address of a connected link, without the port or the IPv6 scope id (uv_ip6_name leaves it out). An IPv4
+   peer that a dual-stack IPv6 socket sees as ::ffff:a.b.c.d is written a.b.c.d, as it would be on an IPv4 socket. I/O
+   thread only. */
 static void read_peer(net *n, const tcp_link *k) {
   struct sockaddr_storage address;
   int len = sizeof address;

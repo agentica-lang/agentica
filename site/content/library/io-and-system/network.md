@@ -49,7 +49,7 @@ TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 TCP.remote_address(socket: Socket) -> String
 ```
 
-The IP address of the other side, without the port: `"127.0.0.1"` or `"::1"`, like Rack's `REMOTE_ADDR`. An IPv4 client of an IPv6 listener shows as IPv4 (`"127.0.0.1"`, not `"::ffff:127.0.0.1"`). A closed socket gives `""`. TLS sockets have it too.
+The IP address of the other side, without the port: `"127.0.0.1"` or `"::1"`, like Rack's `REMOTE_ADDR`. An IPv4 client of an IPv6 listener shows as IPv4 (`"127.0.0.1"`, not `"::ffff:127.0.0.1"`). The IPv6 scope id is dropped, so link-local peers (`fe80::...`) on different interfaces can look the same. A closed socket gives `""`. TLS sockets have it too.
 
 ```agentica
 def main() -> Void
