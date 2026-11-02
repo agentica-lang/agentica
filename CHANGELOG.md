@@ -23,6 +23,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `HTTP.listen_upload` keeps the connection when the whole body had arrived
+  by the time the handler returned, even if the handler did not read it (an
+  empty chunked body, say).
 - Code under the JIT that unwraps Optionals (`unwrap!`) or builds Map literals
   runs faster: such functions now get machine code.
 - Under the JIT, a loop that calls `map`, `filter`, `reduce`, `any?`, `all?`,

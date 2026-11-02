@@ -1431,29 +1431,32 @@ end
 def main() -> Void
   options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 10000, max_connections: 16)
   server = HTTP.serve("127.0.0.1", 0, &handle, options).unwrap!
-  puts(HTTP.local_port(server))
+  certs = System.args()[0]
+  tls = TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!
+  secure = HTTP.serve_tls("127.0.0.1", 0, tls, &handle, options).unwrap!
+  puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
   IO.flush()
   IO.read()
   HTTP.close_server(server)
+  HTTP.close_server(secure)
   IO.inspect(HTTP.wait(server))
+  IO.inspect(HTTP.wait(secure))
 end
 """
 
 
 @pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
 def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_path, adopt, flags):
-    """HTTP.serve: on one keep-alive connection of http.client, a page, a file sent in pieces with its Content-Length,
-    an upload of either framing counted as it arrives, and a small POST read whole by HTTP.app; a body over the limit
-    of HTTP.app is a 413 that closes. Then a plain request and a WebSocket on one raw connection
-    (fixtures/websocket_client.py)."""
+    """HTTP.serve: on one keep-alive connection of http.client, a page, a file sent in pieces with its Content-Length
+    (and its HEAD), an upload of either framing counted as it arrives, and a small POST read whole by HTTP.app; a body
+    over the limit of HTTP.app is a 413 that closes. Then a plain request and a WebSocket on one raw connection
+    (fixtures/websocket_client.py), and a page, a file and an upload over serve_tls."""
     import http.client
+    import ssl
 
     from tests.fixtures.websocket_client import TEXT, Client
 
-    source = tmp_path / "serve.agc"
-    source.write_text(SERVE_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), flags=flags, stdin=True))
-    port = int(vm.next_line())
+    vm, port, tls_port = start_serve(tmp_path, adopt, flags)
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(20))
 
     def ask(method, path, body=None, chunked=False):
@@ -1468,6 +1471,9 @@ def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_p
     local = conn.sock.getsockname()
     expected = b"".join(str(n).encode() * 1000 for n in range(10))
     assert ask("GET", "/file") == (200, expected)
+    conn.request("HEAD", "/file")
+    response = conn.getresponse()
+    assert (response.status, response.getheader("Content-Length"), response.read()) == (200, "10000", b"")
     big = bytes(range(256)) * 4096
     assert ask("PUT", "/upload", big) == (200, b"stored 1048576")
     assert vm.next_line() == "stored 1048576"
@@ -1491,34 +1497,70 @@ def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_p
         assert c.close_frame() == (1000, "")
         assert c.ended()
     assert vm.next_line() == "closed 1000"
+
+    context = ssl.create_default_context(cafile=str(CERTS / "ca.pem"))
+    conn = http.client.HTTPSConnection("localhost", tls_port, timeout=scaled(20), context=context)
+    assert ask("GET", "/") == (200, b"page GET / 0")
+    assert ask("GET", "/file") == (200, expected)
+    assert ask("PUT", "/upload", iter([b"ab", b"cd"]), chunked=True) == (200, b"stored 4")
+    assert vm.next_line() == "stored 4"
+    conn.close()
+    finish_serve(vm)
+
+
+def start_serve(tmp_path, adopt, flags=()):
+    source = tmp_path / "serve.agc"
+    source.write_text(SERVE_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), CERTS, flags=flags, stdin=True))
+    port, tls_port = vm.next_line().split()
+    return vm, int(port), int(tls_port)
+
+
+def finish_serve(vm):
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"
     assert vm.next_line() == "ok()"
+    assert vm.next_line() == "ok()"
 
 
-def test_serve_closes_a_connection_whose_body_was_not_read_and_refuses_to_upgrade_it(tmp_path, adopt):
-    """HTTP.serve: an answer that comes before the body was read says `Connection: close` and the connection ends; an
-    upgrade while the body is still unread is a 500 that closes, with a warning on stderr."""
-    source = tmp_path / "serve.agc"
-    source.write_text(SERVE_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), stdin=True))
-    port = int(vm.next_line())
+def raw_answer(conn, until_close):
+    """The head (lower case) of the next answer on a raw socket, and its Content-Length body; with `until_close`,
+    everything up to the close."""
+    got = b""
+    while b"\r\n\r\n" not in got or until_close:
+        more = conn.recv(65536)
+        if not more:
+            break
+        got += more
+    head, _, rest = got.partition(b"\r\n\r\n")
+    return head.lower(), rest
+
+
+@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
+def test_serve_keeps_a_connection_only_for_a_body_that_arrived_and_upgrades_only_then(tmp_path, adopt, flags):
+    """HTTP.serve: an empty chunked body that the app never reads still counts as read, so the connection stays, and a
+    handshake with an empty chunked body upgrades. An answer that comes before the body arrived says `Connection:
+    close` and the connection ends; an upgrade while the body is still coming is a 500 that closes, with a warning."""
+    vm, port, _ = start_serve(tmp_path, adopt, flags)
     upgrade = b"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
     key = b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+    chunked = b"Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
+        conn.sendall(b"POST /early HTTP/1.1\r\nHost: x\r\n" + chunked)
+        head, rest = raw_answer(conn, False)
+        assert head.split(b" ")[1] == b"401" and b"connection: close" not in head, head
+        while len(rest) < 2:
+            rest += conn.recv(65536)
+        conn.sendall(b"GET /ws HTTP/1.1\r\nHost: x\r\n" + upgrade + key + chunked)
+        head, _ = raw_answer(conn, False)
+        assert head.split(b" ")[1] == b"101", head
     for request, status in [(b"PUT /early HTTP/1.1\r\nHost: x\r\nContent-Length: 1000000\r\n\r\n" + b"x" * 1000, b"401"),
                             (b"GET /ws HTTP/1.1\r\nHost: x\r\n" + upgrade + key + b"Content-Length: 10\r\n\r\n", b"500")]:
         with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as conn:
             conn.sendall(request)
-            got = b""
-            while True:
-                more = conn.recv(65536)
-                if not more:
-                    break
-                got += more
-            head = got.partition(b"\r\n\r\n")[0].lower()
-            assert head.split(b" ")[1] == status, got
-            assert b"\r\nconnection: close" in head, got
-    vm.close_stdin()
-    assert vm.wait() == 0, "the VM server finishes"
-    assert vm.next_line() == "ok()"
+            head, _ = raw_answer(conn, True)
+            assert head.split(b" ")[1] == status, head
+            assert b"\r\nconnection: close" in head, head
+    assert vm.next_line() == "closed 1006"
+    finish_serve(vm)
     assert "http: invalid response: an upgrade before the request body was read" in vm.stderr_text()

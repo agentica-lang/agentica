@@ -433,9 +433,12 @@ Properties of the client that no test checks:
   the answer time and the connection closes. `HTTP.read_all` is a receive loop
   over `pieces` with a byte limit that awaits `done`.
 - A `serve` server reads the head as a `listen_upload` server does, with the
-  WebSocket handshake let through, and calls the app with the same feeder. A
-  request with no body counts as read whole, so a route that never reads it
-  keeps the connection (the feeder may not have run yet when the app returns).
+  WebSocket handshake let through, and calls the app with the same feeder.
+  When the app returns, the server closes `pieces` and waits for `rest` at
+  most the answer time: the feeder sends the bytes past a whole body, and
+  closes `rest` when the body failed or the closed `pieces` stopped it. So a
+  body that had all arrived (an empty chunked one) counts as read whether the
+  app read it or not, and a request with no body counts as read at once.
   The answer goes out as a `listen` answer (`Whole`, with `Connection: close`
   unless the body was read whole), as a stream (`Stream`, with the same
   header) or as an upgrade (`Upgrade`, only when the body was read whole;
