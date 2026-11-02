@@ -52,79 +52,34 @@ end
 
 ### 32.5 `agentica doc`
 
-- `agentica doc PATH` prints the exported API of one module as Markdown:
-  1. the module doc;
-  2. then each exported declaration in source order: its signature, its doc, and
-     for a struct or enum its fields or variants with their docs.
-- An export without a doc is still listed, with its signature only.
-- `PATH` is a source file or a `std/` module name (`std/http`). A `PATH` that
-  starts with `std/` always names an embedded standard module, as an import
-  does: `std/prelude/` and a path with `.`, `..` or empty parts exit 2.
-- **Parse only.** `agentica doc` lexes and parses one module. It does not
-  resolve its imports or type-check it, so it cannot fail on a dependency. A
-  module that re-exports a name is linked to list the original declaration
-  with its doc; if it does not link, it lists no re-export.
-  For a `std/` name the source is the copy embedded in the binary.
-  - A lex or parse error gives that diagnostic and exit 1.
-  - An unknown file or `std/` module gives exit 2, as `help` does.
-- **Signatures.** A signature is one normalized line built from the AST, in the
-  form the builtin catalog uses:
-  - a function: `add(a: Int, b: Int = 2) -> Int`, a default value as written
-    in the source;
-  - a struct: `struct QueueState`;
-  - an enum: `enum Option[T]`.
+The command, its exit codes and what it prints are in
+[`06b-builtins.md`](../grammar/06b-builtins.md); the Markdown and `--json` forms
+(`{module, doc, items}`, each item `{kind, name, signature, summary, doc, span}`
+plus parameters, fields or variants by kind) are documented in
+`compiler/docs/doc_json.agc`, and the format is stable so agents and a future
+site generator can read it. Decisions:
 
-  Types are printed as written, so an import alias such as `Models.User` stays
-  as it is.
-- The Markdown form starts with `# PATH`, then the module doc, then for each
-  export a heading with its signature, its doc, and a list line per field or
-  variant.
-- `agentica doc PATH --json` prints the same data as one JSON object. The format
-  is stable, so agents and a future site generator can read it. Each field means
-  the same wherever it appears:
-  - top level: `{module, doc, items}`;
-  - `module`: `PATH` as the user typed it, a file path or a `std/` name;
-  - `doc`: the whole doc text with the `##` markers removed and its leading and
-    trailing blank lines dropped, or `null`. At the top level it is the module
-    doc;
-  - `summary`: the first paragraph of `doc` on one line, each line trimmed, or
-    `null` when there is none;
-  - `items`: one object per export, in source order:
-    `{kind, name, signature, summary, doc, span}`;
-  - `kind`: `"function"`, `"struct"`, `"enum"`, `"alias"` or `"constant"`;
-  - `signature`: the line above; an alias is `type Grid[T] = List[List[T]]`
-    and a constant is `LIMIT: Int` (`LIMIT` without a written type);
-  - `span`: the declaration's span, from `export` to the end of the
-    declaration, not its `##` block: an object
-    `{file, range: {start: {line, column}, end: {line, column}}}`, the two keys
-    a diagnostic JSON puts at its top level, in an object of their own. Lines
-    and columns start at 1 and `end` is exclusive, as in a diagnostic;
-  - a function item also has `parameters`, a list of `{name, type, default}`
-    (`default` is the source text of the default value, or `null`), and
-    `result`, its result type;
-  - a struct item also has `fields`: `[{name, type, default, doc}]`, with
-    `default` as for a parameter;
-  - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with
-    `payload` empty for a variant without one;
-  - every type is a string, printed as written.
-- Private declarations are left out. Their docs exist for readers of the code.
+- **Parse only.** It lexes and parses one module and does not resolve imports or
+  type-check, so it cannot fail on a dependency. A module that re-exports a name
+  is linked to list the original declaration with its doc; if it does not link,
+  it lists no re-export. A `std/` name reads the copy embedded in the binary, and
+  a `PATH` that starts with `std/` always names an embedded module (`std/prelude/`
+  and paths with `.`, `..` or empty parts exit 2).
+- **Signatures** are one normalized line built from the AST in the form the
+  builtin catalog uses (`add(a: Int, b: Int = 2) -> Int`, `struct QueueState`,
+  `enum Option[T]`); types print as written, so an import alias such as
+  `Models.User` stays.
+- An export without a doc is still listed, with its signature only; private
+  declarations are left out (their docs are for readers of the code); a `span`
+  covers the declaration from `export`, not its `##` block.
 
 ### 32.6 `agentica help` for `std/`
 
-- `agentica help std/http.get` (module path, `.`, export name) shows that
-  function's signature and doc, in text or `--json`. It reads the module the
-  same way as `agentica doc` (§32.5).
-- `agentica help std/MOD.NAME --json` uses the builtin help fields that apply:
-  `name`, `arity`, `parameters`, `result` and `signature`, with `description`
-  set to the whole doc (or `null`) and `summary` added (§32.5). It has no
-  `effects`.
-- `agentica help std/http` lists the module's exports with their summaries. With
-  `--json` it prints `{module, doc, items: [{kind, name, summary}]}`, with the
-  fields of §32.5.
-- An unknown module or name gives exit 2, with "did you mean" over that module's
-  exports for a name.
-- Builtins keep today's help, from the catalog.
-- User files are not covered: `agentica doc file.agc` serves them.
+`agentica help std/MODULE[.NAME] [--json]` reads a module as `doc` does and uses
+the builtin help fields that apply, with `description` set to the whole doc and
+`summary` added, and no `effects` (grammar, `06b-builtins.md`). An unknown module
+or name exits 2, with "did you mean" over the module's exports. Builtins keep
+the catalog help; user files are served by `agentica doc file.agc`.
 
 ### 32.8 Later, to evaluate
 
