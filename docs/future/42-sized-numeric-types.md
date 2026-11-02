@@ -464,24 +464,21 @@ With (C), the operations are:
 
 ### 42.12 Storage (§38.6)
 
-- **Step 4, gated by measurement.** Typed storage stores a list of a scalar type
-  with its element width: 1 byte for `Int8` and `UInt8`, 2 bytes for the 16-bit
-  types, 4 bytes for the 32-bit types and `Float32`, and 8 bytes for `Int`,
-  `UInt64` and `Float`. No tag is stored per item. The list header holds the
-  element kind, so the paths that have no static type (`inspect`, `to_s`,
-  `JSON.encode`, `List.sort` and equality, §42.11) read the width from the list,
-  as they read a tag today. A read rebuilds the `agc_value` from the element
-  kind (§38.6, item 1). `Int` and `Float` lists are already unboxed at 8 bytes
-  (§17.12), so step 4 is for `UInt64` and the narrower widths.
-- **Why not earlier.** It touches every container that holds values, and the
-  persistent vector (§17.12) would need leaves of more widths than its 8-byte
-  Int and Float leaves. §38.7 says to change the value layout only when a
-  measurement says so. The criterion: a program that reads a 10 MB file into a
-  `List[UInt8]` has a peak RSS that is too high for its task, measured with the
-  benchmark script, and the change is made only if the list items are the limit.
-- **What it buys.** A `List[UInt8]` of 10 MB costs about 10 MB with typed
-  storage, against about 160 MB with 16-byte items.
+**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type
+at its element width (1 byte for `Int8` and `UInt8`, 2 for the 16-bit types, 4
+for the 32-bit types and `Float32`, 8 for `Int`, `UInt64` and `Float`), with no
+tag per item. The list header holds the element kind, so the paths that have no
+static type (`inspect`, `to_s`, `JSON.encode`, `List.sort`, equality; §42.11)
+read the width from the list, and a read rebuilds the `agc_value` (§38.6, item
+1). `Int` and `Float` lists are already unboxed at 8 bytes (§17.12), so step 4 is
+for `UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost about
+10 MB, against about 160 MB with 16-byte items.
 
+**Why not earlier.** It touches every container that holds values, and the
+persistent vector (§17.12) would need leaves of more widths. §38.7 says to change
+the value layout only when a measurement says so. The criterion: a program that
+reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for its task,
+measured with the benchmark script, and the list items are the limit.
 ### 42.13 Phasing and tests
 
 Each step is one or more PRs. Each PR holds its own contracts, with its own
@@ -530,56 +527,40 @@ is the `stage0` path of §18.2.
 
 ### 42.16 Later and not planned
 
-Later, each when a real program needs it:
-
-- Float16 and BFloat16 (§42.9).
-- Saturating conversions and methods (§42.6).
-- Checked arithmetic methods that return a Result (§42.7).
-- Hex, octal and binary literals (§42.5). This is the most likely first
-  addition.
-- Text parsers for the sized types, `UInt64` first (§42.6).
-- A sized JSON extractor such as `JSON.uint64` (§42.8).
-- SIMD vectors of the sized types (§19).
-- Packed struct fields for the sized types (§38.6, item 3), after step 4.
+Later, each when a real program needs it: Float16 and BFloat16 (§42.9);
+saturating conversions and methods (§42.6); checked arithmetic methods that
+return a Result (§42.7); hex, octal and binary literals (§42.5, the most likely
+first addition); text parsers for the sized types, `UInt64` first (§42.6); a
+sized JSON extractor such as `JSON.uint64` (§42.8); SIMD vectors of the sized
+types (§19); packed struct fields (§38.6, item 3), after step 4.
 
 Not planned:
 
-- **Arbitrary-precision integers (`BigInt`).** Python's `int` is the case for
-  it. It would need allocation and its own cost on the hot path, and no program
-  needs it yet.
-- **A decimal type.** No program needs one, and it is not on the roadmap.
-- **Implicit numeric promotion or widening.** A second rule would make
-  conversion errors invisible to agents. Explicit conversions only (§42.6).
-- **Operator overloading to make conversions implicit.** §6 says there is none.
-- **A `Byte` alias** (§42.4).
-- **An unsigned `Int`.** `Int` stays signed, and `UInt64` covers the range above
-  it.
-- **A target-dependent `Int` width.** The owner confirmed that `Int` and
-  `Float` stay 64-bit on every target. A 32-bit option is only a note: the owner
-  noted that it could be revisited if an old 32-bit architecture ever becomes a
-  target; none is planned.
-  - Design rationale (the author's, not the owner's): the VM stores `Int` as C
-    `int64_t` and `Float` as `double`, which C provides on 32-bit CPUs too. A
-    32-bit build must compute `Float` in hardware double (SSE2 on x86, VFP on
-    ARM), since x87 extended precision gives other results. A build option for a
-    32-bit `Int` would make the same program overflow on one target and not on
-    another, and `.agcb` files would not move between them.
+- **Arbitrary-precision integers (`BigInt`)** (needs allocation and a hot-path
+  cost, and no program needs it) and **a decimal type**.
+- **Implicit numeric promotion or widening**, and **operator overloading to make
+  conversions implicit** (§6 says there is none): a second rule would make
+  conversion errors invisible to agents.
+- **A `Byte` alias** (§42.4) and **an unsigned `Int`** (`UInt64` covers the range
+  above `Int`).
+- **A target-dependent `Int` width.** The owner confirmed `Int` and `Float` stay
+  64-bit on every target; a 32-bit option could be revisited only if an old
+  32-bit architecture becomes a target (none is planned). Rationale (the
+  author's): the VM stores `Int` as `int64_t` and `Float` as `double`, which C
+  provides on 32-bit CPUs too, but a 32-bit build must compute `Float` in
+  hardware double (SSE2, VFP; x87 gives other results), and a 32-bit `Int` option
+  would make one program overflow on one target and not another, and `.agcb`
+  files would not move between them.
 
 ### 42.17 Questions for the owner
 
 - **Literal typing (42.5, "Operators, calls and sign").** Adopt the rule as
-  written: a literal, or a literal expression of arithmetic operators, takes the
-  other operand's type; with two literal expressions, an arithmetic operator
-  passes the expected type into both operands, and a comparison does not; a type
-  variable of a call is fixed by its other arguments; and a unary `-` folds into
-  an integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
-  adopt it.
-- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern),
-  or change to `UInt64` in step 3? Recommendation: change it in step 3, with the
-  other bit builtins, so one type holds a 64-bit pattern. This is breaking, and
-  it is a choice of API, not of correctness.
-- **Trigger for step 4.** The measurement in §42.12 is a proposal. The owner may
+  written. Recommendation: adopt it.
+- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern), or change to
+  `UInt64` in step 3? Recommendation: change it in step 3 with the other bit
+  builtins, so one type holds a 64-bit pattern (breaking; an API choice, not a
+  correctness one).
+- **Trigger for step 4.** The measurement in §42.12 is a proposal; the owner may
   prefer a fixed trigger, for example a benchmark row of roadmap 14.
-- **Hex literals.** Keep them later (recommended), or bring them into step 1
-  when the literal rules are written, since the `0xFF` form is what binary code
-  asks for first.
+- **Hex literals.** Keep them later (recommended), or bring them into step 1,
+  since the `0xFF` form is what binary code asks for first.
