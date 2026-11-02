@@ -18,6 +18,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   WebSockets on one port: its `HTTP.App` gets the body on a channel and returns
   an `HTTP.Answer`; `HTTP.app` wraps a plain `HTTP.Handler`.
 
+### Changed
+
+- `HTTP.listen_upload` keeps the connection when the whole body had arrived
+  by the time the handler returned, even if the handler did not read it (an
+  empty chunked body, say). A handler that answers before any of the body
+  arrived now answers up to 100 ms later.
+
 ## [0.21.0] - 2026-11-02
 
 ### Added
