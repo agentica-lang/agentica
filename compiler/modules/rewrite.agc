@@ -20,6 +20,12 @@ import Resolve from "resolve"
 ## The module key of std/regex, whose compile a regex literal calls.
 export REGEX_MODULE = "std/regex.agc"
 
+## The module key of std/eag, which a file with an `<<~EAG` template must import, as `require "eag"` does in Ruby.
+export EAG_MODULE = "std/eag.agc"
+
+## The code of the error for a template without that import.
+export EAG_IMPORT_CODE = "CHECK-EAG-IMPORT"
+
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports left
 ## out.
@@ -286,8 +292,21 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
       return ok(Ast.Expr.FunctionRef(node.with(name: name)))
     Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
     Ast.Expr.RegexLit(node) -> return ok(Ast.Expr.RegexLit(rewrite_regex(cx, node)))
+    Ast.Expr.EagLit(node) -> return rewrite_eag(cx, node)
     _ -> return rewrite_compound(cx, expr)
   end
+end
+
+# A template needs `import ... from "std/eag"` in any form (CHECK-EAG-IMPORT); its code is rewritten as any code.
+def rewrite_eag(cx: Resolve.Context, node: Ast.EagLit) -> Result[Ast.Expr]
+  if !cx.me.imports.any? do |key: String| key == EAG_MODULE end
+    site = Failure.Site(file: cx.me.file, span: node.span)
+    help = "add import EAG from \"std/eag\"; any import of std/eag will do"
+    return error(Failure.fail_at(site, EAG_IMPORT_CODE, "an EAG template needs std/eag", Failure.hint(help)))
+  end
+
+  call = try rewrite_expr(cx, node.call)
+  return ok(Ast.Expr.EagLit(node.with(call: call)))
 end
 
 # The call inside a regex literal names std/regex's compile when the file imports std/regex in any form; it stays ""

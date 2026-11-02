@@ -1,0 +1,6 @@
+def page(n: Int) -> String
+  return <<~EAG
+    <% if n > 1 %>
+    a
+  EAG
+end

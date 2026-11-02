@@ -176,6 +176,12 @@ design.
   - Status: Planned (row 7.11, item 14 after 0.8.0): a `*_test.agc` file may
     have no `main`; its top-level `test_*` functions are its tests
 
+- §: 51
+  - Title: EAG templates
+  - File: [`51-templates.md`](51-templates.md)
+  - Status: Built (row 7.13): the `<<~EAG` heredoc with the tags of ERB, and
+    `std/eag`
+
 New features are VM-only (roadmap 7i deleted the evaluator) and get no second
 implementation ([roadmap
 rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).

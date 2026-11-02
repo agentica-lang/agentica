@@ -1,0 +1,12 @@
+import EAG from "std/eag"
+
+def page(names: List[String]) -> String
+  return <<~EAG
+    <ul>
+    <% for name in names %>
+      <li><%= name -%>
+      </li> <%# kept: #{not} \n raw %>
+    <% end %>
+    </ul>
+  EAG
+end

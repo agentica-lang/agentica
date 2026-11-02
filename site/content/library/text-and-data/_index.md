@@ -11,6 +11,7 @@ description: Work with text and numbers, search and replace text with regular ex
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a `Bytes`, and to frame messages.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.
 - Use [HTML](/library/text-and-data/html/) (`std/html`) to escape and unescape HTML text.
+- Use [EAG templates](/library/text-and-data/eag/) (`<<~EAG` and `std/eag`) to build text from a template with ERB tags.
 - Use [Cookie](/library/text-and-data/cookie/) (`std/cookie`) to read a `Cookie` header and to write a `Set-Cookie` header.
 - Use [MIME](/library/text-and-data/mime/) (`std/mime`) to find the media type of a file from its name, and to tell which types are text.
 - Use [URI](/library/text-and-data/uri/) (`std/uri`) to percent-encode and decode URL components and to read and write query strings.

@@ -419,6 +419,7 @@ export enum Expr
   Typed(TypedTarget)
   ConstRef(ConstRef)
   RegexLit(RegexLit)
+  EagLit(EagLit)
 end
 
 ## A number, string, true, false or nil.
@@ -636,6 +637,16 @@ export struct RegexLit
   span: Source.Span
 end
 
+## An `<<~EAG` template (docs/future/51-templates.md): `call` is the expression that builds its text, which the parser
+## makes from the body (eag.agc) with tokens that keep their places in the template. The literal stands for it in the
+## tree so that the linker can ask for the import of std/eag and the formatter can print the template as written.
+## `span` is the opener. The nodes of `call` take the ids before the literal's own.
+export struct EagLit
+  id: Int
+  call: Expr
+  span: Source.Span
+end
+
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
 ## checks it as the first argument without checking it twice. The parser never makes it. id
 ## and span are those of the receiver.
@@ -671,6 +682,7 @@ export def expr_id(expr: Expr) -> Int
     Expr.Typed(node) -> return node.id
     Expr.ConstRef(node) -> return node.id
     Expr.RegexLit(node) -> return node.id
+    Expr.EagLit(node) -> return node.id
   end
 end
 
@@ -699,6 +711,7 @@ export def expr_span(expr: Expr) -> Source.Span
     Expr.Typed(node) -> return node.span
     Expr.ConstRef(node) -> return node.span
     Expr.RegexLit(node) -> return node.span
+    Expr.EagLit(node) -> return node.span
   end
 end
 

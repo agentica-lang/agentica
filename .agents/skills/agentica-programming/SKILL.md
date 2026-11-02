@@ -72,6 +72,7 @@ Read only what the task needs.
 | `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
 | `mime.md` | `std/mime` (media type of a file) |
 | `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
+| `eag.md` | `<<~EAG` templates (Agentica's ERB) and `std/eag` |
 | `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, memory reads, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
 | `analysis.md` | compiler answers in a program (`std/analysis`) |

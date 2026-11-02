@@ -1,0 +1,15 @@
+import EAG from "std/eag"
+
+def page(names: List[String], flag: Bool) -> String
+  return <<~EAG
+    <ul>
+    <% for name in names %>
+      <% if flag %>
+      <li><%= EAG.html_escape(name) -%>
+      </li>
+      <% end %>
+    <% end %>
+    <%- total = names.size -%>
+    A literal <%% tag and #{raw} \n text <%# note %>.
+  EAG
+end

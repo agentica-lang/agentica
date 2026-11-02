@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- EAG templates, Agentica's ERB: a heredoc `<<~EAG` with the tags `<%= %>`,
+  `<% %>`, `<%# %>`, `<%%` and `-%>`, checked with the code around it and
+  needing `import EAG from "std/eag"`; `EAG.html_escape` is Ruby's
+  `ERB::Util.html_escape`.
 - `agentica help std/MODULE` lists the exports of a standard library module
   with their summaries, and `agentica help std/MODULE.NAME` prints one export
   with its signature and `##` doc (`--json` too).

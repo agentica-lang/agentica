@@ -7,6 +7,7 @@
 
 import Diag from "../diagnostics/diagnostic"
 import Ast from "ast"
+import Eag from "eag"
 import Base from "parse_base"
 import Source from "source"
 import Tokens from "token"
@@ -1064,6 +1065,36 @@ def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
   return Ast.Expr.RegexLit(Ast.RegexLit(id: ids + 3, body: body, flags: flags, call: unwrap, span: token.span))
 end
 
+# An `<<~EAG` template: its body is expanded into the tokens of an expression (eag.agc), parsed on its own, and the
+# literal holds that expression. A problem of the expansion or of the code is the first one, with a place in the body.
+def parse_eag(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
+  token = e.tokens[pos]
+  case token.value
+    Tokens.Value.Eag(body) ->
+      case Eag.expand(token, body)
+        Diag.Outcome.Failed(problem) ->
+          return error(Base.bail_span(problem.code, problem.message, problem.span, problem.help))
+        Diag.Outcome.Done(tokens) ->
+          inner = Base.make_env(tokens).with(nesting: e.nesting)
+          parsed = try parse_expression(inner, 0, ids)
+          if inner.tokens[parsed.pos].kind != "EOF"
+            return error(
+              Base.unexpected(
+                inner,
+                parsed.pos,
+                "unexpected #{Base.describe(inner.tokens[parsed.pos])} in a template",
+              ),
+            )
+          end
+
+          node = Ast.Expr.EagLit(Ast.EagLit(id: parsed.ids, call: parsed.node, span: token.span))
+          return ok(Base.ExprAt(node: node, pos: pos + 1, ids: parsed.ids + 1))
+      end
+
+    _ -> return error(Base.impossible(e, pos))
+  end
+end
+
 def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   cursor = pos + 1
   name = ""
@@ -1319,6 +1350,10 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   if kind == "regex"
     return ok(Base.ExprAt(node: regex_node(token, ids), pos: pos + 1, ids: ids + 4))
+  end
+
+  if kind == "eag"
+    return parse_eag(e, pos, ids)
   end
 
   if kind == "left-paren"

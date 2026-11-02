@@ -239,8 +239,8 @@ end line is `LEX-UNTERMINATED-HEREDOC`, at `<<~NAME`.
 
 A heredoc is the form for text of two or more lines: a heredoc with one body
 line, or none, is `LEX-HEREDOC-ONE-LINE`, at `<<~NAME`, with a help that shows
-the string literal (`"text\n"`). A heredoc is never required: `"a\nb"` stays
-valid.
+the string literal (`"text\n"`); `<<~EAG` is the exception (below). A heredoc is
+never required: `"a\nb"` stays valid.
 
 Only the squiggly form exists. `<<~text`, `<<~'NAME'`, `<<NAME` and `<<-NAME`
 are `LEX-UNEXPECTED-CHAR`, at the `<<` and the `~` or `-` of the opener, with a
@@ -256,6 +256,52 @@ so the nodes built from them stay on the opener line. The tokens inside `#{...}`
 keep their line and column in the body, and a diagnostic about them prints that
 line. A span inside a heredoc can therefore lie after the span of the expression
 that holds it.
+
+### EAG templates
+
+EAG ("Embedded AGentica") is Agentica's ERB. A heredoc named `EAG`, `<<~EAG`,
+is a template: a `String` built from its text and its tags. Roadmap row 7.13,
+[`51-templates.md`](../future/51-templates.md).
+
+```agentica
+import EAG from "std/eag"
+
+def page(names: List[String]) -> String
+  return <<~EAG
+    <ul>
+    <% for name in names %>
+      <li><%= EAG.html_escape(name) -%>
+      </li>
+    <% end %>
+    </ul>
+  EAG
+end
+```
+
+The lexer keeps the body lines as written in one `eag` token (the rules of a
+heredoc apply: the indentation, the end line, `LEX-HEREDOC-INDENT`,
+`LEX-UNTERMINATED-HEREDOC`; a body may be one line or empty). The text is raw,
+with no escape and no `#{}`. The tags:
+
+- `<%= code %>` inserts the value of `code`, as `"#{code}"` does; the output is
+  raw, as the output of ERB is.
+- `<% code %>` is a statement or the head of one (`if`, `elsif`, `else`, `for`,
+  `while`, `case`, `end`, a call with `do`). The tags of a template close their
+  own blocks (`PARSE-EAG-BLOCK`).
+- `<%# note %>` is dropped, and `<%%` is the text `<%`.
+- `-%>` removes the line break after the tag, and `<%-` removes the spaces
+  before the tag when only spaces come before it on its line.
+- A line that holds only one `<% %>` or `<%# %>` tag and spaces is removed
+  whole. This is the one rule that is not Ruby's `trim_mode: "-"`.
+- A tag ends at the first `%>` on its line (`LEX-UNTERMINATED-EAG-TAG`).
+
+The parser makes the template an expression that builds the text, from tokens
+that keep their places in the file, so every diagnostic about a tag has its
+place in the template; the checker checks it as ordinary code. A tag sees the
+names of the function and, since the template is a block of the function, cannot
+assign them (`CHECK-CAPTURED-ASSIGNMENT`). The literal is an expression that can
+stand anywhere one can. The file must import `std/eag` in any form, or the
+literal is `CHECK-EAG-IMPORT`.
 
 ### Regex literals
 

@@ -147,6 +147,20 @@ is a rule:
   - **Help:** indent with spaces; end the heredoc with a line that holds only
     its name
 
+- **Written:** a `<%` tag with no `%>` on its line in an `<<~EAG` template
+  (`LEX-UNTERMINATED-EAG-TAG`)
+  - **Help:** end the tag with `%>` on the same line; write `<%%` for the text
+    `<%`
+
+- **Written:** an `<% end %>` with nothing to close, or an `<% if %>`,
+  `<% for %>`, `<% while %>`, `<% case %>` or a tag with `do` that the template
+  never ends (`PARSE-EAG-BLOCK`)
+  - **Help:** a template closes its own blocks
+
+- **Written:** an `<<~EAG` template in a file that does not import `std/eag`
+  (`CHECK-EAG-IMPORT`)
+  - **Help:** add `import EAG from "std/eag"`; any import of `std/eag` will do
+
 - **Written:** `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`)
   - **Help:** comments start with `#`; `4 // 2` has no `//` operator, `/` on two
     Ints truncates

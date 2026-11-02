@@ -1,0 +1,386 @@
+program #71 0:1:1-355:22:1
+  module "eag.agc"
+    declaration: struct-decl #5 27:3:1-75:7:1 name="Item"
+      field: field-decl #2 41:4:3-55:5:1 name="title"
+        type: type-ref #1 48:4:10-54:4:16 name="String"
+      field: field-decl #4 57:5:3-71:6:1 name="visible"
+        type: type-ref #3 66:5:12-70:5:16 name="Bool"
+    declaration: function-decl #63 76:8:1-309:18:1 name="page"
+      param: param #7 85:8:10-97:8:22 name="name"
+        type: type-ref #6 91:8:16-97:8:22 name="String"
+      param: param #10 99:8:24-116:8:41 name="items"
+        type: type-ref #9 106:8:31-116:8:41 name="List"
+          arg: type-ref #8 111:8:36-115:8:40 name="Item"
+      result: type-ref #11 121:8:46-127:8:52 name="String"
+      body: return-stmt #62 130:9:3-144:10:1
+        value: eag-lit #61 137:9:10-143:9:16 type=String
+          call: field-access #60 137:9:10-143:9:16 name="first" type=String resolved=call("List.first", List(String))
+            target: method-call #59 137:9:10-143:9:16 name="map" type=List(String) resolved=call("List.map", List(Int))
+              target: list-lit #13 137:9:10-143:9:16 type=List(Int)
+                element: literal #12 137:9:10-143:9:16 value=int:0 type=Int
+              arg: block-lit #58 137:9:10-143:9:16 type=Fn([Int], String)
+                param: block-param #15 137:9:10-143:9:16 name="__n"
+                  type: type-ref #14 137:9:10-143:9:16 name="Int"
+                body: binding #19 137:9:10-143:9:16 name="__t"
+                  type: type-ref #17 137:9:10-143:9:16 name="List"
+                    arg: type-ref #16 137:9:10-143:9:16 name="String"
+                  value: list-lit #18 137:9:10-143:9:16 type=List(String)
+                body: binding #23 137:9:10-143:9:16 name="__t"
+                  value: method-call #22 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #20 137:9:10-143:9:16 name="__t" type=List(String)
+                    arg: literal #21 137:9:10-143:9:16 value=string:"<h1>" type=String
+                body: binding #29 156:10:13-177:10:34 name="__t"
+                  value: method-call #28 156:10:13-177:10:34 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #24 156:10:13-177:10:34 name="__t" type=List(String)
+                    arg: interpolation #27 156:10:13-177:10:34 type=String
+                      part: call #26 156:10:13-177:10:34 name="@2::html_escape" piped=false type=String
+                        arg: name-ref #25 172:10:29-176:10:33 name="name" type=String
+                body: binding #33 137:9:10-143:9:16 name="__t"
+                  value: method-call #32 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
+                    target: name-ref #30 137:9:10-143:9:16 name="__t" type=List(String)
+                    arg: literal #31 137:9:10-143:9:16 value=string:"</h1>\n" type=String
+                body: for-stmt #53 193:11:8-295:15:11 variable="item"
+                  iterable: name-ref #34 205:11:20-210:11:25 name="items" type=List(Struct(Item))
+                  body: if-stmt #52 221:12:8-281:14:11
+                    branch: if-branch #51 221:12:8-143:9:16
+                      condition: field-access #36 224:12:11-236:12:23 name="visible" type=Bool
+                        target: name-ref #35 224:12:11-228:12:15 name="item" type=Struct(Item)
+                      body: binding #40 137:9:10-143:9:16 name="__t"
+                        value: method-call #39 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
+                          target: name-ref #37 137:9:10-143:9:16 name="__t" type=List(String)
+                          arg: literal #38 137:9:10-143:9:16 value=string:"<li>" type=String
+                      body: binding #46 252:13:13-262:13:23 name="__t"
+                        value: method-call #45 252:13:13-262:13:23 name="push" type=List(String) resolved=call("List.append", List(String))
+                          target: name-ref #41 252:13:13-262:13:23 name="__t" type=List(String)
+                          arg: interpolation #44 252:13:13-262:13:23 type=String
+                            part: field-access #43 252:13:13-262:13:23 name="title" type=String
+                              target: name-ref #42 252:13:13-256:13:17 name="item" type=Struct(Item)
+                      body: binding #50 137:9:10-143:9:16 name="__t"
+                        value: method-call #49 137:9:10-143:9:16 name="push" type=List(String) resolved=call("List.append", List(String))
+                          target: name-ref #47 137:9:10-143:9:16 name="__t" type=List(String)
+                          arg: literal #48 137:9:10-143:9:16 value=string:"</li>\n" type=String
+                body: expr-stmt #57 137:9:10-143:9:16
+                  value: method-call #56 137:9:10-143:9:16 name="join" type=String resolved=call("String.join", List(String))
+                    target: name-ref #54 137:9:10-143:9:16 name="__t" type=List(String)
+                    arg: literal #55 137:9:10-143:9:16 value=string:"" type=String
+    declaration: function-decl #70 310:19:1-355:22:1 name="main"
+      result: type-ref #64 324:19:15-328:19:19 name="Void"
+      body: expr-stmt #69 331:20:3-351:21:1
+        value: call #68 331:20:3-350:20:22 name="puts" piped=false type=Void
+          arg: call #67 336:20:8-349:20:21 name="page" piped=false type=String
+            arg: literal #65 341:20:13-344:20:16 value=string:"a" type=String
+            arg: list-lit #66 346:20:18-348:20:20 type=List(Struct(Item))
+  module "std/eag.agc"
+    declaration: function-decl #7 919:27:8-992:30:1 name="@2::html_escape"
+      param: param #2 935:27:24-948:27:37 name="value"
+        type: type-ref #1 942:27:31-948:27:37 name="String"
+      result: type-ref #3 953:27:42-959:27:48 name="String"
+      body: return-stmt #6 962:28:3-988:29:1
+        value: call #5 969:28:10-987:28:28 name="@3::escape" piped=false type=String
+          arg: name-ref #4 981:28:22-986:28:27 name="value" type=String
+  module "std/html.agc"
+    declaration: const-decl #1 320:8:1-330:9:1 name="@3::HASH"
+      value: literal #0 327:8:8-329:8:10 value=int:35 type=Int
+    declaration: const-decl #3 330:9:1-343:10:1 name="@3::UPPER_X"
+      value: literal #2 340:9:11-342:9:13 value=int:88 type=Int
+    declaration: const-decl #5 343:10:1-357:11:1 name="@3::LOWER_X"
+      value: literal #4 353:10:11-356:10:14 value=int:120 type=Int
+    declaration: const-decl #7 357:11:1-381:12:1 name="@3::FIRST_SURROGATE"
+      value: literal #6 375:11:19-380:11:24 value=int:55296 type=Int
+    declaration: const-decl #9 381:12:1-404:13:1 name="@3::LAST_SURROGATE"
+      value: literal #8 398:12:18-403:12:23 value=int:57343 type=Int
+    declaration: const-decl #11 404:13:1-430:14:1 name="@3::LAST_CODE_POINT"
+      value: literal #10 422:13:19-429:13:26 value=int:1114111 type=Int
+    declaration: const-decl #28 523:16:1-602:17:1 name="@3::NAMED_ENTITIES"
+      value: map-lit #27 540:16:18-601:16:79 type=Map(String, String)
+        entry: map-entry #14 541:16:19-551:16:29
+          key: literal #12 541:16:19-546:16:24 value=string:"amp" type=String
+          value: literal #13 548:16:26-551:16:29 value=string:"&" type=String
+        entry: map-entry #17 553:16:31-562:16:40
+          key: literal #15 553:16:31-557:16:35 value=string:"lt" type=String
+          value: literal #16 559:16:37-562:16:40 value=string:"<" type=String
+        entry: map-entry #20 564:16:42-573:16:51
+          key: literal #18 564:16:42-568:16:46 value=string:"gt" type=String
+          value: literal #19 570:16:48-573:16:51 value=string:">" type=String
+        entry: map-entry #23 575:16:53-587:16:65
+          key: literal #21 575:16:53-581:16:59 value=string:"quot" type=String
+          value: literal #22 583:16:61-587:16:65 value=string:"\"" type=String
+        entry: map-entry #26 589:16:67-600:16:78
+          key: literal #24 589:16:67-595:16:73 value=string:"apos" type=String
+          value: literal #25 597:16:75-600:16:78 value=string:"'" type=String
+    declaration: function-decl #49 733:20:8-934:29:1 name="@3::escape"
+      param: param #30 744:20:19-756:20:31 name="text"
+        type: type-ref #29 750:20:25-756:20:31 name="String"
+      result: type-ref #31 761:20:36-767:20:42 name="String"
+      body: return-stmt #48 770:21:3-930:28:1
+        value: method-call #47 783:22:5-925:26:29 name="replace" type=String resolved=call("String.replace", String)
+          target: method-call #44 783:22:5-896:25:31 name="replace" type=String resolved=call("String.replace", String)
+            target: method-call #41 783:22:5-865:24:28 name="replace" type=String resolved=call("String.replace", String)
+              target: method-call #38 783:22:5-837:23:28 name="replace" type=String resolved=call("String.replace", String)
+                target: method-call #35 783:22:5-809:22:31 name="replace" type=String resolved=call("String.replace", String)
+                  target: name-ref #32 783:22:5-787:22:9 name="text" type=String
+                  arg: literal #33 796:22:18-799:22:21 value=string:"&" type=String
+                  arg: literal #34 801:22:23-808:22:30 value=string:"&amp;" type=String
+                arg: literal #36 825:23:16-828:23:19 value=string:"<" type=String
+                arg: literal #37 830:23:21-836:23:27 value=string:"&lt;" type=String
+              arg: literal #39 853:24:16-856:24:19 value=string:">" type=String
+              arg: literal #40 858:24:21-864:24:27 value=string:"&gt;" type=String
+            arg: literal #42 881:25:16-885:25:20 value=string:"\"" type=String
+            arg: literal #43 887:25:22-895:25:30 value=string:"&quot;" type=String
+          arg: literal #45 912:26:16-915:26:19 value=string:"'" type=String
+          arg: literal #46 917:26:21-924:26:28 value=string:"&#39;" type=String
+    declaration: function-decl #84 1345:34:8-1586:45:1 name="@3::unescape"
+      param: param #52 1358:34:21-1370:34:33 name="text"
+        type: type-ref #51 1364:34:27-1370:34:33 name="String"
+      result: type-ref #53 1375:34:38-1381:34:44 name="String"
+      body: if-stmt #61 1384:35:3-1429:38:1
+        branch: if-branch #60 1384:35:3-1423:37:1
+          condition: unary #57 1387:35:6-1406:35:25 op=not op-span=1387:35:6-1388:35:7 type=Bool
+            operand: method-call #56 1388:35:7-1406:35:25 name="include?" type=Bool resolved=call("String.contains?", String)
+              target: name-ref #54 1388:35:7-1392:35:11 name="text" type=String
+              arg: literal #55 1402:35:21-1405:35:24 value=string:"&" type=String
+          body: return-stmt #59 1411:36:5-1423:37:1
+            value: name-ref #58 1418:36:12-1422:36:16 name="text" type=String
+      body: binding #65 1431:38:3-1456:39:1 name="pieces"
+        value: method-call #64 1440:38:12-1455:38:27 name="split" type=List(String) resolved=call("String.split", String)
+          target: name-ref #62 1440:38:12-1444:38:16 name="text" type=String
+          arg: literal #63 1451:38:23-1454:38:26 value=string:"&" type=String
+      body: binding #70 1458:39:3-1476:40:1 name="out"
+        value: list-lit #69 1464:39:9-1475:39:20 type=List(String)
+          element: index-access #68 1465:39:10-1474:39:19 type=String
+            target: name-ref #66 1465:39:10-1471:39:16 name="pieces" type=List(String)
+            index: literal #67 1472:39:17-1473:39:18 value=int:0 type=Int
+      body: for-stmt #79 1478:40:3-1560:43:1 variable="piece"
+        iterable: call #73 1491:40:16-1511:40:36 name="List.drop" piped=false type=List(String)
+          arg: name-ref #71 1501:40:26-1507:40:32 name="pieces" type=List(String)
+          arg: literal #72 1509:40:34-1510:40:35 value=int:1 type=Int
+        body: binding #78 1516:41:5-1554:42:1 name="out"
+          value: method-call #77 1522:41:11-1553:41:42 name="push" type=List(String) resolved=call("List.append", List(String))
+            target: name-ref #74 1522:41:11-1525:41:14 name="out" type=List(String)
+            arg: call #76 1531:41:20-1552:41:41 name="@3::unescape_piece" piped=false type=String
+              arg: name-ref #75 1546:41:35-1551:41:40 name="piece" type=String
+      body: return-stmt #83 1562:43:3-1582:44:1
+        value: method-call #82 1569:43:10-1581:43:22 name="join" type=String resolved=call("String.join", List(String))
+          target: name-ref #80 1569:43:10-1572:43:13 name="out" type=List(String)
+          arg: literal #81 1578:43:19-1580:43:21 value=string:"" type=String
+    declaration: function-decl #146 1705:47:1-2137:64:1 name="@3::unescape_piece"
+      param: param #87 1724:47:20-1737:47:33 name="piece"
+        type: type-ref #86 1731:47:27-1737:47:33 name="String"
+      result: type-ref #88 1742:47:38-1748:47:44 name="String"
+      body: binding #92 1751:48:3-1780:49:1 name="end_at"
+        value: method-call #91 1760:48:12-1779:48:31 name="index_of" type=Optional(Int) resolved=call("String.index_of", String)
+          target: name-ref #89 1760:48:12-1765:48:17 name="piece" type=String
+          arg: literal #90 1775:48:27-1778:48:30 value=string:";" type=String
+      body: if-stmt #99 1782:49:3-1827:52:1
+        branch: if-branch #98 1782:49:3-1821:51:1
+          condition: field-access #94 1785:49:6-1797:49:18 name="none?" type=Bool resolved=call("Optional.none?", Optional(Int))
+            target: name-ref #93 1785:49:6-1791:49:12 name="end_at" type=Optional(Int)
+          body: return-stmt #97 1802:50:5-1821:51:1
+            value: interpolation #96 1809:50:12-1820:50:23 type=String
+              part: text "&"
+              part: name-ref #95 1813:50:16-1818:50:21 name="piece" type=String
+      body: binding #102 1829:52:3-1849:53:1 name="at"
+        value: field-access #101 1834:52:8-1848:52:22 name="unwrap!" type=Int resolved=call("Optional.unwrap!", Optional(Int))
+          target: name-ref #100 1834:52:8-1840:52:14 name="end_at" type=Optional(Int)
+      body: binding #107 1851:53:3-1877:54:1 name="name"
+        value: method-call #106 1858:53:10-1876:53:28 name="slice" type=String resolved=call("String.slice", String)
+          target: name-ref #103 1858:53:10-1863:53:15 name="piece" type=String
+          arg: literal #104 1870:53:22-1871:53:23 value=int:0 type=Int
+          arg: name-ref #105 1873:53:25-1875:53:27 name="at" type=Int
+      body: binding #119 1879:54:3-1929:55:1 name="rest"
+        value: method-call #118 1886:54:10-1928:54:52 name="slice" type=String resolved=call("String.slice", String)
+          target: name-ref #108 1886:54:10-1891:54:15 name="piece" type=String
+          arg: binary #111 1898:54:22-1904:54:28 op=plus op-span=1901:54:25-1902:54:26 type=Int
+            left: name-ref #109 1898:54:22-1900:54:24 name="at" type=Int
+            right: literal #110 1903:54:27-1904:54:28 value=int:1 type=Int
+          arg: binary #117 1906:54:30-1927:54:51 op=minus op-span=1924:54:48-1925:54:49 type=Int
+            left: binary #115 1906:54:30-1923:54:47 op=minus op-span=1919:54:43-1920:54:44 type=Int
+              left: field-access #113 1906:54:30-1918:54:42 name="length" type=Int resolved=call("String.length", String)
+                target: name-ref #112 1906:54:30-1911:54:35 name="piece" type=String
+              right: name-ref #114 1921:54:45-1923:54:47 name="at" type=Int
+            right: literal #116 1926:54:50-1927:54:51 value=int:1 type=Int
+      body: if-stmt #129 1931:55:3-2018:58:1
+        branch: if-branch #128 1931:55:3-2012:57:1
+          condition: method-call #121 1934:55:6-1959:55:31 name="key?" type=Bool resolved=call("Map.has_key?", Map(String, String))
+            target: const-ref #506 1934:55:6-1948:55:20 name="@3::NAMED_ENTITIES" type=Map(String, String)
+            arg: name-ref #120 1954:55:26-1958:55:30 name="name" type=String
+          body: return-stmt #127 1964:56:5-2012:57:1
+            value: interpolation #126 1971:56:12-2011:56:52 type=String
+              part: method-call #124 1974:56:15-2002:56:43 name="get" type=String resolved=call("Map.get", Map(String, String))
+                target: const-ref #509 1974:56:15-1988:56:29 name="@3::NAMED_ENTITIES" type=Map(String, String)
+                arg: name-ref #122 1993:56:34-1997:56:38 name="name" type=String
+                arg: literal #123 1999:56:40-2001:56:42 value=string:"" type=String
+              part: name-ref #125 2005:56:46-2009:56:50 name="rest" type=String
+      body: binding #132 2020:58:3-2046:59:1 name="code"
+        value: call #131 2027:58:10-2045:58:28 name="@3::numeric_code" piped=false type=Int
+          arg: name-ref #130 2040:58:23-2044:58:27 name="name" type=String
+      body: if-stmt #140 2048:59:3-2089:62:1
+        branch: if-branch #139 2048:59:3-2083:61:1
+          condition: binary #135 2051:59:6-2059:59:14 op=less op-span=2056:59:11-2057:59:12 type=Bool
+            left: name-ref #133 2051:59:6-2055:59:10 name="code" type=Int
+            right: literal #134 2058:59:13-2059:59:14 value=int:0 type=Int
+          body: return-stmt #138 2064:60:5-2083:61:1
+            value: interpolation #137 2071:60:12-2082:60:23 type=String
+              part: text "&"
+              part: name-ref #136 2075:60:16-2080:60:21 name="piece" type=String
+      body: return-stmt #145 2091:62:3-2133:63:1
+        value: interpolation #144 2098:62:10-2132:62:44 type=String
+          part: call #142 2101:62:13-2123:62:35 name="String.from_code" piped=false type=String
+            arg: name-ref #141 2118:62:30-2122:62:34 name="code" type=Int
+          part: name-ref #143 2126:62:38-2130:62:42 name="rest" type=String
+    declaration: function-decl #194 2271:67:1-2549:77:1 name="@3::numeric_code"
+      param: param #148 2288:67:18-2300:67:30 name="name"
+        type: type-ref #147 2294:67:24-2300:67:30 name="String"
+      result: type-ref #149 2305:67:35-2308:67:38 name="Int"
+      body: binding #153 2311:68:3-2335:69:1 name="bytes"
+        value: field-access #152 2319:68:11-2334:68:26 name="to_a" type=List(Int) resolved=call("Bytes.to_a", Bytes)
+          target: field-access #151 2319:68:11-2329:68:21 name="bytes" type=Bytes resolved=call("String.bytes", String)
+            target: name-ref #150 2319:68:11-2323:68:15 name="name" type=String
+      body: if-stmt #168 2337:69:3-2395:72:1
+        branch: if-branch #167 2337:69:3-2389:71:1
+          condition: binary #163 2340:69:6-2374:69:40 op=or op-span=2355:69:21-2357:69:23 type=Bool
+            left: binary #157 2340:69:6-2354:69:20 op=less op-span=2351:69:17-2352:69:18 type=Bool
+              left: field-access #155 2340:69:6-2350:69:16 name="size" type=Int resolved=call("List.size", List(Int))
+                target: name-ref #154 2340:69:6-2345:69:11 name="bytes" type=List(Int)
+              right: literal #156 2353:69:19-2354:69:20 value=int:2 type=Int
+            right: binary #162 2358:69:24-2374:69:40 op=not-equal op-span=2367:69:33-2369:69:35 type=Bool
+              left: index-access #160 2358:69:24-2366:69:32 type=Int
+                target: name-ref #158 2358:69:24-2363:69:29 name="bytes" type=List(Int)
+                index: literal #159 2364:69:30-2365:69:31 value=int:0 type=Int
+              right: const-ref #161 2370:69:36-2374:69:40 name="@3::HASH" type=Int
+          body: return-stmt #166 2379:70:5-2389:71:1
+            value: unary #165 2386:70:12-2388:70:14 op=minus op-span=2386:70:12-2387:70:13 type=Int
+              operand: literal #164 2387:70:13-2388:70:14 value=int:1 type=Int
+      body: if-stmt #187 2397:72:3-2498:75:1
+        branch: if-branch #186 2397:72:3-2492:74:1
+          condition: binary #179 2400:72:6-2442:72:48 op=or op-span=2420:72:26-2422:72:28 type=Bool
+            left: binary #173 2400:72:6-2419:72:25 op=equal op-span=2409:72:15-2411:72:17 type=Bool
+              left: index-access #171 2400:72:6-2408:72:14 type=Int
+                target: name-ref #169 2400:72:6-2405:72:11 name="bytes" type=List(Int)
+                index: literal #170 2406:72:12-2407:72:13 value=int:1 type=Int
+              right: const-ref #172 2412:72:18-2419:72:25 name="@3::LOWER_X" type=Int
+            right: binary #178 2423:72:29-2442:72:48 op=equal op-span=2432:72:38-2434:72:40 type=Bool
+              left: index-access #176 2423:72:29-2431:72:37 type=Int
+                target: name-ref #174 2423:72:29-2428:72:34 name="bytes" type=List(Int)
+                index: literal #175 2429:72:35-2430:72:36 value=int:1 type=Int
+              right: const-ref #177 2435:72:41-2442:72:48 name="@3::UPPER_X" type=Int
+          body: return-stmt #185 2447:73:5-2492:74:1
+            value: call #184 2454:73:12-2491:73:49 name="@3::digits_value" piped=false type=Int
+              arg: call #182 2467:73:25-2486:73:44 name="List.drop" piped=false type=List(Int)
+                arg: name-ref #180 2477:73:35-2482:73:40 name="bytes" type=List(Int)
+                arg: literal #181 2484:73:42-2485:73:43 value=int:2 type=Int
+              arg: literal #183 2488:73:46-2490:73:48 value=int:16 type=Int
+      body: return-stmt #193 2500:75:3-2545:76:1
+        value: call #192 2507:75:10-2544:75:47 name="@3::digits_value" piped=false type=Int
+          arg: call #190 2520:75:23-2539:75:42 name="List.drop" piped=false type=List(Int)
+            arg: name-ref #188 2530:75:33-2535:75:38 name="bytes" type=List(Int)
+            arg: literal #189 2537:75:40-2538:75:41 value=int:1 type=Int
+          arg: literal #191 2541:75:44-2543:75:46 value=int:10 type=Int
+    declaration: function-decl #255 2771:80:1-3176:100:1 name="@3::digits_value"
+      param: param #197 2788:80:18-2805:80:35 name="digits"
+        type: type-ref #196 2796:80:26-2805:80:35 name="List"
+          arg: type-ref #195 2801:80:31-2804:80:34 name="Int"
+      param: param #199 2807:80:37-2816:80:46 name="base"
+        type: type-ref #198 2813:80:43-2816:80:46 name="Int"
+      result: type-ref #200 2821:80:51-2824:80:54 name="Int"
+      body: if-stmt #207 2827:81:3-2864:84:1
+        branch: if-branch #206 2827:81:3-2858:83:1
+          condition: field-access #202 2830:81:6-2843:81:19 name="empty?" type=Bool resolved=call("List.empty?", List(Int))
+            target: name-ref #201 2830:81:6-2836:81:12 name="digits" type=List(Int)
+          body: return-stmt #205 2848:82:5-2858:83:1
+            value: unary #204 2855:82:12-2857:82:14 op=minus op-span=2855:82:12-2856:82:13 type=Int
+              operand: literal #203 2856:82:13-2857:82:14 value=int:1 type=Int
+      body: binding #209 2866:84:3-2876:85:1 name="value"
+        value: literal #208 2874:84:11-2875:84:12 value=int:0 type=Int
+      body: for-stmt #240 2878:85:3-3079:95:1 variable="byte"
+        iterable: name-ref #210 2890:85:15-2896:85:21 name="digits" type=List(Int)
+        body: binding #213 2901:86:5-2927:87:1 name="digit"
+          value: call #212 2909:86:13-2926:86:30 name="@3::digit_value" piped=false type=Int
+            arg: name-ref #211 2921:86:25-2925:86:29 name="byte" type=Int
+        body: if-stmt #225 2931:87:5-2985:90:1
+          branch: if-branch #224 2931:87:5-2977:89:1
+            condition: binary #220 2934:87:8-2960:87:34 op=or op-span=2944:87:18-2946:87:20 type=Bool
+              left: binary #216 2934:87:8-2943:87:17 op=less op-span=2940:87:14-2941:87:15 type=Bool
+                left: name-ref #214 2934:87:8-2939:87:13 name="digit" type=Int
+                right: literal #215 2942:87:16-2943:87:17 value=int:0 type=Int
+              right: binary #219 2947:87:21-2960:87:34 op=greater-equal op-span=2953:87:27-2955:87:29 type=Bool
+                left: name-ref #217 2947:87:21-2952:87:26 name="digit" type=Int
+                right: name-ref #218 2956:87:30-2960:87:34 name="base" type=Int
+            body: return-stmt #223 2967:88:7-2977:89:1
+              value: unary #222 2974:88:14-2976:88:16 op=minus op-span=2974:88:14-2975:88:15 type=Int
+                operand: literal #221 2975:88:15-2976:88:16 value=int:1 type=Int
+        body: binding #231 2989:90:5-3018:91:1 name="value"
+          value: binary #230 2997:90:13-3017:90:33 op=plus op-span=3010:90:26-3011:90:27 type=Int
+            left: binary #228 2997:90:13-3009:90:25 op=multiply op-span=3003:90:19-3004:90:20 type=Int
+              left: name-ref #226 2997:90:13-3002:90:18 name="value" type=Int
+              right: name-ref #227 3005:90:21-3009:90:25 name="base" type=Int
+            right: name-ref #229 3012:90:28-3017:90:33 name="digit" type=Int
+        body: if-stmt #239 3022:91:5-3073:94:1
+          branch: if-branch #238 3022:91:5-3065:93:1
+            condition: binary #234 3025:91:8-3048:91:31 op=greater op-span=3031:91:14-3032:91:15 type=Bool
+              left: name-ref #232 3025:91:8-3030:91:13 name="value" type=Int
+              right: const-ref #233 3033:91:16-3048:91:31 name="@3::LAST_CODE_POINT" type=Int
+            body: return-stmt #237 3055:92:7-3065:93:1
+              value: unary #236 3062:92:14-3064:92:16 op=minus op-span=3062:92:14-3063:92:15 type=Int
+                operand: literal #235 3063:92:15-3064:92:16 value=int:1 type=Int
+      body: if-stmt #252 3081:95:3-3157:98:1
+        branch: if-branch #251 3081:95:3-3151:97:1
+          condition: binary #247 3084:95:6-3136:95:58 op=and op-span=3109:95:31-3112:95:34 type=Bool
+            left: binary #243 3084:95:6-3108:95:30 op=greater-equal op-span=3090:95:12-3092:95:14 type=Bool
+              left: name-ref #241 3084:95:6-3089:95:11 name="value" type=Int
+              right: const-ref #242 3093:95:15-3108:95:30 name="@3::FIRST_SURROGATE" type=Int
+            right: binary #246 3113:95:35-3136:95:58 op=less-equal op-span=3119:95:41-3121:95:43 type=Bool
+              left: name-ref #244 3113:95:35-3118:95:40 name="value" type=Int
+              right: const-ref #245 3122:95:44-3136:95:58 name="@3::LAST_SURROGATE" type=Int
+          body: return-stmt #250 3141:96:5-3151:97:1
+            value: unary #249 3148:96:12-3150:96:14 op=minus op-span=3148:96:12-3149:96:13 type=Int
+              operand: literal #248 3149:96:13-3150:96:14 value=int:1 type=Int
+      body: return-stmt #254 3159:98:3-3172:99:1
+        value: name-ref #253 3166:98:10-3171:98:15 name="value" type=Int
+    declaration: function-decl #301 3232:102:1-3457:114:1 name="@3::digit_value"
+      param: param #257 3248:102:17-3257:102:26 name="byte"
+        type: type-ref #256 3254:102:23-3257:102:26 name="Int"
+      result: type-ref #258 3262:102:31-3265:102:34 name="Int"
+      body: if-stmt #271 3268:103:3-3324:106:1
+        branch: if-branch #270 3268:103:3-3318:105:1
+          condition: binary #265 3271:103:6-3296:103:31 op=and op-span=3282:103:17-3285:103:20 type=Bool
+            left: binary #261 3271:103:6-3281:103:16 op=greater-equal op-span=3276:103:11-3278:103:13 type=Bool
+              left: name-ref #259 3271:103:6-3275:103:10 name="byte" type=Int
+              right: literal #260 3279:103:14-3281:103:16 value=int:48 type=Int
+            right: binary #264 3286:103:21-3296:103:31 op=less-equal op-span=3291:103:26-3293:103:28 type=Bool
+              left: name-ref #262 3286:103:21-3290:103:25 name="byte" type=Int
+              right: literal #263 3294:103:29-3296:103:31 value=int:57 type=Int
+          body: return-stmt #269 3301:104:5-3318:105:1
+            value: binary #268 3308:104:12-3317:104:21 op=minus op-span=3313:104:17-3314:104:18 type=Int
+              left: name-ref #266 3308:104:12-3312:104:16 name="byte" type=Int
+              right: literal #267 3315:104:19-3317:104:21 value=int:48 type=Int
+      body: if-stmt #284 3326:106:3-3382:109:1
+        branch: if-branch #283 3326:106:3-3376:108:1
+          condition: binary #278 3329:106:6-3354:106:31 op=and op-span=3340:106:17-3343:106:20 type=Bool
+            left: binary #274 3329:106:6-3339:106:16 op=greater-equal op-span=3334:106:11-3336:106:13 type=Bool
+              left: name-ref #272 3329:106:6-3333:106:10 name="byte" type=Int
+              right: literal #273 3337:106:14-3339:106:16 value=int:65 type=Int
+            right: binary #277 3344:106:21-3354:106:31 op=less-equal op-span=3349:106:26-3351:106:28 type=Bool
+              left: name-ref #275 3344:106:21-3348:106:25 name="byte" type=Int
+              right: literal #276 3352:106:29-3354:106:31 value=int:70 type=Int
+          body: return-stmt #282 3359:107:5-3376:108:1
+            value: binary #281 3366:107:12-3375:107:21 op=minus op-span=3371:107:17-3372:107:18 type=Int
+              left: name-ref #279 3366:107:12-3370:107:16 name="byte" type=Int
+              right: literal #280 3373:107:19-3375:107:21 value=int:55 type=Int
+      body: if-stmt #297 3384:109:3-3441:112:1
+        branch: if-branch #296 3384:109:3-3435:111:1
+          condition: binary #291 3387:109:6-3413:109:32 op=and op-span=3398:109:17-3401:109:20 type=Bool
+            left: binary #287 3387:109:6-3397:109:16 op=greater-equal op-span=3392:109:11-3394:109:13 type=Bool
+              left: name-ref #285 3387:109:6-3391:109:10 name="byte" type=Int
+              right: literal #286 3395:109:14-3397:109:16 value=int:97 type=Int
+            right: binary #290 3402:109:21-3413:109:32 op=less-equal op-span=3407:109:26-3409:109:28 type=Bool
+              left: name-ref #288 3402:109:21-3406:109:25 name="byte" type=Int
+              right: literal #289 3410:109:29-3413:109:32 value=int:102 type=Int
+          body: return-stmt #295 3418:110:5-3435:111:1
+            value: binary #294 3425:110:12-3434:110:21 op=minus op-span=3430:110:17-3431:110:18 type=Int
+              left: name-ref #292 3425:110:12-3429:110:16 name="byte" type=Int
+              right: literal #293 3432:110:19-3434:110:21 value=int:87 type=Int
+      body: return-stmt #300 3443:112:3-3453:113:1
+        value: unary #299 3450:112:10-3452:112:12 op=minus op-span=3450:112:10-3451:112:11 type=Int
+          operand: literal #298 3451:112:11-3452:112:12 value=int:1 type=Int
+constant-order ["@3::HASH","@3::UPPER_X","@3::LOWER_X","@3::FIRST_SURROGATE","@3::LAST_SURROGATE","@3::LAST_CODE_POINT","@3::NAMED_ENTITIES"]

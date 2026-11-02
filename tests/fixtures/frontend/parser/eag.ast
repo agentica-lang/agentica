@@ -1,0 +1,56 @@
+program #55 0:1:1-329:16:1
+  declaration: import-decl #0 0:1:1-26:2:1 path="std/eag" alias="EAG"
+  declaration: function-decl #54 27:3:1-329:16:1 name="page"
+    param: param #3 36:3:10-55:3:29 name="names"
+      type: type-ref #2 43:3:17-55:3:29 name="List"
+        arg: type-ref #1 48:3:22-54:3:28 name="String"
+    param: param #5 57:3:31-67:3:41 name="flag"
+      type: type-ref #4 63:3:37-67:3:41 name="Bool"
+    result: type-ref #6 72:3:46-78:3:52 name="String"
+    body: return-stmt #53 81:4:3-95:5:1
+      value: eag-lit #52 88:4:10-94:4:16
+        call: field-access #51 88:4:10-94:4:16 name="first"
+          target: method-call #50 88:4:10-94:4:16 name="map"
+            target: list-lit #8 88:4:10-94:4:16
+              element: literal #7 88:4:10-94:4:16 value=int:0
+            arg: block-lit #49 88:4:10-94:4:16
+              param: block-param #10 88:4:10-94:4:16 name="__n"
+                type: type-ref #9 88:4:10-94:4:16 name="Int"
+              body: binding #14 88:4:10-94:4:16 name="__t"
+                type: type-ref #12 88:4:10-94:4:16 name="List"
+                  arg: type-ref #11 88:4:10-94:4:16 name="String"
+                value: list-lit #13 88:4:10-94:4:16
+              body: binding #18 88:4:10-94:4:16 name="__t"
+                value: method-call #17 88:4:10-94:4:16 name="push"
+                  target: name-ref #15 88:4:10-94:4:16 name="__t"
+                  arg: literal #16 88:4:10-94:4:16 value=string:"<ul>\n"
+              body: for-stmt #37 111:6:8-230:11:11 variable="name"
+                iterable: name-ref #19 123:6:20-128:6:25 name="names"
+                body: if-stmt #36 141:7:10-216:10:13
+                  branch: if-branch #35 141:7:10-94:4:16
+                    condition: name-ref #20 144:7:13-148:7:17 name="flag"
+                    body: binding #24 88:4:10-94:4:16 name="__t"
+                      value: method-call #23 88:4:10-94:4:16 name="push"
+                        target: name-ref #21 88:4:10-94:4:16 name="__t"
+                        arg: literal #22 88:4:10-94:4:16 value=string:"  <li>"
+                    body: binding #30 166:8:15-187:8:36 name="__t"
+                      value: method-call #29 166:8:15-187:8:36 name="push"
+                        target: name-ref #25 166:8:15-187:8:36 name="__t"
+                        arg: interpolation #28 166:8:15-187:8:36
+                          part: call #27 166:8:15-187:8:36 name="EAG.html_escape" piped=false
+                            arg: name-ref #26 182:8:31-186:8:35 name="name"
+                    body: binding #34 88:4:10-94:4:16 name="__t"
+                      value: method-call #33 88:4:10-94:4:16 name="push"
+                        target: name-ref #31 88:4:10-94:4:16 name="__t"
+                        arg: literal #32 88:4:10-94:4:16 value=string:"  </li>\n"
+              body: binding #40 242:12:9-260:12:27 name="total"
+                value: field-access #39 250:12:17-260:12:27 name="size"
+                  target: name-ref #38 250:12:17-255:12:22 name="names"
+              body: binding #44 88:4:10-94:4:16 name="__t"
+                value: method-call #43 88:4:10-94:4:16 name="push"
+                  target: name-ref #41 88:4:10-94:4:16 name="__t"
+                  arg: literal #42 88:4:10-94:4:16 value=string:"A literal <% tag and #{raw} \\n text .\n"
+              body: expr-stmt #48 88:4:10-94:4:16
+                value: method-call #47 88:4:10-94:4:16 name="join"
+                  target: name-ref #45 88:4:10-94:4:16 name="__t"
+                  arg: literal #46 88:4:10-94:4:16 value=string:""

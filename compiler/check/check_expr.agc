@@ -127,6 +127,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.TypeName(found) -> return check_type_name(cx, st, found)
     Ast.Expr.ConstRef(found) -> return check_const_ref(cx, st, found)
     Ast.Expr.RegexLit(found) -> return CheckRegex.check_regex(cx, st, found)
+    Ast.Expr.EagLit(found) -> return State.expr(cx, st, found.call, T.Type.Unknown)
   end
 end
 
