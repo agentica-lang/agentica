@@ -1,0 +1,1 @@
+ERROR PARSE-EAG-DIRECTIVE 56:4:8-81:4:33 "an escape directive belongs on the first line of the template" "write <%@ escape &function %> alone on the first line, as in <%@ escape &EAG.html_escape %>"

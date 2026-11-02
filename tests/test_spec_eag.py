@@ -51,18 +51,26 @@ end
 '''
 
 
+def html_escape(value):
+    """`EAG.html_escape`, written again: Ruby's `ERB::Util.html_escape`."""
+    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#39;")):
+        value = value.replace(char, entity)
+    return value
+
+
 def peer_render(template, scope):
     """The text of `template` for the names in `scope`, by ERB's rules: `<%= %>`, `<% %>`, `<%# %>`, `<%%`, `-%>`
     (removes the line break after the tag), `<%-` (removes the spaces before it), and a line with one statement or
-    comment tag and nothing else but spaces vanishes."""
-    code = ["_out = []"]
+    comment tag and nothing else but spaces vanishes. `<%@ escape %>` turns on `html_escape` for `<%= %>`, as Erubi's
+    `escape: true` does, and `<%== %>` inserts as it is."""
+    code = ["_out = []", "_esc = str"]
     depth = 0
 
     def add(line):
         code.append("  " * depth + line)
 
     for line in template.split("\n")[:-1]:
-        pieces = re.split(r"(<%%|<%[=#-]?.*?-?%>)", line)
+        pieces = re.split(r"(<%%|<%(?:==|[=#@-])?.*?-?%>)", line)
         tags = [piece for piece in pieces if piece.startswith("<%") and piece != "<%%"]
         blank = all(not piece.strip() for piece in pieces if piece not in tags and piece != "<%%" and piece != "")
         alone = len(tags) == 1 and not tags[0].startswith("<%=") and blank
@@ -72,12 +80,16 @@ def peer_render(template, scope):
             if piece == "<%%":
                 add("_out.append(%r)" % "<%")
             elif piece.startswith("<%"):
-                kind = piece[2] if piece[2] in "=#-" else ""
+                kind = "==" if piece.startswith("<%==") else piece[2] if piece[2] in "=#@-" else ""
                 body = piece[2 + len(kind):-2]
                 trimmed = body.endswith("-")
                 body = body[:-1] if trimmed else body
-                if kind == "=":
+                if kind == "==":
                     add("_out.append(str(%s))" % body)
+                elif kind == "=":
+                    add("_out.append(_esc(str(%s)))" % body)
+                elif kind == "@":
+                    add("_esc = html_escape")
                 elif kind == "#":
                     pass
                 else:
@@ -100,7 +112,7 @@ def peer_render(template, scope):
             first = False
         if not alone and not trimmed:
             add("_out.append('\\n')")
-    namespace = dict(scope)
+    namespace = dict(scope, html_escape=html_escape)
     exec("\n".join(code), namespace)
     return "".join(namespace["_out"])
 
@@ -134,6 +146,35 @@ def test_output_matches_the_peer(tmp_path):
     assert result.stdout == first + "\n" + second + "\n"
     # Raw by default, as ERB is: nothing is escaped, `#{raw}` is text, and `\n` is a backslash and an n.
     assert "T&<" in result.stdout and "#{raw} \\n" in result.stdout
+
+
+ESCAPED = '''<%@ escape &EAG.html_escape %>
+<h1><%= title %></h1>
+<% for name in names %>
+<li><%= name %> <%== name %> <%= n + 1 %></li>
+<% end %>
+'''
+
+# The same tags with no directive: `<%==` is `<%=`.
+PLAIN = ESCAPED.replace("<%@ escape &EAG.html_escape %>\n", "")
+
+
+def test_an_escape_directive_applies_to_output_tags_and_not_to_raw_tags(tmp_path):
+    source = PROGRAM % indented(ESCAPED)
+    source = source.replace("def main()", "def plain(title: String, names: List[String], n: Int, flag: Bool) -> String\n"
+                            "  return <<~EAG\n%s  EAG\nend\n\ndef main()" % indented(PLAIN))
+    source = source.replace("  puts(render(\"U\", [], 0, false))\n", "  puts(plain(\"T&<\", [\"a<\", \"b\"], 2, true))\n")
+    path = write(tmp_path, source)
+    result = run(cli() + [str(path)], env=vm_environment())
+    assert result.code == 0, result.stderr
+    scope = {"title": "T&<", "names": ["a", "b"], "n": 2, "flag": True}
+    first = peer_render(ESCAPED, scope)
+    second = peer_render(PLAIN, dict(scope, names=["a<", "b"]))
+    assert result.stdout == first + "\n" + second + "\n"
+    # `<%=` escaped, `<%==` as it is, and a template with no directive is raw.
+    assert "<h1>T&amp;&lt;</h1>" in result.stdout and "<li>a&lt; a<" not in result.stdout
+    assert "<li>a<" in result.stdout.split("<h1>T&<</h1>")[1]
+    assert run(cli() + ["fmt", "--check", str(path)], env=vm_environment()).code == 0
 
 
 def test_a_template_is_an_expression_and_html_escape_is_in_std_eag(tmp_path):
@@ -199,10 +240,46 @@ end
     ("a\n    <% end %>\n", "PARSE-EAG-BLOCK", "end %>"),
     ("a\n    <%= n + %>\n", "PARSE-UNEXPECTED-TOKEN", " n + "),
     ("a\n    <%= puts(\"x\") %>\n", "CHECK-VOID-VALUE", "puts"),
+    ("a\n    <%@ escape &EAG.html_escape %>\n", "PARSE-EAG-DIRECTIVE", " escape &EAG"),
+    ("<%@ escape &EAG.html_escape %>\n    <%@ escape  &EAG.html_escape %>\n", "PARSE-EAG-DIRECTIVE", " escape  &EAG"),
+    ("<%@ other &EAG.html_escape %>\n    a\n", "PARSE-EAG-DIRECTIVE", " other &EAG"),
+    ("<%@ escape %>\n    a\n", "PARSE-EAG-DIRECTIVE", " escape "),
 ])
 def test_template_diagnostics_carry_a_span_in_the_template(tmp_path, body, code, needle):
     source = 'import EAG from "std/eag"\n\ndef page(n: Int) -> String\n  return <<~EAG\n    %s  EAG\nend\n' % body
     source += "\ndef main() -> Void\n  puts(page(1))\nend\n"
+    diagnostic = problem(check(write(tmp_path, source)), code, 1)
+    assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == where(source, needle)
+
+
+@pytest.mark.parametrize("escaper, code, needle", [
+    ("&count", "CHECK-TYPE-MISMATCH", " escape &count"),
+    ("&join", "CHECK-TYPE-MISMATCH", " escape &join"),
+    ("3", "CHECK-TYPE-MISMATCH", " escape 3"),
+    ("&nope", "CHECK-UNKNOWN-NAME", "&nope"),
+])
+def test_the_escaper_is_checked_as_a_function_from_string_to_string(tmp_path, escaper, code, needle):
+    source = '''import EAG from "std/eag"
+
+def count(n: Int) -> String
+  return "#{n}"
+end
+
+def join(a: String, b: String) -> String
+  return a
+end
+
+def page() -> String
+  return <<~EAG
+    <%%@ escape %s %%>
+    a <%%= "x" %%>
+  EAG
+end
+
+def main() -> Void
+  puts(page())
+end
+''' % escaper
     diagnostic = problem(check(write(tmp_path, source)), code, 1)
     assert (diagnostic["range"]["start"]["line"], diagnostic["range"]["start"]["column"]) == where(source, needle)
 

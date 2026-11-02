@@ -14,8 +14,8 @@ library page is `site/content/library/text-and-data/eag.md`.
   function, so a typo in `<%= user.nme %>` is `CHECK-UNKNOWN-FIELD` at the tag.
 - **Ruby's tags**: `<%= %>`, `<% %>`, `<%# %>`, `<%%`, `-%>`, and `<%-`.
 - **Raw output**, as ERB. HTML escaping is `EAG.html_escape(value)` from
-  `std/eag` (Ruby's `ERB::Util.html_escape`), written in the tag. An escaping
-  mode is a possible later step, not part of this one.
+  `std/eag` (Ruby's `ERB::Util.html_escape`), written in the tag, or an escaper
+  that the template names (51.5).
 - **`<% %>` holds any statement.** Blocks (`if`, `for`, `while`, `case`) must
   close inside the template (`PARSE-EAG-BLOCK`).
 - **The file imports `std/eag`** in any form, as `require "erb"`; the check is
@@ -74,7 +74,7 @@ What follows from the block:
 - `%%>` for the text `%>` inside a tag, and the other trim modes of ERB
   (`%`, `<>`, `>`). `<>` is nearly the rule for a line with one tag (the next
   item).
-- Escaping by default.
+- Escaping by default: the core stays raw; a template asks for escaping (51.5).
 - `agentica type-at` and `refs` at a position inside a tag are
   `QUERY-NO-EXPRESSION`: the literal holds its expansion for the checker, but
   the position search does not descend into it. `refs` by name, or from a
@@ -89,3 +89,24 @@ What follows from the block:
   both.
 - A template is code of its function, so a variable of the function is read-only
   inside it, and Agentica's syntax applies in the tags (`for x in xs`, `end`).
+
+### 51.5 The escaper (owner, 2026-11-02)
+
+The core stays raw and has one generic hook; escaping HTML is a library's
+business (Bond offers `Bond.escape`).
+
+- A directive tag `<%@ escape function %>` on the first line of the body gives
+  the template an escaper. `function` is any expression of type
+  `Fn[String, String]`, such as `&EAG.html_escape` or `&Bond.escape`. Alone on
+  its line, the directive is removed whole. `escape` is the only word.
+- With an escaper, `<%= code %>` pushes `escaper.call("#{code}")`, the escape of
+  the text that ERB's `to_s` gives. `<%== code %>` always pushes the text as it
+  is, with or without an escaper, so adding an escaper needs no edit of the tags.
+- The expansion keeps the same shape: the escaper is the item of the list that
+  the block maps, `[function].map do |eag#e: Fn[String, String]|`, so the
+  checker sees ordinary code and a function of another type is
+  `CHECK-TYPE-MISMATCH` at the directive. `eag#e` is a hidden name like the
+  others. A directive with another word or no function, not on the first line
+  or given twice is `PARSE-EAG-DIRECTIVE`.
+- The hook takes text, not a value, so a type `Fn[T, String]` and a "safe
+  string" type are not part of it: `<%==` is the way out.

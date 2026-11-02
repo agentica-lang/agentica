@@ -157,6 +157,11 @@ is a rule:
   never ends (`PARSE-EAG-BLOCK`)
   - **Help:** a template closes its own blocks
 
+- **Written:** a `<%@ %>` directive of an `<<~EAG` template that is not
+  `escape function`, is not on the first line of the body, or comes twice
+  (`PARSE-EAG-DIRECTIVE`)
+  - **Help:** write `<%@ escape &EAG.html_escape %>` alone on the first line
+
 - **Written:** an `<<~EAG` template in a file that does not import `std/eag`
   (`CHECK-EAG-IMPORT`)
   - **Help:** add `import EAG from "std/eag"`; any import of `std/eag` will do

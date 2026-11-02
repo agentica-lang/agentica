@@ -1,0 +1,10 @@
+import EAG from "std/eag"
+
+def page(names: List[String]) -> String
+  return <<~EAG
+    <%@ escape &EAG.html_escape %>
+    <% for name in names %>
+    <li><%= name %> <%== name %></li>
+    <% end %>
+  EAG
+end

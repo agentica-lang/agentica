@@ -45,7 +45,31 @@ end
 
 ```
 
-- `<%= code %>` inserts the value of `code` as `"#{code}"` does (`to_s`). The output is raw, as ERB's is: nothing is escaped, so write `EAG.html_escape(...)` for HTML.
+A template with an escaper escapes what `<%= %>` inserts and leaves `<%==` alone:
+
+```agentica
+import EAG from "std/eag"
+
+def card(name: String, note: String) -> String
+  return <<~EAG
+    <%@ escape &EAG.html_escape %>
+    <p><%= name %>: <%== note %></p>
+  EAG
+end
+
+def main() -> Void
+  puts(card("a<b", "<em>ok</em>"))
+end
+```
+
+```output
+<p>a&lt;b: <em>ok</em></p>
+
+```
+
+- `<%= code %>` inserts the value of `code` as `"#{code}"` does (`to_s`). The output is raw, as ERB's is: nothing is escaped, so write `EAG.html_escape(...)` for HTML, or give the template an escaper (below).
+- `<%== code %>` inserts the value raw, with or without an escaper.
+- `<%@ escape function %>` alone on the first line of the template gives it an escaper: `function` is a value of type `Fn[String, String]`, such as `&EAG.html_escape`, and every `<%= code %>` then inserts `function.call("#{code}")`, so HTML is escaped by default and `<%==` is the way out. A function of another type is `CHECK-TYPE-MISMATCH` at the directive; `escape` is the only directive word, and a directive with another word, with no function, not on the first line or given twice is `PARSE-EAG-DIRECTIVE`. Any `Fn[String, String]` works, so a library can offer its own escaper.
 - `<% code %>` is a statement: `if`, `elsif`, `else`, `for`, `while`, `case`, `end`, or any other. The tags of a template must close their own blocks (`PARSE-EAG-BLOCK`). A template is a block of its function, so a tag cannot assign a variable of the function (`CHECK-CAPTURED-ASSIGNMENT`); a variable made in a tag lives in the template. For the same reason a block inside a tag cannot write output: `<% items.each do |i| %><%= i %><% end %>` is `CHECK-CAPTURED-ASSIGNMENT`, so write `<% for i in items %>` (Ruby's `each do` habit does not work here).
 - `<%# note %>` is dropped. `<%%` is the text `<%`. `-%>` removes the line break after the tag, and `<%-` removes the spaces before the tag when only spaces come before it on its line (Ruby's `trim_mode: "-"`).
 - One rule is not Ruby's `trim_mode: "-"`: a line that holds only one `<% %>` or `<%# %>` tag and spaces is removed whole, so a loop leaves no blank lines.
