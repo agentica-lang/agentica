@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `TCP.remote_address(socket)` returns the peer's IP address without the port
+  (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
+
 ## [0.21.0] - 2026-11-02
 
 ### Added
@@ -19,8 +24,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`Regex.match`, `find_all`, `replace`, `split`), matched inside the VM.
 - Regex literals `/pattern/flags` (flags `i` and `m`), checked when the
   program is compiled; the file imports `std/regex`.
-- `TCP.remote_address(socket)` returns the peer's IP address without the port
-  (`"127.0.0.1"`, `"::1"`), for TCP and TLS sockets.
 
 ### Changed
 
