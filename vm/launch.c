@@ -52,8 +52,6 @@
 #define PROFILE_SAMPLE 1000
 #define PROFILE_SAMPLE_MAX 1000000000
 
-typedef enum { LAUNCH_FLUSHED, LAUNCH_FLUSH_BUSY, LAUNCH_FLUSH_FAILED } launch_flush_result;
-
 #ifndef _WIN32
 static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -144,31 +142,6 @@ const char *agc_launch_self_path(int argc, char **argv, const char *fallback, ch
   return buffer;
 }
 
-/* A compute call may still own a C stream at exit. Linux skips it rather than waiting for that call. */
-static launch_flush_result flush_stdio(FILE *stream) {
-#ifdef __linux__
-  int saved_errno = errno;
-  if (ftrylockfile(stream) != 0) {
-    errno = saved_errno;
-    return LAUNCH_FLUSH_BUSY;
-  }
-#endif
-  bool ok = true;
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) {
-      ok = false;
-      break;
-    }
-    clearerr(stream);
-  }
-#ifdef __linux__
-  saved_errno = errno;
-  funlockfile(stream);
-  errno = saved_errno;
-#endif
-  return ok ? LAUNCH_FLUSHED : LAUNCH_FLUSH_FAILED;
-}
-
 /* A failure of the file flush or of the native frees: the run's outcome is kept, and one line says what may be lost. */
 static void flush_failed(agc_vm *vm, bool natives) {
   agc_sync_reset(vm);
@@ -221,17 +194,17 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
     *outcome = *vm->outcome;
 }
 
-/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the queued
-   compute calls are dropped, then the children, then standard output and the
-   files, then what native code still owns, then the exit. Nothing else is drained: the sockets are closed in goodbye
+/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the queued compute calls are dropped, then the children,
+   then standard output (a C stream whose lock a compute call holds is skipped: agc_stdio_flush) and the files, then
+   what native code still owns, then the exit. Nothing else is drained: the sockets are closed in goodbye
    (agc_io_goodbye), and the OS frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_ffi_stop_queued(vm);
   agc_processes_stop(vm);
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
-  bool stdout_ok = flush_stdio(stdout) != LAUNCH_FLUSH_FAILED;
-  flush_stdio(stderr);
+  bool stdout_ok = agc_stdio_flush(stdout) != AGC_STDIO_FAILED;
+  agc_stdio_flush(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
@@ -245,7 +218,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
-    if (!stdout_ok || flush_stdio(stdout) == LAUNCH_FLUSH_FAILED)
+    if (!stdout_ok || agc_stdio_flush(stdout) == AGC_STDIO_FAILED)
       write_error = "cannot write to standard output";
     else if (agc_output_failed(&vm->rt->err))
       write_error = "cannot write to standard error";
@@ -266,8 +239,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
     code = (int)outcome->exit_code;
   }
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
-  flush_stdio(stdout);
-  flush_stdio(stderr);
+  agc_stdio_flush(stdout);
+  agc_stdio_flush(stderr);
   return code;
 }
 

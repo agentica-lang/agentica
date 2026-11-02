@@ -99,6 +99,22 @@ class TestModuleRules:
         for (path, code), checked in zip(cases, results):
             self.assert_rejected(checked, code, line=1, file="root.agc")
 
+    def test_a_relative_import_that_finds_no_file_has_help_at_the_import(self):
+        """An import is relative to the importing file: a missing folder or file is CHECK-IMPORT-IO at the import
+        line, with a help (the path tried, and the form from the importing file when the project folder has it)."""
+        lib = "export def hi() -> String\n  return \"hi\"\nend\n"
+        main = "\ndef main() -> Void\nend\n"
+        cases = [
+            ({"agentica.toml": 'name = "p"\n', "src/lib.agc": lib, "tools/x.agc": 'import L from "src/lib"\n' + main},
+             "tools/x.agc"),
+            ({"agentica.toml": 'name = "p"\n', "tools/x.agc": 'import L from "gone"\n' + main}, "tools/x.agc"),
+        ]
+        results = self.checks([(files, root, None) for files, root in cases])
+        for (_files, root), checked in zip(cases, results):
+            problem = self.assert_rejected(checked, "CHECK-IMPORT-IO", line=1, file=root)
+            assert start(problem) == (1, 1)
+            assert problem["help"]
+
     def test_std_internal_is_private_to_std_modules_and_the_span_is_the_import(self):
         """std/internal/ holds the core that std/analysis embeds: a program may import none of it, a name that exists
         or not. The span is the import line, up to the start of the next one."""

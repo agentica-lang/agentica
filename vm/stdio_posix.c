@@ -10,8 +10,9 @@
 #endif
 #include "core.h"
 
-#if defined(__linux__) || defined(__APPLE__)
 #include <errno.h>
+
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -197,5 +198,27 @@ bool agc_memstream_take(FILE *file, agc_memstream *m, char **text, size_t *len) 
   free(m);
   return ok;
 }
+
 #endif
+
+/* ftrylockfile is POSIX, so every system but Windows takes this flush, not only Linux and macOS. */
+agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
+  int saved_errno = errno;
+  if (ftrylockfile(stream) != 0) {
+    errno = saved_errno;
+    return AGC_STDIO_BUSY;
+  }
+  bool ok = true;
+  while (fflush(stream) != 0) {
+    if (errno != EINTR) {
+      ok = false;
+      break;
+    }
+    clearerr(stream);
+  }
+  saved_errno = errno;
+  funlockfile(stream);
+  errno = saved_errno;
+  return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FAILED;
+}
 #endif
