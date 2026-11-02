@@ -142,9 +142,9 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   it out. The loader does not guard it: a crafted `.agcb` gets nothing `TCP` and
   `TLS` do not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is
   a reserved name.
-- **Options.** `HTTP.client` and `HTTP.listen` check every number first:
-  positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB. A
-  bad record is an `error` result.
+- **Options.** `HTTP.client` and the servers check every number first:
+  positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB
+  for a client and 256 MiB for a server. A bad record is an `error` result.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
   (`none`: system trust), and the `listen_*_tls` forms a server one.
 
@@ -436,6 +436,9 @@ Properties of the client that no test checks:
   over `pieces` with a byte limit that awaits `done`.
 - A `serve` server reads the head as a `listen_upload` server does, with the
   WebSocket handshake let through, and calls the app with the same feeder.
+  Its bodies are capped at `max_body_bytes`: a larger `Content-Length` gets
+  the 413 from the head, before the app and any `100 Continue`, and a chunked
+  body that grows past it fails `done` with the error of `read_all`.
   When the app returns, the server closes `pieces` and waits for `rest` at
   most the answer time: the feeder sends the bytes past a whole body, and
   closes `rest` when the body failed or the closed `pieces` stopped it. So a
