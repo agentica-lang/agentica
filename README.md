@@ -14,8 +14,8 @@ reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/
 ## Install
 
 Each release has an archive per system (Linux and macOS on x86-64 and arm64,
-Windows on x86-64), with `bin/agentica` and the licenses. Unpack one and put its `bin`
-folder on your `PATH`. The [install
+Windows on x86-64), with `bin/agentica` and the licenses. Unpack one and put
+its `bin` folder on your `PATH`. The [install
 guide](https://agentica-lang.github.io/agentica/getting-started/) lists the
 archives, the minimum system versions and the requirements to build.
 
