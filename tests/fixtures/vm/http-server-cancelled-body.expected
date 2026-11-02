@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1211,
+  "stdout": [
+    "HTTP/1.1 200 OK",
+    "closed",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

@@ -100,6 +100,8 @@ CRLF = "\r\n".bytes
 # two must match.
 DOWNLOAD_MAX_BYTES = 268435456
 CLIENT_MAX_BODY = 67108864
+# The error of an awaited task that was cancelled (Task.await), as the feeder of a closing server gives it.
+TASK_CANCELLED = "task: cancelled"
 # The error of `read_all` for a body over its limit, which `body_refusal` answers 413.
 BODY_TOO_LONG = "http: body exceeds max_bytes"
 # The start of the error of a chunked body with a line or trailer section over the head limits, which
@@ -2211,6 +2213,12 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   pieces.close
   past = left.recv(ANSWER_MS)
   bodiless = not head.chunked and head.length == 0
+  if not bodiless and cancelled?(feeder)
+    # Only a closing server cancels the feeder, and then no answer goes out: the app read a body that is gone (`app`
+    # answers 400 for it). A request with no body never waits for the feeder, so its answer stands.
+    TCP.close(socket)
+    return Sent(keep: false, rest: NO_BYTES)
+  end
   whole = bodiless or Result.ok?(past)
   sent = send_answer(socket, request, result, whole, Result.unwrap_or(past, NO_BYTES), options)
   if whole
@@ -2221,6 +2229,19 @@ def answer_app(reading: Reading, app: App, options: HttpServerOptions) -> Sent
   drain(socket, Time.monotonic_ms() + ANSWER_MS)
   TCP.close(socket)
   return Sent(keep: false, rest: NO_BYTES)
+end
+
+# Whether the feeder ended cancelled. A feeder that still reads a body the app left unread gets 1 ms before it counts
+# as not cancelled.
+def cancelled?(feeder: Task[Result[Void]]) -> Bool
+  case Task.await(feeder, 1)
+    Await.Done(outcome) ->
+      case outcome
+        error(message) -> return message == TASK_CANCELLED
+        ok(_) -> return false
+      end
+    Await.TimedOut -> return false
+  end
 end
 
 # Sends the answer of an app. `whole` says whether the request body was read whole, and `rest` holds the bytes read
@@ -2280,6 +2301,11 @@ end
 def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
   if announced_length(request.headers) > max_body_bytes
     return ok(Answer.Whole(closing_answer(413)))
+  end
+  # A request with neither a length nor chunks has no body (a request body never ends with the connection): the
+  # handler runs at once, without awaiting the feeder, which a closing server may cancel.
+  if announced_length(request.headers) == 0 and header_values(request.headers, "transfer-encoding").empty?
+    return ok(Answer.Whole(try handler.call(request)))
   end
   case read_all(body, max_body_bytes)
     ok(data) ->
