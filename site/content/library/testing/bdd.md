@@ -93,7 +93,7 @@ Scenario Outline: Greet in a language
 
 - A variable is added to the environment `agentica test` runs in; the program sees the others as they are. Setting a name again replaces its value. The variable reaches only the program of that scenario: not the runner, and no other scenario.
 - Each `the program argument` adds one argument, in order, with no splitting on spaces: `"a b"` is one argument. The program reads them with `System.args`.
-- Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`, a name or value cannot contain a NUL byte, and `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns, cannot be set: each is `RUNTIME-BDD-CONTEXT`. On Windows names ignore ASCII case, so `Path` and then `PATH` set one variable, to the second value.
+- Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`, a name or value cannot contain a NUL byte, and `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns, cannot be set: each is `RUNTIME-BDD-CONTEXT`. On Windows names ignore case, so `Path` and then `PATH` set one variable, to the second value; two names that differ only in the case of a letter outside ASCII, such as `Ä` and `ä`, make `the Agentica program` fail with `RUNTIME-BDD-IO`.
 - A scenario starts one program. To run it again with other values, write another scenario (an outline row is one).
 
 ## Your own steps
