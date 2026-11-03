@@ -255,6 +255,7 @@ def run(
     step_tries: attached.st.step_tries,
     bound: attached.st.bound,
   )
+
   return ok(Recovered(checked: checked, problems: problems, failed: failed))
 end
 
@@ -323,6 +324,7 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
         bodies: before.checked.bodies,
         step_tries: before.checked.step_tries,
       )
+
       return Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)
     none ->
       st = State.fresh().with(types: State.no_types(ids_of(linked)))

@@ -90,6 +90,7 @@ def spawn_mismatch(cx: State.Cx, callback: State.Out, site: State.Site, owning: 
     "#{site.selected.name} expects a function that takes #{wanted} parameter(s), " +
     "found #{spawn_found(callback.type)}; #{needs}"
   )
+
   span = Ast.expr_span(site.args[0])
   if wanted == 0 and T.is?(callback.type, "Fn") and T.params(callback.type).size == 1
     return State.fail_help(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span, spawn_argument_help(site.args[0]))
@@ -434,6 +435,7 @@ def task_map_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Bloc
     task_map_block_result(site.expected),
     none,
   )
+
   return task_map_result(cx, checked.st, checked.type, block.span)
 end
 

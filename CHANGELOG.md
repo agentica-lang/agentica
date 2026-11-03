@@ -20,6 +20,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
   `env` map of variables for the new program.
 
+### Changed
+
+- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
+  when it fits, and an empty line after a statement that takes several lines.
+
 ## [0.22.0] - 2026-11-02
 
 ### Added

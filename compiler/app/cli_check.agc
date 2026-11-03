@@ -73,6 +73,7 @@ export def json_text(entries: List[Entry]) -> String
     "failed": JSON.from(failed),
     "files": JSON.array(files),
   })
+
   return "#{JSON.encode(document)}\n"
 end
 

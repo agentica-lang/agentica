@@ -69,6 +69,7 @@ export def lower_function(
     file: fx.file,
     span: span,
   )
+
   return ok(Built(function: made, fx: fx))
 end
 
@@ -347,6 +348,7 @@ def bytes_reads(fx: Lowering.Fx, element: Int, items: Int, index: Int, span: Sou
     file: fx.file,
     spans: [span, span, span],
   )
+
   return [
     Ir.instr("move", [element, items], fx.file, [span]),
     Ir.instr("move", [element + 1, index], fx.file, [span]),

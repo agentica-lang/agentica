@@ -16,6 +16,7 @@ def main() -> Void
     more
   TWO
   )
+
   name = "x"
   shown = <<~SHOWN
     hello #{name}

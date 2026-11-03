@@ -74,6 +74,7 @@ export def run(steps: List[Step]) -> Void
       fields: Map[String, Json] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
       deliver(record_text(fields))
     end
+
     emit("ready")
     System.exit(0)
   elsif mode == "scenario"
@@ -329,7 +330,9 @@ def serve(all: List[Step]) -> Void
     has_table: false,
     table: empty,
   )
+
   no_hooks: List[Fn[Context, Result[Void]]] = []
+
   ctx = Context(
     scenario: Scenario(
       settings: settings.unwrap!,
@@ -343,6 +346,7 @@ def serve(all: List[Step]) -> Void
       closing: false,
     ),
   )
+
   line = Process.parent_read_line(idle_ms())
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
@@ -395,6 +399,7 @@ def after_record(problems: List[String]) -> String
     "code": JSON.from("RUNTIME-BDD-AFTER"),
     "message": JSON.from(clip("after hook failed: #{problems.join("; ")}")),
   }
+
   return record_text(fields)
 end
 
@@ -558,6 +563,7 @@ def compare(ctx: Context, checked: Result[Void], expected: String, actual: Strin
       "expected": JSON.from(clip(expected)),
       "actual": JSON.from(clip(actual)),
     }
+
     finish(ctx, fields)
   end
   return ctx
@@ -710,6 +716,7 @@ def deliver(text: String) -> Void
         "code": JSON.from("RUNTIME-BDD-OUTPUT-LIMIT"),
         "message": JSON.from("handler output exceeds 1 MiB"),
       }
+
       Process.parent_send(record_text(fields), send_ms())
     else
       IO.warn("BDD could not send a record to the runner: #{sent.message}")

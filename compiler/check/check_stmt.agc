@@ -155,6 +155,7 @@ def check_block_run(
     step: step,
     capture: some(State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver)),
   )
+
   inside = State.enter(inside)
   index = 0
   while index < types.size

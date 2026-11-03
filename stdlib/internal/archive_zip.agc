@@ -239,6 +239,7 @@ export def extract_zip(
     seen_fold: {},
     seen_exact: {},
   )
+
   outcome = try pass3(src, found, ordered, ctx)
   return ok(outcome)
 end
@@ -1054,6 +1055,7 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
     .map do |piece: Piece| piece.bytes end
     .inflate(true, cap)
     .reduce(Pump(got: 0, crc: 0)) do |pump: Pump, out: Bytes| try pump_out(handle, pump, out, deadline, entry) end
+
   case outcome
     ok(pump) ->
       if pump.got != entry.usize

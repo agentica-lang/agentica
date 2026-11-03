@@ -46,6 +46,7 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
       "scenarios": JSON.array([]),
       "error": DiagnosticJson.json(located(file, code, message)),
     }
+
     report = {
       "ok": JSON.from(false),
       "passed": JSON.from(0),
@@ -57,6 +58,7 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
       "seed": seed,
       "files": JSON.array([JSON.object(entry)]),
     }
+
     return Ending(code: 2, text: "#{JSON.encode(JSON.object(report))}\n")
   end
 

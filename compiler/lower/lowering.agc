@@ -159,6 +159,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     expression: &Expr.lower_expression,
     block: &Stmt.lower_block_function,
   )
+
   table_size = functions.size + plan.kept.size
   if start
     table_size += 1
@@ -388,6 +389,7 @@ def hoisted_regexes(functions: List[Located], scans: List[Scans.Scan]) -> List[L
         doc: none,
         span: regex.span,
       )
+
       found = found.push(LocatedConst(file: functions[at].file, constant: constant))
     end
 
