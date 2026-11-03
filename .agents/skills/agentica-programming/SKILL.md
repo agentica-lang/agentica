@@ -70,6 +70,7 @@ Read only what the task needs.
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
 | `html.md` | `std/html` (HTML escaping) |
 | `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
+| `option_parser.md` | `std/option_parser` (command-line options and arguments, typed getters, help) |
 | `mime.md` | `std/mime` (media type of a file) |
 | `utc.md` | `std/utc` (Unix ms to UTC date and RFC 3339 text) |
 | `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
