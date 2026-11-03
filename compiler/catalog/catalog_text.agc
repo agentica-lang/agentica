@@ -127,6 +127,10 @@ def name_lines() -> List[String]
 end
 
 def limit_types(limit: Model.Limit) -> String
+  if limit.equality
+    return "equality"
+  end
+
   return limit.allowed.map do |type: Types.Type| Types.debug_text(type) end.join("/")
 end
 

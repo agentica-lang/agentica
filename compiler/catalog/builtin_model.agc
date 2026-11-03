@@ -143,17 +143,20 @@ export struct EnumDef
 end
 
 ## A type variable of a prelude function that only some types may take: the key of `group_by` is an Int or a String.
-## what is how the message names the value ("a key"). The variables of a row that has no Limit take any type.
+## what is how the message names the value ("a key"). The variables of a row that has no Limit take any type. With
+## equality the variable may take any type that == compares (allowed is then empty), as the items of `include?` do.
 export struct Limit
   variable: String
   allowed: List[Types.Type]
   what: String
+  equality: Bool = false
 end
 
 ## What the checker and the lowering need to know about a prelude function besides its catalog row (the row of the
 ## same name). module is the stem of the prelude file with the body (stdlib/prelude/list.agc is "list"). The body is a
 ## function of that file: bodies maps the word of the type that selector (a limited variable) is bound to, such as
-## "Int", to the function; a function that serves every allowed type has selector "" and the one entry "".
+## "Int", to the function; a function that serves every allowed type has selector "" and the one entry "". With a
+## selector, the entry "" serves the types that have no entry of their own.
 export struct PreludeRow
   name: String
   module: String

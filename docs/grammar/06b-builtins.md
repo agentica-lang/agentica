@@ -18,7 +18,7 @@ Ruby aliases are the module functions named in the library pages: `strip`,
 method work too, and the texts show only the first: `length` and `size` on
 `String`, `Bytes`, `List`, `Map`, `Set` and `Range`; `collect` for `map`,
 `inject` for `reduce` and `detect` for `find` (on `List` and `Lazy`); `member?`
-for `include?` on `Set` and `Range`; `include?` and `member?` for `key?` on
+for `include?` on `List`, `Set` and `Range`; `include?` and `member?` for `key?` on
 `Map`. Two differ from Ruby: `to_i` and `to_f` on text return a `Result`
 (`"abc".to_i` is an error, not `0`), and `to_i!` and `to_f!` halt on bad text.
 An unknown method is `CHECK-UNKNOWN-METHOD`.

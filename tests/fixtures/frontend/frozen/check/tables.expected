@@ -42,6 +42,7 @@ export def method_aliases() -> Map[String, String]
     "List.inject": "List.reduce",
     "List.join": "String.join",
     "List.length": "List.size",
+    "List.member?": "List.include?",
     "List.push": "List.append",
     "List.select": "List.filter",
     "Map.include?": "Map.has_key?",
@@ -73,8 +74,8 @@ end
 export def ruby_synonyms() -> List[String]
   return [
     "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
-    "List.inject", "List.length", "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?",
-    "Set.length", "Set.member?", "String.size",
+    "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?", "Range.length",
+    "Range.member?", "Set.length", "Set.member?", "String.size",
   ]
 end
 

@@ -2367,6 +2367,19 @@ ROWS_22: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "List.include?",
+    parameters: [
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T"))),
+      Model.Named(name: "value", type: Types.Type.Var("T")),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Check whether a value is in the list, comparing with ==; items need equality; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "List.last",
     parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A")))],
     result: Types.Type.Var("A"),

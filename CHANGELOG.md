@@ -33,6 +33,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
 - An `Fn` struct field is called by its name: `store.put(a, b)` is
   `store.put.call(a, b)`.
+- `xs.include?(x)` (also `member?`) tells whether a list holds a value,
+  compared with `==`, for any item type that has `==`.
 
 ### Changed
 
