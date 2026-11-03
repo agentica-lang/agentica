@@ -388,12 +388,12 @@ Every failure is an error value. The checks run in this order:
 - `Path.real` is `uv_fs_realpath` in a pool job with no deadline. The path must
   exist; a link loop, too many links or a non-directory in the middle fail
   (`filesystem: cannot resolve path`). An empty or NUL path gives the
-  `filesystem: invalid path` error. A relative path starts at the working directory,
-  and the result decodes per byte, as `Dir.list` names do. macOS fails an
-  absolute form of 1024 bytes or more. On Windows `.` and `..` are dropped
-  before a link is followed, a name under a file gives ENOENT, `/` takes the
-  working directory's drive, and an absolute form of 260 characters or more
-  fails unless `LongPathsEnabled` is 1 (the binary's manifest declares
+  `filesystem: invalid path` error. A relative path starts at the working
+  directory, and the result decodes per byte, as `Dir.list` names do. macOS
+  fails an absolute form of 1024 bytes or more. On Windows `.` and `..` are
+  dropped before a link is followed, a name under a file gives ENOENT, `/`
+  takes the working directory's drive, and an absolute form of 260 characters
+  or more fails unless `LongPathsEnabled` is 1 (the binary's manifest declares
   `longPathAware`).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.

@@ -8,7 +8,7 @@
     "true",
     "ok(\"hello\")",
     "ok(\"ñ😀\")",
-    "error(\"invalid UTF-8 at byte offset 3\")",
+    "error(\"invalid UTF-8 at byte 3\")",
     "echo hello ñ😀",
     "ok(<Bytes 2 0102>)",
     "ok(<Bytes 1 03>)",

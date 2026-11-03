@@ -14,7 +14,7 @@
     "an error from the block: error(\"stopped at 2\")",
     "  7 + 1 = 8",
     "a failed try: error(\"cannot convert \\\"x\\\" to Int\")",
-    "invalid UTF-8: error(\"invalid UTF-8 at byte offset 0\")",
+    "invalid UTF-8: error(\"invalid UTF-8 at byte 0\")",
     "a line over the buffer: error(\"filesystem: line exceeds buffer_bytes\")",
     "a missing file: error(\"filesystem: path does not refer to a regular file\")",
     "a bad timeout: error(\"filesystem: timeout must be positive milliseconds\")",

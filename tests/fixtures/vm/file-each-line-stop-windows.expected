@@ -26,7 +26,7 @@
     "  3 doubled by a task: 6",
     "a block that waits on other tasks: ok()",
     "  saw a",
-    "invalid UTF-8 ends the call: error(\"invalid UTF-8 at byte offset 0\")",
+    "invalid UTF-8 ends the call: error(\"invalid UTF-8 at byte 0\")",
     "a line over the buffer ends the call: error(\"filesystem: line exceeds buffer_bytes\")",
     "a missing file: error(\"filesystem: path does not refer to a regular file\")",
     "  saw 1",

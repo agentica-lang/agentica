@@ -55,7 +55,7 @@
     "  -> error(\"filesystem: line exceeds buffer_bytes\")",
     "invalid UTF-8",
     "  \"ok\"",
-    "  -> error(\"invalid UTF-8 at byte offset 1\")",
+    "  -> error(\"invalid UTF-8 at byte 1\")",
     "open errors",
     "missing",
     "  -> error(\"filesystem: path does not refer to a regular file\")",

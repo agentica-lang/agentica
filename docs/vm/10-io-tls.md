@@ -212,7 +212,8 @@ texts.
   CRLF, returns a final line without a terminator at EOF (a lone CR stays), and
   returns `network: end of input` on an empty EOF. A line over 1 MiB returns
   `network: line exceeds 1048576 bytes` and closes the socket. Invalid UTF-8
-  returns `invalid UTF-8 at byte offset N`, and the line is consumed. A read
+  returns `invalid UTF-8 at byte N` (N counts from the start of the line), and
+  the line is consumed. A read
   error (`ECONNRESET`) returns `could not read from the stream`, and later reads
   return it too. Bytes that arrived before the error are still returned.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
@@ -236,8 +237,8 @@ texts.
   parked. A peer sees FIN, or RST when data was left unread. A DNS lookup still
   running in the pool is not waited for.
 - **Messages.** The VM's own texts start with `network:`; connect and listen
-  failures add `host:` and `port:` lines and the system error. The size builtins charge by size
-  (10.2.1).
+  failures add `host:` and `port:` lines and the system error. The size
+  builtins charge by size (10.2.1).
 - **Platforms.** The code is shared; libuv hides the socket types. What it does
   not hide:
   - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the message

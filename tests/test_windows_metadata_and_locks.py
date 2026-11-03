@@ -334,8 +334,7 @@ def test_opening_a_device_fails_before_any_lock(root, work):
     bytecode = compile_work_text(work, DEVICE_OPEN_PROGRAM, "windows-device-open")
     result = run_vm(bytecode, args=[], env=vm_environment(), cwd=root)
     assert result.code == 0, (result.code, result.stderr)
-    # An error result that names the device; the prose around it is not asserted.
-    assert result.stdout.startswith("error("), result.stdout
+    assert "filesystem: cannot open file for reading" in result.stdout, result.stdout
     assert "NUL" in result.stdout, result.stdout
 
 

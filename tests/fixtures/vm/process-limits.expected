@@ -3,7 +3,7 @@
   "code": null,
   "steps": 154,
   "stdout": [
-    "error(\"invalid UTF-8 at byte offset 0\")",
+    "error(\"invalid UTF-8 at byte 0\")",
     "ok(\"valid\")",
     "error(\"process: count must be 0..1048576\")",
     "error(\"process: count must be 0..1048576\")",

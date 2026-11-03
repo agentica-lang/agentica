@@ -25,11 +25,9 @@ static const char timed_out[] = "network: operation timed out";
 /* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
    start a valid character. */
 agc_value agc_utf8_error(const uint8_t *data, size_t len) {
-  size_t at = 0;
-  for (size_t n; at < len && (n = agc_utf8_valid(data + at, len - at)) != 0;) at += n;
   char message[64];
-  int n = snprintf(message, sizeof message, "invalid UTF-8 at byte offset %zu", at);
-  return agc_result_value(false, agc_string_value(agc_make_string(message, (size_t)n, (size_t)n)));
+  snprintf(message, sizeof message, "invalid UTF-8 at byte %zu", agc_utf8_bad_at(data, len));
+  return agc_error_value(message);
 }
 
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
