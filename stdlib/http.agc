@@ -57,7 +57,7 @@ CHANNEL_CLOSED = "channel: closed"
 END_OF_INPUT = "network: end of input"
 # vm/tcp.c upgrade_error: bytes came with the CONNECT answer, before the TLS handshake began.
 BEFORE_TLS = "network: data came before the TLS handshake"
-READ_FAILED = "error reading from stream port"
+READ_FAILED = "could not read from the stream"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
 # No bytes: the empty rest of a read and the empty body.

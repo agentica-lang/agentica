@@ -5,7 +5,7 @@ test reads from outside what a folder would show: the named pipes of the process
 libuv makes for a child's standard streams, listed in \\.\pipe\) and its handle count (GetProcessHandleCount).
 
 Several layers refuse a path that names such a pipe: the device-namespace check of every file call (path_string in
-vm/files.c, a contract error), the regular-file check, and the pipe itself (all its instances are busy). The pipe case
+vm/files.c, a bad path error), the regular-file check, and the pipe itself (all its instances are busy). The pipe case
 pins the first one by the text of its error, for the spellings that begin with \\.\ and \\?\ (without that check those
 calls would still fail, one layer later, and a test of the outcome alone would pass). The other spellings (\\localhost\,
 \\127.0.0.1\ and \??\) reach the later layers and are checked only by the fact that they fail.
@@ -30,8 +30,8 @@ pytestmark = pytest.mark.skipif(os.name != "nt",
 
 WAIT = scaled(20)
 PIPE_FOLDER = "\\\\.\\pipe"
-# The error of path_string (vm/files.c): the same contract text as every other bad path.
-GUARD_ERROR = 'error("path->complete-path: contract violation'
+# The error of path_string (vm/files.c): the same text as every other bad path.
+GUARD_ERROR = 'error("filesystem: invalid path'
 
 # A gate for a program: true when the file `path` can be read, false after about 15 s.
 WAIT_FOR = r"""def wait_for(path: String) -> Bool

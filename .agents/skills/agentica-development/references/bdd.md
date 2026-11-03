@@ -109,7 +109,7 @@ or the site).
   A failed `channel_send` fails the step at once (`send exceeds` is
   `RUNTIME-BDD-IO`, else `read_failure`). `read_failure` (and `failure` in
   `units`) treat the messages `Child.gone?` names (end of input, closed
-  channel or stdin, `error writing to stream port`) as a dead child, so its
+  channel or stdin, `could not write to the stream`) as a dead child, so its
   fail record or stderr diagnostic is shown. A `fail` after the last step is
   the scenario's error (`await_exit` reads to the end after `channel_close`).
   A child that dies prints its diagnostic on stderr with `--json`; the runner

@@ -138,7 +138,7 @@ def test_sha256_rejects_an_empty_path(tmp_path):
     )
     result = run(cli() + [str(source)], env=vm_environment())
     assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error(\"path->complete-path: contract violation"), result.stdout
+    assert result.stdout.startswith("error(\"filesystem: invalid path"), result.stdout
 
 
 def test_sha256_reports_denied_fs(tmp_path):

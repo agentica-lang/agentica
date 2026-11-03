@@ -151,9 +151,6 @@ static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
 static const char refused_windows_path[] = "filesystem: refusing to remove an unsafe Windows path";
 #endif
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
-static const char rename_who[] = "rename-file-or-directory";
-static const char complete_who[] = "path->complete-path";
-static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
 
 static void put(text *t, const char *data, size_t len) {
   if (agc_size_add(t->len, len) > t->cap) {
@@ -228,12 +225,10 @@ static void put_form(text *t, const agc_string *s) {
   puts_text(t, "...");
 }
 
-static agc_value contract_error(const char *who, const char *expected, const agc_string *given) {
+/* The error of a path that path_string refuses, with the path in its printed form. */
+static agc_value bad_path(const agc_string *given) {
   text t = {0};
-  puts_text(&t, who);
-  puts_text(&t, ": contract violation\n  expected: ");
-  puts_text(&t, expected);
-  puts_text(&t, "\n  given: ");
+  puts_text(&t, "filesystem: invalid path ");
   put_form(&t, given);
   return error_text(&t);
 }
@@ -1391,22 +1386,21 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_NOT_REGULAR: return error_of(not_regular);
     case FS_TOO_BIG: return error_of("filesystem: file exceeds 1048576 bytes");
     case FS_OPEN:
-      if (o->kind == OP_LIST) return os_error(vm, "directory-list: could not open directory", o->path, path_len, o->err);
+      if (o->kind == OP_LIST) return os_error(vm, "filesystem: cannot open directory", o->path, path_len, o->err);
       if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
-        return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
-      return os_error(vm, "open-output-file: error opening file", o->path, path_len, o->err);
+        return os_error(vm, "filesystem: cannot open file for reading", o->path, path_len, o->err);
+      return os_error(vm, "filesystem: cannot open file for writing", o->path, path_len, o->err);
     case FS_IS_DIR: {
       text t = {0};
-      puts_text(&t, "open-output-file: path is a directory\n  path: ");
+      puts_text(&t, "filesystem: path is a directory\n  path: ");
       put(&t, o->path, path_len);
-      puts_text(&t, "\n  system error: path refers to a directory; rkt_err=9");
       return error_text(&t);
     }
     case FS_MISSING: return error_of("filesystem: path does not exist");
     case FS_LINK: return error_of("filesystem: path is not a regular file or directory");
     case FS_EOF: return error_of("filesystem: end of file");
     case FS_LONG_LINE: return error_of("filesystem: line exceeds 1048576 bytes");
-    case FS_MKDIR: return os_error(vm, "make-directory: cannot make directory", o->path, o->fail_at, o->err);
+    case FS_MKDIR: return os_error(vm, "filesystem: cannot make directory", o->path, o->fail_at, o->err);
     case FS_RESOLVE: return os_error(vm, "filesystem: cannot resolve path", o->path, path_len, o->err);
     case FS_REMOVE: return os_error(vm, "filesystem: cannot remove path", o->path, path_len, o->err);
     case FS_TREE_DEEP: return error_of(too_deep);
@@ -1423,8 +1417,8 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       return error_text(&t);
     }
     default:
-      return agc_system_error(vm, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port",
-                              o->err);
+      return agc_system_error(vm, o->status == FS_WRITE ? "filesystem: cannot write the file"
+                                                        : "filesystem: cannot read the file", o->err);
   }
 }
 
@@ -1608,10 +1602,9 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
 }
 
 /* A job on the file at path. */
-static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout, const char *who,
-                         const char *expected) {
+static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout) {
   if (timeout <= 0) return error_of(bad_timeout);
-  if (!path_string(path)) return contract_error(who, expected, path);
+  if (!path_string(path)) return bad_path(path);
   op *o = new_op(vm, kind);
   o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
@@ -1619,8 +1612,7 @@ static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64
 
 static agc_value builtin_read_text(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_READ_TEXT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who,
-                 complete_expected);
+  return path_op(vm, OP_READ_TEXT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind kind) {
@@ -1630,7 +1622,7 @@ static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind 
   int64_t timeout = agc_as_int(vm, args[2]);
   if (content->bytes > LIMIT) return error_of("filesystem: text exceeds 1048576 bytes");
   if (timeout <= 0) return error_of(bad_timeout);
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
   op *o = new_op(vm, kind);
   o->in = malloc(content->bytes ? content->bytes : 1);
   if (!o->in) agc_out_of_memory();
@@ -1650,35 +1642,33 @@ static agc_value builtin_append_text(agc_vm *vm, agc_value *args, uint32_t span)
 
 static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
+  return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 /* File.sha256: the SHA-256 of the file's bytes, as a Bytes. */
 static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
+  return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_LSTAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
+  return path_op(vm, OP_LSTAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_list(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_LIST, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "directory-list", "path-string?");
+  return path_op(vm, OP_LIST, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_mkdir(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_MKDIR, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "make-directory*",
-                 "path-string?");
+  return path_op(vm, OP_MKDIR, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_dir_mkdir_private(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return path_op(vm, OP_MKDIR_PRIVATE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "make-directory",
-                 "path-string?");
+  return path_op(vm, OP_MKDIR_PRIVATE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1687,7 +1677,7 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
 #ifdef _WIN32
   if (path_string(path) && !windows_remove_input_valid(path)) return error_of(refused_windows_path);
 #endif
-  return path_op(vm, OP_REMOVE, path, agc_as_int(vm, args[1]), "delete-directory/files", "path-string?");
+  return path_op(vm, OP_REMOVE, path, agc_as_int(vm, args[1]));
 }
 
 static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1696,8 +1686,8 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *to = agc_as_string(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
   if (timeout <= 0) return error_of(bad_timeout);
-  if (!path_string(from)) return contract_error(rename_who, "path-string?", from);
-  if (!path_string(to)) return contract_error(rename_who, "path-string?", to);
+  if (!path_string(from)) return bad_path(from);
+  if (!path_string(to)) return bad_path(to);
   op *o = new_op(vm, OP_RENAME);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
@@ -1713,7 +1703,7 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[2]);
   if (len > REPLACE_LIMIT) return error_of("filesystem: data exceeds 16777216 bytes");
   if (timeout <= 0) return error_of(bad_timeout);
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
   op *o = new_op(vm, OP_REPLACE);
   o->in = malloc(len ? len : 1);
   if (!o->in) agc_out_of_memory();
@@ -1758,7 +1748,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   } else {
     return error_of("filesystem: mode must be read, write, append, or create_private");
   }
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
   return start(vm, open_op(vm, kind, path), agc_void(), timeout);
 }
 
@@ -1940,7 +1930,7 @@ static bool lines_take(agc_vm *vm, agc_line_reader *r, file_state *st, size_t le
 static agc_value lines_refused(agc_vm *vm, const agc_string *path, int64_t timeout) {
   if (vm->rt->deny_fs) return error_of(AGC_DENIED_FS);
   if (timeout <= 0) return error_of(bad_timeout);
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
   return agc_void();
 }
 
@@ -2236,7 +2226,7 @@ void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
 static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   const agc_string *path = agc_as_string(vm, args[0]);
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
   op *o = new_op(vm, OP_REAL);
   o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), NO_DEADLINE);
@@ -2270,15 +2260,14 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_list_cursor_begin(&cursor, parts, 0);
   while (agc_list_cursor_next(&cursor, &item)) {
     const agc_string *part = agc_as_string(vm, item);
-    if (!path_string(part))
-      return contract_error("build-path", "(or/c path-string? path-for-some-system? 'up 'same)", part);
+    if (!path_string(part)) return bad_path(part);
   }
   agc_list_cursor_begin(&cursor, parts, 1);
   while (agc_list_cursor_next(&cursor, &item)) {
     const agc_string *part = agc_as_string(vm, item);
     if (agc_fs_rooted(part->data, part->bytes)) {
       text t = {0};
-      puts_text(&t, "build-path: absolute path cannot be added to a path\n  absolute path: ");
+      puts_text(&t, "filesystem: Path.join cannot add the absolute path ");
       put_form(&t, part);
       return error_text(&t);
     }
@@ -2309,7 +2298,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   const agc_string *path = agc_as_string(vm, args[0]);
-  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  if (!path_string(path)) return bad_path(path);
 #ifdef _WIN32
   char *given = agc_cstr(path);
   char *resolved = agc_fs_absolute(given);

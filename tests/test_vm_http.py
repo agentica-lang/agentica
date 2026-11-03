@@ -940,9 +940,9 @@ def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, a
         "200 None 8 over tls 15",
         "200 closed cleanly 14",
         "http: truncated HTTP body",
-        ("prefix", "error reading from stream port | "),
-        ("prefix", "ssl-connect: connect failed (certificate verify failed"),
-        ("prefix", "ssl-load-verify-source!: load failed from: ")], "tls")
+        ("prefix", "could not read from the stream | "),
+        ("prefix", "network: TLS connect failed (certificate verify failed"),
+        ("prefix", "network: cannot load ca_file ")], "tls")
 
 
 def test_public_connection_reads_bodies_in_pieces_and_serves_a_second_request_on_the_same_socket(tmp_path, adopt):
@@ -1043,7 +1043,7 @@ def test_public_connection_over_tls_verifies_the_certificate_and_ends_a_body_tha
         "0",
         "200 closed cleanly 0",
         "false",
-        ("prefix", "ssl-connect: connect failed (certificate verify failed"),
+        ("prefix", "network: TLS connect failed (certificate verify failed"),
         "started"], "connection-tls")
 
 

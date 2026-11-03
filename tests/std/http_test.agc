@@ -166,7 +166,7 @@ def main() -> Void
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)
-      try Test.eq(String.starts_with?(kept.message, "open-output-file: error opening file"), true)
+      try Test.eq(String.starts_with?(kept.message, "filesystem: cannot open file for writing"), true)
       try Test.eq(try File.read_text("download-kept.bin", 5000), "old")
       Path.remove("download-kept.bin", 5000)
     end
