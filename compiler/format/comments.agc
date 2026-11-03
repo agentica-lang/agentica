@@ -3,11 +3,11 @@
 ## the later stages never see them; this pass gives each comment one node and one role, before any layout.
 ##
 ## The nodes are an outline of the tree: one entry per node with a span (declarations, parameters, fields, variants,
-## types, statements, `if` branches, `case` arms, patterns, expressions, named arguments, map entries, block
-## parameters and import names), plus the module doc, which the tree keeps as text only. Each has the kind of its
-## tree node and its span cut at its last token that is not a line break, because a parsed span can end with the line
-## break after the node. The outline is built with a worklist and no recursion, so a deep tree cannot reach the limit
-## of VM calls.
+## types, statements, `if` branches, `case` arms, patterns, expressions, the stages of a pipe chain, named arguments,
+## map entries, block parameters and import names), plus the module doc, which the tree keeps as text only. Each has
+## the kind of its tree node and its span cut at its last token that is not a line break, because a parsed span can
+## end with the line break after the node. The outline is built with a worklist and no recursion, so a deep tree
+## cannot reach the limit of VM calls.
 ##
 ## The rules, after Prettier and syntax_tree: for each comment, the enclosing node is the deepest node whose span holds
 ## it, and the preceding and following nodes are the closest children of that node before and after it. A comment
@@ -100,6 +100,7 @@ enum Part
   Arm(Ast.CaseArm)
   Pattern(Ast.Pattern)
   Expr(Ast.Expr)
+  Stage(Ast.Call)
   Named(Ast.NamedArg)
   Entry(Ast.MapEntry)
   BlockParam(Ast.BlockParam)
@@ -213,7 +214,8 @@ def outline_of(program: Ast.Program, marks: Marks) -> Outline
     pending = queue[at]
     raw = span_of(pending.part)
     kind = kind_of(pending.part)
-    nodes = nodes.push(Node(kind: kind, span: tight(raw, marks), parent: pending.parent, key: key_of(kind, raw)))
+    shown = widened(pending.part, raw)
+    nodes = nodes.push(Node(kind: kind, span: tight(shown, marks), parent: pending.parent, key: key_of(kind, raw)))
     children = children_of(pending.part, marks).select do |part: Part| written?(span_of(part)) end
     first = first.push(queue.size)
     count = count.push(children.size)
@@ -227,6 +229,65 @@ def outline_of(program: Ast.Program, marks: Marks) -> Outline
   starts = nodes.map do |node: Node| node.span.start.offset end
   stops = nodes.map do |node: Node| node.span.stop.offset end
   return Outline(nodes: nodes, first: first, count: count, starts: starts, stops: stops)
+end
+
+# The span a node holds in the outline. The parser gives a piped call (`x |> f(a)` is the call `f(x, a)`) the span of
+# the call written on the right, so its first argument, the rest of the chain, lies before it; the node of a chain
+# covers it all, from the start of the first operand, to hold the comments between the stages. The key of the node
+# stays the one of the span as parsed.
+def widened(part: Part, raw: Source.Span) -> Source.Span
+  case part
+    Part.Expr(expr) ->
+      start = chain_start(expr)
+      if start.offset < raw.start.offset
+        return raw.with(start: start)
+      end
+
+      return raw
+    _ -> return raw
+  end
+end
+
+# Where the chain that ends in `expr` starts: the first operand of its `|>` stages, or the start of `expr` itself when
+# it is not a piped call (or a `try` of one).
+def chain_start(expr: Ast.Expr) -> Source.Position
+  start = Ast.expr_span(expr).start
+  current = expr
+  looping = true
+  while looping
+    looping = false
+    case current
+      Ast.Expr.Call(node) ->
+        if node.piped
+          current = node.args[0]
+          looping = true
+        end
+
+      Ast.Expr.Try(node) ->
+        if piped_call?(node.operand)
+          current = node.operand
+          looping = true
+        end
+
+      _ -> looping = false
+    end
+
+    if looping
+      here = Ast.expr_span(current).start
+      if here.offset < start.offset
+        start = here
+      end
+    end
+  end
+
+  return start
+end
+
+def piped_call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(node) -> return node.piped
+    _ -> return false
+  end
 end
 
 # A node the parser made without text of its own has an empty span; it gets no comment.
@@ -330,6 +391,12 @@ def place(outline: Outline, marks: Marks, comment: Tokens.Comment) -> Attached
       return Attached(comment: comment, node: preceding, role: Role.Trailing, keyword: "")
     end
 
+    # Inside the parentheses of a statement's value, before it: the layout has no place for it between `=` and the
+    # value, so it leads the statement.
+    if value_follows?(outline, enclosing, following)
+      return Attached(comment: comment, node: enclosing, role: Role.Leading, keyword: "")
+    end
+
     return by_order(comment, enclosing, following, preceding, Role.Leading, Role.Trailing)
   end
 
@@ -428,6 +495,16 @@ def last_statement(outline: Outline, node: Int) -> Int
   return -1
 end
 
+# Whether `following` is the value of `enclosing`, a statement that is one value with no body.
+def value_follows?(outline: Outline, enclosing: Int, following: Int) -> Bool
+  if following < 0
+    return false
+  end
+
+  kind = outline.nodes[enclosing].kind
+  return (kind == "Binding" or kind == "Return" or kind == "ExprStmt") and outline.nodes[following].kind != "TypeRef"
+end
+
 def statement?(kind: String) -> Bool
   return STATEMENT_KINDS.include?(kind)
 end
@@ -447,6 +524,7 @@ def span_of(part: Part) -> Source.Span
     Part.Arm(node) -> return node.span
     Part.Pattern(pattern) -> return Ast.pattern_span(pattern)
     Part.Expr(expr) -> return Ast.expr_span(expr)
+    Part.Stage(node) -> return node.span
     Part.Named(node) -> return node.span
     Part.Entry(node) -> return node.span
     Part.BlockParam(node) -> return node.span
@@ -482,6 +560,7 @@ def kind_of(part: Part) -> String
     Part.Arm(_) -> return "CaseArm"
     Part.Pattern(pattern) -> return pattern_kind(pattern)
     Part.Expr(expr) -> return expr_kind(expr)
+    Part.Stage(_) -> return "PipeStage"
     Part.Named(_) -> return "NamedArg"
     Part.Entry(_) -> return "MapEntry"
     Part.BlockParam(_) -> return "BlockParam"
@@ -502,6 +581,7 @@ def children_of(part: Part, marks: Marks) -> List[Part]
     Part.Arm(node) -> return [Part.Pattern(node.pattern)].concat(optional_expr(node.guard)).concat(stmts(node.body))
     Part.Pattern(pattern) -> return pattern_children(pattern)
     Part.Expr(expr) -> return expr_children(expr)
+    Part.Stage(node) -> return exprs(node.args.drop(1))
     Part.Named(node) -> return [Part.Expr(node.value)]
     Part.Entry(node) -> return [Part.Expr(node.key), Part.Expr(node.value)]
     Part.BlockParam(node) -> return optional_type(node.type)
@@ -592,7 +672,7 @@ end
 
 def expr_children(expr: Ast.Expr) -> List[Part]
   case expr
-    Ast.Expr.Call(node) -> return exprs(node.args)
+    Ast.Expr.Call(node) -> return call_children(node)
     Ast.Expr.EnumConstructor(node) -> return exprs(node.args).concat(named(node.named))
     Ast.Expr.Invoke(node) -> return [Part.Expr(node.target)].concat(exprs(node.args))
     Ast.Expr.Construct(node) -> return named(node.args)
@@ -610,6 +690,16 @@ def expr_children(expr: Ast.Expr) -> List[Part]
     Ast.Expr.Typed(node) -> return [Part.Expr(node.target)]
     _ -> return []
   end
+end
+
+# The first operand of a piped call, then the stage written on the right with the rest of the arguments, so a comment
+# before a `|>` leads the stage (`PipeStage`) and one after a stage trails the chain up to it.
+def call_children(node: Ast.Call) -> List[Part]
+  if node.piped
+    return [Part.Expr(node.args[0]), Part.Stage(node)]
+  end
+
+  return exprs(node.args)
 end
 
 def interpolated(parts: List[Ast.Part]) -> List[Part]

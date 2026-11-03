@@ -357,6 +357,34 @@ end
 0.75
 ```
 
+## min and max
+
+```text
+List.min(list: List[T]) -> Optional[T]
+List.max(list: List[T]) -> Optional[T]
+```
+
+`some` with the least or greatest item, or `none` for an empty list. The items are `Int`, `Float` or `String` (compared with `String.compare`); any other item type is `CHECK-TYPE-MISMATCH`. The first item wins a tie, and a `NaN` never wins unless all are `NaN`. An `Int` has no `min(other)`, as in Ruby: write `[a, b].min.unwrap!`, or `n.clamp(lo, hi)` to keep a number in a range.
+
+```agentica
+def main() -> Void
+  puts([3, 1, 2].min)
+  puts([3, 1, 2].max)
+  puts(["pear", "apple"].min)
+  empty: List[Float] = []
+  puts(empty.max)
+  puts([700, 80].min.unwrap!)
+end
+```
+
+```output
+some(1)
+some(3)
+some("apple")
+none
+80
+```
+
 ## min_by and max_by
 
 ```text

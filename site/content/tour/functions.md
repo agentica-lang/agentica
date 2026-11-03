@@ -161,6 +161,27 @@ end
 
 `Fn[Void]` is a function with no parameters that gives nothing. Function values can live in lists, maps and struct fields.
 
+A function in a struct field is called with the name of the field, like a method: `counter.next(1)` is `counter.next.call(1)`. `counter.next` without parentheses still reads the function. Only a field of type `Fn` can be called this way; any other name is `CHECK-UNKNOWN-METHOD`, as structs have no methods. A field named `to_s` or `inspect` that holds a function wins over the method of that name.
+
+```agentica
+struct Counter
+  next: Fn[Int, Int]
+end
+
+def succ(n: Int) -> Int
+  return n + 1
+end
+
+def main() -> Void
+  counter = Counter(next: &succ)
+  puts(counter.next(counter.next(1)))
+end
+```
+
+```output
+3
+```
+
 [Blocks](/tour/blocks/) are the short way to write a function value at the place where you use it.
 
 ## Chain calls with |>

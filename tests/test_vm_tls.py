@@ -211,7 +211,7 @@ def main() -> Void
   puts(show(HTTP.get(pool, base + "/last")))
   other = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(other, base + "/other")))
-  puts(String.starts_with?(TLS.client_context(TlsClientOptions(ca_file: ca)).message, "ssl-load-verify-source!"))
+  puts(String.starts_with?(TLS.client_context(TlsClientOptions(ca_file: ca)).message, "network: cannot load ca_file"))
   # A client with no context builds one with the system trust (SSL_CERT_FILE here) for its first https connection
   # and shares it with the next.
   plain = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: 20000)))
@@ -568,20 +568,20 @@ def test_client_against_node_tls_servers_data_eof_resets_limits_timeouts_and_ver
         'ok("abc")',
         'ok("partial")',
         'error("network: end of input")',
-        ("prefix", 'error("error reading from stream port\\n  system error: '),
+        ("prefix", 'error("could not read from the stream\\n  system error: '),
         "100000",
         "100000 true",
         'error("network: line exceeds 1048576 bytes")',
         'error("network: socket is closed")',
         'error("network: operation timed out")',
         'error("network: socket is closed")',
-        "ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
-        "ssl-connect: connect failed (certificate verify failed: certificate has expired)",
-        "ssl-connect: connect failed (certificate verify failed: self-signed certificate)",
-        ("prefix", "ssl-connect: connect failed ("),
-        ("prefix", "ssl-connect: connect failed ("),
+        "network: TLS connect failed (certificate verify failed: hostname mismatch)",
+        "network: TLS connect failed (certificate verify failed: certificate has expired)",
+        "network: TLS connect failed (certificate verify failed: self-signed certificate)",
+        ("prefix", "network: TLS connect failed ("),
+        ("prefix", "network: TLS connect failed ("),
         "network: operation timed out",
-        "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)"],
+        "network: TLS connect failed (certificate verify failed: unable to get local issuer certificate)"],
         result.stderr)
 
 
@@ -601,7 +601,7 @@ def test_server_serves_node_clients_tls_13_and_12_and_python_and_fails_an_untrus
     assert nodes.code == 0, nodes.stderr
     assert nodes.stdout == "clients ok\nuntrusting UNABLE_TO_VERIFY_LEAF_SIGNATURE\n"
     assert vm.next_line() == "served"
-    assert vm.next_line().startswith("port->ssl-ports: accept failed (")
+    assert vm.next_line().startswith("network: TLS accept failed (")
     python = run([PYTHON, PYTHON_PEER, "client", port], timeout=scaled(30))
     assert python.code == 0, python.stderr
     assert python.stdout == "hello python TLSv1.3\n"
@@ -692,16 +692,16 @@ def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_p
     check_lines(result.stdout, [
         "server: ok",
         "  server: ok",
-        "wrong-host: ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
-        ("prefix", "  server: port->ssl-ports: accept failed ("),
-        "server: ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)",
-        ("prefix", "  server: port->ssl-ports: accept failed ("),
+        "wrong-host: network: TLS connect failed (certificate verify failed: hostname mismatch)",
+        ("prefix", "  server: network: TLS accept failed ("),
+        "server: network: TLS connect failed (certificate verify failed: unable to get local issuer certificate)",
+        ("prefix", "  server: network: TLS accept failed ("),
         "false",
         "false",
-        'ssl-load-verify-source!: load failed from: "<tls>/missing.pem"',
+        'network: cannot load ca_file "<tls>/missing.pem"',
         ("prefix", "  system error: "),
-        ("prefix", "plain server: ssl-connect: connect failed ("),
-        ("prefix", "plain client: port->ssl-ports: accept failed (")],
+        ("prefix", "plain server: network: TLS connect failed ("),
+        ("prefix", "plain client: network: TLS accept failed (")],
         result.stderr)
 
 

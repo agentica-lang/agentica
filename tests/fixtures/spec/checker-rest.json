@@ -7335,7 +7335,7 @@
         "",
         ""
       ],
-      "code": "CHECK-UNKNOWN-METHOD"
+      "code": null
     }
   ],
   "interpolation is a String and rejects Void parts": [
@@ -10157,6 +10157,161 @@
         3,
         3
       ]
+    }
+  ],
+  "the number helpers check their types and reserve the Math name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: Int = (-3).abs",
+        "  b: Float = (-1.5).abs",
+        "  c: Int = 2.pow(3)",
+        "  d: Int = 12.gcd(8)",
+        "  e: Int = 5.clamp(1, 3)",
+        "  f: Float = 2.5.clamp(0.0, 1.0)",
+        "  g: Int = 2.5.floor",
+        "  h: Int = 2.5.ceil",
+        "  i: Int = 2.5.round",
+        "  j: Float = Math.sqrt(2.0)",
+        "  k: Optional[Int] = [1].min",
+        "  l: Optional[Float] = [1.5].max",
+        "  m: Optional[String] = [\"a\"].min",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([true].min)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 8],
+      "covers": "[true]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(5.clamp(1.0, 2.0))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 16],
+      "covers": "1.0",
+      "expected": "Int",
+      "actual": "Float"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.sqrt(4))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "4",
+      "expected": "Float",
+      "actual": "Int",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Math",
+        "  x: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(3.min(4))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.max(1, 2))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "import Math from \"./m\"",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1],
+      "help": false
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.PI)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMPORT-NAME",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.cos(0.0))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(5.round)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [2, 8],
+      "help": true
     }
   ],
   "Lazy steps and terminals check their types, reserve the Lazy name and point eager receivers to .lazy": [

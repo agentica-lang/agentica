@@ -137,6 +137,86 @@ def sum_float(list: List[Float]) -> Float
   return total
 end
 
+# min and max: the first element wins a tie, so a later item must be strictly better. A NaN never wins, unless every
+# item is NaN, and then the first stays, as in min_by. Strings compare by String.compare, the order of sort.
+def min_int(list: List[Int]) -> Optional[Int]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if item < best
+      best = item
+    end
+  end
+  return some(best)
+end
+
+def min_float(list: List[Float]) -> Optional[Float]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if item == item and (best != best or item < best)
+      best = item
+    end
+  end
+  return some(best)
+end
+
+def min_string(list: List[String]) -> Optional[String]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if String.compare(item, best) < 0
+      best = item
+    end
+  end
+  return some(best)
+end
+
+def max_int(list: List[Int]) -> Optional[Int]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if item > best
+      best = item
+    end
+  end
+  return some(best)
+end
+
+def max_float(list: List[Float]) -> Optional[Float]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if item == item and (best != best or item > best)
+      best = item
+    end
+  end
+  return some(best)
+end
+
+def max_string(list: List[String]) -> Optional[String]
+  if list.size == 0
+    return none
+  end
+  best = list[0]
+  for item in list
+    if String.compare(item, best) > 0
+      best = item
+    end
+  end
+  return some(best)
+end
+
 # min_by and max_by: the first element wins a tie, so a later key must be strictly better. A NaN key never wins, unless
 # every key is NaN, and then the first element stays (candidate == candidate is false for NaN). Strings compare by
 # String.compare, the order of sort.

@@ -16,6 +16,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
   (`user == other`, `xs == []`); a type that holds a function, a task, a
   channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
+- Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
+  `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
+- `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
+  an `Optional` (`none` for an empty list).
 - `agentica test` scenarios set the environment and arguments of the program
   under test (`the environment variable "X" is "y"`, `the program argument
   "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
@@ -27,9 +31,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   after an `ok` block).
 - A default of a parameter or a struct field may name a module constant
   (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
+- An `Fn` struct field is called by its name: `store.put(a, b)` is
+  `store.put.call(a, b)`.
 
 ### Changed
 
+- **Breaking:** `Math` is a builtin module name, so it can no longer be an
+  import alias or a declaration name.
+- The texts of many runtime errors changed: those that still used Racket wording
+  now say what failed in plain words (`filesystem: invalid path ""`,
+  `invalid UTF-8 at byte 3`, `network: TLS connect failed`). The diagnostic
+  codes stay the same, but code that matches on the old error texts must be
+  updated.
 - `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
   when it fits, and an empty line after a statement that takes several lines.
 
@@ -80,6 +93,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - An `HTTP.serve` server that is closing no longer answers 400 to a valid
   request: a request with no body gets its answer, and one whose body the close
   cut short gets none.
+- `agentica fmt` keeps a comment inside a pipe chain on its stage instead of
+  refusing the file with `FMT-INTERNAL`.
 
 ## [0.21.0] - 2026-11-02
 

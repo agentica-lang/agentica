@@ -52,9 +52,17 @@ Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included; n
 n.to_f() -> Float                                        # Int
 x.to_i() -> Result[Int]                                  # Float; truncates; NaN, infinity, overflow are errors
 x.to_i!() -> Int                                         # same, but halts (RUNTIME-INVALID-NUMBER)
+n.abs() -> Int                                           # also x.abs -> Float; the least Int overflows
+n.pow(exponent: Int) -> Int                              # no `**`; negative exponent: RUNTIME-INVALID-COUNT
+a.gcd(b: Int) -> Int                                     # never negative; 0.gcd(0) is 0
+n.clamp(min: Int, max: Int) -> Int                       # also on Float; min > max: RUNTIME-INVALID-RANGE
+x.floor() -> Int                                         # also ceil, round (halves away from zero); Float only
+Math.sqrt(x: Float) -> Float                             # negative x: RUNTIME-INVALID-NUMBER
 ```
 
 A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
+`floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result
+outside Int; `round` takes no digits: `(x * 100.0).round.to_f / 100.0`.
 Bit operations: `binary.md`.
 
 ## String
@@ -131,6 +139,7 @@ List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int or
 List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; first-appearance order
 List.uniq(list: List[K]) -> List[K]                      # K is Int or String; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
+List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
 List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (lazy.md)
@@ -254,7 +263,8 @@ functions; `Channel[T]` takes `send`, `recv`, `close`, `closed?`, `empty?`;
 `ATS[K, V]` takes every `ATS` function but `new`. Without parentheses,
 `receiver.name` on a non-struct value calls a method with no arguments
 (`s.length`, `xs.size`, `r.ok?`); on a struct it reads a field, and structs and
-enums have no methods. `.call(...)` invokes a function value. An unknown method
+enums have no methods. `.call(...)` invokes a function value, and an `Fn`
+field is called by its name (`store.put(a, b)`). An unknown method
 is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's methods.
 
 Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,

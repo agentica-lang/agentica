@@ -229,8 +229,8 @@ def system_error(name):
     return "system error: %s; errno=%d" % (os.strerror(code), code)
 
 
-REFUSED_HEAD = "tcp-connect: connection failed\n  hostname: 127.0.0.1\n  port number: %d\n"
-RESET = 'error("error reading from stream port\\n  %s")\n' % system_error("ECONNRESET")
+REFUSED_HEAD = "network: connection failed\n  host: 127.0.0.1\n  port: %d\n"
+RESET = 'error("could not read from the stream\\n  %s")\n' % system_error("ECONNRESET")
 
 def start_peer(adopt, node):
     """The Node servers: returns (peer, ports); the peer prints events such as `closed watch`."""
@@ -374,7 +374,7 @@ def test_listen_on_localhost_fails_when_another_program_holds_the_port_on_ipv6(t
         holder.listen(4)
         result = run_text(tmp_path, "taken", TAKEN_PROGRAM % holder.getsockname()[1])
     assert result.code == 0, result.stderr
-    assert result.stdout.startswith("tcp-listen: listen failed\n  hostname: localhost\n"), result.stdout
+    assert result.stdout.startswith("network: listen failed\n  host: localhost\n"), result.stdout
 
 
 def test_two_tasks_writing_to_one_socket_take_the_writer_lock_in_fifo_order(tmp_path, adopt, node):

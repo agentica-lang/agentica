@@ -27,6 +27,12 @@ PIPES_HEAD = 'def twice(n: Int) -> Int\n  return n * 2\nend\n\ndef main() -> Voi
 PIPES = (PIPES_HEAD + '  n = 3\n  total = n |> twice() |> twice()\n  one = n |> twice()\n  puts(total + one)\nend\n')
 PIPES_LAID_OUT = (PIPES_HEAD + '  n = 3\n  total = (\n    n\n    |> twice()\n    |> twice()\n  )\n\n'
                   '  one = n |> twice()\n  puts(total + one)\nend\n')
+# Comments between the stages of a chain, after a stage and after the first operand stay on their stage; the file used
+# to be refused with FMT-INTERNAL.
+PIPE_COMMENTS = (PIPES_HEAD + '  n = 3\n  total = (n # first\n    # between\n    |> twice() # after one\n    |> twice())\n'
+                 '  puts(total)\nend\n')
+PIPE_COMMENTS_LAID_OUT = (PIPES_HEAD + '  n = 3\n  total = (\n    n # first\n    # between\n    |> twice() # after one\n'
+                          '    |> twice()\n  )\n\n  puts(total)\nend\n')
 
 
 def fmt(*words, cwd, json_style=False, stdin=None):
@@ -113,6 +119,16 @@ def test_a_chain_of_two_pipes_and_a_wrapped_statement_are_laid_out_and_pass_chec
     assert fmt("--check", cwd=tmp_path).stdout == ""
     checked = run(cli() + ["check", "pipes.agc"], env=vm_environment(), cwd=tmp_path)
     assert checked.code == 0, checked.stderr
+
+
+def test_comments_inside_a_pipe_chain_stay_on_their_stage_and_keep_the_tree(tmp_path):
+    lay_out(tmp_path, {"chain.agc": PIPE_COMMENTS})
+    before = fmt("--tree", "chain.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "chain.agc") == PIPE_COMMENTS_LAID_OUT
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    after = fmt("--tree", "chain.agc", cwd=tmp_path)
+    assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
 
 
 def test_a_bad_style_value_is_a_manifest_error(tmp_path):

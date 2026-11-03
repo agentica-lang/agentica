@@ -721,6 +721,7 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
 uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
+size_t agc_utf8_bad_at(const uint8_t *s, size_t len);
 size_t agc_utf8_count(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
