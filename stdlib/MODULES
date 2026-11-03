@@ -11,6 +11,7 @@ html.agc
 http.agc
 logger.agc
 mime.agc
+option_parser.agc
 prelude/bytes.agc
 prelude/lazy.agc
 prelude/list.agc
