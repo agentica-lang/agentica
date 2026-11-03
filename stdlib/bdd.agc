@@ -3,6 +3,9 @@
 ## A step program builds a list of steps with `step` and passes it to `run`. A handler gets the context of its scenario
 ## and returns it: most functions here take the context first and return it, so keep the one they return.
 
+# The variables the VM owns, which `Process.spawn_captured` refuses (`reserved_names` in vm/process.c).
+VM_ENV_NAMES = ["AGENTICA_CHANNEL", "AGENTICA_VM_METRICS", "AGENTICA_VM_METRICS_FILE", "UV_USE_IO_URING"]
+
 struct Settings
   base: String
   agentica: List[String]
@@ -26,7 +29,8 @@ enum Program
   Running(Process)
 end
 
-# `closing` is true in the context an after hook gets: a failed check there ends the hook, not the scenario.
+# `closing` is one channel for the whole scenario, closed when the after hooks start: from then on a failed check ends
+# the hook it runs in, not the scenario, on every context, also one that a hook captured when it was registered.
 struct Scenario
   settings: Settings
   state: Map[String, Json]
@@ -36,7 +40,7 @@ struct Scenario
   env: Map[String, String]
   arguments: List[String]
   after: List[Fn[Context, Result[Void]]]
-  closing: Bool
+  closing: Channel[Bool]
 end
 
 ## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step, the
@@ -69,7 +73,7 @@ export def run(steps: List[Step]) -> Void
     mode = args[1]
   end
   if mode == "list"
-    check_tasks()
+    check_start()
     all.each do |item|
       fields: Map[String, Json] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
       deliver(record_text(fields))
@@ -78,7 +82,7 @@ export def run(steps: List[Step]) -> Void
     emit("ready")
     System.exit(0)
   elsif mode == "scenario"
-    check_tasks()
+    check_start()
     serve(all)
   end
   IO.warn("run this step program with agentica test --steps FILE")
@@ -116,7 +120,7 @@ end
 ## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
 ## later step of the scenario runs. A skipped scenario is not a failure: the run can still pass.
 export def skip(ctx: Context, reason: String) -> Context
-  if ctx.scenario.closing
+  if closing?(ctx)
     halt(ctx, "RUNTIME-BDD-CONTEXT", "an after hook cannot skip the scenario")
   end
   # The hooks run first: the runner stops the child as soon as it reads the skip record.
@@ -159,14 +163,25 @@ end
 
 ## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
 ## later, on top of the environment `agentica test` runs in. The scenario's own environment does not change, and the
-## variable does not reach any other scenario. Setting a name again replaces its value. It must come before
-## `given_program`, and `name` must be nonempty and cannot contain `=`.
+## variable does not reach any other scenario. Setting a name again replaces its value; on Windows, where names ignore
+## ASCII case, `"Path"` and `"PATH"` are one name. It must come before `given_program`. `name` must be nonempty and
+## cannot contain `=` or a NUL byte, `value` cannot contain a NUL byte, and the names the VM owns (`AGENTICA_CHANNEL`,
+## `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) cannot be set.
 export def given_env(ctx: Context, name: String, value: String) -> Context
   not_started(ctx, "the environment")
-  if name == "" or name.contains?("=")
-    halt(ctx, "RUNTIME-BDD-CONTEXT", "an environment variable name must be nonempty and cannot contain =")
+  if name == "" or name.contains?("=") or has_nul?(name) or has_nul?(value)
+    halt(
+      ctx,
+      "RUNTIME-BDD-CONTEXT",
+      "an environment variable name must be nonempty and cannot contain = or NUL, and its value cannot contain NUL",
+    )
   end
-  return with_launch(ctx, ctx.scenario.env.put(name, value), ctx.scenario.arguments)
+  if VM_ENV_NAMES.any? do |owned| same_env_name?(owned, name) end
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "the environment variable #{name} belongs to the VM and cannot be set")
+  end
+  # Where names ignore case the old spelling goes first: the child would get both and could see either.
+  env = ctx.scenario.env.filter do |key, old| !same_env_name?(key, name) end
+  return with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
 end
 
 ## Returns the context with `value` added to the command-line arguments of the program that `given_program` starts
@@ -181,8 +196,8 @@ end
 ## is stopped. A hook gets the context at the end of the scenario and returns `error(message)` when its cleanup fails.
 ## The hook is kept in the context this returns: a step that fails on an older context does not run it.
 ## A failed hook fails a passing scenario and is added to the message of a failing one. The other hooks still run, also
-## when a hook crashes or fails a `BDD` check. Hooks do not run when the process itself ends: a crash in a step, the
-## scenario's time limit or `System.exit`.
+## when a hook crashes or fails a `BDD` check, on its own context or on one it captured earlier. Hooks do not run when
+## the process itself ends: a crash in a step, the scenario's time limit or `System.exit`.
 export def after(ctx: Context, hook: Fn[Context, Result[Void]]) -> Context
   return with_after(ctx, ctx.scenario.after.push(hook))
 end
@@ -343,7 +358,7 @@ def serve(all: List[Step]) -> Void
       env: {},
       arguments: [],
       after: no_hooks,
-      closing: false,
+      closing: Channel.new(1),
     ),
   )
 
@@ -358,13 +373,10 @@ def serve(all: List[Step]) -> Void
       halt(ctx, "RUNTIME-BDD-INFRA", "the step program built a different list of steps: #{current.pattern}")
     end
     ctx = all[current.definition].handler.call(with_step(ctx, current), current.captures)
-    if Task.pending_count() > 0
-      halt(ctx, "RUNTIME-BDD-PENDING-TASKS", "await pending tasks before returning from a BDD handler")
+    check_tasks("await pending tasks before returning from a BDD handler") do |code, message|
+      halt(ctx, code, message)
     end
-    crash = Task.unobserved_crash()
-    if crash.ok?
-      halt(ctx, "RUNTIME-TASK-CRASHED", crash.unwrap!)
-    end
+
     probe(ctx)
     fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
     deliver(record_text(fields))
@@ -379,13 +391,16 @@ def serve(all: List[Step]) -> Void
 end
 
 # Runs the after hooks, the last registered first, each in its own task so that a crash or a failed `BDD` check in one
-# (`finish` crashes the task when the context is closing) leaves the others to run. Returns the problem of each hook
-# that failed.
+# (`finish` crashes the task once the scenario is closing) leaves the others to run. Returns the problem of each hook
+# that failed. The `after` record tells the runner that hooks run, so a time limit reached from here is theirs.
 def run_after(ctx: Context) -> List[String]
-  closing = with_closing(ctx)
+  ctx.scenario.closing.close
   problems: List[String] = []
+  if ctx.scenario.after.size > 0
+    emit("after")
+  end
   for hook in ctx.scenario.after.reverse
-    outcome = Task.await(Task.spawn do hook.call(closing) end)
+    outcome = Task.await(Task.spawn do hook.call(ctx) end)
     if not outcome.ok?
       problems = problems.push(outcome.message)
     end
@@ -403,18 +418,20 @@ def after_record(problems: List[String]) -> String
   return record_text(fields)
 end
 
-def check_tasks() -> Void
+# Ends the scenario when a task is still running (with `pending` as the message) or crashed unobserved. `fail` ends it:
+# `abort` before the scenario's context exists, `halt` once it does, so the after hooks run.
+def check_tasks(pending: String, fail: Fn[String, String, Void]) -> Void
   if Task.pending_count() > 0
-    abort("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before calling BDD.run")
+    fail.call("RUNTIME-BDD-PENDING-TASKS", pending)
   end
-  check_crash()
-end
-
-def check_crash() -> Void
   crash = Task.unobserved_crash()
   if crash.ok?
-    abort("RUNTIME-TASK-CRASHED", crash.unwrap!)
+    fail.call("RUNTIME-TASK-CRASHED", crash.unwrap!)
   end
+end
+
+def check_start() -> Void
+  check_tasks("await pending tasks before calling BDD.run") do |code, message| abort(code, message) end
 end
 
 def probe(ctx: Context) -> Void
@@ -656,20 +673,37 @@ def with_after(ctx: Context, after: List[Fn[Context, Result[Void]]]) -> Context
   )
 end
 
-def with_closing(ctx: Context) -> Context
-  return Context(
-    scenario: Scenario(
-      settings: ctx.scenario.settings,
-      state: ctx.scenario.state,
-      services: ctx.scenario.services,
-      step: ctx.scenario.step,
-      program: ctx.scenario.program,
-      env: ctx.scenario.env,
-      arguments: ctx.scenario.arguments,
-      after: ctx.scenario.after,
-      closing: true,
-    ),
-  )
+# True once the after hooks have started (`run_after`).
+def closing?(ctx: Context) -> Bool
+  return ctx.scenario.closing.closed?
+end
+
+def has_nul?(text: String) -> Bool
+  return text.bytes.to_a.include?(0)
+end
+
+# True when two names are one variable for `Process.spawn_captured` on this system: byte for byte, except that on
+# Windows ASCII case is ignored, as `agc_proc_env_name_equal` in vm/ does. Non-ASCII case twins are a known gap there
+# (see #1041).
+def same_env_name?(a: String, b: String) -> Bool
+  if a == b
+    return true
+  end
+  if System.os() != "windows" or a.bytesize != b.bytesize
+    return false
+  end
+  return ascii_folded(a) == ascii_folded(b)
+end
+
+def ascii_folded(name: String) -> List[Int]
+  return name.bytes.to_a.map do |byte| ascii_lower(byte) end
+end
+
+def ascii_lower(byte: Int) -> Int
+  if byte >= 65 and byte <= 90
+    return byte + 32
+  end
+  return byte
 end
 
 # Fails the scenario at once, for the failures that no hook can follow: before the scenario's context exists.
@@ -686,9 +720,9 @@ end
 
 # Ends the scenario with a fail record. The record goes first and the after hooks run after it, so a hook that hangs or
 # dies cannot hide the failure; the runner reads on until the child exits and adds a failed hook to the message. In a
-# hook (`closing`) it crashes the hook's task instead, which `run_after` turns into that hook's problem.
+# hook (`closing?`) it crashes the hook's task instead, which `run_after` turns into that hook's problem.
 def finish(ctx: Context, fields: Map[String, Json]) -> Void
-  if ctx.scenario.closing
+  if closing?(ctx)
     code = JSON.string(fields["code"]).unwrap_or("")
     gone: Result[Void] = error("#{code}: #{JSON.string(fields["message"]).unwrap_or("")}")
     gone.unwrap!

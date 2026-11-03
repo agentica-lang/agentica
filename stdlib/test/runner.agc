@@ -491,15 +491,22 @@ end
 # Reads channel records until the step ends; what the handler printed is read once per step and may not exceed 1 MiB.
 def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_step: Bool) -> StepEnd
   asserts = 0
+  hooks = false
   while true
     line = Process.channel_read_line(p, Child.left(deadline))
     if not line.ok?
+      # `BDD.skip` runs the hooks before it sends `skip`: a deadline after `after` is a hook's.
+      if hooks and line.message == "process: operation timed out"
+        return StepEnd(verdict: failure("RUNTIME-BDD-TIMEOUT", late_text(true), span), asserts: asserts)
+      end
       return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), asserts: asserts)
     end
     record = Child.record_of(line.unwrap!)
     event = Child.event_of(record)
     if event == "assert"
       asserts += 1
+    elsif event == "after"
+      hooks = true
     elsif event == "fail" or event == "end" or event == "skip"
       printed = Process.read_available(p, Child.left(deadline))
       if not printed.ok?
@@ -539,16 +546,20 @@ end
 # the child, or at the scenario's deadline.
 def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Report.Error
   message = failure.message
+  hooks = false
   line = Process.channel_read_line(p, Child.left(deadline))
   while line.ok?
     record = Child.record_of(line.unwrap!)
-    if Child.event_of(record) == "fail"
+    event = Child.event_of(record)
+    if event == "after"
+      hooks = true
+    elsif event == "fail"
       message = "#{message}; #{Child.text_of(record, "message")}"
     end
     line = Process.channel_read_line(p, Child.left(deadline))
   end
   if line.message == "process: operation timed out"
-    message = "#{message}; an after hook did not finish within the scenario's time limit"
+    message = "#{message}; #{late_text(hooks)}"
   end
   return Report.Error(
     code: failure.code,
@@ -564,10 +575,14 @@ end
 # After the last step the runner closes the channel and the child exits 0 when it reads the end; anything else fails
 # the scenario.
 def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
+  hooks = false
   line = Process.channel_read_line(p, Child.left(deadline))
   while line.ok?
     record = Child.record_of(line.unwrap!)
-    if Child.event_of(record) == "fail"
+    event = Child.event_of(record)
+    if event == "after"
+      hooks = true
+    elsif event == "fail"
       return Report.Verdict.Fail(record_error(record, span))
     end
     line = Process.channel_read_line(p, Child.left(deadline))
@@ -583,10 +598,18 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
     end
   end
   if line.message == "process: operation timed out"
-    # Once the channel is closed the child only runs its after hooks.
-    return failure("RUNTIME-BDD-TIMEOUT", "an after hook did not finish within the scenario's time limit", span)
+    return failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span)
   end
   return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
+end
+
+# Why a child that has sent its last record is still running at the deadline: its after hooks when it said they run
+# (the `after` record), else only its own end.
+def late_text(hooks: Bool) -> String
+  if hooks
+    return "an after hook did not finish within the scenario's time limit"
+  end
+  return "the step program did not exit within the scenario's time limit"
 end
 
 def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error

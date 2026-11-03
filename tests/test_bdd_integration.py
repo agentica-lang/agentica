@@ -277,10 +277,35 @@ def test_a_scenario_gives_its_program_environment_variables_and_arguments_that_r
             "Scenario: too late\n"
             'Given the Agentica program "show.agc"\nAnd the program argument "x"\n'
             "Scenario: an empty name\n"
-            'Given the environment variable "" is "x"\n')})
+            'Given the environment variable "" is "x"\n'
+            # Windows ignores ASCII case in names: the second spelling replaces the first there, as one name does here.
+            "Scenario: a name again in other case\n"
+            'Given the environment variable "Bdd_Greeting" is "first"\n'
+            'And the environment variable "BDD_GREETING" is "second"\n'
+            'And the Agentica program "show.agc"\n'
+            'Then I receive the line "second|" within ' + ms(5000) + " milliseconds\n"
+            # Refused when set, not when the program starts.
+            "Scenario: a name the VM owns\n"
+            'Given the environment variable "UV_USE_IO_URING" is "0"\nAnd the Agentica program "show.agc"\n'
+            "Scenario: a NUL byte\n"
+            'Given the environment variable "BDD_GREETING" ends with a NUL byte\nAnd the Agentica program "show.agc"\n'),
+        "steps.agc": dedent("""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("the environment variable {string} ends with a NUL byte") do |ctx, args|
+                  BDD.given_env(ctx, args[0], "x" + String.from_bytes(Bytes.from_list([0]).unwrap!).unwrap!)
+                end,
+              ])
+            end
+            """)})
     report = json_test(directory / "env.feature")
-    assert [item["status"] for item in report_cases(report)] == ["passed", "passed", "failed", "failed"]
-    assert codes(report) == [None, None, "RUNTIME-BDD-CONTEXT", "RUNTIME-BDD-CONTEXT"]
+    cases = report_cases(report)
+    assert [item["status"] for item in cases] == ["passed", "passed", "failed", "failed", "passed", "failed", "failed"]
+    assert codes(report) == [None, None, "RUNTIME-BDD-CONTEXT", "RUNTIME-BDD-CONTEXT", None, "RUNTIME-BDD-CONTEXT",
+                             "RUNTIME-BDD-CONTEXT"]
+    assert [[step["status"] for step in item["steps"]] for item in cases[5:]] == [["failed", "not_executed"]] * 2
 
 
 AFTER_STEPS = dedent("""\
@@ -308,6 +333,18 @@ AFTER_STEPS = dedent("""\
       return BDD.after(ctx) do |closing| cleanup(closing, log, name) end
     end
 
+    # The hook checks the context of its registration, not the one it is given: the check still fails only the hook.
+    def stale(ctx: BDD.Context, args: List[String]) -> BDD.Context
+      log = args[0]
+      return BDD.after(ctx) do |closing| stale_check(ctx, log) end
+    end
+
+    def stale_check(ctx: BDD.Context, log: String) -> Result[Void]
+      File.append_text(log, "stale\\n", 5000).unwrap!
+      BDD.assert(ctx, false, "stale check")
+      return ok()
+    end
+
     def older(ctx: BDD.Context, args: List[String]) -> BDD.Context
       registered = hook(ctx, args)
       return BDD.assert(ctx, false, "failed on the older context")
@@ -323,6 +360,7 @@ AFTER_STEPS = dedent("""\
       BDD.run([
         BDD.step("the hook {string} logs to {string}", &hook),
         BDD.step("the hook {string} logs to {string} and the step fails on the older context", &older),
+        BDD.step("a hook that checks its older context logs to {string}", &stale),
         BDD.step("the folder {string} exists until the scenario ends", &folder),
         BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "the step failed") end,
         BDD.step("the scenario passes") do |ctx, args| BDD.assert(ctx, true, "never") end,
@@ -366,13 +404,16 @@ def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing
             "a hook cannot skip", f'Given the hook "skip" logs to "{log("skip-hook")}"', "Then the scenario passes"
         ) + scenario(
             "a hook of the same step on an older context is lost",
-            f'Given the hook "one" logs to "{log("older")}" and the step fails on the older context')})
+            f'Given the hook "one" logs to "{log("older")}" and the step fails on the older context'
+        ) + scenario(
+            "a hook that checks an older context fails alone", f'Given the hook "one" logs to "{log("stale")}"',
+            f'And a hook that checks its older context logs to "{log("stale")}"', "Then the scenario passes")})
     report = json_test(directory / "after.feature")
     cases = report_cases(report)
     assert [item["status"] for item in cases] == ["passed", "failed", "skipped", "failed", "failed", "failed", "failed",
-                                                   "failed"]
+                                                   "failed", "failed"]
     assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION",
-                             "RUNTIME-BDD-AFTER", "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION"]
+                             "RUNTIME-BDD-AFTER", "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-AFTER"]
     assert (logs / "passes").read_text().split() == ["two", "one"]
     assert (logs / "fails").read_text().split() == ["one"]
     assert not (tmp_path / "gone").exists()
@@ -388,22 +429,25 @@ def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing
     assert (logs / "skip-hook").read_text().split() == ["skip"]
     assert "cannot skip" in cases[6]["error"]["message"]
     assert not (logs / "older").exists()
+    # Each hook ran once: the stale check did not run the earlier hook again from inside its own.
+    assert (logs / "stale").read_text().split() == ["stale", "one"]
 
 
 @pytest.mark.slow
-def test_a_hook_that_never_ends_is_reported_at_the_scenario_limit_for_a_passing_and_a_failing_scenario(tmp_path):
+def test_a_hook_that_never_ends_is_reported_at_the_scenario_limit_for_a_passing_failing_or_skipped_scenario(tmp_path):
     log = (tmp_path / "log").as_posix()
     directory = suite(tmp_path, {
         "steps.agc": AFTER_STEPS,
         "hang.feature": ("Feature: Hang\n"
                          f'Scenario: passes\nGiven the hook "sleep" logs to "{log}"\nThen the scenario passes\n'
-                         f'Scenario: fails\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario fails\n')})
-    # Two scenarios wait for the 30 s limit one after the other.
-    report = json_test(directory / "hang.feature", timeout=scaled(120))
+                         f'Scenario: fails\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario fails\n'
+                         f'Scenario: skipped\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario is skipped\n')})
+    # Three scenarios wait for the 30 s limit one after the other.
+    report = json_test(directory / "hang.feature", timeout=scaled(160))
     cases = report_cases(report)
-    assert codes(report) == ["RUNTIME-BDD-TIMEOUT", "RUNTIME-BDD-ASSERTION"]
-    assert "after hook did not finish" in cases[0]["error"]["message"]
-    assert "after hook did not finish" in cases[1]["error"]["message"]
+    assert codes(report) == ["RUNTIME-BDD-TIMEOUT", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-TIMEOUT"]
+    for item in cases:
+        assert "after hook did not finish" in item["error"]["message"]
 
 
 def test_a_program_under_test_runs_without_a_step_limit(tmp_path):
