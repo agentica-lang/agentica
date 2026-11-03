@@ -13,6 +13,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- A default of a parameter or a struct field may name a module constant
+  (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
 
 ## [0.22.0] - 2026-11-02
 

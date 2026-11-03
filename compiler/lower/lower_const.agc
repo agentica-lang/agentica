@@ -3,6 +3,7 @@
 ## a slot, and a constant that is one scalar literal gets neither: its reads are the literal.
 
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Ir from "ir"
 import Scans from "lower_scan"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
@@ -94,6 +95,26 @@ export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   end
 end
 
+## A default that names a constant, as the lowering reads it: the value of the constant, written at the place of the
+## name. The checker accepted the name only for a value that a call can build with no code of its own (a literal, an
+## empty list or map, a variant without a payload, none or a struct built with no arguments), so the call site needs no
+## read of the constant, which a constant built after the call could not give. The spans become the one of the name,
+## because the instructions belong to the file of the default, and the node ids stay the ones of the value, which the
+## checker typed. Any other default is as written.
+export def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Expr
+  case default
+    Ast.Expr.ConstRef(node) ->
+      found = values.get(node.name)
+      if found.some?
+        return respanned(found.unwrap!, node.span)
+      end
+
+      return default
+
+    _ -> return default
+  end
+end
+
 # The names of the constants to build: those the reachable functions read and, to a fixed point, those the kept
 # constants read and those the functions their initializers call read.
 def kept_names(
@@ -157,5 +178,19 @@ def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
 
       return none
     _ -> return none
+  end
+end
+
+def respanned(value: Ast.Expr, span: Source.Span) -> Ast.Expr
+  case value
+    Ast.Expr.Literal(node) -> return Ast.Expr.Literal(node.with(span: span))
+    Ast.Expr.Unary(node) ->
+      return Ast.Expr.Unary(node.with(span: span, op_span: span, operand: respanned(node.operand, span)))
+    Ast.Expr.ListLit(node) -> return Ast.Expr.ListLit(node.with(span: span))
+    Ast.Expr.MapLit(node) -> return Ast.Expr.MapLit(node.with(span: span))
+    Ast.Expr.EnumConstructor(node) -> return Ast.Expr.EnumConstructor(node.with(span: span))
+    Ast.Expr.Call(node) -> return Ast.Expr.Call(node.with(span: span))
+    Ast.Expr.Construct(node) -> return Ast.Expr.Construct(node.with(span: span))
+    _ -> return value
   end
 end

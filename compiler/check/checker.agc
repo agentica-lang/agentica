@@ -158,8 +158,17 @@ end
 # The context of the run: the builtin records and enums, the tables built once, and the text of each file.
 def start(linked: Linker.Linked) -> State.Cx
   texts: Map[String, String] = {}
+  sites: Map[String, State.ConstSite] = {}
   for module in linked.modules
     texts = texts.put(module.file, module.text)
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Constant(node) ->
+          site = State.ConstSite(file: module.file, value: node.value, blanked: blanked?(module.text, node.value))
+          sites = sites.put(node.name, site)
+        _ -> sites = sites
+      end
+    end
   end
 
   return State.Cx(
@@ -175,6 +184,7 @@ def start(linked: Linker.Linked) -> State.Cx
     natives: Set.new([]),
     functions: {},
     constants: {},
+    const_sites: sites,
     type_params: [],
     file: linked.modules[0].file,
     texts: texts,
@@ -182,6 +192,21 @@ def start(linked: Linker.Linked) -> State.Cx
     prelude: false,
     json_needs: {},
   )
+end
+
+# Whether a constant value is the 0 of a stub: a 0 where the text of the file has something else.
+def blanked?(text: String, value: Ast.Expr) -> Bool
+  case value
+    Ast.Expr.Literal(node) ->
+      case node.value
+        Ast.LitValue.Whole(number) ->
+          start = node.span.start.offset
+          return number == 0 and text.slice(start, node.span.stop.offset - start) != "0"
+        _ -> return false
+      end
+
+    _ -> return false
+  end
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends

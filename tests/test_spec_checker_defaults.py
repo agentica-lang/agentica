@@ -71,9 +71,39 @@ SINGLE_FILE = [
     ("a default is a constant: a call",
      'def seed() -> Int\n  return 4\nend\n\ndef f(a: Int = seed()) -> Int\n  return a\nend\n\n'
      + main_with("  puts(f())\n"), "CHECK-DEFAULT-VALUE", "seed()"),
-    ("a default is a constant: a name",
-     'ONE = 1\n\ndef f(a: Int = ONE) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
-     "CHECK-DEFAULT-VALUE", "ONE"),
+    ("a default may name a constant whose value is a constant form",
+     'LIMIT = 10\nNEG = -2\nRATE = 0.5\nLABEL = "x"\nON = true\nMODE = Mode.Safe\n'
+     'NO: Optional[Int] = none\nNONE_LIST: List[Int] = []\nNONE_MAP: Map[String, Int] = {}\n\n'
+     'enum Mode\n  Fast\n  Safe\nend\n\n'
+     'def f(a: Int = LIMIT, b: Int = NEG, c: Float = RATE, d: String = LABEL, e: Bool = ON, g: Mode = MODE,'
+     ' h: Optional[Int] = NO, i: List[Int] = NONE_LIST, j: Map[String, Int] = NONE_MAP) -> Int\n'
+     '  return a\nend\n\n' + main_with("  puts(f())\n"), None, None),
+    ("a default may name an exported constant of the same file",
+     'export LIMIT = 10\n\ndef f(a: Int = LIMIT) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"), None, None),
+    ("a parameter default may name a constant that is a struct built with no arguments",
+     'BASE = Opts()\n\nstruct Opts\n  n: Int = 1\nend\n\n'
+     'def f(o: Opts = BASE) -> Int\n  return o.n\nend\n\n' + main_with("  puts(f())\n"), None, None),
+    ("a default that names a constant keeps the type check: a String constant for an Int",
+     'LABEL = "x"\n\ndef f(a: Int = LABEL) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-TYPE-MISMATCH", "LABEL"),
+    ("a default that names a constant keeps the type check: an Int constant for a Float",
+     'ONE = 1\n\ndef f(a: Float = ONE) -> Float\n  return a\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-TYPE-MISMATCH", "ONE"),
+    ("a default that names a constant needs a value that is a constant form: an operation",
+     'SUM = 1 + 2\n\ndef f(a: Int = SUM) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-DEFAULT-VALUE", "SUM"),
+    ("a default that names a constant needs a value that is a constant form: a list with elements",
+     'ITEMS = [1]\n\ndef f(a: List[Int] = ITEMS) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-DEFAULT-VALUE", "ITEMS"),
+    ("a default that names a constant needs a value that is a constant form: another constant",
+     'ONE = 1\nTWO = ONE\n\ndef f(a: Int = TWO) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-DEFAULT-VALUE", "TWO"),
+    ("a default that names a constant is no call of a function",
+     'ONE = 1\n\ndef one() -> Int\n  return ONE\nend\n\ndef f(a: Int = one()) -> Int\n  return a\nend\n\n'
+     + main_with("  puts(f())\n"), "CHECK-DEFAULT-VALUE", "one()"),
+    ("a default that names an unknown constant is an unknown name",
+     'def f(a: Int = GONE) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
+     "CHECK-UNKNOWN-NAME", "GONE"),
     ("a default is a constant: an operation",
      'def f(a: Int = 1 + 2) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n"),
      "CHECK-DEFAULT-VALUE", "1 + 2"),
@@ -229,9 +259,22 @@ SINGLE_FILE = [
      "CHECK-DEFAULT-VALUE", "seed()"),
     ("a field default is a constant: an operation",
      'struct S\n  a: Int = 1 + 2\nend\n\n' + main_with("  puts(S().inspect)\n"), "CHECK-DEFAULT-VALUE", "1 + 2"),
-    ("a field default is a constant: a name",
-     'ONE = 1\n\nstruct S\n  a: Int = ONE\nend\n\n' + main_with("  puts(S().inspect)\n"),
-     "CHECK-DEFAULT-VALUE", "ONE"),
+    ("a field default may name a constant whose value is a constant form",
+     'LIMIT = 10\nLABEL = "x"\nNONE_LIST: List[Int] = []\n\n'
+     'struct S\n  a: Int = LIMIT\n  b: String = LABEL\n  c: List[Int] = NONE_LIST\nend\n\n'
+     + main_with("  puts(S().inspect)\n"), None, None),
+    ("a field default may name a constant in a generic struct",
+     'LIMIT = 10\n\nstruct Box[T]\n  size: Int = LIMIT\n  item: T\nend\n\n'
+     + main_with('  puts(Box(item: "x").inspect)\n  puts(Box(item: 1, size: 2).inspect)\n'), None, None),
+    ("a field default that names a constant keeps the type check",
+     'LABEL = "x"\n\nstruct S\n  a: Int = LABEL\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-TYPE-MISMATCH", "LABEL"),
+    ("a field default that names a constant needs a value that is a constant form",
+     'SUM = 1 + 2\n\nstruct S\n  a: Int = SUM\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-DEFAULT-VALUE", "SUM"),
+    ("a field default is not a constant that is a struct, which could build its own struct again",
+     'BASE = Opts()\n\nstruct Opts\n  n: Int = 1\nend\n\nstruct Outer\n  o: Opts = BASE\nend\n\n'
+     + main_with("  puts(Outer().o.n)\n"), "CHECK-DEFAULT-VALUE", "BASE"),
     ("a field default is a constant: a list with elements",
      'struct S\n  a: List[Int] = [1]\nend\n\n' + main_with("  puts(S().inspect)\n"), "CHECK-DEFAULT-VALUE", "[1]"),
     ("a field default is a constant: a struct",
@@ -292,6 +335,28 @@ MODULES = [
                   'export def pick(mode: Mode = Mode.Safe) -> String\n  return "#{mode}"\nend\n\n',
       "root.agc": 'import Util from "util"\n\n' + main_with("  puts(Util.pick())\n")},
      None, None, None),
+    ("a default may name a constant through an import alias or an imported name",
+     {"limits.agc": "export LIMIT = 10\nexport LABEL = \"x\"\nexport NEG = -1\n",
+      "root.agc": 'import Limits from "limits"\nimport {LIMIT as CAP, NEG} from "limits"\n\n'
+                  'struct Conf\n  a: Int = Limits.LIMIT\n  b: Int = CAP\n  c: Int = NEG\nend\n\n'
+                  'def f(a: Int = Limits.LIMIT, b: String = Limits.LABEL, c: Int = CAP, d: Int = NEG) -> Int\n'
+                  '  return a\nend\n\n' + main_with("  puts(f())\n  puts(Conf().inspect)\n")},
+     None, None, None),
+    ("a default that names an imported constant is resolved in the declaring module",
+     {"limits.agc": "LIMIT = 10\n\nexport struct Conf\n  a: Int = LIMIT\nend\n\n"
+                    "export def f(a: Int = LIMIT) -> Int\n  return a\nend\n\n",
+      "root.agc": 'import Limits from "limits"\n\n' + main_with("  puts(Limits.f())\n  puts(Limits.Conf().inspect)\n")},
+     None, None, None),
+    ("a default that names an imported constant needs a value that is a constant form",
+     {"limits.agc": "export SUM = 1 + 2\n",
+      "root.agc": 'import Limits from "limits"\n\n'
+                  'def f(a: Int = Limits.SUM) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n")},
+     "CHECK-DEFAULT-VALUE", "root.agc", "SUM"),
+    ("a default that names an imported constant keeps the type check",
+     {"limits.agc": "export LABEL = \"x\"\n",
+      "root.agc": 'import {LABEL} from "limits"\n\n'
+                  'struct S\n  a: Int = LABEL\nend\n\n' + main_with("  puts(S().inspect)\n")},
+     "CHECK-TYPE-MISMATCH", "root.agc", "LABEL"),
     ("a bad default in an imported file is reported in that file",
      {"util.agc": 'export def pick(n: Int = 1 + 1) -> Int\n  return n\nend\n\n',
       "root.agc": 'import Util from "util"\n\n' + main_with("  puts(Util.pick())\n")},
