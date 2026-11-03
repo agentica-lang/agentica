@@ -6,9 +6,11 @@ description: Functions for Map[K, V]. Each one is also a method on maps.
 
 Maps are immutable and keep the order in which keys were added. Keys are `Int`, `String` or `Bytes`.
 
+`a == b` is true when the two maps have the same keys with equal values, in any order; the value type must have equality (not `Fn`, `Task`, `Channel`, a handle or `Json`).
+
 ## size and empty?
 
-```text
+```signature
 Map.size(map: Map[K, V]) -> Int
 Map.empty?(map: Map[K, V]) -> Bool
 ```
@@ -29,7 +31,7 @@ false
 
 ## get
 
-```text
+```signature
 Map.get(map: Map[K, V], key: K) -> Optional[V]
 Map.get(map: Map[K, V], key: K, default: V) -> V
 ```
@@ -60,7 +62,7 @@ Ana is 25
 
 ## has_key? and key?
 
-```text
+```signature
 Map.has_key?(map: Map[K, V], key: K) -> Bool
 ```
 
@@ -81,7 +83,7 @@ false
 
 ## put
 
-```text
+```signature
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
 ```
 
@@ -102,7 +104,7 @@ end
 
 ## delete
 
-```text
+```signature
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]
 ```
 
@@ -123,7 +125,7 @@ end
 
 ## keys and values
 
-```text
+```signature
 Map.keys(map: Map[K, V]) -> List[K]
 Map.values(map: Map[K, V]) -> List[V]
 ```
@@ -145,7 +147,7 @@ end
 
 ## each
 
-```text
+```signature
 Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void
 ```
 
@@ -166,7 +168,7 @@ y=2
 
 ## filter and select
 
-```text
+```signature
 Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
 ```
 

@@ -119,6 +119,9 @@ typedef struct {
   uint64_t next_seq;
 } agc_map;
 
+/* Called by agc_map_each_pair with a value of a and the value of the same key in b; false stops the walk. */
+typedef bool (*agc_pair_fn)(void *ctx, agc_value a, agc_value b);
+
 typedef struct {
   uint32_t type, n;
   agc_value fields[];
@@ -751,6 +754,7 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
 void agc_map_each_value(const agc_map *m, void (*visit)(agc_value value, void *data), void *data);
 bool agc_map_any_value(const agc_map *m, agc_value *out);
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b);
+bool agc_map_each_pair(agc_vm *vm, const agc_map *a, const agc_map *b, agc_pair_fn each, void *ctx);
 agc_map *agc_map_delete(agc_vm *vm, const agc_map *m, agc_value key);
 agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key);
 

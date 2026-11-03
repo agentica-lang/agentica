@@ -107,7 +107,7 @@ cleanup) with these differences.
   builtin record `ProcessOutput(stdout: String, stderr: String, truncated:
   Bool)`: the stdout not read yet, all of stderr (invalid UTF-8 becomes U+FFFD)
   and whether either stream was truncated. It consumes nothing and can repeat. A
-  timeout is `error("network: operation timed out")` and keeps the child; a
+  timeout is `error("process: operation timed out")` and keeps the child; a
   `spawn` process gives `error("process: output is not captured")`.
   `ProcessOutput` is reserved.
 - Closing a captured child (`close`, a stream timeout, the end of the run) sends

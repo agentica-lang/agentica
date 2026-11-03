@@ -1,0 +1,24 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 324,
+  "stdout": [
+    "struct true false true false",
+    "list true false false true",
+    "list of structs true false",
+    "enum true false",
+    "unit variant true true",
+    "generic enum true false",
+    "generic struct true true",
+    "map true false false",
+    "set true false",
+    "result true false true true true",
+    "optional true false",
+    "recursive true false",
+    "enum tree true false",
+    "nan false false true true",
+    "bytes true false",
+    ""
+  ],
+  "stderr": []
+}

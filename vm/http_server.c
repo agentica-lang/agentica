@@ -161,7 +161,7 @@ static agc_value wait_expired(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   waiter *w = data;
   agc_loop_call(w->loop, waiter_end, w);
-  return agc_stream_timed_out();
+  return agc_stream_timed_out(AGC_STREAM_NETWORK);
 }
 
 /* On the I/O thread: the waiter leaves the list, so no serve ends a job that is being dropped. */

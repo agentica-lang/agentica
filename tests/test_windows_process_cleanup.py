@@ -103,7 +103,7 @@ def test_closing_a_captured_vm_child_ends_the_child_and_its_own_child(adopt, req
     pids = pids_of(parent.next_line(WAIT), request)
     assert len(pids) == 2
     if mode == "timeout":
-        assert parent.next_line(WAIT) == 'error("network: operation timed out")'
+        assert parent.next_line(WAIT) == 'error("process: operation timed out")'
     assert parent.next_line(WAIT) == "released"
     for pid in pids:
         assert gone(pid), "%s: %s" % (mode, pid)

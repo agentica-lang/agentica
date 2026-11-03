@@ -16,7 +16,7 @@ agentica --deny-run tool.agc
 
 ## Process.spawn
 
-```text
+```signature
 Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
 ```
 
@@ -55,7 +55,7 @@ ok("hello")
 
 ## Process.send and Process.send_bytes
 
-```text
+```signature
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 ```
@@ -77,7 +77,7 @@ ok("ping")
 
 ## Process.read_line and Process.read_bytes
 
-```text
+```signature
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 ```
@@ -89,7 +89,7 @@ Read from the program's standard output.
 
 ## Process.close_stdin
 
-```text
+```signature
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 ```
 
@@ -110,7 +110,7 @@ end
 
 ## Process.wait
 
-```text
+```signature
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 ```
 
@@ -118,7 +118,7 @@ Gives the exit code, nonzero codes included (`false` gives `ok(1)`), and can be 
 
 ## Process.close
 
-```text
+```signature
 Process.close(p: Process) -> Void
 ```
 
@@ -132,7 +132,7 @@ Its standard error goes to yours, unless started with `Process.spawn_captured`. 
 
 ## Process.spawn_captured
 
-```text
+```signature
 Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
 ```
 
@@ -144,11 +144,11 @@ Starts a program in the folder `dir` (`"."`, the default, is the current one; an
 
 ## Process.output
 
-```text
+```signature
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 ```
 
-Waits until a captured program has closed its standard output and error, then gives `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("network: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
+Waits until a captured program has closed its standard output and error, then gives `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: `stdout` is what you have not read yet, `stderr` all of it, `truncated` says whether output was dropped (invalid UTF-8 in `stderr` becomes U+FFFD). It consumes nothing, so call it again if needed. A timeout is `error("process: operation timed out")` and keeps the program. A `Process.spawn` program gives `error("process: output is not captured")`.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -173,7 +173,7 @@ false
 
 ## Process.spawn_channel
 
-```text
+```signature
 Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
 ```
 
@@ -188,7 +188,7 @@ Like `Process.spawn_captured`, and also opens a private channel to the program, 
 
 ## Process.channel_read_line, Process.channel_send and Process.channel_close
 
-```text
+```signature
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
@@ -216,7 +216,7 @@ ok("got hello")
 
 ## Process.read_available
 
-```text
+```signature
 Process.read_available(p: Process, timeout_ms: Int) -> Result[String]
 ```
 
@@ -244,7 +244,7 @@ ok("working\n")
 
 ## Process.parent_read_line and Process.parent_send
 
-```text
+```signature
 Process.parent_read_line(timeout_ms: Int) -> Result[String]
 Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 ```

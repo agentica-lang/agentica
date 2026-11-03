@@ -106,7 +106,7 @@ found at 6
 
 ## some
 
-```text
+```signature
 some(value: T) -> Optional[T]
 ```
 
@@ -157,7 +157,7 @@ none
 
 ## Optional.unwrap_or
 
-```text
+```signature
 Optional.unwrap_or(o: Optional[T], default: T) -> T
 ```
 
@@ -178,7 +178,7 @@ end
 
 ## Optional.unwrap!
 
-```text
+```signature
 Optional.unwrap!(o: Optional[T]) -> T
 ```
 
@@ -196,7 +196,7 @@ end
 
 ## Optional.map
 
-```text
+```signature
 Optional.map(o: Optional[T], f: Fn[T, U]) -> Optional[U]
 ```
 
@@ -217,7 +217,7 @@ none
 
 ## Optional.some? and Optional.none?
 
-```text
+```signature
 Optional.some?(o: Optional[T]) -> Bool
 Optional.none?(o: Optional[T]) -> Bool
 ```
@@ -237,7 +237,7 @@ true
 
 ## Optional.to_result
 
-```text
+```signature
 Optional.to_result(o: Optional[T], message: String) -> Result[T]
 ```
 

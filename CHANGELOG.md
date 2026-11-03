@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
+  (`user == other`, `xs == []`); a type that holds a function, a task, a
+  channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
 - Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
   `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
 - `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
@@ -42,6 +45,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `invalid UTF-8 at byte 3`, `network: TLS connect failed`). The diagnostic
   codes stay the same, but code that matches on the old error texts must be
   updated.
+- A process or child channel timeout now says `process: operation timed out`,
+  and a timeout that is not positive `process: timeout must be positive
+  milliseconds`, instead of the `network:` texts.
 - `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
   when it fits, and an empty line after a statement that takes several lines.
 

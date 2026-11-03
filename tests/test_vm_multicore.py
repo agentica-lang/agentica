@@ -1093,7 +1093,7 @@ def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_i
     # each task ends cancelled. The read keeps the reader lock until its job ends, so main's read times out on it; the
     # close ends every job and the run. A task that owns a child is cancelled: its end kills the child.
     bytecode = program(tmp_path, "proc_cancel", PROC_CANCEL)
-    expected = ['error("task: cancelled")'] * 3 + ['error("network: operation timed out")',
+    expected = ['error("task: cancelled")'] * 3 + ['error("process: operation timed out")',
                                                     'error("process: process is closed")', 'error("task: cancelled")',
                                                     'ok("gone")']
     for _ in range(repeats):
@@ -1145,8 +1145,8 @@ def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_tim
     # which closes the child, so the next read finds it closed; never the timeout and then the line. On Windows the
     # Python children take 50 ms or more to start, so there the case covers only the timeout branch.
     bytecode = program(tmp_path, "proc_deadline", PROC_DEADLINE)
-    waits = {"ok(4)", 'error("network: operation timed out")'}
-    reads = {'ok("hi")', 'error("network: operation timed out") then error("process: process is closed")'}
+    waits = {"ok(4)", 'error("process: operation timed out")'}
+    reads = {'ok("hi")', 'error("process: operation timed out") then error("process: process is closed")'}
     for _ in range(repeats):
         result = vm(bytecode, args=DEADLINE_CHILDREN, timeout=60)
         assert (result.code, result.stderr) == (0, "")

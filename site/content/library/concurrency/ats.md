@@ -19,7 +19,7 @@ An `ATS[K, V]` (Agentica Table Storage) is a table that tasks share and update i
 
 ## ATS.new
 
-```text
+```signature
 ATS.new() -> ATS[K, V]
 ```
 
@@ -39,7 +39,7 @@ end
 
 ## ATS.put, ATS.put_new and ATS.get
 
-```text
+```signature
 ATS.put(table: ATS[K, V], key: K, value: V) -> Void
 ATS.put_new(table: ATS[K, V], key: K, value: V) -> Bool
 ATS.get(table: ATS[K, V], key: K) -> Result[V]
@@ -71,7 +71,7 @@ true
 
 ## ATS.add
 
-```text
+```signature
 ATS.add(table: ATS[K, Int], key: K, n: Int) -> Int
 ```
 
@@ -98,7 +98,7 @@ end
 
 ## ATS.delete
 
-```text
+```signature
 ATS.delete(table: ATS[K, V], key: K) -> Void
 ```
 
@@ -106,7 +106,7 @@ Removes the key; an absent key is ignored.
 
 ## ATS.size, ATS.keys and ATS.to_map
 
-```text
+```signature
 ATS.size(table: ATS[K, V]) -> Int
 ATS.keys(table: ATS[K, V]) -> List[K]
 ATS.to_map(table: ATS[K, V]) -> Map[K, V]

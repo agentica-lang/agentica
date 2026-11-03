@@ -286,7 +286,8 @@ product CLI); helpers in `tests/frontend_support.py` and `frontend_cases.py`.
 ## Agentica gotchas
 
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`). Compare types
-  with `Types.same?`; an enum cannot be compared with `==`.
+  with `Types.same?`; `compiler/` does not compare enums, structs or lists with
+  `==` until `bootstrap/stage0.agcb` lowers them (`Value.equal`).
 - The VM call depth is 10,000 frames. Recurse on the tree only with a bounded
   depth, or use an explicit stack and loops.
 - A value that cannot happen is a `*-INTERNAL` diagnostic, not a crash.

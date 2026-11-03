@@ -7,7 +7,7 @@ description: Functions for Set[T], a collection of distinct Int, String or Bytes
 A set holds each value once, in the order first added. Elements are `Int`, `String` or `Bytes`, like map keys. Sets are immutable.
 
 - `for` walks a set in order. A set prints as `Set[1, 2]`.
-- There is no `==`; use `a.subset?(b) and b.subset?(a)`.
+- `a == b` is true when the two sets have the same elements, in any order.
 - A set can be a struct field, a list item or a map value.
 - A set is not JSON-encodable, so `JSON.encode` refuses it.
 
@@ -30,7 +30,7 @@ Set["b", "a"]
 
 ## new
 
-```text
+```signature
 Set.new(items: List[T]) -> Set[T]
 ```
 
@@ -51,7 +51,7 @@ Set[]
 
 ## add
 
-```text
+```signature
 Set.add(set: Set[T], value: T) -> Set[T]
 ```
 
@@ -74,7 +74,7 @@ Set[1, 2]
 
 ## delete
 
-```text
+```signature
 Set.delete(set: Set[T], value: T) -> Set[T]
 ```
 
@@ -97,7 +97,7 @@ Set["b", "c", "a"]
 
 ## include?
 
-```text
+```signature
 Set.include?(set: Set[T], value: T) -> Bool
 ```
 
@@ -118,7 +118,7 @@ false
 
 ## size and empty?
 
-```text
+```signature
 Set.size(set: Set[T]) -> Int
 Set.empty?(set: Set[T]) -> Bool
 ```
@@ -140,7 +140,7 @@ true
 
 ## to_a
 
-```text
+```signature
 Set.to_a(set: Set[T]) -> List[T]
 ```
 
@@ -158,7 +158,7 @@ end
 
 ## union, intersection and difference
 
-```text
+```signature
 Set.union(a: Set[T], b: Set[T]) -> Set[T]
 Set.intersection(a: Set[T], b: Set[T]) -> Set[T]
 Set.difference(a: Set[T], b: Set[T]) -> Set[T]
@@ -186,7 +186,7 @@ Set[9]
 
 ## subset?
 
-```text
+```signature
 Set.subset?(a: Set[T], b: Set[T]) -> Bool
 ```
 

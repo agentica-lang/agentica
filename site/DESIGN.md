@@ -175,10 +175,13 @@ Source: `_markup/render-codeblock.html`, `_code.scss`.
 - `expect="CODE"` adds an accent box under the code. It says "Does not compile",
   or "Runtime error" for `RUNTIME-` codes, and shows `error[CODE]`.
 - Code and tables scroll sideways in their own box. The exception is a
-  signature block: a `text` block whose every non-empty line has `(` and
-  ` -> `. `render-codeblock.html` wraps it in `div.signature`, and `_code.scss`
-  lets it wrap at any character, each line hanging one step. Output,
-  diagnostics and imports are also `text` and keep scrolling.
+  signature block: a ```` ```signature ```` fence, one `Name(...) -> Type` per
+  line. `render-codeblock.html` wraps it in `div.signature`, and `_code.scss`
+  lets it wrap at any character, each line hanging one step. `highlight.mjs`
+  colors it with the classes of the code blocks: module (`m`), function (`nf`),
+  parameter names (`s`), types (`nc`) and `->` (`k`). It is not a program, so
+  `test_site_examples.py` skips it. Output, diagnostics and imports stay
+  `text` and keep scrolling.
 
 ### Search, page actions and headings
 

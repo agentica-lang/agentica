@@ -742,7 +742,7 @@ def ended_text() -> String
 end
 
 def timed_out_text() -> String
-  return "network: operation timed out"
+  return "process: operation timed out"
 end
 
 def over_text() -> String

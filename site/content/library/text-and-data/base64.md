@@ -10,7 +10,7 @@ They take and give [`Bytes`](/library/data-structures/bytes/), as `Digest.sha256
 
 ## Base64
 
-```text
+```signature
 Base64.strict_encode64(data: Bytes) -> String
 Base64.encode64(data: Bytes) -> String
 Base64.urlsafe_encode64(data: Bytes, padding: Bool = true) -> String
@@ -47,7 +47,7 @@ error("invalid base64")
 
 ## Hex
 
-```text
+```signature
 Digest.hexencode(data: Bytes) -> String
 Digest.hexdecode(text: String) -> Result[Bytes]
 ```

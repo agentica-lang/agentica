@@ -130,7 +130,7 @@ end
     ),
     (
         "== needs items with equality",
-        "def main() -> Void\n  xs: Optional[List[Int]] = some([1])\n  puts(xs == none)\nend\n",
+        "def main() -> Void\n  xs: Optional[Json] = none\n  puts(xs == none)\nend\n",
         "CHECK-TYPE-MISMATCH",
         None,
     ),

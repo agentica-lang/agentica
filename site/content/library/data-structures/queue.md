@@ -12,7 +12,7 @@ The queue holds only `String` values, and there are no blocking cross-task opera
 
 ## Queue.new
 
-```text
+```signature
 Queue.new() -> Queue.QueueState
 ```
 
@@ -31,7 +31,7 @@ end
 
 ## Queue.push
 
-```text
+```signature
 Queue.push(q: Queue.QueueState, value: String) -> Queue.QueueState
 ```
 
@@ -53,7 +53,7 @@ end
 
 ## Queue.pop
 
-```text
+```signature
 Queue.pop(q: Queue.QueueState) -> Result[Queue.Popped]
 ```
 
@@ -79,7 +79,7 @@ false
 
 ## Queue.peek
 
-```text
+```signature
 Queue.peek(q: Queue.QueueState) -> Result[String]
 ```
 
@@ -100,7 +100,7 @@ ok("first")
 
 ## Queue.size and Queue.empty?
 
-```text
+```signature
 Queue.size(q: Queue.QueueState) -> Int
 Queue.empty?(q: Queue.QueueState) -> Bool
 ```

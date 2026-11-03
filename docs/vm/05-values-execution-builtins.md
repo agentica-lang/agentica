@@ -65,7 +65,7 @@ so zeroed registers are valid values.
     the same HAMT and key list, every value nil, so the elements are the keys,
     in first-insertion order. `Set.add` of a member and `Set.delete` of a
     missing element return the same map. Text `Set[1, 2]`, elements as in a
-    list. `Test.eq` compares by size and membership; there is no `==` and no
+    list. `==` and `Test.eq` compare by size and membership; there is no
     JSON form.
 
 - **Type:** Struct

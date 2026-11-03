@@ -10,7 +10,7 @@ Tasks are cooperative: a task yields when it waits for I/O, a timer, a channel o
 
 ## Task.spawn
 
-```text
+```signature
 Task.spawn(function: Fn[R]) -> Task[R]
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
@@ -41,7 +41,7 @@ hi Ana
 
 ## Task.spawn_owning
 
-```text
+```signature
 Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 ```
 
@@ -84,7 +84,7 @@ error("network: end of input")
 
 ## Task.await
 
-```text
+```signature
 Task.await(task: Task[R]) -> R
 ```
 
@@ -118,7 +118,7 @@ still running
 
 ## Task.await with a timeout
 
-```text
+```signature
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 ```
 
@@ -193,7 +193,7 @@ A `Void` task gives `Await[Void]`: match its payload with `_` (`Await.Done(_)`).
 
 ## Task.map
 
-```text
+```signature
 Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
 ```
 
@@ -294,7 +294,7 @@ Tips:
 
 ## Task.sleep
 
-```text
+```signature
 Task.sleep(milliseconds: Int) -> Void
 ```
 
@@ -338,7 +338,7 @@ end
 
 ## Task.cancel
 
-```text
+```signature
 Task.cancel(task: Task[R]) -> Void
 ```
 
@@ -376,7 +376,7 @@ error("task: cancelled")
 
 ## Task.pending_count
 
-```text
+```signature
 Task.pending_count() -> Int
 ```
 
@@ -414,7 +414,7 @@ end
 
 ## Task.unobserved_crash
 
-```text
+```signature
 Task.unobserved_crash() -> Result[String]
 ```
 

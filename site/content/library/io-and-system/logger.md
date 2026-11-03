@@ -10,7 +10,7 @@ The first call of any `Logger` function attaches a handler named `console`. It w
 
 ## Levels
 
-```text
+```signature
 Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
 Logger.info(message: String, fields: Map[String, String] = {}) -> Void
 Logger.warning(message: String, fields: Map[String, String] = {}) -> Void
@@ -59,7 +59,7 @@ false
 
 ## Handlers
 
-```text
+```signature
 Logger.attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
 Logger.detach(name: String) -> Result[Void]
 Logger.handlers() -> List[String]
@@ -104,7 +104,7 @@ a handler named "audit" is already attached
 
 ## Formats
 
-```text
+```signature
 Logger.stderr_text(event: LogEvent) -> Void
 Logger.stderr_json(event: LogEvent) -> Void
 Logger.format_text(event: LogEvent) -> String

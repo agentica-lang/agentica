@@ -45,7 +45,7 @@ false
 
 ## size
 
-```text
+```signature
 Range.size(range: Range) -> Int
 ```
 
@@ -67,7 +67,7 @@ end
 
 ## to_a
 
-```text
+```signature
 Range.to_a(range: Range) -> List[Int]
 ```
 
@@ -89,7 +89,7 @@ end
 
 ## include?
 
-```text
+```signature
 Range.include?(range: Range, value: Int) -> Bool
 ```
 
@@ -107,7 +107,7 @@ false
 
 ## each
 
-```text
+```signature
 Range.each(range: Range, f: Fn[Int, Void]) -> Void
 ```
 
@@ -129,7 +129,7 @@ end
 
 ## first and last
 
-```text
+```signature
 Range.first(range: Range) -> Result[Int]
 Range.last(range: Range) -> Result[Int]
 ```
@@ -152,7 +152,7 @@ error("the range is empty")
 
 ## times, upto and downto
 
-```text
+```signature
 Int.times(n: Int, f: Fn[Int, Void]) -> Void
 Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void
 Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void

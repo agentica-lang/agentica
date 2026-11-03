@@ -16,6 +16,9 @@ import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
 
+# The types whose left side of == gives the right side its expected type (check_sides).
+EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
+
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
 struct Sides
@@ -574,9 +577,10 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
     return ok(Sides(st: right.st.with(range_chain: left.st.range_chain), left: left.type, right: right.type))
   end
 
-  # An Optional on the left gives its type to the right side, so that `x == none` and `x == some([])` check.
+  # A collection, Optional, Result, struct or enum on the left of == gives its type to the right side, so that
+  # `x == none`, `xs == []`, `r == ok(1)` and `m == {}` check. Other types keep the mismatch at the operator.
   wanted = T.Type.Unknown
-  if (node.op == "equal" or node.op == "not-equal") and T.is?(left.type, "Optional")
+  if (node.op == "equal" or node.op == "not-equal") and EXPECTING_SIDES.include?(T.tag(left.type))
     wanted = left.type
   end
 
@@ -765,34 +769,23 @@ end
 
 def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, true)
-  if !equatable?(sides.left)
-    help = ""
-    if T.is?(sides.left, "Set")
-      help = "two sets are equal when each is a subset of the other: a.subset?(b) and b.subset?(a)"
+  if !CheckTypes.equality?(cx, sides.left)
+    message = "#{T.to_text(sides.left)} has no equality"
+    why = CheckTypes.equality_gap(cx, sides.left)
+    if why != ""
+      message += ": #{why}"
     end
 
-    return error(
-      type_error(
-        cx,
-        sides,
-        node,
-        "equality is only defined for primitive values, ranges, Bytes and Optionals of those, found " +
-        T.to_text(sides.left),
-        help,
-      ),
+    help = (
+      "== compares numbers, Bool, String, nil, ranges, Bytes, and lists, maps, sets, Optionals, Results, " +
+      "structs and enums of those; functions, tasks, channels, handles, C.Pointer, Json and a generic T have no " +
+      "equality"
     )
+
+    return error(type_error(cx, sides, node, message, help))
   end
 
   return ok(T.Type.Bool)
-end
-
-# True for a type that == compares: a primitive, a Range, Bytes, or an Optional of one of those.
-def equatable?(type: T.Type) -> Bool
-  if T.is?(type, "Optional")
-    return equatable?(T.item(type))
-  end
-
-  return CheckTypes.primitive?(type) or T.is?(type, "Range") or T.is?(type, "Bytes")
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]

@@ -15,7 +15,7 @@ The VM computes these builtins with OpenSSL, the library it already uses for TLS
 
 ## Digests
 
-```text
+```signature
 Digest.md5(data: Bytes) -> Bytes
 Digest.md5_hexdigest(data: Bytes) -> String
 Digest.sha1(data: Bytes) -> Bytes
@@ -66,7 +66,7 @@ end
 
 ## HMAC
 
-```text
+```signature
 HMAC.sha256(key: Bytes, data: Bytes) -> Bytes
 HMAC.sha256_hexdigest(key: Bytes, data: Bytes) -> String
 HMAC.sha512(key: Bytes, data: Bytes) -> Bytes
@@ -122,7 +122,7 @@ false
 
 ## AES-256-GCM
 
-```text
+```signature
 Cipher.aes_256_gcm_encrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
 Cipher.aes_256_gcm_decrypt(key: Bytes, iv: Bytes, data: Bytes, auth_data: Bytes = "".bytes) -> Result[Bytes]
 ```
@@ -159,7 +159,7 @@ false
 
 ## Password hashing
 
-```text
+```signature
 KDF.pbkdf2_hmac_sha256(password: Bytes, salt: Bytes, iterations: Int, length: Int) -> Result[Bytes]
 KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) -> Result[Bytes]
 ```
@@ -199,7 +199,7 @@ false
 
 ## Triple DES and CMAC
 
-```text
+```signature
 Cipher.des_ede3_cbc_encrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
 Cipher.des_ede3_cbc_decrypt(key: Bytes, iv: Bytes, data: Bytes) -> Result[Bytes]
 CMAC.aes(key: Bytes, data: Bytes) -> Result[Bytes]
@@ -260,7 +260,7 @@ false
 
 ## SecureRandom
 
-```text
+```signature
 SecureRandom.random_bytes(n: Int = 16) -> Bytes
 SecureRandom.hex(n: Int = 16) -> String
 SecureRandom.uuid() -> String

@@ -25,10 +25,12 @@ struct Placed
   seen: Map[String, Bool]
 end
 
-# What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk).
+# What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk). why is the
+# struct field or enum variant where the walk of equality stopped, or "" (see equality_gap).
 struct Walk
   passes: Bool
   seen: Map[String, Bool]
+  why: String
 end
 
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
@@ -231,7 +233,21 @@ end
 ## Results, structs and enums of those. A type variable is one only in the files of the prelude: in the body of a
 ## generic function it stands for any type, which could be an Fn.
 export def data?(cx: State.Cx, type: ResolvedType) -> Bool
-  return data_walk(cx, type, {}).passes
+  return data_walk(cx, type, {}, false).passes
+end
+
+## True for a type that == and != compare: a data type (data?) with no Json inside. Numbers, Bool, String, nil,
+## ranges, Bytes, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs and enums
+## that hold one another is judged as a whole, so the answer does not depend on where the walk starts.
+export def equality?(cx: State.Cx, type: ResolvedType) -> Bool
+  return data_walk(cx, type, {}, true).passes
+end
+
+## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
+## struct field or enum variant on the way ("field User.on_save is Fn[User, Void]"), or "" when neither is on the way
+## (List[Fn[Int, Int]]).
+export def equality_gap(cx: State.Cx, type: ResolvedType) -> String
+  return data_walk(cx, type, {}, true).why
 end
 
 ## True when the type has a type variable inside.
@@ -1020,11 +1036,20 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
 end
 
 def passed(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: true, seen: seen)
+  return Walk(passes: true, seen: seen, why: "")
 end
 
 def refused(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: false, seen: seen)
+  return Walk(passes: false, seen: seen, why: "")
+end
+
+# The refused walk found, with why as its reason when no part deeper in it gave one.
+def refused_at(found: Walk, why: String) -> Walk
+  if found.why != ""
+    return found
+  end
+
+  return found.with(why: why)
 end
 
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
@@ -1095,22 +1120,30 @@ def json_null_item?(type: ResolvedType) -> Bool
   return Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
-# data? for one type. seen holds every struct and enum walked in the whole call ("Struct:name"), not only the ones on
-# the path (struct_walk says why that is sound), and a recursive type ends.
-def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
-  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range") or Types.is?(type, "Bytes")
+# data? for one type, or equality? when equal is true (Json is then refused). seen holds every struct and enum walked
+# in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
+# recursive type ends.
+def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
+  if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes")
     return passed(seen)
+  elsif Types.is?(type, "Json")
+    return Walk(passes: !equal, seen: seen, why: "")
   elsif Types.is?(type, "Var")
-    return Walk(passes: cx.prelude, seen: seen)
+    why = ""
+    if !cx.prelude
+      why = "the type variable #{Types.name(type)} of a generic function could be a function"
+    end
+
+    return Walk(passes: cx.prelude, seen: seen, why: why)
   elsif Types.is?(type, "List")
-    return data_walk(cx, Types.item(type), seen)
+    return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Map")
-    key = data_walk(cx, Types.key(type), seen)
+    key = data_walk(cx, Types.key(type), seen, equal)
     if !key.passes
       return key
     end
 
-    return data_walk(cx, Types.value(type), key.seen)
+    return data_walk(cx, Types.value(type), key.seen, equal)
   elsif Types.is?(type, "Set")
     return passed(seen)
   elsif Types.is?(type, "Result")
@@ -1118,11 +1151,11 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
       return passed(seen)
     end
 
-    return data_walk(cx, Types.item(type), seen)
+    return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Optional")
-    return data_walk(cx, Types.item(type), seen)
+    return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
-    return nominal_walk(cx, type, seen)
+    return nominal_walk(cx, type, seen, equal)
   end
 
   return refused(seen)
@@ -1197,13 +1230,15 @@ def walk_key(type: ResolvedType) -> String
   return "#{name}[#{marks}]"
 end
 
-def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
+# data_walk for a struct or an enum: the type arguments, then the fields or payloads once for each key (struct_walk).
+# A refusal names the field or variant it came through, with its declared type.
+def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
   name = Types.name(type)
   key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
     builtin_void = Types.is?(argument, "Void") and ENUMS.has_key?(name)
     if !builtin_void
-      found = data_walk(cx, argument, seen)
+      found = data_walk(cx, argument, seen, equal)
       if !found.passes
         return found
       end
@@ -1217,14 +1252,19 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> W
   end
 
   seen = seen.put(key, true)
+  place = Types.display_name(name)
   if Types.is?(type, "Struct")
-    for field in stand_in_fields(cx, type)
-      found = data_walk(cx, field.type, seen)
+    declared = cx.structs[name]
+    fields = stand_in_fields(cx, type)
+    index = 0
+    while index < fields.size
+      found = data_walk(cx, fields[index].type, seen, equal)
       if !found.passes
-        return found
+        return refused_at(found, "field #{place}.#{fields[index].name} is #{Types.to_text(declared[index].type)}")
       end
 
       seen = found.seen
+      index += 1
     end
 
     return passed(seen)
@@ -1234,9 +1274,9 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> W
   stand = stand_ins(definition.parameters, Types.args(type))
   for variant in definition.variants
     for payload in variant.payload
-      found = data_walk(cx, substitute(payload, stand), seen)
+      found = data_walk(cx, substitute(payload, stand), seen, equal)
       if !found.passes
-        return found
+        return refused_at(found, "variant #{place}.#{variant.name} holds #{Types.to_text(payload)}")
       end
 
       seen = found.seen

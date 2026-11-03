@@ -14,7 +14,7 @@ Every file function takes a timeout in milliseconds and returns a `Result`. It d
 
 ## File.write_text
 
-```text
+```signature
 File.write_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -33,7 +33,7 @@ ok()
 
 ## File.replace
 
-```text
+```signature
 File.replace(path: String, data: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -53,7 +53,7 @@ end
 
 ## File.append_text
 
-```text
+```signature
 File.append_text(path: String, text: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -61,7 +61,7 @@ Adds text at the end of a file. It creates the file when it is missing.
 
 ## File.read_text
 
-```text
+```signature
 File.read_text(path: String, timeout_ms: Int = 30000) -> Result[String]
 ```
 
@@ -78,7 +78,7 @@ end
 
 ## File.sha256
 
-```text
+```signature
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 ```
 
@@ -99,7 +99,7 @@ end
 
 ## File.stat
 
-```text
+```signature
 File.stat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 ```
 
@@ -119,7 +119,7 @@ end
 
 ## File.lstat
 
-```text
+```signature
 File.lstat(path: String, timeout_ms: Int = 30000) -> Result[FileInfo]
 ```
 
@@ -127,7 +127,7 @@ Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size
 
 ## File.open and File.close
 
-```text
+```signature
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
 File.close(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
 ```
@@ -162,7 +162,7 @@ end
 
 ## File.open with a block
 
-```text
+```signature
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) do |file| ... end -> Result[T]
 ```
 
@@ -187,7 +187,7 @@ end
 
 ## File.write and File.flush
 
-```text
+```signature
 File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
 File.flush(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Void]
 ```
@@ -212,7 +212,7 @@ end
 
 ## File.try_lock
 
-```text
+```signature
 File.try_lock(handle: FileHandle, timeout_ms: Int = 30000) -> Result[Bool]
 ```
 
@@ -237,7 +237,7 @@ end
 
 ## File.read_line
 
-```text
+```signature
 File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
 ```
 
@@ -245,7 +245,7 @@ Reads one line without its line ending (LF or CRLF; a final line without one cou
 
 ## File.each_line
 
-```text
+```signature
 File.each_line(path: String, buffer_bytes: Int = 65536, timeout_ms: Int = 30000) do |line| ... end -> Result[Void]
 ```
 
@@ -273,7 +273,7 @@ end
 
 ## File.read_bytes and File.write_bytes
 
-```text
+```signature
 File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
 File.write_bytes(handle: FileHandle, bytes: Bytes, timeout_ms: Int = 30000) -> Result[Void]
 ```
@@ -296,7 +296,7 @@ end
 
 ## Dir.list
 
-```text
+```signature
 Dir.list(path: String, timeout_ms: Int = 30000) -> Result[List[String]]
 ```
 
@@ -312,7 +312,7 @@ end
 
 ## Dir.mkdir
 
-```text
+```signature
 Dir.mkdir(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -320,7 +320,7 @@ Creates a directory and any missing parents. An existing directory is fine.
 
 ## Dir.mkdir_private
 
-```text
+```signature
 Dir.mkdir_private(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -338,7 +338,7 @@ end
 
 ## Path.join
 
-```text
+```signature
 Path.join(parts: List[String]) -> Result[String]
 ```
 
@@ -356,7 +356,7 @@ ok("build/reports/a.txt")
 
 ## Path.cwd and Path.resolve
 
-```text
+```signature
 Path.cwd() -> Result[String]
 Path.resolve(path: String) -> Result[String]
 ```
@@ -365,7 +365,7 @@ Path.resolve(path: String) -> Result[String]
 
 ## Path.real
 
-```text
+```signature
 Path.real(path: String) -> Result[String]
 ```
 
@@ -390,7 +390,7 @@ false
 
 ## Path.remove
 
-```text
+```signature
 Path.remove(path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -411,7 +411,7 @@ end
 
 ## Path.rename
 
-```text
+```signature
 Path.rename(from: String, to: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
