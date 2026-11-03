@@ -1,4 +1,15 @@
 # A method chain written with a dot at the start of each line keeps that form, without parentheses.
+
+struct Order
+  name: String
+  qty: Int
+end
+
+enum Kind
+  Small(Int)
+  Large(Int)
+end
+
 def chains(orders: List[String]) -> Int
   scores = [3, 8, 5, 10, 1]
     .select do |x| x > 2 end # drop the small ones
@@ -32,4 +43,49 @@ def chains(orders: List[String]) -> Int
     .map do |x| x + cleaned.size + total end
     .select do |x| x.to_s.size > short end
     .size
+end
+
+# A block of the chain that holds a case guard, `while ... do` and `for ... do` does not hide the dots that follow it.
+def inside_blocks(orders: List[Order]) -> Void
+  orders.select do |order| order.qty > 0 end
+    .select do |order|
+      case Kind.Small(order.qty)
+        Kind.Small(n) if n > 1 -> puts(n)
+        Kind.Small(n) -> puts(0)
+        Kind.Large(n) -> puts(n)
+      end
+      total = order.qty
+      while total > 100 do
+        total = total - 100
+      end
+      for step in [1, 2] do
+        total = total + step
+      end
+      total > 1
+    end
+    .each do |order| puts(order.name) end
+end
+
+# A long chain of plain calls breaks before each dot, with no parentheses.
+def plain(order: Order) -> String
+  text = order.name
+    .strip()
+    .upcase()
+    .downcase()
+    .reverse()
+    .strip()
+    .upcase()
+    .downcase()
+    .reverse()
+    .strip()
+    .upcase()
+    .downcase()
+    .reverse()
+    .strip()
+    .upcase()
+    .downcase()
+    .reverse()
+    .strip()
+
+  return text
 end

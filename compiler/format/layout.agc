@@ -40,9 +40,6 @@ LEVELS: Map[String, Int] = {
 PIPE_LEVEL = 5
 UNARY_LEVEL = 8
 POSTFIX_LEVEL = 9
-# The tokens that open and close a level of the source for `dotted?`: brackets, and blocks with their `end`.
-OPENING = Set.new(["left-paren", "left-bracket", "left-brace", "do", "if", "while", "for", "case", "def"])
-CLOSING = Set.new(["right-paren", "right-bracket", "right-brace"])
 
 ## What the layout reads besides the tree: the source lines, the tokens that are not line breaks with their starts,
 ## the comments of each node by its key (`Comments.key_of`), the body of each heredoc by the offset of its opener, and
@@ -930,42 +927,37 @@ def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
 end
 
 # Whether `expr`, the whole value of a statement, is a method chain written with a `.` that starts a line (the parser
-# reads it as a continuation of the line before) and not inside brackets: a dot inside the parentheses of the chain, of
-# an argument or of a block body does not count. The tokens of the chain are counted by their brackets and their
-# `do ... end` blocks, so the dots that count are the ones at its own level.
+# reads it as a continuation of the line before). Each call, field or `.call` of the chain has its dot right after the
+# end of its receiver (past the `)` of a parenthesized one), so the dots of the arguments and of the blocks, which sit
+# inside the links and not between them, never count. A chain that the source wrote inside its own parentheses,
+# `(a\n  .b)`, is left to the layout, which keeps them.
 def dotted?(c: Context, expr: Ast.Expr) -> Bool
-  case link_of(c, expr)
-    some(_) -> return dotted_at?(c, Ast.expr_span(expr))
-    none -> return false
+  span = tight(c, Ast.expr_span(expr))
+  first = token_index(c, span.start.offset)
+  after = token_index(c, span.stop.offset)
+  if first > 0 and after < c.tokens.size
+    if c.tokens[first - 1].kind == "left-paren" and c.tokens[after].kind == "right-paren"
+      return false
+    end
   end
-end
 
-def dotted_at?(c: Context, span: Source.Span) -> Bool
-  at = token_index(c, span.start.offset)
-  stop = token_index(c, span.stop.offset)
-  # A `(` right before the chain whose `)` comes after it wraps the chain, which the layout then keeps in parentheses.
-  wrapped_in = at > 0 and c.tokens[at - 1].kind == "left-paren"
-  depth = 0
+  current = expr
   found = false
-  while at < stop
-    kind = c.tokens[at].kind
-    if OPENING.include?(kind)
-      depth += 1
-    elsif kind == "end" or CLOSING.include?(kind)
-      depth -= 1
-      if depth < 0
-        # A `)` that closes a parenthesized receiver, `(a + b).round`, not the `(` before the chain.
-        wrapped_in = false
-        depth = 0
-      end
-    elsif kind == "dot" and depth == 0 and at > 0 and c.tokens[at].span.start.line > c.tokens[at - 1].span.stop.line
-      found = true
+  while link?(current)
+    receiver = target_of(current)
+    at = token_index(c, tight(c, Ast.expr_span(receiver)).stop.offset)
+    while at < c.tokens.size and c.tokens[at].kind == "right-paren"
+      at += 1
     end
 
-    at += 1
+    if at > 0 and at < c.tokens.size and c.tokens[at].kind == "dot"
+      found = found or c.tokens[at].span.start.line > c.tokens[at - 1].span.stop.line
+    end
+
+    current = receiver
   end
 
-  return found and not wrapped_in
+  return found
 end
 
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
@@ -1363,6 +1355,18 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
 
       return some(Link(doc: inner, block: [], call: false, breaks: false))
     _ -> return none
+  end
+end
+
+# Whether `expr` is one link of a chain: a call, a field, `.call`, `.with` or an index.
+def link?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.MethodCall(_) -> return true
+    Ast.Expr.FieldAccess(_) -> return true
+    Ast.Expr.Invoke(_) -> return true
+    Ast.Expr.Update(_) -> return true
+    Ast.Expr.Index(_) -> return true
+    _ -> return false
   end
 end
 
