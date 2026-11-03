@@ -1,10 +1,12 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 43,
+  "steps": 69,
   "stdout": [
     "\"new\"",
     "\"process: environment names must differ by more than case\"",
+    "\"process: environment names must differ by more than case\"",
+    "\"process: executable is unavailable\"",
     ""
   ],
   "stderr": []

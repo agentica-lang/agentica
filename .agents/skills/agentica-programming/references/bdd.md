@@ -117,7 +117,7 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   child before its program is stopped. Register it in the step that makes the
   thing to clean. The hook gets the final context (use it for `BDD` calls) and
   returns `ok()` or `error(message)`; a hook that returns an error, crashes or
-  fails a `BDD` check fails a passing scenario (`RUNTIME-BDD-AFTER`) or is added
+  fails a `BDD` check (on any context) fails a passing scenario (`RUNTIME-BDD-AFTER`) or is added
   to the message of a failing one, and the other hooks still run. No hook runs
   when the child itself ends: a step that crashes (`.unwrap!` on an error),
   `System.exit`, the 30 s limit. Hooks run before the program under test stops
@@ -125,7 +125,10 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   `BDD.after` returns: a failure on an older context does not run it.
 - `BDD.given_env` and `BDD.given_argument` (or the steps) come before
   `BDD.given_program` (`RUNTIME-BDD-CONTEXT` after): the variable and arguments
-  reach only that scenario's program. A scenario starts one program.
+  reach only that scenario's program. A scenario starts one program. A NUL
+  byte or a name the VM owns (`AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`,
+  `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) is `RUNTIME-BDD-CONTEXT`; on
+  Windows `Path` and `PATH` are one name, so the second replaces the first.
 - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
   `Result[String]` (an error at the end of the output or a timeout). A timeout stops
   the program: later reads, sends and exit checks fail with `RUNTIME-BDD-IO`,

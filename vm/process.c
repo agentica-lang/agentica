@@ -50,6 +50,13 @@ typedef struct request request;
 typedef struct guard guard;
 typedef struct launch launch;
 
+/* One pair of the program's `env` map, taken out of the map by env_problem. Both strings are GC memory, and so is the
+   array that holds the pairs, which keeps them alive. */
+typedef struct {
+  const agc_string *name;
+  const agc_string *value;
+} env_pair;
+
 /* What a spawn hands to the I/O thread: malloc'd strings, no VM values. */
 struct launch {
   guard *g;
@@ -1029,40 +1036,31 @@ static char *env_entry(const char *name, size_t name_size, const char *value, si
 }
 
 /* True when the program's `env` map gives HOST_NAME a new value, so the VM's own entry is left out. */
-static bool env_overridden(agc_vm *vm, const char *host_name, const agc_value *keys, size_t count) {
+static bool env_overridden(const char *host_name, const env_pair *pairs, size_t count) {
   size_t size = strlen(host_name);
-  for (size_t k = 0; k < count; k++) {
-    const agc_string *name = agc_as_string(vm, keys[k]);
-    if (agc_proc_env_name_equal(host_name, size, (const char *)name->data, name->bytes)) return true;
-  }
+  for (size_t k = 0; k < count; k++)
+    if (agc_proc_env_name_equal(host_name, size, pairs[k].name->data, pairs[k].name->bytes)) return true;
   return false;
 }
 
-/* The environment of a child: the VM's own, minus the entries the VM owns and the names `extra` sets, plus the pairs of
-   `extra` (a Map[String, String] checked by env_problem, or NULL); `channel` is the value of AGENTICA_CHANNEL when the
-   child gets a channel. */
-static char **child_env(agc_vm *vm, bool drop_uring, const char *channel, const agc_map *extra) {
+/* The environment of a child: the VM's own, minus the entries the VM owns and the names of `pairs` (the `env` map as
+   env_problem checked it), plus those pairs; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel.
+   Nothing here can fail but the allocation, so no malloc'd entry is lost to an agc_fail. */
+static char **child_env(bool drop_uring, const char *channel, const env_pair *pairs, size_t added) {
   uv_env_item_t *host = NULL;
   int count = 0;
   if (uv_os_environ(&host, &count) != 0) return NULL;
-  const agc_value *keys = extra && extra->size ? agc_map_keys(vm, extra, 0) : NULL;
-  size_t added = keys ? extra->size : 0;
   char **env = calloc(agc_size_add(agc_size_add((size_t)count, added), 2), sizeof(char *));
   if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
   for (int k = 0; k < count; k++) {
     char *entry = env_entry(host[k].name, strlen(host[k].name), host[k].value, strlen(host[k].value));
-    if (own_env(drop_uring, entry) || metrics_env(entry) || env_overridden(vm, host[k].name, keys, added)) free(entry);
+    if (own_env(drop_uring, entry) || metrics_env(entry) || env_overridden(host[k].name, pairs, added)) free(entry);
     else env[kept++] = entry;
   }
   uv_os_free_environ(host, count);
-  for (size_t k = 0; k < added; k++) {
-    agc_value value;
-    const agc_string *name = agc_as_string(vm, keys[k]);
-    if (!agc_map_get(vm, extra, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
-    const agc_string *text = agc_as_string(vm, value);
-    env[kept++] = env_entry((const char *)name->data, name->bytes, (const char *)text->data, text->bytes);
-  }
+  for (size_t k = 0; k < added; k++)
+    env[kept++] = env_entry(pairs[k].name->data, pairs[k].name->bytes, pairs[k].value->data, pairs[k].value->bytes);
   if (channel) {
     size_t size = strlen(CHANNEL_PREFIX) + strlen(channel) + 1;
     env[kept] = malloc(size);
@@ -1172,27 +1170,60 @@ static bool reserved_env(const agc_string *name) {
   return false;
 }
 
-/* Why the program's `env` map cannot be a child's environment, or NULL. A name the VM owns is refused, not dropped:
-   dropping it would run the child without a variable the program asked for. Where names ignore case (Windows) two keys
-   that differ only in case are refused too: libuv would send both and the child could see either. */
-static const char *env_problem(agc_vm *vm, const agc_map *env) {
+static unsigned char ascii_lower(char c) {
+  unsigned char b = (unsigned char)c;
+  return b >= 'A' && b <= 'Z' ? (unsigned char)(b + ('a' - 'A')) : b;
+}
+
+/* qsort order of names as a case-blind system compares them: ASCII letters in lower case, every other byte as it is.
+   Two names that agc_proc_env_name_equal finds equal there compare 0, so after the sort they are neighbours. */
+static int compare_folded(const void *a, const void *b) {
+  const agc_string *x = *(const agc_string *const *)a;
+  const agc_string *y = *(const agc_string *const *)b;
+  size_t size = x->bytes < y->bytes ? x->bytes : y->bytes;
+  for (size_t k = 0; k < size; k++) {
+    int cx = ascii_lower(x->data[k]), cy = ascii_lower(y->data[k]);
+    if (cx != cy) return cx - cy;
+  }
+  return (x->bytes > y->bytes) - (x->bytes < y->bytes);
+}
+
+/* True when two of the COUNT names are one variable on a case-blind system: a sort and a pass over neighbours, so a big
+   map costs O(n log n) comparisons, not one per pair. */
+static bool case_twins(const env_pair *pairs, size_t count) {
+  const agc_string **names = agc_alloc(agc_size_mul(count, sizeof *names));
+  for (size_t k = 0; k < count; k++) names[k] = pairs[k].name;
+  qsort(names, count, sizeof *names, compare_folded);
+  for (size_t k = 1; k < count; k++)
+    if (agc_proc_env_name_equal(names[k - 1]->data, names[k - 1]->bytes, names[k]->data, names[k]->bytes)) return true;
+  return false;
+}
+
+/* Why the program's `env` map cannot be a child's environment, or NULL; *pairs and *count get its pairs, which
+   child_env adds. A name the VM owns is refused, not dropped: dropping it would run the child without a variable the
+   program asked for. Where names ignore case (Windows) two keys that differ only in case are refused too: libuv would
+   send both and the child could see either. */
+static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **pairs, size_t *count) {
+  *pairs = NULL;
+  *count = 0;
   if (!env || !env->size) return NULL;
   const agc_value *keys = agc_map_keys(vm, env, 0);
+  env_pair *found = agc_alloc(agc_size_mul(env->size, sizeof *found));
   for (size_t k = 0; k < env->size; k++) {
     agc_value value;
     const agc_string *name = agc_as_string(vm, keys[k]);
     if (!agc_map_get(vm, env, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
-    if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes) || !no_nul(agc_as_string(vm, value)))
+    const agc_string *text = agc_as_string(vm, value);
+    if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes) || !no_nul(text))
       return "process: environment names must be nonempty and cannot contain = or NUL, and values cannot contain NUL";
     if (reserved_env(name))
       return "process: AGENTICA_CHANNEL, AGENTICA_VM_METRICS, AGENTICA_VM_METRICS_FILE and UV_USE_IO_URING cannot be set";
-    if (agc_proc_env_case_blind())
-      for (size_t j = 0; j < k; j++) {
-        const agc_string *other = agc_as_string(vm, keys[j]);
-        if (agc_proc_env_name_equal((const char *)name->data, name->bytes, (const char *)other->data, other->bytes))
-          return "process: environment names must differ by more than case";
-      }
+    found[k] = (env_pair){name, text};
   }
+  if (agc_proc_env_case_blind() && case_twins(found, env->size))
+    return "process: environment names must differ by more than case";
+  *pairs = found;
+  *count = env->size;
   return NULL;
 }
 
@@ -1256,7 +1287,9 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (dir && (dir->bytes == 0 || !no_nul(dir)))
     return agc_error_value("process: dir must be nonempty and cannot contain NUL");
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
-  const char *env_text = env_problem(vm, env);
+  const env_pair *pairs;
+  size_t pair_count;
+  const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
@@ -1280,7 +1313,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (!l) agc_out_of_memory();
   l->g = g;
   l->argv = child_args(vm, path, list);
-  l->env = child_env(vm, vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL, env);
+  l->env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL, pairs, pair_count);
   l->cwd = cwd;
   l->args = agc_list_len(list);
   l->channel = channel;

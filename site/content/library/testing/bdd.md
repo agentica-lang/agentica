@@ -93,7 +93,7 @@ Scenario Outline: Greet in a language
 
 - A variable is added to the environment `agentica test` runs in; the program sees the others as they are. Setting a name again replaces its value. The variable reaches only the program of that scenario: not the runner, and no other scenario.
 - Each `the program argument` adds one argument, in order, with no splitting on spaces: `"a b"` is one argument. The program reads them with `System.args`.
-- Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`.
+- Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`, a name or value cannot contain a NUL byte, and `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns, cannot be set: each is `RUNTIME-BDD-CONTEXT`. On Windows names ignore ASCII case, so `Path` and then `PATH` set one variable, to the second value.
 - A scenario starts one program. To run it again with other values, write another scenario (an outline row is one).
 
 ## Your own steps
@@ -240,7 +240,7 @@ BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
 Registers a cleanup that runs when the scenario ends, whether it passed, failed or was skipped. A step registers it right after it makes what needs cleaning, so the hook exists only when there is something to clean.
 
 - Hooks run in the reverse order of registration, in the process of the scenario. A hook gets the context the scenario ended with, and returns `ok()` or `error(message)`. Use that context for any `BDD` call in the hook.
-- A hook that returns an `error`, crashes or fails a `BDD` check is a failed hook, and the other hooks still run. A failed hook fails a scenario that passed, with the code `RUNTIME-BDD-AFTER` at the scenario line. For a scenario that failed, the failure stays the one reported and the message of the hook is added to it.
+- A hook that returns an `error`, crashes or fails a `BDD` check is a failed hook, and the other hooks still run. That holds for a check on any context, also one the hook captured when it was registered. A failed hook fails a scenario that passed, with the code `RUNTIME-BDD-AFTER` at the scenario line. For a scenario that failed, the failure stays the one reported and the message of the hook is added to it.
 - Hooks do **not** run when the process of the scenario itself ends: a step that crashes (an `.unwrap!` on an `error`, a division by zero), a step or hook that calls `System.exit`, or the 30 second limit. A scenario that fails by a crash still leaves what it made, so keep a cleanup of stale folders for that case, or make steps return `error` and check it with `BDD.assert` instead of `.unwrap!`.
 - Hooks run before the program under test is stopped, and no `BDD` call stops it first. On Windows a folder the program still holds open may not be removable by a hook.
 - A hook is kept in the context that `BDD.after` returns. A step that registers a hook and then fails on an older context (`BDD.assert(ctx, ...)` with the `ctx` from before) does not run it: pass on the context that `BDD.after` returned.

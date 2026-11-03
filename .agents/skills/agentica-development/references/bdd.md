@@ -100,7 +100,7 @@ or the site).
 - The child talks over a channel (`Process.spawn_channel`, stdin closed at
   once): an init line, then one step line per step (`Process.channel_send`);
   the child answers with JSON line records (`assert`, `step`, `fail`, `end`,
-  `ready`, `skip`) read with `Process.channel_read_line`. After `end` or `fail`
+  `ready`, `skip`, `after`) read with `Process.channel_read_line`. After `end` or `fail`
   the runner reads the handler's output with `Process.read_available` and
   fails the step with `RUNTIME-BDD-OUTPUT-LIMIT` when a cap was hit. An `end`
   whose `index` is not the current step is a `RUNTIME-BDD-INFRA` protocol
@@ -174,9 +174,12 @@ or the site).
   list in `Scenario` until `start`, which passes them to
   `Process.spawn_captured` (`env`) and after the file. `after` keeps
   `Fn[Context, Result[Void]]` hooks; `finish` sends the fail record first and
-  then `run_after` (each hook in its own task; with `closing` set a failed
-  check crashes that task). The runner reads on after a `fail`
-  (`with_hook_problems`) to add the hooks' message. Every failing `bdd.agc`
+  then `run_after` (each hook in its own task). `run_after` closes the
+  scenario's `closing` channel, which every context shares, so a failed check
+  crashes the hook's task even on a context captured earlier, and sends `after`
+  when there are hooks. The runner reads on after a `fail`
+  (`with_hook_problems`) to add the hooks' message, and uses the hook wording
+  for a late timeout only after an `after` record. Every failing `bdd.agc`
   helper takes `ctx` so it can run the hooks; `abort` is for the failures
   before a context exists.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first

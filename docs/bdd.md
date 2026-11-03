@@ -255,23 +255,24 @@ A step program is a normal program: its `main` builds the list of steps with
   service; the old handle is not closed and lives until the scenario's child
   VM ends, or until a `BDD.after` hook closes it. A step still cannot leave a
   task running.
-- `BDD.after(ctx, hook)` keeps a `Fn[Context, Result[Void]]` in the context.
-  The child runs the hooks, the last registered first, each in its own task
+- `BDD.after(ctx, hook)` keeps a `Fn[Context, Result[Void]]` in the context. The
+  child runs the hooks, the last registered first, each in its own task
   (`run_after` in `stdlib/bdd.agc`), when the runner closes the channel (a
   scenario that passed), after the `fail` record of a failed step, and before
-  the `skip` record. A hook gets a context with `closing` set, in which a failed
-  `BDD` check crashes the hook's task instead of ending the child: a returned
-  `error`, a crash and a failed check each become the problem of that hook, and
-  the other hooks still run. After a pass or a skip the problems are one `fail`
-  record with `RUNTIME-BDD-AFTER`. After a failure the first record has already
-  gone, so a hook that hangs or dies cannot hide it: the same record follows,
-  and the runner (`with_hook_problems` in `stdlib/test/runner.agc`) reads on
-  until the child ends or the deadline passes and adds its message to the
-  failure's. A process that ends by itself (a crash in a step, `System.exit`, a
-  limit or the deadline) runs no hook: that state is gone with the process.
-  The hooks run before the program under test is stopped, and a hook belongs
-  to the context `BDD.after` returned, so a `BDD` failure on an older context
-  does not see it.
+  the `skip` record. `run_after` first closes the scenario's `closing` channel,
+  which every context of the scenario shares, and sends an `after` record when
+  there are hooks. From then on a failed `BDD` check, on any context, crashes
+  the hook's task instead of ending the child: a returned `error`, a crash and a
+  failed check each become the problem of that hook, and the other hooks still
+  run. After a pass or a skip the problems are one `fail` record with
+  `RUNTIME-BDD-AFTER`. After a failure the first record has already gone, so a
+  hook that hangs or dies cannot hide it: the same record follows, and the
+  runner (`with_hook_problems` in `stdlib/test/runner.agc`) reads on until the
+  child ends or the deadline passes and adds its message to the failure's. A
+  process that ends by itself (a crash in a step, `System.exit`, a limit or the
+  deadline) runs no hook: that state is gone with the process. The hooks run
+  before the program under test is stopped, and a hook belongs to the context
+  `BDD.after` returned, so a `BDD` failure on an older context does not see it.
 - `BDD.read_line(ctx, timeout_ms)` is `Process.read_line` of the program under
   test as a `Result[String]`: the ended output and the timeout are errors the
   step can handle; the output limit and an I/O failure still fail the step. A
@@ -412,6 +413,11 @@ agentica test [PATH...] [--steps FILE]
 - **Direction:** child to runner
   - **Record:** `skip` (with `reason`)
   - **Meaning:** `BDD.skip` ended the step (the child then exits 0)
+
+- **Direction:** child to runner
+  - **Record:** `after`
+  - **Meaning:** The after hooks start; a deadline that passes from here is
+    reported as a hook that did not finish
 
 - **Direction:** list child to runner
   - **Record:** `step` records, then `ready`
