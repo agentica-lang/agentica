@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 45,
+  "steps": 46,
   "stdout": [
-    "\"new-ab\"",
+    "\"KEPT=NEW\"",
     "\"\"",
     "\"process: environment names must differ by more than case\"",
     ""
