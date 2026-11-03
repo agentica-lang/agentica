@@ -144,9 +144,10 @@ static const char write_failed[] = "could not write to the stream";
    never outlives its context. It has the system trust. The rest belongs to the I/O thread; the pool job writes
    only `built` and `failure`, which libuv hands back to that thread in shared_done. A failed build is not kept: the
    next connection tries again. A queued build is never cancelled, even when every waiter leaves or the client dropped
-   its count: it holds its own count, runs to its end and shared_done gives back the last count. Until then it keeps
-   the loop alive at the end of the run, for as long as reading the system trust takes. A client whose options name a
-   TlsContext connects with TLS.connect instead (std/http). */
+   its count: it holds its own count, runs to its end and shared_done gives back the last count. A run does not wait
+   for it: the run ends through agc_launch_exit (_exit). Until it ends, agc_io_close does not settle; only the test
+   harness retries that close until it does. A client whose options name a TlsContext connects with TLS.connect
+   instead (std/http). */
 struct tls_shared {
   _Atomic size_t refs;
   agc_tls_config *config, *built;
