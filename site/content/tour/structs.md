@@ -340,4 +340,29 @@ end
 12
 ```
 
-Structs cannot be compared with `==`. Compare their fields instead.
+## Equality
+
+Two structs of the same type are equal when all their fields are equal, compared in depth. Lists, maps, sets, Results and enums compare the same way:
+
+```agentica
+struct User
+  name: String
+  tags: List[String]
+end
+
+def main() -> Void
+  a = User(name: "Ana", tags: ["admin"])
+  b = User(name: "Ana", tags: ["admin"])
+  puts(a == b)
+  puts(a.with(tags: []) != b)
+  puts([a, b] == [b, a])
+end
+```
+
+```output
+true
+true
+true
+```
+
+A struct with a function field (`Fn`), a task, a channel, a handle or a `Json` inside has no equality: `==` on it is `CHECK-TYPE-MISMATCH`, and the message names the field. A `Float` field follows IEEE 754, so a struct that holds a NaN is not equal to itself.

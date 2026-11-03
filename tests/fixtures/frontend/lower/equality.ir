@@ -1,0 +1,50 @@
+program 0:1:1-12:1 entry=0 globals=0
+source 0 "equality.agc" chars=148
+struct s0 "Point" ["x","y"]
+fn0 "main" params=0 captures=0 slots=6 entry @ 0:6:1-12:1
+    step @ 0:7:3-8:1
+    step @ 0:7:7-7:24
+    step @ 0:7:16-7:17
+    const r1 int:1 @ 0:7:16-7:17
+    step @ 0:7:22-7:23
+    const r2 int:2 @ 0:7:22-7:23
+    struct r0 r1 s0 @ 0:7:7-7:24
+    step @ 0:8:3-9:1
+    step @ 0:8:3-8:31
+    step @ 0:8:8-8:30
+    step @ 0:8:8-8:9
+    move r2 r0 @ 0:8:8-8:9
+    step @ 0:8:13-8:30
+    step @ 0:8:22-8:23
+    const r4 int:1 @ 0:8:22-8:23
+    step @ 0:8:28-8:29
+    const r5 int:2 @ 0:8:28-8:29
+    struct r3 r4 s0 @ 0:8:13-8:30
+    call-builtin r2 "Value.equal" 2 @ 0:8:10-8:12 0:8:8-8:9 0:8:13-8:30
+    move r1 r2 @ 0:8:10-8:12
+    call-builtin r1 "puts" 1 @ 0:8:3-8:31 0:8:8-8:30
+    step @ 0:9:3-10:1
+    step @ 0:9:3-9:19
+    step @ 0:9:8-9:18
+    step @ 0:9:8-9:11
+    step @ 0:9:9-9:10
+    const r3 int:1 @ 0:9:9-9:10
+    list r2 r3 1 @ 0:9:8-9:11
+    step @ 0:9:15-9:18
+    step @ 0:9:16-9:17
+    const r4 int:2 @ 0:9:16-9:17
+    list r3 r4 1 @ 0:9:15-9:18
+    call-builtin r2 "Value.equal" 2 @ 0:9:12-9:14 0:9:8-9:11 0:9:15-9:18
+    not r1 r2 @ 0:9:12-9:14
+    call-builtin r1 "puts" 1 @ 0:9:3-9:19 0:9:8-9:18
+    step @ 0:10:3-11:1
+    step @ 0:10:3-10:15
+    step @ 0:10:8-10:14
+    step @ 0:10:8-10:9
+    const r2 int:1 @ 0:10:8-10:9
+    step @ 0:10:13-10:14
+    const r3 int:2 @ 0:10:13-10:14
+    eq r1 r2 r3 @ 0:10:10-10:12
+    call-builtin r1 "puts" 1 @ 0:10:3-10:15 0:10:8-10:14
+    const r1 void @ 0:6:1-12:1
+    return r1 @ 0:6:1-12:1

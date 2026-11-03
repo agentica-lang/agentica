@@ -104,8 +104,8 @@ rules those comments do not carry.
   only when one is dropped. `subset?` and the set case of `agc_equal` call
   `agc_set_subset`, so the key-list layout stays in `vm/map.c`. `Set.delete` is
   `agc_map_delete`.
-- `agc_equal` compares sets by size and membership (for `Test.eq`; there is no
-  `==`) and charges the size. Set builtins are `AGC_COST_SIZE` when they walk or
+- `agc_equal` compares sets by size and membership (for `Test.eq` and `==`)
+  and charges the size. Set builtins are `AGC_COST_SIZE` when they walk or
   copy a set or a list, `AGC_COST_NONE` for `add`, `delete`, `include?`, `size`
   and `empty?`. A hostile `.agcb` that puts a value other than an Int, String or
   Bytes in a set stops in `agc_key_hash` (`agc_wrong_tag`).

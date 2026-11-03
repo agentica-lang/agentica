@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 155:12:13-157:12:15 "Team has no equality: field User.on_save is Fn[User, Void]" "== compares numbers, Bool, String, nil, ranges, Bytes, and lists, maps, sets, Optionals, Results, structs and enums of those; functions, tasks, channels, handles and Json have no equality" signature="main() -> Void" file="equality-field.agc"

@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
+  (`user == other`, `xs == []`); a type that holds a function, a task, a
+  channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
 
 ## [0.22.0] - 2026-11-02
 

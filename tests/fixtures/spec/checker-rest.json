@@ -257,10 +257,7 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 9],
-      "covers": "==",
-      "help": true
+      "code": null
     },
     {
       "program": [
@@ -6785,7 +6782,7 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": null
     },
     {
       "program": [
@@ -9237,7 +9234,7 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": null
     }
   ],
   "generic enum construction infers and checks type arguments": [
@@ -10266,7 +10263,7 @@
         11
       ],
       "covers": "==",
-      "help": false
+      "help": true
     },
     {
       "program": [

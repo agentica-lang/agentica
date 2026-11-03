@@ -601,7 +601,9 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
   elsif Types.is?(Lowering.type_of(cx, node.left), "Bytes")
     fx = try lower_bytes_operator(cx, fx, node, dst)
   elsif Types.is?(Lowering.type_of(cx, node.left), "Optional")
-    fx = try lower_optional_equality(cx, fx, node, dst)
+    fx = try lower_deep_equality(cx, fx, node, dst, "Optional.equal")
+  elsif (op == "equal" or op == "not-equal") and deep_equality?(Lowering.type_of(cx, node.left))
+    fx = try lower_deep_equality(cx, fx, node, dst, "Value.equal")
   else
     ops = INT_OPS
     side = Lowering.type_of(cx, node.left)
@@ -645,9 +647,29 @@ def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst
   return ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
 end
 
-# == and != on two Optionals call Optional.equal, the deep equality of the VM: `eq` takes no enum value.
-def lower_optional_equality(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst: Int) -> Result[Lowering.Fx]
-  window = try bytes_call(cx, fx, "Optional.equal", node.left, node.right, node.op_span)
+# True for a type whose == is the deep equality of the VM: anything but a primitive or a Range, which `eq` compares
+# (Bytes and Optional have their own builtins). The checker lets only types with equality reach here.
+def deep_equality?(type: Types.Type) -> Bool
+  for flat in ["Int", "Float", "Bool", "String", "Nil", "Range"]
+    if Types.is?(type, flat)
+      return false
+    end
+  end
+
+  return true
+end
+
+# == and != on two values that `eq` does not take call a builtin of the deep equality of the VM: Optional.equal for
+# two Optionals (it answers `x == none` without a walk), Value.equal for lists, maps, sets, Results, structs and
+# enums. != is the negation of the call.
+def lower_deep_equality(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  node: Ast.Binary,
+  dst: Int,
+  key: String,
+) -> Result[Lowering.Fx]
+  window = try bytes_call(cx, fx, key, node.left, node.right, node.op_span)
   op = "move"
   if node.op == "not-equal"
     op = "not"

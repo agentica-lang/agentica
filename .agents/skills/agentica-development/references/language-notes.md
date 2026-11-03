@@ -16,6 +16,10 @@ section for the area you are changing.
   enum `Optional` (`lower_program.agc` `OPTIONAL`: `None`, `Some`), which the VM
   prints as `none` and `some(x)`; `==` calls the VM builtin `Optional.equal`.
   Its methods are prelude bodies (`stdlib/prelude/optional.agc`).
+- `==` on a list, map, set, Result, struct or enum is the VM builtin
+  `Value.equal` (`lower_deep_equality`), the deep walk of `vm/equal.c` that
+  `Test.eq` shares. The checker's `CheckTypes.equality?` is `data?` with Json
+  refused; `equality_gap` names the field or variant for the message.
 - `try` is a unary expression node. It requires a Result-returning function
   (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through
   the current function's escape. It does not guarantee a return.

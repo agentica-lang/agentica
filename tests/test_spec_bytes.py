@@ -90,12 +90,6 @@ REFUSED = [
     (MAIN + '  c = "a".bytes == "a"\nend\n', "CHECK-TYPE-MISMATCH", "=="),
     (MAIN + '  c = "a".bytes < "b".bytes\nend\n', "CHECK-TYPE-MISMATCH", "<"),
     (MAIN + '  c = "a".bytes[0] + "b".bytes\nend\n', "CHECK-TYPE-MISMATCH", "+"),
-    # A list of Bytes has no equality either.
-    (
-        MAIN + '  a = ["x".bytes]\n  puts(a == ["x".bytes])\nend\n',
-        "CHECK-TYPE-MISMATCH",
-        "==",
-    ),
     # A type variable has no equality, so a Bytes cannot reach EQ through generic code.
     ("def same[T](a: T, b: T) -> Bool\n  return a == b\nend\n\n" + MAIN + "end\n", "CHECK-TYPE-MISMATCH", "=="),
     # Indexing stays off String, and for takes a collection.

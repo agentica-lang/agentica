@@ -1,7 +1,8 @@
 /*
- * Deep value equality (agc_equal), pulled forward for Test.eq. A Json at any
- * depth compares as its canonical text. One explicit stack, no recursion.
- * Core layer. Design: docs/future/25-ruby-typed-idioms.md §25.4 and
+ * Deep value equality (agc_equal): == and != on lists, maps, sets, Results,
+ * structs and enums (the builtins Value.equal and Optional.equal), and Test.eq.
+ * A Json at any depth compares as its canonical text. One explicit stack, no
+ * recursion. Core layer. Design: docs/future/25-ruby-typed-idioms.md §25.4 and
  * docs/future/36-unit-tests.md §36.3.
  */
 #include "core.h"
@@ -67,6 +68,25 @@ static bool push_items(pair_stack *s, const agc_value *x, const agc_value *y, si
   return true;
 }
 
+/* Two packed lists of one kind (Ints or Floats) compare item by item here, without a pair on the stack for each: the
+   stack of a long list would otherwise grow to its length. Floats compare by IEEE 754, so a NaN item is not equal. */
+static bool same_scalars(agc_vm *vm, const agc_list *x, const agc_list *y) {
+  agc_list_cursor left, right;
+  agc_value a, b;
+  size_t compared = 0;
+  bool same = true;
+  agc_list_cursor_begin(&left, x, 0);
+  agc_list_cursor_begin(&right, y, 0);
+  while (same && agc_list_cursor_next(&left, &a) && agc_list_cursor_next(&right, &b)) {
+    compared++;
+    same = a.tag == b.tag && (a.tag == AGC_T_INT ? agc_as_int(vm, a) == agc_as_int(vm, b)
+                                                 : agc_as_float(vm, a) == agc_as_float(vm, b));
+  }
+  /* One unit per pair compared, as a pair popped from the stack would cost. */
+  agc_charge(vm, compared);
+  return same;
+}
+
 static bool push_list(pair_stack *s, const agc_list *x, const agc_list *y) {
   agc_list_cursor left, right;
   agc_value a, b;
@@ -76,9 +96,24 @@ static bool push_list(pair_stack *s, const agc_list *x, const agc_list *y) {
   return true;
 }
 
+/* One object compared with itself is equal without a walk only when nothing inside it can be a NaN, which is not
+   equal to itself (§25.4: a struct that holds a NaN is not equal to itself either). Strings, Bytes, sets (their
+   elements are Ints, Strings or Bytes) and packed Int lists hold no Float; any other value is walked. */
+static bool same_object(agc_vm *vm, agc_value a, agc_value b) {
+  if (agc_value_word(a) != agc_value_word(b)) return false;
+  switch ((agc_tag)a.tag) {
+    case AGC_T_STRING:
+    case AGC_T_BYTES:
+    case AGC_T_SET: return true;
+    case AGC_T_LIST: return agc_list_kind(agc_as_list(vm, a)) == AGC_T_INT;
+    default: return false;
+  }
+}
+
 static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t span) {
   if (a.tag != b.tag) return false;
   agc_charge(vm, 1);
+  if (same_object(vm, a, b)) return true;
   switch ((agc_tag)a.tag) {
     case AGC_T_VOID:
     case AGC_T_NIL: return true;
@@ -94,7 +129,9 @@ static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t
     case AGC_T_JSON: return agc_same_string(vm, agc_json_encode(vm, a, span), agc_json_encode(vm, b, span));
     case AGC_T_LIST: {
       const agc_list *x = agc_as_list(vm, a), *y = agc_as_list(vm, b);
-      return agc_list_len(x) == agc_list_len(y) && push_list(s, x, y);
+      if (agc_list_len(x) != agc_list_len(y)) return false;
+      if (agc_list_kind(x) && agc_list_kind(x) == agc_list_kind(y)) return same_scalars(vm, x, y);
+      return push_list(s, x, y);
     }
     case AGC_T_MAP: return push_map(vm, s, agc_as_map(vm, a), agc_as_map(vm, b));
     case AGC_T_SET: return set_equal(vm, agc_as_set(vm, a), agc_as_set(vm, b));

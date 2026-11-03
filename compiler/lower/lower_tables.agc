@@ -72,7 +72,7 @@ export VM_BUILTINS = Set.new([
   "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index",
   "__lazy_write_lines", "__lazy_chunks.bytes", "__lazy_zlib.bytes", "__lazy_write_bytes.bytes", "Bytes.from_list",
   "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take", "Bytes.drop", "Bytes.equal", "Bytes.plus",
-  "Bytes.concat", "String.bytes", "Optional.equal", "Bytes.decode", "String.encode",
+  "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal", "Bytes.decode", "String.encode",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

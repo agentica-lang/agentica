@@ -7,7 +7,7 @@ description: Functions for Set[T], a collection of distinct Int, String or Bytes
 A set holds each value once, in the order first added. Elements are `Int`, `String` or `Bytes`, like map keys. Sets are immutable.
 
 - `for` walks a set in order. A set prints as `Set[1, 2]`.
-- There is no `==`; use `a.subset?(b) and b.subset?(a)`.
+- `a == b` is true when the two sets have the same elements, in any order.
 - A set can be a struct field, a list item or a map value.
 - A set is not JSON-encodable, so `JSON.encode` refuses it.
 

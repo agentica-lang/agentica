@@ -120,6 +120,7 @@ AREAS = {
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
+            "tests/test_spec_equality.py",
         ],
     ),
     "golden": (
@@ -128,6 +129,7 @@ AREAS = {
             "tests/test_vm_diff_1.py", "tests/test_vm_diff_2.py", "tests/test_vm_diff_3.py",
             "tests/test_vm_diff_4.py", "tests/test_vm_diff_5.py", "tests/test_vm_diff_6.py",
             "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_vm_stack.py", "tests/test_vm_jit.py",
+            "tests/test_vm_equality.py",
         ],
     ),
     "library": (
