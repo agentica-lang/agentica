@@ -1,14 +1,22 @@
 /*
- * Command search rules for Windows. Platform adapter (process_os.h); no VM
- * state or scheduling. Only .exe and .com run, PATH splits at ';' and may
- * quote an entry, and a child pipe is read only by libuv.
+ * Command search rules and environment names for Windows. Platform adapter
+ * (process_os.h); no VM state or scheduling. Only .exe and .com run, PATH
+ * splits at ';' and may quote an entry, a variable name ignores case, and a
+ * child pipe is read only by libuv.
  * Docs: docs/vm/10-io-processes.md, section 10.4.
  */
 #include "process_os.h"
 
 #ifdef _WIN32
+#include "value.h"
 #include <ctype.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <string.h>
+#include <windows.h>
+
+/* UTF-16 units kept on the stack for one environment name; a longer name goes to malloc memory. */
+enum { NAME_UNITS = 256 };
 
 static bool separator(char c) { return c == '/' || c == '\\'; }
 
@@ -71,9 +79,31 @@ bool agc_proc_suffix_ok(const char *path) {
 
 const char *const *agc_proc_suffixes(void) { return runnable; }
 
-/* ASCII case only (_strnicmp in the C locale); non-ASCII case twins are a known gap (see #1041). */
-bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize) {
-  return asize == bsize && _strnicmp(a, b, asize) == 0;
+/* The UTF-16 of a name: in BUF when it fits, else in malloc memory that the caller frees. *units gets its length.
+   A name has at most as many UTF-16 units as UTF-8 bytes. A program's names are valid UTF-8; a host name with a lone
+   surrogate (libuv gives WTF-8) gets U+FFFD for it. A name of INT_MAX bytes or more, far over what Windows accepts in
+   an environment, is compared on its first INT_MAX. */
+static WCHAR *wide_name(const char *name, size_t size, WCHAR *buf, int *units) {
+  int bytes = size > INT_MAX ? INT_MAX : (int)size;
+  *units = 0;
+  if (!bytes) return buf;
+  WCHAR *wide = buf;
+  if (bytes > NAME_UNITS && !(wide = malloc((size_t)bytes * sizeof *wide))) agc_out_of_memory();
+  *units = MultiByteToWideChar(CP_UTF8, 0, name, bytes, wide, bytes);
+  return wide;
+}
+
+/* CompareStringOrdinal ignoring case, as libuv's make_program_env sorts the block of the child, so `Ä` and `ä` are one
+   variable here as there. */
+int agc_proc_env_name_compare(const char *a, size_t asize, const char *b, size_t bsize) {
+  WCHAR abuf[NAME_UNITS], bbuf[NAME_UNITS];
+  int aunits, bunits;
+  WCHAR *awide = wide_name(a, asize, abuf, &aunits);
+  WCHAR *bwide = wide_name(b, bsize, bbuf, &bunits);
+  int order = CompareStringOrdinal(awide, aunits, bwide, bunits, TRUE);
+  if (awide != abuf) free(awide);
+  if (bwide != bbuf) free(bwide);
+  return order - CSTR_EQUAL;
 }
 
 bool agc_proc_env_case_blind(void) { return true; }

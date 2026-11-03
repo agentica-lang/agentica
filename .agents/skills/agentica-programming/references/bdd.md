@@ -129,7 +129,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   reach only that scenario's program. A scenario starts one program. A NUL
   byte or a name the VM owns (`AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`,
   `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) is `RUNTIME-BDD-CONTEXT`; on
-  Windows `Path` and `PATH` are one name, so the second replaces the first.
+  Windows `Path` and `PATH` are one name, so the second replaces the first,
+  but `Ä` and `ä` make `BDD.given_program` fail (`RUNTIME-BDD-IO`).
 - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
   `Result[String]` (an error at the end of the output or a timeout). A timeout stops
   the program: later reads, sends and exit checks fail with `RUNTIME-BDD-IO`,

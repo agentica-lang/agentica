@@ -32,10 +32,10 @@ bool agc_proc_suffix_ok(const char *path);
    suffix_ok accepts. Empty on systems where every name may run. */
 const char *const *agc_proc_suffixes(void);
 
-/* True when the names of two environment variables are the same variable: byte for byte on POSIX; on Windows ignoring
-   ASCII case only. Known gap: Windows itself ignores case across Unicode, so names that differ only in the case of a
-   non-ASCII letter (`Ä`, `ä`) are not found equal here and both reach the child (see #1041). */
-bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize);
+/* The order of two environment variable names, as qsort and memcmp give it: 0 exactly when they are the same
+   variable. Byte for byte on POSIX; on Windows the names as UTF-16, ignoring case as the system does (libuv's
+   make_program_env sorts the child's block the same way). The VM sorts with it to find two names of one variable. */
+int agc_proc_env_name_compare(const char *a, size_t asize, const char *b, size_t bsize);
 
 /* True where two names that differ only in case are one variable (Windows), so a map may not hold both. */
 bool agc_proc_env_case_blind(void);

@@ -191,13 +191,14 @@ pair; Windows uses a pipe per direction (below).
   its own parent opened a channel for it. `System.env` hides the same entries
   from the program (`own_env` in `vm/process.c` decides for both). The `env`
   Map of a spawn adds to that copy, replacing a variable of the same name
-  (ignoring ASCII case on Windows, where two names that differ only in case are
-  an error); it cannot name an entry the VM owns, which is an
-  error and not a silent drop. The natives of each spawn have two arities, with
-  and without `env`: the shorter one is for the bytecode of `stage0.agcb`.
-  `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are also removed from a
-  child's environment (`metrics_env`, matched with their `=`), so a child VM or
-  a BDD runner never fights for the metrics port or file
+  (ignoring case on Windows as the system does, with `CompareStringOrdinal`,
+  where two names that differ only in case are an error); it cannot name an
+  entry the VM owns, which is an error and not a silent drop. The natives of
+  each spawn have two arities, with and without `env`: the shorter one is for
+  the bytecode of `stage0.agcb`. `AGENTICA_VM_METRICS` and
+  `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
+  (`metrics_env`, matched by the whole name), so a child VM or a BDD runner
+  never fights for the metrics port or file
   (`docs/future/28-vm-metrics.md` §28.5); `System.env` still shows them to the
   program.
 - **Child start.** `agc_parent_take` runs in `agentica.c` before the program
