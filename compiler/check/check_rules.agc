@@ -26,7 +26,7 @@ export def check_builtin_call(
   expected: T.Type,
   entry: Model.Builtin,
 ) -> Result[State.Out]
-  selected = Builtins.form_for(entry, node.args.size)
+  selected = Builtins.form_for_call(entry, node.args.size, Ast.block_call?(node))
   if !selected.ok?
     # A block after the last argument of a builtin that takes none (each_slice) is a block with no target.
     try block_without_target(cx, st, node, entry)

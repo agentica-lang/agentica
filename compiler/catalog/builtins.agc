@@ -62,23 +62,32 @@ end
 ## The form of a builtin that takes that many arguments, or an error when none does. A form with defaults takes every
 ## count from its required parameters to all of them; a form that takes exactly that many wins.
 export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
-  if entry.parameters.size == arity
-    return ok(entry)
+  return form_among([entry].concat(entry.alternatives), arity)
+end
+
+## The form for a call: block is true when its last argument is a block (do ... end). A block call takes the block form
+## of a builtin that also has a form without a block (File.open), whatever the count; otherwise it is form_for.
+export def form_for_call(entry: Model.Builtin, arity: Int, block: Bool) -> Result[Model.Builtin]
+  forms = [entry].concat(entry.alternatives)
+  if block and block_form?(entry)
+    return form_among(forms.filter do |form: Model.Builtin| takes_block?(form) end, arity)
   end
 
-  for alternative in entry.alternatives
-    if alternative.parameters.size == arity
-      return ok(alternative)
-    end
-  end
+  return form_for(entry, arity)
+end
 
-  for form in [entry].concat(entry.alternatives)
-    if arity >= required_count(form) and arity < form.parameters.size
-      return ok(form)
-    end
-  end
+## The form of the builtin name for a call with that many arguments, the last a block when block is true.
+export def call_ref(name: String, arity: Int, block: Bool) -> Result[Model.Builtin]
+  entry = try lookup(name).to_result("unknown builtin")
+  return form_for_call(entry, arity, block)
+end
 
-  return error("no form with that arity")
+## True for a form whose body is a function of the prelude (Rule.Prelude), such as the block form of File.open.
+export def prelude_form?(form: Model.Builtin) -> Bool
+  case form.rule
+    Model.Rule.Prelude -> return true
+    _ -> return false
+  end
 end
 
 ## True when some parameter of the form has a default.
@@ -209,37 +218,26 @@ export def record_default_problem(record: String, field: Model.Named) -> String
 end
 
 ## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
-## a single form (the other rules read the arguments by position, and a form picked by the number of arguments would
-## be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has the
-## type of its parameter (a variant is one of its enum, with no payload). The catalog text prints a problem, and a test
-## fails on it.
+## a single form, or with a block form as its one alternative (the other rules read the arguments by position, and a
+## form picked by the number of arguments would be ambiguous; a block form is picked by the block), a parameter after a
+## default has one too unless it is the last and an Fn, and each default has the type of its parameter (a variant is
+## one of its enum, with no payload). The catalog text prints a problem, and a test fails on it.
 export def default_problem(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
   if !forms.any? do |form: Model.Builtin| defaulted?(form) end
     return ""
   end
 
-  if !takes_defaults?(entry.rule) or entry.alternatives.size > 0
+  if !forms.all? do |form: Model.Builtin| takes_defaults?(form.rule) end
     return "a default needs a Plain or Prelude builtin with no alternative form"
   end
 
-  last = entry.parameters.size - 1
-  at = first_default(entry)
-  while at < entry.parameters.size
-    parameter = entry.parameters[at]
-    if !default_present?(parameter.default) and !(at == last and Types.is?(parameter.type, "Fn"))
-      return "parameter #{parameter.name} has no default but follows one"
-    end
-
-    if default_present?(parameter.default) and !default_fits?(parameter)
-      written = Types.to_text(parameter.type)
-      return "the default of #{parameter.name} is not #{article(written)} #{written}"
-    end
-
-    at += 1
+  if entry.alternatives.size > 0 and !block_form?(entry)
+    return "a builtin with defaults takes no alternative form but its block form"
   end
 
-  return ""
+  # The block form repeats the parameters of the entry, so its own last Fn is the only parameter left to check.
+  return form_default_problem(forms[forms.size - 1])
 end
 
 ## The builtin enums that some builtin gives a default variant of: the lowering keeps them in the tables of every
@@ -265,6 +263,73 @@ def none_default?(value: Model.Default) -> Bool
     Model.Default.None -> return true
     _ -> return false
   end
+end
+
+# The problem with the defaults of one form, or "".
+def form_default_problem(entry: Model.Builtin) -> String
+  last = entry.parameters.size - 1
+  at = first_default(entry)
+  while at < entry.parameters.size
+    parameter = entry.parameters[at]
+    if !default_present?(parameter.default) and !(at == last and Types.is?(parameter.type, "Fn"))
+      return "parameter #{parameter.name} has no default but follows one"
+    end
+
+    if default_present?(parameter.default) and !default_fits?(parameter)
+      written = Types.to_text(parameter.type)
+      return "the default of #{parameter.name} is not #{article(written)} #{written}"
+    end
+
+    at += 1
+  end
+
+  return ""
+end
+
+# The first form that takes exactly that many arguments, else the first whose defaults let it take that many.
+def form_among(forms: List[Model.Builtin], arity: Int) -> Result[Model.Builtin]
+  for form in forms
+    if form.parameters.size == arity
+      return ok(form)
+    end
+  end
+
+  for form in forms
+    if arity >= required_count(form) and arity < form.parameters.size
+      return ok(form)
+    end
+  end
+
+  return error("no form with that arity")
+end
+
+# True when the last parameter of the form is a function, which a block fills.
+def takes_block?(form: Model.Builtin) -> Bool
+  return form.parameters.size > 0 and Types.is?(form.parameters[form.parameters.size - 1].type, "Fn")
+end
+
+# True for a builtin whose one alternative is its block form: the same parameters and defaults with a last Fn after
+# them (File.open with a block). Its forms are told apart by the block, not by the count of arguments.
+def block_form?(entry: Model.Builtin) -> Bool
+  if entry.alternatives.size != 1 or takes_block?(entry)
+    return false
+  end
+
+  alternative = entry.alternatives[0]
+  if !takes_block?(alternative) or alternative.parameters.size != entry.parameters.size + 1
+    return false
+  end
+
+  index = 0
+  while index < entry.parameters.size
+    if parameter_text(entry.parameters[index]) != parameter_text(alternative.parameters[index])
+      return false
+    end
+
+    index += 1
+  end
+
+  return true
 end
 
 # The index of the first parameter with a default, or the number of parameters when none has one.
