@@ -17,7 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth.
 - Number helpers with Ruby names: `n.abs`, `a.gcd(b)`, `n.pow(e)`, `x.floor`,
   `x.ceil`, `x.round` and `Math.sqrt(x)`.
-- `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`.
+- `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
+  an `Optional` (`none` for an empty list).
 - `xs.include?(x)` (also `member?`) tells whether a list holds a value.
 - `agentica test` scenarios set the environment and arguments of the program
   under test, and `BDD.after` registers a cleanup that runs after each scenario.
