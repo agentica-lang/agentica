@@ -10,7 +10,6 @@
  */
 #include "services.h"
 
-#include <stdio.h>
 #include <string.h>
 
 enum { OP_CHAR, OP_CLASS, OP_ANY, OP_ANY_NL, OP_SPLIT, OP_JUMP, OP_SAVE, OP_ASSERT, OP_MATCH, OP_COUNT };
@@ -28,6 +27,10 @@ enum { SEARCH_MORE, SEARCH_DONE };
 #define RX_MAX_CAPS 514
 #define RX_MAX_CODE 0x10FFFF
 #define RX_MAX_RANGES ((size_t)2 * (RX_MAX_CODE + 1))
+/* A program std/regex never builds stops the run. WHAT is a string literal, joined to the prefix at compile time:
+   agc_fail keeps only the pointer to its message and longjmps, so a message formatted into a local buffer would be
+   dead before the driver prints it (#1029). */
+#define REFUSE(vm, what, span) agc_fail(vm, "RUNTIME-INTERNAL", "RegexEngine.search: " what, span)
 /* One STEP of the stepper does at most this much before it charges: characters stepped, instructions visited, and
    bytes skipped while no thread runs. Each instruction visit costs a unit of turn cost per RX_WORK_PER_COST, each
    character one unit and each skipped run of AGC_COST_BYTES bytes one unit. */
@@ -101,12 +104,6 @@ typedef struct {
   agc_value result;
   uint64_t chars_done, work_done, skipped, items_done;
 } rx_run;
-
-static _Noreturn void refuse(agc_vm *vm, const char *what, uint32_t span) {
-  char message[160];
-  snprintf(message, sizeof message, "RegexEngine.search: %s", what);
-  agc_fail(vm, "RUNTIME-INTERNAL", message, span);
-}
 
 /* The character at byte B and its length, or -1 at the end. A String is valid UTF-8; a byte that does not start a
    whole sequence still reads as one character of its own value, so no read leaves the text. */
@@ -504,13 +501,13 @@ static agc_step regex_step(agc_vm *vm, agc_stepper *self, agc_value last) {
 /* The items of an Int list, each checked to lie in [low, high]. */
 static uint32_t *int_items(agc_vm *vm, agc_value v, size_t n, int64_t low, int64_t high, uint32_t span) {
   const agc_list *l = agc_as_list(vm, v);
-  if (agc_list_len(l) != n) refuse(vm, "the instruction lists differ in length", span);
+  if (agc_list_len(l) != n) REFUSE(vm, "the instruction lists differ in length", span);
   agc_value *items = agc_alloc(agc_size_mul(n ? n : 1, sizeof *items));
   agc_list_to_array(l, items);
   uint32_t *out = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *out));
   for (size_t k = 0; k < n; k++) {
     int64_t i = agc_as_int(vm, items[k]);
-    if (i < low || i > high) refuse(vm, "an operand is out of range", span);
+    if (i < low || i > high) REFUSE(vm, "an operand is out of range", span);
     out[k] = (uint32_t)i;
   }
   return out;
@@ -519,13 +516,13 @@ static uint32_t *int_items(agc_vm *vm, agc_value v, size_t n, int64_t low, int64
 static void load_classes(agc_vm *vm, rx_run *r, agc_value v, uint32_t span) {
   const agc_list *l = agc_as_list(vm, v);
   size_t count = agc_list_len(l);
-  if (count > RX_MAX_INSTS) refuse(vm, "too many classes", span);
+  if (count > RX_MAX_INSTS) REFUSE(vm, "too many classes", span);
   agc_value *lists = agc_alloc(agc_size_mul(count ? count : 1, sizeof *lists));
   agc_list_to_array(l, lists);
   size_t total = 0;
   for (size_t k = 0; k < count; k++) {
     size_t size = agc_list_len(agc_as_list(vm, lists[k]));
-    if (size % 2 || size > RX_MAX_RANGES || total + size > RX_MAX_RANGES) refuse(vm, "a class is malformed", span);
+    if (size % 2 || size > RX_MAX_RANGES || total + size > RX_MAX_RANGES) REFUSE(vm, "a class is malformed", span);
     total += size;
   }
   r->class_start = agc_alloc_atomic(agc_size_mul(count + 1, sizeof *r->class_start));
@@ -538,7 +535,7 @@ static void load_classes(agc_vm *vm, rx_run *r, agc_value v, uint32_t span) {
     size_t size = agc_list_len(agc_as_list(vm, lists[k]));
     uint32_t *pairs = int_items(vm, lists[k], size, 0, RX_MAX_CODE, span);
     for (size_t p = 0; p < size; p += 2) {
-      if (pairs[p] > pairs[p + 1] || (p && pairs[p] <= pairs[p - 1])) refuse(vm, "a class is malformed", span);
+      if (pairs[p] > pairs[p + 1] || (p && pairs[p] <= pairs[p - 1])) REFUSE(vm, "a class is malformed", span);
       for (uint32_t c = pairs[p]; c <= pairs[p + 1] && c < 128; c++) r->class_ascii[k * 16 + c / 8] |= 1u << (c % 8);
       r->ranges[at++] = pairs[p];
       r->ranges[at++] = pairs[p + 1];
@@ -552,9 +549,9 @@ static void load_classes(agc_vm *vm, rx_run *r, agc_value v, uint32_t span) {
 static void load_program(agc_vm *vm, rx_run *r, agc_value *args, uint32_t span) {
   const agc_list *ops = agc_as_list(vm, args[1]);
   size_t n = agc_list_len(ops);
-  if (n == 0 || n > RX_MAX_INSTS) refuse(vm, "the program is empty or too long", span);
+  if (n == 0 || n > RX_MAX_INSTS) REFUSE(vm, "the program is empty or too long", span);
   int64_t ncap = agc_as_int(vm, args[5]);
-  if (ncap < 2 || ncap > RX_MAX_CAPS || ncap % 2) refuse(vm, "the number of captures is out of range", span);
+  if (ncap < 2 || ncap > RX_MAX_CAPS || ncap % 2) REFUSE(vm, "the number of captures is out of range", span);
   load_classes(vm, r, args[4], span);
   uint32_t classes = (uint32_t)agc_list_len(agc_as_list(vm, args[4]));
   uint32_t *op = int_items(vm, args[1], n, 0, OP_COUNT - 1, span);
@@ -575,7 +572,7 @@ static void load_program(agc_vm *vm, rx_run *r, agc_value *args, uint32_t span) 
     }
     /* Every instruction but SPLIT, JUMP and MATCH goes on to pc + 1. */
     if (op[pc] != OP_SPLIT && op[pc] != OP_JUMP && op[pc] != OP_MATCH && pc + 1 >= n) ok = false;
-    if (!ok) refuse(vm, "an operand is out of range", span);
+    if (!ok) REFUSE(vm, "an operand is out of range", span);
     r->code[pc] = (rx_inst){op[pc], x[pc], y[pc]};
   }
 }
@@ -665,7 +662,7 @@ static void load_starts(rx_run *r) {
 static agc_value builtin_search(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *text = agc_as_string(vm, args[0]);
   int64_t mode = agc_as_int(vm, args[6]);
-  if (mode < 0 || mode >= MODE_COUNT) refuse(vm, "the mode is out of range", span);
+  if (mode < 0 || mode >= MODE_COUNT) REFUSE(vm, "the mode is out of range", span);
   rx_run *r = agc_alloc(sizeof *r);
   r->text = args[0];
   r->s = (const uint8_t *)text->data;
