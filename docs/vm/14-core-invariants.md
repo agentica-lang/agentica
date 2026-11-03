@@ -27,8 +27,9 @@ joins the pool, and the pool would wait for a FIFO that never writes.
 
 - **Regular files** (and directories) use the libuv thread pool, since a read or
   write on them ends in bounded time. The other bounded pool work is DNS
-  (`getaddrinfo`) and the TLS setup jobs that load CA, certificate and key files
-  (§10.2.2, pool size).
+  (`getaddrinfo`), the TLS setup jobs that load CA, certificate and key files
+  (§10.2.2, pool size), and the key derivations of `KDF`, whose work
+  `vm/crypto.c` caps before the job starts.
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits

@@ -127,7 +127,8 @@ KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) ->
   128 * r * (n + p + 2) bytes, at most 1025 MiB (about 1 GiB per call). Other
   values give an `error(...)`. OWASP's password storage cheat sheet
   advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
-  `n = 131072, r = 8, p = 1`. Compare a derived key with
+  `n = 131072, r = 8, p = 1`. A call runs on the thread pool: its task waits
+  and the other tasks keep running. Compare a derived key with
   `HMAC.secure_compare`. `KDF` is a reserved type name.
 
 ```text

@@ -379,7 +379,9 @@ static void test_crypto_keys(void) {
 }
 
 /* AES-256-GCM and the KDFs on empty Bytes and on Bytes with a NUL and a 0xFF: empty data and auth_data are valid,
-   a key, IV or decrypt input of a wrong size and a bad iteration count or length are error Results. */
+   a key, IV or decrypt input of a wrong size and a bad iteration count or length are error Results. A KDF with good
+   arguments is a pool job, which this VM without a task cannot park on: tests/fixtures/vm/kdf.agc and
+   tests/test_vm_crypto.py derive keys. */
 static void test_gcm_and_kdf_keys(void) {
   char key_text[32], iv_text[12];
   memset(key_text, 0xff, sizeof key_text);
@@ -409,12 +411,7 @@ static void test_gcm_and_kdf_keys(void) {
   bad[1] = raw(iv_text, 11);
   assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
 
-  agc_value kdf[4] = {empty, empty, agc_int(1), agc_int(1)};
-  const agc_result *derived = agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf));
-  assert(derived->ok && agc_as_bytes(&vm, derived->value)->len == 1);
-  kdf[0] = odd;
-  kdf[1] = odd;
-  kdf[2] = agc_int(0);
+  agc_value kdf[4] = {odd, odd, agc_int(0), agc_int(1)};
   assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   kdf[2] = agc_int(2);
   kdf[3] = agc_int(0);
@@ -429,15 +426,7 @@ static void test_gcm_and_kdf_keys(void) {
   kdf[2] = agc_int(INT64_MAX);
   kdf[3] = agc_int(AGC_MAX_LIST_COUNT);
   assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
-  /* Two iterations over two 32-byte blocks hash 2 * 2 * 128 bytes, charged in units of 64 bytes, besides the
-     AGC_COST_SIZE that the interpreter adds for the arguments. */
-  kdf[2] = agc_int(2);
-  kdf[3] = agc_int(64);
-  assert(cost_of("KDF.pbkdf2_hmac_sha256", 4, kdf) == 8);
-  agc_value scrypt[6] = {empty, empty, agc_int(16), agc_int(1), agc_int(1), agc_int(64)};
-  derived = agc_as_result(&vm, call("KDF.scrypt", 6, scrypt));
-  assert(derived->ok && agc_as_bytes(&vm, derived->value)->len == 64);
-  scrypt[2] = agc_int(15);
+  agc_value scrypt[6] = {empty, empty, agc_int(15), agc_int(1), agc_int(1), agc_int(64)};
   assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
   /* r = 1 needs n below 2^16, and r * p must stay below 2^30 (checked before the memory). */
   scrypt[2] = agc_int(65536);

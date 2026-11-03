@@ -207,9 +207,10 @@ def test_cipher_and_cmac_in_eight_tasks_on_four_schedulers_match_one_task(tmp_pa
     assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
 
 
-# AES-256-GCM and the KDFs run without the shared lock too (vm/crypto.c), so eight tasks seal, open and derive at
-# once, which fills OpenSSL's cipher and KDF fetch caches from several schedulers (vm/tools/tsan.supp names their
-# wrappers). Each task's answer must equal the same work done again in one task after the parallel run.
+# AES-256-GCM runs without the shared lock too (vm/crypto.c) and the KDFs on the libuv pool, so eight tasks seal, open
+# and derive at once, which fills OpenSSL's cipher and KDF fetch caches from several schedulers and pool threads
+# (vm/tools/tsan.supp names their wrappers). Each task's answer must equal the same work done again in one task after
+# the parallel run.
 GCM_KDF_TASKS = """\
 def work(seed: Int) -> Result[String]
   bytes = (0..65535).to_a.map do |i|

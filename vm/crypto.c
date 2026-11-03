@@ -2,16 +2,17 @@
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
  * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
  * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
- * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF), and the Base64
- * and Digest.hexencode/hexdecode text forms of bytes in plain C. All but the
- * text forms come from the OpenSSL adapter (digest.h). Service layer. Design:
- * docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648 and
- * Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
+ * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, a pool job), and
+ * the Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. All
+ * but the text forms come from the OpenSSL adapter (digest.h). Service layer.
+ * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648
+ * and Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
  */
 #include "services.h"
 #include "digest.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Ruby's encode64 (pack "m") writes 45 bytes, 60 characters, per line, each line ending in a newline. */
@@ -28,6 +29,18 @@ typedef struct {
   uint64_t iterations; /* PBKDF2 */
   uint64_t n, r, p;    /* scrypt */
 } kdf_params;
+
+/* One key derivation on the libuv pool. The password, the salt and the key are malloc'd, so the pool thread touches
+   no GC memory; the done half copies the key into a Bytes. Only the pool work writes `key` and `derived`; the done
+   half (or `drop`, for a job dropped unfinished) owns the rest and wipes the password and the key before it frees
+   them. */
+typedef struct {
+  kdf_params kdf;
+  uint8_t *password, *salt, *key;
+  size_t password_n, salt_n, key_n;
+  uint32_t span;
+  bool derived;
+} kdf_job;
 
 /* The message of a failed hash, by agc_digest_kind. */
 static const char *const digest_missing[] = {
@@ -521,34 +534,87 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
 /* The most memory scrypt may take, 128 * r * (n + p + 2) bytes of native memory outside the GC: the default cap of
    OpenSSL 3's scrypt provider (1025 MiB), which n = 2^20 with r = 8 (RFC 7914 §12, the last vector) fits. */
 #define SCRYPT_MAX_MEMORY ((uint64_t)1025 * 1024 * 1024)
-/* A KDF runs inside one builtin call on its scheduler, where neither --max-steps nor a signal can stop it, so its work
-   is capped before the call, so the worst valid call takes tens of seconds at most on one core: about 80 and 32
-   times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block; scrypt
-   with n = 2^17, r = 8, p = 1).
+/* A KDF runs to its end on a libuv pool thread, where neither --max-steps, a cancel nor a signal stops it, and it
+   holds that thread, which file calls share, meanwhile (docs/vm/14-core-invariants.md §14.1 keeps pool work bounded).
+   So its work is capped before the call, so the worst valid call takes tens of seconds at most on one core: about 80
+   and 32 times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block;
+   scrypt with n = 2^17, r = 8, p = 1).
    PBKDF2's work is iterations * ceil(length / 32). scrypt's is r * p * (n + 16): each of the p lanes mixes n blocks of
    128 * r bytes, and PBKDF2 makes and reads each lane's block too, which costs about as much as 16 more blocks (a
    call with n = 2 and a large p measured about 9 block-times per lane). */
 #define PBKDF2_MAX_WORK ((uint64_t)50000000)
 #define SCRYPT_MAX_WORK ((uint64_t)1 << 25)
 
-/* Derives out_n bytes into out (agc_pbkdf2_hmac_sha256 or agc_scrypt), whose parameters the caller checked. A library
-   failure stops the run; the adapter has then wiped out. One of the libcrypto wrappers that vm/tools/tsan.supp names
-   (see digest_compute). */
-static __attribute__((noinline)) void kdf_compute(agc_vm *vm, const kdf_params *kdf, const uint8_t *password,
-                                                  size_t password_n, const uint8_t *salt, size_t salt_n, uint8_t *out,
-                                                  size_t out_n, uint32_t span) {
-  bool done = kdf->scrypt ? agc_scrypt(password, password_n, salt, salt_n, kdf->n, kdf->r, kdf->p, SCRYPT_MAX_MEMORY,
-                                       out, out_n)
-                          : agc_pbkdf2_hmac_sha256(password, password_n, salt, salt_n, kdf->iterations, out, out_n);
-  if (!done)
-    agc_fail(vm, "RUNTIME-INTERNAL", kdf->scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
+/* Derives out_n bytes into out (agc_pbkdf2_hmac_sha256 or agc_scrypt), whose parameters the caller checked; false
+   when the library fails, and the adapter has then wiped out. One of the libcrypto wrappers that vm/tools/tsan.supp
+   names (see digest_compute). */
+static __attribute__((noinline)) bool kdf_compute(const kdf_params *kdf, const uint8_t *password, size_t password_n,
+                                                  const uint8_t *salt, size_t salt_n, uint8_t *out, size_t out_n) {
+  return kdf->scrypt
+           ? agc_scrypt(password, password_n, salt, salt_n, kdf->n, kdf->r, kdf->p, SCRYPT_MAX_MEMORY, out, out_n)
+           : agc_pbkdf2_hmac_sha256(password, password_n, salt, salt_n, kdf->iterations, out, out_n);
 }
 
-/* The shared end of the KDF builtins: checks the password, salt and length (args 0, 1 and the last, at length_at),
-   derives the key and charges the work, which grows with the iterations or the memory, not with the arguments that
-   AGC_COST_SIZE counts. work is that work in bytes hashed, saturated. */
-static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const kdf_params *kdf, uint64_t work,
-                           uint32_t span) {
+static void kdf_free(kdf_job *k) {
+  agc_wipe(k->password, k->password_n);
+  agc_wipe(k->key, k->key_n);
+  free(k->password);
+  free(k->salt);
+  free(k->key);
+  free(k);
+}
+
+static void kdf_work(void *data) {
+  kdf_job *k = data;
+  k->derived = kdf_compute(&k->kdf, k->password, k->password_n, k->salt, k->salt_n, k->key, k->key_n);
+}
+
+/* On the scheduler that resumes the task, or between turns for a cancelled task, whose value is dropped. A library
+   failure fails the task (RUNTIME-INTERNAL), as when the call ran on the scheduler; a dropped value has no task to
+   fail, so it gives Void. vm->in_turn tells the two apart, as compute_done in vm/ffi.c does. */
+static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  kdf_job *k = data;
+  bool scrypt = k->kdf.scrypt, derived = k->derived;
+  uint32_t span = k->span;
+  agc_value result = agc_void();
+  if (derived) {
+    agc_bytes *out = agc_new_bytes(k->key_n);
+    memcpy(out->data, k->key, k->key_n);
+    result = agc_result_value(true, agc_bytes_value(out));
+  }
+  kdf_free(k);
+  if (!derived && vm->in_turn)
+    agc_fail(vm, "RUNTIME-INTERNAL", scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
+  return result;
+}
+
+/* No deadline: the job is never expired, and a detached one runs to its end and is dropped by kdf_done. */
+static agc_value kdf_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_error_value("KDF: operation timed out");
+}
+
+static void kdf_drop(void *data) { kdf_free(data); }
+
+static const agc_io_kind kdf_io = {kdf_work, kdf_done, kdf_expired, kdf_drop, false, "kdf", NULL, false, NULL};
+
+/* A malloc'd copy of the n bytes at data (NULL for none). */
+static uint8_t *kdf_copy(const uint8_t *data, size_t n) {
+  if (!n) return NULL;
+  uint8_t *copy = malloc(n);
+  if (!copy) agc_out_of_memory();
+  memcpy(copy, data, n);
+  return copy;
+}
+
+/* The shared start of the KDF builtins: checks the password, salt and length (args 0, 1 and the last, at length_at),
+   then derives the key on the libuv pool with copies of the inputs, so the task parks and the other tasks of its
+   scheduler run meanwhile; the job's done half gives the call's value. The fuzz driver (rt->no_files) starts no pool
+   job, so it gets no further than the checks. */
+static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const kdf_params *kdf, uint32_t span) {
   size_t password_n, salt_n;
   const uint8_t *password = agc_bytes_data(vm, args[0], &password_n);
   const uint8_t *salt = agc_bytes_data(vm, args[1], &salt_n);
@@ -559,33 +625,37 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES, rounds;
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
     return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
-  agc_bytes *out = agc_new_bytes((size_t)length);
-  kdf_compute(vm, kdf, password, password_n, salt, salt_n, out->data, (size_t)length, span);
-  uint64_t total;
-  if (__builtin_mul_overflow(work, kdf->scrypt ? 1 : blocks, &total)) total = UINT64_MAX;
-  agc_charge(vm, total / AGC_COST_BYTES);
-  return agc_result_value(true, agc_bytes_value(out));
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
+  kdf_job *k = calloc(1, sizeof *k);
+  if (!k) agc_out_of_memory();
+  k->kdf = *kdf;
+  k->span = span;
+  k->key_n = (size_t)length;
+  k->key = malloc(k->key_n);
+  if (!k->key) agc_out_of_memory();
+  k->password = kdf_copy(password, password_n);
+  k->password_n = password_n;
+  k->salt = kdf_copy(salt, salt_n);
+  k->salt_n = salt_n;
+  agc_io_start(vm, &kdf_io, k, agc_void(), -1);
+  return agc_void();
 }
 
 /* KDF.pbkdf2_hmac_sha256(password, salt, iterations, length): PBKDF2 (RFC 8018 §5.2) with HMAC-SHA256, Ruby's
    OpenSSL::KDF.pbkdf2_hmac with hash "SHA256". iterations below 1, a length outside 1..1048576 or more work than
-   PBKDF2_MAX_WORK is an error Result.
-   Each iteration of each 32-byte block hashes two 64-byte blocks. No shared lock, as digest_value. */
+   PBKDF2_MAX_WORK is an error Result. No shared lock, as digest_value. */
 static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t iterations = agc_as_int(vm, args[2]);
   if (iterations < 1) return agc_error_value("KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
   kdf_params kdf = {.iterations = (uint64_t)iterations};
-  uint64_t work;
-  if (__builtin_mul_overflow((uint64_t)iterations, (uint64_t)128, &work)) work = UINT64_MAX;
-  return kdf_value(vm, args, 3, &kdf, work, span);
+  return kdf_value(vm, args, 3, &kdf, span);
 }
 
 /* KDF.scrypt(password, salt, n, r, p, length): scrypt (RFC 7914), Ruby's OpenSSL::KDF.scrypt. n is a power of 2
    above 1 and below 2^(16 * r), r and p are at least 1 with r * p below 2^30, r * p * (n + 16) is at most
    SCRYPT_MAX_WORK,
    and the memory 128 * r * (n + p + 2) is at most SCRYPT_MAX_MEMORY; anything else is an error Result, checked
-   before any work. The work is about two passes over the n blocks of 128 * r bytes for each of the p lanes. No shared
-   lock, as digest_value. */
+   before any work. No shared lock, as digest_value. */
 static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[2]), r = agc_as_int(vm, args[3]), p = agc_as_int(vm, args[4]);
   if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("KDF.scrypt needs n to be a power of 2 above 1");
@@ -593,7 +663,7 @@ static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   if (p > ((1 << 30) - 1) / r) return agc_error_value("KDF.scrypt needs r * p below 2^30");
   /* RFC 7914 §2: n < 2^(128 * r / 8). Only r <= 3 can meet it, since n fits in 63 bits. */
   if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r)) return agc_error_value("KDF.scrypt needs n below 2^(16 * r)");
-  uint64_t lanes, memory, work, rounds;
+  uint64_t lanes, memory, rounds;
   /* r * p is below 2^30, so only the product with n + 16 can overflow. */
   if (__builtin_add_overflow((uint64_t)n, (uint64_t)16, &rounds) ||
       __builtin_mul_overflow(rounds, (uint64_t)r * (uint64_t)p, &rounds) || rounds > SCRYPT_MAX_WORK)
@@ -601,10 +671,8 @@ static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   bool big = __builtin_add_overflow((uint64_t)n, (uint64_t)p + 2, &lanes) ||
              __builtin_mul_overflow(lanes, (uint64_t)r * 128, &memory) || memory > SCRYPT_MAX_MEMORY;
   if (big) return agc_error_value("KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
-  /* rounds is at most 2^25, so the work fits in 64 bits. */
-  work = rounds * 256;
   kdf_params kdf = {.scrypt = true, .n = (uint64_t)n, .r = (uint64_t)r, .p = (uint64_t)p};
-  return kdf_value(vm, args, 5, &kdf, work, span);
+  return kdf_value(vm, args, 5, &kdf, span);
 }
 
 /* The Digest and HMAC entries: one thin function per kind and output (bytes or hex) over digest_value and

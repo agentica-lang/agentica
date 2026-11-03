@@ -193,7 +193,7 @@ false
 - scrypt's `n` is above 1 and below 2^(16 * r), `r` and `p` are at least 1 with `r * p` below 2^30, and the memory, 128 * r * (n + p + 2) bytes, is at most 1025 MiB. That memory is native, outside the garbage collector, so each call may take up to about 1 GiB while it runs. With `n = 16384` and `r = 8` it is about 16 MiB.
 - Any other value gives an `error`, before any work.
 - OWASP's password storage cheat sheet advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with `n = 131072`, `r = 8` and `p = 1`.
-- A call runs to its end on its scheduler: `--max-steps` and a signal wait for it. So the work is capped, and a valid call takes tens of seconds at most: `iterations * ceil(length / 32)` is at most 50000000 for PBKDF2, and `r * p * (n + 16)` at most 2^25 (33554432) for scrypt, about 80 and 32 times the OWASP figures above.
+- A call runs on the thread pool that file calls use: the task waits, and the other tasks keep running. Once started, a call runs to its end; a cancelled task's call still finishes and its key is dropped. So the work is capped, and a valid call takes tens of seconds at most: `iterations * ceil(length / 32)` is at most 50000000 for PBKDF2, and `r * p * (n + 16)` at most 2^25 (33554432) for scrypt, about 80 and 32 times the OWASP figures above.
 - They need no effect label.
 - `KDF` is a reserved type name.
 

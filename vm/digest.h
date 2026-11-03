@@ -4,8 +4,9 @@
  * hash (files.c), which streams a whole file in fixed chunks, secure random
  * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare,
  * Triple DES CBC, AES-256-GCM and CMAC for the Cipher and CMAC builtins, and
- * PBKDF2 and scrypt for the KDF builtins (crypto.c). The OpenSSL code is in
- * digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md §15.1.
+ * PBKDF2 and scrypt for the KDF builtins (crypto.c), and the wipe of a secret.
+ * The OpenSSL code is in digest_openssl.c. Adapter header. Design:
+ * docs/vm/15-layers.md §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
@@ -114,5 +115,9 @@ bool agc_pbkdf2_hmac_sha256(const unsigned char *password, size_t password_n, co
    or when the library fails; out is then wiped. password and salt may be NULL when their length is 0. */
 bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned char *salt, size_t salt_n, uint64_t n,
                 uint64_t r, uint64_t p, uint64_t max_memory, unsigned char *out, size_t out_n);
+
+/* Overwrites the n bytes at data with zeros in a way the compiler cannot drop, for a copy of a secret (a KDF's
+   password or key) before it is freed. data may be NULL when n is 0. */
+void agc_wipe(void *data, size_t n);
 
 #endif
