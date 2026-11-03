@@ -1,0 +1,7 @@
+1:1 leading StructDecl 3:1 "# A method chain written with a dot at the start of each line keeps that form, without parentheses."
+15:32 trailing MethodCall 14:12 "# drop the small ones"
+16:5 trailing MethodCall 14:12 "# then double what is left"
+36:3 leading Binding 37:3 "# A chain that fits goes back to one line."
+39:3 leading Binding 40:3 "# A parenthesized receiver that must break keeps its parentheses."
+54:1 leading FunctionDecl 55:1 "# A block of the chain that holds a case guard, `while ... do` and `for ... do` does not hide the dots that follow it."
+76:1 leading FunctionDecl 77:1 "# A long chain of plain calls breaks before each dot, with no parentheses."

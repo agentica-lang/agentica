@@ -99,22 +99,47 @@ def wide(xs: List[Int]) -> Void
     |> twice()
   ) # short
 
-  # A trailing comment too wide for the line goes after the statement, under its empty line.
+  # A trailing comment too wide for the line stays after the last line of the statement.
   wide = (
     xs
     |> twice()
     |> twice()
-  )
+  ) # the comment of this statement is too wide for the line after the closing bracket of it, and it stays there
 
-  # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of
-  # its own after the statement
   next = 1
   last = (
     xs
     |> twice()
     |> twice()
+  ) # the comment of this statement is too wide for the line after the closing bracket of it, and it stays there
+end
+
+def closing(xs: List[Int], ok: Bool) -> Void
+  point = Point(
+    x: compute_the_first_coordinate(xs, name),
+    y: compute_the_second_coordinate(xs, name, total),
+    third: 100000,
+  )
+  # A comment alone at the end of a block takes no empty line after a statement of several lines.
+end
+
+def closing_nested(xs: List[Int], ok: Bool) -> Void
+  if ok
+    chain = (
+      xs
+      |> twice()
+      |> twice()
+    )
+    # The same in a nested block.
+  end
+end
+
+def closing_spaced(xs: List[Int]) -> Void
+  point = Point(
+    x: compute_the_first_coordinate(xs, name),
+    y: compute_the_second_coordinate(xs, name, total),
+    third: 100000,
   )
 
-  # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of
-  # its own after the statement
+  # An empty line of the source stays.
 end

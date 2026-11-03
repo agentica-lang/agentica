@@ -66,13 +66,15 @@ export struct Extern
   after: List[Tokens.Comment]
 end
 
-# One item of a body: its first and last source lines and its document, and whether it is a simple statement whose
-# document is measured (it owes an empty line after it when it took several lines).
+# One item of a body: its first and last source lines and its document, whether it is a simple statement whose
+# document is measured (it owes an empty line after it when it took several lines), and whether it is a comment that
+# closes its body (it does not take the empty line that is owed, as no item follows to be told apart from it).
 struct Item
   first: Int
   last: Int
   doc: Docs.Doc
   spread: Bool
+  closing: Bool
 end
 
 # The comments of a node before it and after it, as documents to put around it.
@@ -160,7 +162,7 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
 
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
     line = placed.comment.span.start.line
-    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text), spread: false))
+    items = items.push(comment_item(placed.comment))
   end
 
   return sequence(c, items)
@@ -182,7 +184,7 @@ def sequence(c: Context, items: List[Item]) -> Docs.Doc
     if at > 0
       if blank_before?(c, item.first, items[at - 1].last)
         parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.HardLine])
-      elsif owed
+      elsif owed and not item.closing
         parts = parts.push(Docs.Doc.GapLine)
       else
         parts = parts.push(Docs.Doc.HardLine)
@@ -217,21 +219,25 @@ def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc,
   below: List[Item] = []
   for comment in c.trailing.get(key, [])
     if comment.own_line
-      below = below.push(comment_item(comment))
-    elsif spread
-      suffixes = suffixes.push(Docs.Doc.Trailing(" " + comment.text))
+      below = below.push(closing_item(comment))
     else
       suffixes = suffixes.push(Docs.Doc.LineSuffix(" " + comment.text))
     end
   end
 
-  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes)), spread: spread))
+  shown = Docs.Doc.Concat([doc].concat(suffixes))
+  items = items.push(Item(first: first, last: last, doc: shown, spread: spread, closing: false))
   return items.concat(below)
 end
 
 def comment_item(comment: Tokens.Comment) -> Item
   line = comment.span.start.line
-  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false)
+  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false, closing: false)
+end
+
+# A comment alone at the end of its body.
+def closing_item(comment: Tokens.Comment) -> Item
+  return comment_item(comment).with(closing: true)
 end
 
 # The comments of a node inside an expression: the leading ones on their own lines before it, a comment after code at
@@ -265,7 +271,7 @@ end
 
 # The dangling comments of a node, each on its own line, as the items of an empty body.
 def dangling_items(c: Context, key: String) -> List[Item]
-  return c.dangling.get(key, []).map do |placed: Comments.Attached| comment_item(placed.comment) end
+  return c.dangling.get(key, []).map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # A body two spaces deeper, from the line after its header; nothing for an empty body.
@@ -490,7 +496,8 @@ def extern_items(c: Context, block: Extern) -> List[Item]
   end
 
   # The block keeps its own indent: it starts at the left margin, as every declaration does.
-  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines), spread: false))
+  shown = Docs.Doc.Concat(lines)
+  items = items.push(Item(first: block.first, last: block.last, doc: shown, spread: false, closing: false))
   suffixes: List[Item] = []
   for comment in block.after
     if comment.span.start.line == block.last
@@ -661,7 +668,7 @@ end
 # The dangling comments that go at the end of the last body: before `end`, or with no keyword.
 def end_items(dangling: List[Comments.Attached]) -> List[Item]
   kept = dangling.select do |placed: Comments.Attached| placed.keyword == "end" or placed.keyword == "" end
-  return kept.map do |placed: Comments.Attached| comment_item(placed.comment) end
+  return kept.map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # The offset of the `else` of an `if`: its `else` token, outside the blocks nested in it.
@@ -903,14 +910,54 @@ def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.
   return wrapped([doc], false)
 end
 
-# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`.
+# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`. A
+# method chain that the source wrote with a dot at the start of each line and no parentheses stays that way.
 def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
+  if forced and dotted?(c, expr)
+    key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
+    return commented(c, key, chain_of(c, expr, false, true))
+  end
+
   if forced and (piped?(expr) or piped_try?(expr))
     key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
     return commented(c, key, pipe_doc(c, expr, false, true))
   end
 
   return expr_doc(c, expr, false)
+end
+
+# Whether `expr`, the whole value of a statement, is a method chain written with a `.` that starts a line (the parser
+# reads it as a continuation of the line before). Each call, field or `.call` of the chain has its dot right after the
+# end of its receiver (past the `)` of a parenthesized one), so the dots of the arguments and of the blocks, which sit
+# inside the links and not between them, never count. A chain that the source wrote inside its own parentheses,
+# `(a\n  .b)`, is left to the layout, which keeps them.
+def dotted?(c: Context, expr: Ast.Expr) -> Bool
+  span = tight(c, Ast.expr_span(expr))
+  first = token_index(c, span.start.offset)
+  after = token_index(c, span.stop.offset)
+  if first > 0 and after < c.tokens.size
+    if c.tokens[first - 1].kind == "left-paren" and c.tokens[after].kind == "right-paren"
+      return false
+    end
+  end
+
+  current = expr
+  found = false
+  while link?(current)
+    receiver = target_of(current)
+    at = token_index(c, tight(c, Ast.expr_span(receiver)).stop.offset)
+    while at < c.tokens.size and c.tokens[at].kind == "right-paren"
+      at += 1
+    end
+
+    if at > 0 and at < c.tokens.size and c.tokens[at].kind == "dot"
+      found = found or c.tokens[at].span.start.line > c.tokens[at - 1].span.stop.line
+    end
+
+    current = receiver
+  end
+
+  return found
 end
 
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
@@ -1082,41 +1129,25 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
   while looping
     looping = false
     key = Comments.key_of(Comments.expr_kind(current), Ast.expr_span(current))
-    case current
-      Ast.Expr.Call(node) ->
-        if node.piped
-          stage_key = Comments.key_of("PipeStage", node.span)
-          shown = call_doc_keyed(c, node.with(args: node.args.drop(1), parenthesized: true), stage_key)
-          stage = commented(c, stage_key, Docs.Doc.Concat([text("|> "), shown]))
-          if stages.size > 0
-            stage = commented(c, key, stage)
-          end
-
-          stages = List.concat([stage], stages)
-          current = node.args[0]
-          looping = true
+    case Comments.pipe_stage(current)
+      some(stage) ->
+        stage_key = Comments.key_of("PipeStage", stage.call.span)
+        shown = call_doc_keyed(c, stage.call.with(args: stage.call.args.drop(1), parenthesized: true), stage_key)
+        mark = "|> "
+        if stage.tried
+          mark = "|> try "
         end
 
-      Ast.Expr.Try(node) ->
-        case node.operand
-          Ast.Expr.Call(call) ->
-            if call.piped
-              stage_key = Comments.key_of("PipeStage", call.span)
-              shown = call_doc_keyed(c, call.with(args: call.args.drop(1), parenthesized: true), stage_key)
-              stage = commented(c, stage_key, Docs.Doc.Concat([text("|> try "), shown]))
-              if stages.size > 0
-                stage = commented(c, key, stage)
-              end
-
-              stages = List.concat([stage], stages)
-              current = call.args[0]
-              looping = true
-            end
-
-          _ -> looping = false
+        piece = commented(c, stage_key, Docs.Doc.Concat([text(mark), shown]))
+        if stages.size > 0
+          piece = commented(c, key, piece)
         end
 
-      _ -> looping = false
+        stages = List.concat([piece], stages)
+        current = stage.call.args[0]
+        looping = true
+
+      none -> looping = false
     end
   end
 
@@ -1220,6 +1251,11 @@ end
 # with two calls or more breaks before each `.` when it does not fit (47.5 rule 10): the first call stays with a
 # receiver that is a plain name.
 def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
+  return chain_of(c, expr, bracketed, false)
+end
+
+# `chain_doc`, where `open` says that the chain breaks with leading dots alone, with no parentheses of its own.
+def chain_of(c: Context, expr: Ast.Expr, bracketed: Bool, open: Bool) -> Docs.Doc
   links: List[Link] = []
   current = expr
   looping = true
@@ -1292,6 +1328,10 @@ def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     return Docs.Doc.Concat(before.push(Docs.Doc.Group(parts)))
   end
 
+  if open
+    return Docs.Doc.Group(start.push(Docs.Doc.Indent(rest)))
+  end
+
   return wrapped(start.push(Docs.Doc.Indent(rest)), bracketed)
 end
 
@@ -1315,6 +1355,18 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
 
       return some(Link(doc: inner, block: [], call: false, breaks: false))
     _ -> return none
+  end
+end
+
+# Whether `expr` is one link of a chain: a call, a field, `.call`, `.with` or an index.
+def link?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.MethodCall(_) -> return true
+    Ast.Expr.FieldAccess(_) -> return true
+    Ast.Expr.Invoke(_) -> return true
+    Ast.Expr.Update(_) -> return true
+    Ast.Expr.Index(_) -> return true
+    _ -> return false
   end
 end
 

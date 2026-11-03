@@ -7,14 +7,15 @@
 ## mode, and the fit check stops at it as at any newline, so a group can stay flat around the multi-line body of a
 ## `do` block. A comment on its own line, a heredoc body and a `BreakParent` cannot be flat, so every group around them
 ## breaks. A `LineSuffix` (a comment after code) is written at the end of its line; one that would pass the width goes
-## on its own line above that line instead, at the line's indent. A `Below` (a comment alone on its line after code)
-## goes on its own line after its line. A `Fill` packs its items greedily, breaking only the separators that must
-## break.
+## on its own line above that line instead, at the line's indent, unless the line ends a statement of several lines
+## (see `Measure`). A `Below` (a comment alone on its line after code) goes on its own line after its line. A `Fill`
+## packs its items greedily, breaking only the separators that must break.
 ##
 ## A `Measure` wraps a statement and notes, when it ends (`Measured`), whether the statement took more than one line;
 ## the `GapLine` between two items of a body then writes an empty line after it, under which go the comments below the
-## statement. A `Trailing` comment of such a statement goes after its last line, never above it, so that the text
-## formats to itself.
+## statement. A `LineSuffix` comment of such a statement stays after its last line even when it passes the width, never
+## above that line (inside the brackets of the statement) and never under the empty line (where the next pass reads it
+## as the next item's), so that the text formats to itself.
 ##
 ## The printer keeps an explicit stack and never recurses, and an indent is written only before text, so no line ends
 ## in spaces.
@@ -57,10 +58,6 @@ export enum Doc
   ## The end of a `Measure`, which holds the line the statement started on: the printer's own piece, never built by a
   ## layout.
   Measured(Int)
-  ## A comment after a statement that a `Measure` just ended: like `LineSuffix`, except that on a statement of several
-  ## lines a comment that does not fit after the last line goes on its own line after the statement, not above that
-  ## line, where it would sit inside the brackets of the statement.
-  Trailing(String)
   ## A line break, then an empty line when the last `Measure` took more than one line. A comment `Below` the line goes
   ## under the empty line, where the next pass reads it as the next item's.
   GapLine
@@ -129,18 +126,6 @@ export def render(doc: Doc, width: Int) -> String
       Doc.Comment(text) -> out = comment(out, text, indent, width)
       Doc.After(lines) -> out = out.with(afters: out.afters.push(lines))
       Doc.Below(text) -> out = out.with(belows: out.belows.push(text))
-      Doc.Trailing(text) ->
-        written = out.line.length
-        for suffix in out.suffixes
-          written += suffix.length
-        end
-
-        if out.measured and out.line != "" and written + text.length > width
-          out = out.with(belows: out.belows.push(text.strip))
-        else
-          out = out.with(suffixes: out.suffixes.push(text))
-        end
-
       Doc.Measure(parts) ->
         stack = stack.push(Command(indent: indent, flat: flat, doc: Doc.Measured(out.lines.size)))
         stack = push_all(stack, indent, flat, parts)
@@ -256,7 +241,6 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
         end
 
       Doc.LineSuffix(_) -> left = left
-      Doc.Trailing(_) -> left = left
       Doc.BreakParent ->
         if flat
           return false
@@ -302,8 +286,9 @@ def write(out: Output, text: String) -> Output
   return out.with(line: line + text)
 end
 
-# Ends the current line: its suffixes first (one that would pass the width goes above the line), then the heredoc
-# bodies waiting for this break, then the comments below it; the next line gets `indent`.
+# Ends the current line: its suffixes first (one that would pass the width goes above the line, except on the last line
+# of a statement of several lines, where above is inside its brackets), then the heredoc bodies waiting for this break,
+# then the comments below it; the next line gets `indent`.
 def newline(out: Output, indent: Int, width: Int) -> Output
   lines = out.lines
   line = out.line
@@ -313,7 +298,7 @@ def newline(out: Output, indent: Int, width: Int) -> Output
   end
 
   for suffix in out.suffixes
-    if line.strip == "" or line.length + suffix.length <= width
+    if out.measured or line.strip == "" or line.length + suffix.length <= width
       line = line + suffix
     else
       lines = lines.concat(wrap(suffix.strip, width - margin.length).map do |part: String| margin + part end)

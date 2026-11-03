@@ -1,5 +1,5 @@
 # Comments inside pipe chains stay on their stage: before a `|>`, after a stage, after the first operand, and before
-# the first operand.
+# the first operand, which may be parenthesized or follow a `|> try` stage.
 
 def stages(users: List[User], conn: Conn) -> Void
   # between stages
@@ -82,4 +82,20 @@ def nested(xs: List[Int]) -> Void
   )
 
   puts(ys, zs)
+end
+
+def edges(users: List[User], conn: Conn) -> Void
+  # between the pipe and try
+  tried = (
+    users # after the pipe
+    |> try Orm.all(conn)
+    |> count()
+  )
+
+  # after the opening parenthesis of a parenthesized first operand
+  # on the line of the parenthesis
+  first = users + more |> count()
+  # on a line of its own
+  second = users + more |> count()
+  return second
 end

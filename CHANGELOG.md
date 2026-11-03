@@ -100,6 +100,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   cut short gets none.
 - `agentica fmt` keeps a comment inside a pipe chain on its stage instead of
   refusing the file with `FMT-INTERNAL`.
+- `agentica fmt` keeps a trailing comment that is too wide on the last line of
+  a statement of several lines, and puts no empty line between such a
+  statement and the comment that closes its block. A comment after the `(` of
+  a statement's value no longer refuses the file with `FMT-INTERNAL`.
+- `agentica fmt` keeps a method chain written with a `.` at the start of each
+  line in that form, with no parentheses, as `tour/blocks.md` teaches.
 
 ## [0.21.0] - 2026-11-02
 
