@@ -215,6 +215,7 @@ def downloaded_target(
     sha256: artifact.sha256,
     member: artifact.member,
   )
+
   case workspace.native_artifact.call(request)
     ok(path) -> return Target.File(path)
     error(packed) -> return Target.Unusable(packed)

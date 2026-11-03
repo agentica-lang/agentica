@@ -200,6 +200,7 @@ def method_on(
   typed = Ast.Expr.Typed(
     Ast.TypedTarget(id: Ast.expr_id(target_node), target: target_node, type: type, span: Ast.expr_span(target_node)),
   )
+
   call = Ast.Call(id: id, name: resolved, args: [typed].concat(args), piped: false, parenthesized: true, span: span)
   st = State.record_resolved(target.st, id, State.Resolved.Call(resolved, type))
   return Calls.check_call(cx, st, call, expected)

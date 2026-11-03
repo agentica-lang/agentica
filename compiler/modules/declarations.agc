@@ -212,6 +212,7 @@ export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Voi
         span_of(decl),
         Diag.Help.Hint(order_help(group)),
       )
+
       return error(Failure.from_stage(file, problem))
     end
 

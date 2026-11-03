@@ -92,6 +92,7 @@ export def print_program(program: Ast.Program) -> List[String]
       text_attr(" module-doc=", program.module_doc),
     ),
   ]
+
   for decl in program.declarations
     lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
   end
@@ -156,6 +157,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(
         head(at, role, "const-decl", node.id, node.span, name_attr(node.name) + exported + doc_attr(node.doc)),
       )
+
       lines = print_optional_type(lines, child, "type", node.type)
       return print_expr(lines, child, "value", node.value)
     Ast.Decl.Enum(node) ->
@@ -170,6 +172,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
           "#{name_attr(node.name)} type-parameters=#{list_text(parameters)}#{doc_attr(node.doc)}",
         ),
       )
+
       for variant in node.variants
         lines = print_variant(lines, child, variant)
       end
@@ -388,6 +391,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
         " enum=#{Text.quote(node.enum_name)} variant=#{Text.quote(node.variant_name)}",
         node.args,
       )
+
       return print_named_args(lines, child, node.named)
     Ast.Expr.Invoke(node) ->
       lines = out.push(head(at, role, "invoke", node.id, node.span, ""))
@@ -481,6 +485,7 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
           " enum=#{Text.quote(node.enum_name)} variant=#{Text.quote(node.variant_name)} bindings=#{list_text(names)}",
         ),
       )
+
       for slot in node.slots
         case slot
           Ast.Slot.Nested(inner) -> lines = print_pattern(lines, deeper(at), "nested", inner)
@@ -590,6 +595,7 @@ def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> Li
   lines = out.push(
     head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)),
   )
+
   return print_types(lines, deeper(at), "payload", variant.payload_types)
 end
 

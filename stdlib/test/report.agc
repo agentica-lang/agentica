@@ -114,6 +114,7 @@ export def from_json(text: String) -> Result[Error]
     column: try int_at(start, "column"),
     end_column: try int_at(stop, "column"),
   )
+
   return ok(
     Error(
       code: try text_at(root, "code"),
@@ -174,6 +175,7 @@ export def json(files: List[FileResult], seed: Int) -> Json
     "exit_code": JSON.from(sums.exit_code),
     "files": JSON.array(files.map do |file| file_json(file) end),
   }
+
   return JSON.object(fields)
 end
 
@@ -185,6 +187,7 @@ export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
     "#{sums.passed} passed, #{sums.failed} failed, #{sums.skipped} skipped, #{sums.not_executed} not executed, " +
     "#{sums.file_errors} file errors"
   )
+
   if sums.exit_code != 0
     last = "#{last}, seed #{seed}"
   end
@@ -196,6 +199,7 @@ def totals(files: List[FileResult]) -> Totals
   passed = files.reduce(0) do |n, file|
     n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size
   end
+
   skipped = files.reduce(0) do |n, file|
     n + file.scenarios.filter do |item| status(item.verdict) == "skipped" end.size
   end
@@ -203,6 +207,7 @@ def totals(files: List[FileResult]) -> Totals
   not_run = files.reduce(0) do |n, file|
     n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size
   end
+
   file_errors = files.filter do |file| failed?(file.verdict) end.size
   severe = files.any? do |file| severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end end
   code = 1
@@ -257,6 +262,7 @@ def file_json(file: FileResult) -> Json
     "error": verdict_json(file.verdict),
     "output": JSON.from(file.output),
   }
+
   return JSON.object(fields)
 end
 
@@ -278,6 +284,7 @@ def scenario_json(item: ScenarioResult) -> Json
     "reason": reason_json(item.verdict),
     "output": JSON.from(item.output),
   }
+
   return JSON.object(fields)
 end
 
@@ -308,6 +315,7 @@ def step_json(step: StepResult) -> Json
     "location": location_json(step.location),
     "error": problem,
   }
+
   return JSON.object(fields)
 end
 
@@ -317,6 +325,7 @@ def location_json(span: Span) -> Json
     "line": JSON.from(span.line),
     "column": JSON.from(span.column),
   }
+
   return JSON.object(fields)
 end
 
@@ -343,6 +352,7 @@ def error_json(problem: Error) -> Json
     "file": JSON.from(span.file),
     "range": JSON.object(range),
   }
+
   return JSON.object(put_detail(put_detail(fields, "expected", problem.expected), "actual", problem.actual))
 end
 

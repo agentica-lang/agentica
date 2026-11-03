@@ -31,6 +31,7 @@ export def ai(problem: Problems.Problem, text: String) -> String
     |> field("expected", problem.expected)
     |> field("actual", problem.actual)
   )
+
   for label in problem.labels
     out = out.push("  label: #{label.span.start.line}:#{label.span.start.column} #{label.text}")
   end

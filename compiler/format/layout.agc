@@ -362,6 +362,7 @@ def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
     text("def #{node.name}#{type_parameters(node.type_parameters)}"),
     listed(text("("), params, text(")"), []),
   ]
+
   if written?(node.result.span)
     head = head.concat([text(" -> "), type_doc(c, node.result)])
   end
@@ -541,6 +542,7 @@ def statement_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
         expr_doc(c, node.condition, false),
         text(optional_do(c, node.condition)),
       ])
+
       return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.For(node) ->
       key = Comments.key_of("ForStmt", node.span)
@@ -601,6 +603,7 @@ def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
       Comments.key_of("IfBranch", branch.span),
       Docs.Doc.Concat([text(keyword), expr_doc(c, branch.condition, false)]),
     )
+
     parts = parts.concat([head, body(c, items)])
     at += 1
   end
@@ -1277,6 +1280,7 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
         Docs.Doc.SoftLine,
         text("]"),
       ])
+
       return some(Link(doc: inner, block: [], call: false, breaks: false))
     _ -> return none
   end
@@ -1678,6 +1682,7 @@ def extern_blocks(lines: List[String], tokens: List[Tokens.Token]) -> List[Exter
       blocks = blocks.push(
         Extern(first: first, last: last, start: token.span.start.offset, stop: stop, before: [], after: []),
       )
+
       while at < tokens.size and tokens[at].span.start.offset < stop
         at += 1
       end

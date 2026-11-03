@@ -69,6 +69,7 @@ export def lower(
       spans: [span, span, span],
     ),
   ]
+
   slots = count + 2
   if record?(native)
     info = cx.structs[function.result.name]
@@ -80,6 +81,7 @@ export def lower(
       body = body.push(
         Ir.Instr(op: "const", args: [position], imm: Ir.Imm.Int(field), name: "", file: index, spans: [span]),
       )
+
       body = body.push(Ir.instr("list-get", [count + 1 + field, count, position], index, [span]))
       field += 1
     end

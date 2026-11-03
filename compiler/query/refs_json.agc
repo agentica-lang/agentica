@@ -21,6 +21,7 @@ export def json(found: Model.Refs) -> Json
     "references": JSON.array(found.references.map do |use: Model.Reference| reference_json(use) end),
     "skipped": JSON.array(found.skipped.map do |left: Model.Skipped| skipped_json(left) end),
   }
+
   if found.partial
     return JSON.object(DiagnosticJson.partial(shape, found.diagnostics))
   end
