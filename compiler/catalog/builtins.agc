@@ -76,6 +76,16 @@ export def form_for_call(entry: Model.Builtin, arity: Int, block: Bool) -> Resul
   return form_for(entry, arity)
 end
 
+## The form for a call of that many arguments with no block: the entry alone for a builtin with a block form
+## (File.open), since its block form takes the block as its last argument, so it is not a form without one.
+export def form_without_block(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
+  if block_form?(entry)
+    return form_among([entry], arity)
+  end
+
+  return form_for(entry, arity)
+end
+
 ## The form of the builtin name for a call with that many arguments, the last a block when block is true.
 export def call_ref(name: String, arity: Int, block: Bool) -> Result[Model.Builtin]
   entry = try lookup(name).to_result("unknown builtin")

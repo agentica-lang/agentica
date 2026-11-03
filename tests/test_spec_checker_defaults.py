@@ -204,6 +204,9 @@ SINGLE_FILE = [
                  '  b: Result[List[Int]] = File.open("a.txt", "write") do |_|\n    ok([])\n  end\n  puts(b)\n'
                  '  c = File.open("a.txt", "append", 50) do |f|\n    try File.write(f, "x")\n    ok()\n  end\n'
                  '  puts(c)\n  puts(File.open("a.txt", "read", 50, &size))\n'), None, None),
+    ("File.open with too many arguments and a block is an arity error, not a missing block target",
+     main_with('  File.open("a.txt", "read", 10, 5) do |f|\n    ok(1)\n  end\n'), "CHECK-ARITY",
+     'File.open("a.txt", "read", 10, 5) do |f|\n    ok(1)\n  end'),
     ("the block of File.open gives a Result",
      main_with('  puts(File.open("a.txt") do |_|\n    5\n  end)\n'), "CHECK-TYPE-MISMATCH", "5"),
     ("the expected type of File.open with a block is the Result its block gives",

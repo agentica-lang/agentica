@@ -124,7 +124,7 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
   end
 
   last = node.args[node.args.size - 1]
-  without = Builtins.form_for(entry, node.args.size - 1)
+  without = Builtins.form_without_block(entry, node.args.size - 1)
   case last
     Ast.Expr.BlockLit(block) ->
       if without.ok?
