@@ -2,73 +2,91 @@
  * Deep value equality (agc_equal): == and != on lists, maps, sets, Results,
  * structs and enums (the builtins Value.equal and Optional.equal), and Test.eq.
  * A Json at any depth compares as its canonical text. One explicit work stack
- * (pairs, and long lists walked by two cursors), no recursion. Core layer.
- * Design: docs/future/25-ruby-typed-idioms.md §25.4, docs/future/36-unit-tests.md §36.3.
+ * of pairs, and a walker stack for long lists and maps, which are walked one
+ * pair at a time; no recursion. Core layer.
+ * Design: docs/grammar/06-semantics.md (Operators), site/content/library/testing/test.md.
  */
 #include "core.h"
 
 #include <string.h>
 
-/* The work stack starts on the C stack and moves to GC memory only when it grows past this: most compares (a small
+/* The stacks start on the C stack and move to GC memory only when they grow past these: most compares (a small
    struct, a unit variant) never allocate. */
 #define INLINE_WORK 16
+#define INLINE_WALKERS 4
 
-/* Lists up to this length push their item pairs; a longer one gets one cursor entry, so the stack grows with the
-   depth of the values, not with their width. */
+/* Lists up to this length push their item pairs; a longer one gets a walker, so the stacks grow with the depth of
+   the values, not with their width. */
 #define SHORT_LIST 3
 
-/* One entry of the work stack: a pair still to compare, or two lists of one length whose items are taken from the
-   cursors, in order. */
+/* A pair still to compare, or the turn of the walker on top of the walker stack: two lists of one length, or two
+   maps of one size. A walker entry is pushed with its walker and popped with it, so the two stacks stay in step and
+   an entry needs no pointer to its walker. */
+typedef enum { WORK_PAIR, WORK_LISTS, WORK_MAP } work_kind;
+
 typedef struct {
-  bool cursors;
+  work_kind kind;
+  agc_value a, b;
+} work;
+
+/* The state of a walk, apart from the work entries so they stay small: the cursors of two lists, whose items are
+   taken in order, or the key walk of two maps (vm/map.c). */
+typedef struct {
   union {
-    struct {
-      agc_value a, b;
-    } pair;
     struct {
       agc_list_cursor left, right;
     } lists;
+    agc_map_pairs map;
   } as;
-} work;
+} walker;
 
-/* items points at the inline array of agc_equal until the first growth. Boehm scans the C stack, so the values held
-   there stay reachable; after a growth they live in scanned GC memory (agc_alloc). */
+/* items and walkers point at the inline arrays of agc_equal until their first growth. Boehm scans the C stack, so
+   the values and the cursors held there stay reachable; after a growth they live in scanned GC memory (agc_alloc). */
 typedef struct {
   work *items;
   size_t depth, capacity;
+  walker *walkers;
+  size_t walking, walker_capacity;
 } work_stack;
 
-/* What agc_map_each_pair hands back to visit_values. */
-typedef struct {
-  agc_vm *vm;
-  work_stack *stack;
-} map_walk;
+/* The array of *items with room for one more of size bytes: the same array, or a copy twice as big in GC memory. */
+static void *grow(void *items, size_t used, size_t *capacity, size_t size) {
+  if (used < *capacity) return items;
+  size_t bigger = agc_size_mul(*capacity, 2);
+  void *grown = agc_alloc(agc_size_mul(bigger, size));
+  memcpy(grown, items, used * size);
+  *capacity = bigger;
+  return grown;
+}
 
 static work *push_slot(work_stack *s) {
-  if (s->depth == s->capacity) {
-    size_t bigger = agc_size_mul(s->capacity, 2);
-    work *grown = agc_alloc(agc_size_mul(bigger, sizeof(work)));
-    memcpy(grown, s->items, s->depth * sizeof(work));
-    s->items = grown;
-    s->capacity = bigger;
-  }
+  s->items = grow(s->items, s->depth, &s->capacity, sizeof(work));
   return &s->items[s->depth++];
+}
+
+/* A walker entry and its walker; the caller fills the walker. */
+static walker *push_walker(work_stack *s, work_kind kind) {
+  push_slot(s)->kind = kind;
+  s->walkers = grow(s->walkers, s->walking, &s->walker_capacity, sizeof(walker));
+  return &s->walkers[s->walking++];
 }
 
 static void push_pair(work_stack *s, agc_value a, agc_value b) {
   work *w = push_slot(s);
-  w->cursors = false;
-  w->as.pair.a = a;
-  w->as.pair.b = b;
+  w->kind = WORK_PAIR;
+  w->a = a;
+  w->b = b;
 }
 
 bool agc_same_string(agc_vm *vm, const agc_string *x, const agc_string *y) {
+  if (x == y) return true;
   if (x->bytes != y->bytes) return false;
   agc_charge_bytes(vm, x->bytes);
   return x->bytes == 0 || memcmp(x->data, y->data, x->bytes) == 0;
 }
 
 bool agc_same_bytes(agc_vm *vm, const agc_bytes *x, const agc_bytes *y) {
+  if (x == y) return true;
   if (x->len != y->len) return false;
   agc_charge_bytes(vm, x->len);
   return x->len == 0 || memcmp(x->data, y->data, x->len) == 0;
@@ -118,11 +136,6 @@ static bool visit(agc_vm *vm, work_stack *s, agc_value a, agc_value b) {
   return scalar_equal(vm, a, b);
 }
 
-static bool visit_values(void *walk, agc_value a, agc_value b) {
-  map_walk *w = walk;
-  return visit(w->vm, w->stack, a, b);
-}
-
 /* Fields, payloads or the items of a short list, in order: the scalars are compared first, then the containers are
    pushed last first, so the first one is compared first. */
 static bool visit_items(agc_vm *vm, work_stack *s, const agc_value *x, const agc_value *y, size_t n) {
@@ -170,8 +183,7 @@ static bool visit_list(agc_vm *vm, work_stack *s, const agc_list *x, const agc_l
   if (n != agc_list_len(y)) return false;
   if (agc_list_kind(x) && agc_list_kind(x) == agc_list_kind(y)) return same_scalars(vm, x, y);
   if (n > SHORT_LIST) {
-    work *w = push_slot(s);
-    w->cursors = true;
+    walker *w = push_walker(s, WORK_LISTS);
     agc_list_cursor_begin(&w->as.lists.left, x, 0);
     agc_list_cursor_begin(&w->as.lists.right, y, 0);
     return true;
@@ -194,8 +206,9 @@ static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
 }
 
 /* One object compared with itself is equal without a walk only when nothing inside it can be a NaN, which is not
-   equal to itself (§25.4: a struct that holds a NaN is not equal to itself either). Strings, Bytes, sets (their
-   elements are Ints, Strings or Bytes) and packed Int lists hold no Float; any other value is walked. */
+   equal to itself (a list or struct that holds a NaN is not equal to itself either, docs/grammar/06-semantics.md).
+   Strings, Bytes, sets (their elements are Ints, Strings or Bytes) and packed Int lists hold no Float; any other
+   value is walked. */
 static bool same_object(agc_vm *vm, agc_value a, agc_value b) {
   if (agc_value_word(a) != agc_value_word(b)) return false;
   switch ((agc_tag)a.tag) {
@@ -218,8 +231,9 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
     case AGC_T_LIST: return visit_list(vm, s, agc_as_list(vm, a), agc_as_list(vm, b));
     case AGC_T_MAP: {
       const agc_map *x = agc_as_map(vm, a), *y = agc_as_map(vm, b);
-      map_walk walk = {vm, s};
-      return x->size == y->size && agc_map_each_pair(vm, x, y, visit_values, &walk);
+      if (x->size != y->size) return false;
+      agc_map_pairs_begin(vm, &push_walker(s, WORK_MAP)->as.map, x, y);
+      return true;
     }
     case AGC_T_SET: return set_equal(vm, agc_as_set(vm, a), agc_as_set(vm, b));
     case AGC_T_STRUCT: {
@@ -238,26 +252,45 @@ static bool expand(agc_vm *vm, work_stack *s, agc_value a, agc_value b, uint32_t
   }
 }
 
+/* The next pair of the walker on top, or false when it is done. A map walk that met a key missing from the other
+   map is done too, and *differs says so. */
+static bool walk_next(agc_vm *vm, work_stack *s, work_kind kind, agc_value *x, agc_value *y, bool *differs) {
+  walker *w = &s->walkers[s->walking - 1];
+  if (kind == WORK_MAP) {
+    if (agc_map_pairs_next(vm, &w->as.map, x, y)) return true;
+    *differs = w->as.map.missing;
+    return false;
+  }
+  /* Both lists have one length, so the cursors end together. */
+  return agc_list_cursor_next(&w->as.lists.left, x) && agc_list_cursor_next(&w->as.lists.right, y);
+}
+
 bool agc_equal(agc_vm *vm, agc_value a, agc_value b, uint32_t span) {
   work inline_items[INLINE_WORK];
-  work_stack s = {inline_items, 0, INLINE_WORK};
+  walker inline_walkers[INLINE_WALKERS];
+  work_stack s = {inline_items, 0, INLINE_WORK, inline_walkers, 0, INLINE_WALKERS};
   push_pair(&s, a, b);
   while (s.depth) {
-    work *top = &s.items[s.depth - 1];
-    if (top->cursors) {
-      agc_value x, y;
-      /* Both lists have one length, so the cursors end together. visit may move the stack, so top is not used
-         after it. */
-      if (!agc_list_cursor_next(&top->as.lists.left, &x) || !agc_list_cursor_next(&top->as.lists.right, &y)) {
-        s.depth--;
-      } else if (!visit(vm, &s, x, y)) {
-        return false;
-      }
+    const work *top = &s.items[s.depth - 1];
+    agc_value x, y;
+    if (top->kind == WORK_PAIR) {
+      x = top->a;
+      y = top->b;
+      s.depth--;
+      if (!expand(vm, &s, x, y, span)) return false;
       continue;
     }
-    agc_value x = top->as.pair.a, y = top->as.pair.b;
-    s.depth--;
-    if (!expand(vm, &s, x, y, span)) return false;
+    /* The walker entry stays on the stack while its pairs are compared; visit may push a pair above it (and move the
+       stack), so top is not used after this. */
+    bool differs = false;
+    if (walk_next(vm, &s, top->kind, &x, &y, &differs)) {
+      if (!visit(vm, &s, x, y)) return false;
+    } else if (differs) {
+      return false;
+    } else {
+      s.depth--;
+      s.walking--;
+    }
   }
   return true;
 }

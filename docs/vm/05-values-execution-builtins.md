@@ -275,7 +275,10 @@ returns.
 - **Exits.** Three kinds of builtin matter here:
   - A *direct* builtin only returns a value. It may allocate, do work that grows
     with its arguments, charge turn cost and fail. It never parks, starts a
-    block or a native frame, or moves frames.
+    block or a native frame, or moves frames, and it never yields halfway: `==`
+    on two large equal values (`Value.equal`, like `Optional.equal` and
+    `Test.eq`) runs whole in one turn, and the task yields after it returns
+    when the units it charged spent the turn (10.2.1).
   - A *leaf* builtin is a plain C call. It never parks, starts a block or a
     stepper, or charges turn cost, and its work is bounded.
   - A *block call* is a builtin row with a native kind (`map`, `filter`,

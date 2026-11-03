@@ -48,7 +48,8 @@ def value(rng, depth):
     if kind == "O":
         return ("O", None if rng.random() < 0.3 else value(rng, depth - 1))
     if kind == "L":
-        return ("L", tuple(value(rng, depth - 1) for _ in range(rng.randint(0, 3))))
+        # Up to 6 items: past 3, the VM walks a list with cursors instead of pushing its pairs.
+        return ("L", tuple(value(rng, depth - 1) for _ in range(rng.randint(0, 6))))
     if kind == "M":
         return ("M", {rng.choice("abc"): value(rng, depth - 1) for _ in range(rng.randint(0, 3))})
     return ("P", (value(rng, depth - 1), value(rng, depth - 1)))

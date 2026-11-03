@@ -2,9 +2,9 @@
  * Maps in C: the persistent 32-way HAMT behind Map and Set, hashed with
  * SipHash-1-3 keyed by vm->rt->hash_key, with agc_map_put, get and delete (and
  * their _hash variants for tests), agc_map_add_hash (put that leaves a member
- * alone, for Set), agc_map_keys in insertion order and agc_set_subset. The
- * order is a key list, newest first, where a delete leaves a dead cell instead
- * of copying the list. Core layer.
+ * alone, for Set), agc_map_keys in insertion order, agc_set_subset and the
+ * pair walk of == (agc_map_pairs). The order is a key list, newest first, where
+ * a delete leaves a dead cell instead of copying the list. Core layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
 #include "core.h"
@@ -49,18 +49,6 @@ struct agc_hamt {
   uint32_t datamap, nodemap, leaves, children;
   hamt_leaf leaf[];
 };
-
-/* The seqs of a map's dead key cells, from its dropped list: a cell is live
-   unless its seq is there (a key put back after a delete gets a new seq, so
-   only its old cell is dead). Building the set costs O(dead), not O(size).
-   When the seqs are dense, a bitmap over [lo, hi) answers; when they are
-   sparse, they are sorted from high to low and merged with the walk of the key
-   list, whose seqs fall. */
-typedef struct {
-  uint64_t *seqs, *bits;
-  uint64_t lo, hi;
-  size_t n, at;
-} seq_set;
 
 static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
@@ -317,7 +305,7 @@ static int by_falling_seq(const void *a, const void *b) {
   return x < y ? 1 : x > y ? -1 : 0;
 }
 
-static void dead_begin(agc_vm *vm, const agc_map *m, seq_set *set) {
+static void dead_begin(agc_vm *vm, const agc_map *m, agc_seq_set *set) {
   memset(set, 0, sizeof *set);
   set->lo = m->next_seq;
   set->hi = m->next_seq;
@@ -346,7 +334,7 @@ static void dead_begin(agc_vm *vm, const agc_map *m, seq_set *set) {
 
 /* Whether seq is in the set. Called with falling seqs, as the key list gives
    them. */
-static bool seq_in(seq_set *set, uint64_t seq) {
+static bool seq_in(agc_seq_set *set, uint64_t seq) {
   if (set->bits) {
     if (seq < set->lo || seq >= set->hi) return false;
     uint64_t at = seq - set->lo;
@@ -372,7 +360,7 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   if (m->dead == 0) {
     for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
   } else {
-    seq_set dead;
+    agc_seq_set dead;
     dead_begin(vm, m, &dead);
     for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next)
       if (!seq_in(&dead, cell->seq)) keys[--k] = cell->key;
@@ -422,7 +410,7 @@ bool agc_map_any_value(const agc_map *m, agc_value *out) {
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
   if (a->size > b->size) return false;
   agc_value present;
-  seq_set dead = {NULL, NULL, 0, 0, 0, 0};
+  agc_seq_set dead = {NULL, NULL, 0, 0, 0, 0};
   if (a->dead > 0) dead_begin(vm, a, &dead);
   for (const agc_keys *cell = a->reversed; cell; cell = cell->next)
     if ((a->dead == 0 || !seq_in(&dead, cell->seq)) && !agc_map_get_hash(vm, b, cell->hash, cell->key, &present))
@@ -430,20 +418,30 @@ bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
   return true;
 }
 
-/* Each live key of a, newest first, with its value in a and in b, until each returns false. False when a key of a is
-   not in b or each stopped; the caller compares the sizes. The cached hash of the cell finds the key in both tables
-   without hashing it again (no charge for a String key), and a missing key ends the walk at once. */
-bool agc_map_each_pair(agc_vm *vm, const agc_map *a, const agc_map *b, agc_pair_fn each, void *ctx) {
-  seq_set dead = {NULL, NULL, 0, 0, 0, 0};
-  if (a->dead > 0) dead_begin(vm, a, &dead);
-  for (const agc_keys *cell = a->reversed; cell; cell = cell->next) {
-    if (a->dead > 0 && seq_in(&dead, cell->seq)) continue;
-    agc_value left, right;
-    if (!agc_map_get_hash(vm, a, cell->hash, cell->key, &left) ||
-        !agc_map_get_hash(vm, b, cell->hash, cell->key, &right) || !each(ctx, left, right))
-      return false;
+/* Starts a walk over the live keys of a with their values in a and in b. The caller compares the sizes first. */
+void agc_map_pairs_begin(agc_vm *vm, agc_map_pairs *walk, const agc_map *a, const agc_map *b) {
+  memset(walk, 0, sizeof *walk);
+  walk->a = a;
+  walk->b = b;
+  walk->cell = a->reversed;
+  if (a->dead > 0) dead_begin(vm, a, &walk->dead);
+}
+
+/* The next live key of a, newest first: true with its value in a (left) and in b (right), or false at the end. A key
+   that b lacks ends the walk at once with walk->missing set. The cached hash of the cell finds the key in both tables
+   without hashing it again (no charge for a String key). */
+bool agc_map_pairs_next(agc_vm *vm, agc_map_pairs *walk, agc_value *left, agc_value *right) {
+  while (walk->cell) {
+    const agc_keys *cell = walk->cell;
+    walk->cell = cell->next;
+    if (walk->a->dead > 0 && seq_in(&walk->dead, cell->seq)) continue;
+    if (agc_map_get_hash(vm, walk->a, cell->hash, cell->key, left) &&
+        agc_map_get_hash(vm, walk->b, cell->hash, cell->key, right))
+      return true;
+    walk->missing = true;
+    walk->cell = NULL;
   }
-  return true;
+  return false;
 }
 
 /* Removes key from under node: the new node, node itself when the key is not
@@ -492,7 +490,7 @@ static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t
 static void compact_keys(agc_vm *vm, agc_map *m) {
   /* The rebuild grows with the map: a persisted map at the threshold rebuilds on every derived delete. */
   agc_charge(vm, m->size + m->dead);
-  seq_set dead;
+  agc_seq_set dead;
   dead_begin(vm, m, &dead);
   agc_keys *block = agc_alloc(agc_size_mul(m->size, sizeof(agc_keys)));
   size_t k = 0;

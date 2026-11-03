@@ -733,8 +733,8 @@ more = Map.put(stock, "kiwi", 7)
 ### Sets
 
 `Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key:
-any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once and keeps
-the order of first insertion.
+any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once
+and keeps the order of first insertion.
 
 ```ruby
 seen: Set[String] = Set.new([])
@@ -756,8 +756,8 @@ puts(seen)
   loop, so assigning the variable in the body does not change the loop.
 - Sets print as `Set[1, 2]` (strings in their `inspect` form). `==` and
   `Test.eq` compare two sets in any order; there is no index
-  (`CHECK-NOT-INDEXABLE`). A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
-  `Map` key, but it may be a field, a list item or a map value.
+  (`CHECK-NOT-INDEXABLE`). A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`)
+  and cannot be a `Map` key, but it may be a field, a list item or a map value.
 - Functions are in
   [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).
   `Set.include?` and `Set.add` take effectively constant time; `Set.to_a` and

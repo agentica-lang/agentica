@@ -404,22 +404,19 @@ static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t sp
   return r->value;
 }
 
-/* == and != on two Optional values (enum values of the builtin enum Optional): the deep equality of Test.eq, since
-   the interpreter's eq takes no enum. The checker allows it only when the item has equality. Two different variants
-   and two nones are answered here, without the work stack of agc_equal: `x == none` is the common case. */
-static agc_value builtin_optional_equal(agc_vm *vm, agc_value *args, uint32_t span) {
-  const agc_enum *a = agc_as_enum(vm, args[0]);
-  const agc_enum *b = agc_as_enum(vm, args[1]);
-  if (a->variant != b->variant) return agc_bool(false);
-  if (a->n == 0) return agc_bool(true);
-  return agc_bool(agc_equal(vm, args[0], args[1], span));
-}
-
-/* == and != on two lists, maps, sets, Results, structs or enums: the deep equality of Test.eq (vm/equal.c). The
-   checker allows it only for two values of one type with equality; hand-made bytecode gets false for two different
-   tags and RUNTIME-INTERNAL from agc_equal for a pair with no equality (two functions, two handles). A direct row:
-   it never parks, starts a stepper or moves a frame, so compiled loops call it without leaving. */
+/* == and != on two lists, maps, sets, Results, Optionals, structs or enums (Value.equal and Optional.equal): the deep
+   equality of Test.eq (vm/equal.c). The checker allows it only for two values of one type with equality; hand-made
+   bytecode gets false for two different tags and RUNTIME-INTERNAL from agc_equal for a pair with no equality (two
+   functions, two handles). Two enums (an Optional among them) of different variants, or two unit variants, are
+   answered here, without the work stack of agc_equal: `x == none` is the common case. A direct row: it never parks,
+   starts a stepper or moves a frame, so compiled loops call it without leaving. */
 static agc_value builtin_value_equal(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (agc_is(args[0], AGC_T_ENUM) && agc_is(args[1], AGC_T_ENUM)) {
+    const agc_enum *a = agc_as_enum(vm, args[0]);
+    const agc_enum *b = agc_as_enum(vm, args[1]);
+    if (a->variant != b->variant) return agc_bool(false);
+    if (a->n == 0 && b->n == 0) return agc_bool(true);
+  }
   return agc_bool(agc_equal(vm, args[0], args[1], span));
 }
 
@@ -548,7 +545,7 @@ const agc_builtin agc_core_builtins[] = {
   {"Result.unwrap!", 1, builtin_result_unwrap, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.unwrap_or", 2, builtin_result_unwrap_or, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Result.message", 1, builtin_result_message, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Optional.equal", 2, builtin_optional_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Optional.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"Value.equal", 2, builtin_value_equal, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE, false, false, false},
   {"List.filter", 2, NULL, AGC_NATIVE_FILTER, AGC_COST_NONE, false, false, false},

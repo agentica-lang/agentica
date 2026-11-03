@@ -238,7 +238,9 @@ end
 
 ## True for a type that == and != compare: a data type (data?) with no Json inside. Numbers, Bool, String, nil,
 ## ranges, Bytes, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs and enums
-## that hold one another is judged as a whole, so the answer does not depend on where the walk starts.
+## that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in data?, a
+## type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include? needs it
+## (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site (check_prelude.agc).
 export def equality?(cx: State.Cx, type: ResolvedType) -> Bool
   return data_walk(cx, type, {}, true).passes
 end
