@@ -33,12 +33,12 @@ List.reverse(list: List[T]) -> List[T]
 ```agentica
 def main() -> Void
   xs = [1, 2]
-  puts(xs.size)                # 2
-  puts(xs.empty?)              # false
-  puts(xs.at(1))               # 2, the same as xs[1]
+  puts(xs.size) # 2
+  puts(xs.empty?) # false
+  puts(xs.at(1)) # 2, the same as xs[1]
   puts(xs.first)
   puts(xs.last)
-  puts(xs.push(9))             # xs is still [1, 2]
+  puts(xs.push(9)) # xs is still [1, 2]
   puts(xs.set(0, 7))
   puts(xs.concat([3]))
   puts(List.repeat("-", 3))
@@ -73,7 +73,7 @@ def main() -> Void
   xs = [1, 2, 3, 4]
   puts(xs.take(2))
   puts(xs.drop(2))
-  puts(xs.take(10))   # a larger count is fine
+  puts(xs.take(10)) # a larger count is fine
 end
 ```
 
@@ -157,9 +157,7 @@ Run the function for each element, in order, and give nothing back. The index st
 
 ```agentica
 def main() -> Void
-  ["a", "b"].each_with_index do |s, i|
-    puts("#{i}: #{s}")
-  end
+  ["a", "b"].each_with_index do |s, i| puts("#{i}: #{s}") end
 end
 ```
 
@@ -282,9 +280,7 @@ Splits the list into slices of `size` elements; the last may be shorter. It take
 
 ```agentica
 def main() -> Void
-  [1, 2, 3, 4, 5].each_slice(2).each do |pair|
-    puts(pair)
-  end
+  [1, 2, 3, 4, 5].each_slice(2).each do |pair| puts(pair) end
 end
 ```
 

@@ -43,7 +43,7 @@ A default build links the system OpenSSL, so `dist/agentica` runs only where it 
 ## Hello, world
 
 ```agentica
-def main() -> Void        # every program starts at main
+def main() -> Void # every program starts at main
   puts("Hello, world!")
 end
 ```

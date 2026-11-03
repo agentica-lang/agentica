@@ -206,16 +206,23 @@ def add(a: Int, b: Int) -> Int
 end
 
 def load(text: String) -> Result[Int]
-  return text.strip |> try parse() |> validate()
+  return (
+    text.strip
+    |> try parse()
+    |> validate()
+  )
 end
 
 def main() -> Void
   puts(1 |> add(2) |> add(3))
   puts(load(" 7 ").inspect)
   puts(load("-3").inspect)
-  total = (10
+  total = (
+    10
     |> add(1)
-    |> add(100))
+    |> add(100)
+  )
+
   puts(total)
 end
 ```
@@ -262,9 +269,7 @@ end
 def main() -> Void
   puts(join(["a", "b"]))
   puts(join(["a", "b"], "-"))
-  each_line("a.txt") do |line|
-    puts(line)
-  end
+  each_line("a.txt") do |line| puts(line) end
 
   each_line("b.txt", 50, &show)
 end
@@ -346,9 +351,7 @@ def main() -> Void
   puts(first_or(["ana", "ben"], "none"))
   puts(first_or([], 0))
 
-  longest = max_by(["pear", "fig", "banana"]) do |w|
-    w.length
-  end
+  longest = max_by(["pear", "fig", "banana"]) do |w| w.length end
 
   puts(longest.unwrap_or("none"))
 end

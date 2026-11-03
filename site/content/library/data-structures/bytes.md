@@ -112,9 +112,7 @@ The bytes as a list of integers. `Bytes` has no `map`, `select` or `reduce`; `to
 
 ```agentica
 def main() -> Void
-  total = "abc".bytes.to_a.reduce(0) do |sum, byte|
-    sum + byte
-  end
+  total = "abc".bytes.to_a.reduce(0) do |sum, byte| sum + byte end
 
   puts(total)
 end
@@ -218,9 +216,7 @@ def main() -> Void
   end
 
   puts(sum)
-  "ab".bytes.each do |byte|
-    puts(byte)
-  end
+  "ab".bytes.each do |byte| puts(byte) end
 end
 ```
 

@@ -280,9 +280,13 @@ def amount(line: String) -> Result[Int]
 end
 
 def main() -> Void
-  done = File.foreach("ledger.csv", 4096, 1000).drop(1).map do |line|
-    "#{try amount(line) * 100}"
-  end.write_lines("cents.txt", 1000)
+  done = (
+    File.foreach("ledger.csv", 4096, 1000)
+      .drop(1)
+      .map do |line| "#{try amount(line) * 100}" end
+      .write_lines("cents.txt", 1000)
+  )
+
   puts(done)
 end
 ```

@@ -76,7 +76,7 @@ def main() -> Void
     puts(fruit)
   end
 
-  for _ in 1..2     # the body does not need the number
+  for _ in 1..2 # the body does not need the number
     puts("tick")
   end
 end
@@ -98,9 +98,7 @@ def main() -> Void
     puts(i)
   end
 
-  2.times do |i|
-    puts("round #{i}")
-  end
+  2.times do |i| puts("round #{i}") end
 end
 ```
 

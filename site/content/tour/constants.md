@@ -23,7 +23,7 @@ hello: 86400
 
 A name is capital letters, digits and `_`, at least two characters (`LIMIT`, `MAX_DEPTH`). Another spelling is `PARSE-CONSTANT-NAME`:
 
-```agentica {expect="PARSE-CONSTANT-NAME"}
+```agentica {expect="PARSE-CONSTANT-NAME" fmt="off"}
 MaxDepth = 8
 
 def main() -> Void

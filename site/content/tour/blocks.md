@@ -10,9 +10,7 @@ A block is a small function written right after a call, between `do` and `end`. 
 
 ```agentica
 def main() -> Void
-  doubled = [1, 2, 3].map do |x|
-    x * 2
-  end
+  doubled = [1, 2, 3].map do |x| x * 2 end
 
   puts(doubled)
 end
@@ -41,9 +39,7 @@ end
 
 ```agentica
 def main() -> Void
-  ["tea", "cake"].each do |item|
-    puts("I like #{item}")
-  end
+  ["tea", "cake"].each do |item| puts("I like #{item}") end
 end
 ```
 
@@ -88,9 +84,7 @@ A block cannot assign to an outer variable. Build the value with `map` or `reduc
 ```agentica {expect="CHECK-CAPTURED-ASSIGNMENT"}
 def main() -> Void
   total = 0
-  [1, 2].each do |x|
-    total += x
-  end
+  [1, 2].each do |x| total += x end
 end
 ```
 
@@ -162,13 +156,14 @@ A line that starts with a dot and a name continues the line before it, so a long
 
 ```agentica
 def main() -> Void
-  scores = [3, 8, 5, 10, 1]
-    .select do |x| x > 2 end   # drop the small ones
-    # then double what is left
-    .map do |x|
-      x * 2
-    end
-    .take(3)
+  scores = (
+    [3, 8, 5, 10, 1]
+      .select do |x| x > 2 end # drop the small ones
+      # then double what is left
+      .map do |x| x * 2 end
+      .take(3)
+  )
+
   puts(scores)
 end
 ```

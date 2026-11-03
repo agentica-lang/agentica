@@ -45,9 +45,9 @@ import Toml from "std/toml"
 def main() -> Void
   text = "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[bin]]\npath = \"a.agc\"\n\n[[bin]]\npath = \"b.agc\"\n"
   doc = Toml.parse(text).unwrap!
-  puts(Toml.get(doc, "package.name"))     # a dotted path
-  puts(Toml.get(doc, "bin.1.path"))       # digits index an array
-  puts(Toml.get(doc, "package.license"))  # a missing key is an error
+  puts(Toml.get(doc, "package.name")) # a dotted path
+  puts(Toml.get(doc, "bin.1.path")) # digits index an array
+  puts(Toml.get(doc, "package.license")) # a missing key is an error
   puts(Toml.parse("a = 1\nb = 2\nc d\n")) # a parse error names its place
 end
 ```
@@ -80,7 +80,11 @@ Arrays and inline tables nest at most 256 levels, and a key has at most 256 part
 import Toml from "std/toml"
 
 def main() -> Void
-  pkg: Map[String, Toml.Value] = {"name": Toml.Value.Str("acme/text"), "deps": Toml.Value.Array([Toml.Value.Str("acme/lists")])}
+  pkg: Map[String, Toml.Value] = {
+    "name": Toml.Value.Str("acme/text"),
+    "deps": Toml.Value.Array([Toml.Value.Str("acme/lists")]),
+  }
+
   root: Map[String, Toml.Value] = {}
   root = root.put("package", Toml.Value.Array([Toml.Value.Table(pkg)]))
   root = root.put("version", Toml.Value.Int(1))

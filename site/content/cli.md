@@ -28,8 +28,8 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
-  count = 1          # count is an Int
-  count = "two"      # error: a String does not fit
+  count = 1 # count is an Int
+  count = "two" # error: a String does not fit
   puts(count)
 end
 ```

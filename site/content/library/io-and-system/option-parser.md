@@ -34,20 +34,26 @@ struct Options
 end
 
 def load() -> Result[Options]
-  parser = OP.new("tool", "Serves a file over HTTP", [
-    Arg(name: "file", help: "file to serve"),
-  ], [
-    Opt(name: "port", short: "p", kind: K.Int, default: "8080", help: "port"),
-    Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
-    Opt(name: "user", kind: K.String, help: "user name"),
-  ])
+  parser = OP.new(
+    "tool",
+    "Serves a file over HTTP",
+    [Arg(name: "file", help: "file to serve")],
+    [
+      Opt(name: "port", short: "p", kind: K.Int, default: "8080", help: "port"),
+      Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
+      Opt(name: "user", kind: K.String, help: "user name"),
+    ],
+  )
+
   p = try OP.parse(parser, System.args())
-  return ok(Options(
-    file: OP.string(p, "file"),
-    port: OP.int(p, "port"),
-    verbose: OP.flag(p, "verbose"),
-    user: OP.optional_string(p, "user"),
-  ))
+  return ok(
+    Options(
+      file: OP.string(p, "file"),
+      port: OP.int(p, "port"),
+      verbose: OP.flag(p, "verbose"),
+      user: OP.optional_string(p, "user"),
+    ),
+  )
 end
 
 def main() -> Void
@@ -88,11 +94,17 @@ import OP from "std/option_parser"
 import {Arg, Opt, Kind as K} from "std/option_parser"
 
 def main() -> Void
-  parser = OP.new("tool", "", [Arg(name: "file")], [
-    Opt(name: "port", short: "p", kind: K.Int, default: "8080"),
-    Opt(name: "ratio", kind: K.Float),
-    Opt(name: "verbose", short: "v", kind: K.Flag),
-  ])
+  parser = OP.new(
+    "tool",
+    "",
+    [Arg(name: "file")],
+    [
+      Opt(name: "port", short: "p", kind: K.Int, default: "8080"),
+      Opt(name: "ratio", kind: K.Float),
+      Opt(name: "verbose", short: "v", kind: K.Flag),
+    ],
+  )
+
   p = OP.parse(parser, ["-v", "--port=3000", "--", "-notes.txt"]).unwrap!
   puts(OP.string(p, "file"))
   puts(OP.int(p, "port"))
@@ -156,11 +168,17 @@ import OP from "std/option_parser"
 import {Arg, Opt, Kind as K} from "std/option_parser"
 
 def main() -> Void
-  parser = OP.new("tool", "Serves a file over HTTP", [Arg(name: "file", help: "file to serve")], [
-    Opt(name: "port", short: "p", kind: K.Int, default: "8080", help: "port"),
-    Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
-    Opt(name: "user", kind: K.String, choices: ["ana", "bob"], help: "user name"),
-  ])
+  parser = OP.new(
+    "tool",
+    "Serves a file over HTTP",
+    [Arg(name: "file", help: "file to serve")],
+    [
+      Opt(name: "port", short: "p", kind: K.Int, default: "8080", help: "port"),
+      Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
+      Opt(name: "user", kind: K.String, choices: ["ana", "bob"], help: "user name"),
+    ],
+  )
+
   result = OP.parse(parser, ["--help"])
   puts(OP.help?(result.message))
   puts(OP.usage(parser))

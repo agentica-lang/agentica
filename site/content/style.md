@@ -14,7 +14,7 @@ Indent with two spaces. No tabs, no trailing spaces, and one newline at the end 
 
 Keep lines at 119 characters or less, comments included. Wrap a long call or list with one item per line and a trailing comma:
 
-```agentica {mode="check"}
+```agentica {mode="check" fmt="off"}
 # good
 struct User
   name: String
@@ -34,7 +34,7 @@ end
 
 Wrap a long expression in parentheses. Never continue an expression on a bare line:
 
-```agentica {mode="check"}
+```agentica {mode="check" fmt="off"}
 # good
 def label(first: String, last: String, title: String) -> String
   return (
@@ -52,7 +52,7 @@ Put spaces around operators and after commas, but not around `..` and `...` or i
 
 Separate top-level declarations with one blank line. Do not put blank lines right after `def` or before `end`, or two blank lines in a row.
 
-```agentica {expect="PARSE-MISSING-BLANK-LINE"}
+```agentica {expect="PARSE-MISSING-BLANK-LINE" fmt="off"}
 # bad
 def one() -> Int
   return 1
@@ -74,7 +74,7 @@ Put a blank line after the `end` of a block before the next statement. The examp
 
 The first letter is enforced, and so is a constant in capitals:
 
-```agentica {expect="PARSE-CONSTANT-NAME"}
+```agentica {expect="PARSE-CONSTANT-NAME" fmt="off"}
 # bad
 Limit = 10
 
@@ -264,9 +264,7 @@ Use a `for` loop for a running total, and a method such as `map` to transform a 
 # bad
 def main() -> Void
   sum = 0
-  [1, 2].each do |x|
-    sum += x
-  end
+  [1, 2].each do |x| sum += x end
   puts(sum)
 end
 ```

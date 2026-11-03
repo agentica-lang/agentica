@@ -69,8 +69,8 @@ def main() -> Void
   end
 
   Native.close(query)
-  IO.inspect(prepare(db, "select from nowhere"))   # error("sqlite: near \"from\": syntax error")
-  IO.inspect(open("/no/such/dir/x.db"))            # error("sqlite: unable to open database file")
+  IO.inspect(prepare(db, "select from nowhere")) # error("sqlite: near \"from\": syntax error")
+  IO.inspect(open("/no/such/dir/x.db")) # error("sqlite: unable to open database file")
   Native.close(db)
 end
 ```

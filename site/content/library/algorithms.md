@@ -17,12 +17,8 @@ struct Player
 end
 
 def main() -> Void
-  players = [
-    Player(name: "Ana", score: 7),
-    Player(name: "Bo", score: 12),
-    Player(name: "Cy", score: 9)
-  ]
-  best_first = players.sort_by do |p| -p.score end   # negative key: largest first
+  players = [Player(name: "Ana", score: 7), Player(name: "Bo", score: 12), Player(name: "Cy", score: 9)]
+  best_first = players.sort_by do |p| -p.score end # negative key: largest first
   for p in best_first
     puts("#{p.name}: #{p.score}")
   end
@@ -74,8 +70,9 @@ def main() -> Void
     "school": ["library"],
     "lake": [],
     "library": [],
-    "island": []
+    "island": [],
   }
+
   puts(shortest_path(graph, "home", "library"))
   puts(shortest_path(graph, "home", "island"))
 end
@@ -133,8 +130,8 @@ enum Tree
 end
 
 def factorial(n: Int) -> Int
-  if n <= 1
-    return 1                                   # base case
+  if n <= 1 # base case
+    return 1
   end
 
   return n * factorial(n - 1)
@@ -144,8 +141,7 @@ end
 def flatten(tree: Tree) -> List[Int]
   case tree
     Tree.Leaf(value) -> return [value]
-    Tree.Node(children) ->
-      return children.reduce([]) do |all, child| all.concat(flatten(child)) end
+    Tree.Node(children) -> return children.reduce([]) do |all, child| all.concat(flatten(child)) end
   end
 end
 

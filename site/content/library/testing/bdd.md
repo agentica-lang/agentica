@@ -119,10 +119,7 @@ def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def main() -> Void
-  BDD.run([
-    BDD.step("I remember {int}", &remember),
-    BDD.step("the count is {int}", &check_count),
-  ])
+  BDD.run([BDD.step("I remember {int}", &remember), BDD.step("the count is {int}", &check_count)])
 end
 ```
 
@@ -153,11 +150,7 @@ import BDD from "std/bdd"
 
 def main() -> Void
   answer = "42"
-  BDD.run([
-    BDD.step("the answer is {int}") do |ctx, args|
-      BDD.assert(ctx, args[0] == answer, "wrong answer")
-    end,
-  ])
+  BDD.run([BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, args[0] == answer, "wrong answer") end])
 end
 ```
 
@@ -234,10 +227,7 @@ def check_echo(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def main() -> Void
-  BDD.run([
-    BDD.step("a connected pair", &open_pair),
-    BDD.step("the pair echoes {string}", &check_echo),
-  ])
+  BDD.run([BDD.step("a connected pair", &open_pair), BDD.step("the pair echoes {string}", &check_echo)])
 end
 ```
 
@@ -296,10 +286,7 @@ def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def main() -> Void
-  BDD.run([
-    BDD.step("the table has two rows:", &check_rows),
-    BDD.step("I send the record:", &send_body),
-  ])
+  BDD.run([BDD.step("the table has two rows:", &check_rows), BDD.step("I send the record:", &send_body)])
 end
 ```
 

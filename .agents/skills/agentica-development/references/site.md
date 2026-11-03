@@ -105,7 +105,7 @@ Every `agentica` code block in `site/content` must be a complete program.
 from an optional `input` block right after it), and compares stdout with the
 `output` block that follows. `make test` runs the `SMOKE_PAGES` of that file as
 a smoke; the whole site runs in the slow tier (`make test-slow`).
-`.github/workflows/site-examples.yml` runs the slow tier of this file alone on
+`.github/workflows/site-examples.yml` runs both tiers of this file alone on
 pull requests that change only `site/content` (CI skips those).
 
 Fence attributes:
@@ -117,6 +117,19 @@ Fence attributes:
   `RUNTIME-` codes and "Does not compile" otherwise. It shows only the code,
   so the page cannot drift from the diagnostic message.
 - `{file="name.agc"}` is a module that the page's other blocks can import.
+- `{fmt="off"}` leaves the block out of the format check (below). Use it only
+  for a block that is wrong or partial on purpose: a style rule shown by
+  hand, or a program that does not parse (`PARSE-` codes).
+
+Every other `agentica` block must already be in the layout of `agentica fmt`
+(the `agentica.toml` of the test sets `blank_line_after_end`).
+`test_every_site_example_is_formatted` writes the blocks to files and runs
+`fmt --check` once; it is in the fast tier, so `make test` runs it. To fix a
+failure, run `dist/agentica fmt` on the block (paste it into a file in a folder
+with `[style]` `blank_line_after_end = true`), then put the result back; do not
+hand-edit. The comment that `fmt` moves to another line may then say the wrong
+thing: put it on a line of its own above the code first. Bond's and
+agentica-db's docs sites are in their repositories, with their own checks.
 
 A function signature (`Name.fn(a: T) -> R`) goes in a `signature` fence, not
 `text` or `agentica`: the test skips it and the site colors it.

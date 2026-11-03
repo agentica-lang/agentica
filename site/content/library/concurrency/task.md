@@ -209,9 +209,7 @@ def slow_double(n: Int) -> Result[Int]
 end
 
 def main() -> Void
-  results = Task.map([1, 2, 3, 4], 2, 1000) do |n|
-    slow_double(n)
-  end
+  results = Task.map([1, 2, 3, 4], 2, 1000) do |n| slow_double(n) end
 
   puts(results)
 end

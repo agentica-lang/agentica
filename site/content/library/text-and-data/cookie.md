@@ -32,7 +32,16 @@ import Cookie from "std/cookie"
 
 def main() -> Void
   puts(Cookie.parse("sid=abc123; theme=dark; sid=other"))
-  cookie = Cookie.Cookie(name: "sid", value: "abc123", path: "/", max_age: 3600, secure: true, http_only: true, same_site: "Lax")
+  cookie = Cookie.Cookie(
+    name: "sid",
+    value: "abc123",
+    path: "/",
+    max_age: 3600,
+    secure: true,
+    http_only: true,
+    same_site: "Lax",
+  )
+
   puts(Cookie.set_header(cookie))
   puts(Cookie.set_header(Cookie.Cookie(name: "sid", value: "a b")))
 end
