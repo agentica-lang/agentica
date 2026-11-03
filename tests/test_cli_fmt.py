@@ -21,6 +21,12 @@ ENDS = ('def main() -> Void\n  xs = [1, 2, 3]\n  xs.each do |x| puts(x + 1000000
         '  end\n  puts(1)\nend\n')
 ENDS_BLANK = ('def main() -> Void\n  xs = [1, 2, 3]\n  xs.each do |x|\n    puts(x + 1000000000)\n  end\n\n  if true\n'
               '    puts("a")\n  end\n\n  puts(1)\nend\n')
+# Two or more `|>` go one stage per line and close with a `)` alone, a wrapped statement is followed by an empty line,
+# a single `|>` stays on its line, and the last statement of a block gets no empty line after it.
+PIPES_HEAD = 'def twice(n: Int) -> Int\n  return n * 2\nend\n\ndef main() -> Void\n'
+PIPES = (PIPES_HEAD + '  n = 3\n  total = n |> twice() |> twice()\n  one = n |> twice()\n  puts(total + one)\nend\n')
+PIPES_LAID_OUT = (PIPES_HEAD + '  n = 3\n  total = (\n    n\n    |> twice()\n    |> twice()\n  )\n\n'
+                  '  one = n |> twice()\n  puts(total + one)\nend\n')
 
 
 def fmt(*words, cwd, json_style=False, stdin=None):
@@ -95,6 +101,17 @@ def test_the_style_of_the_nearest_manifest_sets_the_width_and_the_empty_line_aft
     assert text(tmp_path, "inner/wide.agc") == WIDE
     # The output follows the rule that `agentica check` enforces.
     checked = run(cli() + ["check", "a/ends.agc"], env=vm_environment(), cwd=tmp_path)
+    assert checked.code == 0, checked.stderr
+
+
+def test_a_chain_of_two_pipes_and_a_wrapped_statement_are_laid_out_and_pass_check(tmp_path):
+    style = "[style]\nblank_line_after_end = true\n"
+    lay_out(tmp_path, {"agentica.toml": style, "pipes.agc": PIPES})
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "pipes.agc") == PIPES_LAID_OUT
+    # fmt twice is fmt once, and the lone `)` and the empty lines are what `check` asks for.
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    checked = run(cli() + ["check", "pipes.agc"], env=vm_environment(), cwd=tmp_path)
     assert checked.code == 0, checked.stderr
 
 

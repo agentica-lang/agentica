@@ -593,6 +593,7 @@ def check_capture(
     cx.type_params.any? do |item: String| item == target.name end and
     !parameters.any? do |item: String| item == target.name end
   )
+
   if hidden
     return error(
       State.fail_help(

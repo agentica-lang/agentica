@@ -673,10 +673,12 @@ def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) ->
     node.op_span,
     State.hint_of(same_help(sides, with_to_s)),
   )
+
   labels = [
     Failure.Label(span: Ast.expr_span(node.left), text: "this is #{left}"),
     Failure.Label(span: Ast.expr_span(node.right), text: "this is #{right}"),
   ]
+
   return error(Failure.pack(base.with(expected: left, actual: right, labels: labels)))
 end
 

@@ -16,6 +16,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
   (`user == other`, `xs == []`); a type that holds a function, a task, a
   channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
+- `File.open(path, mode) do |f| ... end` closes the file when the block ends,
+  with `ok` or `error`, and gives the block's `Result` (or the close error
+  after an `ok` block).
+
+### Changed
+
+- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
+  when it fits, and an empty line after a statement that takes several lines.
 
 ## [0.22.0] - 2026-11-02
 

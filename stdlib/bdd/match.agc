@@ -113,6 +113,7 @@ def compile_one(text: String) -> Result[Pattern]
     end
     Slot(capture: capture, literal: after(tail, close).split(""))
   end
+
   return ok(Pattern(text: text, head: parts[0].split(""), slots: slots))
 end
 

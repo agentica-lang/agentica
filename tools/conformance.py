@@ -73,12 +73,12 @@ _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
     "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
     "tests/test_spec_package_native.py", "tests/test_spec_package_native_download.py", "tests/test_spec_style.py",
-    "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_zlib.py", "tests/test_vm_file_lines.py", "tests/test_vm_file_sha256.py",
+    "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_zlib.py", "tests/test_vm_file_lines.py", "tests/test_vm_file_open_block.py", "tests/test_vm_file_sha256.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_vm_native.py", "tests/test_vm_http_proxy.py",
 })
-_NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py"})
+_NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py"})
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
     "linux-arm64": WINDOWS_ONLY_MODULES,
@@ -151,8 +151,8 @@ AREAS = {
         "files, directories, paths, metadata and locks",
         [
             "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_vm_os.py",
-            "tests/test_vm_file_lines.py", "tests/test_vm_file_sha256.py", "tests/test_vm_zlib.py",
-            "tests/test_vm_zlib_crc32.py", "tests/test_vm_lazy_io.py",
+            "tests/test_vm_file_lines.py", "tests/test_vm_file_open_block.py", "tests/test_vm_file_sha256.py",
+            "tests/test_vm_zlib.py", "tests/test_vm_zlib_crc32.py", "tests/test_vm_lazy_io.py",
             "tests/test_windows_handle_counts.py",
             "tests/test_windows_metadata_and_locks.py",
         ],

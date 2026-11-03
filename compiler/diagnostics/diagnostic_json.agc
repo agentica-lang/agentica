@@ -21,6 +21,7 @@ export def object(diagnostic: Model.Diagnostic) -> Json
     "file": JSON.from(diagnostic.file),
     "range": range(diagnostic.range),
   }
+
   fields = (
     fields
     |> note("key_path", diagnostic.key_path)
@@ -30,6 +31,7 @@ export def object(diagnostic: Model.Diagnostic) -> Json
     |> note("function", diagnostic.function)
     |> note("help", diagnostic.help)
   )
+
   if diagnostic.labels.size > 0
     labels = diagnostic.labels.map do |label: Model.Label|
       JSON.object({"range": range(label.range), "text": JSON.from(label.text)})

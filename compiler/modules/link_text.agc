@@ -67,6 +67,7 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
       ParseText.text_attr(" module-doc=", root.module_doc),
     ),
   ]
+
   for module in linked.modules
     if module.declarations.size > 0
       lines = module_lines(lines, module, notes)

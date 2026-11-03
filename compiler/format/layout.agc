@@ -8,7 +8,9 @@
 ## not already inside brackets gets its own.
 ##
 ## Between two items of a body (a declaration, a statement, a field, a variant, a `case` arm or a comment) a blank
-## line stays when the source had one right before the second item, at most one, and none is added.
+## line stays when the source had one right before the second item, at most one. One is added after a simple statement
+## that takes several lines (`sequence`). A pipe chain of two or more `|>` that is the whole value of a statement
+## always breaks, one stage per line.
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -64,11 +66,13 @@ export struct Extern
   after: List[Tokens.Comment]
 end
 
-# One item of a body: its first and last source lines and its document.
+# One item of a body: its first and last source lines and its document, and whether it is a simple statement whose
+# document is measured (it owes an empty line after it when it took several lines).
 struct Item
   first: Int
   last: Int
   doc: Docs.Doc
+  spread: Bool
 end
 
 # The comments of a node before it and after it, as documents to put around it.
@@ -156,7 +160,7 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
 
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
     line = placed.comment.span.start.line
-    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text)))
+    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text), spread: false))
   end
 
   return sequence(c, items)
@@ -164,18 +168,28 @@ end
 
 # ---- Items, blank lines and comments ----
 
-# The items joined by line breaks, with an empty line where the source had a blank line right before an item.
+# The items joined by line breaks, with an empty line where the source had a blank line right before an item, and
+# after a simple statement that took several lines when another item comes next, a comment included: a comment
+# alone on its line after a blank line belongs to the item below it, so the formatted text must not read differently
+# when it is formatted again. The statement owes that line, and the printer pays it only when the statement did take
+# several lines.
 def sequence(c: Context, items: List[Item]) -> Docs.Doc
   parts: List[Docs.Doc] = []
+  owed = false
   at = 0
   while at < items.size
     item = items[at]
     if at > 0
-      parts = parts.push(Docs.Doc.HardLine)
       if blank_before?(c, item.first, items[at - 1].last)
+        parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.HardLine])
+      elsif owed
+        parts = parts.push(Docs.Doc.GapLine)
+      else
         parts = parts.push(Docs.Doc.HardLine)
       end
     end
+
+    owed = item.spread
 
     parts = parts.push(item.doc)
     at += 1
@@ -193,24 +207,31 @@ end
 # The items of a node: its leading comments, the node with its comments after code, and the comments alone on their
 # lines after it.
 def node_items(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc) -> List[Item]
+  return node_items_of(c, key, first, last, doc, false)
+end
+
+# `node_items`, where `spread` says that `doc` is a measured simple statement.
+def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc, spread: Bool) -> List[Item]
   items: List[Item] = c.leading.get(key, []).map do |comment: Tokens.Comment| comment_item(comment) end
   suffixes: List[Docs.Doc] = []
   below: List[Item] = []
   for comment in c.trailing.get(key, [])
     if comment.own_line
       below = below.push(comment_item(comment))
+    elsif spread
+      suffixes = suffixes.push(Docs.Doc.Trailing(" " + comment.text))
     else
       suffixes = suffixes.push(Docs.Doc.LineSuffix(" " + comment.text))
     end
   end
 
-  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes))))
+  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes)), spread: spread))
   return items.concat(below)
 end
 
 def comment_item(comment: Tokens.Comment) -> Item
   line = comment.span.start.line
-  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text))
+  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false)
 end
 
 # The comments of a node inside an expression: the leading ones on their own lines before it, a comment after code at
@@ -344,6 +365,7 @@ def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
     text("def #{node.name}#{type_parameters(node.type_parameters)}"),
     listed(text("("), params, text(")"), []),
   ]
+
   if written?(node.result.span)
     head = head.concat([text(" -> "), type_doc(c, node.result)])
   end
@@ -468,7 +490,7 @@ def extern_items(c: Context, block: Extern) -> List[Item]
   end
 
   # The block keeps its own indent: it starts at the left margin, as every declaration does.
-  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines)))
+  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines), spread: false))
   suffixes: List[Item] = []
   for comment in block.after
     if comment.span.start.line == block.last
@@ -493,22 +515,29 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
   for stmt in stmts
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
-    items = items.concat(node_items(c, key, span.start.line, last_line(c, span), statement_doc(c, stmt)))
+    doc = statement_doc(c, stmt, true)
+    if simple?(stmt)
+      doc = Docs.Doc.Measure([doc])
+    end
+
+    items = items.concat(node_items_of(c, key, span.start.line, last_line(c, span), doc, simple?(stmt)))
   end
 
   return items
 end
 
-def statement_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
+# A statement. `forced` says that it is an item of a body, where a pipe chain of two or more `|>` that is the whole
+# value of the statement always breaks; the body of a one-line `do` block or of a `case` arm keeps the fit rule.
+def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
   case stmt
-    Ast.Stmt.Binding(node) -> return binding_doc(c, node)
+    Ast.Stmt.Binding(node) -> return binding_doc(c, node, forced)
     Ast.Stmt.Return(node) ->
       case node.value
-        some(value) -> return Docs.Doc.Concat([text("return "), expr_doc(c, value, false)])
+        some(value) -> return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
         none -> return text("return")
       end
 
-    Ast.Stmt.Expression(node) -> return expr_doc(c, node.value, false)
+    Ast.Stmt.Expression(node) -> return value_doc(c, node.value, forced)
     Ast.Stmt.If(node) -> return if_doc(c, node)
     Ast.Stmt.While(node) ->
       key = Comments.key_of("WhileStmt", node.span)
@@ -518,6 +547,7 @@ def statement_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
         expr_doc(c, node.condition, false),
         text(optional_do(c, node.condition)),
       ])
+
       return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.For(node) ->
       key = Comments.key_of("ForStmt", node.span)
@@ -532,7 +562,7 @@ end
 
 # `name = value`, `name: Type = value`, or a compound assignment such as `name += value`, which the parser keeps as
 # `name = name + value`: the token after the name tells them apart.
-def binding_doc(c: Context, node: Ast.Binding) -> Docs.Doc
+def binding_doc(c: Context, node: Ast.Binding, forced: Bool) -> Docs.Doc
   at = token_index(c, node.name_span.start.offset) + 1
   if at < c.tokens.size and c.tokens[at].kind.ends_with?("-assign")
     case node.value
@@ -545,8 +575,13 @@ def binding_doc(c: Context, node: Ast.Binding) -> Docs.Doc
 
   case node.type
     some(type) ->
-      return Docs.Doc.Concat([text("#{node.name}: "), type_doc(c, type), text(" = "), expr_doc(c, node.value, false)])
-    none -> return Docs.Doc.Concat([text("#{node.name} = "), expr_doc(c, node.value, false)])
+      return Docs.Doc.Concat([
+        text("#{node.name}: "),
+        type_doc(c, type),
+        text(" = "),
+        value_doc(c, node.value, forced),
+      ])
+    none -> return Docs.Doc.Concat([text("#{node.name} = "), value_doc(c, node.value, forced)])
   end
 end
 
@@ -578,6 +613,7 @@ def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
       Comments.key_of("IfBranch", branch.span),
       Docs.Doc.Concat([text(keyword), expr_doc(c, branch.condition, false)]),
     )
+
     parts = parts.concat([head, body(c, items)])
     at += 1
   end
@@ -709,7 +745,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
     found = around(c, key)
     if found.before.size == 0 and c.trailing.get(key, []).all? do |comment: Tokens.Comment| !comment.own_line end
       suffixes = c.trailing.get(key, []).map do |comment: Tokens.Comment| Docs.Doc.LineSuffix(" " + comment.text) end
-      line = Docs.Doc.Group([text(head), Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)])])
+      line = Docs.Doc.Group([text(head), Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt, false)])])
       return Docs.Doc.Concat(above.push(line).concat(suffixes).concat(dangling_end(c, arm_key)))
     end
   end
@@ -752,7 +788,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     Ast.Expr.Name(node) -> return text(node.name)
     Ast.Expr.Call(node) ->
       if node.piped
-        return pipe_doc(c, expr, bracketed)
+        return pipe_doc(c, expr, bracketed, false)
       end
 
       return call_doc(c, node)
@@ -785,7 +821,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     Ast.Expr.BlockLit(node) -> return block_doc(c, node)
     Ast.Expr.Try(node) ->
       if piped?(node.operand)
-        return pipe_doc(c, expr, bracketed)
+        return pipe_doc(c, expr, bracketed, false)
       end
 
       return Docs.Doc.Concat([text("try "), operand(c, node.operand, UNARY_LEVEL)])
@@ -867,6 +903,16 @@ def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.
   return wrapped([doc], false)
 end
 
+# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`.
+def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
+  if forced and (piped?(expr) or piped_try?(expr))
+    key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
+    return commented(c, key, pipe_doc(c, expr, false, true))
+  end
+
+  return expr_doc(c, expr, false)
+end
+
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
 # postfix or primary expression's.
 def level(expr: Ast.Expr) -> Int
@@ -886,6 +932,13 @@ def level(expr: Ast.Expr) -> Int
       return UNARY_LEVEL
     Ast.Expr.Unary(_) -> return UNARY_LEVEL
     _ -> return POSTFIX_LEVEL
+  end
+end
+
+def piped_try?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Try(node) -> return piped?(node.operand)
+    _ -> return false
   end
 end
 
@@ -1020,8 +1073,9 @@ def binary_doc(c: Context, node: Ast.Binary, bracketed: Bool) -> Docs.Doc
   return wrapped([first].concat(parts), bracketed)
 end
 
-# A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it.
-def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
+# A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it. With
+# `forced` (the whole value of a statement), a chain of two or more `|>` breaks even when it fits.
+def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.Doc
   stages: List[Docs.Doc] = []
   current = expr
   looping = true
@@ -1063,7 +1117,12 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     end
   end
 
+  # A single stage stays on its line when it fits.
   parts: List[Docs.Doc] = [operand(c, current, PIPE_LEVEL)]
+  if forced and stages.size >= 2
+    parts = parts.push(Docs.Doc.BreakParent)
+  end
+
   for stage in stages
     parts = parts.concat([Docs.Doc.Line, stage])
   end
@@ -1247,6 +1306,7 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
         Docs.Doc.SoftLine,
         text("]"),
       ])
+
       return some(Link(doc: inner, block: [], call: false, breaks: false))
     _ -> return none
   end
@@ -1326,7 +1386,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0
       return Docs.Doc.Group([
         text(head),
-        Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)]),
+        Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt, false)]),
         Docs.Doc.Line,
         text("end"),
       ])
@@ -1648,6 +1708,7 @@ def extern_blocks(lines: List[String], tokens: List[Tokens.Token]) -> List[Exter
       blocks = blocks.push(
         Extern(first: first, last: last, start: token.span.start.offset, stop: stop, before: [], after: []),
       )
+
       while at < tokens.size and tokens[at].span.start.offset < stop
         at += 1
       end
