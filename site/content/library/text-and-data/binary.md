@@ -45,8 +45,8 @@ import Binary from "std/binary"
 
 def main() -> Void
   data = Bytes.from_list([1, 2, 3, 4, 255, 254]).unwrap!
-  puts(Binary.read_u8(data, 4))       # one byte, unsigned
-  puts(Binary.read_i8(data, 4))       # the same byte, signed
+  puts(Binary.read_u8(data, 4)) # one byte, unsigned
+  puts(Binary.read_i8(data, 4)) # the same byte, signed
   puts(Binary.read_u16_be(data, 0))
   puts(Binary.read_u16_le(data, 0))
   puts(Binary.read_u32_be(data, 0))
@@ -83,7 +83,7 @@ def main() -> Void
   puts(Binary.write_u16_be(513).unwrap!.to_a)
   puts(Binary.write_u16_le(513).unwrap!.to_a)
   puts(Binary.write_u32_be(305419896).unwrap!.to_a)
-  puts(Binary.write_i64_be(-1).to_a)   # a plain Bytes, it cannot fail
+  puts(Binary.write_i64_be(-1).to_a) # a plain Bytes, it cannot fail
   puts(Binary.write_i32_le(-2).unwrap!.to_a)
 end
 ```

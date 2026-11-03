@@ -231,7 +231,7 @@ def show(text: String) -> Result[Void]
   name = ""
   case update.name
     JsonField.Value(n) -> name = "set to #{n}"
-    _ -> name = "keep"          # this API treats null like absent
+    _ -> name = "keep" # this API treats null like absent
   end
 
   puts("name: #{name}")

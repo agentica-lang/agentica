@@ -98,9 +98,7 @@ def main() -> Void
     puts(n)
   end
 
-  ["x", "y"].each do |s|
-    puts(s)
-  end
+  ["x", "y"].each do |s| puts(s) end
 end
 ```
 

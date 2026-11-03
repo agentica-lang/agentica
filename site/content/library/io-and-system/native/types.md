@@ -42,9 +42,9 @@ extern "libc.so.6"
 end
 
 def main() -> Void
-  fd = open("/tmp/agentica-native.txt", 65, 384)   # O_WRONLY | O_CREAT on Linux, mode 0600
-  fcntl_set(fd, 2, 1)                                # F_SETFD, FD_CLOEXEC
-  puts(fcntl_get(fd, 1))                             # F_GETFD: 1
+  fd = open("/tmp/agentica-native.txt", 65, 384) # O_WRONLY | O_CREAT on Linux, mode 0600
+  fcntl_set(fd, 2, 1) # F_SETFD, FD_CLOEXEC
+  puts(fcntl_get(fd, 1)) # F_GETFD: 1
   close(fd)
 end
 ```
@@ -76,7 +76,7 @@ def main() -> Void
   db = sqlite3_open(":memory:").db
   failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
   if !Native.null?(failed.errmsg)
-    puts(Native.get_string(failed.errmsg, 0))   # near "from": syntax error
+    puts(Native.get_string(failed.errmsg, 0)) # near "from": syntax error
     sqlite3_free(failed.errmsg)
   end
 
@@ -207,7 +207,7 @@ def main() -> Void
   stream = fopen("/tmp/agentica-native.txt", "w").unwrap!
   fputs("hello\n", stream)
   Native.close(stream)
-  IO.inspect(fopen("/no/such/dir/file", "r"))   # error("fopen returned NULL")
+  IO.inspect(fopen("/no/such/dir/file", "r")) # error("fopen returned NULL")
 end
 ```
 
@@ -259,11 +259,10 @@ def main() -> Void
   api = plugin_api(1)
   opened = open(slot(api, OPEN), "/tmp/data", slot(api, CLOSE))
   if opened.result == 0
-    Native.memory_pointer(64) do |buf|
-      puts(read(slot(api, READ), opened.handle, buf, 64))
-    end
+    Native.memory_pointer(64) do |buf| puts(read(slot(api, READ), opened.handle, buf, 64)) end
 
-    Native.close(opened.handle)   # calls the close slot once
+    # calls the close slot once
+    Native.close(opened.handle)
   end
 end
 ```

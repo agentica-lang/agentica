@@ -85,9 +85,7 @@ import Logger from "std/logger"
 
 def main() -> Void
   _ = Logger.detach("console")
-  _ = Logger.attach("audit", LogLevel.Warning) do |event|
-    puts("audit: #{event.message}")
-  end
+  _ = Logger.attach("audit", LogLevel.Warning) do |event| puts("audit: #{event.message}") end
 
   Logger.info("not for the audit handler")
   Logger.err("cannot open the cache")
@@ -123,7 +121,14 @@ Logger.time_text(ms: Int) -> String
 import Logger from "std/logger"
 
 def main() -> Void
-  event = LogEvent(level: LogLevel.Info, message: "request done", fields: {"path": "/items", "status": "200"}, time_ms: 1760523302345, task: 1)
+  event = LogEvent(
+    level: LogLevel.Info,
+    message: "request done",
+    fields: {"path": "/items", "status": "200"},
+    time_ms: 1760523302345,
+    task: 1,
+  )
+
   puts(Logger.format_text(event))
   puts(Logger.format_json(event))
   odd = LogEvent(level: LogLevel.Error, message: "a=b", fields: {"note": "two words"}, time_ms: 0, task: 2)
@@ -161,8 +166,7 @@ import Logger from "std/logger"
 def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true
     case events.recv(1000)
-      ok(event) ->
-        try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
+      ok(event) -> try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
       error(_) ->
         if events.closed? and events.empty?
           break
@@ -176,9 +180,7 @@ end
 def main() -> Void
   events: Channel[LogEvent] = Channel.new(64)
   writer = Task.spawn_owning(&write_events, events)
-  _ = Logger.attach("file", LogLevel.Info) do |event|
-    _ = events.send(event, 1000)
-  end
+  _ = Logger.attach("file", LogLevel.Info) do |event| _ = events.send(event, 1000) end
 
   Logger.info("server started")
   _ = Logger.detach("file")

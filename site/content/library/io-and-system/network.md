@@ -532,7 +532,13 @@ import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello".bytes))
+    return ok(
+      HttpResponse(
+        status: 200,
+        headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")],
+        body: "hello".bytes,
+      ),
+    )
   end
 
   return ok(HttpResponse(status: 404, headers: [], body: "not found".bytes))
@@ -678,7 +684,14 @@ end
 def main() -> Void
   app = logged(guarded(&hello))
   open = HttpRequest(method: "GET", target: "/", path: "/", headers: [], body: "".bytes)
-  signed = HttpRequest(method: "GET", target: "/", path: "/", headers: [Header(name: "authorization", value: "token")], body: "".bytes)
+  signed = HttpRequest(
+    method: "GET",
+    target: "/",
+    path: "/",
+    headers: [Header(name: "authorization", value: "token")],
+    body: "".bytes,
+  )
+
   app.call(open)
   app.call(signed)
 end
@@ -839,7 +852,11 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   if request.method == "GET" and request.path == "/events"
     events: Channel[Bytes] = Channel.new(8)
     Task.spawn(&produce, events)
-    headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
+    headers = [
+      Header(name: "Content-Type", value: "text/event-stream"),
+      Header(name: "Cache-Control", value: "no-cache"),
+    ]
+
     return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
   end
 

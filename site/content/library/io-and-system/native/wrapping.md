@@ -149,7 +149,7 @@ Agentica functions have no variadic parameters, and a wrapper does not add any. 
 
 ```agentica {mode="check"}
 O_WRONLY = 1
-O_CREAT = 64   # the Linux value; macOS uses 0x200
+O_CREAT = 64 # the Linux value; macOS uses 0x200
 F_SETFD = 2
 FD_CLOEXEC = 1
 

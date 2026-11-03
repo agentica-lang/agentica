@@ -255,7 +255,7 @@ def main() -> Void
   puts(3.shift_left(8))
   puts((-1).shift_left(1))
   puts((-7).shift_right(1))
-  puts((-7) / 2)
+  puts(-7 / 2)
   puts((-1).shift_right_unsigned(60))
   puts((-1).shift_right_unsigned(64 - 8))
   puts(1.shift_left(64))

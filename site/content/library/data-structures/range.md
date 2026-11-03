@@ -75,9 +75,7 @@ The values as a list, in order. A range with more than 1048576 values stops the 
 
 ```agentica
 def main() -> Void
-  evens = (0..10).to_a.select do |n|
-    n % 2 == 0
-  end
+  evens = (0..10).to_a.select do |n| n % 2 == 0 end
 
   puts(evens)
 end
@@ -115,9 +113,7 @@ Calls the block with each value, in order.
 
 ```agentica
 def main() -> Void
-  (1..3).each do |i|
-    puts(i * 10)
-  end
+  (1..3).each do |i| puts(i * 10) end
 end
 ```
 
@@ -162,19 +158,13 @@ Methods on `Int` for loops. `n.times` calls the block with `0` to `n - 1`, and n
 
 ```agentica
 def main() -> Void
-  3.times do |i|
-    print(i)
-  end
+  3.times do |i| print(i) end
 
   puts("")
-  1.upto(3) do |i|
-    print(i)
-  end
+  1.upto(3) do |i| print(i) end
 
   puts("")
-  3.downto(1) do |i|
-    print(i)
-  end
+  3.downto(1) do |i| print(i) end
 
   puts("")
 end

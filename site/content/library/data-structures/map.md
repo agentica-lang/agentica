@@ -155,9 +155,7 @@ Runs the function with each key and value, in insertion order.
 
 ```agentica
 def main() -> Void
-  {"x": 1, "y": 2}.each do |key, value|
-    puts("#{key}=#{value}")
-  end
+  {"x": 1, "y": 2}.each do |key, value| puts("#{key}=#{value}") end
 end
 ```
 

@@ -4,8 +4,11 @@ Each block is checked or run with the product CLI, in a folder of its own, where
 rule `blank_line_after_end` for both modes. A fenced block may carry attributes:
 `mode="check"` only checks the program, `expect="CODE"` says the program is rejected or fails with that diagnostic code,
 `file="name.agc"` makes the block a module file that the programs of the page import. An `input` block after a program
-is its standard input, and an `output` block is the exact standard output of its run. The fast tier covers the start
-pages, two tour pages and the BDD page; the slow tier covers the whole site (the site-examples workflow runs it).
+is its standard input, and an `output` block is the exact standard output of its run. `fmt="off"` leaves the block out
+of the formatting check, for an example that is deliberately not in the layout of `agentica fmt` (a style rule shown
+by hand, a program that does not parse). The fast tier runs the smoke pages: the start pages, two tour pages and the
+BDD page; the slow tier runs the whole site (the site-examples workflow runs it). Both tiers check the format of every
+block of the whole site.
 """
 import json
 import re
@@ -21,7 +24,7 @@ from tests.agentica_test import ROOT, cli, run, vm_environment
 CONTENT = ROOT / "site" / "content"
 FENCE_OPEN = re.compile(r"^```([A-Za-z0-9_-]+)[ \t]*(?:\{([^}]*)\})?[ \t]*$")
 FENCE_CLOSE = re.compile(r"^```[ \t]*$")
-KNOWN_ATTRIBUTES = ("mode", "file", "expect")
+KNOWN_ATTRIBUTES = ("mode", "file", "expect", "fmt")
 SMOKE_PAGES = ["getting-started.md", "cli.md", "tour/modules.md", "tour/results-and-try.md", "library/testing/bdd.md"]
 JOBS = 4
 # The codes of the stages before the run: a program that fails with one of them was rejected, not run.
@@ -113,6 +116,8 @@ def check_program(where, directory, block, input_text, output_text):
     for key in attributes:
         if key not in KNOWN_ATTRIBUTES:
             problems.append("%s: unknown attribute %s" % (where, key))
+    if attributes.get("fmt", "off") != "off":
+        problems.append("%s: unknown fmt %s" % (where, attributes["fmt"]))
     mode = attributes.get("mode", "run")
     if mode not in ("run", "check"):
         problems.append("%s: unknown mode %s" % (where, mode))
@@ -199,6 +204,23 @@ def check_pages(pages, tmp_path):
     for index, page in enumerate(pages):
         check_page(page, counts, tmp_path / str(index))
     return counts
+
+
+def test_every_site_example_is_formatted(tmp_path):
+    """One `fmt --check` over every block of the site, each written to a file of its own."""
+    names = {}
+    for page in site_pages():
+        stem = str(page.relative_to(CONTENT).with_suffix("")).replace("/", "-")
+        for block in blocks_of(page):
+            if is_program(block) and block.attributes.get("fmt") != "off":
+                name = "%s-%d.agc" % (stem, block.line)
+                (tmp_path / name).write_text(block.text, encoding="utf-8")
+                names[name] = block
+    (tmp_path / "agentica.toml").write_text(MANIFEST, encoding="utf-8")
+    assert len(names) > 400, "the site should have many formatted examples"
+    result = agentica(tmp_path, "fmt", "--check", tmp_path)
+    hint = "run `agentica fmt` on these blocks (PAGE-LINE.agc, LINE is the fence), or mark them fmt=\"off\""
+    assert result.code == 0, "%s:\n%s%s" % (hint, result.stdout, result.stderr)
 
 
 def test_the_smoke_pages_run_their_examples(tmp_path):

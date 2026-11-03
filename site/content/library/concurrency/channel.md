@@ -276,9 +276,7 @@ def emit(source: Source) -> Void
 end
 
 def coordinate(c: Coordinator) -> Void
-  c.sources.each do |source|
-    Task.await(source)
-  end
+  c.sources.each do |source| Task.await(source) end
 
   c.events.close
 end
@@ -288,8 +286,9 @@ def main() -> Void
   sources = [
     Task.spawn(&emit, Source(name: "a", count: 3, events: events)),
     Task.spawn(&emit, Source(name: "b", count: 0, events: events)),
-    Task.spawn(&emit, Source(name: "c", count: 2, events: events))
+    Task.spawn(&emit, Source(name: "c", count: 2, events: events)),
   ]
+
   coordinator = Task.spawn(&coordinate, Coordinator(sources: sources, events: events))
   totals: Map[String, Int] = {}
   while true
@@ -308,9 +307,7 @@ def main() -> Void
   end
 
   Task.await(coordinator)
-  totals.keys.sort.each do |name|
-    puts("#{name}: #{totals.get(name, 0)}")
-  end
+  totals.keys.sort.each do |name| puts("#{name}: #{totals.get(name, 0)}") end
 end
 ```
 

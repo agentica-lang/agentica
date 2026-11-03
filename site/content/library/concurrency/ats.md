@@ -171,9 +171,7 @@ def main() -> Void
   tasks = [1, 2, 3].map do |_| Task.spawn(&work, shared) end
   tasks.each do |task| Task.await(task) end
   puts(stats.get("stored").unwrap!)
-  cache.keys.sort.each do |n|
-    puts(cache.get(n).unwrap!)
-  end
+  cache.keys.sort.each do |n| puts(cache.get(n).unwrap!) end
 end
 ```
 

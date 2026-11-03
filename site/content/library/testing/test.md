@@ -22,12 +22,8 @@ def main() -> Void
       try Test.eq(parse_port("8080"), ok(8080))
       Test.eq(parse_port(" 80 "), ok(80))
     end,
-    Test.test("rejects zero") do
-      Test.error?(parse_port("0"))
-    end,
-    Test.test("ports are below 65536") do
-      Test.assert(parse_port("65536").ok? == false, "65536 must be rejected")
-    end
+    Test.test("rejects zero") do Test.error?(parse_port("0")) end,
+    Test.test("ports are below 65536") do Test.assert(parse_port("65536").ok? == false, "65536 must be rejected") end,
   ])
 end
 ```

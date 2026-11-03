@@ -20,7 +20,7 @@ end
 def main() -> Void
   fd = eventfd(0, 0)
   bell = Task.spawn(&ring, fd)
-  puts(Native.wait_readable(fd, 1_000))   # ok() once the other task writes
+  puts(Native.wait_readable(fd, 1_000)) # ok() once the other task writes
   puts(Task.await(bell))
 end
 ```

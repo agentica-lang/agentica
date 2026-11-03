@@ -225,9 +225,7 @@ struct User
 end
 
 def main() -> Void
-  User.members.each do |m|
-    puts("#{m.name}: #{m.type}")
-  end
+  User.members.each do |m| puts("#{m.name}: #{m.type}") end
 end
 ```
 

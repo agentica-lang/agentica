@@ -40,7 +40,7 @@ end
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
   count = 1
-  count = "one"      # error: count is an Int
+  count = "one" # error: count is an Int
 end
 ```
 
@@ -74,17 +74,17 @@ def load(n: Int) -> Int
 end
 
 def main() -> Void
-  _ = load(1)          # keep the call, drop its value
-  for _ in 1..2        # the body does not need the number
+  _ = load(1) # keep the call, drop its value
+  for _ in 1..2 # the body does not need the number
     puts("tick")
   end
 
-  {"a": 1, "b": 2}.each do |_, v|   # drop the key
+  {"a": 1, "b": 2}.each do |_, v| # drop the key
     puts(v)
   end
 
   case Result.Ok(3)
-    ok(_) -> puts("fine")           # drop the payload
+    ok(_) -> puts("fine") # drop the payload
     error(_) -> puts("failed")
   end
 end
@@ -102,7 +102,7 @@ fine
 ```agentica {expect="CHECK-UNKNOWN-NAME"}
 def main() -> Void
   _ = 1
-  puts(_)            # error: _ cannot be read
+  puts(_) # error: _ cannot be read
 end
 ```
 
@@ -133,7 +133,7 @@ There is no shadowing: a new variable cannot reuse a visible name.
 ```agentica {expect="CHECK-SHADOWED-NAME"}
 def main() -> Void
   x = 1
-  for x in [1, 2]     # error: x is already visible
+  for x in [1, 2] # error: x is already visible
     puts(x)
   end
 end
