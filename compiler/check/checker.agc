@@ -219,16 +219,23 @@ def blanked?(stubbed: Bool, text: String, node: Ast.ConstDecl) -> Bool
   end
 end
 
-# The offset of the `(` that opens the value of a stub, given the offset of its `0`. The `0` is on the first line that
-# has room for it beside the `(`, so after a first line that is a lone `[` it is on a later line, with only blanks and
-# line breaks between (check_cache.agc, zero_line).
+# The offset where the value of a stub starts, given the offset of its `0`. The stub has the offsets of the text, which
+# is what `text` holds. The `0` follows the `(` at the start of the value, or, when the first line of the value is too
+# short for both (a lone `[`, `{` or `(`, check_cache.agc, zero_line), it is on a later line with only blanks and line
+# breaks between. The start is then the opener in the text before those blanks. Anything else before the blanks (a `=`
+# followed by many blanks, then a real 0) is not the start of a value that was cut, so the `0` is one character after
+# it, as in the common case.
 def stub_open(text: String, zero: Int) -> Int
   at = zero
   while at > 0 and " \t\r\n".contains?(text.slice(at - 1, 1))
     at -= 1
   end
 
-  return at - 1
+  if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
+    return at - 1
+  end
+
+  return zero - 1
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends

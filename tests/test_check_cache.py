@@ -682,3 +682,13 @@ def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws)
     # The first run writes the entry of lim.agc; the refused default is then read against its stub.
     assert settled(ws, source=THROUGH_LIMITS, needle="Lim.SMALL")[0] == (0, '{"ok":true}\n', "")
     refused_long_list_default(ws)
+
+
+def test_a_real_zero_far_after_its_equals_sign_is_no_blanked_value(ws):
+    # Blanks between the `=` and the value must not be read as the room a stub leaves for its 0.
+    (ws.project / "lim.agc").write_text(LIMITS + "export ZERO =" + " " * 30 + "0\n", encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
+    assert settled(ws, source=THROUGH_LIMITS, needle="Lim.SMALL")[0] == (0, '{"ok":true}\n', "")
+    zero = THROUGH_LIMITS.replace("a: Int = Lim.SMALL", "a: Int = Lim.ZERO")
+    (ws.project / "main.agc").write_text(zero, encoding="utf-8")
+    assert settled(ws, source=zero, needle="Lim.ZERO")[0] == (0, '{"ok":true}\n', "")

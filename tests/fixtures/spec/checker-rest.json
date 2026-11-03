@@ -10034,6 +10034,30 @@
     },
     {
       "program": [
+        "struct Point",
+        "  size: Int",
+        "end",
+        "",
+        "def size(point: Point) -> Int",
+        "  return point.size",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Point(size: 1).size(2))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        10,
+        8
+      ],
+      "covers": "Point(size: 1).size(2)",
+      "help": true
+    },
+    {
+      "program": [
         "def main() -> Void",
         "  puts([].include?(1))",
         "end",

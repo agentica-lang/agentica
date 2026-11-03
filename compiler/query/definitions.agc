@@ -66,7 +66,7 @@ export def of_expr(
     Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)
     Ast.Expr.FieldAccess(node) -> return field(find(modules, T.name(target_type(types, node.target))), node.name)
     Ast.Expr.MethodCall(node) ->
-      if field_call?(resolved, node.id)
+      if State.field_call?(resolved, node.id)
         return field(find(modules, T.name(target_type(types, node.target))), node.name)
       end
 
@@ -114,18 +114,6 @@ def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   end
 
   return T.Type.Unknown
-end
-
-def field_call?(resolved: Map[Int, State.Resolved], id: Int) -> Bool
-  found = resolved.get(id)
-  if found.none?
-    return false
-  end
-
-  case found.unwrap!
-    State.Resolved.FieldCall -> return true
-    _ -> return false
-  end
 end
 
 def top_level(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]

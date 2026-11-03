@@ -356,7 +356,7 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
         return []
       end
 
-      if field_call?(scan, node.id)
+      if State.field_call?(scan.resolved, node.id)
         return field_read_sites(scan, node.target, node.name, node.name_span)
       end
 
@@ -395,18 +395,6 @@ def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Sour
   end
 
   return placed(scan, member("field", owner, name), "read", name_span, name_span)
-end
-
-def field_call?(scan: Scan, id: Int) -> Bool
-  found = scan.resolved.get(id)
-  if found.none?
-    return false
-  end
-
-  case found.unwrap!
-    State.Resolved.FieldCall -> return true
-    _ -> return false
-  end
 end
 
 def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Site]
