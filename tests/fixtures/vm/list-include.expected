@@ -1,24 +1,33 @@
-true
-false
-true
-false
-true
-false
-false
-true
-true
-false
-false
-true
-true
-false
-true
-false
-true
-false
-true
-true
-false
-true
-false
-true
+{
+  "exit": 0,
+  "code": null,
+  "steps": 485,
+  "stdout": [
+    "true",
+    "false",
+    "true",
+    "false",
+    "true",
+    "false",
+    "false",
+    "true",
+    "true",
+    "false",
+    "false",
+    "true",
+    "true",
+    "false",
+    "true",
+    "false",
+    "true",
+    "false",
+    "true",
+    "true",
+    "false",
+    "true",
+    "false",
+    "true",
+    ""
+  ],
+  "stderr": []
+}
