@@ -387,6 +387,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
             ),
           ),
         )
+
         index = stop
         if mark == " "
           index += 1
@@ -434,6 +435,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
             ),
           ),
         )
+
         index = stop
         if mark == " "
           index += 1
@@ -549,6 +551,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
                 span: Source.Span(start: start, stop: newline_end),
               ),
             )
+
             head_at = tokens.size
           end
         end
@@ -573,6 +576,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
               ),
             ),
           )
+
           index = stop
         end
 
@@ -1231,6 +1235,7 @@ def heredoc_line(
         line: body.line,
         line_start: body.start,
       )
+
       case lex_from(input, inner, frames.size)
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(lexed) ->

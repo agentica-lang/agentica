@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Error messages that still used Racket wording now say what failed in plain
   words (`filesystem: invalid path ""`, `invalid UTF-8 at byte offset 3`,
   `network: TLS connect failed`); the diagnostic codes stay the same.
+- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
+  when it fits, and an empty line after a statement that takes several lines.
 
 ## [0.22.0] - 2026-11-02
 

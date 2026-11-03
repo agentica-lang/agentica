@@ -201,6 +201,7 @@ def artifact_table(artifact: Artifact) -> Toml.Value
     "sha256": Toml.Value.Str(artifact.sha256),
     "member": Toml.Value.Str(artifact.member),
   }
+
   return Toml.Value.Table(keys)
 end
 

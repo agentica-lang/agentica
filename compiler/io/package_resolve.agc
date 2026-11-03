@@ -162,6 +162,7 @@ def collect_manifest(
         sha256: place.sha256,
         member: place.member,
       )
+
       found = found.put(artifact_key(artifact), Found_artifact(artifact: artifact, file: manifest.file, row: row))
     end
   end

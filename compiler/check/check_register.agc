@@ -456,6 +456,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types:
     cx.enums.has_key?(node.name) or
     cx.aliases.has_key?(node.name)
   )
+
   if taken
     return error(
       State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(node.name)}\" is already defined", node.span),
@@ -491,6 +492,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types:
     result: result,
     shape: Defaults.shape(node.params),
   )
+
   natives = cx.natives
   if node.native.some?
     natives = natives.add(node.name)

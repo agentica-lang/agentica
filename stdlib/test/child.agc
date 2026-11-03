@@ -151,6 +151,7 @@ export def stderr_text(stderr: String) -> String
     .filter do |line|
       line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
     end
+
   return tail(kept.join("\n"), 65536)
 end
 
@@ -169,6 +170,7 @@ def vm_shape?(line: String, task: Bool) -> Bool
     "message": JSON.from(text_of(root, "message")),
     "range": JSON.object({"start": position(start), "end": position(stop)}),
   }
+
   for key in ["spawned_at", "stack", "stack_omitted"]
     found = JSON.get(root, key)
     if found.ok? and trace_kind?(key, found.unwrap!)
@@ -206,5 +208,6 @@ def summary?(line: String) -> Bool
     "unobserved_crashes": JSON.from(int_of(root, "unobserved_crashes")),
     "first": JSON.from(text_of(root, "first")),
   }
+
   return JSON.encode(JSON.object(fields)) == JSON.encode(root)
 end

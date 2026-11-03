@@ -158,6 +158,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     receivers: receivers_at(loaded),
     roots: kept.map do |entry: Modules.Entry| entry.key end,
   )
+
   return Programs(linked: some(together), skipped: skipped)
 end
 
@@ -296,6 +297,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
     ids: ids,
     type_parameters: [],
   )
+
   declarations = try Rewrite.rewrite_declarations(cx)
   return ok(
     LinkedModule(

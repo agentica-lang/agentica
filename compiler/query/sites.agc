@@ -164,6 +164,7 @@ def scanned(
     text: module.text,
     function: "",
   )
+
   out: List[Site] = []
   for declaration in module.declarations
     out = out.concat(declaration_sites(scan, declaration))

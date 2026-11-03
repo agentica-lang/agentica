@@ -77,6 +77,7 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
     |> Wire.add_all(functions)
     |> Wire.add(Wire.u32(program.entry))
   )
+
   joined = Wire.join(out)
   if !joined.ok?
     return error(Failure.internal(program, joined.message))

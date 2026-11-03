@@ -143,6 +143,7 @@ export def encode(digest: String, entry: Entry) -> String
     "style #{styled_digit(entry.styled)}",
     "stub #{entry.stub.length} #{text_digest(entry.stub)}",
   ].join("\n")
+
   lines = entry.constants.keys.sort.map do |name: String|
     "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
   end
