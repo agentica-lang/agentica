@@ -188,8 +188,10 @@ for (const file of htmlFiles(site)) {
     if (decode(colored) !== source.replace(/\n$/, "")) fail(`${file}: block ${index} changed its text`);
     return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
   });
+  let colored_here = 0;
   const signed = out.replace(SIGNATURE, (_match, open, body, close) => {
     signatures++;
+    colored_here++;
     const colored = body.replace(/(<span class="?cl"?>)([^<]*)(<\/span>)/g, (_cell, start, text, end) => {
       const line = decode(text);
       if (line.trim() === "") return `${start}${text}${end}`;
@@ -200,6 +202,9 @@ for (const file of htmlFiles(site)) {
     if (decode(colored) !== decode(body)) fail(`${file}: a signature block changed its text`);
     return `<div class=signature>${open}<code class=language-signature data-lang=signature>${colored}${close}</div>`;
   });
+  // A block that SIGNATURE does not match would stay plain with no word, so count the wrappers the template wrote.
+  const wrapped = (out.match(/<div class="?signature"?>/g) ?? []).length;
+  if (wrapped !== colored_here) fail(`${file}: ${wrapped} signature blocks, but ${colored_here} have the expected shape`);
   if (/class="?agc-code"?/.test(signed)) fail(`${file}: an agentica block has an unexpected shape`);
   if (signed !== html) writeFileSync(file, signed);
 }

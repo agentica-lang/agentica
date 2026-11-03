@@ -861,6 +861,8 @@ agc_input_status agc_input_whole(agc_vm *vm, size_t max, const agc_bytes **out);
 void agc_charge(agc_vm *vm, uint64_t units);
 void agc_charge_bytes(agc_vm *vm, size_t bytes);
 uint64_t agc_value_units(agc_value v);
+/* CODE and MESSAGE are kept by pointer in the outcome, which the driver reads after the longjmp, not copied: pass a
+   literal, static data or GC memory, never a stack buffer. agc_fail_text keeps the string object instead. */
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 /* __fail_arg: fails at argument number `argument` of the call a prelude function was given (agc_fail's rule for the

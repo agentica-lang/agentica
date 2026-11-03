@@ -184,6 +184,7 @@ static void test_leaf_and_direct_rows(void) {
       {"List.map", 2, false, false},     {"IO.gets", 0, false, false},       {"Task.spawn", 1, false, false},
       {"Native.closed?", 1, true, false}, {"LogRegistry.floor", 0, true, false},
       {"LogRegistry.set_level", 1, false, false}, {"Value.equal", 2, false, true},
+      {"Optional.equal", 2, false, true},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const char *name = expected[k].name;

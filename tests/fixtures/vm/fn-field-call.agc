@@ -1,4 +1,6 @@
 # store.put(a, b) calls the function in the Fn field put, as store.put.call(a, b) does.
+import Hooks from "lib/fn_field_hooks"
+
 struct Store[T]
   get: Fn[String, Result[T]]
   put: Fn[String, T, Result[Void]]
@@ -8,6 +10,11 @@ end
 struct Counter
   next: Fn[Int, Int]
   name: String
+end
+
+# The last parameter is an Fn, so a block fills it: loop.each(items) do |n| ... end.
+struct Loop
+  each: Fn[List[Int], Fn[Int, Void], Void]
 end
 
 def lookup(key: String) -> Result[String]
@@ -37,6 +44,12 @@ def copy(store: Store[String], from: String, to: String) -> Result[Void]
   return ok()
 end
 
+def walk(items: List[Int], f: Fn[Int, Void]) -> Void
+  for item in items
+    f.call(item)
+  end
+end
+
 def main() -> Void
   store = Store(get: &lookup, put: &save, note: &say)
   puts(store.get("a"))
@@ -49,4 +62,15 @@ def main() -> Void
   puts(counter.next(1) == counter.next.call(1))
   puts(counter.name.upcase)
   puts([counter].map do |c| c.next(10) end)
+
+  loop = Loop(each: &walk)
+  loop.each([1, 2]) do |n|
+    puts("item #{n}")
+  end
+
+  hooks = Hooks.Hooks(add: &Hooks.plus, each: &Hooks.walk)
+  puts(hooks.add(1, 2))
+  hooks.each([3]) do |n|
+    puts("hook #{n}")
+  end
 end

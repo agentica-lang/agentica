@@ -257,6 +257,19 @@ def test_a_constant_is_a_value_wherever_it_is_read(program):
     ]
 
 
+def test_a_constant_used_only_in_a_default_is_a_reference(tmp_path):
+    # The value of a default is a use of the name, so a rename built on `refs` must reach it too.
+    source = ("RETRIES = 3\n\nstruct Options\n  retries: Int = RETRIES\nend\n\n"
+              "def fetch(tries: Int = RETRIES) -> Int\n  return tries\nend\n")
+    (tmp_path / "options.agc").write_text(source, encoding="utf-8")
+    report = answer(("options.agc", where(source, "RETRIES")), cwd=tmp_path)
+    assert (report["definition"]["kind"], report["definition"]["name"]) == ("constant", "RETRIES")
+    assert places(report) == [
+        ("options.agc", *where(source, "= RETRIES", 2), "value", None),
+        ("options.agc", *where(source, "= RETRIES)", 2), "value", "fetch"),
+    ]
+
+
 def test_a_constant_read_through_the_alias_is_a_reference_to_the_member_alone(program):
     reader = "import Models from \"models\"\n\ndef limit() -> Int\n  return Models.LIMIT + 1\nend\n"
     (program / "reader.agc").write_text(reader, encoding="utf-8")

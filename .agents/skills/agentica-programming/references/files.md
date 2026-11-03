@@ -143,7 +143,9 @@ end
 ```
 
 - The block gives `Result[T]` and `try` works in it; `T` comes from the
-  expected type of the call, else from the block.
+  expected type of the call, else from the block. A block that only gives
+  `error(...)` needs the type: `r: Result[Int] = File.open(...) do ... end`.
+- `ms` limits the open and the close, each on its own, not the block.
 - A failed open is the call's error, and the block does not run.
 - The close runs after `ok`, `error`, an early `return` and a failed `try`.
   After `ok(v)` the call gives `ok(v)`, or the close error (the close writes

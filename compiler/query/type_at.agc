@@ -218,7 +218,7 @@ end
 def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offset: Int) -> Answer
   module = linked.modules[0]
   span = Ast.expr_span(expr)
-  definition = Definitions.of_expr(linked.modules, checked.types, expr)
+  definition = Definitions.of_expr(linked.modules, checked.types, checked.resolved, expr)
   kind = "expression"
   builtin: Optional[Model.Builtin] = none
   if on_name?(expr, module.text, offset)

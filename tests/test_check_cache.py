@@ -667,3 +667,18 @@ def test_a_default_that_names_a_long_list_that_starts_with_zero_answers_alike(ws
     (ws.project / "lim.agc").write_text(LIMITS_WITH_ZERO, encoding="utf-8")
     (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
     refused_long_list_default(ws)
+
+
+# A value of exactly ELIDE_FROM (24) characters whose first line is a lone `[`: the stub has no room for its 0 beside the
+# `(` on that line, so the 0 is on the second. The file ends without a line break after the value.
+LONE_BRACKET_VALUE = "[\n1,2,3,4,5,6,7,8,9,10 ]"
+LIMITS_LONE_BRACKET = (LIMITS.rsplit("export LONG_LIST", 1)[0] + "export LONG_LIST = " + LONE_BRACKET_VALUE)
+
+
+def test_a_default_that_names_a_value_with_a_lone_bracket_line_answers_alike(ws):
+    assert len(LONE_BRACKET_VALUE) == 24
+    (ws.project / "lim.agc").write_text(LIMITS_LONE_BRACKET, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
+    # The first run writes the entry of lim.agc; the refused default is then read against its stub.
+    assert settled(ws, source=THROUGH_LIMITS, needle="Lim.SMALL")[0] == (0, '{"ok":true}\n', "")
+    refused_long_list_default(ws)

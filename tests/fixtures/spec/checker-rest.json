@@ -10035,6 +10035,22 @@
     {
       "program": [
         "def main() -> Void",
+        "  puts([].include?(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-LIST-TYPE",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
         "  puts([true].tally)",
         "end",
         "",

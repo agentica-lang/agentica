@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 148,
+  "steps": 206,
   "stdout": [
     "ok(\"value of a\")",
     "error(\"empty key\")",
@@ -12,6 +12,10 @@
     "true",
     "C",
     "[11]",
+    "item 1",
+    "item 2",
+    "3",
+    "hook 3",
     ""
   ],
   "stderr": []

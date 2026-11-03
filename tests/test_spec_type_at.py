@@ -388,6 +388,24 @@ def test_the_doc_of_a_field_is_read_from_the_struct_that_the_target_names(progra
     assert (field["kind"], field["doc"], field["signature"]) == ("field", "The name.", "name: String")
 
 
+def test_the_call_of_an_fn_field_names_the_field_of_its_struct(tmp_path):
+    hooks = "export struct Hooks\n  add: Fn[Int, Int, Int]\nend\n"
+    source = ("import H from \"hooks\"\n\nstruct Counter\n  next: Fn[Int, Int]\nend\n\n"
+              "def run(hooks: H.Hooks, counter: Counter) -> Int\n"
+              "  return hooks.add(counter.next(1), 2)\nend\n")
+    (tmp_path / "hooks.agc").write_text(hooks, encoding="utf-8")
+    (tmp_path / "app.agc").write_text(source, encoding="utf-8")
+    # The struct of the receiver is found in the same file and in an imported one.
+    for needle, name, file, signature in (("next(1)", "next", "app.agc", "next: Fn[Int, Int]"),
+                                          ("add(counter", "add", "hooks.agc", "add: Fn[Int, Int, Int]")):
+        report = answer(("app.agc", where(source, needle, 1)), cwd=tmp_path)
+        assert (report["kind"], report["type"]) == ("name", "Int")
+        assert report["help"] is None
+        field = report["definition"]
+        assert (field["kind"], field["name"], field["file"], field["signature"]) == ("field", name, file, signature)
+        assert start(field["name_span"]) == where(hooks if file == "hooks.agc" else source, name + ":")
+
+
 def test_a_builtin_is_answered_with_its_help_object_and_no_definition(program):
     report = answer(("orders.agc", where(ORDERS, "name.upcase", 6)), cwd=program)
     assert (report["kind"], report["definition"]) == ("builtin", None)
