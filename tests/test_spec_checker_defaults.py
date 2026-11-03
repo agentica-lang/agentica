@@ -368,6 +368,13 @@ MODULES = [
       "root.agc": 'import Limits from "limits"\n\n'
                   'def f(a: Int = Limits.SUM) -> Int\n  return a\nend\n\n' + main_with("  puts(f())\n")},
      "CHECK-DEFAULT-VALUE", "root.agc", "SUM"),
+    ("two modules may declare a constant of one name: a default is judged by the module it names",
+     {"first.agc": "export LIMIT = 10\n",
+      "second.agc": "export LIMIT = 1 + 2\n",
+      "root.agc": 'import {LIMIT as CAP} from "first"\nimport Second from "second"\n\n'
+                  'def f(a: Int = CAP) -> Int\n  return a\nend\n\n'
+                  'def g(a: Int = Second.LIMIT) -> Int\n  return a\nend\n\n' + main_with("  puts(f() + g())\n")},
+     "CHECK-DEFAULT-VALUE", "root.agc", "LIMIT"),
     ("a default that names an imported constant keeps the type check",
      {"limits.agc": "export LABEL = \"x\"\n",
       "root.agc": 'import {LABEL} from "limits"\n\n'

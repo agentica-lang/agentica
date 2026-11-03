@@ -65,8 +65,7 @@ end
 
 ## Where a module constant is declared and what it is set to: the value is how a default that names the constant is
 ## judged (CHECK-DEFAULT-VALUE), and the file is the one a problem about a blanked value is reported in. blanked is
-## true when the value is the 0 that the check cache leaves in the stub of a long constant (the text of the file is the
-## whole one, so the stub shows in the text at the value).
+## true when the value is the 0 that the check cache leaves in the stub of a long constant (checker.agc, blanked?).
 export struct ConstSite
   file: String
   value: Ast.Expr

@@ -636,6 +636,16 @@ end
 '''
 
 
+def refused_long_list_default(ws):
+    """Cold, warm and off, a default that names `Lim.LONG_LIST` for a `List[Int]` is CHECK-DEFAULT-VALUE."""
+    wrong = THROUGH_LIMITS.replace("b: String = Lim.LONG_TEXT", "b: List[Int] = Lim.LONG_LIST")
+    wrong = wrong.replace('"#{a} #{b}"', '"#{a} #{b.size}"')
+    (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
+    failed = settled(ws, source=wrong, needle="Lim.SMALL")
+    assert failed[0][0] == 1
+    assert json.loads(failed[0][2])["code"] == "CHECK-DEFAULT-VALUE"
+
+
 def test_a_default_that_names_a_constant_of_a_stubbed_module_answers_alike(ws):
     (ws.project / "lim.agc").write_text(LIMITS, encoding="utf-8")
     (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
@@ -643,9 +653,17 @@ def test_a_default_that_names_a_constant_of_a_stubbed_module_answers_alike(ws):
     assert settled(ws, **asked)[0] == (0, '{"ok":true}\n', "")
     # The entry of lim.agc holds a stub without the value of the long constants, so the answer for the long list must
     # still be the one of the whole text.
-    wrong = THROUGH_LIMITS.replace("b: String = Lim.LONG_TEXT", "b: List[Int] = Lim.LONG_LIST")
-    wrong = wrong.replace('"#{a} #{b}"', '"#{a} #{b.size}"')
-    (ws.project / "main.agc").write_text(wrong, encoding="utf-8")
-    failed = settled(ws, source=wrong, needle="Lim.SMALL")
-    assert failed[0][0] == 1
-    assert json.loads(failed[0][2])["code"] == "CHECK-DEFAULT-VALUE"
+    refused_long_list_default(ws)
+
+
+# A long list that starts with a 0: the stub puts its own 0 where the whole text has a 0 too, so a look at the text at
+# the value cannot tell them apart.
+LIMITS_WITH_ZERO = '''export SMALL = 7
+export LONG_LIST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+'''
+
+
+def test_a_default_that_names_a_long_list_that_starts_with_zero_answers_alike(ws):
+    (ws.project / "lim.agc").write_text(LIMITS_WITH_ZERO, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_LIMITS, encoding="utf-8")
+    refused_long_list_default(ws)

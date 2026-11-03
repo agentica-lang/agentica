@@ -42,8 +42,8 @@ NO_TREE = "0000000000000000000000000000000000000000000000000000000000000000"
 # `end` closes a function; the stub keeps it and the line break before it.
 END_WORD = "end"
 
-# A constant whose value is shorter than this keeps its value in the stub: it is cheap to read and to check.
-ELIDE_FROM = 24
+## A constant whose value is shorter than this keeps its value in the stub: it is cheap to read and to check.
+export ELIDE_FROM = 24
 
 # What follows the tree digest in an entry: the style line and the start of the stub line, which are as long as each
 # other.

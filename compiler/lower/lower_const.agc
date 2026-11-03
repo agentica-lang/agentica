@@ -181,6 +181,8 @@ def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
   end
 end
 
+# The kinds respanned here are the ones that `constant?` and `empty_construct?` of check_defaults.agc accept, and the
+# reverse: a kind accepted there and missing here would stay a name that the call site cannot read.
 def respanned(value: Ast.Expr, span: Source.Span) -> Ast.Expr
   case value
     Ast.Expr.Literal(node) -> return Ast.Expr.Literal(node.with(span: span))

@@ -149,6 +149,8 @@ def acceptable?(value: Ast.Expr, param: Bool) -> Bool
   return constant?(value) or (param and empty_construct?(value))
 end
 
+# The forms accepted here and in empty_construct? must be the kinds that `respanned` handles in `Const.in_place`
+# (lower/lower_const.agc), and the reverse.
 # A literal (a minus sign allowed before a number), an empty list or map, a variant with no payload, or none (the
 # parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool

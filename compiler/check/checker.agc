@@ -6,6 +6,7 @@
 import {ENUMS, RECORDS, record_defaults} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Env from "../modules/link_env"
+import CheckCache from "../modules/check_cache"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import T from "../syntax/types"
@@ -164,7 +165,7 @@ def start(linked: Linker.Linked) -> State.Cx
     for decl in module.declarations
       case decl
         Ast.Decl.Constant(node) ->
-          site = State.ConstSite(file: module.file, value: node.value, blanked: blanked?(module.text, node.value))
+          site = State.ConstSite(file: module.file, value: node.value, blanked: blanked?(module.stubbed, node))
           sites = sites.put(node.name, site)
         _ -> sites = sites
       end
@@ -194,14 +195,21 @@ def start(linked: Linker.Linked) -> State.Cx
   )
 end
 
-# Whether a constant value is the 0 of a stub: a 0 where the text of the file has something else.
-def blanked?(text: String, value: Ast.Expr) -> Bool
-  case value
-    Ast.Expr.Literal(node) ->
-      case node.value
+# Whether the value of a constant is the 0 of a stub: the module is a stub and the value is a 0 that the cache cut
+# (check_cache.agc: the stub holds `(0`, blanks and `)` over a value of ELIDE_FROM characters or more). The text of the
+# value is not looked at: the whole text may have a 0 at the same place. A short 0 that the cache did not cut, with a
+# long comment after it, can read as cut; the answer is then the one of the whole text, which is the right one.
+def blanked?(stubbed: Bool, node: Ast.ConstDecl) -> Bool
+  if !stubbed
+    return false
+  end
+
+  case node.value
+    Ast.Expr.Literal(lit) ->
+      case lit.value
         Ast.LitValue.Whole(number) ->
-          start = node.span.start.offset
-          return number == 0 and text.slice(start, node.span.stop.offset - start) != "0"
+          # The `0` is one character after the start of the value, which the `(` of the stub opens.
+          return number == 0 and node.span.stop.offset - (lit.span.start.offset - 1) >= CheckCache.ELIDE_FROM
         _ -> return false
       end
 
