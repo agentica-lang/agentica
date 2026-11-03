@@ -1,0 +1,6 @@
+1:1 leading FunctionDecl 3:1 "# The layout of pipe chains and of the empty line after a statement that takes several lines."
+13:3 leading Binding 14:3 "# The comments around a chain keep their place."
+16:18 trailing Binding 14:3 "# after the chain"
+17:3 leading ExprStmt 18:3 "# alone after the chain"
+25:3 leading Binding 26:3 "# A comment above a wrapped statement stays above it."
+27:3 leading Binding 28:3 "# The comment of the statement that follows."

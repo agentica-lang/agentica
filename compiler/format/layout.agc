@@ -8,7 +8,8 @@
 ## not already inside brackets gets its own.
 ##
 ## Between two items of a body (a declaration, a statement, a field, a variant, a `case` arm or a comment) a blank
-## line stays when the source had one right before the second item, at most one, and none is added.
+## line stays when the source had one right before the second item, at most one. One is added after a simple statement
+## that takes several lines (`sequence`). A pipe chain of two or more `|>` always breaks, one stage per line.
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -64,11 +65,13 @@ export struct Extern
   after: List[Tokens.Comment]
 end
 
-# One item of a body: its first and last source lines and its document.
+# One item of a body: its first and last source lines and its document, and whether it is a simple statement whose
+# document is measured (it owes an empty line after it when it took several lines).
 struct Item
   first: Int
   last: Int
   doc: Docs.Doc
+  spread: Bool
 end
 
 # The comments of a node before it and after it, as documents to put around it.
@@ -156,7 +159,7 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
 
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
     line = placed.comment.span.start.line
-    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text)))
+    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text), spread: false))
   end
 
   return sequence(c, items)
@@ -164,18 +167,28 @@ end
 
 # ---- Items, blank lines and comments ----
 
-# The items joined by line breaks, with an empty line where the source had a blank line right before an item.
+# The items joined by line breaks, with an empty line where the source had a blank line right before an item, and
+# after a simple statement that took several lines when another item comes next, a comment included: a comment
+# alone on its line after a blank line belongs to the item below it, so the formatted text must not read differently
+# when it is formatted again. The statement owes that line, and the printer pays it only when the statement did take
+# several lines.
 def sequence(c: Context, items: List[Item]) -> Docs.Doc
   parts: List[Docs.Doc] = []
+  owed = false
   at = 0
   while at < items.size
     item = items[at]
     if at > 0
-      parts = parts.push(Docs.Doc.HardLine)
       if blank_before?(c, item.first, items[at - 1].last)
+        parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.HardLine])
+      elsif owed
+        parts = parts.push(Docs.Doc.GapLine)
+      else
         parts = parts.push(Docs.Doc.HardLine)
       end
     end
+
+    owed = item.spread
 
     parts = parts.push(item.doc)
     at += 1
@@ -193,6 +206,11 @@ end
 # The items of a node: its leading comments, the node with its comments after code, and the comments alone on their
 # lines after it.
 def node_items(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc) -> List[Item]
+  return node_items_of(c, key, first, last, doc, false)
+end
+
+# `node_items`, where `spread` says that `doc` is a measured simple statement.
+def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc, spread: Bool) -> List[Item]
   items: List[Item] = c.leading.get(key, []).map do |comment: Tokens.Comment| comment_item(comment) end
   suffixes: List[Docs.Doc] = []
   below: List[Item] = []
@@ -204,13 +222,13 @@ def node_items(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc) ->
     end
   end
 
-  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes))))
+  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes)), spread: spread))
   return items.concat(below)
 end
 
 def comment_item(comment: Tokens.Comment) -> Item
   line = comment.span.start.line
-  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text))
+  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false)
 end
 
 # The comments of a node inside an expression: the leading ones on their own lines before it, a comment after code at
@@ -468,7 +486,7 @@ def extern_items(c: Context, block: Extern) -> List[Item]
   end
 
   # The block keeps its own indent: it starts at the left margin, as every declaration does.
-  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines)))
+  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines), spread: false))
   suffixes: List[Item] = []
   for comment in block.after
     if comment.span.start.line == block.last
@@ -493,7 +511,12 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
   for stmt in stmts
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
-    items = items.concat(node_items(c, key, span.start.line, last_line(c, span), statement_doc(c, stmt)))
+    doc = statement_doc(c, stmt)
+    if simple?(stmt)
+      doc = Docs.Doc.Measure([doc])
+    end
+
+    items = items.concat(node_items_of(c, key, span.start.line, last_line(c, span), doc, simple?(stmt)))
   end
 
   return items
@@ -1021,6 +1044,8 @@ def binary_doc(c: Context, node: Ast.Binary, bracketed: Bool) -> Docs.Doc
 end
 
 # A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it.
+# A chain
+# of two or more `|>` always breaks.
 def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
   stages: List[Docs.Doc] = []
   current = expr
@@ -1063,7 +1088,12 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     end
   end
 
+  # Two or more stages are one per line even when they fit; a single stage stays on its line when it fits.
   parts: List[Docs.Doc] = [operand(c, current, PIPE_LEVEL)]
+  if stages.size >= 2
+    parts = parts.push(Docs.Doc.BreakParent)
+  end
+
   for stage in stages
     parts = parts.concat([Docs.Doc.Line, stage])
   end

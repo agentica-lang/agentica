@@ -8,6 +8,7 @@ def main() -> Void
     "the first part of a long message that is split by hand into two pieces, " +
     "and the second part of the same message"
   )
+
   puts(text)
   report(
     "a call whose argument is a long concatenation of string pieces that does not fit on one line " + "with the call",

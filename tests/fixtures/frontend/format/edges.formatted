@@ -8,6 +8,7 @@ def main() -> Void
     1 + # after an operator
     2
   )
+
   name = "a # not a comment" # after a string
   piped = total |> double() # after a pipe step
   puts(piped)

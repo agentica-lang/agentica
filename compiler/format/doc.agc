@@ -46,6 +46,15 @@ export enum Doc
   ## Lines written as they are after the next line break, with no indent added: the body of a heredoc, ending with its
   ## end line.
   After(List[String])
+  ## The pieces of a statement. The printer notes whether they took more than one line (the lines of a heredoc body do
+  ## not count), for the `GapLine` that follows.
+  Measure(List[Doc])
+  ## The end of a `Measure`, which holds the line the statement started on: the printer's own piece, never built by a
+  ## layout.
+  Measured(Int)
+  ## A line break, then an empty line when the last `Measure` took more than one line. A comment `Below` the line goes
+  ## under the empty line, where the next pass reads it as the next item's.
+  GapLine
 end
 
 # A piece waiting on the stack, with its indent and whether its group is flat.
@@ -65,13 +74,14 @@ struct Output
   suffixes: List[String]
   afters: List[List[String]]
   belows: List[String]
+  measured: Bool
 end
 
 ## Lays out `doc` in `width` columns and gives the text: lines with no trailing spaces, joined by line breaks, with a
 ## final line break and no empty line at the end.
 export def render(doc: Doc, width: Int) -> String
   stack: List[Command] = [Command(indent: 0, flat: false, doc: doc)]
-  out = Output(lines: [], line: "", indent: 0, suffixes: [], afters: [], belows: [])
+  out = Output(lines: [], line: "", indent: 0, suffixes: [], afters: [], belows: [], measured: false)
   while stack.size > 0
     command = stack[stack.size - 1]
     stack = stack.take(stack.size - 1)
@@ -110,6 +120,18 @@ export def render(doc: Doc, width: Int) -> String
       Doc.Comment(text) -> out = comment(out, text, indent, width)
       Doc.After(lines) -> out = out.with(afters: out.afters.push(lines))
       Doc.Below(text) -> out = out.with(belows: out.belows.push(text))
+      Doc.Measure(parts) ->
+        stack = stack.push(Command(indent: indent, flat: flat, doc: Doc.Measured(out.lines.size)))
+        stack = push_all(stack, indent, flat, parts)
+      Doc.Measured(start) -> out = out.with(measured: out.lines.size > start)
+      Doc.GapLine ->
+        if out.measured
+          held = out.belows
+          out = newline(out.with(belows: []), indent, width)
+          out = newline(out.with(belows: held), indent, width)
+        else
+          out = newline(out, indent, width)
+        end
     end
   end
 
@@ -225,6 +247,10 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
         if flat
           return false
         end
+
+      Doc.Measure(parts) -> pending = push_all(pending, command.indent, command.flat, parts)
+      Doc.Measured(_) -> left = left
+      Doc.GapLine -> return true
     end
   end
 
@@ -260,6 +286,10 @@ def newline(out: Output, indent: Int, width: Int) -> Output
   lines = out.lines
   line = out.line
   margin = indent_of(line)
+  if line == ""
+    margin = spaces(out.indent)
+  end
+
   for suffix in out.suffixes
     if line.strip == "" or line.length + suffix.length <= width
       line = line + suffix
@@ -277,7 +307,7 @@ def newline(out: Output, indent: Int, width: Int) -> Output
     lines = lines.concat(wrap(below, width - margin.length).map do |part: String| margin + part end)
   end
 
-  return Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [])
+  return Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [], measured: out.measured)
 end
 
 def indent_of(line: String) -> String
