@@ -106,16 +106,31 @@ export def foreign_names() -> Map[String, String]
     "Map.new": "use a map literal with a type: m: Map[String, Int] = {}",
     "Math.abs": "use n.abs",
     "Math.ceil": "use x.ceil",
-    "Math.cos": "Math has only sqrt; declare it from C: extern \"libm.so.6\" with def cos(x: C.Double) -> C.Double",
-    "Math.exp": "Math has only sqrt; declare it from C: extern \"libm.so.6\" with def exp(x: C.Double) -> C.Double",
+    "Math.cos": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def cos(x: C.Double) -> C.Double"
+    ),
+    "Math.exp": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def exp(x: C.Double) -> C.Double"
+    ),
     "Math.floor": "use x.floor",
-    "Math.log": "Math has only sqrt; declare it from C: extern \"libm.so.6\" with def log(x: C.Double) -> C.Double",
+    "Math.log": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def log(x: C.Double) -> C.Double"
+    ),
     "Math.max": "use [a, b].max.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Math.min": "use [a, b].min.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Math.pow": "use n.pow(exponent) on an Int",
     "Math.round": "use x.round",
-    "Math.sin": "Math has only sqrt; declare it from C: extern \"libm.so.6\" with def sin(x: C.Double) -> C.Double",
-    "Math.tan": "Math has only sqrt; declare it from C: extern \"libm.so.6\" with def tan(x: C.Double) -> C.Double",
+    "Math.sin": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def sin(x: C.Double) -> C.Double"
+    ),
+    "Math.tan": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def tan(x: C.Double) -> C.Double"
+    ),
     "Mutex.new": "keep the state in one owner task that receives messages on a Channel, and send it requests",
     "Native.bytes_at": (
       "use Native.get_bytes(p, 0, length) for Native.bytes_at(p, length): its second argument is an offset"

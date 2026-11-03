@@ -56,6 +56,7 @@ export def parse(arguments: List[String]) -> Parsed
     deny: [],
     no_cache: false,
   )
+
   at = 0
   while at < arguments.size and arguments[at] != "--"
     word = arguments[at]

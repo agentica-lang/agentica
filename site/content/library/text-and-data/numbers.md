@@ -90,7 +90,7 @@ Int.gcd(a: Int, b: Int) -> Int
 ```
 
 - `abs` of the least `Int`, `-9223372036854775808`, does not fit and is `RUNTIME-INTEGER-OVERFLOW`, as `-n` is. `Float.abs` clears the sign, so `-0.0` gives `0.0`, and a NaN stays NaN.
-- `n.pow(e)` multiplies `n` by itself `e` times; `n.pow(0)` is `1`, `0.pow(0)` too. A result past 64 bits is `RUNTIME-INTEGER-OVERFLOW` at the call. A negative exponent is `RUNTIME-INVALID-COUNT` at the exponent: Ruby gives a fraction there, which an `Int` cannot hold.
+- `n.pow(e)` is `n` to the power `e`; `n.pow(0)` is `1`, `0.pow(0)` too. A result past 64 bits is `RUNTIME-INTEGER-OVERFLOW` at the call. A negative exponent is `RUNTIME-INVALID-COUNT` at the exponent: Ruby gives a fraction there, which an `Int` cannot hold.
 - `gcd` is never negative, and `0.gcd(0)` is `0`. The only result that does not fit is `2^63`, from the least `Int` with `0` or with itself: `RUNTIME-INTEGER-OVERFLOW`.
 
 ```agentica

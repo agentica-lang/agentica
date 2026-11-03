@@ -3,10 +3,11 @@ import Builtins from "../../../../compiler/catalog/builtins"
 import Types from "../../../../compiler/syntax/types"
 
 # Builds catalog rows by hand for the paths of builtin defaults that no real row uses yet: a last Fn parameter, an
-# alternative form, a Prelude rule, a rule that is neither Plain nor Prelude, a gap in the defaults, a default of the
-# wrong type and a bad variant. Prints, for each row, which counts of arguments form_for takes (for 0 to 3), the
-# fewest arguments, the arity text (and the one of a method call, which leaves out the receiver), the signature and
-# the problem of the defaults.
+# alternative form, a block form (File.open with a block) and one that differs from its entry, a Prelude rule, a rule
+# that is neither Plain nor Prelude, a gap in the defaults, a default of the wrong type and a bad variant. Prints, for
+# each row, which counts of arguments form_for takes (for 0 to 3) and which form_for_call picks with a block (b, the
+# block form; p, the plain one), the fewest arguments, the arity text (and the one of a method call, which leaves out
+# the receiver), the signature and the problem of the defaults.
 
 def required(name: String, type: Types.Type) -> Model.Named
   return Model.Named(name: name, type: type)
@@ -41,9 +42,25 @@ def takes(entry: Model.Builtin, arity: Int) -> String
   return "n"
 end
 
+# The form a call with a block takes: b for a form whose last parameter is an Fn, p for one without, n for none.
+def with_block(entry: Model.Builtin, arity: Int) -> String
+  found = Builtins.form_for_call(entry, arity, true)
+  if !found.ok?
+    return "n"
+  end
+
+  form = found.unwrap!
+  if form.parameters.size > 0 and Types.is?(form.parameters[form.parameters.size - 1].type, "Fn")
+    return "b"
+  end
+
+  return "p"
+end
+
 def show(entry: Model.Builtin) -> Void
   taken = [0, 1, 2, 3].map do |arity: Int| takes(entry, arity) end.join("")
-  puts("#{entry.name} takes=#{taken} required=#{Builtins.required_count(entry)}")
+  blocks = [0, 1, 2, 3].map do |arity: Int| with_block(entry, arity) end.join("")
+  puts("#{entry.name} takes=#{taken} block=#{blocks} required=#{Builtins.required_count(entry)}")
   puts("  arity=#{Builtins.arity_text(entry, 0)} method=#{Builtins.arity_text(entry, 1)}")
   puts("  signature=#{Builtins.form_signature(entry)}")
   puts("  problem=#{Builtins.default_problem(entry)}")
@@ -65,6 +82,11 @@ def main() -> Void
   show(plain("Row.none", [required("path", text)]))
   show(row("Row.alternative", [x, one], Model.Rule.Plain, [plain("Row.alternative", [x])]))
   show(row("Row.alternative_second", [x], Model.Rule.Plain, [plain("Row.alternative_second", [x, one])]))
+  block = required("f", Types.Type.Fn([Types.Type.Int], Types.Type.Result(Types.Type.Var("A"))))
+  block_form = row("Row.block_form", [x, one, block], Model.Rule.Prelude, [])
+  show(row("Row.block", [x, one], Model.Rule.Plain, [block_form]))
+  other_default = row("Row.block_other", [x, timeout, block], Model.Rule.Prelude, [])
+  show(row("Row.block_other", [x, one], Model.Rule.Plain, [other_default]))
   show(row("Row.not_plain", [x, one], Model.Rule.ListMap, []))
   show(row("Row.prelude", [required("path", text), timeout], Model.Rule.Prelude, []))
   show(plain("Row.gap", [x, optional("a", number, Model.Default.Whole(1)), required("b", number)]))

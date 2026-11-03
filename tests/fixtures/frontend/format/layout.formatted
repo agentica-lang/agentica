@@ -91,6 +91,7 @@ def body_rules(xs: List[Int], name: String) -> Void
     step = acc + x
     step * 2
   end
+
   xs.each do |x| puts(x) end
   shape = Shape.Circle(3)
   empty = Shape.Empty
@@ -98,7 +99,12 @@ def body_rules(xs: List[Int], name: String) -> Void
   first = xs[0]
   negative = -total
   flag = not xs.empty?
-  piped = xs |> List.reverse() |> List.take(2)
+  piped = (
+    xs
+    |> List.reverse()
+    |> List.take(2)
+  )
+
   chained = (
     name.strip
       .downcase
@@ -110,11 +116,13 @@ def body_rules(xs: List[Int], name: String) -> Void
       .size
       .to_s
   )
+
   long_call = some_function_name(
     first_argument_value,
     second_argument_value,
     nested_call(third_argument, fourth_argument, 5),
   )
+
   long_pipe = (
     xs
     |> List.reverse()
@@ -122,14 +130,17 @@ def body_rules(xs: List[Int], name: String) -> Void
     |> List.drop(1)
     |> List.concat([first_value, second_value, third_value])
   )
+
   sum = (first_operand_with_a_long_name + second_operand_with_a_long_name) * (third_operand_name - fourth_operand)
   listed = xs.filter do |x| x > 100 end.reduce(an_initial_value_with_a_rather_long_name) do |acc: Int, x: Int|
     step = acc + x
     step * 2
   end
+
   kinds = Set.new([
     "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa", "lambda", "mu", "nu",
   ])
+
   case shape
     Shape.Circle(radius) -> puts(radius)
     Shape.Pair(a, _) if a > 0 -> puts(a)

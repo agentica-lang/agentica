@@ -487,6 +487,7 @@ export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[Ht
     options.max_body_bytes,
     CLIENT_MAX_BODY,
   )
+
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
@@ -582,6 +583,7 @@ export def request(
     body,
     options.max_body_bytes,
   )
+
   deadline = Time.monotonic_ms() + options.timeout_ms
   reply: Channel[Result[HttpResponse]] = Channel.new(1)
   job = HttpWire.Job(
@@ -597,6 +599,7 @@ export def request(
     worker: 0,
     kept: false,
   )
+
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
     ok(_) -> return unless_denied(options, where.scheme, wait_reply(reply, deadline))
     error(message) ->
@@ -642,6 +645,7 @@ export def download(
     NO_BYTES,
     client_options.max_body_bytes,
   )
+
   deadline = Time.monotonic_ms() + options.timeout_ms
   # What a 407 from the proxy is told as; empty when there is no proxy or the request is in a tunnel, whose 407 is the
   # server's own answer.
@@ -676,6 +680,7 @@ export def start(origin: String, options: HttpClientOptions = HttpClientOptions(
     options.max_body_bytes,
     CLIENT_MAX_BODY,
   )
+
   where = try parse_url(origin)
   if where.target != "/"
     return error("http: start takes an origin such as http://host:8080, with no path or query")
@@ -719,6 +724,7 @@ export def send_request(
     body,
     conn.options.max_body_bytes,
   )
+
   case encoded
     ok(request) -> return send_encoded(conn, request, method == "HEAD", body)
     error(message) ->
@@ -784,6 +790,7 @@ export def open(
     options.max_body_bytes,
     CLIENT_MAX_BODY,
   )
+
   where = try parse_url(url)
   conn = try connect_to(where, options)
   case send_request(conn, method, where.target, body, headers)
@@ -932,6 +939,7 @@ export def serve(
     options.max_body_bytes,
     DOWNLOAD_MAX_BYTES,
   )
+
   listener = try TCP.listen(host, port)
   return ok(start_server(listener, app, options))
 end
@@ -952,6 +960,7 @@ export def serve_tls(
     options.max_body_bytes,
     DOWNLOAD_MAX_BYTES,
   )
+
   listener = try TLS.listen(host, port, tls)
   return ok(start_server(listener, app, options))
 end
@@ -1744,6 +1753,7 @@ def next_piece(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> 
     chunks: exchange.chunks,
     closes: exchange.closes,
   )
+
   return ok(Step(piece: data, exchange: next))
 end
 
@@ -1833,6 +1843,7 @@ def upload_whole(
     options.max_body_bytes,
     CLIENT_MAX_BODY,
   )
+
   if method != "POST" and method != "PUT" and method != "PATCH"
     return error("http: upload takes POST, PUT or PATCH")
   end
@@ -1886,6 +1897,7 @@ def uploaded(
     NO_BYTES,
     conn.options.max_body_bytes,
   )
+
   # A failure to write is not the end: a server that refused the upload (a 413) answers and closes, and its answer is
   # waiting in the input. It is returned when it can be read; else the failure is.
   failed = ""
@@ -2210,6 +2222,7 @@ def answer_app(reading: Reading, service: Service) -> Sent
     body: NO_BYTES,
     remote_addr: TCP.remote_address(socket),
   )
+
   if not head.chunked and head.length == 0
     # Nothing to feed: the app gets closed pieces and a task that has already ended ok, so `read_all` waits for
     # nothing that a closing server could cancel.
@@ -2222,6 +2235,7 @@ def answer_app(reading: Reading, service: Service) -> Sent
     &feed_request,
     Feeding(reading: reading, step_ms: options.request_timeout_ms, pieces: pieces, rest: left),
   )
+
   result = app.call(request, RequestBody(pieces: pieces, done: feeder))
   pieces.close
   past = left.recv(ANSWER_MS)
@@ -2336,6 +2350,7 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
         body: data,
         remote_addr: request.remote_addr,
       )
+
       return ok(Answer.Whole(try handler.call(whole)))
     error(message) -> return ok(body_refusal(message))
   end
@@ -2512,6 +2527,7 @@ def run_session(
     write_ms: write_ms,
     rest: rest,
   )
+
   writer = Task.spawn(&write_frames, wire)
   reader = Task.spawn(&read_frames, wire)
   forwarder = Task.spawn(&forward_messages, wire)

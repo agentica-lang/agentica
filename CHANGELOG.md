@@ -17,11 +17,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
 - `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
   an `Optional` (`none` for an empty list).
+- `File.open(path, mode) do |f| ... end` closes the file when the block ends,
+  with `ok` or `error`, and gives the block's `Result` (or the close error
+  after an `ok` block).
 
 ### Changed
 
 - **Breaking:** `Math` is a builtin module name, so it can no longer be an
   import alias or a declaration name.
+- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
+  when it fits, and an empty line after a statement that takes several lines.
 
 ## [0.22.0] - 2026-11-02
 

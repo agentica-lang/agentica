@@ -99,8 +99,9 @@ Change style only in code you touch. Restyle untouched code separately.
 
 ## Pipes
 
-- Use a parenthesized pipe for three or more steps on one value; put one
+- Use a parenthesized pipe for two or more `|>` steps on one value; put one
   `|> f(args)` per line. Start with the input value. One step is a regular call.
+  A statement that takes several lines is followed by an empty line (`fmt`).
 - Pipe into your own functions. Builtins with method forms use `.`; piping to
   them fails (`CHECK-PIPE-METHOD`): write `x.upcase`, not
   `x |> String.upcase()`.

@@ -22,6 +22,7 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Channel.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_channel"}),
   Model.PreludeRow(name: "File.chunks", module: "lazy", limits: [], selector: "", bodies: {"": "from_chunks"}),
   Model.PreludeRow(name: "File.foreach", module: "lazy", limits: [], selector: "", bodies: {"": "from_file"}),
+  Model.PreludeRow(name: "File.open", module: "file", limits: [], selector: "", bodies: {"": "open"}),
   Model.PreludeRow(name: "Lazy.chunk_while", module: "lazy", limits: [], selector: "", bodies: {"": "chunk_while"}),
   Model.PreludeRow(name: "Lazy.deflate", module: "lazy", limits: [], selector: "", bodies: {"": "deflate"}),
   Model.PreludeRow(name: "Lazy.drop", module: "lazy", limits: [], selector: "", bodies: {"": "drop"}),

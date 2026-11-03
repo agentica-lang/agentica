@@ -362,6 +362,7 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Res
   receiver = Ast.Expr.TypeName(
     Ast.TypeName(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
   )
+
   name_span = member_span(cx, node, size, "members")
   return ok(
     Ast.Expr.FieldAccess(
@@ -416,6 +417,7 @@ def rewrite_constant_member(
   receiver = Ast.Expr.ConstRef(
     Ast.ConstRef(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
   )
+
   name_span = member_span(cx, node, length, member)
   if node.args.size == 0 and !node.parenthesized
     return ok(

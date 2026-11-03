@@ -4,7 +4,9 @@
 ## block gives binds the next variable. A variable the row limits (the key of group_by is an Int or a String) must end
 ## up as one of its allowed types. The checker records which function of stdlib/prelude/ the call runs, by the id of
 ## the call. A row may give defaults to its last parameters, as a Plain row does: the arguments fill the parameters
-## by the rules of check/defaults.agc, and the lowering fills the rest.
+## by the rules of check/defaults.agc, and the lowering fills the rest. A block whose Result type is not known yet
+## takes it from the expected type of the call, else from its body (Slot.InferResult), so `try` works in it (File.open
+## with a block).
 
 import Model from "../catalog/builtin_model"
 import {PRELUDE} from "../catalog/builtins"
@@ -35,7 +37,9 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
   index = 0
   while index < count
     param = Defaults.param_of(shape, count, index)
-    bound = try check_argument(cx, bound, site.args[index], form.parameters[param].type, row.module == "lazy")
+    template = form.parameters[param].type
+    settled = block_result(form, template, site.expected)
+    bound = try check_argument(cx, bound, site.args[index], template, settled, row.module == "lazy")
     index += 1
   end
 
@@ -46,15 +50,23 @@ end
 
 # One argument: a block is checked with the parameter types known so far and the result the parameter says, any other
 # expression with its parameter type when that is known. Then the type found is matched against the parameter, which
-# binds the variables not seen yet. step is true for a method of Lazy: a `try` in its block ends the pipeline.
-def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, step: Bool) -> Result[Bound]
+# binds the variables not seen yet. settled is the result an open block must give (block_result). step is true for a
+# method of Lazy: a `try` in its block ends the pipeline.
+def check_argument(
+  cx: State.Cx,
+  bound: Bound,
+  arg: Ast.Expr,
+  template: T.Type,
+  settled: T.Type,
+  step: Bool,
+) -> Result[Bound]
   wanted = CheckTypes.substitute(template, bound.types)
   span = Ast.expr_span(arg)
   checked = State.Out(st: bound.st, type: T.Type.Unknown)
   case arg
     Ast.Expr.BlockLit(block) ->
       if T.is?(template, "Fn")
-        checked = try check_block(cx, bound, block, template, step)
+        checked = try check_block(cx, bound, block, template, settled, step)
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
       end
@@ -79,10 +91,17 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
 end
 
 # A block given for a parameter of type Fn[...]: its parameters are the types the Fn has, all known by now (the
-# receiver comes first), and the result is the one the Fn has when that is known. "Known" is judged on the variables of
-# the row (template), not on the types they stand for: in a generic function the type found may be the function's own
-# type parameter.
-def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, template: T.Type, step: Bool) -> Result[State.Out]
+# receiver comes first), and the result is the one the Fn has when that is known, else settled. "Known" is judged on
+# the variables of the row (template), not on the types they stand for: in a generic function the type found may be
+# the function's own type parameter.
+def check_block(
+  cx: State.Cx,
+  bound: Bound,
+  block: Ast.BlockLit,
+  template: T.Type,
+  settled: T.Type,
+  step: Bool,
+) -> Result[State.Out]
   params = CheckTypes.substitute_all(T.params(template), bound.types)
   if T.params(template).any? do |param: T.Type| CheckTypes.open_variables?(param, bound.types) end
     return error(
@@ -92,10 +111,25 @@ def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, template: T.Typ
 
   result = CheckTypes.substitute(T.result(template), bound.types)
   if CheckTypes.open_variables?(T.result(template), bound.types)
-    result = T.Type.Unknown
+    result = settled
   end
 
   return Stmt.check_block_in(cx, bound.st, block, some(params), result, none, step)
+end
+
+# The result a block gives when its Fn's result still has an open variable. A Result there is one the body decides,
+# Result[Unknown] (Slot.InferResult), unless it is also the call's result and the expected type of the call is a
+# Result that names its item. Anything else is Unknown: the body decides it all.
+def block_result(form: Model.Builtin, template: T.Type, expected: T.Type) -> T.Type
+  if !T.is?(template, "Fn") or !T.is?(T.result(template), "Result")
+    return T.Type.Unknown
+  end
+
+  if T.same?(T.result(template), form.result) and T.is?(expected, "Result") and !T.unknown?(T.item(expected))
+    return expected
+  end
+
+  return T.Type.Result(T.Type.Unknown)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.

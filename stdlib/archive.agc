@@ -230,6 +230,7 @@ export def extract_tar(
     seen_fold: {},
     seen_exact: {},
   )
+
   scan = Scan(
     ctx: ctx,
     carry: "".bytes,
@@ -245,6 +246,7 @@ export def extract_tar(
     fold: "",
     total: 0,
   )
+
   outcome = scan_all(src, gzip, scan, members)
   if !outcome.ok?
     return error(Result.message(outcome))
@@ -889,6 +891,7 @@ def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
     has_gnu_name: false,
     gnu_name: "".bytes,
   )
+
   canon = match_name_of(raw)
   if size > SCAN_BYTES
     return error("archive: entry size exceeds 1073741824 bytes at entry #{entry}")
@@ -972,6 +975,7 @@ def end_data(sc: Scan) -> Result[Scan]
       seen_fold: Map.put(ctx.seen_fold, sc.fold, true),
       seen_exact: Map.put(ctx.seen_exact, sc.out, true),
     )
+
     sc = sc.with(ctx: ctx, out: "", index: -1)
   end
   return ok(start_pad(sc, sc.size))
