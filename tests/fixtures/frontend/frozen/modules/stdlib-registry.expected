@@ -13,6 +13,7 @@ std/internal/archive_zip.agc
 std/internal/websocket.agc
 std/logger.agc
 std/mime.agc
+std/option_parser.agc
 std/prelude/bytes.agc
 std/prelude/lazy.agc
 std/prelude/list.agc

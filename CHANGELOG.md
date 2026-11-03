@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
+  `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
+  `argparse` with Ruby names.
+
 ### Changed
 
 - `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even

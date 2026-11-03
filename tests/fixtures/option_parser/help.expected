@@ -1,0 +1,13 @@
+Usage: tool [options] <file>
+
+Serves a file over HTTP
+
+Arguments:
+  <file>           file to serve
+
+Options:
+  -p, --port PORT  port (default: 8080)
+  -v, --verbose    more output
+  -q, --quiet      less output
+  -u, --user USER  user name
+  -h, --help       show this help

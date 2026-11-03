@@ -64,8 +64,8 @@ starting point; the repository's own lifecycle rules (§1) override it.
 | Built, language | Rules to the grammar; delete the spec; keep the index row as a gap; no renumbering |
 | Built, runtime/VM | Design and rationale to the runtime docs; delete the spec file |
 | Built, user-facing | Site page (add it if missing, same PR) and the programming skill; internal copy deleted |
-| Built, roadmap row | Condense to a one-line complete row; phase file deleted or only open items |
-| Pending, planned | **One home**: a single plan file; every other location holds only a pointer |
+| Built, roadmap row | Frozen: leave it |
+| Pending, planned | **One home**: its GitHub issue; every other location holds only a pointer |
 | Pending, idea only | One row in the ideas index |
 | Decided against | One index line linking the rationale; no file |
 
@@ -79,15 +79,12 @@ decision.
 **Agentica map (verify before use):** `docs/grammar/` is the current language
 contract (the site renders it; one line per paragraph); the builtin library
 reference lives only in `site/content/library/`. `docs/vm/` is the VM
-design. `docs/future/` is an index of language proposals; when a phase lands,
-its syntax moves to the grammar and the file is deleted with its section
-number preserved as a gap. `docs/roadmap/README.md` holds the order table and
-the general rules; **pending work unifies in the roadmap phase file** (owner
-decision 2026-10-18): the `docs/future/` section becomes the spec it points
-to, and the roadmap file stops restating it. Built VM records that still sit
-in `docs/future/` (for example small-value sharing, value representation, JIT,
-SIMD) move to `docs/vm/`. `docs/bdd.md` is the contract for BDD. Site pages
-are the user-facing home of built features.
+design. `docs/future/` and `docs/roadmap/` are frozen history (2026-11-03):
+do not prune or edit them; their section and phase numbers stay for the code
+and tests that cite them. Pending work lives in GitHub issues. Built VM records
+that still sit in `docs/future/` (for example small-value sharing, value
+representation, JIT, SIMD) stay there. `docs/bdd.md` is the contract for BDD.
+Site pages are the user-facing home of built features.
 
 ## 3. Identify waste
 
@@ -115,14 +112,14 @@ implemented" needs evidence, not memory:
 - the construct appears in the current contract (grammar, library reference,
   or VM docs), with its rules;
 - spec or behavior tests exercise it (`tests/test_spec_*.py` and peers);
-- the roadmap row or index says complete, with the phase date;
+- the frozen roadmap row or index says complete, with the phase date;
 - a CHANGELOG entry exists; when cheap, the binary demonstrates it
   (`dist/agentica check`).
 
-Grammar plus tests gives high confidence; only a roadmap tick gives medium.
-If intent and implementation conflict without a clear superseding authority,
-mark it unresolved; do not silently rewrite it. Similar topics alone do not
-prove duplication.
+Grammar plus tests gives high confidence; only a frozen roadmap tick gives
+medium. If intent and implementation conflict without a clear superseding
+authority, mark it unresolved; do not silently rewrite it. Similar topics
+alone do not prove duplication.
 
 ## 4. Optimize for token efficiency
 

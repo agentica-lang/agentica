@@ -1,5 +1,10 @@
 # Agentica implementation roadmap
 
+> **Frozen on 2026-11-03.** This roadmap is kept as history and for the phase
+> numbers that code and tests cite. New and pending work lives in
+> [GitHub issues](https://github.com/agentica-lang/agentica/issues) (labels,
+> milestones); finished work is in `CHANGELOG.md`.
+
 This roadmap turns the core specification in [`grammar.md`](../grammar.md) into
 a usable interpreter. Planned syntax lives in
 [`docs/future/`](../future/README.md) until its phase lands.
