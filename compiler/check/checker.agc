@@ -6,6 +6,7 @@
 import {ENUMS, RECORDS, record_defaults} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Env from "../modules/link_env"
+import CheckCache from "../modules/check_cache"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import T from "../syntax/types"
@@ -158,8 +159,17 @@ end
 # The context of the run: the builtin records and enums, the tables built once, and the text of each file.
 def start(linked: Linker.Linked) -> State.Cx
   texts: Map[String, String] = {}
+  sites: Map[String, State.ConstSite] = {}
   for module in linked.modules
     texts = texts.put(module.file, module.text)
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Constant(node) ->
+          site = State.ConstSite(file: module.file, value: node.value, blanked: blanked?(module.stubbed, node))
+          sites = sites.put(node.name, site)
+        _ -> sites = sites
+      end
+    end
   end
 
   return State.Cx(
@@ -175,6 +185,7 @@ def start(linked: Linker.Linked) -> State.Cx
     natives: Set.new([]),
     functions: {},
     constants: {},
+    const_sites: sites,
     type_params: [],
     file: linked.modules[0].file,
     texts: texts,
@@ -182,6 +193,28 @@ def start(linked: Linker.Linked) -> State.Cx
     prelude: false,
     json_needs: {},
   )
+end
+
+# Whether the value of a constant is the 0 of a stub: the module is a stub and the value is a 0 that the cache cut
+# (check_cache.agc: the stub holds `(0`, blanks and `)` over a value of ELIDE_FROM characters or more). The text of the
+# value is not looked at: the whole text may have a 0 at the same place. A short 0 that the cache did not cut, with a
+# long comment after it, can read as cut; the answer is then the one of the whole text, which is the right one.
+def blanked?(stubbed: Bool, node: Ast.ConstDecl) -> Bool
+  if !stubbed
+    return false
+  end
+
+  case node.value
+    Ast.Expr.Literal(lit) ->
+      case lit.value
+        Ast.LitValue.Whole(number) ->
+          # The `0` is one character after the start of the value, which the `(` of the stub opens.
+          return number == 0 and node.span.stop.offset - (lit.span.start.offset - 1) >= CheckCache.ELIDE_FROM
+        _ -> return false
+      end
+
+    _ -> return false
+  end
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends

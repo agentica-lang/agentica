@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `File.open(path, mode) do |f| ... end` closes the file when the block ends,
   with `ok` or `error`, and gives the block's `Result` (or the close error
   after an `ok` block).
+- A default of a parameter or a struct field may name a module constant
+  (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
 
 ### Changed
 
