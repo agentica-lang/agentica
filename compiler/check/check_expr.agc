@@ -249,20 +249,7 @@ def check_invoke(cx: State.Cx, st: State.St, node: Ast.Invoke) -> Result[State.O
     return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", ".call requires a function value", node.span))
   end
 
-  params = T.params(target.type)
-  if params.size != node.args.size
-    return error(State.fail(cx, target.st, "CHECK-ARITY", "wrong number of function arguments", node.span))
-  end
-
-  current = target.st
-  index = 0
-  while index < params.size
-    out = try State.expr(cx, current, node.args[index], params[index])
-    current = out.st
-    index += 1
-  end
-
-  return ok(State.Out(st: current, type: T.result(target.type)))
+  return Methods.apply_function(cx, target.st, target.type, node.args, node.span)
 end
 
 # try needs a function, or a block, that returns a Result (a block with an inferred result qualifies only when it must

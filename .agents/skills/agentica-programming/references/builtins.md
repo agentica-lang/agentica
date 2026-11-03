@@ -254,7 +254,8 @@ functions; `Channel[T]` takes `send`, `recv`, `close`, `closed?`, `empty?`;
 `ATS[K, V]` takes every `ATS` function but `new`. Without parentheses,
 `receiver.name` on a non-struct value calls a method with no arguments
 (`s.length`, `xs.size`, `r.ok?`); on a struct it reads a field, and structs and
-enums have no methods. `.call(...)` invokes a function value. An unknown method
+enums have no methods. `.call(...)` invokes a function value, and an `Fn`
+field is called by its name (`store.put(a, b)`). An unknown method
 is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's methods.
 
 Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,

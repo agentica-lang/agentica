@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 148,
+  "stdout": [
+    "ok(\"value of a\")",
+    "error(\"empty key\")",
+    "note: copied a",
+    "ok()",
+    "[\"value of a\", \"value of b\"]",
+    "3",
+    "true",
+    "C",
+    "[11]",
+    ""
+  ],
+  "stderr": []
+}

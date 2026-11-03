@@ -1,0 +1,45 @@
+program #43 0:1:1-287:19:1
+  module "fn-field-call.agc"
+    declaration: struct-decl #8 0:1:1-65:5:1 name="Counter"
+      field: field-decl #3 17:2:3-36:3:1 name="next"
+        type: type-ref #2 23:2:9-35:2:21 name="Fn"
+          arg: type-ref #0 26:2:12-29:2:15 name="Int"
+          arg: type-ref #1 31:2:17-34:2:20 name="Int"
+      field: field-decl #7 38:3:3-61:4:1 name="tell"
+        type: type-ref #6 44:3:9-60:3:25 name="Fn"
+          arg: type-ref #4 47:3:12-53:3:18 name="String"
+          arg: type-ref #5 55:3:20-59:3:24 name="Void"
+    declaration: function-decl #16 66:6:1-109:9:1 name="succ"
+      param: param #10 75:6:10-81:6:16 name="n"
+        type: type-ref #9 78:6:13-81:6:16 name="Int"
+      result: type-ref #11 86:6:21-89:6:24 name="Int"
+      body: return-stmt #15 92:7:3-105:8:1
+        value: binary #14 99:7:10-104:7:15 op=plus op-span=101:7:12-102:7:13 type=Int
+          left: name-ref #12 99:7:10-100:7:11 name="n" type=Int
+          right: literal #13 103:7:14-104:7:15 value=int:1 type=Int
+    declaration: function-decl #23 110:10:1-157:13:1 name="say"
+      param: param #18 118:10:9-130:10:21 name="text"
+        type: type-ref #17 124:10:15-130:10:21 name="String"
+      result: type-ref #19 135:10:26-139:10:30 name="Void"
+      body: expr-stmt #22 142:11:3-153:12:1
+        value: call #21 142:11:3-152:11:13 name="puts" piped=false type=Void
+          arg: name-ref #20 147:11:8-151:11:12 name="text" type=String
+    declaration: function-decl #42 158:14:1-287:19:1 name="main"
+      result: type-ref #24 172:14:15-176:14:19 name="Void"
+      body: binding #30 179:15:3-222:16:1 name="counter"
+        value: construct #29 189:15:13-221:15:45 type="Counter" type=Struct(Counter)
+          arg: named-arg #26 197:15:21-208:15:32 name="next"
+            value: function-ref #25 203:15:27-208:15:32 name="succ" type=Fn([Int], Int)
+          arg: named-arg #28 210:15:34-220:15:44 name="tell"
+            value: function-ref #27 216:15:40-220:15:44 name="say" type=Fn([String], Void)
+      body: expr-stmt #37 224:16:3-260:17:1
+        value: call #36 224:16:3-259:16:38 name="puts" piped=false type=Void
+          arg: method-call #35 229:16:8-258:16:37 name="next" type=Int resolved=field-call
+            target: name-ref #31 229:16:8-236:16:15 name="counter" type=Struct(Counter)
+            arg: method-call #34 242:16:21-257:16:36 name="next" type=Int resolved=field-call
+              target: name-ref #32 242:16:21-249:16:28 name="counter" type=Struct(Counter)
+              arg: literal #33 255:16:34-256:16:35 value=int:1 type=Int
+      body: expr-stmt #41 262:17:3-283:18:1
+        value: method-call #40 262:17:3-282:17:23 name="tell" type=Void resolved=field-call
+          target: name-ref #38 262:17:3-269:17:10 name="counter" type=Struct(Counter)
+          arg: literal #39 275:17:16-281:17:22 value=string:"done" type=String

@@ -18,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   after an `ok` block).
 - A default of a parameter or a struct field may name a module constant
   (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
+- An `Fn` struct field is called by its name: `store.put(a, b)` is
+  `store.put.call(a, b)`.
 
 ### Changed
 

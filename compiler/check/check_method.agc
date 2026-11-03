@@ -2,6 +2,7 @@
 ## access that is not a struct field names a builtin of the receiver's kind; it is checked as the call of that builtin
 ## with the receiver as first argument, and the resolution is recorded by node id for lowering.
 
+import Model from "../catalog/builtin_model"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
@@ -29,7 +30,37 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
     )
   end
 
+  field = fn_field(cx, target.type, node.name)
+  if field.some?
+    return check_field_call(cx, target.st, node, field.unwrap!)
+  end
+
   return method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
+end
+
+## The call of a function value of the given type: one argument for each parameter, each checked against its type, and
+## the result type of the function. Shared by `f.call(args)` and a call of an Fn field (`s.name(args)`).
+export def apply_function(
+  cx: State.Cx,
+  st: State.St,
+  type: T.Type,
+  args: List[Ast.Expr],
+  span: Source.Span,
+) -> Result[State.Out]
+  params = T.params(type)
+  if params.size != args.size
+    return error(State.fail(cx, st, "CHECK-ARITY", "wrong number of function arguments", span))
+  end
+
+  current = st
+  index = 0
+  while index < params.size
+    out = try State.expr(cx, current, args[index], params[index])
+    current = out.st
+    index += 1
+  end
+
+  return ok(State.Out(st: current, type: T.result(type)))
 end
 
 ## Checks target.name: a struct field, or a method without arguments (to_s, size, ...).
@@ -50,6 +81,29 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   end
 
   return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
+end
+
+# The Fn field a struct has under the name, if any. Such a field wins over a method of the same name (to_s, inspect):
+# `s.name(args)` calls the function the field holds, as `s.name.call(args)` does. A field of another type is not
+# callable (CHECK-UNKNOWN-METHOD). A field named `with` cannot hold a function (check_register), so `with(` stays the
+# struct update.
+def fn_field(cx: State.Cx, target: T.Type, name: String) -> Optional[Model.Named]
+  if !T.is?(target, "Struct")
+    return none
+  end
+
+  found = Calls.find_field(CheckTypes.fields_of(cx, target), name)
+  if found.ok? and T.is?(found.unwrap!.type, "Fn")
+    return some(found.unwrap!)
+  end
+
+  return none
+end
+
+# target.name(args) where name is an Fn field: the arguments match the parameters of the function the field holds.
+def check_field_call(cx: State.Cx, st: State.St, node: Ast.MethodCall, field: Model.Named) -> Result[State.Out]
+  called = try apply_function(cx, st, field.type, node.args, node.span)
+  return ok(State.Out(st: State.record_resolved(called.st, node.id, State.Resolved.FieldCall), type: called.type))
 end
 
 # JSON.Codec.decode(codec, text) and the other methods of a codec written as functions: CHECK-UNKNOWN-NAME, since they
@@ -263,8 +317,8 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   field = Calls.find_field(fields, name)
   if cx.functions.has_key?(name)
     return "structs have no methods; call #{name}(...) with the struct as an argument"
-  elsif field.ok? and T.is?(field.unwrap!.type, "Fn")
-    return "#{name} is a function field; call it with .#{name}.call(...)"
+  elsif field.ok?
+    return "#{name} is a field of type #{T.to_text(field.unwrap!.type)}, not a function; call only an Fn field"
   elsif name == "with"
     # No did-you-mean here: a field close to "with" is not a typo of it.
     return "with needs the fields to change, as in .with(field: value); #{Help.field_list(fields)}"

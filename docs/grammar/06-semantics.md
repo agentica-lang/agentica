@@ -815,6 +815,16 @@ maps, parameters, returns and fields. A bare function name is not a value.
 Functions have no equality, fields, indexing or JSON encoding; `IO.inspect`
 prints `<Fn>`.
 
+A field of type `Fn` is called through the struct, without `.call`:
+`store.put(a, b)` is `store.put.call(a, b)`. The arguments are checked against
+the parameters of the field's type (`CHECK-ARITY`, `CHECK-TYPE-MISMATCH`), the
+value is the result of the function, and `store.put` without parentheses still
+reads the function. Structs have no methods, so the name of an `Fn` field
+cannot clash with one, except `to_s` and `inspect`: an `Fn` field of that name
+wins, as the field does when it is read. A field named `with` cannot hold a
+function, so `x.with(...)` is always the struct update. Calling a field of any
+other type, or a name that is no field, is `CHECK-UNKNOWN-METHOD`.
+
 ### Blocks and closures
 
 A block is a function written at the call site, as the last argument of a call:

@@ -102,8 +102,9 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   Strings cannot be indexed (`CHECK-NOT-INDEXABLE`: use `s.at(i)`). List
   indexing is O(log32 n); `for` visits items in order.
 - `&name` references a top-level function without capturing locals: `f: Fn[Int,
-  Int] = &double`, then `f.call(21)`. A block is also a function value and
-  captures locals. Function values go in containers, fields, parameters and
+  Int] = &double`, then `f.call(21)`. An `Fn` field of a struct is called by
+  its name: `store.put(a, b)` is `store.put.call(a, b)`. A block is also a
+  function value and captures locals. Function values go in containers, fields, parameters and
   returns; signatures must match exactly. Bare function names are not values.
   There are no standalone lambdas, equality or JSON encoding; inspect prints
   `<Fn>`.

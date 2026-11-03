@@ -169,6 +169,20 @@ def test_a_function_has_its_calls_and_values_through_every_way_to_name_it(progra
     assert places(values) == [("orders.agc", *where(ORDERS, "&total", 1), "value", "build")]
 
 
+def test_the_call_of_an_fn_field_is_a_read_of_the_field(tmp_path):
+    source = ("struct Counter\n  next: Fn[Int, Int]\nend\n\n"
+              "def succ(n: Int) -> Int\n  return n + 1\nend\n\n"
+              "def run() -> Int\n  counter = Counter(next: &succ)\n  return counter.next(counter.next(1))\nend\n")
+    (tmp_path / "counter.agc").write_text(source, encoding="utf-8")
+    report = answer(("counter.agc", where(source, "next: Fn")), cwd=tmp_path)
+    assert (report["definition"]["kind"], report["definition"]["struct"]) == ("field", "Counter")
+    assert places(report) == [
+        ("counter.agc", *where(source, "next: &succ"), "construct", "run"),
+        ("counter.agc", *where(source, "next(counter"), "read", "run"),
+        ("counter.agc", *where(source, "next(1)"), "read", "run"),
+    ]
+
+
 def test_a_name_that_nothing_uses_has_an_empty_list_and_exit_0(program):
     report = answer(("models.agc", where(MODELS, "unused", 2)), cwd=program)
     assert (report["definition"]["kind"], report["definition"]["name"], report["references"]) == (

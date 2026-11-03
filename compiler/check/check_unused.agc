@@ -100,6 +100,7 @@ end
 def resolved_is_call?(found: State.Resolved) -> Bool
   case found
     State.Resolved.Call(name, receiver) -> return true
+    State.Resolved.FieldCall -> return true
     _ -> return false
   end
 end
