@@ -1,48 +1,41 @@
 ## 41. Dates and times
 
-**Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
-section, and the roadmap order table does not place it. Its types are checker
-changes, so they are written in `compiler/`, the Agentica front end (41.13), as
-the owner decided on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and
-has landed. `std/utc` (`UTC.parts`, `UTC.iso8601`) is the stopgap until the
-`Time` functions land, which replace it. They differ from it: microseconds, not
-milliseconds; a year outside 1 to 9999 is an error, where `std/utc` writes it
-with its sign; and `Time.format` always writes six fraction digits, where
-`UTC.iso8601` takes a count (0 to 9). The rest adds no grammar syntax: new
-builtin types and new functions of the existing `Time` module. Every name here
-is a proposal for the owner to review. The precision is microseconds, as the
-owner decided on 2026-10-15 (41.8).
+**Status:** designed, not scheduled (the owner's scope of 2026-10-14; the
+roadmap order table does not place it). The types are checker changes, so they
+are written in `compiler/` (41.13), as the owner decided on 2026-10-15.
+`Time.monotonic_ns` (41.10) is independent and has landed. `std/utc`
+(`UTC.parts`, `UTC.iso8601`) is the stopgap until the `Time` functions replace
+it; they differ: microseconds, not milliseconds; a year outside 1 to 9999 is an
+error, where `std/utc` writes it with its sign; and `Time.format` always writes
+six fraction digits, where `UTC.iso8601` takes a count (0 to 9). No grammar
+syntax is added: new builtin types and new functions of the existing `Time`
+module. Every name is a proposal for the owner to review. The precision is
+microseconds (owner, 2026-10-15; 41.8).
 
-Programs compute with dates and times: a due date, the timestamp of a log
-line (the grammar's logging section), an expiry, a time from a JSON API.
-Today a program has `Time.now_ms()` (wall clock) and `Time.monotonic_ms()`, and
-nothing else. It turns milliseconds into a date by hand, and it cannot tell a
-value with an offset from one without. `File.stat` gives `modified_seconds` as
-Unix seconds, so `Time.from_unix(info.modified_seconds)` turns it into a
-`DateTime`.
+Programs compute with dates and times (a due date, a log timestamp, an expiry,
+a time from a JSON API), and today have only `Time.now_ms()` and
+`Time.monotonic_ms()`. `Time.from_unix(info.modified_seconds)` turns the
+`File.stat` result into a `DateTime`.
 
 ### 41.1 Where it lives, and the exception to "std/ first"
 
-The roadmap rule "New library features: `std/` first" (`docs/roadmap/README.md`)
-puts pure computation in `stdlib/*.agc`. This section is a deliberate exception,
-chosen by the owner on 2026-10-14: the calendar types and their conversions are
-native, as builtins of the existing `Time` module, written in C under `vm/`. The
-reasons:
+The roadmap rule "New library features: `std/` first" puts pure computation in
+`stdlib/*.agc`. This section is a deliberate exception (owner, 2026-10-14): the
+calendar types and their conversions are builtins of the existing `Time`
+module, written in C under `vm/`.
 
-- The types are the part a `std/` module cannot give. A struct declared in a
-  module is constructible by any program and its name is not reserved, so the
-  rule "a `Date` is a real day" cannot be kept. The types must be builtins
-  (41.2), and the functions that build and read them belong next to them.
+- The types are what a `std/` module cannot give: a struct declared in a module
+  is constructible by any program and its name is not reserved, so the rule "a
+  `Date` is a real day" cannot be kept. The functions that build and read them
+  belong next to them (41.2).
 - One place for time: `Time.now_ms` and `Time.monotonic_ms` already live there,
   and `Time.now()` returns the same clock as a `DateTime`.
-- Speed: a conversion is a few dozen integer operations in C, one builtin call.
-  An Agentica version would cost about a hundred interpreted steps per
-  conversion (an estimate, not measured), and each step counts against
-  `--max-steps`.
+- Speed: a conversion is a few dozen integer operations in C, one builtin call;
+  an Agentica version would cost about a hundred interpreted steps (an estimate,
+  not measured), each counting against `--max-steps`.
 
-The exception is not yet in the roadmap rule. When the types land, the rule
-gets a new item: calendar types and their conversions, which need a builtin
-type. This section does not edit the rule text.
+When the types land, the roadmap rule gets an item for calendar types that need
+a builtin type.
 
 ### 41.2 Types
 
@@ -352,16 +345,11 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
 
 ### 41.9 Algorithms
 
-Days from civil date and back use the two published algorithms of Howard Hinnant
-(`days_from_civil` and `civil_from_days`, in his note "chrono-compatible
-low-level date algorithms"). The C code is written for this repo from those
-steps; nothing is copied from another project.
-
-Division needs care. `docs/grammar/06-semantics.md` says integer `/` truncates
-toward zero and `%` takes the sign of the dividend, and the C operators do the
-same. The algorithms rely on floor division for negative values (days before
-1970, negative instants). The code uses `floor_div` and `floor_mod` helpers with
-a positive divisor, and the vectors cover negative inputs (41.15).
+Days from civil date and back use Howard Hinnant's `days_from_civil` and
+`civil_from_days`, written for this repo from those steps. The algorithms need
+floor division for negative values, while integer `/` and `%` truncate
+(`docs/grammar/06-semantics.md`); the code uses `floor_div` and `floor_mod`
+helpers with a positive divisor, and the vectors cover negative inputs (41.15).
 
 ### 41.10 Measuring elapsed time
 
@@ -379,25 +367,17 @@ end
   `Time.now()`, or a difference of two `DateTime` values. The wall clock can
   jump, so the difference can be negative or wrong. `Time.us_between` is for
   calendar differences (days until a due date), not for how long code runs.
-- `Time.monotonic_ns() -> Int` (landed): nanoseconds from an arbitrary
-  origin that never goes backward. It reads the same clock as
-  `Time.monotonic_ms`, with the same code: `clock_gettime(CLOCK_MONOTONIC)` on
-  POSIX and `QueryPerformanceCounter` on Windows. On Windows it splits the
-  counter into seconds and a remainder before it scales to nanoseconds, as
-  `monotonic_ms` does, because multiplying the raw count by 10^9 overflows an
-  Int after about 15 minutes of uptime at the usual 10 MHz frequency. An Int
-  holds about 292 years of nanoseconds from the origin, which the program never
-  reads, so the range is not a practical limit.
-- Why nanoseconds: short work (a call of a few microseconds) is invisible in
-  milliseconds.
-- Why not `uv_hrtime`: `vm/numbers.c` reads the OS clock directly for
-  `monotonic_ms`, and a second clock path would let the two builtins disagree.
-  The owner may prefer libuv; the two can be compared.
-- This is exception 1 of the std-first rule (the OS clock), so it is a C
-  builtin, independent of the types.
-- No `elapsed` helper. The helper would be `Time.monotonic_ms() - start` with a
-  name, and it would hide which clock it reads. The existing code
-  (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
+- `Time.monotonic_ns() -> Int` (landed): nanoseconds from an arbitrary origin
+  that never goes backward, from the clock `Time.monotonic_ms` reads
+  (`clock_gettime(CLOCK_MONOTONIC)` on POSIX, `QueryPerformanceCounter` on
+  Windows, split into seconds and a remainder before scaling, since multiplying
+  the raw count by 10^9 overflows an Int after about 15 minutes at 10 MHz). Why
+  nanoseconds: short work is invisible in milliseconds. Why not `uv_hrtime`: a
+  second clock path would let the two builtins disagree (the owner may prefer
+  libuv). It is exception 1 of the std-first rule (the OS clock).
+- No `elapsed` helper: it would be `Time.monotonic_ms() - start` with a name and
+  would hide which clock it reads (`stdlib/test/runner.agc` writes the
+  subtraction).
 
 ### 41.11 Relation to `std/logger`
 
@@ -418,37 +398,34 @@ there too.
 
 ### 41.12 Cost
 
-A conversion is one builtin call (one step plus its arguments). Allocation is
-one fixed-size record for each date or time value (no list or nested record
-field), and one `String` for text. Parsing scans the text once.
+A conversion is one builtin call. Allocation is one fixed-size record per value
+(no list or nested record field) and one `String` for text. Parsing scans the
+text once.
 
 ### 41.13 Freeze and roadmap impact
 
 The types, the reserved names, the construction rule and its code are a checker
-change, and the `Time.*` functions (41.3 to 41.7) return the new types, so their
-catalog rows come with them. Both are written in `compiler/` (the Agentica front
-end, §18; catalog: §18.3), as the owner decided on 2026-10-15, with the C side
-in a new `vm/dates.c`. The order table is not changed by this section; the
-roadmap's "Designed, not scheduled" paragraph says where the types wait.
-`Time.monotonic_ns` (41.10) landed alone, as a builtin row.
+change, and the `Time.*` functions return the new types, so their catalog rows
+come with them: all in `compiler/` (§18), with the C side in a new
+`vm/dates.c` (owner, 2026-10-15). The order table is not changed by this
+section. `Time.monotonic_ns` (41.10) landed alone, as a builtin row.
 
 ### 41.14 Docs of the implementation PR
 
-The grammar, the programming skill (a `references/dates.md`), a site page and a
+The grammar, the programming skill (`references/dates.md`), a site page and a
 **Breaking:** CHANGELOG entry for the reserved names. When the feature lands,
-§41 leaves `docs/future/` (`docs/future/README.md`).
+§41 leaves `docs/future/`.
 
 ### 41.15 Tests
 
-The independent peer is a Python generator (standard library only, `datetime`
-and `timedelta`, fixed seed) that writes the input of a golden fixture. The
-vectors cover the epoch and the microseconds before it (41.9), the bounds of
-years 1 and 9999 at the extreme offsets (41.8), leap days, month ends, offsets
-from -1439 to 1439 minutes, and fractions of six, seven and nine digits. Round
-trips: `parse` of `format`, `from_unix_us` of `to_unix_us`, the naive and time
-forms, and `add_days` of `days_between`; records have no `==` (41.2), so checks
-use `compare`. Every error message of 41.3 and 41.6 has a golden, and the
-checker codes are asserted with their spans.
+The peer is a Python generator (standard library only, `datetime`, fixed seed)
+that writes the input of a golden fixture. The vectors cover the epoch and the
+microseconds before it, the bounds of years 1 and 9999 at the extreme offsets
+(41.8), leap days, month ends, offsets from -1439 to 1439, and fractions of six,
+seven and nine digits. Round trips: `parse` of `format`, `from_unix_us` of
+`to_unix_us`, the naive and time forms, `add_days` of `days_between`; records
+have no `==` (41.2), so checks use `compare`. Every error message of 41.3 and
+41.6 has a golden, and the checker codes are asserted with their spans.
 
 ### 41.16 Later
 
@@ -533,20 +510,17 @@ names do not clash with the types, because enum variants are not reserved
 
 The costs, to be accepted when it lands:
 
-- Conformance. Year `0000` and second `60` are valid TOML 1.0, and std/toml
-  accepts both today. §41 rejects both (41.8), so they become a std/toml parse
-  error at the value's position. Python's `tomllib`, the test peer of 45.11,
-  rejects both too. This is a small loss of conformance, and it is documented.
-- Round trip. It is semantic, not textual. `Time.format` writes six fraction
-  digits and `Z`, so `07:32:00` comes back as `07:32:00.000000`. `-00:00`,
-  lowercase `t` and `z`, and digits past the sixth are lost as well. The value
-  stays the same at microsecond precision; the text does not.
-- Space for `T`. TOML allows a space (`1979-05-27 07:32:00Z`). std/toml changes
-  it to `T` before it calls the parser, since §41.6 rejects a space.
-- Truncation. TOML asks for truncation of fraction digits past the precision an
-  implementation keeps, which §41.6 does too.
-- TOML 1.1 makes seconds optional. If std/toml moves to 1.1, `parse_time` would
-  need to accept `HH:MM`.
+- Conformance: year `0000` and second `60` are valid TOML 1.0 and std/toml
+  accepts both today; §41 rejects both (41.8), so they become a parse error at
+  the value's position (Python's `tomllib`, the test peer of 45.11, rejects both
+  too).
+- The round trip is semantic, not textual: `07:32:00` comes back as
+  `07:32:00.000000`; `-00:00`, lowercase `t` and `z`, and digits past the sixth
+  are lost.
+- TOML allows a space for `T`; std/toml changes it to `T` before parsing, since
+  §41.6 rejects a space.
+- TOML 1.1 makes seconds optional; moving to 1.1 would need `parse_time` to
+  accept `HH:MM`.
 
 ### 41.20 Questions for the owner
 

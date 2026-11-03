@@ -1,83 +1,39 @@
 ## 42. Sized numeric types
 
-**Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
-section. It is implemented in the Agentica front end (`compiler/`) and the VM,
-so it is a checker change and not VM-only. Every name and every choice is a
-proposal for the owner to review. Each open choice has a recommendation and one
-line of reasoning, and the rejected options are named.
+**Status:** designed, not scheduled (the owner's scope of 2026-10-14). It is a
+checker and VM change, not VM-only. Every name and choice is a proposal for the
+owner to review; each open choice has a recommendation, a reason and the
+rejected options.
 
-Agentica has one integer type, `Int` (signed 64-bit), and one float type,
-`Float` (IEEE binary64). This section adds fixed-width integer types (`Int8`,
-`Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`, `UInt64`) and `Float32`, with the
-rules that keep them safe for agents to write.
+`Int` (signed 64-bit) and `Float` (IEEE binary64) are the only numeric types.
+This section adds `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`,
+`UInt64` and `Float32`, with the rules that keep them safe for agents to write.
 
-### 42.1 Decisions at a glance
+### 42.1 Summary
 
-Each choice is argued in the section named; the recommendation is the text
-there.
-
-- Types: `Int8`, `Int16`, `Int32`, `UInt8`, `UInt16`, `UInt32`, `UInt64`,
-  `Float32`; `Int64` and `Float64` are aliases; `Int` and `Float` stay the
-  default spellings; no `Byte`; `Bytes` is its own type (42.4, 42.10). Float16
-  and BFloat16 later (42.9).
-- Literals: typed by context, `Int` or `Float` with none; no suffixes; no hex
-  yet; out of range is `CHECK-INT-RANGE`, and `CHECK-FLOAT-RANGE` is new (42.5).
-- Conversions: plain value when it cannot fail, `Result` when it can, `!`
-  halts, `wrap_` wraps (42.6).
-- Arithmetic: same type only (`CHECK-TYPE-MISMATCH`, no implicit widening);
-  overflow halts at each width in both directions (`RUNTIME-INTEGER-OVERFLOW`);
-  `wrapping_add`, `wrapping_sub`, `wrapping_mul` on every integer type; the
-  seven `Int` bit names read at each width (42.7).
-- `UInt64` prints unsigned, and JSON decoding reads the stored text (42.8).
-- Map keys: every integer type, no floats; `Range`: `Int` only (42.10).
-- JSON: sized struct fields, with bounds in the schema (42.10).
-- `std/binary` moves to the sized types in step 3 (breaking, 42.10).
-- VM: one new tag per kind; the `Int` opcodes stay; one `FIT` opcode after
-  64-bit ops; unsigned ops for `UInt64`; `ROUND_F32` (42.11).
-- Storage: `agc_value` items in steps 1 to 3; typed storage in step 4, if
-  measured (42.12).
-- Phasing: 1 integers, 2 Float32, 3 binary API, 4 storage (gated) (42.13).
-- `Int` and `Float` are 64 bits on every target (42.4, 42.16).
+Types, literals, conversions, arithmetic and VM choices are argued in 42.4 to
+42.11. Phasing is 42.13: 1 integers, 2 Float32, 3 binary API (breaking), 4
+typed storage (gated by measurement). `Int` and `Float` are 64 bits on every
+target (42.4, 42.16).
 
 ### 42.2 Today
 
-- `Int` is signed 64-bit. Overflow in `+`, `-`, `*`, unary `-` and `MIN / -1`
-  halts with `RUNTIME-INTEGER-OVERFLOW` (`docs/grammar/06-semantics.md`).
-- `Float` is IEEE binary64. A float literal is digits, a `.` and digits, with no
-  exponent (`docs/grammar/04-lexical.md`). A float literal of 401 digits checks.
-  The value it runs with is not checked here, so §42.5 settles the range.
-- Integer literals take `_` separators. `0xFF`, `200u8` and `1e3` are
-  `PARSE-UNEXPECTED-TOKEN`.
-- An integer literal above the 64-bit range is `CHECK-INT-RANGE`.
-  `-9223372036854775808` checks, so the smallest `Int` needs no special form.
-- There is no implicit numeric conversion. `2 * 1.5`, `1 == 1.0`, `x: Float =
-  1`, `[1.0, 2]` and a `Range` of Floats are all `CHECK-TYPE-MISMATCH`.
-- A `Map` key that is not an integer or string type is `CHECK-MAP-KEY-TYPE`
-  (`Map[Float, Int]`).
-- The checker's method aliases map `s.to_i` to `String.to_int`, `n.to_f` to
-  `Float.from_int`, `n.to_s` to `String.from_int` and `x.to_i!` to
-  `Float.to_int!`.
-- `check_binary` checks both operands with no expected type. Literal typing
-  from the other operand needs a change there.
-- A `List[Int]` item takes 8 bytes (unboxed leaves, `docs/vm/17-lists.md`
-  §17.12), and an item of any other list is an `agc_value`, which is 16 bytes
-  (`vm/value.h`). So a byte in a `List[Int]` costs 8 bytes, not one.
-- The VM picks typed opcodes from static types: `AGC_OP_ADD_I` and
-  `AGC_OP_ADD_F` are separate opcodes. The checker's types reach lowering.
+- `Int` overflow halts with `RUNTIME-INTEGER-OVERFLOW`; there is no implicit
+  numeric conversion; a float literal has no exponent; integer literals have
+  no hex or suffix forms (`docs/grammar/04-lexical.md`, `06-semantics.md`).
+- A float literal of 401 digits checks: the value it runs with is not checked
+  (§42.5 settles the range).
+- A user `struct Int8` checks, so reserving the names is breaking (§42.15).
+- A `List[Int]` item takes 8 bytes (`docs/vm/17-lists.md` §17.12); any other
+  item is a 16-byte `agc_value`, so a byte costs 8 bytes.
+- The VM picks typed opcodes from static types (`AGC_OP_ADD_I`,
+  `AGC_OP_ADD_F`); generic paths read the tag (`vm/equal.c`, `vm/map.c`).
 - The `.agcb` type table has the kinds `INT`, `FLOAT`, `BOOL`, `STRING`, `LIST`,
-  `MAP` and `STRUCT` (`AGC_TYPE_*` in `vm/value.h`). The loader rejects an
-  unknown kind (`load_types` in `vm/loader.c`). Typed JSON uses these kinds
-  (`vm/json_typed.c`).
-- A JSON integer beyond `Int` is kept as its text until it is extracted
-  (`AGC_JSON_BIG`). `JSON.int` extracts `Int` only.
-- Float text is `agc_float_text` (`vm/value.c`). It tries 15 to 17 digits
-  and keeps the first that reads back to the same double, then strips trailing
-  zeros. JSON encoding uses it too.
-- A user `struct Int8` checks. So reserving the new names is a breaking change
-  (§42.15).
-- Equality and map keys test the tag (`vm/equal.c`, `vm/map.c`), as do other
-  generic paths (42.11).
-
+  `MAP`, `STRUCT`; the loader rejects an unknown kind. A JSON integer beyond
+  `Int` is kept as its text (`AGC_JSON_BIG`); `JSON.int` extracts `Int` only.
+- `agc_float_text` tries 15 to 17 digits and keeps the first that reads back.
+- `check_binary` checks both operands with no expected type; literal typing
+  from the other operand needs a change there.
 ### 42.3 Motivation, and what it costs
 
 The reasons, in the order of their weight:
@@ -109,27 +65,10 @@ Literals stay plain (§42.5). Conversions are explicit, as they are today with
 `to_f` and `to_i!` (§42.6). The rule for conversions is one rule (§42.6). And
 the evaluation rounds measure the binary tasks again after step 3 (§42.13).
 
-Other languages, by their own rules:
-
-- Go: int8 to int64, uint8 to uint64; no implicit conversion; wraps silently;
-  the wrap is the rule.
-- Rust: i8 to i128, u8 to u128; no implicit conversion (`as` casts); panics in
-  debug, wraps in release; `wrapping_*`, `checked_*`, `saturating_*`;
-  `try_from` returns a Result.
-- Swift: Int8 to Int64, UInt8 to UInt64; no implicit conversion; traps; `&+`,
-  `&-`, `&*`; `init(exactly:)` returns an optional.
-- Zig: any width; safe widening only; illegal behavior, checked in safe builds;
-  `+%`, `+|`; `@intCast` is checked.
-- Kotlin: Byte to Long and unsigned types; no implicit conversion; wraps
-  silently; no modular ops in the core.
-- C#: sbyte to ulong; widening only; unchecked unless in `checked`.
-- Python, Ruby: one arbitrary-precision `int`; never overflows.
-
-The pattern: the languages that avoid silent wrong results halt on overflow
-(Rust in debug, Swift, Zig in safe builds), and they name the wrap operations
-(`wrapping_`, `&+`, `+%`). Most of them convert explicitly. Agentica follows
-that pattern and keeps the existing rule of §6 that there is no implicit
-conversion.
+Other languages: those that avoid silent wrong results halt on overflow (Rust
+in debug, Swift, Zig in safe builds), name the wrap operations (`wrapping_`,
+`&+`, `+%`) and convert explicitly. Agentica follows that and keeps the rule of
+§6 that there is no implicit conversion.
 
 ### 42.4 Names and aliases
 
@@ -141,8 +80,8 @@ conversion.
   are the same type, not a second one. Reason: `String.length`, `Random.int`,
   `JSON.int` and every other builtin return `Int`, and a second 64-bit type
   would make each of them a conversion. Messages print the canonical `Int` and
-  `Float`. The alias holds only while `Int` is 64 bits on every target (§42.1,
-  §42.16).
+  `Float`. The alias holds only while `Int` is 64 bits on every target
+  (§42.16).
 - **`Int` and `Float` stay the default spellings** in the examples and the
   builtin signatures. Reason: agents learn one name for the
   common case, and the new names are for the cases that need a width.
@@ -525,24 +464,21 @@ With (C), the operations are:
 
 ### 42.12 Storage (§38.6)
 
-- **Step 4, gated by measurement.** Typed storage stores a list of a scalar type
-  with its element width: 1 byte for `Int8` and `UInt8`, 2 bytes for the 16-bit
-  types, 4 bytes for the 32-bit types and `Float32`, and 8 bytes for `Int`,
-  `UInt64` and `Float`. No tag is stored per item. The list header holds the
-  element kind, so the paths that have no static type (`inspect`, `to_s`,
-  `JSON.encode`, `List.sort` and equality, §42.11) read the width from the list,
-  as they read a tag today. A read rebuilds the `agc_value` from the element
-  kind (§38.6, item 1). `Int` and `Float` lists are already unboxed at 8 bytes
-  (§17.12), so step 4 is for `UInt64` and the narrower widths.
-- **Why not earlier.** It touches every container that holds values, and the
-  persistent vector (§17.12) would need leaves of more widths than its 8-byte
-  Int and Float leaves. §38.7 says to change the value layout only when a
-  measurement says so. The criterion: a program that reads a 10 MB file into a
-  `List[UInt8]` has a peak RSS that is too high for its task, measured with the
-  benchmark script, and the change is made only if the list items are the limit.
-- **What it buys.** A `List[UInt8]` of 10 MB costs about 10 MB with typed
-  storage, against about 160 MB with 16-byte items.
+**Step 4, gated by measurement.** Typed storage keeps a list of a scalar type at
+its element width (1 byte for `Int8` and `UInt8`, 2 for the 16-bit types, 4 for
+the 32-bit types and `Float32`, 8 for `Int`, `UInt64` and `Float`), with no tag
+per item. The list header holds the element kind, so the paths that have no
+static type (`inspect`, `to_s`, `JSON.encode`, `List.sort`, equality; §42.11)
+read the width from the list, and a read rebuilds the `agc_value` (§38.6, item
+1). `Int` and `Float` lists are already unboxed at 8 bytes (§17.12), so step 4
+is for `UInt64` and the narrower widths. A `List[UInt8]` of 10 MB would cost
+about 10 MB, against about 160 MB with 16-byte items.
 
+**Why not earlier.** It touches every container that holds values, and the
+persistent vector (§17.12) would need leaves of more widths. §38.7 says to
+change the value layout only when a measurement says so. The criterion: a
+program that reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for
+its task, measured with the benchmark script, and the list items are the limit.
 ### 42.13 Phasing and tests
 
 Each step is one or more PRs. Each PR holds its own contracts, with its own
@@ -563,24 +499,18 @@ should have made.
   `binary` arm of the evaluation rounds.
 - **Step 4: typed storage, if measured.** §42.12.
 
-Tests, for each step: goldens for the VM, an independent Python peer with the
-standard library only (unbounded integers masked to the width; for Float32 the
-exact result with `fractions.Fraction` rounded to binary32 by integer
-arithmetic, and the shortest printing checked with exact arithmetic, never
-through a `double` or `repr`), round trips of the conversions, and checker
-goldens that assert the code and the span (`CHECK-INT-RANGE`,
-`CHECK-TYPE-MISMATCH`, `CHECK-MAP-KEY-TYPE`, `CHECK-FLOAT-RANGE`,
-`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INVALID-COUNT`).
+Tests, for each step: VM goldens, an independent Python peer (unbounded
+integers masked to the width; for Float32 the exact result by
+`fractions.Fraction` rounded by integer arithmetic, never through a `double`
+or `repr`), conversion round trips, and checker goldens that assert code and
+span.
 
 ### 42.14 Freeze and bootstrap impact
 
-- **Where it lands.** The Agentica front end (`compiler/`), which is the only
-  front end. The sized rows go into its catalog.
-- **`stage0`.** Step 1 adds no syntax, and the compiler's own code does not use
-  the new types, so no `stage0` refresh is needed for it. Step 3 may change the
-  compiler's use of `std/binary`, which is a `stage0` change under §18.2 if it
-  does. The format change (§42.11) is the `stage0` path of §18.2.
-
+The sized rows go into the catalog of `compiler/`. Step 1 adds no syntax and
+the compiler does not use the new types, so it needs no `stage0` refresh. Step
+3 may change the compiler's use of `std/binary`, and the format change (§42.11)
+is the `stage0` path of §18.2.
 ### 42.15 Breaking changes
 
 - **Reserved names (step 1).** `Int8` to `UInt64`, `Float32`, `Int64` and
@@ -597,56 +527,40 @@ goldens that assert the code and the span (`CHECK-INT-RANGE`,
 
 ### 42.16 Later and not planned
 
-Later, each when a real program needs it:
-
-- Float16 and BFloat16 (§42.9).
-- Saturating conversions and methods (§42.6).
-- Checked arithmetic methods that return a Result (§42.7).
-- Hex, octal and binary literals (§42.5). This is the most likely first
-  addition.
-- Text parsers for the sized types, `UInt64` first (§42.6).
-- A sized JSON extractor such as `JSON.uint64` (§42.8).
-- SIMD vectors of the sized types (§19).
-- Packed struct fields for the sized types (§38.6, item 3), after step 4.
+Later, each when a real program needs it: Float16 and BFloat16 (§42.9);
+saturating conversions and methods (§42.6); checked arithmetic methods that
+return a Result (§42.7); hex, octal and binary literals (§42.5, the most likely
+first addition); text parsers for the sized types, `UInt64` first (§42.6); a
+sized JSON extractor such as `JSON.uint64` (§42.8); SIMD vectors of the sized
+types (§19); packed struct fields (§38.6, item 3), after step 4.
 
 Not planned:
 
-- **Arbitrary-precision integers (`BigInt`).** Python's `int` is the case for
-  it. It would need allocation and its own cost on the hot path, and no program
-  needs it yet.
-- **A decimal type.** No program needs one, and it is not on the roadmap.
-- **Implicit numeric promotion or widening.** A second rule would make
-  conversion errors invisible to agents. Explicit conversions only (§42.6).
-- **Operator overloading to make conversions implicit.** §6 says there is none.
-- **A `Byte` alias** (§42.4).
-- **An unsigned `Int`.** `Int` stays signed, and `UInt64` covers the range above
-  it.
-- **A target-dependent `Int` width.** The owner confirmed that `Int` and
-  `Float` stay 64-bit on every target. A 32-bit option is only a note: the owner
-  noted that it could be revisited if an old 32-bit architecture ever becomes a
-  target; none is planned.
-  - Design rationale (the author's, not the owner's): the VM stores `Int` as C
-    `int64_t` and `Float` as `double`, which C provides on 32-bit CPUs too. A
-    32-bit build must compute `Float` in hardware double (SSE2 on x86, VFP on
-    ARM), since x87 extended precision gives other results. A build option for a
-    32-bit `Int` would make the same program overflow on one target and not on
-    another, and `.agcb` files would not move between them.
+- **Arbitrary-precision integers (`BigInt`)** (needs allocation and a hot-path
+  cost, and no program needs it) and **a decimal type**.
+- **Implicit numeric promotion or widening**, and **operator overloading to make
+  conversions implicit** (§6 says there is none): a second rule would make
+  conversion errors invisible to agents.
+- **A `Byte` alias** (§42.4) and **an unsigned `Int`** (`UInt64` covers the
+  range above `Int`).
+- **A target-dependent `Int` width.** The owner confirmed `Int` and `Float` stay
+  64-bit on every target; a 32-bit option could be revisited only if an old
+  32-bit architecture becomes a target (none is planned). Rationale (the
+  author's): the VM stores `Int` as `int64_t` and `Float` as `double`, which C
+  provides on 32-bit CPUs too, but a 32-bit build must compute `Float` in
+  hardware double (SSE2, VFP; x87 gives other results), and a 32-bit `Int`
+  option would make one program overflow on one target and not another, and
+  `.agcb` files would not move between them.
 
 ### 42.17 Questions for the owner
 
 - **Literal typing (42.5, "Operators, calls and sign").** Adopt the rule as
-  written: a literal, or a literal expression of arithmetic operators, takes the
-  other operand's type; with two literal expressions, an arithmetic operator
-  passes the expected type into both operands, and a comparison does not; a type
-  variable of a call is fixed by its other arguments; and a unary `-` folds into
-  an integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
-  adopt it.
-- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern),
-  or change to `UInt64` in step 3? Recommendation: change it in step 3, with the
-  other bit builtins, so one type holds a 64-bit pattern. This is breaking, and
-  it is a choice of API, not of correctness.
-- **Trigger for step 4.** The measurement in §42.12 is a proposal. The owner may
+  written. Recommendation: adopt it.
+- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern), or change to
+  `UInt64` in step 3? Recommendation: change it in step 3 with the other bit
+  builtins, so one type holds a 64-bit pattern (breaking; an API choice, not a
+  correctness one).
+- **Trigger for step 4.** The measurement in §42.12 is a proposal; the owner may
   prefer a fixed trigger, for example a benchmark row of roadmap 14.
-- **Hex literals.** Keep them later (recommended), or bring them into step 1
-  when the literal rules are written, since the `0xFF` form is what binary code
-  asks for first.
+- **Hex literals.** Keep them later (recommended), or bring them into step 1,
+  since the `0xFF` form is what binary code asks for first.

@@ -6,24 +6,15 @@ a usable interpreter. Planned syntax lives in
 
 ## Current implementation order
 
-The core interpreter, Results, JSON, function values, tasks, BDD, TCP, TLS,
-HTTP, files, processes, modules, packages and the FFI core are implemented. The
-bytecode VM is the only backend: `agentica file.agc` compiles in-process and
-runs on the VM of the same binary, and `agentica run` runs a compiled `.agcb`.
-Small items stay open in 7e (loader validation for opcodes as they land) and 7f
-(the extra corpora).
+The language, the bytecode VM (the only backend), the runtime services and the
+FFI core are implemented. Small items stay open in 7e (loader validation for
+opcodes as they land) and 7f (the extra corpora).
 
 The list below is the one source for the order of pending work and its
-dependencies; each item names its phases and the sections that specify them.
-Phase and row numbers stay stable; done rows keep one line each, and git history
-keeps their records.
+dependencies. Phase and row numbers stay stable; done rows keep one line each,
+and git history keeps their records.
 
 ### Order after 0.8.0 (owner, 2026-10-21)
-
-Released: 0.9.0 (the FFI core, FFI-a, with its Windows and macOS parity) and
-0.10.0 (the JIT groundwork, the rest of the FFI core, and the x86-64 JIT with
-our own emitter, no sljit). The CHANGELOG has the records. Smaller values
-(#396) are deferred.
 
 - **Linux first:** new VM and C features land on Linux first. Until the Windows
   and macOS port, the feature is refused there with a clear error, and its
@@ -36,28 +27,20 @@ Items 1 to 4 (FFI-a, cached bytecode, packages
 
 5. The formatter
    [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt) (row 7.9).
-   The owner answered the open questions of
-   [§47.9](../future/47-formatter.md#479-open-questions) on 2026-10-31; 47a,
-   47b and 47c are done, and 47d waits for the language server.
+   47a to 47c are done; 47d waits for the language server.
 6. [#396](https://github.com/agentica-lang/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
-   not only Linux.
+   not only Linux. Deferred.
 
 Weighed later (no fixed order):
 
-7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
-   (row 7.10).
 12. UDP [#450](https://github.com/agentica-lang/agentica/issues/450) (row 7.5):
     it leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
 14. Test functions [§50](../future/50-test-functions.md#50-test-functions)
     (row 7.11).
 15. `Set[T]` and `Queue[T]` (row 12; `Set` is done).
-16. HTTP streaming, 20e to 20g
-    ([§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), with
-    `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts); 19a,
-    19b and ALPN, 19c, are done).
 17. [#469](https://github.com/agentica-lang/agentica/issues/469): the doc site.
 19. The Windows issues
     [#474](https://github.com/agentica-lang/agentica/issues/474),
@@ -68,30 +51,29 @@ Weighed later (no fixed order):
 ### Done rows
 
 - **1 to 4:** the everyday library (5n), typed JSON (5f2, 5i), modules with
-  `std/` and `pkg/`, and the Ruby-style ergonomics (the accepted forms are in
-  [§25](../future/25-ruby-typed-idioms.md)).
+  `std/` and `pkg/`, and the Ruby-style ergonomics
+  ([§25](../future/25-ruby-typed-idioms.md)).
 - **5 to 7:** the C VM core with the Boehm GC
-  (`docs/vm/12-testing-and-pr-plan.md` §12.2), tasks with the fairness rule
+  (§12.2 of `docs/vm/12-testing-and-pr-plan.md`), tasks with the fairness rule
   (`docs/vm/10-io-scheduler.md` §10.2.1), and the VM as the default backend.
 - **7.1:** processes, VM tracing (14a), TCP, TLS, HTTP 20a and BDD in Agentica
   ([phase 21](21-bdd-in-agentica.md), [`docs/bdd.md`](../bdd.md)).
 - **7.2:** `HTTP` is the free import alias of `std/http` (owner, 2026-10-13).
 - **7.2.1:** HTTP 20b and 20c (`std/http`, its server), task crash isolation
-  (phase 24: a crash ends only its task; a handle belongs to the task that
-  opened it, [§14.5](../vm/14-core-invariants.md#145-handles)) and unit tests
+  (phase 24, [§14.5](../vm/14-core-invariants.md#145-handles)) and unit tests
   ([phase 25](25-unit-tests.md)).
 - **7.2.1a to 7.2.1h:** the VM core
   ([§14](../vm/14-core-invariants.md#14-vm-core-invariants)), the first part of
-  the [VM layers](07-vm.md#7l-vm-layers), the architecture note
-  ([§16](../vm/16-architecture.md#16-vm-architecture)), asynchronous process
-  close and the flush limit, `Channel[T]` (17b), stdout and stderr on the loop,
-  the pipe operator `|>` (15l), and `File.each_line` (17d).
+  the [VM layers](07-vm.md#7l-vm-layers) (7.2.1b), the architecture note
+  ([§16](../vm/16-architecture.md#16-vm-architecture), 7.2.1c), asynchronous
+  process close and the flush limit (7.2.1d), `Channel[T]` (17b, 7.2.1e),
+  stdout and stderr on the loop (7.2.1f), the pipe operator `|>` (15l), and
+  `File.each_line` (17d, 7.2.1h).
 - **7.2.2, 7.2.3:** the 6c pilot and the smaller skill (`docs/eval.md`, rounds
   9 to 12).
 - **7.2a:** doc comments (22a, [§32](../future/32-doc-comments.md)) and digit
-  separators (phase 23, the grammar's literals).
-- **22b:** `agentica doc PATH` and `agentica help std/MODULE[.NAME]`
-  ([§32.5 and §32.6](../future/32-doc-comments.md)).
+  separators (phase 23). **22b:** `agentica doc PATH` and
+  `agentica help std/MODULE[.NAME]`.
 - **7.13:** EAG templates, the `<<~EAG` heredoc and `std/eag`
   ([§51](../future/51-templates.md)); `type-at` and `refs` at a position
   inside a tag do not work yet.
@@ -99,22 +81,26 @@ Weighed later (no fixed order):
   [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary)), stack traces
   (14b), and `System.env` and `Path.real` for the self-hosted front end.
 - **7.2.7 to 7.2.9:** the self-hosted front end
-  ([§18](../future/18-front-end-language.md)), with the new import forms and
-  module constants (44a0 to 44d; 44e, static data, only if start-up numbers
-  ask), and the tests in Python.
+  ([§18](../future/18-front-end-language.md); 44a0 to 44d; 44e, static data,
+  only if start-up numbers ask), and the tests in Python.
 - **7.2b:** the semantic CLI and `std/analysis`
   ([§39](../future/39-semantic-cli.md)); open: the §39.12 measurement (row 10).
 - **7.3:** iteration and concurrency
   ([§27](../future/27-iteration-and-concurrency.md)): `Task.map`, channels,
   `Task.await` with a timeout, `File.each_line`, `Lazy[T]`.
-- **7.5a:** default parameter values. **7.12:** type aliases (49a, 49b; the
-  grammar).
+- **7.4:** HTTP streaming (20e to 20g:
+  [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)) and TLS
+  contexts, `TLS.upgrade` and ALPN (19a to 19c,
+  [§29](../future/29-tls-context.md#29-tls-contexts)).
+- **7.10:** regular expressions
+  ([§48](../future/48-regex.md#48-regular-expressions), 48a to 48c; 48d,
+  Unicode classes, is planned).
+- **7.5a:** default parameter values. **7.12:** type aliases (49a, 49b).
 - **8, 8.2, 8.3:** faster lists (8d), the prelude and the Enumerable methods
   (15f; `format`, 15k, is deferred to row 7.6), and the VM start-up cut
   ([vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83)).
-- **9.1 (item 8):** the JIT (7m): x86-64 and arm64 emitters, `--jit on` by
-  default. The known limits are in
-  [§6.4](../vm/05-values-execution-builtins.md#64-jit), "Known limits".
+- **9.1 (item 8):** the JIT (7m), `--jit on` by default; known limits in
+  [§6.4](../vm/05-values-execution-builtins.md#64-jit).
 - **11:** multicore schedulers (`docs/vm/16-architecture.md` §16.9).
 - **17:** shared tables (phase 9): `ATS[K, V]`, the grammar's
   [Shared tables](../grammar/06c-tasks-and-tests.md#shared-tables-ats).
@@ -122,21 +108,9 @@ Weighed later (no fixed order):
 
 ### Pending rows
 
-- **Order:** 7.4
-  - **Next work:** New features, VM-only: the streaming items of phase 20 (20e
-    and 20f; 20g, the streamed server response, is built,
-    [§30](../future/30-hybrid-http.md#3011-streaming-on-channels)),
-    built on channels; `TlsContext` (19a), `TLS.upgrade` (19b) and ALPN (19c,
-    owner 2026-10-16: the HTTP client stays small and opens its low layers,
-    [§30.13](../future/30-hybrid-http.md)) are done
-    ([§29](../future/29-tls-context.md#29-tls-contexts))
-  - **Outcome:** Programs stream HTTP bodies through channels, set up TLS with a
-    `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
-
 - **Order:** 7.5
-  - **Next work:** UDP (leaves the core plan, item 12 above). The crypto
-    module (`docs/future/20-crypto.md` §20) has landed
-  - **Outcome:** Programs send UDP and encrypt
+  - **Next work:** UDP (leaves the core plan, item 12 above)
+  - **Outcome:** Programs send UDP
 
 - **Order:** 7.6
   - **Next work:** Each item changes the checker in `compiler/`. Strict
@@ -160,37 +134,24 @@ Weighed later (no fixed order):
     nobody asks
 
 - **Order:** 7.8
-  - **Next work:** Weighed later (item 20 above; design and plan:
-    [§46](../future/46-signals.md#46-signals)): signals that a program can
-    handle, in parts 46a subscription, 46b sending and 46d `std/http` drains
-    its handlers on a stop (46c is obsolete, §46.7). 46d comes after 46b by the
-    owner's order. 46a and 46b may run earlier when no other VM PR is waiting.
+  - **Next work:** Weighed later (item 20 above;
+    [§46](../future/46-signals.md#46-signals)): 46a subscription, 46b sending
+    and 46d `std/http` drains its handlers on a stop (46c is obsolete, §46.7).
+    46d comes after 46b by the owner's order. 46a and 46b may run earlier when
+    no other VM PR is waiting.
   - **Outcome:** A container entrypoint can stop its children and exit on its
     own terms
 
 - **Order:** 7.9
-  - **Next work:** Second batch (item 5 above; design and plan:
+  - **Next work:** Second batch (item 5 above;
     [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)):
-    `agentica fmt`, written in Agentica on the self-hosted lexer and parser
-    (parts 47a to 47c, done: the comment side list and its attachment, the
-    printer with `fmt --check` and `make fmt-check`, then write mode, `fmt -`,
-    `[style]` and `CHECK-LINE-TOO-LONG` with `make check-compiler`). 47d, the
-    LSP hook, waits for the language server (§43, not scheduled).
+    `agentica fmt` in Agentica on the self-hosted lexer and parser. 47a to 47c
+    are done; 47d, the LSP hook, waits for the language server (§43, not
+    scheduled).
   - **Outcome:** Every `.agc` file has one layout, checked in CI
 
-- **Order:** 7.10
-  - **Next work:** Item 7 above; design and plan:
-    [§48](../future/48-regex.md#48-regular-expressions). Parts 48a, 48b and
-    48c are done: `std/regex` in Agentica (a parser and a linear-time Pike VM,
-    no backtracking), the regex literal `/pattern/flags`, and the matcher in C
-    (`vm/regex.c`). The questions of
-    [§48.10](../future/48-regex.md#4810-decisions-and-open-questions) are
-    decided with its recommendations (A).
-  - **Outcome:** A program searches, extracts, replaces and splits text with a
-    pattern, and no pattern can stall the VM
-
 - **Order:** 7.11
-  - **Next work:** Planned (item 14 above; design and plan:
+  - **Next work:** Planned (item 14 above;
     [§50](../future/50-test-functions.md#50-test-functions)): a `*_test.agc`
     file may have no `main`; its top-level `test_*` functions are its tests,
     and the front end adds the `main` that runs them (50a, `compiler/` only).
@@ -208,8 +169,8 @@ Weighed later (no fixed order):
 
 - **Order:** 10
   - **Next work:** The full 6c evaluation round, with the semantic CLI of row
-    7.2b (§39.12). Round 13 (2026-10-22, `docs/eval.md`) ran it on 0.8.1: no
-    query use, so it is inconclusive. No fixed order (owner, 2026-10-21)
+    7.2b (§39.12). Round 13 (`docs/eval.md`) ran it on 0.8.1: no query use, so
+    it is inconclusive. No fixed order (owner, 2026-10-21)
   - **Outcome:** Evidence on whether agents do better in Agentica than in typed
     Python
 
@@ -265,25 +226,22 @@ and the Unicode generator (7k).
 Stable core (owner decisions, 2026-10-20 and 2026-10-21). The C core stays
 small, safe and stable: the language, the VM, the GC, the scheduler, tasks and
 channels, JSON, and the OS primitives that need the event loop (files,
-processes, timers, TCP and TLS). UDP is not in the core plan: it may be a
-package built on the FFI later. Everything else is an extension: first a package
-written in Agentica ([§45](../future/45-packages.md)), and a native library
-through the FFI (issue
+processes, timers, TCP and TLS). UDP is not in the core plan. Everything else is
+an extension: first a package written in Agentica
+([§45](../future/45-packages.md)), and a native library through the FFI (issue
 [#534](https://github.com/agentica-lang/agentica/issues/534)) only when it needs
 a library in C, C++ or Rust. After the FFI lands, the core changes only for
 bugs, platforms and speed (the JIT).
 
 Designed, not scheduled, with no row in this table:
 
-- Dates and times ([§41](../future/41-dates-and-times.md)). Its builtin types
+- Dates and times ([§41](../future/41-dates-and-times.md)); its builtin types
   are checker changes in the Agentica front end (§41.13, owner 2026-10-15). Its
   `Time.monotonic_ns` part has landed (§41.10).
 - Sized numeric types ([§42](../future/42-sized-numeric-types.md)), checker
   changes in the Agentica front end (§42.14).
-
-Idea, not scheduled, with no row: a language server
-([§43](../future/43-language-server.md)). It would reuse the §39 commands and
-the §32 doc comments.
+- A language server ([§43](../future/43-language-server.md)), an idea: it would
+  reuse the §39 commands and the §32 doc comments.
 
 Keep diagnostics, behavior tests, grammar, and the self-contained programming
 reference part of every phase. Specify new APIs in `docs/future/` before
@@ -312,22 +270,20 @@ programming reference contain the current signatures.
   built on the `Int` builtins, text formatting, algorithms.
 - A function moves to a C builtin later only when a measurement shows it is hot
   (`make bench`, the server measurement 7j, or phase 12). Its `std/` API does
-  not change, results and error strings included, so user code does not change;
-  only step counts may. The new builtin is public (no internal helper builtins,
+  not change, results and error strings included; only step counts may. The new
+  builtin is public (no internal helper builtins,
   `docs/vm/03-ir-and-bytecode.md` §4.5). It goes in an existing builtin module
   whose first parameter type fits (for example
   `List.read_u32_be(data, offset)`), never under a module named like the `std/`
-  module's documented import alias, so the import keeps working. It is
-  documented like any other builtin, and the `std/` function becomes a one-line
-  wrapper.
+  module's documented import alias. It is documented like any other builtin,
+  and the `std/` function becomes a one-line wrapper.
 - Exceptions, which are builtins from day one, in C only:
   1. Anything that touches the OS: files, stdin and stdout, processes, sockets,
      TLS, time, signals, random bytes from the OS. A program cannot make system
      calls.
   2. Crypto: always through the TLS/crypto provider adapter (OpenSSL 3 today,
      `docs/future/20-crypto.md` §20), never hand-written in Agentica: a
-     constant-time compare is impossible in an interpreter, and home-made crypto
-     is a classic source of bugs.
+     constant-time compare is impossible in an interpreter.
   3. Parsers of untrusted input that have mature libraries: JSON on yyjson and
      HTTP on picohttpparser stay as decided.
   4. Anything that needs its own memory layout in the runtime: `Bytes`, and the
@@ -338,11 +294,10 @@ programming reference contain the current signatures.
      [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary).
   6. Log registry state: the handler table and the global log level, which the
      VM runtime holds for `std/logger` (the grammar's logging section). It is
-     runtime state, not computation. It is the first state the language
-     keeps between calls, so it is limited to this registry and reached only
-     through the `Logger` functions. Its two builtin types, the record
-     `LogEvent` and the enum `LogLevel`, are builtins because handlers take
-     them.
+     runtime state, not computation, and the first state the language keeps
+     between calls, so it is limited to this registry and reached only through
+     the `Logger` functions. Its two builtin types, the record `LogEvent` and
+     the enum `LogLevel`, are builtins because handlers take them.
 - Library code that must be generic over the builtin type variables, or that
   must be called as a method on a builtin type (`xs.find do ... end`), cannot be
   a `std/` module; it goes in the compiler prelude (`stdlib/prelude/*.agc`,
@@ -354,13 +309,12 @@ programming reference contain the current signatures.
   scheduler is a C builtin instead (`Task.await` with a timeout, §27.3).
 - Two builtin modules are std-only: `HttpWire` (phase 20,
   `docs/vm/10-io-http.md` §10.7), the framing layer under `std/http`, and
-  `LogRegistry` (the grammar's logging section), the registry under
-  `std/logger`. A public raw layer next to `std/http` would be a second way to
-  do HTTP, and a public registry would let user code change the handlers without
-  the `Logger` functions. So the linker lets only modules embedded from
-  `stdlib/` call them (`std_only_name?` in `compiler/catalog/builtins.agc`),
-  and user code gets `CHECK-UNKNOWN-NAME` with a help that names the std module
-  to import.
+  `LogRegistry`, the registry under `std/logger`. A public raw layer would be a
+  second way to do HTTP, and a public registry would let user code change the
+  handlers without the `Logger` functions. So the linker lets only modules
+  embedded from `stdlib/` call them (`std_only_name?` in
+  `compiler/catalog/builtins.agc`), and user code gets `CHECK-UNKNOWN-NAME` with
+  a help that names the std module to import.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 ## Files

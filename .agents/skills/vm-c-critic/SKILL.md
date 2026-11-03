@@ -30,25 +30,16 @@ person to hold in their head (`docs/vm/14-core-invariants.md`).
 If the worktree's `HEAD` is not the PR head, or the touched files have local
 edits, say so and review the PR head through a scratch worktree instead.
 
-## Tool ladder (stop at the first that answers)
+## Tools
 
-- What changed, by symbol: gmem `code_diff` (`base: origin/<base>`,
-  `root: <worktree>`); else `git diff --stat` with
-  `git diff origin/<base>...HEAD`.
-- Exact hunks: `git diff origin/<base>...HEAD -- <path>`.
-- Shape of a file: gmem `code_outline`; else `rg -n '^[a-z].*\(' <file>`.
-- Where X is defined: gmem `find_symbol` (`query`, `root`); else
-  `rg -nw X vm/`.
-- What a file includes: gmem `code_imports`; else `rg -n '^#include' <file>`.
-- Who calls X, every `memcpy` or cast:
-  `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/`; else `rg -nw X vm/`.
-- A symbol's body: read its exact line range (the whole file only if small).
-- A deleted symbol: `git show origin/<base>:<path>` and the line range, or the
-  diff hunk.
-
-The gmem tools index definitions and includes, never uses. An empty result is
-not proof of absence: confirm with `rg`. Pass the worktree as `root`, or the
-line ranges will not match the diff.
+Use the gmem tools when listed (`code_diff` with `base: origin/<base>` and
+`root: <worktree>`, `code_outline`, `find_symbol`, `code_imports`), else `git
+diff origin/<base>...HEAD`, `rg` and `ast-grep run --lang c -p 'memcpy($D, $S,
+$N)' vm/` for call sites and casts. Read a symbol's exact line range; for a
+deleted symbol use `git show origin/<base>:<path>`. The gmem tools index
+definitions and includes, never uses, and an empty result is not proof of
+absence: confirm with `rg`. Pass the worktree as `root`, or the line ranges
+will not match the diff.
 
 ## Workflow
 

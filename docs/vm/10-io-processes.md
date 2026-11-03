@@ -13,55 +13,46 @@
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
 - Windows: allow only `.exe` and `.com` after resolution, case-insensitively
-  (`.exe` is tried first when the name has neither, on purpose: `.com` files
-  are the older, rarer kind, and a plain name should not be taken by one). A
-  command with `\`, `/` or a `:` is a path and is not searched in `PATH`.
-  Reject a name that ends in a dot or a space, or in `.cmd` or `.bat`, any `:`
-  that is not the drive letter of `C:\` or `C:/`, and the `\\?\` and `\\.\`
-  prefixes (so `C:foo.exe`, `x.exe:stream`, `\\?\C:\x.exe` and
-  `\\.\C:\x.exe` are refused). The checks are on the command as given
-  (`agc_proc_name_ok`).
-  The allowlist applies to the last component of the resolved path. The port
-  does not search the current directory before `PATH`, but a relative `PATH`
-  entry such as `.` resolves against it, as on POSIX. `PATHEXT` is not read:
-  `.bat` and `.cmd` need `cmd.exe`, an implicit shell, so they never run, and a
-  planted `x.cmd.exe` cannot answer a request for `x.cmd`. A program that
-  wants a shell starts `cmd.exe` by name. A quoted `PATH` entry that holds `;`
-  is split inside the quotes, and no device-name check (`CON`, `NUL`) is made:
-  such a name is a file that does not run, or an error from `uv_spawn`.
+  (`.exe` is tried first when the name has neither, on purpose: a plain name
+  should not be taken by the rarer `.com`). A command with `\`, `/` or a `:` is
+  a path and is not searched in `PATH`. `agc_proc_name_ok` checks the command as
+  given and rejects a name that ends in a dot or a space, or in `.cmd` or
+  `.bat`, any `:` that is not the drive letter of `C:\` or `C:/`, and the
+  `\\?\` and `\\.\` prefixes (so `C:foo.exe` and `x.exe:stream` are refused).
+  The allowlist applies to the last component of the resolved path. The working
+  directory is not searched before `PATH`, but a relative `PATH` entry such as
+  `.` resolves against it, as on POSIX. `PATHEXT` is not read: `.bat` and `.cmd`
+  need `cmd.exe`, an implicit shell, so they never run, and a planted
+  `x.cmd.exe` cannot answer a request for `x.cmd`. A program that wants a shell
+  starts `cmd.exe` by name. No device-name check (`CON`, `NUL`) is made: such a
+  name is a file that does not run, or an error from `uv_spawn`.
 - Windows stops: there is no `SIGTERM`. libuv ends a child with
   `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
-  wait of a captured child ends at once. libuv reports the raw exit code 1 and
-  the signal that was asked for, and `exited` records 128 plus that signal: 137
-  for the `SIGKILL` of a plain child, 143 for the `SIGTERM` of a captured one
-  (`tests/test_process_windows.py` reads the pair from the `proc` trace). The
-  program cannot read that status, because the handle is closed by then; and
-  137 and 143 hold only when the stop reached a live child, since after an
-  `ESRCH` the real exit code is recorded.
-  Unless libuv cannot assign its job object (a Windows version without nested
-  jobs, `win/process.c`), every child it starts is in one job that kills its
-  members when the VM that made it ends. That job has
-  `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in
-  it, not their subprocesses: the direct children of a VM that is killed die
-  with it, and a child that is itself a VM stops its own children the same
-  way. Other descendants are not covered. So a grandchild that a VM started
-  never reads the end of its channel from the death of its parent there: the
-  parent's job ends it first. A parent that is no libuv process, or that
-  spawns with `UV_PROCESS_DETACHED`, leaves a child that reads it
-  (`vm/tests/process_test.c`).
-  `Process.close` and the end of a run still stop only the direct child.
-  Stopping a child that has already ended, before its exit callback ran, is not
-  a failure on any system (`UV_ESRCH` is read as stopped, with no `#ifdef`). On
-  Windows that is `TerminateProcess` on an exited process. On POSIX it means
-  someone else reaped the child (a host with `SIGCHLD` set to `SIG_IGN`, or its
-  own reaper), and then `Process.close` waits up to `REAP_MS`.
-- Windows arguments: libuv quotes each argument with the rules of the C
-  runtime (`CommandLineToArgvW`), so a program that parses its command line
-  that way sees every word unchanged, including empty ones, spaces, quotes and
-  trailing backslashes. The whole command line, counting the quotes that libuv
-  adds, may hold 32767 characters; a longer one is an error `Result`. Only the
-  standard streams and the channel reach a child: libuv passes a handle list,
-  so no other handle of the VM is inherited.
+  wait of a captured child ends at once. `exited` records 128 plus the signal
+  that was asked for: 137 for the `SIGKILL` of a plain child, 143 for the
+  `SIGTERM` of a captured one (`tests/test_process_windows.py` reads the pair
+  from the `proc` trace). The program cannot read that status, because the
+  handle is closed by then; and the pair holds only when the stop reached a live
+  child, since after an `ESRCH` the real exit code is recorded. Unless libuv
+  cannot assign its job object (a Windows version without nested jobs), every
+  child it starts is in one job that kills its members when the VM that made it
+  ends. That job has `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct
+  children are in it, not their subprocesses: the direct children of a VM that
+  is killed die with it, and a child that is itself a VM stops its own children
+  the same way. A grandchild that a VM started never reads the end of its
+  channel from the death of its parent there: the parent's job ends it first. A
+  parent that is no libuv process, or that spawns with `UV_PROCESS_DETACHED`,
+  leaves a child that reads it (`vm/tests/process_test.c`). `Process.close` and
+  the end of a run still stop only the direct child. Stopping a child that has
+  already ended, before its exit callback ran, is not a failure on any system
+  (`UV_ESRCH` is read as stopped). On POSIX it means someone else reaped the
+  child (`SIGCHLD` set to `SIG_IGN`, or its own reaper), and then
+  `Process.close` waits up to `REAP_MS`.
+- Windows arguments: libuv quotes each argument with the rules of the C runtime
+  (`CommandLineToArgvW`), so every word arrives unchanged. The whole command
+  line, counting the quotes that libuv adds, may hold 32767 characters; a longer
+  one is an error `Result`. Only the standard streams and the channel reach a
+  child: libuv passes a handle list.
 
 **Plain processes.** `vm/process.c` holds the `Process` builtins. Other
 systems get none.
@@ -232,22 +223,17 @@ pair; Windows uses a pipe per direction (below).
 - **Timeouts and errors.** A timed-out `channel_read_line` or `channel_send`
   closes the channel and only the channel: the process keeps running, so the
   parent can still call `read_available`, `output`, `wait` and `close`. Later
-  channel calls return `error("process: channel is closed")`. The same holds for
-  the child side. `channel_read_line` at the end of the child's output returns
+  channel calls return `error("process: channel is closed")`, on the child side
+  too. At the end of the child's output `channel_read_line` returns
   `error("process: end of input")` (a reset peer counts as the end); a line over
-  1 MiB is `error("process: line exceeds 1048576 bytes")` and closes the
-  channel; `channel_send` takes at most 1048576 bytes
-  (`process: send exceeds 1048576 bytes`) and a write that finds the peer gone
-  is the OS error text (`error writing to stream port`, with the system error).
-  A cut of stdout or stderr (more than 1 MiB unread, as in Reading) also wakes a
-  pending `channel_read_line`, and makes every later one that finds no complete
-  line, with `error("process: output exceeds 1048576 bytes")`; lines already in
+  1 MiB closes the channel; `channel_send` takes at most 1 MiB. A cut of stdout
+  or stderr (more than 1 MiB unread, as in Reading) also wakes a pending
+  `channel_read_line`, and makes every later one that finds no complete line
+  fail with `error("process: output exceeds 1048576 bytes")`; lines already in
   the buffer are still delivered first, and the channel stays open. So a child
   that prints for ever, and never sends its record, is found at 1 MiB and not at
-  the runner's deadline. On a process made by `spawn` or `spawn_captured`, the
-  three parent-side channel calls return
-  `error("process: the child has no channel")`; on a closed process they return
-  `error("process: process is closed")`.
+  the runner's deadline. The error texts are in `vm/process.c` and
+  `vm/duplex.c`.
 - **Half close.** `channel_close(p, timeout_ms)` shuts the write side only
   (`uv_shutdown`): the child reads the end of its input, and the parent can
   still read what the child sends. It is idempotent, also after the peer has
@@ -290,49 +276,16 @@ pair; Windows uses a pipe per direction (below).
 
 ### 10.5 Limits the C runtime keeps
 
-- **Limit:** `IO.read_bytes` count
-  - **Value:** 0..1 MiB
-
-- **Limit:** Process send, read, line
-  - **Value:** 1 MiB
-
-- **Limit:** File read, line, text, writes
-  - **Value:** 1 MiB
-
-- **Limit:** TCP `send_bytes`, `recv_bytes`, line (`TCP.send` of a String has no
-  limit, as in the grammar)
-  - **Value:** 1 MiB
-
-- **Limit:** Byte values
-  - **Value:** 0..255
-
-- **Limit:** `List.repeat` count
-  - **Value:** 0..1048576
-
-- **Limit:** HTTP start and header line
-  - **Value:** 8192 bytes
-
-- **Limit:** HTTP header block
-  - **Value:** 65536 bytes
-
-- **Limit:** HTTP headers
-  - **Value:** 100
-
-- **Limit:** HTTP interim responses
-  - **Value:** 15 accepted, the 16th fails
-
-- **Limit:** `max_connections`
-  - **Value:** at most 65536
-
-- **Limit:** HTTP body
-  - **Value:** `max_body_bytes`, 413. The body is held whole, so the default is
-    1 MiB and the cap 64 MiB (10.7)
-
-- **Limit:** Process launch
-  - **Value:** off with `--deny-run`
-
-- **Limit:** Windows programs other than `.exe`, `.com`
-  - **Value:** rejected
+- 1 MiB: `IO.read_bytes` count (0..1 MiB), Process send, read and line, File
+  read, line, text and writes, TCP `send_bytes`, `recv_bytes` and line
+  (`TCP.send` of a String has no limit, as in the grammar).
+- Byte values 0..255; `List.repeat` count 0..1048576.
+- HTTP: start and header line 8192 bytes, header block 65536 bytes, 100 headers,
+  15 interim responses accepted (the 16th fails), `max_connections` at most
+  65536, body `max_body_bytes` (413). The body is held whole, so the default is
+  1 MiB and the cap 64 MiB (10.7).
+- Process launch is off with `--deny-run`; Windows programs other than `.exe`
+  and `.com` are rejected.
 
 HTTP numbers: `Content-Length` and chunk sizes accumulate with saturation.
 Parsing stops once a value exceeds the limit (413), and every comparison is

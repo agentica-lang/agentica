@@ -197,7 +197,7 @@ Server(host: "a", port: none, tags: [some("x"), none])
 {"host":"a","port":8080,"tags":["x",null]}
 ```
 
-What `JSON.decode` gives encodes back to the same JSON, except that a missing key comes back as `null`. JSON has one `null`, so in an `Optional[Optional[T]]` the value `some(none)` writes `null` and reads back as `none`. `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since `some(nil)` would be written as `null`. Use `JsonField` (below) when a missing key and `null` mean different things; `Optional[JsonField[T]]` is `CHECK-JSON-FIELD-PLACE`, and `JsonField[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`.
+What `JSON.decode` gives encodes back to the same JSON, except that a missing key comes back as `null`. JSON has one `null`, so in an `Optional[Optional[T]]` the value `some(none)` writes `null` and reads back as `none`. Use `JsonField` (below) when a missing key and `null` mean different things. `Optional[Nil]`, `Optional[JsonField[T]]` and `JsonField[Optional[T]]` are rejected by the checker (see the [builtins reference](/reference/builtins/)).
 
 ## Optional and nullable fields
 
@@ -262,9 +262,7 @@ name: set to Ana
 {"name":"Bo","age":null}
 ```
 
-The variants are always qualified (`JsonField.Value(x)`). `Absent` and `Null` need an expected type, like any nullary variant of a generic enum (`CHECK-ENUM-TYPE-INFERENCE` otherwise); a struct field gives one. A `case` needs the three arms or a `_` arm, which is how a program treats absent and null alike.
-
-`JsonField` may only be the type of a struct field in a JSON type: in the type of a `JSON.decode` or `JSON.schema` target or of a `JSON.encode` or `JSON.from` argument. A list or map of them, an `Optional` item, a `JsonField[JsonField[T]]` or a bare `JsonField` passed to `JSON.encode` or `JSON.from` is `CHECK-JSON-FIELD-PLACE`, at the target or argument; so is `items: List[T]` when `T` is a `JsonField` (a type argument counts after substitution). In `Box[JsonField[Int]]` (`struct Box[T]` with `value: T`) the field is a direct `JsonField` field, but `items: List[T]` or `f: JsonField[T]` with that argument is `CHECK-JSON-FIELD-PLACE`; `JSON.decode` and `JSON.schema` still take no generic instance. This check comes first, so `List[JsonField[Nil]]` is `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` as a field cannot be encoded or decoded (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`), since `Value(nil)` would look like `Null`. A bare `JsonField` target is `CHECK-UNKNOWN-TYPE`. Outside JSON it is an ordinary enum value: locals, parameters, lists and maps may hold it, it prints when `T` does (`JsonField.Value(30)`), and it has no `==`. A user `struct JsonField`, `enum JsonField` or `import ... as JsonField` is `CHECK-REDEFINED-NAME`.
+The variants are always qualified (`JsonField.Value(x)`), and `Absent` and `Null` need an expected type, which a struct field gives. A `case` needs the three arms or a `_` arm, which is how a program treats absent and null alike. `JsonField` may only be the direct type of a struct field in a JSON type; anywhere else in one is `CHECK-JSON-FIELD-PLACE`. The checker rules for `JsonField` and the other reserved names are in the [builtins reference](/reference/builtins/).
 
 ## JSON.parse
 

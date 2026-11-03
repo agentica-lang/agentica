@@ -29,39 +29,27 @@ the same object every time a program computes them.
 
 ### 34.6 As built
 
-The numbers are in [`docs/vm-benchmarks.md`](../vm-benchmarks.md)
-("Shared small values"). The table is in `agc_runtime` (`vm/port.h`) and
-`agc_vm_init` (`vm/interp.c`)
-makes it: `empty_list`, `empty_map` and `empty_set` (values; the Map and the
-Set are one `agc_map` under two tags), `empty_string` and `chars[128]`
-(`agc_string *`). Nothing writes them. `agc_small_string(vm, data, bytes,
-chars)` in `vm/value.c` returns the shared String for no bytes or one ASCII
-byte, else a new one; the paths below call it, or read the table. There are no
-`agc_empty_list`, `agc_empty_map` or `agc_empty_set` helpers: one field read
-needs no function.
-
-The builtins that return them are the ones that call `agc_small_string` or read
-the table (`rg agc_small_string vm/`): Strings with no bytes or one ASCII byte,
-the empty results of list, map, set and range functions, `Set.new([])`, and the
-last `Map.delete`. `Set.new`, the set filters and the typed JSON map start from
-the shared empty value: `agc_map_put` and `agc_map_add_hash` never write their
-input.
+The numbers are in [`docs/vm-benchmarks.md`](../vm-benchmarks.md) ("Shared small
+values"). The table is in `agc_runtime` (`vm/port.h`), made by `agc_vm_init`:
+`empty_list`, `empty_map` and `empty_set` (the Map and the Set are one `agc_map`
+under two tags), `empty_string` and `chars[128]`. Nothing writes them.
+`agc_small_string` (`vm/value.c`) returns the shared String for no bytes or one
+ASCII byte, else a new one; the other paths read the table directly (one field
+read needs no helper). Callers: `rg agc_small_string vm/`.
 
 Left out, after a measurement or because the gain is small:
 
-- `CONCAT` with an empty side returning the other String. A loop of `(s + "")`
+- `CONCAT` with an empty side returning the other String: a loop of `(s + "")`
   allocates 198 MB before and 6.7 MB after, but `check
-  compiler/syntax/parser.agc` allocates the same bytes, so no real program
-  gains.
-- `filter` and `map` with nothing to return. It saves one list of about 40
-  bytes for each call. The edit is in `resume_native`, which also runs
-  `File.each_line`, and in one link layout it moved that loop by +12%; the
-  layouts differ by that much without any edit
-  ([`docs/vm-benchmarks.md`](../vm-benchmarks.md), "Shared small values").
-- The strings of `agc_utf8_decode` (process output, TCP reads, `read_text`),
-  HTTP bodies and `Dir.list`: they allocate once for each I/O operation.
-- The `[]` of a Json array: `agc_json_container` has no vm.
+  compiler/syntax/parser.agc` allocates the same, so no real program gains.
+- `filter` and `map` with nothing to return: it saves one list of about 40 bytes
+  per call, and the edit in `resume_native` (shared with `File.each_line`) moved
+  that loop by +12% in one link layout (layouts differ by that much without any
+  edit).
+- The strings of `agc_utf8_decode`, HTTP bodies and `Dir.list` (one allocation
+  per I/O operation), and the `[]` of a Json array (`agc_json_container` has no
+  vm).
 
 Every shared path keeps the turn cost it had, since the cost rule reads sizes
-and not objects. The tests are `shared_strings`, `shared_empties` and the keys
-test in `vm/tests`, and the golden `shared-small-values`.
+and not objects. Tests: `shared_strings`, `shared_empties` and the keys test in
+`vm/tests`, and the golden `shared-small-values`.

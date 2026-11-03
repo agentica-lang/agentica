@@ -83,10 +83,8 @@ files that the program can reach are built before `main`.
 ## Running
 
 Only the root file's `def main() -> Void` runs; imported `main` functions never
-run. Linking keeps source spans and distinct module identities. Imported calls
-and tasks share the program's execution budget and resource ownership.
-`agentica check`, `agentica FILE`, `agentica --dump` and `agentica test` use the
-same loader. There are no wildcard imports, package registry, mutable module
+run. Imported calls and tasks share the program's execution budget and resource
+ownership. There are no wildcard imports, package registry, mutable module
 state, nested module blocks or receiver attachment.
 
 ## Standard library and external libraries
@@ -101,12 +99,9 @@ state, nested module blocks or receiver attachment.
   3. `$XDG_DATA_HOME/agentica/lib/`, default `~/.local/share/agentica/lib/`;
   4. `/usr/local/share/agentica/lib/`, then `/usr/share/agentica/lib/`.
 
-On Windows, `AGENTICA_PATH` is separated by `;` and takes drive (`C:\libs`,
-`C:/libs`) and UNC (`\\server\share`) roots, and `/foo` and `\foo` (from the
-root of the current drive); `C:libs` is relative. The user root is
-`%LOCALAPPDATA%/agentica/lib/` (left out when the variable is unset or relative;
-`XDG_DATA_HOME` and `HOME` are not read) and there are no default system roots.
-Empty `AGENTICA_PATH` entries are ignored; a relative entry gives
+On Windows, `AGENTICA_PATH` is separated by `;` and takes drive and UNC roots,
+the user root is `%LOCALAPPDATA%/agentica/lib/`, and there are no default
+system roots. Empty `AGENTICA_PATH` entries are ignored; a relative entry gives
 `CHECK-IMPORT-PATH` when resolving a `pkg/` import. The first existing file
 wins, and a read or syntax error in it does not fall back to another root.
 

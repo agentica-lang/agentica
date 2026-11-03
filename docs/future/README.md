@@ -54,7 +54,7 @@ design.
 - §: 18
   - Title: Front-end implementation language (self-hosting; done)
   - File: [`18-front-end-language.md`](18-front-end-language.md)
-  - Status: Decision and bootstrap done; the remaining work is in the roadmap
+  - Status: Done; the remaining work is in the roadmap
 
 - §: 19
   - Title: SIMD in the VM
@@ -70,9 +70,8 @@ design.
 - §: 25
   - Title: Ruby typed idioms
   - File: [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md)
-  - Status: 25.1, 25.2, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar
-    and the programming skill are the contract); 25.4, 25.5, 25.9 and 25.11
-    planned (row 7.6); Part B to evaluate later; Part C decided against
+  - Status: 25.1 to 25.3, 25.6, 25.10, 25.12.1 and 25.14 built; 25.4, 25.5,
+    25.9 and 25.11 planned (row 7.6); Part B later; Part C decided against
 
 - §: 26
   - Title: Strict diagnostics
@@ -83,10 +82,7 @@ design.
   - Title: Iteration and concurrent collections
   - File:
     [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md)
-  - Status: `Task.map` (17a), channels (17b), `Task.await` with a timeout
-    (17c), `File.each_line` (17d) and `Lazy[T]` over lists, ranges,
-    `Lazy.produce`, `File.foreach` and `ch.lazy` (17e) built; generators and
-    shared state decided against
+  - Status: built (17a to 17e); generators and shared state decided against
 
 - §: 28
   - Title: VM metrics
@@ -96,20 +92,18 @@ design.
 - §: 29
   - Title: TLS contexts
   - File: [`29-tls-context.md`](29-tls-context.md)
-  - Status: Planned (row 7.4)
+  - Status: 19a to 19c built; later options planned
 
 - §: 30
   - Title: HTTP on the VM: simple, synchronous, hybrid
   - File: [`30-hybrid-http.md`](30-hybrid-http.md)
-  - Status: Streaming (20e to 20g, order step 7.4) and binary bodies
-    planned; the rest of phase 20 is built:
+  - Status: Built (phase 20, 20e to 20g):
     [`docs/vm/10-io-http.md`](../vm/10-io-http.md)
 
 - §: 32
   - Title: Doc comments
   - File: [`32-doc-comments.md`](32-doc-comments.md)
-  - Status: 22a built (row 7.2a); `agentica doc` and `agentica help` for
-    `std/` built (row 22b)
+  - Status: Built (rows 7.2a, 22b)
 
 - §: 34
   - Title: Shared small values in the VM
@@ -125,62 +119,53 @@ design.
 - §: 39
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
-  - Status: Built (row 7.2b): `outline`, `symbol`, `refs`, `type-at`,
-    `--partial` and `std/analysis`; pending: the 6c measurement (§39.12)
+  - Status: Built (row 7.2b); pending: the 6c measurement (§39.12)
 
 - §: 41
   - Title: Dates and times
   - File: [`41-dates-and-times.md`](41-dates-and-times.md)
-  - Status: Designed by the owner's scope of 2026-10-14, not scheduled
-    (41.13); `Time.monotonic_ns` has landed
+  - Status: Designed, not scheduled; `Time.monotonic_ns` has landed
 
 - §: 42
   - Title: Sized numeric types
   - File: [`42-sized-numeric-types.md`](42-sized-numeric-types.md)
-  - Status: Designed by the owner's scope of 2026-10-14, not scheduled
+  - Status: Designed, not scheduled
 
 - §: 43
   - Title: Language server (LSP)
   - File: [`43-language-server.md`](43-language-server.md)
-  - Status: Idea, not scheduled (the owner asked on 2026-10-15 to note it);
-    reuses §39 and §32
+  - Status: Idea, not scheduled; reuses §39 and §32
 
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
-  - Status: Built (45-0, 45a to 45d); only FFI-b is left, for 0.10 (issue
+  - Status: Built; only FFI-b is left (issue
     [#534](https://github.com/agentica-lang/agentica/issues/534))
 
 - §: 46
   - Title: Signals
   - File: [`46-signals.md`](46-signals.md)
-  - Status: Weighed later (row 7.8): catch TERM and INT for a safe shutdown,
-    forward signals to children, signal a process group; 46a and 46b may run
-    earlier when no other VM PR is waiting
+  - Status: Weighed later (row 7.8)
 
 - §: 47
   - Title: Code formatter (`agentica fmt`)
   - File: [`47-formatter.md`](47-formatter.md)
-  - Status: Second batch of the order after 0.8.0 (row 7.9); 47d waits for the
-    LSP (§43)
+  - Status: Built (row 7.9); 47d waits for the LSP (§43)
 
 - §: 48
   - Title: Regular expressions
   - File: [`48-regex.md`](48-regex.md)
-  - Status: Weighed later (row 7.10): `std/regex` in Agentica first, then the
-    regex literal `/pattern/flags`
+  - Status: Built (row 7.10); 48d (Unicode classes) planned
 
 - §: 50
   - Title: Test functions without `main`
   - File: [`50-test-functions.md`](50-test-functions.md)
-  - Status: Planned (row 7.11, item 14 after 0.8.0): a `*_test.agc` file may
-    have no `main`; its top-level `test_*` functions are its tests
+  - Status: Planned (row 7.11)
 
 - §: 51
   - Title: EAG templates
   - File: [`51-templates.md`](51-templates.md)
-  - Status: Built (row 7.13): the `<<~EAG` heredoc with the tags of ERB, and
-    `std/eag`
+  - Status: Built (row 7.13)
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no second
 implementation ([roadmap

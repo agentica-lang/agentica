@@ -263,9 +263,6 @@ Decided on 2026-10-14:
    is the answer for FIFO use. §17.11 keeps this for a `drop` that does not
    start at a multiple of 32 and for the right side of a `concat`, and makes
    `take`, an aligned `drop` and the left side of a `concat` share leaves.
-4. **Two PRs, not one:** first the API over the flat array with every call site
-   migrated, then the trie behind the API, so the first PR's tests were an
-   oracle for the second.
 
 ### 17.11 Bulk operations after the trie
 

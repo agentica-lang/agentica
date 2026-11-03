@@ -12,48 +12,34 @@ Actions self-hosted runner; section 46.4 says how it maps to the proposed API.
 
 ### 46.1 Today
 
-The VM has one stop path. A program cannot take part in it.
+The VM has one stop path, and a program cannot take part in it. One `sigaction`
+handler covers SIGINT, SIGTERM and SIGHUP (`agc_io_watch_stop`, `vm/loop.c`),
+except a signal the VM started as ignored. It only sets atomics and wakes the
+loop; the scheduler checks it between turns (`check_stop`, `vm/task.c`), the run
+ends as an exit with code 128 + signal, and `agc_launch_settle`
+(`vm/launch.c`) kills the children, flushes and raises the signal again with its
+default action. A second signal is recorded until the children are stopped; a
+3-second `alarm` (`STOP_GRACE_SECONDS`) bounds that wait. See
+`docs/vm/14-core-invariants.md` §14.4 and `docs/vm/10-io-scheduler.md` §10.2.2.
 
-- **The stop path.** One `sigaction` handler covers SIGINT, SIGTERM and SIGHUP
-  (`agc_io_watch_stop` in `vm/loop.c`), except a signal the VM started as
-  ignored. It sets atomics and wakes the loop with `uv_async_send`; it never
-  runs program code. The scheduler checks the first signal between turns
-  (`check_stop` in `vm/task.c`), and the run ends as an exit with code 128 +
-  signal (`agc_stop` in `vm/interp.c`). `agc_launch_settle` in `vm/launch.c`
-  kills the children, flushes the output and the files, and raises the signal
-  again with its default action. A second signal is only recorded until the
-  children are stopped; a 3-second `alarm` (`STOP_GRACE_SECONDS` in `vm/loop.c`)
-  bounds that wait. A driven VM whose driver is gone treats even the first
-  signal as a second one. See `docs/vm/14-core-invariants.md` §14.4 and
-  `docs/vm/10-io-scheduler.md` §10.2.2, "Stop signals".
-- **No program view.** No builtin reports a signal, and no task ever sees one.
-  The VM signals only the children it started (`uv_process_kill` in
-  `signal_child`); it has no call to signal another pid or a process group.
-- **Children.** `Process.spawn` and `Process.spawn_captured` leave the child in
-  the VM's own process group and session. `Process.close` and the end of the run
-  signal only the child's pid: SIGKILL for `spawn`; for `spawn_captured`
-  SIGTERM, then SIGKILL one second later (`signal_child` and `shut` in
-  `vm/process.c`). Descendants are not reached
+- No builtin reports a signal and no task sees one. The VM signals only the
+  children it started (`signal_child`); it has no call to signal another pid or
+  a process group.
+- `Process.spawn` and `spawn_captured` leave the child in the VM's process group
+  and session. `Process.close` and the end of the run signal only the child's
+  pid: SIGKILL for `spawn`; SIGTERM then SIGKILL one second later for
+  `spawn_captured`. Descendants are not reached
   (`site/content/library/io-and-system/process.md`).
-- **Exit status of a child.** `Process.wait` returns the exit code. A child
-  killed by a signal returns 128 + signal (`finished` in `vm/process.c`). So a
-  child that exits with 143 and a child killed by SIGTERM look the same.
-- **Wait and stderr.** `Process.wait` returns when the child has exited and its
-  stderr is at EOF (`docs/vm/10-io-processes.md`). A grandchild that keeps the
-  stderr pipe open delays it. A timed-out wait returns `error("network:
-  operation timed out")` and keeps the child (`agc_stream_timed_out`, defined in
-  `vm/stream.c`).
-- **libuv.** The VM has no `uv_signal_t` watcher for the stop signals
-  (`docs/vm/15-layers.md`: `process.c` has no signal watchers). libuv has its
-  own signal watcher inside `uv_spawn`, for SIGCHLD. A past VM hang came from a
-  program that read the loop's own signal pipes. The guard is `private_pipe` in
-  `vm/files.c`, from PR #162 (2026-10-13). Any new watcher must respect that
-  guard and libuv's shared signal lock.
-- **No driver delay.** An ordinary run is the process of the binary (since step
-  8d-2), so a stop reaches the program at once.
-- **PID 1.** The VM reaps the children that libuv spawned. Nothing in `vm/`
-  calls `waitpid` on other pids. So a grandchild that is re-parented to a VM
-  running as PID 1 stays a zombie. `docker run --init` avoids this.
+- `Process.wait` returns the exit code, or 128 + signal for a killed child, so
+  exit 143 and death by SIGTERM look the same. It returns when the child has
+  exited and its stderr is at EOF (`docs/vm/10-io-processes.md`), so a
+  grandchild holding the stderr pipe delays it.
+- The VM has no `uv_signal_t` watcher for the stop signals; libuv has its own
+  inside `uv_spawn` (SIGCHLD). A past hang came from a program reading the
+  loop's signal pipes; the guard is `private_pipe` in `vm/files.c` (PR #162).
+  Any new watcher must respect it and libuv's shared signal lock.
+- The VM reaps only the children libuv spawned, so a grandchild re-parented to a
+  VM running as PID 1 stays a zombie (`docker run --init` avoids this).
 
 ### 46.2 Goals
 
@@ -115,24 +101,19 @@ from the moment the program subscribes. The channel also fits the timeouts that
 the programs already use with `Channel.recv` and `Task.await`. The
 recommendation is in 46.8, question 1.
 
-The name `Signal` is a risk, and the 46a PR decides it, with this evidence. (1)
-`tests/fixtures/vm/http-server-close.agc` has `struct Signal` (line 3). A user
-type with a builtin name is `CHECK-REDEFINED-NAME`, so the reserved name is a
-breaking change, and the fixture is renamed. (2) No builtin takes an enum as a
-parameter today. `Await` is only a return value, and it has special checker code
-(`check_await_timeout` in `compiler/check/check_collections.agc`).
+The name `Signal` is a risk, and the 46a PR decides it (open question 12 of
+46.8). (1) `tests/fixtures/vm/http-server-close.agc` has `struct Signal`; a user
+type with a builtin name is `CHECK-REDEFINED-NAME`, so the reserved name is
+breaking and the fixture is renamed. (2) No builtin takes an enum as a
+parameter today (`Await` is only a return value, with special checker code);
 `List[Signal]` as a parameter is new. (3) A builtin enum that shares its name
-with a function namespace has no precedent. The module resolver
-(`compiler/modules/resolve.agc`) reads `Name.x` as an enum constructor when
-`Name` is a builtin enum. So `Signal.channel(...)` would be read as a
-constructor. The options are: (A) keep `Signal.channel` and `Signal.number`, and
-make the resolver resolve a function first, which is a front-end change; (B)
-move them to `System.subscribe(signals)` and `System.signal_number(sig)`, and
-keep `Signal` as an enum only. The recommendation is (B), which avoids the
-clash. The enum parameter (no builtin takes one today) is checked with a spike
-in 46a (46.8, question 12). The rest of this section uses
-the names of (A). Under (B) they change to `System.subscribe` and
-`System.signal_number`.
+with a function namespace has no precedent: the module resolver reads `Name.x`
+as an enum constructor when `Name` is a builtin enum, so `Signal.channel(...)`
+would be read as a constructor. Options: (A) keep `Signal.channel` and
+`Signal.number` and make the resolver resolve a function first (a front-end
+change); (B) move them to `System.subscribe(signals)` and
+`System.signal_number(sig)` and keep `Signal` as an enum only. Recommendation:
+(B). The rest of this section uses the names of (A).
 
 #### 46.3.2 Ownership, lifecycle and the handler
 
@@ -153,34 +134,29 @@ the names of (A). Under (B) they change to `System.subscribe` and
 - **Channel rules.** `Channel.send` on a signal channel gives `error("signal:
   channel is read only")`, since only the VM sends.
 - **The masks and the handler.** The VM keeps two atomic masks, one bit per
-  signal number. `subscribed` is set for each signal with a live subscription.
-  The loop writes it, and the handler reads it. `pending` is set by the handler
-  for a subscribed signal. The handler then wakes the loop with the
-  `uv_async_send` that it already uses. The loop clears the bit and offers the
-  value to each subscription, with a send that never waits. The subscription
-  table belongs to the I/O thread, and a builtin changes it with a request
-  through the inbox (`docs/vm/16-architecture.md`). The handler reads only the
-  masks. A signal with no subscription goes to the stop path, as today. No libuv
-  signal watcher is added. The `uv_signal_t` idea was checked and rejected.
-  libuv's signal watchers share a lock and a pipe (46.1). libuv also puts back
-  the default action when it stops the last watcher of a signal, so the VM would
-  have to reinstall its own handler each time.
+  signal number: `subscribed` (written by the loop, read by the handler) and
+  `pending` (set by the handler for a subscribed signal, which then wakes the
+  loop with the existing `uv_async_send`). The loop clears the bit and offers
+  the value to each subscription with a send that never waits. The subscription
+  table belongs to the I/O thread and changes by a request through the inbox
+  (`docs/vm/16-architecture.md`). A signal with no subscription takes the stop
+  path as today. No `uv_signal_t` watcher is added: libuv's watchers share a
+  lock and a pipe (46.1), and libuv restores the default action when it stops
+  the last watcher of a signal, so the VM would have to reinstall its handler
+  each time.
 - **The stop set.** `stop_signals[]` in `vm/loop.c` grows from INT, TERM and HUP
-  to also USR1, USR2 and QUIT. `agc_io_block_stop` blocks the same list in
-  worker threads, so these signals reach the loop thread, as the first three do.
-  Without a subscription, USR1 and USR2 now take the stop path. The children
-  stop, the output and the files are flushed, and the process dies by that
-  signal, as TERM does. Today they end the process at once by their default
-  action and leave the children running. This is a behavior change, and the 46a
-  CHANGELOG entry says so.
-- **Writes.** The handler has no `SA_RESTART`. A blocking write to stdout or
-  stderr that a handled signal interrupts returns EINTR. Today `write_failed`
-  (`vm/output.c`) treats EINTR as a stop only when a stop signal is set.
-  Otherwise it reports `RUNTIME-INTERNAL`, which would fail the program on a
-  handled TERM. 46a changes the callers. An EINTR write is retried for the rest
-  of its bytes, after the stream's error flag is cleared. While a blocked stdout
-  write is retried after EINTR, a handled signal waits until the write finishes;
-  only a stop signal ends it.
+  to USR1, USR2 and QUIT, and `agc_io_block_stop` blocks the same list in
+  worker threads. Without a subscription USR1 and USR2 now take the stop path
+  (children stopped, output flushed, death by that signal) instead of ending
+  the process at once and leaving the children running: a behavior change that
+  the 46a CHANGELOG entry says.
+- **Writes.** The handler has no `SA_RESTART`, so a blocking stdout or stderr
+  write interrupted by a handled signal returns EINTR. Today `write_failed`
+  (`vm/output.c`) treats EINTR as a stop only when a stop signal is set, and
+  otherwise reports `RUNTIME-INTERNAL`, which would fail the program on a
+  handled TERM. 46a retries an EINTR write for the rest of its bytes after
+  clearing the stream's error flag; while it is retried a handled signal waits,
+  and only a stop signal ends it.
 - **Ignored at start.** A signal that the VM started as ignored (for example
   under `nohup`) keeps that state. The handler install skips it.
   `Signal.channel` returns `error("signal: ignored when the program started")`
@@ -194,32 +170,24 @@ ends the run after the children stop (46.1). The recommendation is to deliver
 every Term, Int, Hup, Usr1 and Usr2 to the channel while a subscription exists,
 and to keep Quit as the force path (46.8, question 3).
 
-Quit is never delivered. It always takes the stop path. The children stop, the
-output and files are flushed as on any stop, and the process exits with status
-131 by calling `_exit(131)`. It does not raise the signal again. So it leaves no
-core dump, and a parent sees exit status 131, not death by a signal.
-`agc_launch_settle` in `vm/launch.c` and the stop handler in `vm/loop.c`
-special-case Quit this way. `_exit` is async-signal-safe, so the handler may
-call it. A second Quit during that end takes the second-signal path, and it also
-exits with 131.
-
-Today the VM does not handle Quit. Its default action dumps core and leaves the
-children running. So Quit joins the stop set in 46a. A program that ignores
-later signals can still be stopped by Quit (Ctrl-\) or by its parent's SIGKILL.
+Quit is never delivered. It always takes the stop path: the children stop, the
+output and files are flushed, and the process exits with status 131 by
+`_exit(131)` (async-signal-safe) without raising the signal again, so there is
+no core dump and a parent sees exit status 131, not death by a signal. A second
+Quit during that end also exits with 131. `agc_launch_settle` and the stop
+handler special-case it. Today Quit is not handled (its default action dumps
+core and leaves the children running), so it joins the stop set in 46a. A
+program that ignores later signals can still be stopped by Quit (Ctrl-\) or by
+its parent's SIGKILL.
 
 #### 46.3.4 The grace alarm
 
-`STOP_GRACE_SECONDS` bounds only the default path, meaning a second default stop
-while the children are being stopped. A handled signal never enters that path,
-so the alarm is never armed for it. A program that handles TERM and needs ten
-seconds of cleanup is not cut by the alarm.
-
-The alarm can still cut a program on its default path. An example is a second
-Quit while the children are being stopped.
-
-The parent's SIGKILL is a different thing. It is the parent's timer, as
-`STOP_TIMEOUT` is in the gh-runner script. The VM does not add a deadline for a
-handled stop. The program sets its own deadline.
+`STOP_GRACE_SECONDS` bounds only the default path (a second default stop while
+the children are stopped). A handled signal never arms it, so a program that
+handles TERM and needs ten seconds of cleanup is not cut. The alarm can still
+cut a program on its default path, for example on a second Quit. The parent's
+SIGKILL is the parent's timer (`STOP_TIMEOUT` in the gh-runner script); the VM
+adds no deadline for a handled stop.
 
 #### 46.3.5 Sending to a child
 
@@ -232,10 +200,9 @@ This sends the signal to the child's pid. It works for a child from
 an error Result. The rule for `Process.wait` does not change, so it still
 returns 128 + signal for a child killed by a signal.
 
-No change to `Process.wait` is needed for the use cases here. The gh-runner
-returns 0 after its own stop, and the run.sh code otherwise. If a program ever
-needs to tell a signal death from an exit code, the smallest change is a builtin
-that returns the signal number. It is not proposed now.
+`Process.wait` does not change: it still returns 128 + signal for a killed
+child. A builtin that returns the signal number is the smallest change if a
+program ever needs it; it is not proposed now.
 
 #### 46.3.6 Process groups
 
@@ -251,15 +218,13 @@ Process.signal_group(p: Process, sig: Signal) -> Result[Void]
   (`site/content/library/io-and-system/process.md`).
   So a program uses an absolute path.
 - **Streams: the child inherits them.** The child inherits the VM's stdin,
-  stdout and stderr, as Python's `Popen` does with no arguments. The VM makes no
-  pipe for it, so nothing can stall, and its output goes straight to the
-  container's logs. The program cannot read that output. `Process.read_line`,
-  `Process.output`, `Process.send` and the channel calls give an error Result
-  for such a child. The alternative is a pump task that copies a pipe into the
-  program's output. A pump that no task reads fills the pipe after 64 KiB and
-  stalls run.sh. So the pump must always run, which is more machinery for the
-  same result. The cost of inheriting is that the child shares stdin with the
-  program. A program that reads stdin while the child runs competes with it.
+  stdout and stderr, as Python's `Popen` does with no arguments: no pipe, so
+  nothing can stall, and its output goes straight to the container's logs. The
+  program cannot read that output (`Process.read_line`, `output`, `send` and the
+  channel calls give an error Result). The alternative, a pump task copying a
+  pipe, must always run (a pump nobody reads fills the pipe after 64 KiB and
+  stalls run.sh), so it is more machinery for the same result. The cost of
+  inheriting: the child shares stdin with the program.
 - **Wait.** A `spawn_group` child has no pipes, so `Process.wait` returns when
   the leader exits. The stderr rule of 46.1 does not apply to it. Piped children
   keep today's rule.
@@ -354,44 +319,27 @@ The recommendation (46.8, question 5) is to gate `System.signal` and
 
 #### 46.3.10 Tests and children
 
-- A driven VM sets `PR_SET_PDEATHSIG` to SIGTERM (`agc_launch_bind` in
-  `vm/launch.c`). When the driver dies, the VM gets SIGTERM. That signal is an
-  orphan signal, so the rule of 46.3.2 sends it down the default path. The VM
-  kills its children and exits. The program does not get to clean up in that
-  case, because no driver is left to wait for.
-- `agentica test` runs each scenario's VM as a captured child. The runner stops
-  it with `Process.close` (`stdlib/test/runner.agc`). That sends SIGTERM, and
-  one second later SIGKILL. A test program that subscribes to TERM and needs
-  more than one second to clean up is killed by the runner. That is the right
-  result, because the runner owns the timeout. A test program should subscribe
-  only if it stops within a second.
-- The programs without a subscription keep the stop behavior that
-  `tests/test_vm_stop.py` checks (TERM, INT and HUP). USR1, USR2 and QUIT cases
-  are new, in 46a.
+- A driven VM sets `PR_SET_PDEATHSIG` to SIGTERM (`agc_launch_bind`). When the
+  driver dies that orphan signal takes the default path (46.3.2): the VM kills
+  its children and exits, with no cleanup, since no driver is left to wait for.
+- `agentica test` stops each scenario's VM with `Process.close`
+  (`stdlib/test/runner.agc`): SIGTERM, then SIGKILL one second later. A test
+  program that subscribes to TERM and needs more than a second to clean up is
+  killed by the runner, which owns the timeout.
+- Programs without a subscription keep the stop behavior that
+  `tests/test_vm_stop.py` checks; USR1, USR2 and QUIT cases are new, in 46a.
 
 #### 46.3.11 Layers
 
-The first idea was a service on the loop thread, using the existing `uv_signal`
-watchers. The code has no such watchers, so the placement changes
-(`docs/vm/15-layers.md`).
-
-- The stop state, the two masks, the handler and the subscription table stay in
-  `vm/loop.c`, which is core. A service reaches the loop only through the port
-  (`agc_io_uv`). The stop signals are not part of the port, so a service cannot
-  touch the stop state.
-- The channel offer goes in `vm/channel.c`, which is core. It is a send that
-  never waits, with the one-value-per-signal rule and the end of the owning
-  task. The `Signal.channel` builtin goes there too, next to the other Channel
-  builtins.
-- The EINTR retry for writes goes in the callers in `vm/output.c`, which is
-  core.
-- `Process.signal`, `Process.signal_group`, `Process.spawn_group`, the group
-  close and `System.signal` go in `vm/process.c`. That file is a service. It may
-  use libuv and plain syscalls, including the pidfd calls through `syscall()`.
-- The builtin rows and the enum data go in `compiler/catalog/builtins_data.agc`
-  (46.7).
-
-No `uv_signal_t` watcher is added (46.3.2).
+The code has no `uv_signal` watchers, so the stop state, the two masks, the
+handler and the subscription table stay in `vm/loop.c` (core; a service reaches
+the loop only through the port, which has no stop signals). The channel offer
+(a send that never waits, one value per signal, end of the owning task) and the
+`Signal.channel` builtin go in `vm/channel.c`; the EINTR retry in
+`vm/output.c`; `Process.signal`, `signal_group`, `spawn_group`, the group close
+and `System.signal` (libuv and plain syscalls, pidfd through `syscall()`) in
+`vm/process.c`, a service (`docs/vm/15-layers.md`); the rows and the enum in
+`compiler/catalog/builtins_data.agc`.
 
 ### 46.4 The entrypoint in Agentica
 
@@ -416,162 +364,90 @@ not compile today), maps from Python like this:
 - A signal before the subscription takes the default path: it stops the
   `config.sh` child and ends the process by that signal.
 
-### 46.5 What the entrypoint needs, checked against today
+### 46.5 What the entrypoint needs
 
-Each need of the gh-runner script is checked against the builtins. "Partly"
-means a workaround is possible; "missing" means the builtin or the module is not
-there. The file-operation gaps are real, but they are not signal work, so they
-go to their own change.
+Missing, and in §46: stop signals TERM and INT (`Signal.channel`, 46.3.1);
+signal a child's group (`Process.signal_group`, 46.3.6); run run.sh as a session
+leader with its output (`Process.spawn_group`, 46.3.6); signal a listener by pid
+(`System.signal`, 46.3.7). Missing or partly, outside §46 (separate changes):
+`File.copy` that keeps the mode, an `exists?`/access check, `System.hostname`
+(use `HOSTNAME` or `/etc/hostname`), reaping orphans as PID 1 (`docker run
+--init`, 46.8 question 10). The rest of the launcher exists today.
 
-Missing, and in §46:
+### 46.6 Tests (for later)
 
-- **Stop signals TERM and INT:** `Signal.channel` with `Signal.Term` and
-  `Signal.Int` (46.3.1).
-- **Signal a child's group:** `Process.signal_group` (46.3.6).
-- **Run run.sh as a session leader, with its output:** `Process.spawn_group`
-  (46.3.6). It inherits the output, as Python does.
-- **Signal a listener by pid:** `System.signal` through a pidfd (46.3.7).
-
-Missing or partly, outside §46 (separate changes): `File.copy` that keeps the
-mode (`read_text` and `write_text` lose it and are text-only); an `exists?` and
-an `os.access` check; `System.hostname` (use `HOSTNAME` or `/etc/hostname`);
-reaping orphans as PID 1 (use `docker run --init`, 46.8 question 10). Running
-`./config.sh` in a directory works with `spawn_captured`, which takes `dir` but
-captures stderr. The rest of the launcher exists today (`System.env`,
-`Process.spawn_captured`, `Dir.list("/proc")`, `Process.wait(p, ms)`,
-`Path.remove`, `Dir.mkdir`, `File.lstat`, `HTTP.post`, `JSON`,
-`Time.monotonic_ms`, `System.exit`, `Logger`).
-
-### 46.6 Testing plan (for later)
-
-The tests are hermetic, Linux only, and follow the process-test rule of
-`AGENTS.md`. They cover these behaviors:
-
-- a handled TERM runs the cleanup, prints, and exits 0;
-- a TERM is forwarded to a child started with `spawn_group`;
-- a second TERM is ignored; QUIT exits with status 131 as a normal exit (not
-  death by a signal), leaves no children, and writes no core file;
-- a child that ignores TERM is killed with its group after the deadline;
-- a signal to a pid carries the right name, and a wrong name is an error that
-  leaves the process alive;
-- INT is ignored at start, as `nohup` does: `Signal.channel` returns the
-  `ignored` error, and INT stays ignored.
+Hermetic, Linux only, following the process-test rule of `AGENTS.md`: a handled
+TERM runs the cleanup and exits 0; TERM is forwarded to a `spawn_group` child; a
+second TERM is ignored; QUIT exits 131 as a normal exit, leaves no children and
+writes no core file; a child that ignores TERM is killed with its group after
+the deadline; a signal to a pid carries the right name and a wrong name is an
+error that leaves the process alive; INT ignored at start gives the `ignored`
+error and stays ignored.
 
 ### 46.7 Phases
 
-- **46a: subscription.** The `Signal` enum and its names (46.3.1); the PR
-  decides between options (A) and (B) of 46.3.1 (option (A) needs a front-end
-  change). The stop set grows by USR1, USR2 and QUIT, writes retry on EINTR
-  (46.3.2), and Quit takes the `_exit(131)` path (46.3.3). **Breaking:**
+- **46a: subscription.** The `Signal` enum and its names (46.3.1; the PR chooses
+  between (A) and (B)); the stop set grows by USR1, USR2 and QUIT; writes retry
+  on EINTR (46.3.2); Quit takes the `_exit(131)` path (46.3.3). **Breaking:**
   `Signal` becomes a reserved builtin name.
-- **46b: sending.** `Process.signal`, `Process.spawn_group`,
-  `Process.signal_group` and `System.signal`, with the pidfd probe and
-  `--deny-run`; the group close and the end-of-run group kill for group
-  children.
-- **46c: the driver.** Obsolete: it forwarded a break from the Racket driver,
-  and since step 8d-2 an ordinary run is the process of the binary (46.1). A
-  container runs `agentica` directly.
-- **46d: graceful HTTP stop.** A drain in `std/http`: stop accepting, and wait
-  for the handlers to finish, up to a deadline. Agentica code, after 46b by the
-  owner's order.
-- **Separate changes, outside §46:** `File.copy` that keeps the mode,
-  `System.hostname`, and reaping orphans as PID 1 (46.8, question 10).
+- **46b: sending.** `Process.signal`, `spawn_group`, `signal_group` and
+  `System.signal`, with the pidfd probe and `--deny-run`; the group close and
+  the end-of-run group kill for group children.
+- **46d: graceful HTTP stop.** A drain in `std/http` (stop accepting, wait for
+  the handlers up to a deadline), in Agentica, after 46b by the owner's order.
+  (46c, the Racket driver, is gone: an ordinary run is the process of the
+  binary.)
+- Outside §46: `File.copy` that keeps the mode, `System.hostname`, PID 1
+  reaping (46.8, question 10).
 
 ### 46.8 Open questions
 
-Each question has options and a recommendation. All were decided on 2026-10-15
-as the recommendation, except question 12.
+Decided on 2026-10-15 as recommended, except question 12. Options not taken are
+named.
 
-1. **API shape: channel or blocking wait.** Options: (a) `Signal.channel`, a
-   subscription that queues values from the moment it is made. (b)
-   `Signal.wait(names, timeout_ms)`, a blocking call. **Recommendation:** (a). A
-   blocking call drops a signal that arrives before the call. It also needs a
-   task for each wait point. The channel fits the timeouts that the programs
-   already use.
-
-2. **Names: enum or strings.** Options: (a) the builtin enum `Signal`. The
-   checker catches a typo. The set is fixed by the VM. (b) strings, such as
-   `Signal.channel(["TERM"])`, where a typo shows up only at run time.
-   **Recommendation:** (a), as `LogLevel` does.
-
-3. **Later signals.** Options: (A) as today: a second signal ends the run after
-   the children are stopped, with the 3-second alarm. (B) the program decides:
-   while a subscription exists, every Term, Int, Hup, Usr1 and Usr2 goes to the
-   channel. Quit is the force path. It stops the children, flushes as on any
-   stop, and exits 131 through `_exit`. (C) the program decides, but a repeat of
-   the same signal within 3 seconds forces the exit. **Recommendation:** (B). It
-   matches the gh-runner and Go's `signal.Notify`. The VM still never leaves a
-   child behind, because Quit stops the children. The hard stop belongs to the
-   parent: Docker's SIGKILL after 10 seconds, or `Process.close`. The cost is
-   that a direct `agentica run`, with no parent to kill it, can only be stopped
-   by Quit or SIGKILL. Ctrl-\ is less known than Ctrl-C twice, so the site page
-   must say so. Option (C) is the fallback if the owner wants Ctrl-C twice to
-   work.
-
-4. **The grace alarm.** Options: (a) keep the 3-second alarm for the default
-   path only. A handled signal never arms it. (b) a grace per subscription, such
-   as `Signal.channel(signals, grace_ms)`. **Recommendation:** (a). A handled
-   stop has no VM deadline. The program sets its own deadlines.
-
-5. **The permission flag.** Options: (a) no flag for subscribing. `--deny-run`
-   for `spawn_group` and `System.signal`. (b) `--deny-run` for every signal
-   call, including subscribing. (c) a new flag such as `--deny-signal`.
-   **Recommendation:** (a). A program that subscribes only affects itself. A pid
-   signal reaches other processes, so it belongs to the class that `--deny-run`
-   already covers. A new flag adds one more thing to document for little gain.
-
-6. **SIGHUP reload.** Options: (a) out of scope. HUP stays a stop signal only.
-   (b) in scope as delivery only. HUP can be subscribed to, the VM does no
-   reload, and the program decides. **Recommendation:** (b). It costs nothing
-   once 46a exists, and the VM reloads nothing.
-
-7. **The driver's 2-second wait.** Moot since step 8d-2: there is no Racket
-   driver (46.7, 46c).
-
-8. **The pid API shape.** Options: (a) `System.signal(pid, sig, comm)` with a
-   pidfd and the name check. (b) `System.signal(pid, sig)` with no check, and a
-   warning in the docs. (c) a handle from the scan, such as `Process.attach(pid,
-   comm)`, returning a non-owning `Process`. **Recommendation:** (a). Option (b)
-   is unsafe because of pid reuse. Option (c) makes `Process.close` dangerous,
-   since it would kill a process the program does not own.
-
-9. **Stdin of group children.** `spawn_group` children inherit stdin (46.3.6),
-   as Python does. Options: (a) inherit, and document that the program must not
-   read stdin while such a child runs. (b) give the child `/dev/null` as stdin,
-   and let the program choose a pipe later. **Recommendation:** (a), to match
-   the script.
-
-10. **Reaping orphans as PID 1.** Options: (a) document `docker run --init`. (b)
-    make the VM reap orphans when it is PID 1, by calling `waitpid` on pids that
-    libuv does not own. **Recommendation:** (a) now. The VM would need `waitpid`
-    on pids it does not own, which is a separate decision.
-
-11. **Fallback when pidfd is unavailable.** Options: (a) refuse:
-    `System.signal` returns `error("signal: pidfd is unavailable")`. (b) call
-    `kill()` after the name check, which leaves a window in which a reused pid
-    can be hit. The race is documented. **Recommendation:** (a). The window in
-    (b) can signal a stranger. The gh-runner still ends after its deadline,
-    because the group kill reaches a listener that stays in run.sh's group.
-
-12. **The name `Signal`.** Options: (A) keep `Signal.channel` and
-    `Signal.number` beside the enum, and make the module resolver resolve a
-    function first. This is a front-end change. (B) move the functions to
-    `System.subscribe(signals)` and `System.signal_number(sig)`, and keep
-    `Signal` as an enum only. **Recommendation:** (B). It avoids the resolver
-    clash. The enum parameter (no builtin takes one today) is checked with a
-    spike in 46a. The fixture rename and the `**Breaking:**` entry happen under
-    either option.
-
-    **Decided (2026-10-15):** (B) is the starting point, not a final choice.
-    The 46a PR makes the final choice between (A) and (B), as 46.3.1 and 46.7
-    say.
+1. **API shape:** a `Signal.channel` subscription, which queues values from the
+   moment it is made. Not a blocking `Signal.wait(names, timeout_ms)`: it drops
+   a signal that arrives before the call and needs a task per wait point.
+2. **Names:** the builtin enum `Signal` (a typo is a check error), as
+   `LogLevel` does; not strings.
+3. **Later signals:** (B), the program decides: while a subscription exists
+   every Term, Int, Hup, Usr1 and Usr2 goes to the channel, and Quit is the
+   force path (stops the children, flushes, exit 131). It matches the gh-runner
+   and Go's `signal.Notify`, and the VM never leaves a child behind. The hard
+   stop belongs to the parent (Docker's SIGKILL after 10 seconds,
+   `Process.close`). The cost: a direct `agentica run` can only be stopped by
+   Quit or SIGKILL, and Ctrl-\ is less known than Ctrl-C twice, so the site page
+   must say so. Not (A) (as today) and not (C) (a repeat of the same signal
+   within 3 seconds forces the exit; the fallback if Ctrl-C twice must work).
+4. **Grace alarm:** kept for the default path only; a handled stop has no VM
+   deadline. Not a grace per subscription.
+5. **Permissions:** no flag for subscribing (it affects only the program);
+   `--deny-run` for `spawn_group` and `System.signal` (a pid signal reaches
+   other processes, the class `--deny-run` covers). Not a new `--deny-signal`.
+6. **SIGHUP reload:** delivery only. HUP can be subscribed to; the VM reloads
+   nothing and the program decides.
+7. (Moot: no Racket driver.)
+8. **Pid API:** `System.signal(pid, sig, comm)` with a pidfd and the name check.
+   Not a check-less `System.signal(pid, sig)` (pid reuse), and not a
+   `Process.attach(pid, comm)` handle (`Process.close` would kill a process the
+   program does not own).
+9. **Stdin of group children:** inherited, as Python does (the program must not
+   read stdin while such a child runs); not `/dev/null`.
+10. **Reaping orphans as PID 1:** document `docker run --init`; the VM would
+    need `waitpid` on pids it does not own, a separate decision.
+11. **No pidfd:** refuse with `error("signal: pidfd is unavailable")`. Not
+    `kill()` after the name check: the window can signal a stranger. The
+    gh-runner still ends after its deadline, since the group kill reaches a
+    listener left in run.sh's group.
+12. **The name `Signal`:** the options (A) and (B) of 46.3.1. **Decided
+    (2026-10-15):** (B) is the starting point, not a final choice; the 46a PR
+    makes the final choice, with a spike on the enum parameter. The fixture
+    rename and the `**Breaking:**` entry happen under either.
 
 ### 46.9 Implementation (row 7.8)
 
-One PR per item. 46a and 46b are VM C code and may run earlier, when no other
-VM PR is waiting; 46d comes after 46b.
-
-Done when: a program handles TERM, INT, HUP, USR1 and USR2 and stops its
-children before it exits, with QUIT as the force path; it sends signals to its
-own children and to a pid it did not start; `std/http` drains its handlers on a
-stop; and the behaviors of §46.6 hold.
+One PR per item; 46a and 46b are VM C code and may run earlier, when no other VM
+PR is waiting. Done when: a program handles TERM, INT, HUP, USR1 and USR2 and
+stops its children before it exits, with QUIT as the force path; it signals its
+own children and a pid it did not start; `std/http` drains its handlers on a
+stop; and the tests of 46.6 hold.

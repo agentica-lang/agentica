@@ -13,21 +13,11 @@ reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/
 
 ## Install
 
-Each release has an archive per system, with `bin/agentica` and the licenses:
-`linux-x86_64` and `linux-arm64` (glibc 2.28 or newer), `macos-x86_64` and
-`macos-arm64` (macOS 12 or newer), and
-`windows-x86_64` (Windows 10 or newer), with one `SHA256SUMS` file. Unpack one
-and put its `bin` folder on your `PATH`. The archives are not signed or
-notarized; the [install
-guide](https://agentica-lang.github.io/agentica/getting-started/) says what
-macOS and Windows show for that.
-
-## Requirements to build
-
-A C11 compiler and `make`. On Linux also OpenSSL 3 and libgc 8.2 or newer with
-`pkg-config` (or `AGENTICA_GC=vendored` to build libgc from the submodule).
-macOS needs the Xcode command line tools; Windows needs MSYS2 UCRT64 with GCC.
-See the install guide.
+Each release has an archive per system (Linux and macOS on x86-64 and arm64,
+Windows on x86-64), with `bin/agentica` and the licenses. Unpack one and put
+its `bin` folder on your `PATH`. The [install
+guide](https://agentica-lang.github.io/agentica/getting-started/) lists the
+archives, the minimum system versions and the requirements to build.
 
 ## Build
 

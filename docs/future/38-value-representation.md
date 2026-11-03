@@ -13,75 +13,35 @@ memory or speed ever asks for it.
 
 ### 38.1 Today
 
-- `agc_value` (`vm/value.h`, `docs/vm/05-values-execution-builtins.md` §5) is a
-  `uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and
-  `void *`. That is 12 bytes of data and 4 of padding, so 16 bytes, passed by
-  value.
-- Under the SysV x86-64 ABI a 16-byte struct of two eightbytes travels in two
-  registers, in and out of a call.
-- `Int` and `Float` never allocate. `Int` is a signed 64-bit integer, and
-  overflow is a runtime error (`docs/grammar.md`).
-- Memory is managed by the Boehm GC, which is conservative: it treats any word
-  that looks like a pointer into the heap as one. Pointers are never tagged
-  (`docs/vm/05-values-execution-builtins.md` §5.3).
-- The collector is compiled with `-DALL_INTERIOR_POINTERS` (`GC_COMPILE` in
-  mk/vm.mk), so a pointer anywhere inside an object keeps it alive. bdwgc reads
-  heap objects, the stack and the roots only at 8-byte aligned offsets
-  (`ALIGNMENT` is 8 on x86-64); the VM calls `GC_set_all_interior_pointers(1)`
-  and no `GC_register_displacement`.
+`agc_value` (`vm/value.h`, `docs/vm/05-values-execution-builtins.md` §5) is a
+`uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and `void *`:
+12 bytes of data and 4 of padding, 16 bytes passed by value (two registers under
+the SysV x86-64 ABI). `Int` and `Float` never allocate, and `Int` is 64-bit with
+overflow a runtime error. The Boehm GC is conservative, and pointers are never
+tagged (§5.3). It is compiled with `-DALL_INTERIOR_POINTERS` (`GC_COMPILE`,
+mk/vm.mk) and reads heap objects, stack and roots only at 8-byte aligned offsets
+(`GC_set_all_interior_pointers(1)`, no `GC_register_displacement`).
 
-### 38.2 Packed struct (12 or 9 bytes): rejected
+### 38.2 Alternatives weighed
 
-`__attribute__((packed))` with the `uint32_t` tag gives 12 bytes; with a
-`uint8_t` tag, 9 bytes.
-
-- **The GC loses pointers.** Boehm reads only 8-byte aligned words. In an array
-  of 12-byte values every second payload sits at an offset of 4 mod 8; with
-  9-byte values, seven of eight do. A pointer there is invisible, so a live
-  object would be freed. This is the blocker.
-- **Unaligned payloads.** x86-64 allows them, but a load that crosses a cache
-  line costs more, and atomic access is not possible (a split lock at best).
-- **Other architectures** may trap on unaligned access or emulate it slowly.
-- **Small gain, worse calls.** It saves only 25% (12 bytes) or 44% (9 bytes). A
-  struct with unaligned fields has class MEMORY in the SysV ABI, so it is passed
-  on the stack instead of in two registers.
-
-### 38.3 NaN-boxing (8 bytes)
-
-LuaJIT style: a value is a `double`, and the other types live in the payload
-bits of a NaN.
-
-- Floats stay inline, with no tag to check.
-- A 64-bit `Int` does not fit in the free bits (about 48 to 51). Large Ints
-  would need heap boxes, which means allocation and GC pressure in arithmetic,
-  or the language would have to narrow `Int`'s range.
-- The classic layout puts the tag in the high bits, so a stored pointer is not a
-  valid address and Boehm cannot see it.
-- The pointer-favouring variant (JavaScriptCore style: doubles are offset by a
-  large power of two, so raw pointers keep their top bits clear) keeps pointers
-  visible to Boehm, but it still cannot hold a 64-bit Int.
-
-### 38.4 Low-bit pointer tagging (8 bytes)
-
-Ruby and OCaml style: heap objects are 8-byte aligned, so the low bits of a
-pointer are free for a tag.
-
-- It works with Boehm because this build recognises interior pointers (§38.1):
-  `p + 1` still points inside the object. Small ints with the low bit set can
-  look like pointers and keep some garbage alive, as any conservative scan may.
-- Ints become 62 or 63 bits. That is a language change: `Int` is 64-bit today,
-  and overflow would move.
-- Floats need heap boxes. Ruby's flonum trick keeps most doubles inline by
-  rotating the exponent bits into a tagged word, but doubles outside that range
-  are still boxed.
-
-### 38.5 Struct of arrays (9 bytes)
-
-A container keeps a separate array of 1-byte tags next to an array of 8-byte
-payloads. That is 9 bytes per value, everything stays aligned, and pointers stay
-visible to Boehm. The cost is complexity in every container (lists, structs,
-enum payloads, captures, `Result`, Json, registers): each one manages two arrays
-and rebuilds an `agc_value` on every read.
+- **Packed struct (12 or 9 bytes): rejected.** Boehm reads only aligned words,
+  so in an array of 12-byte values every second payload (seven of eight with 9
+  bytes) is invisible and a live object would be freed: the blocker. Also
+  unaligned loads across cache lines, no atomic access, traps on some
+  architectures, and a small gain (25% or 44%) with worse calls: a struct with
+  unaligned fields is class MEMORY in the SysV ABI and goes on the stack.
+- **NaN-boxing (8 bytes).** Floats stay inline, but a 64-bit `Int` does not fit
+  in the free bits (about 48 to 51): large Ints need heap boxes (allocation in
+  arithmetic) or the language must narrow `Int`. The classic layout hides
+  pointers from Boehm; the pointer-favouring variant (JavaScriptCore) keeps them
+  visible but still cannot hold a 64-bit Int.
+- **Low-bit pointer tagging (8 bytes, Ruby and OCaml style).** Works with Boehm
+  (interior pointers are recognised), but Ints become 62 or 63 bits, a language
+  change, and Floats need heap boxes (Ruby's flonum keeps most inline).
+- **Struct of arrays (9 bytes).** A separate array of 1-byte tags beside the
+  8-byte payloads keeps alignment and GC visibility, but every container (lists,
+  structs, enum payloads, captures, `Result`, Json, registers) manages two
+  arrays and rebuilds an `agc_value` on every read.
 
 ### 38.6 Direction: use the static types
 

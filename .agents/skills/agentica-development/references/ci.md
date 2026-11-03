@@ -201,35 +201,9 @@ binary and C tests. The two run at once and a shard unpacks both.
   must not build two modes in a row and then use the first: its binaries would
   be relinked, and through the first binary of the bootstrap the stages would
   run again (about 45 s in sanitizer mode).
-- The jobs and what they run:
-
-  - `changes`: which paths changed: `c` (the C half runs), `trace`
-  - `build`: `make dist/agentica build/vm/release/bootstrap/agentica
-    vm-test-binaries`, then the upload
-  - `tests-fast` 1/2, 2/2: `make test SHARD=i/2`; shard 1 also `vm-latency`;
-    shard 2 also `test-multicore-modules` and `test-remove-actions`
-  - `tests-slow` 1/2, 2/2: `make test-slow SHARD=i/2`; shard 2 also
-    `vm-task-map` (alone on the CPU)
-  - `tests-shared`: `test-shared`
-  - `checks`: `vm-test`, `test-bdd`, `layout-check`, `fixed-point`,
-    `vm-jit-test`, `smoke`, `fmt-check`, `check-compiler`, the stage0 rebuild
-    check, `vendored-test`, `dup-check`
-  - `test`: the aggregate of the five jobs above
-  - `sanitizer-build`: `vm-sanitize-build` (the sanitizer `dist/agentica` and
-    its stages), then the upload
-  - `tsan-build`: `vm-tsan`, the TSan binary, the GC stress binary and C tests,
-    then the upload
-  - `lint-fuzz`: `vm-lint`, `vm-trace-off` (when asked), `vm-libfuzz-run` (it
-    builds its own objects)
-  - `sanitizer-tests` 1/2, 2/2: `vm-sanitize-test SHARD=i/2`; shard 1 also the
-    sanitizer `vm-test` and `fixed-point`; shard 2 also `vm-gc-stress`
-  - `tsan-run` 1/3, 2/3, 3/3: `vm-tsan-run SHARD=i/3`
-  - `vm-layers`: `vm-layers`
-  - `jit-arm64` (`ubuntu-24.04-arm`, builds its own binary): `vm-test`,
-    `vm-jit-test`, `tests/test_vm_jit.py`
-  - `vm-sanitizers`: the aggregate of the C half
-  - `warm-third-party`, `dup-check`: `master` pushes only
-
+- A shard job also runs some extra targets (`vm-latency` and
+  `test-remove-actions` on fast shard 1 or 2, `vm-task-map` alone on slow shard
+  2); see the YAML.
 - **Check names.** `test` and `vm-sanitizers` are the checks to name in a
   branch protection rule or a merge gate. Each `needs` its half and runs with
   `always()`: it fails when a job failed, was cancelled or did not run.
@@ -359,13 +333,10 @@ Skip rules, checked by the report:
 
 ## Release (`release.yml`)
 
-Five packages, one job each, built from stage0 (`make vm-test fixed-point`) with
-vendored libgc, OpenSSL and zlib: `linux-x86_64` and `linux-arm64` (`.tar.gz`,
-pinned `zig cc` against glibc 2.28, on `ubuntu-latest` and `ubuntu-24.04-arm`),
-`windows-x86_64` (`.zip`, MSYS2 UCRT64), and `macos-x86_64` and `macos-arm64`
-(`.tar.gz`, `MACOSX_DEPLOYMENT_TARGET=12.0`). Per package:
-build, strip (macOS adds an ad hoc `codesign`; no Developer ID or notarization),
-`make release-check`, `release-package`, `release-smoke`, upload.
+Five packages, one job each, built from stage0 with vendored libgc, OpenSSL and
+zlib (Linux: pinned `zig cc` against glibc 2.28; macOS: deployment target 12.0,
+ad hoc `codesign`, no notarization). Per package: build, strip,
+`make release-check`, `release-package`, `release-smoke`, upload;
 `RELEASE_PLATFORM` names the package. The Linux jobs also run the full golden
 sweep, `test-distribution` and the examples.
 

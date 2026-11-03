@@ -1,17 +1,9 @@
 ## Pending work: General programming and MCP (after the VM)
 
-Done and specified in the grammar: strict `Void`, files and paths, processes
-(5l), typed JSON, builders and schemas (5f2, 5i), and modules and imports (3,
-3a).
-
 ### 1. Everyday library (remaining phase 5n and supporting utilities)
 
 Keep names and argument order consistent with the existing builtin library.
 
-- [x] `List` operations (`concat`, `take`, `drop`, `at`, `map`, `filter`,
-  `reduce`, `sort`, `sort_by`), string search/replacement, numeric conversions,
-  `Time` and `Random`: in the builtin catalog. `reduce` takes the accumulator
-  first, `f(accumulator, item)`.
 - [ ] Decide which other gaps belong here after a real task needs them. From
   the code-challenge list: math (`abs`, `min`, `max`, `pow`, `sqrt`, `floor`,
   `ceil`, `gcd`), conversions, string helpers, input helpers (lines of
@@ -57,12 +49,7 @@ Build stdio examples first on the file/process/JSON/module foundations.
 - [ ] Specify dedicated SSE and Streamable HTTP behavior, then implement it over
   the existing HTTP/1.1 streaming APIs with independent interoperability tests.
 
-Task concurrency is already available for handling notifications while a client
-waits. Channels are built
-([§27.2](../future/27-iteration-and-concurrency.md#272-channels));
-`Process.poll_line` remains proposed in
+Tasks and channels are built; `Process.poll_line` remains proposed in
 [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions). A UUID
-is `SecureRandom.uuid` (`site/content/library/text-and-data/crypto.md`). A
-Ruby-style `Regex` is designed in
-[§48](../future/48-regex.md#48-regular-expressions), and it waits until after
-the bootstrap (roadmap row 7.10, phase 29).
+is `SecureRandom.uuid`. `Regex` is row 7.10
+([§48](../future/48-regex.md#48-regular-expressions)).

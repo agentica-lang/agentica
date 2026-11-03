@@ -144,16 +144,13 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   it out. The loader does not guard it: a crafted `.agcb` gets nothing `TCP` and
   `TLS` do not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is
   a reserved name.
-- **Options.** `HTTP.client` and the servers check every number first:
-  positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB
-  for a client and 256 MiB for a server. A bad record is an `error` result.
+- **Options.** `HTTP.client` and the servers check every number first (limits
+  in 10.5). A bad record is an `error` result.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
   (`none`: system trust), and `serve_tls` a server one.
 
 #### 10.7.1 As built: the client (20a)
 
-The `HttpWire` signatures, for the client and the server, are its rows in
-`compiler/catalog/builtins_data.agc`.
 
 - The client is `std/http` code on `TCP`, `TLS`, `Channel` and `Task`.
   `HttpWire.service` (`vm/http_service.c`) runs `f(jobs)`, the client's owner
@@ -276,9 +273,6 @@ The `HttpWire` signatures, for the client and the server, are its rows in
 - One deadline covers the call, from the wait for a connection to the last body
   byte. On timeout the connection is closed and the call returns
   `network: operation timed out`.
-
-- Errors are `http: ` plus the text in `vm/http_parse.h`, the texts of
-  `std/http`, or the network text of tcp.c.
 
 Properties of the client that no test checks:
 
@@ -445,22 +439,19 @@ Properties of the client that no test checks:
   receive's own error (`channel: closed`), not from a later `closed?`. HTTP/1.0
   never gets here: the parser answers 505.
 - An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
-  kept) or an `Accept`. An `Accept` writes the 101 head
-  by hand (`Sec-WebSocket-Accept` is the base64 of `Digest.sha1` of the key and
-  the GUID of RFC 6455), then runs the session in the connection task with
-  three tasks around it. The reader is the only task that reads the socket: it
-  takes the frame head (two bytes, then the length and mask), checks it before
-  it reads the payload (masked, no reserved bits, known opcode, control frames
-  whole and at most 125 bytes, the length against `max_message_bytes`), unmasks
-  the payload in a loop over its bytes (about 7 MB/s), joins fragments, checks
-  UTF-8 and close codes, and sends whole messages to `incoming`. The
+  kept) or an `Accept`. An `Accept` writes the 101 head by hand, then runs the
+  session in the connection task with three tasks around it. The reader is the
+  only task that reads the socket: it checks each frame head before it reads the
+  payload (masked, no reserved bits, known opcode, control frames whole and at
+  most 125 bytes, the length against `max_message_bytes`), joins fragments,
+  checks UTF-8 and close codes, and sends whole messages to `incoming`. The
   forwarder turns the handler's `outgoing` messages into frames for the writer.
   The writer is the only task that writes the socket and the one that ends the
   connection: its channel holds frames and four verdicts (our close frame, the
-  answer to the peer's, a failure frame, the loss of the peer), and it
-  finishes when the handshake is done, on a failed write, or `close_ms` after
-  our close frame. The reader answers a close frame (the echo goes to the writer
-  before the handler hears the `Close`). Every path ends with one `Close` on
+  answer to the peer's, a failure frame, the loss of the peer), and it finishes
+  when the handshake is done, on a failed write, or `close_ms` after our close
+  frame. The reader answers a close frame (the echo goes to the writer before
+  the handler hears the `Close`). Every path ends with one `Close` on
   `incoming`: the peer's, the code of the failure, or 1006. The pure part (the
   frame codec, the checks and the accept key) is `std/internal/websocket`; a
   read timeout closes the socket, so `idle_ms` is the timeout of each read and

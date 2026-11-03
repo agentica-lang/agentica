@@ -60,20 +60,17 @@ Known exceptions (the mechanisms are in §10.2.2):
   `path_string` refuses the `\\.\`, `\\?\` and `//./` spellings. The waiting
   streams reach the VM as sockets, process pipes and the standard streams.
 - **Windows stdin.** One blocking `_read` on a thread of the VM's own reads
-  every stdin kind, and the task waits on the loop for that job. At most one
-  read is in flight. Cancelling a reader detaches the job rather than
-  interrupting the OS read. This is a portability exception, not a pattern for
-  other I/O (§10.2.2, Stdin).
+  every stdin kind, and the task waits on the loop for that job; a cancelled
+  reader detaches the job. A portability exception, not a pattern for other I/O
+  (§10.2.2, Stdin).
 - **Windows stdout and stderr.** The loop never waits for a reader: a pipe is
   written by a libuv pipe handle, a console or a refused handle by a pool job
   (§10.2.2, Windows). The stop signal and the final notices share one wait of
   up to 200 ms that the exit uses.
 - **Pool-thread fallbacks.** stdin stays a pool job with a blocking read when it
-  cannot be made non-blocking (no `/proc/self/fd/N` reopen, no `F_DUPFD`, no
-  poller, or write-only stdin). A regular file whose read can block
-  (`/proc/kmsg`, some `/sys` files) keeps one pool thread until the read
-  returns. A regular file that reports size 0 (`/proc`, `/sys`) is read to EOF,
-  at most 1 MiB.
+  cannot be made non-blocking (§10.2.2, Stdin). A regular file whose read can
+  block (`/proc/kmsg`, some `/sys` files) keeps one pool thread until the read
+  returns.
 - **stdout and stderr fallbacks.** A stream keeps the blocking `fwrite` of its
   `FILE *` only when the loop cannot take it: the reopen or the `dup` fails, the
   descriptor is not open for writing (a closed stdout that `main` refilled with
@@ -84,9 +81,6 @@ Known exceptions (the mechanisms are in §10.2.2):
   stderr goes through the same buffer (`agc_output_forward`). In the fallback it
   takes the blocking `fwrite` on the I/O thread, under the stream's lock
   (§10.2.3, Output). The final C stdio flush is in §14.4, step 4.
-- **Notices (text the VM writes to stderr by itself).** They are queued, never
-  written inside a print, and what a stuck pipe will not take is dropped, so the
-  exit stays bounded (§10.2.2, Notices).
 - **Release flush of a file handle.** When a file job is dropped before its pool
   work ran (its timeout, a cancel, or the flush limit), or a handle is released
   at the end of the run (`release_handles`), `release_state` in `vm/files.c`
@@ -95,8 +89,6 @@ Known exceptions (the mechanisms are in §10.2.2):
   the write. The write is at most 4 KiB (`WRITE_BUFFER`) for a `File.open`
   handle, and at most 64 KiB (`CHUNK`) for the `Lazy.write_lines` handle
   (`vm/lazy.c`).
-- **Stdout and stderr on one target** share one buffer and FIFO, so output keeps
-  the order of the calls (§10.2.2, One target, one buffer).
 
 ### 14.2 Timeouts
 
@@ -225,10 +217,8 @@ flush (a FIFO nobody reads, or a test child that gets the SIGTERM of
 flush limit. A second signal that comes before the children are stopped waits
 for step 1, so children are never left behind.
 
-`agc_launch_settle` in `vm/launch.c` runs this path (§10.2.2, "End of
-run" and "Stop signals", which also say how a second signal and the stop grace
-timer bound it). `main`'s return, `System.exit`, a diagnostic, the step limit
-and the first stop signal all reach it. `agc_io_close` serves only the
+`agc_launch_settle` in `vm/launch.c` runs this path for every way the run ends
+(§10.2.2, "End of run" and "Stop signals"). `agc_io_close` serves only the
 in-process harnesses and the single binary, which closes the front end's loop
 before it runs the program in a new runtime. The Windows stdin reader is not
 joined: a read that the close cannot cancel stays in `_read` and takes the next

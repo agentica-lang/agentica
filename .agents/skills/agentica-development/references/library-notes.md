@@ -93,8 +93,6 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `Task.pending_count()` is above zero after its handler, then with
   RUNTIME-TASK-CRASHED when `Task.unobserved_crash()` is `ok`. The runner skips
   stderr lines with `"task": true` when it reads a child's last diagnostic.
-- The `task-*` goldens own task behavior; `tests/test_bdd_integration.py`
-  verifies concurrent streams of a program under test and cleanup.
 
 ## TCP, TLS and HTTP
 
@@ -147,10 +145,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `benchmarks/programs/logger-disabled.agc`. The goldens `logger-*` hold the
   stack lines of `std/logger.agc` in `logger-tasks.expected`: change
   `logger.agc` and rewrite them.
-- Tests: goldens `logger-*`; `tests/std/logger_test.agc` (one child VM per
-  file, so each test restores the registry); `tests/test_vm_logger.py` with the
-  Python peer `tests/fixtures/logger-peer.py` (the JSON lines and `time_text`
-  against `datetime`).
+- `tests/std/logger_test.agc` runs one child VM per file, so each test
+  restores the registry.
 
 ## Files and paths
 
@@ -181,9 +177,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   return path, and the end of a task cancelled while it waits closes the
   handle, as for `File.open`. `buffer_bytes` outside 1,024 to 16,777,216 is
   `RUNTIME-INVALID-COUNT` at the argument, before the file opens; a timeout of
-  zero or less is an error Result. Tests: `tests/test_vm_file_lines.py` (with
-  `tests/fixtures/lines-peer.py`), `vm/tests/each_line_test.c` and the goldens
-  `tests/fixtures/vm/file-each-line*.agc`.
+  zero or less is an error Result.
 - File.foreach and ch.lazy are the I/O sources of `Lazy` (`vm/lazy.c`,
   `LAZY_FILE` and `LAZY_CHANNEL`): prelude rows like the other sources. The
   terminal drives the line reader of `File.each_line` (`agc_lines_*` in
@@ -193,10 +187,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   takes `rt->sync` only around those two calls (`lazy_lines_next`,
   `lazy_receive`); `resume_stepper` fails `RUNTIME-INTERNAL` if an unlocked step
   returns holding it. `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`)
-  rejects `File.foreach(...).each` written as one chain. Goldens:
-  `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,
-  `step-limited/lazy-channel-endless.agc`; closes on every path:
-  `tests/test_vm_lazy_io.py`; N=4: `tests/test_vm_multicore.py`.
+  rejects `File.foreach(...).each` written as one chain.
 - `lz.write_lines(path, ms)` is the terminal `LAZY_WRITE`, driving the line
   writer `agc_line_writer` of `vm/files.c` (`agc_writer_*` in `services.h`): it
   opens before the first pull (`sink_ready`), parks on each write job
@@ -206,15 +197,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `module == "lazy"` rows with `St.step`, `check_try` records the ids
   (`Checked.step_tries`), the lowering emits `try-step`, and the interpreter
   sets `agc_stepper.escaped` (`mark_escape`) so `lazy_resume` ends the run with
-  the error. Goldens: `tests/fixtures/vm/lazy-try.agc`, `lazy-write.agc`; the
-  round trip and the closes: `tests/test_vm_lazy_io.py`; the Python peer:
-  `tests/test_stdlib_prelude.py`.
-- `tests/test_filesystem.py` runs checked Agentica programs through the CLI on
-  the VM against temporary directories, with Python peers for `Path.real` and
-  `System.env` with bytes that are not UTF-8 (`tests/fixtures/os-peer.py`) and
-  for FIFOs (`tests/fixtures/fifo-peer.py`, a reader that is slow or leaves,
-  giving `EPIPE`). Keep filesystem tests local and clean temporary trees on
-  every outcome.
+  the error.
+- Keep filesystem tests (`tests/test_filesystem.py`, with Python peers in
+  `tests/fixtures/`) local and clean temporary trees on every outcome.
 
 ## Void and processes
 
@@ -251,7 +236,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   C. A reader takes a `Bytes`, checks `window` (offset range, no overflow for
   any offset) and reads the items with `b[i]`; its only error is the offset.
   A writer packs a masked `List[Int]` with one `Bytes.from_list` (`pack`);
-  joining is `Bytes.concat`. Goldens: `std-binary` and `std-binary-vectors`.
+  joining is `Bytes.concat`.
 
 ## std/toml
 
@@ -271,9 +256,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   parts of one dotted key. The encoder refuses the same depths, and `to_json`
   refuses 2,048 levels, so no value built by a caller halts with
   `RUNTIME-STACK-OVERFLOW`, and what `encode` writes `parse` reads back.
-- Tests: `tests/test_std_toml.py` compares the tagged value with the vendored
-  toml-test JSON (TOML 1.0.0, `tests/fixtures/toml-test/`) and with `tomllib`;
-  `.gitattributes` marks both fixture folders `-text` to keep CRLF.
+- `.gitattributes` marks the toml fixture folders `-text` to keep CRLF.
 
 ## std/regex
 
@@ -286,10 +269,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   in C too. Match values are built in Agentica.
 - `Program` is private and holds an empty `Set` (`seal`) so that
   `JSON.decode` cannot build a `Regex`: `compile` is the only maker.
-- Tests: `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`,
-  Go's empty-match rules applied to its spans; a slow generated tier), checks
-  error positions and the ReDoS step budget; golden `std-regex` pins the Go
-  rules. The benchmark pair is `benchmarks/programs/regex.agc`.
+- `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`, Go's
+  empty-match rules applied to its spans); golden `std-regex` pins the Go rules.
 - The front end imports `std/regex` (`compiler/check/check_regex.agc`, listed
   in `stdlib/CORE`) to check regex literals (48b), so `compile`, its errors and
   any builtin it calls are part of the front end: a change there needs the

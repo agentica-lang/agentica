@@ -1,10 +1,9 @@
 ## 16. VM architecture
 
-**Status:** decided by the owner on 2026-10-13, row 7.2.1c of the
-[roadmap](../roadmap/README.md). This is the one picture of the threads, the
-queues and who owns what. The VM runs one scheduler per logical core by default;
-with N = 1 the scheduler and the loop share one thread. §16.9 says what differs,
-and this model also serves N = 1.
+**Status:** decided by the owner on 2026-10-13 (row 7.2.1c). This is the one
+picture of the threads, the queues and who owns what. The VM runs one scheduler
+per logical core by default; with N = 1 the scheduler and the loop share one
+thread (§16.9).
 
 The model has one loop, one run queue and no home scheduler for a task. A BEAM
 style design (one loop, run queue and resource registry per scheduler, a home
@@ -326,8 +325,8 @@ one exit path are as in §16.1 to §16.6. What differs:
   `uv_run(UV_RUN_NOWAIT)` after each turn and `uv_run(UV_RUN_ONCE)` when the run
   queue is empty (§10.2.1, §10.2.2). A separate I/O thread beside one scheduler
   thread at N = 1 is not used: the libuv code of the services would also run
-  beside the interpreter, which §16.11 leaves open, and every deadline wait (a
-  channel wait, a timed await, `Task.sleep`) would pay a timer job. A prototype
+  beside the interpreter, and every deadline wait (a channel wait, a timed
+  await, `Task.sleep`) would pay a timer job. A prototype
   ran the task-switch benchmark several times slower. The request code is the
   same at any N. What differs is where the loop runs: a request posted on the
   loop's thread runs at once, and one posted from another thread is queued and
@@ -467,34 +466,27 @@ one exit path are as in §16.1 to §16.6. What differs:
   it cannot be the work that ends a stall. Deadlines of real I/O jobs (a work or
   external job) stay on a libuv timer, started by the START request that the job
   pays anyway.
-- **A post after the loop closed is loud.** `agc_io_share` marks the loop shared
-  for good, so `on_io_thread` keeps comparing thread ids after `agc_io_close`
-  clears the inbox. A post from another thread after close writes a message and
-  aborts (`post_after_close`). It guards against a bug, not a program:
-  `vm/tests/job_test.c` runs this case in a child.
+- **A post after the loop closed is loud.** After `agc_io_close`, a post from
+  another thread aborts (`post_after_close`): it guards against a bug, not a
+  program.
 - **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
-  (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix). It runs
-  the C tests that use more than one thread: the inbox, the set-once outcome and
-  count, the run queue, wake and cancel against park, jobs, `rt->sync`, the
-  output locks, timers, and whole runs on four schedulers in
-  `vm/tests/threads_test.c`. `make vm-tsan-run` runs
-  `tests/test_vm_multicore.py` on the same build, with the release front end.
-- **The task is recorded before the job starts.** `start_job` sets `r->task` and
-  `t->parked` before it posts START, so a completion that follows at once finds
-  the task.
-- **Atomic task states.** The states (`agc_task_state` in `vm/port.h`) are in an
-  `_Atomic` field, and the protocol is in §10.2.3, "Park and wake protocol". The
-  end of the turn is in the scheduler. It decides the trace and the cancel flag
-  first. The CAS from PARKING to PARKED is its last access to the task, apart
-  from one more read of the cancel flag (a cancel can fall between the first
-  read and the CAS). If the CAS finds WOKEN, the scheduler queues the task, so
-  the task is queued once and its next turn takes up the wait again.
-- **`--schedulers N`.** `vm/launch.c` reads the flag and `AGENTICA_SCHEDULERS`
-  (§10.2.3). The default is at most 1024. The profile trace and
-  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one scheduler. The default count
+  (TSan and Boehm's stop-the-world do not mix) and runs the C tests that use
+  more than one thread, including whole runs on four schedulers
+  (`vm/tests/threads_test.c`). `make vm-tsan-run` runs
+  `tests/test_vm_multicore.py` on the same build.
+- **The task is recorded before the job starts** (`start_job` sets `r->task`
+  and `t->parked` before it posts START), so a completion that follows at once
+  finds the task.
+- **Atomic task states.** The protocol is in §10.2.3, "Park and wake protocol".
+  The CAS from PARKING to PARKED ends the turn: it is the scheduler's last
+  access to the task, apart from one more read of the cancel flag (a cancel can
+  fall between the first read and the CAS). If the CAS finds WOKEN, the
+  scheduler queues the task, once.
+- **`--schedulers N`** (§10.2.3). The profile trace and
+  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one scheduler: the default count
   then drops to 1, and a count above 1 chosen by the flag or the variable exits
-  2 with a message before the program loads. The front end always runs on one
-  scheduler, so its output does not depend on the machine.
+  2 before the program loads. The front end always runs on one scheduler, so its
+  output does not depend on the machine.
 - **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares the
   locks and the loop, lets threads register with the GC, makes one scheduler
   context (`agc_vm`) per thread, and starts scheduler 0. The calling thread
@@ -618,21 +610,16 @@ one exit path are as in §16.1 to §16.6. What differs:
     It also runs for the C tests and for `AGENTICA_VM_TEST_SHARED=1`, a
     test-only switch that runs a program on one scheduler with every lock on.
     `make test-shared` runs the binary test modules that way. In that mode the
-    lock placement is checked, not only exercised. `agc_lock_drop` aborts when
-    the caller is not the owner. `agc_sync_assert` fails the run with
-    `RUNTIME-INTERNAL` when a mutator of a shared list runs without the lock.
-    `rg agc_sync_assert vm/` lists them: the task tree, a channel's waiter
-    queues, the logger table, a handle's waiters, holder and `next_owner`, the
-    stdin waiters and the timer heaps. `agc_task_next` fails when a turn ended
-    with the lock held. `vm/tests/sync_test.c` checks the marks of the tables,
-    and `tests/test_vm_shared.py` holds the programs for the paths the other
-    modules do not reach. Not yet under the lock: the profiling counters. A
-    socket or a child needs no lock, since the I/O thread owns it. The owner of
-    a stream's lock is the calling thread's context, not the stream's own `vm`.
+    lock placement is checked, not only exercised: `agc_lock_drop` aborts when
+    the caller is not the owner, and `agc_sync_assert` fails the run with
+    `RUNTIME-INTERNAL` when a mutator of a shared list runs without the lock
+    (`rg agc_sync_assert vm/`). Not yet under the lock: the profiling counters.
+    A socket or a child needs no lock, since the I/O thread owns it. The owner
+    of a stream's lock is the calling thread's context, not the stream's own
+    `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
-- **The exit path runs on the I/O thread.** `agc_launch_end` (`vm/launch.c`)
-  calls `agc_launch_settle`, then the output end, then `agc_launch_exit`.
+- **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).
 
 ### 16.10 Later iterations
 
@@ -650,10 +637,9 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
 
 ### 16.11 Open
 
-- **Detached jobs** (decided, built; §16.9). A job whose task was cancelled has
-  no owner (§10.2.2). A cancelled outcome counts as detached: the task gives up
-  the wait, and the job runs to its end (§10.2.3). A scheduler ends a detached
-  job through `agc_io_service`.
+- **Detached jobs** (decided, built; §16.9, §10.2.2). A cancelled outcome
+  counts as detached: the task gives up the wait, the job has no owner and runs
+  to its end (§10.2.3). A scheduler ends it through `agc_io_service`.
 - **Cancel against PARKING and a ready task** (decided, built; §16.9). A READY
   task is taken out of the queue by the canceller, an O(n) walk under the
   queue's lock. A task the canceller cannot find is ended by the scheduler that
@@ -662,29 +648,22 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
 - **The resource registry and the wait lists** (decided, built; §16.9). One
   registry is shared under its own leaf lock, and the I/O thread goes from a
   job's id to the task through it (§16.5). The alternative, a registry owned by
-  the I/O thread, would make every free by a scheduler a request too. Freeing a
-  job calls `agc_unregister`, a registry write that moves the last entry. The
-  handle's lock FIFO, the stdin waiters and the awaiters list are all under
-  `rt->sync`. The alternatives were a short lock for each list, or FIFOs owned
-  by the I/O thread with lock enter and leave as requests. `rt->sync` covers the
-  channels' waiter lists too. A lock hand-on and a channel wake race the
-  waiter's deadline, a timer of the task (§16.9). Both wakers run under
+  the I/O thread, would make every free by a scheduler a request too. The
+  handle's lock FIFO, the stdin waiters, the awaiters list and the channels'
+  waiter lists are all under `rt->sync`; the alternatives were a short lock for
+  each list, or FIFOs owned by the I/O thread. A lock hand-on and a channel wake
+  race the waiter's deadline (a timer of the task, §16.9). Both wakers run under
   `rt->sync`, and the state CAS picks one. A losing lock hand-on must offer the
   lock to the next waiter. A losing channel wake passes the value or slot on
   (§10.2.2).
 - **Read buffers and request slots** (decided, built for sockets; §16.9). The
   I/O thread owns a connection's `agc_conn.in` and its request slots (a
-  process's too). The read callback appends to the buffer, read-ahead stays
-  there, and a read request gets its line or bytes as a `malloc`'d copy cut on
-  the I/O thread. Open: at N > 1 a read of bytes that are already buffered still
-  posts a request. A lock on the buffer that lets a scheduler take them at once
-  is not built. On the polled file path, `expired` moves `o->st->buf` while the
-  I/O thread may still run `ready`, `step` and `send_rest`, so the poller pause
-  must complete first. Stdin is appended to `rt->in.buf` on a scheduler (§16.2).
-  How the schedulers lock `rt->in` between them is open.
-- **A libuv step whose result a half needs** (decided, for sockets). `serve`
-  (`vm/tcp.c`) calls `uv_accept` on the I/O thread. A TLS child finishes its
-  handshake there, and the request hands the child to `accept_done`.
+  process's too); a read request gets its line or bytes as a `malloc`'d copy cut
+  on the I/O thread. Open: at N > 1 a read of bytes that are already buffered
+  still posts a request, and how the schedulers lock `rt->in` between them
+  (stdin is appended to `rt->in.buf` on a scheduler, §16.2). On the polled file
+  path, `expired` moves `o->st->buf` while the I/O thread may still run `ready`,
+  `step` and `send_rest`, so the poller pause must complete first.
 - **stdout and stderr on the loop** (decided, built; §10.2.2). An OS lock
   cannot be held across a park, so each stream has a short lock around its
   buffer and FIFO and a single writer on the loop (§16.8).

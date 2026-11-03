@@ -39,18 +39,13 @@ The manifest is in [05b](../grammar/05b-modules.md), Packages.
   takes the local name as an argument and never reads it. Nothing checks it
   against the names that others give it.
 
-**`blank_line_after_end`** (built, see 05b): `agentica fmt` (47) must add the
-empty line when the key is on.
-
-**Pending: the `max_line_width` rule.** `max_line_width` is the longest line
-allowed, in characters (Unicode code points, not bytes). It counts every line,
-comments and doc comments included. With no `max_line_width` there is no limit.
-A line over it is an error, never a warning (section 26). `agentica check`
-reports it as `CHECK-LINE-TOO-LONG`, at the first character past the limit. The
-code is proposed in §47.2 and owned by phase 28 (47c), which moves the check
-there; the owner confirms it. `tests/test_style_line_width.py` enforces the
-limit for this repository. `agentica fmt` does not enforce it: a line it cannot
-break stays long.
+**`blank_line_after_end`** and **`max_line_width`** are built (05b).
+`max_line_width` counts characters (code points), comments included; with none
+there is no limit. `agentica check` reports a longer line as
+`CHECK-LINE-TOO-LONG`, never a warning (section 26); `agentica fmt` never breaks
+a word, so a line it cannot break stays long, and it adds the empty line when
+`blank_line_after_end` is on (§47.2). `tests/test_style_line_width.py` covers
+`stdlib/`.
 
 ### 45.6 Lock and hash
 
