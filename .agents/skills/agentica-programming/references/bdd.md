@@ -119,7 +119,10 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   returns `ok()` or `error(message)`; a hook that returns an error, crashes or
   fails a `BDD` check fails a passing scenario (`RUNTIME-BDD-AFTER`) or is added
   to the message of a failing one, and the other hooks still run. No hook runs
-  when the child itself ends: a crash in a step, `System.exit`, the 30 s limit.
+  when the child itself ends: a step that crashes (`.unwrap!` on an error),
+  `System.exit`, the 30 s limit. Hooks run before the program under test stops
+  (Windows may not remove a folder it still holds). A hook lives in the context
+  `BDD.after` returns: a failure on an older context does not run it.
 - `BDD.given_env` and `BDD.given_argument` (or the steps) come before
   `BDD.given_program` (`RUNTIME-BDD-CONTEXT` after): the variable and arguments
   reach only that scenario's program. A scenario starts one program.

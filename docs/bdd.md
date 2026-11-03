@@ -269,6 +269,9 @@ A step program is a normal program: its `main` builds the list of steps with
   until the child ends or the deadline passes and adds its message to the
   failure's. A process that ends by itself (a crash in a step, `System.exit`, a
   limit or the deadline) runs no hook: that state is gone with the process.
+  The hooks run before the program under test is stopped, and a hook belongs
+  to the context `BDD.after` returned, so a `BDD` failure on an older context
+  does not see it.
 - `BDD.read_line(ctx, timeout_ms)` is `Process.read_line` of the program under
   test as a `Result[String]`: the ended output and the timeout are errors the
   step can handle; the output limit and an I/O failure still fail the step. A

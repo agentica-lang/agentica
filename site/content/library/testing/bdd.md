@@ -249,10 +249,12 @@ BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
 
 Registers a cleanup that runs when the scenario ends, whether it passed, failed or was skipped. A step registers it right after it makes what needs cleaning, so the hook exists only when there is something to clean.
 
-- Hooks run in the reverse order of registration, in the process of the scenario, before its program under test is stopped. A hook gets the context the scenario ended with, and returns `ok()` or `error(message)`. Use that context for any `BDD` call in the hook.
+- Hooks run in the reverse order of registration, in the process of the scenario. A hook gets the context the scenario ended with, and returns `ok()` or `error(message)`. Use that context for any `BDD` call in the hook.
 - A hook that returns an `error`, crashes or fails a `BDD` check is a failed hook, and the other hooks still run. A failed hook fails a scenario that passed, with the code `RUNTIME-BDD-AFTER` at the scenario line. For a scenario that failed, the failure stays the one reported and the message of the hook is added to it.
-- Hooks do not run when the process of the scenario itself ends: a crash in a step, `System.exit`, or the 30 second limit. A hook that fails a check ends only that hook.
-- A hook cannot call `BDD.skip`.
+- Hooks do **not** run when the process of the scenario itself ends: a step that crashes (an `.unwrap!` on an `error`, a division by zero), a step or hook that calls `System.exit`, or the 30 second limit. A scenario that fails by a crash still leaves what it made, so keep a cleanup of stale folders for that case, or make steps return `error` and check it with `BDD.assert` instead of `.unwrap!`.
+- Hooks run before the program under test is stopped, and no `BDD` call stops it first. On Windows a folder the program still holds open may not be removable by a hook.
+- A hook is kept in the context that `BDD.after` returns. A step that registers a hook and then fails on an older context (`BDD.assert(ctx, ...)` with the `ctx` from before) does not run it: pass on the context that `BDD.after` returned.
+- A hook cannot call `BDD.skip`. A hook that fails after `BDD.skip` turns the skipped scenario into a failed one (`RUNTIME-BDD-AFTER`). A hook that never ends is reported when the 30 second limit of the scenario passes.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"

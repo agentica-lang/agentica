@@ -1001,11 +1001,8 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
 }
 
 static bool env_prefix(const char *entry, const char *prefix) {
-#ifdef _WIN32
-  return _strnicmp(entry, prefix, strlen(prefix)) == 0;
-#else
-  return strncmp(entry, prefix, strlen(prefix)) == 0;
-#endif
+  size_t n = strlen(prefix);
+  return strlen(entry) >= n && agc_proc_env_name_equal(entry, n, prefix, n);
 }
 
 static bool own_env(bool drop_uring, const char *entry) {
@@ -1020,18 +1017,24 @@ static bool metrics_env(const char *entry) {
          env_prefix(entry, METRICS_FILE_ENV);
 }
 
-static bool env_name_is(const char *host, const agc_string *name) {
-#ifdef _WIN32
-  return strlen(host) == name->bytes && _strnicmp(host, (const char *)name->data, name->bytes) == 0;
-#else
-  return strlen(host) == name->bytes && memcmp(host, name->data, name->bytes) == 0;
-#endif
+/* "NAME=VALUE" in malloc memory. */
+static char *env_entry(const char *name, size_t name_size, const char *value, size_t value_size) {
+  char *entry = malloc(agc_size_add(agc_size_add(name_size, value_size), 2));
+  if (!entry) agc_out_of_memory();
+  memcpy(entry, name, name_size);
+  entry[name_size] = '=';
+  memcpy(entry + name_size + 1, value, value_size);
+  entry[name_size + 1 + value_size] = '\0';
+  return entry;
 }
 
 /* True when the program's `env` map gives HOST_NAME a new value, so the VM's own entry is left out. */
 static bool env_overridden(agc_vm *vm, const char *host_name, const agc_value *keys, size_t count) {
-  for (size_t k = 0; k < count; k++)
-    if (env_name_is(host_name, agc_as_string(vm, keys[k]))) return true;
+  size_t size = strlen(host_name);
+  for (size_t k = 0; k < count; k++) {
+    const agc_string *name = agc_as_string(vm, keys[k]);
+    if (agc_proc_env_name_equal(host_name, size, (const char *)name->data, name->bytes)) return true;
+  }
   return false;
 }
 
@@ -1048,12 +1051,7 @@ static char **child_env(agc_vm *vm, bool drop_uring, const char *channel, const 
   if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
   for (int k = 0; k < count; k++) {
-    size_t name = strlen(host[k].name), value = strlen(host[k].value);
-    char *entry = malloc(agc_size_add(agc_size_add(name, value), 2));
-    if (!entry) agc_out_of_memory();
-    memcpy(entry, host[k].name, name);
-    entry[name] = '=';
-    memcpy(entry + name + 1, host[k].value, value + 1);
+    char *entry = env_entry(host[k].name, strlen(host[k].name), host[k].value, strlen(host[k].value));
     if (own_env(drop_uring, entry) || metrics_env(entry) || env_overridden(vm, host[k].name, keys, added)) free(entry);
     else env[kept++] = entry;
   }
@@ -1063,13 +1061,7 @@ static char **child_env(agc_vm *vm, bool drop_uring, const char *channel, const 
     const agc_string *name = agc_as_string(vm, keys[k]);
     if (!agc_map_get(vm, extra, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
     const agc_string *text = agc_as_string(vm, value);
-    char *entry = malloc(agc_size_add(agc_size_add(name->bytes, text->bytes), 2));
-    if (!entry) agc_out_of_memory();
-    memcpy(entry, name->data, name->bytes);
-    entry[name->bytes] = '=';
-    memcpy(entry + name->bytes + 1, text->data, text->bytes);
-    entry[name->bytes + 1 + text->bytes] = '\0';
-    env[kept++] = entry;
+    env[kept++] = env_entry((const char *)name->data, name->bytes, (const char *)text->data, text->bytes);
   }
   if (channel) {
     size_t size = strlen(CHANNEL_PREFIX) + strlen(channel) + 1;
@@ -1167,8 +1159,22 @@ static int start_child(guard *g, proc *p, const launch *l) {
 
 static bool no_nul(const agc_string *s) { return !memchr(s->data, 0, s->bytes); }
 
-/* Why the program's `env` map cannot be a child's environment, or NULL. A name the VM owns (own_env, metrics_env) is
-   refused, not dropped: dropping it would run the child without a variable the program asked for. */
+/* The names the VM owns (own_env, metrics_env), each as its prefix with the "=" that ends the name. UV_USE_IO_URING is
+   refused on every system on purpose, also where the VM would pass it through: one rule, and a program has no use for
+   setting a libuv variable of the VM. */
+static const char *const reserved_names[] = {URING_ENV, CHANNEL_PREFIX, METRICS_ENV, METRICS_FILE_ENV};
+
+static bool reserved_env(const agc_string *name) {
+  for (size_t k = 0; k < sizeof reserved_names / sizeof reserved_names[0]; k++) {
+    size_t size = strlen(reserved_names[k]) - 1;
+    if (agc_proc_env_name_equal((const char *)name->data, name->bytes, reserved_names[k], size)) return true;
+  }
+  return false;
+}
+
+/* Why the program's `env` map cannot be a child's environment, or NULL. A name the VM owns is refused, not dropped:
+   dropping it would run the child without a variable the program asked for. Where names ignore case (Windows) two keys
+   that differ only in case are refused too: libuv would send both and the child could see either. */
 static const char *env_problem(agc_vm *vm, const agc_map *env) {
   if (!env || !env->size) return NULL;
   const agc_value *keys = agc_map_keys(vm, env, 0);
@@ -1178,15 +1184,14 @@ static const char *env_problem(agc_vm *vm, const agc_map *env) {
     if (!agc_map_get(vm, env, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
     if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes) || !no_nul(agc_as_string(vm, value)))
       return "process: environment names must be nonempty and cannot contain = or NUL, and values cannot contain NUL";
-    char *entry = malloc(agc_size_add(name->bytes, 2));
-    if (!entry) agc_out_of_memory();
-    memcpy(entry, name->data, name->bytes);
-    entry[name->bytes] = '=';
-    entry[name->bytes + 1] = '\0';
-    bool owned = own_env(true, entry) || metrics_env(entry);
-    free(entry);
-    if (owned)
+    if (reserved_env(name))
       return "process: AGENTICA_CHANNEL, AGENTICA_VM_METRICS, AGENTICA_VM_METRICS_FILE and UV_USE_IO_URING cannot be set";
+    if (agc_proc_env_case_blind())
+      for (size_t j = 0; j < k; j++) {
+        const agc_string *other = agc_as_string(vm, keys[j]);
+        if (agc_proc_env_name_equal((const char *)name->data, name->bytes, (const char *)other->data, other->bytes))
+          return "process: environment names must differ by more than case";
+      }
   }
   return NULL;
 }

@@ -27,13 +27,19 @@ static agc_value text(const char *s) {
   return agc_string_value(agc_make_string(s, strlen(s), 0));
 }
 
-/* The first entry of a name: for a spawn it is the arity without `env`, which these tests call. */
+/* The entry of a name with the fewest arguments, whatever the order of the table: for a spawn it is the arity without
+   `env`, which these tests call. */
 static const agc_builtin *first_builtin(const char *name) {
-  for (size_t k = 0; k < agc_process_builtin_count; k++)
-    if (strcmp(agc_process_builtins[k].name, name) == 0) return &agc_process_builtins[k];
-  for (size_t k = 0; k < agc_duplex_builtin_count; k++)
-    if (strcmp(agc_duplex_builtins[k].name, name) == 0) return &agc_duplex_builtins[k];
-  return NULL;
+  const agc_builtin *found = NULL;
+  for (size_t k = 0; k < agc_process_builtin_count; k++) {
+    const agc_builtin *b = &agc_process_builtins[k];
+    if (strcmp(b->name, name) == 0 && (!found || b->arity < found->arity)) found = b;
+  }
+  for (size_t k = 0; k < agc_duplex_builtin_count; k++) {
+    const agc_builtin *b = &agc_duplex_builtins[k];
+    if (strcmp(b->name, name) == 0 && (!found || b->arity < found->arity)) found = b;
+  }
+  return found;
 }
 
 static agc_value call(const char *name, agc_value *args) {

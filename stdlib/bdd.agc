@@ -178,6 +178,7 @@ end
 ## Returns the context with `hook` registered to run when the scenario ends, whether it passed, failed or was skipped.
 ## Hooks run in the reverse order of registration, in the child process of the scenario, before the program under test
 ## is stopped. A hook gets the context at the end of the scenario and returns `error(message)` when its cleanup fails.
+## The hook is kept in the context this returns: a step that fails on an older context does not run it.
 ## A failed hook fails a passing scenario and is added to the message of a failing one. The other hooks still run, also
 ## when a hook crashes or fails a `BDD` check. Hooks do not run when the process itself ends: a crash in a step, the
 ## scenario's time limit or `System.exit`.

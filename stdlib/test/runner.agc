@@ -577,6 +577,10 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
       return Report.Verdict.Pass
     end
   end
+  if line.message == "network: operation timed out"
+    # Once the channel is closed the child only runs its after hooks.
+    return failure("RUNTIME-BDD-TIMEOUT", "an after hook did not finish within the scenario's time limit", span)
+  end
   return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
 

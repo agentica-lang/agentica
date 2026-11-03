@@ -123,8 +123,9 @@ def cleanup(request):
     return request.addfinalizer
 
 
-def json_test(*args, before=()):
-    result = run(cli() + [*before, "test", "--json", *args], env=vm_environment())
+def json_test(*args, before=(), timeout=None):
+    limit = {"timeout": timeout} if timeout else {}
+    result = run(cli() + [*before, "test", "--json", *args], env=vm_environment(), **limit)
     assert result.stderr == ""
     return json.loads(result.stdout)
 
@@ -293,6 +294,10 @@ AFTER_STEPS = dedent("""\
         invalid = 1 / 0
       elsif name == "check"
         BDD.assert(closing, false, "hook check")
+      elsif name == "skip"
+        BDD.skip(closing, "from a hook")
+      elsif name == "sleep"
+        Task.sleep(60000)
       end
       return ok()
     end
@@ -301,6 +306,11 @@ AFTER_STEPS = dedent("""\
       log = args[1]
       name = args[0]
       return BDD.after(ctx) do |closing| cleanup(closing, log, name) end
+    end
+
+    def older(ctx: BDD.Context, args: List[String]) -> BDD.Context
+      registered = hook(ctx, args)
+      return BDD.assert(ctx, false, "failed on the older context")
     end
 
     def folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
@@ -312,6 +322,7 @@ AFTER_STEPS = dedent("""\
     def main() -> Void
       BDD.run([
         BDD.step("the hook {string} logs to {string}", &hook),
+        BDD.step("the hook {string} logs to {string} and the step fails on the older context", &older),
         BDD.step("the folder {string} exists until the scenario ends", &folder),
         BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "the step failed") end,
         BDD.step("the scenario passes") do |ctx, args| BDD.assert(ctx, true, "never") end,
@@ -347,11 +358,21 @@ def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing
             f'And the hook "bad" logs to "{log("breaks")}"', f'And the hook "crash" logs to "{log("breaks")}"',
             f'And the hook "check" logs to "{log("breaks")}"', "Then the scenario passes"
         ) + scenario(
-            "a hook is added to a failure", f'Given the hook "bad" logs to "{log("both")}"', "When the scenario fails")})
+            "a hook is added to a failure", f'Given the hook "bad" logs to "{log("both")}"', "When the scenario fails"
+        ) + scenario(
+            "a hook fails a skipped scenario", f'Given the hook "bad" logs to "{log("skip-bad")}"',
+            "When the scenario is skipped"
+        ) + scenario(
+            "a hook cannot skip", f'Given the hook "skip" logs to "{log("skip-hook")}"', "Then the scenario passes"
+        ) + scenario(
+            "a hook of the same step on an older context is lost",
+            f'Given the hook "one" logs to "{log("older")}" and the step fails on the older context')})
     report = json_test(directory / "after.feature")
     cases = report_cases(report)
-    assert [item["status"] for item in cases] == ["passed", "failed", "skipped", "failed", "failed"]
-    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION"]
+    assert [item["status"] for item in cases] == ["passed", "failed", "skipped", "failed", "failed", "failed", "failed",
+                                                   "failed"]
+    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION",
+                             "RUNTIME-BDD-AFTER", "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION"]
     assert (logs / "passes").read_text().split() == ["two", "one"]
     assert (logs / "fails").read_text().split() == ["one"]
     assert not (tmp_path / "gone").exists()
@@ -362,6 +383,27 @@ def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing
     assert "cleanup failed" in broken and "hook check" in broken and "division by zero" in broken
     both = cases[4]["error"]["message"]
     assert both.startswith("the step failed") and "cleanup failed" in both
+    assert (logs / "skip-bad").read_text().split() == ["bad"]
+    assert "cleanup failed" in cases[5]["error"]["message"]
+    assert (logs / "skip-hook").read_text().split() == ["skip"]
+    assert "cannot skip" in cases[6]["error"]["message"]
+    assert not (logs / "older").exists()
+
+
+@pytest.mark.slow
+def test_a_hook_that_never_ends_is_reported_at_the_scenario_limit_for_a_passing_and_a_failing_scenario(tmp_path):
+    log = (tmp_path / "log").as_posix()
+    directory = suite(tmp_path, {
+        "steps.agc": AFTER_STEPS,
+        "hang.feature": ("Feature: Hang\n"
+                         f'Scenario: passes\nGiven the hook "sleep" logs to "{log}"\nThen the scenario passes\n'
+                         f'Scenario: fails\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario fails\n')})
+    # Two scenarios wait for the 30 s limit one after the other.
+    report = json_test(directory / "hang.feature", timeout=scaled(120))
+    cases = report_cases(report)
+    assert codes(report) == ["RUNTIME-BDD-TIMEOUT", "RUNTIME-BDD-ASSERTION"]
+    assert "after hook did not finish" in cases[0]["error"]["message"]
+    assert "after hook did not finish" in cases[1]["error"]["message"]
 
 
 def test_a_program_under_test_runs_without_a_step_limit(tmp_path):

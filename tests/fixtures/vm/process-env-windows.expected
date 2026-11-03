@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 36,
+  "stdout": [
+    "ok(\"new-ab\")",
+    "\"process: environment names must differ by more than case\"",
+    ""
+  ],
+  "stderr": []
+}
