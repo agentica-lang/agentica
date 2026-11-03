@@ -119,7 +119,8 @@ Fence attributes:
 - `{file="name.agc"}` is a module that the page's other blocks can import.
 - `{fmt="off"}` leaves the block out of the format check (below). Use it only
   for a block that is wrong or partial on purpose: a style rule shown by
-  hand, or a program that does not parse (`PARSE-` codes).
+  hand, a program that does not parse (`PARSE-` codes), or syntax that `fmt`
+  rewrites but the page teaches (the leading-dot chain of `tour/blocks.md`).
 
 Every other `agentica` block must already be in the layout of `agentica fmt`
 (the `agentica.toml` of the test sets `blank_line_after_end`).
