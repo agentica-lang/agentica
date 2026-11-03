@@ -18,7 +18,9 @@
 #endif
 #endif
 #if AGC_TEST_ASAN
-#include <sanitizer/asan_interface.h>
+/* From <sanitizer/asan_interface.h>, declared here because clang-tidy may not find the compiler's own headers. */
+void *__asan_get_current_fake_stack(void);
+void *__asan_addr_is_in_fake_stack(void *fake_stack, void *addr, void **beg, void **end);
 #endif
 
 static inline agc_value agc_test_call(agc_vm *vm, agc_task *task, const agc_builtin *builtin, agc_value *args) {
