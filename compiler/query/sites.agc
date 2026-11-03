@@ -356,6 +356,10 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
         return []
       end
 
+      if field_call?(scan, node.id)
+        return field_read_sites(scan, node.target, node.name, node.name_span)
+      end
+
       return builtin_method_sites(scan, node.id, node.name_span)
     Ast.Expr.BlockLit(node) ->
       out: List[Site] = []
@@ -380,12 +384,29 @@ def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span:
     return builtin_method_sites(scan, id, name_span)
   end
 
+  return field_read_sites(scan, target, name, name_span)
+end
+
+# The read of a struct field of the program, or the call of an Fn field (`x.name(args)`).
+def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
   owner = struct_of(scan, target)
   if !scan.declared.include?(owner)
     return []
   end
 
   return placed(scan, member("field", owner, name), "read", name_span, name_span)
+end
+
+def field_call?(scan: Scan, id: Int) -> Bool
+  found = scan.resolved.get(id)
+  if found.none?
+    return false
+  end
+
+  case found.unwrap!
+    State.Resolved.FieldCall -> return true
+    _ -> return false
+  end
 end
 
 def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Site]

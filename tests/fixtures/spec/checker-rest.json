@@ -7338,7 +7338,7 @@
         "",
         ""
       ],
-      "code": "CHECK-UNKNOWN-METHOD"
+      "code": null
     }
   ],
   "interpolation is a String and rejects Void parts": [

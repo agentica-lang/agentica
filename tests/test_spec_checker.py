@@ -79,6 +79,32 @@ def test_a_field_named_with_cannot_hold_a_function(tmp_path):
     assert_clean("struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n", tmp_path)
 
 
+FN_FIELD = ("struct Hooks\n  run: Fn[Int, Int]\n  note: Fn[String, Void]\n  to_s: Fn[Int]\n  size: Int\nend\n\n"
+            "struct Store[T]\n  get: Fn[String, T]\nend\n\n"
+            "def one(n: Int) -> Int\n  return n\nend\n\n"
+            "def zero() -> Int\n  return 0\nend\n\n"
+            "def say(text: String) -> Void\n  puts(text)\nend\n\n"
+            "def name_of(key: String) -> String\n  return key\nend\n\n")
+
+
+def fn_field_main(body):
+    return FN_FIELD + main_with("  h = Hooks(run: &one, note: &say, to_s: &zero, size: 1)\n" + body)
+
+
+def test_an_fn_field_is_called_like_a_method(tmp_path):
+    assert_clean(fn_field_main("  puts(h.run(h.run(1)))\n  h.note(\"x\")\n  puts(h.to_s())\n  puts(h.run.call(2))"),
+                 tmp_path)
+    assert_clean(FN_FIELD + main_with("  s = Store(get: &name_of)\n  puts(s.get(\"a\").upcase)"), tmp_path)
+    expect(fn_field_main("  puts(h.run(1, 2))"), "CHECK-ARITY", (30, 8), tmp_path, "h.run(1, 2)")
+    expect(fn_field_main('  puts(h.run("a"))'), "CHECK-TYPE-MISMATCH", (30, 14), tmp_path, '"a"')
+    expect(fn_field_main('  text: String = h.run(1)'), "CHECK-TYPE-MISMATCH", (30, 18), tmp_path, "h.run(1)")
+
+
+def test_only_an_fn_field_can_be_called_like_a_method(tmp_path):
+    expect(fn_field_main("  puts(h.size(1))"), "CHECK-UNKNOWN-METHOD", (30, 8), tmp_path, "h.size(1)")
+    expect(fn_field_main("  puts(h.missing(1))"), "CHECK-UNKNOWN-METHOD", (30, 8), tmp_path, "h.missing(1)")
+
+
 def test_pipe_calls_user_functions_and_builtins(tmp_path):
     bodies = (
         "  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
