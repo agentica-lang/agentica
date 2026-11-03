@@ -40,6 +40,9 @@ LEVELS: Map[String, Int] = {
 PIPE_LEVEL = 5
 UNARY_LEVEL = 8
 POSTFIX_LEVEL = 9
+# The tokens that open and close a level of the source for `dotted?`: brackets, and blocks with their `end`.
+OPENING = Set.new(["left-paren", "left-bracket", "left-brace", "do", "if", "while", "for", "case", "def"])
+CLOSING = Set.new(["right-paren", "right-bracket", "right-brace"])
 
 ## What the layout reads besides the tree: the source lines, the tokens that are not line breaks with their starts,
 ## the comments of each node by its key (`Comments.key_of`), the body of each heredoc by the offset of its opener, and
@@ -910,14 +913,59 @@ def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.
   return wrapped([doc], false)
 end
 
-# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`.
+# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`. A
+# method chain that the source wrote with a dot at the start of each line and no parentheses stays that way.
 def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
+  if forced and dotted?(c, expr)
+    key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
+    return commented(c, key, chain_of(c, expr, false, true))
+  end
+
   if forced and (piped?(expr) or piped_try?(expr))
     key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
     return commented(c, key, pipe_doc(c, expr, false, true))
   end
 
   return expr_doc(c, expr, false)
+end
+
+# Whether `expr`, the whole value of a statement, is a method chain written with a `.` that starts a line (the parser
+# reads it as a continuation of the line before) and not inside brackets: a dot inside the parentheses of the chain, of
+# an argument or of a block body does not count. The tokens of the chain are counted by their brackets and their
+# `do ... end` blocks, so the dots that count are the ones at its own level.
+def dotted?(c: Context, expr: Ast.Expr) -> Bool
+  case link_of(c, expr)
+    some(_) -> return dotted_at?(c, Ast.expr_span(expr))
+    none -> return false
+  end
+end
+
+def dotted_at?(c: Context, span: Source.Span) -> Bool
+  at = token_index(c, span.start.offset)
+  stop = token_index(c, span.stop.offset)
+  # A `(` right before the chain whose `)` comes after it wraps the chain, which the layout then keeps in parentheses.
+  wrapped_in = at > 0 and c.tokens[at - 1].kind == "left-paren"
+  depth = 0
+  found = false
+  while at < stop
+    kind = c.tokens[at].kind
+    if OPENING.include?(kind)
+      depth += 1
+    elsif kind == "end" or CLOSING.include?(kind)
+      depth -= 1
+      if depth < 0
+        # A `)` that closes a parenthesized receiver, `(a + b).round`, not the `(` before the chain.
+        wrapped_in = false
+        depth = 0
+      end
+    elsif kind == "dot" and depth == 0 and at > 0 and c.tokens[at].span.start.line > c.tokens[at - 1].span.stop.line
+      found = true
+    end
+
+    at += 1
+  end
+
+  return found and not wrapped_in
 end
 
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
@@ -1211,6 +1259,11 @@ end
 # with two calls or more breaks before each `.` when it does not fit (47.5 rule 10): the first call stays with a
 # receiver that is a plain name.
 def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
+  return chain_of(c, expr, bracketed, false)
+end
+
+# `chain_doc`, where `open` says that the chain breaks with leading dots alone, with no parentheses of its own.
+def chain_of(c: Context, expr: Ast.Expr, bracketed: Bool, open: Bool) -> Docs.Doc
   links: List[Link] = []
   current = expr
   looping = true
@@ -1281,6 +1334,10 @@ def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     end
 
     return Docs.Doc.Concat(before.push(Docs.Doc.Group(parts)))
+  end
+
+  if open
+    return Docs.Doc.Group(start.push(Docs.Doc.Indent(rest)))
   end
 
   return wrapped(start.push(Docs.Doc.Indent(rest)), bracketed)

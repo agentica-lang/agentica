@@ -154,15 +154,14 @@ end
 
 A line that starts with a dot and a name continues the line before it, so a long chain of method calls and blocks reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
 
-```agentica {fmt="off"}
+```agentica
 def main() -> Void
   scores = [3, 8, 5, 10, 1]
-    .select do |x| x > 2 end   # drop the small ones
+    .select do |x| x > 2 end # drop the small ones
     # then double what is left
-    .map do |x|
-      x * 2
-    end
+    .map do |x| x * 2 end
     .take(3)
+
   puts(scores)
 end
 ```

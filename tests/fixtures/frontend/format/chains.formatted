@@ -1,0 +1,35 @@
+# A method chain written with a dot at the start of each line keeps that form, without parentheses.
+def chains(orders: List[String]) -> Int
+  scores = [3, 8, 5, 10, 1]
+    .select do |x| x > 2 end # drop the small ones
+    # then double what is left
+    .map do |x| x * 2 end
+    .take(3)
+
+  puts(scores)
+  cleaned = orders.map do |name| name.strip end
+    .select do |name| name.length > 0 end
+    .map do |name| name.upcase end
+    .select do |name| name.starts_with?("ORDER") end
+    .take(100)
+
+  orders.map do |name| name.strip end
+    .select do |name| name.length > 0 end
+    .map do |name| name.upcase end
+    .select do |name| name.starts_with?("ORDER") end
+    .each do |name| puts(name) end
+
+  # A chain that fits goes back to one line.
+  short = orders.size
+  # A parenthesized receiver that must break keeps its parentheses.
+  total = (
+    orders.size + cleaned.size + short + 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000 + 7000000
+  ).abs.to_s.size
+
+  return [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+  ]
+    .map do |x| x + cleaned.size + total end
+    .select do |x| x.to_s.size > short end
+    .size
+end

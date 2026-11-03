@@ -1,0 +1,5 @@
+1:1 leading FunctionDecl 2:1 "# A method chain written with a dot at the start of each line keeps that form, without parentheses."
+4:32 trailing MethodCall 3:12 "# drop the small ones"
+5:5 trailing MethodCall 3:12 "# then double what is left"
+25:3 leading Binding 26:3 "# A chain that fits goes back to one line."
+28:3 leading Binding 29:3 "# A parenthesized receiver that must break keeps its parentheses."

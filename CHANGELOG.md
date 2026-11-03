@@ -104,6 +104,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   a statement of several lines, and puts no empty line between such a
   statement and the comment that closes its block. A comment after the `(` of
   a statement's value no longer refuses the file with `FMT-INTERNAL`.
+- `agentica fmt` keeps a method chain written with a `.` at the start of each
+  line in that form, with no parentheses, as `tour/blocks.md` teaches.
 
 ## [0.21.0] - 2026-11-02
 
