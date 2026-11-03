@@ -491,15 +491,22 @@ end
 # Reads channel records until the step ends; what the handler printed is read once per step and may not exceed 1 MiB.
 def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_step: Bool) -> StepEnd
   asserts = 0
+  hooks = false
   while true
     line = Process.channel_read_line(p, Child.left(deadline))
     if not line.ok?
+      # `BDD.skip` runs the hooks before it sends `skip`: a deadline after `after` is a hook's.
+      if hooks and line.message == "process: operation timed out"
+        return StepEnd(verdict: failure("RUNTIME-BDD-TIMEOUT", late_text(true), span), asserts: asserts)
+      end
       return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), asserts: asserts)
     end
     record = Child.record_of(line.unwrap!)
     event = Child.event_of(record)
     if event == "assert"
       asserts += 1
+    elsif event == "after"
+      hooks = true
     elsif event == "fail" or event == "end" or event == "skip"
       printed = Process.read_available(p, Child.left(deadline))
       if not printed.ok?

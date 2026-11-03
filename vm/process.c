@@ -1159,7 +1159,7 @@ static bool no_nul(const agc_string *s) { return !memchr(s->data, 0, s->bytes); 
 
 /* The names the VM owns (own_env, metrics_env), each as its prefix with the "=" that ends the name. UV_USE_IO_URING is
    refused on every system on purpose, also where the VM would pass it through: one rule, and a program has no use for
-   setting a libuv variable of the VM. */
+   setting a libuv variable of the VM. VM_ENV_NAMES in stdlib/bdd.agc mirrors this list: change both. */
 static const char *const reserved_names[] = {URING_ENV, CHANNEL_PREFIX, METRICS_ENV, METRICS_FILE_ENV};
 
 static bool reserved_env(const agc_string *name) {
@@ -1176,7 +1176,9 @@ static unsigned char ascii_lower(char c) {
 }
 
 /* qsort order of names as a case-blind system compares them: ASCII letters in lower case, every other byte as it is.
-   Two names that agc_proc_env_name_equal finds equal there compare 0, so after the sort they are neighbours. */
+   Two names that agc_proc_env_name_equal finds equal there compare 0, so after the sort they are neighbours. Like that
+   function it folds ASCII only, so names that differ only in the case of a non-ASCII letter are not refused yet,
+   though Windows treats them as one (a known gap, see #1041). */
 static int compare_folded(const void *a, const void *b) {
   const agc_string *x = *(const agc_string *const *)a;
   const agc_string *y = *(const agc_string *const *)b;

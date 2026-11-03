@@ -682,8 +682,9 @@ def has_nul?(text: String) -> Bool
   return text.bytes.to_a.include?(0)
 end
 
-# True when two names are one variable for `Process.spawn_captured` on this system: byte for byte, except that Windows
-# ignores ASCII case (non-ASCII letters must match), as `agc_proc_env_name_equal` in vm/ does.
+# True when two names are one variable for `Process.spawn_captured` on this system: byte for byte, except that on
+# Windows ASCII case is ignored, as `agc_proc_env_name_equal` in vm/ does. Non-ASCII case twins are a known gap there
+# (see #1041).
 def same_env_name?(a: String, b: String) -> Bool
   if a == b
     return true

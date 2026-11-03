@@ -2106,288 +2106,288 @@ program #3 0:1:1-50:5:1
             target: field-access #2101 25241:682:10-25251:682:20 name="bytes"
               target: name-ref #2100 25241:682:10-25245:682:14 name="text"
           arg: literal #2103 25266:682:35-25267:682:36 value=int:0
-    declaration: function-decl #2138 25488:687:1-25700:696:1 name="@3::same_env_name?"
-      param: param #2108 25507:687:20-25516:687:29 name="a"
-        type: type-ref #2107 25510:687:23-25516:687:29 name="String"
-      param: param #2110 25518:687:31-25527:687:40 name="b"
-        type: type-ref #2109 25521:687:34-25527:687:40 name="String"
-      result: type-ref #2111 25532:687:45-25536:687:49 name="Bool"
-      body: if-stmt #2118 25539:688:3-25571:691:1
-        branch: if-branch #2117 25539:688:3-25565:690:1
-          condition: binary #2114 25542:688:6-25548:688:12 op=equal op-span=25544:688:8-25546:688:10
-            left: name-ref #2112 25542:688:6-25543:688:7 name="a"
-            right: name-ref #2113 25547:688:11-25548:688:12 name="b"
-          body: return-stmt #2116 25553:689:5-25565:690:1
-            value: literal #2115 25560:689:12-25564:689:16 value=bool:true
-      body: if-stmt #2131 25573:691:3-25652:694:1
-        branch: if-branch #2130 25573:691:3-25646:693:1
-          condition: binary #2127 25576:691:6-25628:691:58 op=or op-span=25601:691:31-25603:691:33
-            left: binary #2121 25576:691:6-25600:691:30 op=not-equal op-span=25588:691:18-25590:691:20
-              left: call #2119 25576:691:6-25587:691:17 name="System.os" piped=false
-              right: literal #2120 25591:691:21-25600:691:30 value=string:"windows"
-            right: binary #2126 25604:691:34-25628:691:58 op=not-equal op-span=25615:691:45-25617:691:47
-              left: field-access #2123 25604:691:34-25614:691:44 name="bytesize"
-                target: name-ref #2122 25604:691:34-25605:691:35 name="a"
-              right: field-access #2125 25618:691:48-25628:691:58 name="bytesize"
-                target: name-ref #2124 25618:691:48-25619:691:49 name="b"
-          body: return-stmt #2129 25633:692:5-25646:693:1
-            value: literal #2128 25640:692:12-25645:692:17 value=bool:false
-      body: return-stmt #2137 25654:694:3-25696:695:1
-        value: binary #2136 25661:694:10-25695:694:44 op=equal op-span=25677:694:26-25679:694:28
-          left: call #2133 25661:694:10-25676:694:25 name="@3::ascii_folded" piped=false
-            arg: name-ref #2132 25674:694:23-25675:694:24 name="a"
-          right: call #2135 25680:694:29-25695:694:44 name="@3::ascii_folded" piped=false
-            arg: name-ref #2134 25693:694:42-25694:694:43 name="b"
-    declaration: function-decl #2153 25701:697:1-25810:700:1 name="@3::ascii_folded"
-      param: param #2140 25718:697:18-25730:697:30 name="name"
-        type: type-ref #2139 25724:697:24-25730:697:30 name="String"
-      result: type-ref #2142 25735:697:35-25744:697:44 name="List"
-        arg: type-ref #2141 25740:697:40-25743:697:43 name="Int"
-      body: return-stmt #2152 25747:698:3-25806:699:1
-        value: method-call #2151 25754:698:10-25805:698:61 name="map"
-          target: field-access #2145 25754:698:10-25769:698:25 name="to_a"
-            target: field-access #2144 25754:698:10-25764:698:20 name="bytes"
-              target: name-ref #2143 25754:698:10-25758:698:14 name="name"
-          arg: block-lit #2150 25774:698:30-25805:698:61
-            param: block-param #2146 25778:698:34-25782:698:38 name="byte"
-            body: expr-stmt #2149 25784:698:40-25801:698:57
-              value: call #2148 25784:698:40-25801:698:57 name="@3::ascii_lower" piped=false
-                arg: name-ref #2147 25796:698:52-25800:698:56 name="byte"
-    declaration: function-decl #2172 25811:701:1-25921:707:1 name="@3::ascii_lower"
-      param: param #2155 25827:701:17-25836:701:26 name="byte"
-        type: type-ref #2154 25833:701:23-25836:701:26 name="Int"
-      result: type-ref #2156 25841:701:31-25844:701:34 name="Int"
-      body: if-stmt #2169 25847:702:3-25903:705:1
-        branch: if-branch #2168 25847:702:3-25897:704:1
-          condition: binary #2163 25850:702:6-25875:702:31 op=and op-span=25861:702:17-25864:702:20
-            left: binary #2159 25850:702:6-25860:702:16 op=greater-equal op-span=25855:702:11-25857:702:13
-              left: name-ref #2157 25850:702:6-25854:702:10 name="byte"
-              right: literal #2158 25858:702:14-25860:702:16 value=int:65
-            right: binary #2162 25865:702:21-25875:702:31 op=less-equal op-span=25870:702:26-25872:702:28
-              left: name-ref #2160 25865:702:21-25869:702:25 name="byte"
-              right: literal #2161 25873:702:29-25875:702:31 value=int:90
-          body: return-stmt #2167 25880:703:5-25897:704:1
-            value: binary #2166 25887:703:12-25896:703:21 op=plus op-span=25892:703:17-25893:703:18
-              left: name-ref #2164 25887:703:12-25891:703:16 name="byte"
-              right: literal #2165 25894:703:19-25896:703:21 value=int:32
-      body: return-stmt #2171 25905:705:3-25917:706:1
-        value: name-ref #2170 25912:705:10-25916:705:14 name="byte"
-    declaration: function-decl #2202 26032:709:1-26248:714:1 name="@3::abort"
-      param: param #2174 26042:709:11-26054:709:23 name="code"
-        type: type-ref #2173 26048:709:17-26054:709:23 name="String"
-      param: param #2176 26056:709:25-26071:709:40 name="message"
-        type: type-ref #2175 26065:709:34-26071:709:40 name="String"
-      result: type-ref #2177 26076:709:45-26080:709:49 name="Void"
-      body: binding #2194 26083:710:3-26196:711:1 name="fields"
-        type: type-ref #2180 26091:710:11-26108:710:28 name="Map"
-          arg: type-ref #2178 26095:710:15-26101:710:21 name="String"
-          arg: type-ref #2179 26103:710:23-26107:710:27 name="Json"
-        value: map-lit #2193 26111:710:31-26195:710:115
-          entry: map-entry #2184 26112:710:32-26138:710:58
-            key: literal #2181 26112:710:32-26119:710:39 value=string:"event"
-            value: call #2183 26121:710:41-26138:710:58 name="JSON.from" piped=false
-              arg: literal #2182 26131:710:51-26137:710:57 value=string:"fail"
-          entry: map-entry #2188 26140:710:60-26163:710:83
-            key: literal #2185 26140:710:60-26146:710:66 value=string:"code"
-            value: call #2187 26148:710:68-26163:710:83 name="JSON.from" piped=false
-              arg: name-ref #2186 26158:710:78-26162:710:82 name="code"
-          entry: map-entry #2192 26165:710:85-26194:710:114
-            key: literal #2189 26165:710:85-26174:710:94 value=string:"message"
-            value: call #2191 26176:710:96-26194:710:114 name="JSON.from" piped=false
-              arg: name-ref #2190 26186:710:106-26193:710:113 name="message"
-      body: expr-stmt #2198 26198:711:3-26227:712:1
-        value: call #2197 26198:711:3-26226:711:31 name="@3::deliver" piped=false
-          arg: call #2196 26206:711:11-26225:711:30 name="@3::record_text" piped=false
-            arg: name-ref #2195 26218:711:23-26224:711:29 name="fields"
-      body: expr-stmt #2201 26229:712:3-26244:713:1
-        value: call #2200 26229:712:3-26243:712:17 name="System.exit" piped=false
-          arg: literal #2199 26241:712:15-26242:712:16 value=int:1
-    declaration: function-decl #2231 26249:715:1-26452:719:1 name="@3::halt"
-      param: param #2204 26258:715:10-26270:715:22 name="ctx"
-        type: type-ref #2203 26263:715:15-26270:715:22 name="@3::Context"
-      param: param #2206 26272:715:24-26284:715:36 name="code"
-        type: type-ref #2205 26278:715:30-26284:715:36 name="String"
-      param: param #2208 26286:715:38-26301:715:53 name="message"
-        type: type-ref #2207 26295:715:47-26301:715:53 name="String"
-      result: type-ref #2209 26306:715:58-26310:715:62 name="Void"
-      body: binding #2226 26313:716:3-26426:717:1 name="fields"
-        type: type-ref #2212 26321:716:11-26338:716:28 name="Map"
-          arg: type-ref #2210 26325:716:15-26331:716:21 name="String"
-          arg: type-ref #2211 26333:716:23-26337:716:27 name="Json"
-        value: map-lit #2225 26341:716:31-26425:716:115
-          entry: map-entry #2216 26342:716:32-26368:716:58
-            key: literal #2213 26342:716:32-26349:716:39 value=string:"event"
-            value: call #2215 26351:716:41-26368:716:58 name="JSON.from" piped=false
-              arg: literal #2214 26361:716:51-26367:716:57 value=string:"fail"
-          entry: map-entry #2220 26370:716:60-26393:716:83
-            key: literal #2217 26370:716:60-26376:716:66 value=string:"code"
-            value: call #2219 26378:716:68-26393:716:83 name="JSON.from" piped=false
-              arg: name-ref #2218 26388:716:78-26392:716:82 name="code"
-          entry: map-entry #2224 26395:716:85-26424:716:114
-            key: literal #2221 26395:716:85-26404:716:94 value=string:"message"
-            value: call #2223 26406:716:96-26424:716:114 name="JSON.from" piped=false
-              arg: name-ref #2222 26416:716:106-26423:716:113 name="message"
-      body: expr-stmt #2230 26428:717:3-26448:718:1
-        value: call #2229 26428:717:3-26447:717:22 name="@3::finish" piped=false
-          arg: name-ref #2227 26435:717:10-26438:717:13 name="ctx"
-          arg: name-ref #2228 26440:717:15-26446:717:21 name="fields"
-    declaration: function-decl #2285 26797:723:1-27188:736:1 name="@3::finish"
-      param: param #2233 26808:723:12-26820:723:24 name="ctx"
-        type: type-ref #2232 26813:723:17-26820:723:24 name="@3::Context"
-      param: param #2237 26822:723:26-26847:723:51 name="fields"
-        type: type-ref #2236 26830:723:34-26847:723:51 name="Map"
-          arg: type-ref #2234 26834:723:38-26840:723:44 name="String"
-          arg: type-ref #2235 26842:723:46-26846:723:50 name="Json"
-      result: type-ref #2238 26852:723:56-26856:723:60 name="Void"
-      body: if-stmt #2264 26859:724:3-27043:729:1
-        branch: if-branch #2263 26859:724:3-27037:728:1
-          condition: call #2240 26862:724:6-26875:724:19 name="@3::closing?" piped=false
-            arg: name-ref #2239 26871:724:15-26874:724:18 name="ctx"
-          body: binding #2247 26880:725:5-26929:726:1 name="code"
-            value: method-call #2246 26887:725:12-26928:725:53 name="unwrap_or"
-              target: call #2244 26887:725:12-26914:725:39 name="JSON.string" piped=false
-                arg: index-access #2243 26899:725:24-26913:725:38
-                  target: name-ref #2241 26899:725:24-26905:725:30 name="fields"
-                  index: literal #2242 26906:725:31-26912:725:37 value=string:"code"
-              arg: literal #2245 26925:725:50-26927:725:52 value=string:""
-          body: binding #2259 26933:726:5-27020:727:1 name="gone"
-            type: type-ref #2249 26939:726:11-26951:726:23 name="Result"
-              arg: type-ref #2248 26946:726:18-26950:726:22 name="Void"
-            value: call #2258 26954:726:26-27019:726:91 name="error" piped=false
-              arg: interpolation #2257 26960:726:32-27018:726:90
-                part: name-ref #2250 26963:726:35-26967:726:39 name="code"
+    declaration: function-decl #2138 25521:688:1-25733:697:1 name="@3::same_env_name?"
+      param: param #2108 25540:688:20-25549:688:29 name="a"
+        type: type-ref #2107 25543:688:23-25549:688:29 name="String"
+      param: param #2110 25551:688:31-25560:688:40 name="b"
+        type: type-ref #2109 25554:688:34-25560:688:40 name="String"
+      result: type-ref #2111 25565:688:45-25569:688:49 name="Bool"
+      body: if-stmt #2118 25572:689:3-25604:692:1
+        branch: if-branch #2117 25572:689:3-25598:691:1
+          condition: binary #2114 25575:689:6-25581:689:12 op=equal op-span=25577:689:8-25579:689:10
+            left: name-ref #2112 25575:689:6-25576:689:7 name="a"
+            right: name-ref #2113 25580:689:11-25581:689:12 name="b"
+          body: return-stmt #2116 25586:690:5-25598:691:1
+            value: literal #2115 25593:690:12-25597:690:16 value=bool:true
+      body: if-stmt #2131 25606:692:3-25685:695:1
+        branch: if-branch #2130 25606:692:3-25679:694:1
+          condition: binary #2127 25609:692:6-25661:692:58 op=or op-span=25634:692:31-25636:692:33
+            left: binary #2121 25609:692:6-25633:692:30 op=not-equal op-span=25621:692:18-25623:692:20
+              left: call #2119 25609:692:6-25620:692:17 name="System.os" piped=false
+              right: literal #2120 25624:692:21-25633:692:30 value=string:"windows"
+            right: binary #2126 25637:692:34-25661:692:58 op=not-equal op-span=25648:692:45-25650:692:47
+              left: field-access #2123 25637:692:34-25647:692:44 name="bytesize"
+                target: name-ref #2122 25637:692:34-25638:692:35 name="a"
+              right: field-access #2125 25651:692:48-25661:692:58 name="bytesize"
+                target: name-ref #2124 25651:692:48-25652:692:49 name="b"
+          body: return-stmt #2129 25666:693:5-25679:694:1
+            value: literal #2128 25673:693:12-25678:693:17 value=bool:false
+      body: return-stmt #2137 25687:695:3-25729:696:1
+        value: binary #2136 25694:695:10-25728:695:44 op=equal op-span=25710:695:26-25712:695:28
+          left: call #2133 25694:695:10-25709:695:25 name="@3::ascii_folded" piped=false
+            arg: name-ref #2132 25707:695:23-25708:695:24 name="a"
+          right: call #2135 25713:695:29-25728:695:44 name="@3::ascii_folded" piped=false
+            arg: name-ref #2134 25726:695:42-25727:695:43 name="b"
+    declaration: function-decl #2153 25734:698:1-25843:701:1 name="@3::ascii_folded"
+      param: param #2140 25751:698:18-25763:698:30 name="name"
+        type: type-ref #2139 25757:698:24-25763:698:30 name="String"
+      result: type-ref #2142 25768:698:35-25777:698:44 name="List"
+        arg: type-ref #2141 25773:698:40-25776:698:43 name="Int"
+      body: return-stmt #2152 25780:699:3-25839:700:1
+        value: method-call #2151 25787:699:10-25838:699:61 name="map"
+          target: field-access #2145 25787:699:10-25802:699:25 name="to_a"
+            target: field-access #2144 25787:699:10-25797:699:20 name="bytes"
+              target: name-ref #2143 25787:699:10-25791:699:14 name="name"
+          arg: block-lit #2150 25807:699:30-25838:699:61
+            param: block-param #2146 25811:699:34-25815:699:38 name="byte"
+            body: expr-stmt #2149 25817:699:40-25834:699:57
+              value: call #2148 25817:699:40-25834:699:57 name="@3::ascii_lower" piped=false
+                arg: name-ref #2147 25829:699:52-25833:699:56 name="byte"
+    declaration: function-decl #2172 25844:702:1-25954:708:1 name="@3::ascii_lower"
+      param: param #2155 25860:702:17-25869:702:26 name="byte"
+        type: type-ref #2154 25866:702:23-25869:702:26 name="Int"
+      result: type-ref #2156 25874:702:31-25877:702:34 name="Int"
+      body: if-stmt #2169 25880:703:3-25936:706:1
+        branch: if-branch #2168 25880:703:3-25930:705:1
+          condition: binary #2163 25883:703:6-25908:703:31 op=and op-span=25894:703:17-25897:703:20
+            left: binary #2159 25883:703:6-25893:703:16 op=greater-equal op-span=25888:703:11-25890:703:13
+              left: name-ref #2157 25883:703:6-25887:703:10 name="byte"
+              right: literal #2158 25891:703:14-25893:703:16 value=int:65
+            right: binary #2162 25898:703:21-25908:703:31 op=less-equal op-span=25903:703:26-25905:703:28
+              left: name-ref #2160 25898:703:21-25902:703:25 name="byte"
+              right: literal #2161 25906:703:29-25908:703:31 value=int:90
+          body: return-stmt #2167 25913:704:5-25930:705:1
+            value: binary #2166 25920:704:12-25929:704:21 op=plus op-span=25925:704:17-25926:704:18
+              left: name-ref #2164 25920:704:12-25924:704:16 name="byte"
+              right: literal #2165 25927:704:19-25929:704:21 value=int:32
+      body: return-stmt #2171 25938:706:3-25950:707:1
+        value: name-ref #2170 25945:706:10-25949:706:14 name="byte"
+    declaration: function-decl #2202 26065:710:1-26281:715:1 name="@3::abort"
+      param: param #2174 26075:710:11-26087:710:23 name="code"
+        type: type-ref #2173 26081:710:17-26087:710:23 name="String"
+      param: param #2176 26089:710:25-26104:710:40 name="message"
+        type: type-ref #2175 26098:710:34-26104:710:40 name="String"
+      result: type-ref #2177 26109:710:45-26113:710:49 name="Void"
+      body: binding #2194 26116:711:3-26229:712:1 name="fields"
+        type: type-ref #2180 26124:711:11-26141:711:28 name="Map"
+          arg: type-ref #2178 26128:711:15-26134:711:21 name="String"
+          arg: type-ref #2179 26136:711:23-26140:711:27 name="Json"
+        value: map-lit #2193 26144:711:31-26228:711:115
+          entry: map-entry #2184 26145:711:32-26171:711:58
+            key: literal #2181 26145:711:32-26152:711:39 value=string:"event"
+            value: call #2183 26154:711:41-26171:711:58 name="JSON.from" piped=false
+              arg: literal #2182 26164:711:51-26170:711:57 value=string:"fail"
+          entry: map-entry #2188 26173:711:60-26196:711:83
+            key: literal #2185 26173:711:60-26179:711:66 value=string:"code"
+            value: call #2187 26181:711:68-26196:711:83 name="JSON.from" piped=false
+              arg: name-ref #2186 26191:711:78-26195:711:82 name="code"
+          entry: map-entry #2192 26198:711:85-26227:711:114
+            key: literal #2189 26198:711:85-26207:711:94 value=string:"message"
+            value: call #2191 26209:711:96-26227:711:114 name="JSON.from" piped=false
+              arg: name-ref #2190 26219:711:106-26226:711:113 name="message"
+      body: expr-stmt #2198 26231:712:3-26260:713:1
+        value: call #2197 26231:712:3-26259:712:31 name="@3::deliver" piped=false
+          arg: call #2196 26239:712:11-26258:712:30 name="@3::record_text" piped=false
+            arg: name-ref #2195 26251:712:23-26257:712:29 name="fields"
+      body: expr-stmt #2201 26262:713:3-26277:714:1
+        value: call #2200 26262:713:3-26276:713:17 name="System.exit" piped=false
+          arg: literal #2199 26274:713:15-26275:713:16 value=int:1
+    declaration: function-decl #2231 26282:716:1-26485:720:1 name="@3::halt"
+      param: param #2204 26291:716:10-26303:716:22 name="ctx"
+        type: type-ref #2203 26296:716:15-26303:716:22 name="@3::Context"
+      param: param #2206 26305:716:24-26317:716:36 name="code"
+        type: type-ref #2205 26311:716:30-26317:716:36 name="String"
+      param: param #2208 26319:716:38-26334:716:53 name="message"
+        type: type-ref #2207 26328:716:47-26334:716:53 name="String"
+      result: type-ref #2209 26339:716:58-26343:716:62 name="Void"
+      body: binding #2226 26346:717:3-26459:718:1 name="fields"
+        type: type-ref #2212 26354:717:11-26371:717:28 name="Map"
+          arg: type-ref #2210 26358:717:15-26364:717:21 name="String"
+          arg: type-ref #2211 26366:717:23-26370:717:27 name="Json"
+        value: map-lit #2225 26374:717:31-26458:717:115
+          entry: map-entry #2216 26375:717:32-26401:717:58
+            key: literal #2213 26375:717:32-26382:717:39 value=string:"event"
+            value: call #2215 26384:717:41-26401:717:58 name="JSON.from" piped=false
+              arg: literal #2214 26394:717:51-26400:717:57 value=string:"fail"
+          entry: map-entry #2220 26403:717:60-26426:717:83
+            key: literal #2217 26403:717:60-26409:717:66 value=string:"code"
+            value: call #2219 26411:717:68-26426:717:83 name="JSON.from" piped=false
+              arg: name-ref #2218 26421:717:78-26425:717:82 name="code"
+          entry: map-entry #2224 26428:717:85-26457:717:114
+            key: literal #2221 26428:717:85-26437:717:94 value=string:"message"
+            value: call #2223 26439:717:96-26457:717:114 name="JSON.from" piped=false
+              arg: name-ref #2222 26449:717:106-26456:717:113 name="message"
+      body: expr-stmt #2230 26461:718:3-26481:719:1
+        value: call #2229 26461:718:3-26480:718:22 name="@3::finish" piped=false
+          arg: name-ref #2227 26468:718:10-26471:718:13 name="ctx"
+          arg: name-ref #2228 26473:718:15-26479:718:21 name="fields"
+    declaration: function-decl #2285 26830:724:1-27221:737:1 name="@3::finish"
+      param: param #2233 26841:724:12-26853:724:24 name="ctx"
+        type: type-ref #2232 26846:724:17-26853:724:24 name="@3::Context"
+      param: param #2237 26855:724:26-26880:724:51 name="fields"
+        type: type-ref #2236 26863:724:34-26880:724:51 name="Map"
+          arg: type-ref #2234 26867:724:38-26873:724:44 name="String"
+          arg: type-ref #2235 26875:724:46-26879:724:50 name="Json"
+      result: type-ref #2238 26885:724:56-26889:724:60 name="Void"
+      body: if-stmt #2264 26892:725:3-27076:730:1
+        branch: if-branch #2263 26892:725:3-27070:729:1
+          condition: call #2240 26895:725:6-26908:725:19 name="@3::closing?" piped=false
+            arg: name-ref #2239 26904:725:15-26907:725:18 name="ctx"
+          body: binding #2247 26913:726:5-26962:727:1 name="code"
+            value: method-call #2246 26920:726:12-26961:726:53 name="unwrap_or"
+              target: call #2244 26920:726:12-26947:726:39 name="JSON.string" piped=false
+                arg: index-access #2243 26932:726:24-26946:726:38
+                  target: name-ref #2241 26932:726:24-26938:726:30 name="fields"
+                  index: literal #2242 26939:726:31-26945:726:37 value=string:"code"
+              arg: literal #2245 26958:726:50-26960:726:52 value=string:""
+          body: binding #2259 26966:727:5-27053:728:1 name="gone"
+            type: type-ref #2249 26972:727:11-26984:727:23 name="Result"
+              arg: type-ref #2248 26979:727:18-26983:727:22 name="Void"
+            value: call #2258 26987:727:26-27052:727:91 name="error" piped=false
+              arg: interpolation #2257 26993:727:32-27051:727:90
+                part: name-ref #2250 26996:727:35-27000:727:39 name="code"
                 part: text ": "
-                part: method-call #2256 26972:726:44-27016:726:88 name="unwrap_or"
-                  target: call #2254 26972:726:44-27002:726:74 name="JSON.string" piped=false
-                    arg: index-access #2253 26984:726:56-27001:726:73
-                      target: name-ref #2251 26984:726:56-26990:726:62 name="fields"
-                      index: literal #2252 26991:726:63-27000:726:72 value=string:"message"
-                  arg: literal #2255 27013:726:85-27015:726:87 value=string:""
-          body: expr-stmt #2262 27024:727:5-27037:728:1
-            value: field-access #2261 27024:727:5-27036:727:17 name="unwrap!"
-              target: name-ref #2260 27024:727:5-27028:727:9 name="gone"
-      body: expr-stmt #2268 27045:729:3-27074:730:1
-        value: call #2267 27045:729:3-27073:729:31 name="@3::deliver" piped=false
-          arg: call #2266 27053:729:11-27072:729:30 name="@3::record_text" piped=false
-            arg: name-ref #2265 27065:729:23-27071:729:29 name="fields"
-      body: binding #2271 27076:730:3-27102:731:1 name="problems"
-        value: call #2270 27087:730:14-27101:730:28 name="@3::run_after" piped=false
-          arg: name-ref #2269 27097:730:24-27100:730:27 name="ctx"
-      body: if-stmt #2281 27104:731:3-27167:734:1
-        branch: if-branch #2280 27104:731:3-27161:733:1
-          condition: binary #2275 27107:731:6-27124:731:23 op=greater op-span=27121:731:20-27122:731:21
-            left: field-access #2273 27107:731:6-27120:731:19 name="size"
-              target: name-ref #2272 27107:731:6-27115:731:14 name="problems"
-            right: literal #2274 27123:731:22-27124:731:23 value=int:0
-          body: expr-stmt #2279 27129:732:5-27161:733:1
-            value: call #2278 27129:732:5-27160:732:36 name="@3::deliver" piped=false
-              arg: call #2277 27137:732:13-27159:732:35 name="@3::after_record" piped=false
-                arg: name-ref #2276 27150:732:26-27158:732:34 name="problems"
-      body: expr-stmt #2284 27169:734:3-27184:735:1
-        value: call #2283 27169:734:3-27183:734:17 name="System.exit" piped=false
-          arg: literal #2282 27181:734:15-27182:734:16 value=int:1
-    declaration: function-decl #2302 27189:737:1-27314:741:1 name="@3::emit"
-      param: param #2287 27198:737:10-27211:737:23 name="event"
-        type: type-ref #2286 27205:737:17-27211:737:23 name="String"
-      result: type-ref #2288 27216:737:28-27220:737:32 name="Void"
-      body: binding #2297 27223:738:3-27279:739:1 name="fields"
-        type: type-ref #2291 27231:738:11-27248:738:28 name="Map"
-          arg: type-ref #2289 27235:738:15-27241:738:21 name="String"
-          arg: type-ref #2290 27243:738:23-27247:738:27 name="Json"
-        value: map-lit #2296 27251:738:31-27278:738:58
-          entry: map-entry #2295 27252:738:32-27277:738:57
-            key: literal #2292 27252:738:32-27259:738:39 value=string:"event"
-            value: call #2294 27261:738:41-27277:738:57 name="JSON.from" piped=false
-              arg: name-ref #2293 27271:738:51-27276:738:56 name="event"
-      body: expr-stmt #2301 27281:739:3-27310:740:1
-        value: call #2300 27281:739:3-27309:739:31 name="@3::deliver" piped=false
-          arg: call #2299 27289:739:11-27308:739:30 name="@3::record_text" piped=false
-            arg: name-ref #2298 27301:739:23-27307:739:29 name="fields"
-    declaration: function-decl #2353 27315:742:1-27865:760:1 name="@3::deliver"
-      param: param #2304 27327:742:13-27339:742:25 name="text"
-        type: type-ref #2303 27333:742:19-27339:742:25 name="String"
-      result: type-ref #2305 27344:742:30-27348:742:34 name="Void"
-      body: expr-stmt #2307 27351:743:3-27362:744:1
-        value: call #2306 27351:743:3-27361:743:13 name="IO.flush" piped=false
-      body: binding #2311 27364:744:3-27408:745:1 name="sent"
-        value: call #2310 27371:744:10-27407:744:46 name="Process.parent_send" piped=false
-          arg: name-ref #2308 27391:744:30-27395:744:34 name="text"
-          arg: call #2309 27397:744:36-27406:744:45 name="@3::send_ms" piped=false
-      body: if-stmt #2352 27410:745:3-27861:759:1
-        branch: if-branch #2351 27410:745:3-27855:758:1
-          condition: unary #2314 27413:745:6-27425:745:18 op=not op-span=27413:745:6-27416:745:9
-            operand: field-access #2313 27417:745:10-27425:745:18 name="ok?"
-              target: name-ref #2312 27417:745:10-27421:745:14 name="sent"
-          body: if-stmt #2347 27430:746:5-27836:757:1
-            branch: if-branch #2341 27430:746:5-27743:754:1
-              condition: binary #2318 27433:746:8-27486:746:61 op=equal op-span=27446:746:21-27448:746:23
-                left: field-access #2316 27433:746:8-27445:746:20 name="message"
-                  target: name-ref #2315 27433:746:8-27437:746:12 name="sent"
-                right: literal #2317 27449:746:24-27486:746:61 value=string:"process: send exceeds 1048576 bytes"
-              body: binding #2335 27493:747:7-27684:752:1 name="fields"
-                type: type-ref #2321 27501:747:15-27518:747:32 name="Map"
-                  arg: type-ref #2319 27505:747:19-27511:747:25 name="String"
-                  arg: type-ref #2320 27513:747:27-27517:747:31 name="Json"
-                value: map-lit #2334 27521:747:35-27683:751:8
-                  entry: map-entry #2325 27531:748:9-27557:748:35
-                    key: literal #2322 27531:748:9-27538:748:16 value=string:"event"
-                    value: call #2324 27540:748:18-27557:748:35 name="JSON.from" piped=false
-                      arg: literal #2323 27550:748:28-27556:748:34 value=string:"fail"
-                  entry: map-entry #2329 27567:749:9-27612:749:54
-                    key: literal #2326 27567:749:9-27573:749:15 value=string:"code"
-                    value: call #2328 27575:749:17-27612:749:54 name="JSON.from" piped=false
-                      arg: literal #2327 27585:749:27-27611:749:53 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
-                  entry: map-entry #2333 27622:750:9-27674:750:61
-                    key: literal #2330 27622:750:9-27631:750:18 value=string:"message"
-                    value: call #2332 27633:750:20-27674:750:61 name="JSON.from" piped=false
-                      arg: literal #2331 27643:750:30-27673:750:60 value=string:"handler output exceeds 1 MiB"
-              body: expr-stmt #2340 27691:753:7-27743:754:1
-                value: call #2339 27691:753:7-27742:753:58 name="Process.parent_send" piped=false
-                  arg: call #2337 27711:753:27-27730:753:46 name="@3::record_text" piped=false
-                    arg: name-ref #2336 27723:753:39-27729:753:45 name="fields"
-                  arg: call #2338 27732:753:48-27741:753:57 name="@3::send_ms" piped=false
+                part: method-call #2256 27005:727:44-27049:727:88 name="unwrap_or"
+                  target: call #2254 27005:727:44-27035:727:74 name="JSON.string" piped=false
+                    arg: index-access #2253 27017:727:56-27034:727:73
+                      target: name-ref #2251 27017:727:56-27023:727:62 name="fields"
+                      index: literal #2252 27024:727:63-27033:727:72 value=string:"message"
+                  arg: literal #2255 27046:727:85-27048:727:87 value=string:""
+          body: expr-stmt #2262 27057:728:5-27070:729:1
+            value: field-access #2261 27057:728:5-27069:728:17 name="unwrap!"
+              target: name-ref #2260 27057:728:5-27061:728:9 name="gone"
+      body: expr-stmt #2268 27078:730:3-27107:731:1
+        value: call #2267 27078:730:3-27106:730:31 name="@3::deliver" piped=false
+          arg: call #2266 27086:730:11-27105:730:30 name="@3::record_text" piped=false
+            arg: name-ref #2265 27098:730:23-27104:730:29 name="fields"
+      body: binding #2271 27109:731:3-27135:732:1 name="problems"
+        value: call #2270 27120:731:14-27134:731:28 name="@3::run_after" piped=false
+          arg: name-ref #2269 27130:731:24-27133:731:27 name="ctx"
+      body: if-stmt #2281 27137:732:3-27200:735:1
+        branch: if-branch #2280 27137:732:3-27194:734:1
+          condition: binary #2275 27140:732:6-27157:732:23 op=greater op-span=27154:732:20-27155:732:21
+            left: field-access #2273 27140:732:6-27153:732:19 name="size"
+              target: name-ref #2272 27140:732:6-27148:732:14 name="problems"
+            right: literal #2274 27156:732:22-27157:732:23 value=int:0
+          body: expr-stmt #2279 27162:733:5-27194:734:1
+            value: call #2278 27162:733:5-27193:733:36 name="@3::deliver" piped=false
+              arg: call #2277 27170:733:13-27192:733:35 name="@3::after_record" piped=false
+                arg: name-ref #2276 27183:733:26-27191:733:34 name="problems"
+      body: expr-stmt #2284 27202:735:3-27217:736:1
+        value: call #2283 27202:735:3-27216:735:17 name="System.exit" piped=false
+          arg: literal #2282 27214:735:15-27215:735:16 value=int:1
+    declaration: function-decl #2302 27222:738:1-27347:742:1 name="@3::emit"
+      param: param #2287 27231:738:10-27244:738:23 name="event"
+        type: type-ref #2286 27238:738:17-27244:738:23 name="String"
+      result: type-ref #2288 27249:738:28-27253:738:32 name="Void"
+      body: binding #2297 27256:739:3-27312:740:1 name="fields"
+        type: type-ref #2291 27264:739:11-27281:739:28 name="Map"
+          arg: type-ref #2289 27268:739:15-27274:739:21 name="String"
+          arg: type-ref #2290 27276:739:23-27280:739:27 name="Json"
+        value: map-lit #2296 27284:739:31-27311:739:58
+          entry: map-entry #2295 27285:739:32-27310:739:57
+            key: literal #2292 27285:739:32-27292:739:39 value=string:"event"
+            value: call #2294 27294:739:41-27310:739:57 name="JSON.from" piped=false
+              arg: name-ref #2293 27304:739:51-27309:739:56 name="event"
+      body: expr-stmt #2301 27314:740:3-27343:741:1
+        value: call #2300 27314:740:3-27342:740:31 name="@3::deliver" piped=false
+          arg: call #2299 27322:740:11-27341:740:30 name="@3::record_text" piped=false
+            arg: name-ref #2298 27334:740:23-27340:740:29 name="fields"
+    declaration: function-decl #2353 27348:743:1-27898:761:1 name="@3::deliver"
+      param: param #2304 27360:743:13-27372:743:25 name="text"
+        type: type-ref #2303 27366:743:19-27372:743:25 name="String"
+      result: type-ref #2305 27377:743:30-27381:743:34 name="Void"
+      body: expr-stmt #2307 27384:744:3-27395:745:1
+        value: call #2306 27384:744:3-27394:744:13 name="IO.flush" piped=false
+      body: binding #2311 27397:745:3-27441:746:1 name="sent"
+        value: call #2310 27404:745:10-27440:745:46 name="Process.parent_send" piped=false
+          arg: name-ref #2308 27424:745:30-27428:745:34 name="text"
+          arg: call #2309 27430:745:36-27439:745:45 name="@3::send_ms" piped=false
+      body: if-stmt #2352 27443:746:3-27894:760:1
+        branch: if-branch #2351 27443:746:3-27888:759:1
+          condition: unary #2314 27446:746:6-27458:746:18 op=not op-span=27446:746:6-27449:746:9
+            operand: field-access #2313 27450:746:10-27458:746:18 name="ok?"
+              target: name-ref #2312 27450:746:10-27454:746:14 name="sent"
+          body: if-stmt #2347 27463:747:5-27869:758:1
+            branch: if-branch #2341 27463:747:5-27776:755:1
+              condition: binary #2318 27466:747:8-27519:747:61 op=equal op-span=27479:747:21-27481:747:23
+                left: field-access #2316 27466:747:8-27478:747:20 name="message"
+                  target: name-ref #2315 27466:747:8-27470:747:12 name="sent"
+                right: literal #2317 27482:747:24-27519:747:61 value=string:"process: send exceeds 1048576 bytes"
+              body: binding #2335 27526:748:7-27717:753:1 name="fields"
+                type: type-ref #2321 27534:748:15-27551:748:32 name="Map"
+                  arg: type-ref #2319 27538:748:19-27544:748:25 name="String"
+                  arg: type-ref #2320 27546:748:27-27550:748:31 name="Json"
+                value: map-lit #2334 27554:748:35-27716:752:8
+                  entry: map-entry #2325 27564:749:9-27590:749:35
+                    key: literal #2322 27564:749:9-27571:749:16 value=string:"event"
+                    value: call #2324 27573:749:18-27590:749:35 name="JSON.from" piped=false
+                      arg: literal #2323 27583:749:28-27589:749:34 value=string:"fail"
+                  entry: map-entry #2329 27600:750:9-27645:750:54
+                    key: literal #2326 27600:750:9-27606:750:15 value=string:"code"
+                    value: call #2328 27608:750:17-27645:750:54 name="JSON.from" piped=false
+                      arg: literal #2327 27618:750:27-27644:750:53 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
+                  entry: map-entry #2333 27655:751:9-27707:751:61
+                    key: literal #2330 27655:751:9-27664:751:18 value=string:"message"
+                    value: call #2332 27666:751:20-27707:751:61 name="JSON.from" piped=false
+                      arg: literal #2331 27676:751:30-27706:751:60 value=string:"handler output exceeds 1 MiB"
+              body: expr-stmt #2340 27724:754:7-27776:755:1
+                value: call #2339 27724:754:7-27775:754:58 name="Process.parent_send" piped=false
+                  arg: call #2337 27744:754:27-27763:754:46 name="@3::record_text" piped=false
+                    arg: name-ref #2336 27756:754:39-27762:754:45 name="fields"
+                  arg: call #2338 27765:754:48-27774:754:57 name="@3::send_ms" piped=false
             else:
-              body: expr-stmt #2346 27758:755:7-27828:756:1
-                value: call #2345 27758:755:7-27827:755:76 name="IO.warn" piped=false
-                  arg: interpolation #2344 27766:755:15-27826:755:75
+              body: expr-stmt #2346 27791:756:7-27861:757:1
+                value: call #2345 27791:756:7-27860:756:76 name="IO.warn" piped=false
+                  arg: interpolation #2344 27799:756:15-27859:756:75
                     part: text "BDD could not send a record to the runner: "
-                    part: field-access #2343 27812:755:61-27824:755:73 name="message"
-                      target: name-ref #2342 27812:755:61-27816:755:65 name="sent"
-          body: expr-stmt #2350 27840:757:5-27855:758:1
-            value: call #2349 27840:757:5-27854:757:19 name="System.exit" piped=false
-              arg: literal #2348 27852:757:17-27853:757:18 value=int:1
-    declaration: function-decl #2357 27866:761:1-27909:764:1 name="@3::idle_ms"
-      result: type-ref #2354 27883:761:18-27886:761:21 name="Int"
-      body: return-stmt #2356 27889:762:3-27905:763:1
-        value: literal #2355 27896:762:10-27904:762:18 value=int:86400000
-    declaration: function-decl #2361 27910:765:1-27949:768:1 name="@3::send_ms"
-      result: type-ref #2358 27927:765:18-27930:765:21 name="Int"
-      body: return-stmt #2360 27933:766:3-27945:767:1
-        value: literal #2359 27940:766:10-27944:766:14 value=int:5000
-    declaration: function-decl #2372 27950:769:1-28056:772:1 name="@3::record_text"
-      param: param #2365 27966:769:17-27991:769:42 name="fields"
-        type: type-ref #2364 27974:769:25-27991:769:42 name="Map"
-          arg: type-ref #2362 27978:769:29-27984:769:35 name="String"
-          arg: type-ref #2363 27986:769:37-27990:769:41 name="Json"
-      result: type-ref #2366 27996:769:47-28002:769:53 name="String"
-      body: return-stmt #2371 28005:770:3-28052:771:1
-        value: interpolation #2370 28012:770:10-28051:770:49
-          part: call #2369 28015:770:13-28047:770:45 name="JSON.encode" piped=false
-            arg: call #2368 28027:770:25-28046:770:44 name="JSON.object" piped=false
-              arg: name-ref #2367 28039:770:37-28045:770:43 name="fields"
+                    part: field-access #2343 27845:756:61-27857:756:73 name="message"
+                      target: name-ref #2342 27845:756:61-27849:756:65 name="sent"
+          body: expr-stmt #2350 27873:758:5-27888:759:1
+            value: call #2349 27873:758:5-27887:758:19 name="System.exit" piped=false
+              arg: literal #2348 27885:758:17-27886:758:18 value=int:1
+    declaration: function-decl #2357 27899:762:1-27942:765:1 name="@3::idle_ms"
+      result: type-ref #2354 27916:762:18-27919:762:21 name="Int"
+      body: return-stmt #2356 27922:763:3-27938:764:1
+        value: literal #2355 27929:763:10-27937:763:18 value=int:86400000
+    declaration: function-decl #2361 27943:766:1-27982:769:1 name="@3::send_ms"
+      result: type-ref #2358 27960:766:18-27963:766:21 name="Int"
+      body: return-stmt #2360 27966:767:3-27978:768:1
+        value: literal #2359 27973:767:10-27977:767:14 value=int:5000
+    declaration: function-decl #2372 27983:770:1-28089:773:1 name="@3::record_text"
+      param: param #2365 27999:770:17-28024:770:42 name="fields"
+        type: type-ref #2364 28007:770:25-28024:770:42 name="Map"
+          arg: type-ref #2362 28011:770:29-28017:770:35 name="String"
+          arg: type-ref #2363 28019:770:37-28023:770:41 name="Json"
+      result: type-ref #2366 28029:770:47-28035:770:53 name="String"
+      body: return-stmt #2371 28038:771:3-28085:772:1
+        value: interpolation #2370 28045:771:10-28084:771:49
+          part: call #2369 28048:771:13-28080:771:45 name="JSON.encode" piped=false
+            arg: call #2368 28060:771:25-28079:771:44 name="JSON.object" piped=false
+              arg: name-ref #2367 28072:771:37-28078:771:43 name="fields"
           part: text "\n"
-    declaration: function-decl #2376 28057:773:1-28121:776:1 name="@3::ended_text"
-      result: type-ref #2373 28077:773:21-28083:773:27 name="String"
-      body: return-stmt #2375 28086:774:3-28117:775:1
-        value: literal #2374 28093:774:10-28116:774:33 value=string:"process: end of input"
-    declaration: function-decl #2380 28122:777:1-28197:780:1 name="@3::timed_out_text"
-      result: type-ref #2377 28146:777:25-28152:777:31 name="String"
-      body: return-stmt #2379 28155:778:3-28193:779:1
-        value: literal #2378 28162:778:10-28192:778:40 value=string:"process: operation timed out"
-    declaration: function-decl #2384 28198:781:1-28277:784:1 name="@3::over_text"
-      result: type-ref #2381 28217:781:20-28223:781:26 name="String"
-      body: return-stmt #2383 28226:782:3-28273:783:1
-        value: literal #2382 28233:782:10-28272:782:49 value=string:"process: output exceeds 1048576 bytes"
+    declaration: function-decl #2376 28090:774:1-28154:777:1 name="@3::ended_text"
+      result: type-ref #2373 28110:774:21-28116:774:27 name="String"
+      body: return-stmt #2375 28119:775:3-28150:776:1
+        value: literal #2374 28126:775:10-28149:775:33 value=string:"process: end of input"
+    declaration: function-decl #2380 28155:778:1-28230:781:1 name="@3::timed_out_text"
+      result: type-ref #2377 28179:778:25-28185:778:31 name="String"
+      body: return-stmt #2379 28188:779:3-28226:780:1
+        value: literal #2378 28195:779:10-28225:779:40 value=string:"process: operation timed out"
+    declaration: function-decl #2384 28231:782:1-28310:785:1 name="@3::over_text"
+      result: type-ref #2381 28250:782:20-28256:782:26 name="String"
+      body: return-stmt #2383 28259:783:3-28306:784:1
+        value: literal #2382 28266:783:10-28305:783:49 value=string:"process: output exceeds 1048576 bytes"
   module "assertions.agc"
     declaration: function-decl #21 65:4:8-284:8:1 name="@4::verify"
       param: param #3 76:4:19-93:4:36 name="ctx"

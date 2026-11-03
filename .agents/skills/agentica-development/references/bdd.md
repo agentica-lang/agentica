@@ -98,25 +98,23 @@ or the site).
   scenario`, `--max-steps` 1,000,000 per step plus one, 30 s deadline), then
   prints `Report.json` or `Report.text` and exits with `Report.exit_code`.
 - The child talks over a channel (`Process.spawn_channel`, stdin closed at
-  once): an init line, then one step line per step (`Process.channel_send`);
-  the child answers with JSON line records (`assert`, `step`, `fail`, `end`,
-  `ready`, `skip`, `after`) read with `Process.channel_read_line`. After `end` or `fail`
-  the runner reads the handler's output with `Process.read_available` and
-  fails the step with `RUNTIME-BDD-OUTPUT-LIMIT` when a cap was hit. An `end`
-  whose `index` is not the current step is a `RUNTIME-BDD-INFRA` protocol
+  once): an init line, then one step line per step (`Process.channel_send`); the
+  child answers with JSON line records (`assert`, `step`, `fail`, `end`,
+  `ready`, `skip`, `after`) read with `Process.channel_read_line`. After `end`
+  or `fail` the runner reads the handler's output with `Process.read_available`
+  and fails the step with `RUNTIME-BDD-OUTPUT-LIMIT` when a cap was hit. An
+  `end` whose `index` is not the current step is a `RUNTIME-BDD-INFRA` protocol
   error. `skip` (`BDD.skip`: the child sends it and exits 0) ends the scenario
-  as `Verdict.Skipped(reason)`: that step `Skipped`, later ones `NotExecuted`.
-  A failed `channel_send` fails the step at once (`send exceeds` is
+  as `Verdict.Skipped(reason)`: that step `Skipped`, later ones `NotExecuted`. A
+  failed `channel_send` fails the step at once (`send exceeds` is
   `RUNTIME-BDD-IO`, else `read_failure`). `read_failure` (and `failure` in
-  `units`) treat the messages `Child.gone?` names (end of input, closed
-  channel or stdin, `could not write to the stream`) as a dead child, so its
-  fail record or stderr diagnostic is shown. A `fail` after the last step is
-  the scenario's error (`await_exit` reads to the end after `channel_close`).
-  A child that dies prints its diagnostic on stderr with `--json`; the runner
-  reads the last line with `Report.from_json`, else `PREMATURE-EXIT`.
-
-## Unit tests (`stdlib/test/units.agc`; protocol: `docs/bdd.md`)
-
+  `units`) treat the messages `Child.gone?` names (end of input, closed channel
+  or stdin, `could not write to the stream`) as a dead child, so its fail record
+  or stderr diagnostic is shown. A `fail` after the last step is the scenario's
+  error (`await_exit` reads to the end after `channel_close`). A child that dies
+  prints its diagnostic on stderr with `--json`; the runner reads the last line
+  with `Report.from_json`, else `PREMATURE-EXIT`. ## Unit tests
+  (`stdlib/test/units.agc`; protocol: `docs/bdd.md`)
 - `std/test/units` runs a test file: a list child (`--agentica-test list`,
   `Process.spawn_channel`, stdin closed at once; a read ending with `process:
   output exceeds` closes the child: a file error `RUNTIME-BDD-OUTPUT-LIMIT`; a

@@ -434,19 +434,20 @@ def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing
 
 
 @pytest.mark.slow
-def test_a_hook_that_never_ends_is_reported_at_the_scenario_limit_for_a_passing_and_a_failing_scenario(tmp_path):
+def test_a_hook_that_never_ends_is_reported_at_the_scenario_limit_for_a_passing_failing_or_skipped_scenario(tmp_path):
     log = (tmp_path / "log").as_posix()
     directory = suite(tmp_path, {
         "steps.agc": AFTER_STEPS,
         "hang.feature": ("Feature: Hang\n"
                          f'Scenario: passes\nGiven the hook "sleep" logs to "{log}"\nThen the scenario passes\n'
-                         f'Scenario: fails\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario fails\n')})
-    # Two scenarios wait for the 30 s limit one after the other.
-    report = json_test(directory / "hang.feature", timeout=scaled(120))
+                         f'Scenario: fails\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario fails\n'
+                         f'Scenario: skipped\nGiven the hook "sleep" logs to "{log}"\nWhen the scenario is skipped\n')})
+    # Three scenarios wait for the 30 s limit one after the other.
+    report = json_test(directory / "hang.feature", timeout=scaled(160))
     cases = report_cases(report)
-    assert codes(report) == ["RUNTIME-BDD-TIMEOUT", "RUNTIME-BDD-ASSERTION"]
-    assert "after hook did not finish" in cases[0]["error"]["message"]
-    assert "after hook did not finish" in cases[1]["error"]["message"]
+    assert codes(report) == ["RUNTIME-BDD-TIMEOUT", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-TIMEOUT"]
+    for item in cases:
+        assert "after hook did not finish" in item["error"]["message"]
 
 
 def test_a_program_under_test_runs_without_a_step_limit(tmp_path):
