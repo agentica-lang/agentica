@@ -1085,7 +1085,9 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
     case current
       Ast.Expr.Call(node) ->
         if node.piped
-          stage = Docs.Doc.Concat([text("|> "), call_doc(c, node.with(args: node.args.drop(1), parenthesized: true))])
+          stage_key = Comments.key_of("PipeStage", node.span)
+          shown = call_doc_keyed(c, node.with(args: node.args.drop(1), parenthesized: true), stage_key)
+          stage = commented(c, stage_key, Docs.Doc.Concat([text("|> "), shown]))
           if stages.size > 0
             stage = commented(c, key, stage)
           end
@@ -1099,8 +1101,9 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
         case node.operand
           Ast.Expr.Call(call) ->
             if call.piped
-              shown = call_doc(c, call.with(args: call.args.drop(1), parenthesized: true))
-              stage = Docs.Doc.Concat([text("|> try "), shown])
+              stage_key = Comments.key_of("PipeStage", call.span)
+              shown = call_doc_keyed(c, call.with(args: call.args.drop(1), parenthesized: true), stage_key)
+              stage = commented(c, stage_key, Docs.Doc.Concat([text("|> try "), shown]))
               if stages.size > 0
                 stage = commented(c, key, stage)
               end
@@ -1132,6 +1135,11 @@ end
 
 # A call by name: `f(args)`, `puts x` without parentheses, and a trailing `do` block.
 def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
+  return call_doc_keyed(c, node, Comments.key_of("Call", node.span))
+end
+
+# `call_doc`, where `key` holds the dangling comments of an empty argument list: the call's own, or its pipe stage's.
+def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
   args = node.args
   block: List[Docs.Doc] = []
   if args.size > 0
@@ -1144,9 +1152,7 @@ def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
   end
 
   if node.parenthesized
-    return Docs.Doc.Concat(
-      [text(call_name(c, node)), arguments(c, args, Comments.key_of("Call", node.span))].concat(block),
-    )
+    return Docs.Doc.Concat([text(call_name(c, node)), arguments(c, args, key)].concat(block))
   end
 
   if args.size == 0

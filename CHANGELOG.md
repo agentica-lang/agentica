@@ -79,6 +79,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - An `HTTP.serve` server that is closing no longer answers 400 to a valid
   request: a request with no body gets its answer, and one whose body the close
   cut short gets none.
+- `agentica fmt` keeps a comment inside a pipe chain on its stage instead of
+  refusing the file with `FMT-INTERNAL`.
 
 ## [0.21.0] - 2026-11-02
 
