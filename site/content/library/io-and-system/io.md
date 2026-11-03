@@ -19,7 +19,7 @@ On other systems, output is buffered, so call `IO.flush()` when another program 
 
 ## puts
 
-```text
+```signature
 puts(value: T) -> Void
 IO.puts(value: T) -> Void
 ```
@@ -40,7 +40,7 @@ text
 
 ## print
 
-```text
+```signature
 print(value: T) -> Void
 IO.print(value: T) -> Void
 ```
@@ -61,7 +61,7 @@ ab
 
 ## IO.warn
 
-```text
+```signature
 IO.warn(value: T) -> Void
 ```
 
@@ -80,7 +80,7 @@ this goes to stdout
 
 ## IO.inspect
 
-```text
+```signature
 IO.inspect(value: T) -> T
 ```
 
@@ -100,7 +100,7 @@ end
 
 ## gets
 
-```text
+```signature
 gets() -> Result[String]
 IO.gets() -> Result[String]
 ```
@@ -127,7 +127,7 @@ false
 
 ## gets!
 
-```text
+```signature
 gets!() -> String
 IO.gets!() -> String
 ```
@@ -151,7 +151,7 @@ Hello, Ana!
 
 ## IO.eof?
 
-```text
+```signature
 IO.eof?() -> Bool
 ```
 
@@ -181,7 +181,7 @@ c
 
 ## IO.read
 
-```text
+```signature
 IO.read() -> String
 ```
 
@@ -207,7 +207,7 @@ The last line ends with `\n`, so `split` gives an empty last part.
 
 ## IO.read_bytes
 
-```text
+```signature
 IO.read_bytes(count: Int) -> Result[Bytes]
 ```
 
@@ -234,7 +234,7 @@ ok("hi")
 
 ## IO.flush
 
-```text
+```signature
 IO.flush() -> Void
 ```
 

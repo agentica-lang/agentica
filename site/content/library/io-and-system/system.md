@@ -6,7 +6,7 @@ description: Program arguments, environment variables, exit codes, clocks and ra
 
 ## System.args
 
-```text
+```signature
 System.args() -> List[String]
 ```
 
@@ -25,7 +25,7 @@ end
 
 ## System.exit
 
-```text
+```signature
 System.exit(code: Int) -> Void
 ```
 
@@ -45,7 +45,7 @@ before
 
 ## System.env
 
-```text
+```signature
 System.env(name: String) -> Result[String]
 ```
 
@@ -76,7 +76,7 @@ The VM hides the variables it keeps for itself:
 
 ## System.os
 
-```text
+```signature
 System.os() -> String
 ```
 
@@ -98,7 +98,7 @@ true
 
 ## System.pid
 
-```text
+```signature
 System.pid() -> Int
 ```
 
@@ -116,7 +116,7 @@ true
 
 ## Std.source
 
-```text
+```signature
 Std.source(path: String) -> Result[String]
 ```
 
@@ -141,7 +141,7 @@ false
 
 ## Time.now_ms
 
-```text
+```signature
 Time.now_ms() -> Int
 ```
 
@@ -159,7 +159,7 @@ true
 
 ## Time.monotonic_ms
 
-```text
+```signature
 Time.monotonic_ms() -> Int
 ```
 
@@ -180,7 +180,7 @@ true
 
 ## Time.monotonic_ns
 
-```text
+```signature
 Time.monotonic_ns() -> Int
 ```
 
@@ -201,7 +201,7 @@ true
 
 ## Random.int
 
-```text
+```signature
 Random.int(min: Int, max: Int) -> Int
 ```
 
@@ -220,7 +220,7 @@ true
 
 ## Random.float
 
-```text
+```signature
 Random.float() -> Float
 ```
 

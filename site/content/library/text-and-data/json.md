@@ -13,7 +13,7 @@ Two ways to work with JSON:
 
 ## JSON.encode
 
-```text
+```signature
 JSON.encode(value: T) -> String
 ```
 
@@ -43,7 +43,7 @@ end
 
 ## JSON.decode
 
-```text
+```signature
 JSON.decode(s: String, type: T) -> Result[T]
 JSON.decode(json: Json, type: T) -> Result[T]
 ```
@@ -94,7 +94,7 @@ error("y: expected required field")
 
 ## JSON.schema
 
-```text
+```signature
 JSON.schema(type: T) -> Json
 ```
 
@@ -118,7 +118,7 @@ end
 
 ## JSON.codec
 
-```text
+```signature
 JSON.codec(type: T) -> JSON.Codec[T]
 codec.decode(s: String) -> Result[T]
 codec.decode(json: Json) -> Result[T]
@@ -266,7 +266,7 @@ The variants are always qualified (`JsonField.Value(x)`), and `Absent` and `Null
 
 ## JSON.parse
 
-```text
+```signature
 JSON.parse(s: String) -> Result[Json]
 ```
 
@@ -303,7 +303,7 @@ true
 
 ## JSON.get and JSON.at
 
-```text
+```signature
 JSON.get(j: Json, key: String) -> Result[Json]
 JSON.at(j: Json, index: Int) -> Result[Json]
 ```
@@ -326,7 +326,7 @@ false
 
 ## JSON.string, JSON.int, JSON.float and JSON.bool
 
-```text
+```signature
 JSON.string(j: Json) -> Result[String]
 JSON.int(j: Json) -> Result[Int]
 JSON.float(j: Json) -> Result[Float]
@@ -377,7 +377,7 @@ false
 
 ## JSON.list
 
-```text
+```signature
 JSON.list(j: Json) -> Result[List[Json]]
 ```
 
@@ -400,7 +400,7 @@ null
 
 ## JSON.kind
 
-```text
+```signature
 JSON.kind(value: Json) -> String
 ```
 
@@ -419,7 +419,7 @@ end
 
 ## JSON.null and JSON.null?
 
-```text
+```signature
 JSON.null() -> Json
 JSON.null?(value: Json) -> Bool
 ```
@@ -441,7 +441,7 @@ false
 
 ## JSON.from
 
-```text
+```signature
 JSON.from(value: T) -> Json
 ```
 
@@ -462,7 +462,7 @@ ok(true)
 
 ## JSON.object and JSON.array
 
-```text
+```signature
 JSON.object(fields: Map[String, Json]) -> Json
 JSON.array(items: List[Json]) -> Json
 ```

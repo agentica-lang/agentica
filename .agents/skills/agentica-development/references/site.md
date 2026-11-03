@@ -23,7 +23,9 @@ rule that a site page shows.
   `div.agc-code` for it and fails the build on Hugo highlight options
   (`linenos`, `hl_lines`); the script fails on a block of another shape, an
   unknown HTML entity or a `CLASSES` entry that colors no token.
-  `make site-serve` skips the script.
+  `make site-serve` skips the script. The same script colors the `signature`
+  blocks (module, function, parameter names, types, `->`) with a small
+  tokenizer and fails on a line of another shape.
 - To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
   agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
 
@@ -115,6 +117,9 @@ Fence attributes:
   `RUNTIME-` codes and "Does not compile" otherwise. It shows only the code,
   so the page cannot drift from the diagnostic message.
 - `{file="name.agc"}` is a module that the page's other blocks can import.
+
+A function signature (`Name.fn(a: T) -> R`) goes in a `signature` fence, not
+`text` or `agentica`: the test skips it and the site colors it.
 
 ## Deploy
 

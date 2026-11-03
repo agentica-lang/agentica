@@ -30,7 +30,7 @@ Set["b", "a"]
 
 ## new
 
-```text
+```signature
 Set.new(items: List[T]) -> Set[T]
 ```
 
@@ -51,7 +51,7 @@ Set[]
 
 ## add
 
-```text
+```signature
 Set.add(set: Set[T], value: T) -> Set[T]
 ```
 
@@ -74,7 +74,7 @@ Set[1, 2]
 
 ## delete
 
-```text
+```signature
 Set.delete(set: Set[T], value: T) -> Set[T]
 ```
 
@@ -97,7 +97,7 @@ Set["b", "c", "a"]
 
 ## include?
 
-```text
+```signature
 Set.include?(set: Set[T], value: T) -> Bool
 ```
 
@@ -118,7 +118,7 @@ false
 
 ## size and empty?
 
-```text
+```signature
 Set.size(set: Set[T]) -> Int
 Set.empty?(set: Set[T]) -> Bool
 ```
@@ -140,7 +140,7 @@ true
 
 ## to_a
 
-```text
+```signature
 Set.to_a(set: Set[T]) -> List[T]
 ```
 
@@ -158,7 +158,7 @@ end
 
 ## union, intersection and difference
 
-```text
+```signature
 Set.union(a: Set[T], b: Set[T]) -> Set[T]
 Set.intersection(a: Set[T], b: Set[T]) -> Set[T]
 Set.difference(a: Set[T], b: Set[T]) -> Set[T]
@@ -186,7 +186,7 @@ Set[9]
 
 ## subset?
 
-```text
+```signature
 Set.subset?(a: Set[T], b: Set[T]) -> Bool
 ```
 

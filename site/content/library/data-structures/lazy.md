@@ -27,7 +27,7 @@ A `Lazy` has no `==`, no `to_s` (`CHECK-TYPE-MISMATCH`) and no JSON form (`CHECK
 
 ## Sources
 
-```text
+```signature
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
@@ -103,7 +103,7 @@ ok([9, 16, 25, 36])
 
 ## map, select and flat_map
 
-```text
+```signature
 Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
 Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
 Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
@@ -126,7 +126,7 @@ ok([1, -1, 2, -2, 3])
 
 ## take, take_while, drop and drop_while
 
-```text
+```signature
 Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A]
 Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
 Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]
@@ -152,7 +152,7 @@ ok([5, 2, 7])
 
 ## with_index
 
-```text
+```signature
 Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B]
 ```
 
@@ -170,7 +170,7 @@ ok(["0:a", "1:b", "2:c"])
 
 ## each_slice, each_cons and chunk_while
 
-```text
+```signature
 Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
 Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
 Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]
@@ -195,7 +195,7 @@ ok([[1, 2], [4, 5, 6], [9]])
 
 ## to_a and first
 
-```text
+```signature
 Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]]
 Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]
 ```
@@ -216,7 +216,7 @@ ok([1, 4, 9])
 
 ## each
 
-```text
+```signature
 Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]
 ```
 
@@ -245,7 +245,7 @@ error("stopped at 3")
 
 ## reduce and find
 
-```text
+```signature
 Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
 Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]
 ```
@@ -268,7 +268,7 @@ error("not found")
 
 ## write_lines
 
-```text
+```signature
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> Result[Void]
 ```
 
@@ -289,7 +289,7 @@ end
 
 ## Zlib steps
 
-```text
+```signature
 Lazy.deflate(lazy: Lazy[Bytes], level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
 Lazy.inflate(lazy: Lazy[Bytes], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]
 Lazy.gzip(lazy: Lazy[Bytes], level: Int = 6) -> Lazy[Bytes]

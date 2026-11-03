@@ -36,7 +36,7 @@ end
 
 ## Test.test
 
-```text
+```signature
 Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
 ```
 
@@ -44,7 +44,7 @@ Builds a test from a name and a block. A `TestCase` keeps the name, the block an
 
 ## Test.run
 
-```text
+```signature
 Test.run(tests: List[TestCase]) -> Void
 ```
 
@@ -72,7 +72,7 @@ Each test gets its own random generator, seeded from the run's seed and the test
 
 ## Test.eq
 
-```text
+```signature
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
@@ -103,7 +103,7 @@ A failed assertion counts against the test it runs in (its own task, or a task s
 
 ## Test.ok?
 
-```text
+```signature
 Test.ok?(result: Result[T]) -> Result[Void]
 ```
 
@@ -123,7 +123,7 @@ expected ok; actual error("cannot convert \"x\" to Int")
 
 ## Test.error?
 
-```text
+```signature
 Test.error?(result: Result[T]) -> Result[Void]
 ```
 
@@ -143,7 +143,7 @@ expected an error; actual ok(0)
 
 ## Test.assert
 
-```text
+```signature
 Test.assert(condition: Bool, message: String) -> Result[Void]
 ```
 

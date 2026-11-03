@@ -8,7 +8,7 @@ description: Build and read Result values.
 
 ## ok
 
-```text
+```signature
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 ```
@@ -27,7 +27,7 @@ ok("yes")
 
 ## error
 
-```text
+```signature
 error(message: String) -> Result[T]
 ```
 
@@ -49,7 +49,7 @@ error("broken")
 
 ## Result.ok?
 
-```text
+```signature
 Result.ok?(r: Result[T]) -> Bool
 ```
 
@@ -67,7 +67,7 @@ false
 
 ## Result.unwrap!
 
-```text
+```signature
 Result.unwrap!(r: Result[T]) -> T
 ```
 
@@ -85,7 +85,7 @@ end
 
 ## Result.unwrap_or
 
-```text
+```signature
 Result.unwrap_or(r: Result[T], default: T) -> T
 ```
 
@@ -105,7 +105,7 @@ end
 
 ## Result.message
 
-```text
+```signature
 Result.message(r: Result[T]) -> String
 ```
 

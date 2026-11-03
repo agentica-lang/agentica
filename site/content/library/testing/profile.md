@@ -10,7 +10,7 @@ Steps are the unit of work of the VM: the entries that `--max-steps` counts. The
 
 ## Profile.measure
 
-```text
+```signature
 Profile.measure(label: String, block: Fn[T]) -> T
 ```
 
@@ -95,7 +95,7 @@ end
 
 ## Profile.steps
 
-```text
+```signature
 Profile.steps() -> Int
 ```
 

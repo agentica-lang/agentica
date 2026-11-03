@@ -8,6 +8,7 @@ import textmate from "vscode-textmate";
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const BLOCK = /<div class="?agc-code"?>(<div class="?highlight"?><pre[^>]*><code)[^>]*>([\s\S]*?)(<\/code><\/pre><\/div>)<\/div>/g;
+const SIGNATURE = /<div class="?signature"?>(<div class="?highlight"?><pre[^>]*>)<code[^>]*>([\s\S]*?)(<\/code><\/pre><\/div>)<\/div>/g;
 const CLASSES = [
   ["comment", "c"],
   ["constant.character.escape", "se"],
@@ -75,6 +76,68 @@ function render(grammar, source) {
     .join("\n");
 }
 
+// Splits text at the top-level commas, not those inside brackets, parentheses or quotes.
+function splitParams(text) {
+  const parts = [];
+  let depth = 0;
+  let quote = false;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quote) quote = char !== '"' || text[i - 1] === "\\";
+    else if (char === '"') quote = true;
+    else if ("([{".includes(char)) depth++;
+    else if (")]}".includes(char)) depth--;
+    else if (char === "," && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+// Index of the ")" that closes the "(" at `open`, or -1.
+function closingParen(line, open) {
+  let depth = 0;
+  let quote = false;
+  for (let i = open; i < line.length; i++) {
+    const char = line[i];
+    if (quote) quote = char !== '"' || line[i - 1] === "\\";
+    else if (char === '"') quote = true;
+    else if (char === "(") depth++;
+    else if (char === ")" && --depth === 0) return i;
+  }
+  return -1;
+}
+
+const wrap = (name, text) => (text === "" ? "" : `<span class=${name}>${escape(text)}</span>`);
+
+// A signature line is "Module.name(param: Type = default, ...) -> Type" (the module and the
+// result are optional). It colors the module (m), the name (nf), the parameter names (s), the
+// types (nc) and "->" (k) with the classes that the code blocks already use.
+function renderSignatureLine(line) {
+  const open = line.indexOf("(");
+  const close = open < 0 ? -1 : closingParen(line, open);
+  if (!/^[A-Za-z_][\w.<>?!]*$/.test(line.slice(0, Math.max(open, 0))) || close < 0) return null;
+  const qualified = line.slice(0, open);
+  const dot = qualified.lastIndexOf(".");
+  const params = splitParams(line.slice(open + 1, close))
+    .map((param) => {
+      const found = param.match(/^(\s*)(\w+)(:\s*)?([\s\S]*)$/);
+      if (!found) return escape(param);
+      const [, space, name, colon = "", rest] = found;
+      if (colon === "") return `${space}${wrap("s", name)}${escape(rest)}`;
+      const [type, ...value] = rest.split(" = ");
+      return `${space}${wrap("s", name)}${colon}${wrap("nc", type)}${value.length > 0 ? escape(` = ${value.join(" = ")}`) : ""}`;
+    })
+    .join(",");
+  const tail = line.slice(close + 1);
+  const arrow = tail.indexOf(" -> ");
+  const result = arrow < 0 ? escape(tail) : `${escape(tail.slice(0, arrow))} ${wrap("k", "->")} ${wrap("nc", tail.slice(arrow + 4))}`;
+  return `${wrap("m", qualified.slice(0, dot + 1))}${wrap("nf", qualified.slice(dot + 1))}(${params})${result}`;
+}
+
 function htmlFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -108,6 +171,7 @@ function fail(message) {
 }
 
 let blocks = 0;
+let signatures = 0;
 for (const file of htmlFiles(site)) {
   const html = readFileSync(file, "utf8");
   let index = 0;
@@ -124,10 +188,23 @@ for (const file of htmlFiles(site)) {
     if (decode(colored) !== source.replace(/\n$/, "")) fail(`${file}: block ${index} changed its text`);
     return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
   });
-  if (/class="?agc-code"?/.test(out)) fail(`${file}: an agentica block has an unexpected shape`);
-  if (out !== html) writeFileSync(file, out);
+  const signed = out.replace(SIGNATURE, (_match, open, body, close) => {
+    signatures++;
+    const colored = body.replace(/(<span class="?cl"?>)([^<]*)(<\/span>)/g, (_cell, start, text, end) => {
+      const line = decode(text);
+      if (line.trim() === "") return `${start}${text}${end}`;
+      const rendered = renderSignatureLine(line.replace(/\n$/, ""));
+      if (rendered === null) fail(`${file}: a signature block has a line of an unexpected shape: ${line}`);
+      return `${start}${rendered}${line.endsWith("\n") ? "\n" : ""}${end}`;
+    });
+    if (decode(colored) !== decode(body)) fail(`${file}: a signature block changed its text`);
+    return `<div class=signature>${open}<code class=language-signature data-lang=signature>${colored}${close}</div>`;
+  });
+  if (/class="?agc-code"?/.test(signed)) fail(`${file}: an agentica block has an unexpected shape`);
+  if (signed !== html) writeFileSync(file, signed);
 }
 if (blocks === 0) fail(`no agentica code blocks found in ${site}`);
 const unused = CLASSES.filter(([prefix]) => !used.has(prefix)).map(([prefix]) => prefix);
 if (unused.length > 0) fail(`no token matched ${unused.join(", ")}: check the scope names in CLASSES`);
-console.log(`highlight: ${blocks} agentica code blocks`);
+if (signatures === 0) fail(`no signature blocks found in ${site}`);
+console.log(`highlight: ${blocks} agentica code blocks, ${signatures} signature blocks`);

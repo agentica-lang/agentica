@@ -22,7 +22,7 @@ Some methods have Ruby names too:
 
 ## length and empty?
 
-```text
+```signature
 String.length(s: String) -> Int
 String.empty?(s: String) -> Bool
 ```
@@ -47,7 +47,7 @@ false
 
 ## upcase and downcase
 
-```text
+```signature
 String.upcase(s: String) -> String
 String.downcase(s: String) -> String
 ```
@@ -66,7 +66,7 @@ hello
 
 ## trim
 
-```text
+```signature
 String.trim(s: String) -> String
 ```
 
@@ -84,7 +84,7 @@ end
 
 ## split
 
-```text
+```signature
 String.split(s: String, separator: String) -> List[String]
 ```
 
@@ -112,7 +112,7 @@ a,,b,
 
 ## join
 
-```text
+```signature
 String.join(parts: List[String], separator: String) -> String
 ```
 
@@ -132,7 +132,7 @@ x, y
 
 ## contains?, starts_with? and ends_with?
 
-```text
+```signature
 String.contains?(s: String, part: String) -> Bool
 String.starts_with?(s: String, prefix: String) -> Bool
 String.ends_with?(s: String, suffix: String) -> Bool
@@ -155,7 +155,7 @@ false
 
 ## replace
 
-```text
+```signature
 String.replace(s: String, from: String, to: String) -> String
 ```
 
@@ -173,7 +173,7 @@ a+b+c
 
 ## slice
 
-```text
+```signature
 String.slice(s: String, start: Int, length: Int) -> String
 ```
 
@@ -193,7 +193,7 @@ ica
 
 ## index_of
 
-```text
+```signature
 String.index_of(s: String, part: String) -> Optional[Int]
 ```
 
@@ -213,7 +213,7 @@ true
 
 ## at
 
-```text
+```signature
 String.at(s: String, index: Int) -> String
 ```
 
@@ -231,7 +231,7 @@ e
 
 ## reverse
 
-```text
+```signature
 String.reverse(s: String) -> String
 ```
 
@@ -247,7 +247,7 @@ desserts
 
 ## code and from_code
 
-```text
+```signature
 String.code(c: String) -> Int
 String.from_code(n: Int) -> String
 ```
@@ -268,7 +268,7 @@ b
 
 ## compare
 
-```text
+```signature
 String.compare(a: String, b: String) -> Int
 ```
 
@@ -290,7 +290,7 @@ end
 
 ## from_int and from_float
 
-```text
+```signature
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
 ```
@@ -311,7 +311,7 @@ end
 
 ## to_int and to_float
 
-```text
+```signature
 String.to_int(s: String) -> Result[Int]
 String.to_float(s: String) -> Result[Float]
 ```
@@ -340,7 +340,7 @@ false
 
 ## to_int! and to_float!
 
-```text
+```signature
 String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
@@ -361,7 +361,7 @@ end
 
 ## from_bytes
 
-```text
+```signature
 String.from_bytes(data: Bytes) -> Result[String]
 ```
 
@@ -381,7 +381,7 @@ false
 
 ## bytes
 
-```text
+```signature
 String.bytes(s: String) -> Bytes
 ```
 
@@ -402,7 +402,7 @@ end
 
 ## encode
 
-```text
+```signature
 String.encode(s: String, encoding: String) -> Result[Bytes]
 ```
 
@@ -426,7 +426,7 @@ error("cannot encode U+20AC in Latin-1 at index 1")
 
 ## bytesize
 
-```text
+```signature
 String.bytesize(s: String) -> Int
 ```
 

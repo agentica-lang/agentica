@@ -15,7 +15,7 @@ A channel is a bounded queue: one task sends values, another receives them. See 
 
 ## Channel.new
 
-```text
+```signature
 Channel.new(capacity: Int) -> Channel[T]
 ```
 
@@ -40,7 +40,7 @@ false
 
 ## Channel.send
 
-```text
+```signature
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
@@ -67,7 +67,7 @@ channel: timed out
 
 ## Channel.recv
 
-```text
+```signature
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 ```
 
@@ -94,7 +94,7 @@ channel: timed out
 
 ## Channel.close
 
-```text
+```signature
 Channel.close(channel: Channel[T]) -> Void
 ```
 
@@ -122,7 +122,7 @@ channel: closed
 
 ## Channel.closed?
 
-```text
+```signature
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
@@ -149,7 +149,7 @@ true
 
 ## Channel.empty?
 
-```text
+```signature
 Channel.empty?(channel: Channel[T]) -> Bool
 ```
 
