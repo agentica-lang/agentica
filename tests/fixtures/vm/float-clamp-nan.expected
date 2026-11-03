@@ -1,0 +1,10 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INVALID-RANGE",
+  "steps": 18,
+  "stdout": [
+    "0.5",
+    ""
+  ],
+  "stderr": []
+}

@@ -203,14 +203,18 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
   more than 1,000 type references in an expanded alias.
 - `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure
-  (also an `ATS.add` past the 64-bit range, which leaves the table unchanged).
+  (also an `ATS.add` past the 64-bit range, which leaves the table unchanged,
+  and `abs`, `pow`, `gcd`, `floor`, `ceil` or `round` past the Int range).
 - `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative
   `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
   `Task.map` `limit` outside 1..1024; a negative
-  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count; a
-  `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
+  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count or `n.pow`
+  exponent; a `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
+- `RUNTIME-INVALID-RANGE`: `Random.int` or `clamp` with min > max (or a NaN
+  bound of `x.clamp`).
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
-  `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
+  `x.to_i!`, `floor`, `ceil` or `round` on a Float that is NaN or infinity,
+  `Math.sqrt` of a negative number, `Float.from_bits32` outside
   0..4294967295, a `Digest` hash, `HMAC`, `Base64` or `Digest.hexencode`
   item outside 0..255.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or

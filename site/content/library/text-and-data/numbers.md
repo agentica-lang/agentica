@@ -1,7 +1,7 @@
 ---
 title: Int and Float
 weight: 2
-description: Convert between Int, Float and String, and work on the bits of an Int or a Float.
+description: Convert between Int, Float and String, round, clamp and other number helpers, and work on the bits of an Int or a Float.
 ---
 
 Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
@@ -14,6 +14,8 @@ Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
 | `x.to_i`, `x.to_i!` on a `Float` | `Float.to_int(x)`, `Float.to_int!(x)` |
 
 The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. Masks read best in hex or binary: `0xFF`, `0b1010` (see [hex, binary and octal](/tour/numbers/#hex-binary-and-octal)).
+
+The number helpers are methods, as in Ruby: `n.abs`, `n.pow(3)`, `a.gcd(b)`, `n.clamp(lo, hi)`, `x.floor`, `x.ceil`, `x.round`, and `Math.sqrt(x)`. There is no `**` operator. For the least or greatest item of a list, see [min and max](/library/data-structures/list/#min-and-max).
 
 To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
 
@@ -76,6 +78,133 @@ end
 ```output
 8
 9
+```
+
+## abs, pow and gcd
+
+```text
+Int.abs(n: Int) -> Int
+Float.abs(x: Float) -> Float
+Int.pow(n: Int, exponent: Int) -> Int
+Int.gcd(a: Int, b: Int) -> Int
+```
+
+- `abs` of the least `Int`, `-9223372036854775808`, does not fit and is `RUNTIME-INTEGER-OVERFLOW`, as `-n` is. `Float.abs` clears the sign, so `-0.0` gives `0.0`, and a NaN stays NaN.
+- `n.pow(e)` multiplies `n` by itself `e` times; `n.pow(0)` is `1`, `0.pow(0)` too. A result past 64 bits is `RUNTIME-INTEGER-OVERFLOW` at the call. A negative exponent is `RUNTIME-INVALID-COUNT` at the exponent: Ruby gives a fraction there, which an `Int` cannot hold.
+- `gcd` is never negative, and `0.gcd(0)` is `0`. The only result that does not fit is `2^63`, from the least `Int` with `0` or with itself: `RUNTIME-INTEGER-OVERFLOW`.
+
+```agentica
+def main() -> Void
+  puts((-5).abs)
+  puts((-2.5).abs)
+  puts(2.pow(10))
+  puts((-3).pow(3))
+  puts(12.gcd(18))
+  puts((-12).gcd(0))
+end
+```
+
+```output
+5
+2.5
+1024
+-27
+6
+12
+```
+
+```agentica {expect="RUNTIME-INTEGER-OVERFLOW"}
+def main() -> Void
+  puts(2.pow(63))
+end
+```
+
+## clamp
+
+```text
+Int.clamp(n: Int, min: Int, max: Int) -> Int
+Float.clamp(x: Float, min: Float, max: Float) -> Float
+```
+
+Gives `min` when the number is below it, `max` when above it, and the number itself otherwise. `min > max` stops the program with `RUNTIME-INVALID-RANGE`, as in Ruby (an `ArgumentError` there). On a `Float`, a NaN bound is `RUNTIME-INVALID-RANGE` too, and a NaN `x` comes back as NaN.
+
+```agentica
+def main() -> Void
+  requested = 2000
+  puts(requested.clamp(1, 512))
+  puts((-4).clamp(0, 10))
+  puts(1.5.clamp(0.0, 1.0))
+end
+```
+
+```output
+512
+0
+1.0
+```
+
+```agentica {expect="RUNTIME-INVALID-RANGE"}
+def main() -> Void
+  puts(5.clamp(10, 1))
+end
+```
+
+## floor, ceil and round
+
+```text
+Float.floor(x: Float) -> Int
+Float.ceil(x: Float) -> Int
+Float.round(x: Float) -> Int
+```
+
+They give an `Int`, as Ruby's `Float#floor` gives an `Integer`. `floor` goes down, `ceil` goes up, and `round` goes to the nearest whole number, with halves away from zero: `2.5.round` is `3` and `(-2.5).round` is `-3`. Like `x.to_i!`, NaN or an infinity is `RUNTIME-INVALID-NUMBER` and a result outside `Int` is `RUNTIME-INTEGER-OVERFLOW`. `round` takes no number of digits; for two decimals write `(x * 100.0).round.to_f / 100.0`.
+
+```agentica
+def main() -> Void
+  puts(2.7.floor)
+  puts((-2.1).floor)
+  puts(2.1.ceil)
+  puts(2.5.round)
+  puts((-2.5).round)
+  puts((3.14159 * 100.0).round.to_f / 100.0)
+end
+```
+
+```output
+2
+-3
+3
+3
+-3
+3.14
+```
+
+## Math.sqrt
+
+```text
+Math.sqrt(x: Float) -> Float
+```
+
+The square root. A negative `x` stops the program with `RUNTIME-INVALID-NUMBER` at the argument, as Ruby raises `Math::DomainError`. `-0.0` gives `-0.0`, infinity gives infinity, and a NaN stays NaN. For an `Int`, convert first: `Math.sqrt(n.to_f)`.
+
+```agentica
+def main() -> Void
+  puts(Math.sqrt(16.0))
+  puts(Math.sqrt(2.0))
+  puts(Math.sqrt(9.to_f).floor)
+end
+```
+
+```output
+4.0
+1.4142135623730951
+3
+```
+
+```agentica {expect="RUNTIME-INVALID-NUMBER"}
+def main() -> Void
+  puts(Math.sqrt(0.0 - 1.0))
+end
 ```
 
 ## Int.bit_and, Int.bit_or and Int.bit_xor

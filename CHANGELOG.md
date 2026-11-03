@@ -13,6 +13,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
+  `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
+- `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
+  an `Optional` (`none` for an empty list).
+
+### Changed
+
+- **Breaking:** `Math` is a builtin module name, so it can no longer be an
+  import alias or a declaration name.
 
 ## [0.22.0] - 2026-11-02
 

@@ -25,7 +25,7 @@ OTHER = "linux" if WINDOWS else "windows"
 DEMO = 'extern "pkgdemo"\n  export def pkgdemo_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n'
 MAIN = 'import Demo from "pkg/pkgdemo/demo"\n\ndef main() -> Void\n  puts(Demo.pkgdemo_add(40, 2))\nend\n'
 LIBM = 'extern "cmath"\n  export def cos(x: C.Double) -> C.Double\nend\n'
-SYSTEM_MAIN = 'import Math from "pkg/pkgdemo/math"\n\ndef main() -> Void\n  puts(Math.cos(0.0))\nend\n'
+SYSTEM_MAIN = 'import Libm from "pkg/pkgdemo/math"\n\ndef main() -> Void\n  puts(Libm.cos(0.0))\nend\n'
 # The libraries of the C runtime and the math library, found by name by the system loader.
 SYSTEM_TABLE = """[native.cmath]
 linux = { system = "libm.so.6" }
