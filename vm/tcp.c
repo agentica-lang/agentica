@@ -1284,7 +1284,7 @@ static void stop_request(void *data) {
 static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   const request *q = data;
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "timeout");
-  return agc_stream_timed_out();
+  return agc_stream_timed_out(AGC_STREAM_NETWORK);
 }
 
 /* On the I/O thread without rt->sync: it stops the request and the net only. A cancelled connect's socket resource is
@@ -1390,7 +1390,7 @@ static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t tim
   if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, where[0]);
   int64_t port = agc_as_int(vm, where[1]);
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   if (port < 1 || port > 65535) return agc_error_value("network: port must be 1..65535");
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
@@ -1533,7 +1533,7 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
   const net *plain = live(sk);
   if (!plain) return agc_error_value(socket_closed);
   if (plain->secure) return agc_error_value("network: the socket is TLS already");
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   if (!server && !host->bytes) return agc_error_value("network: host cannot be empty");
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
@@ -1602,7 +1602,7 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   net *n = agc_as_listener(vm, args[0])->state->native;
   int64_t timeout = agc_as_int(vm, args[1]);
   if (!n || n->closed) return agc_error_value(listener_closed);
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   park(vm, new_request(n, REQ_ACCEPT), args[0], timeout, begin_accept);
   return agc_void();
 }
@@ -1665,7 +1665,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   int64_t timeout = agc_as_int(vm, args[kind == REQ_LINE || kind == REQ_IDLE ? 1 : kind == REQ_BYTES ? 2 : 3]);
   agc_socket *sk = agc_as_socket(vm, args[0]);
   agc_value result;
-  if (!agc_stream_lock(vm, sk->reader, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, sk->reader, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error_value(socket_closed);
   /* At N = 1 the input is this thread's: what is buffered is taken without a park. */
@@ -1817,7 +1817,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   int64_t timeout = agc_as_int(vm, args[2]);
   agc_socket *sk = agc_as_socket(vm, args[0]);
   agc_value result;
-  if (!agc_stream_lock(vm, sk->writer, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, sk->writer, AGC_STREAM_NETWORK, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error_value(socket_closed);
   bool here = agc_io_here(vm);

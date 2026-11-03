@@ -34,6 +34,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `invalid UTF-8 at byte 3`, `network: TLS connect failed`). The diagnostic
   codes stay the same, but code that matches on the old error texts must be
   updated.
+- A process or child channel timeout now says `process: operation timed out`,
+  and a timeout that is not positive `process: timeout must be positive
+  milliseconds`, instead of the `network:` texts.
 - `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
   when it fits, and an empty line after a statement that takes several lines.
 

@@ -19,8 +19,10 @@
 #define READ_AHEAD ((size_t)4096)
 #define WRITE_CHUNK ((size_t)1 << 30)
 
-static const char bad_timeout[] = "network: timeout must be positive milliseconds";
-static const char timed_out[] = "network: operation timed out";
+/* By agc_stream_area: TCP says `network:`, processes and the child channel `process:`. */
+static const char *const bad_timeout[] = {"network: timeout must be positive milliseconds",
+                                          "process: timeout must be positive milliseconds"};
+static const char *const timed_out[] = {"network: operation timed out", "process: operation timed out"};
 
 /* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
    start a valid character. */
@@ -38,9 +40,9 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
 }
 #endif
 
-agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
+agc_value agc_stream_bad_timeout(agc_stream_area area) { return agc_error_value(bad_timeout[area]); }
 
-agc_value agc_stream_timed_out(void) { return agc_error_value(timed_out); }
+agc_value agc_stream_timed_out(agc_stream_area area) { return agc_error_value(timed_out[area]); }
 
 agc_value agc_stream_written(agc_vm *vm, int status) {
   static const char write_failed[] = "could not write to the stream";
@@ -55,14 +57,14 @@ agc_resource *agc_new_lock(agc_vm *vm) {
   return lock;
 }
 
-bool agc_stream_lock(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result) {
+bool agc_stream_lock(agc_vm *vm, agc_resource *lock, agc_stream_area area, int64_t *timeout, agc_value *result) {
   if (*timeout <= 0) {
-    *result = agc_stream_bad_timeout();
+    *result = agc_stream_bad_timeout(area);
     return false;
   }
   agc_lock_status status = agc_handle_wait(vm, lock, timeout);
   if (status == AGC_LOCK_TAKEN) return true;
-  *result = status == AGC_LOCK_WAIT ? agc_void() : agc_stream_timed_out();
+  *result = status == AGC_LOCK_WAIT ? agc_void() : agc_stream_timed_out(area);
   return false;
 }
 

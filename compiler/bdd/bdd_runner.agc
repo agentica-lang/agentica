@@ -105,7 +105,7 @@ end
 # Waits as long as the run takes: a wait that times out is repeated.
 def wait_for(child: Process) -> Result[Int]
   waited = Process.wait(child, WAIT_SLICE)
-  while !waited.ok? and waited.message == "network: operation timed out"
+  while !waited.ok? and waited.message == "process: operation timed out"
     waited = Process.wait(child, WAIT_SLICE)
   end
 

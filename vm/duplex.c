@@ -370,7 +370,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   } else {
     agc_loop_call(agc_io_loop(vm), stop_request, q);
   }
-  return agc_stream_timed_out();
+  return agc_stream_timed_out(AGC_STREAM_PROCESS);
 }
 
 static const agc_io_kind duplex_io = {NULL,           request_done, request_expired, drop_request, true, "channel",
@@ -459,7 +459,7 @@ static bool usable(const agc_duplex *d, const request *pending, agc_value *resul
 
 agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, int64_t timeout) {
   agc_value result;
-  if (!agc_stream_lock(vm, lock, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, &timeout, &result)) return result;
   if (agc_io_here(vm)) {
     if (!usable(d, d->reader, &result)) return result;
     if (agc_inbuf_ready(&d->in, true, 0)) return take_line(vm, d);
@@ -482,7 +482,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   agc_value result;
   const agc_string *text = agc_as_string(vm, line);
   if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
-  if (!agc_stream_lock(vm, lock, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, &timeout, &result)) return result;
   if (agc_io_here(vm)) {
     int rc = usable(d, d->writer, &result) ? 1 : -1;
     if (rc > 0 && d->write_closed) {
@@ -507,7 +507,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
 
 agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, int64_t timeout) {
   agc_value result;
-  if (!agc_stream_lock(vm, lock, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, &timeout, &result)) return result;
   if (!agc_io_here(vm)) {
     start_request(vm, new_request(vm, d, DX_SHUT, false), agc_handle_value(lock), timeout, begin_shut);
     return agc_void();
@@ -636,7 +636,7 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
 static agc_value builtin_parent_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t timeout = agc_as_int(vm, args[0]);
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   agc_duplex *d = parent_of(vm);
   if (!d) return agc_error_value("process: no parent channel");
   return agc_duplex_read_line(vm, d, vm->rt->parent_locks.reader, timeout);
@@ -645,7 +645,7 @@ static agc_value builtin_parent_read_line(agc_vm *vm, agc_value *args, uint32_t 
 static agc_value builtin_parent_send(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   agc_duplex *d = parent_of(vm);
   if (!d) return agc_error_value("process: no parent channel");
   return agc_duplex_send(vm, d, vm->rt->parent_locks.writer, args[0], timeout);

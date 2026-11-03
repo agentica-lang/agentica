@@ -2280,7 +2280,7 @@ program #3 0:1:1-50:5:1
     declaration: function-decl #2280 26220:744:1-26295:747:1 name="@3::timed_out_text"
       result: type-ref #2277 26244:744:25-26250:744:31 name="String"
       body: return-stmt #2279 26253:745:3-26291:746:1
-        value: literal #2278 26260:745:10-26290:745:40 value=string:"network: operation timed out"
+        value: literal #2278 26260:745:10-26290:745:40 value=string:"process: operation timed out"
     declaration: function-decl #2284 26296:748:1-26375:751:1 name="@3::over_text"
       result: type-ref #2281 26315:748:20-26321:748:26 name="String"
       body: return-stmt #2283 26324:749:3-26371:750:1

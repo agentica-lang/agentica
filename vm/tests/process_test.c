@@ -628,7 +628,7 @@ static void channel_tests(const char *self) {
   agc_string *big = agc_new_string(1048577, 0);
   memset(big->data, 'y', big->bytes);
   fails(send_line(handle, agc_string_value(big)), "process: send exceeds 1048576 bytes");
-  fails(read_line(handle, 100), "network: operation timed out");
+  fails(read_line(handle, 100), "process: operation timed out");
   fails(read_line(handle, 100), "process: channel is closed");
   fails(send_line(handle, text("late\n")), "process: channel is closed");
   close_process(handle);

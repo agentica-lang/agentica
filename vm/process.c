@@ -689,7 +689,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   if (q->posted) {
     req_kind kind = q->kind;
     agc_loop_call(agc_io_loop(vm), stop_request, q);
-    return kind == REQ_CLOSE ? agc_void() : agc_stream_timed_out();
+    return kind == REQ_CLOSE ? agc_void() : agc_stream_timed_out(AGC_STREAM_PROCESS);
   }
   unlink_request(q);
   if (q->kind == REQ_CLOSE) {
@@ -697,7 +697,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
     return agc_void();
   }
   if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) shut(q->p);
-  return agc_stream_timed_out();
+  return agc_stream_timed_out(AGC_STREAM_PROCESS);
 }
 
 /* The cancel half runs on the I/O thread when the job loses its task (a detach, or the deadline after it). */
@@ -1255,7 +1255,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
   if (dir && (dir->bytes == 0 || !no_nul(dir)))
     return agc_error_value("process: dir must be nonempty and cannot contain NUL");
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   const char *env_text = env_problem(vm, env);
   if (env_text) return agc_error_value(env_text);
   agc_process *pr = agc_alloc(sizeof(agc_process));
@@ -1366,7 +1366,7 @@ static bool begin_read(void *data, agc_io_job *job) {
 
 /* Takes LOCK (the reader's or the writer's) under the call's timeout; the open process, or NULL with *result set. */
 static proc *take_lock(agc_vm *vm, agc_process *pr, agc_resource *lock, int64_t *timeout, agc_value *result) {
-  if (!agc_stream_lock(vm, lock, timeout, result)) return NULL;
+  if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, timeout, result)) return NULL;
   proc *p = live(vm, pr);
   if (!p) *result = agc_error_value(closed_text);
   return p;
@@ -1494,7 +1494,7 @@ static bool begin_wait(void *data, agc_io_job *job) {
 static agc_value await_child(agc_vm *vm, const agc_value *args, req_kind kind) {
   agc_process *pr = agc_as_process(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return agc_stream_bad_timeout();
+  if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   proc *p = live(vm, pr);
   if (!p) return agc_error_value(closed_text);
   /* `captured` is fixed before the child is shared, so any thread may read it. */
