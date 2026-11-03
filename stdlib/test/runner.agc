@@ -289,7 +289,7 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
   output = Process.output(p, Child.left(deadline))
   Process.close(p)
-  if read.problem == "network: operation timed out" or not output.ok?
+  if read.problem == "process: operation timed out" or not output.ok?
     return Listing.Broken(
       Report.error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where),
     )
@@ -547,7 +547,7 @@ def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Repo
     end
     line = Process.channel_read_line(p, Child.left(deadline))
   end
-  if line.message == "network: operation timed out"
+  if line.message == "process: operation timed out"
     message = "#{message}; an after hook did not finish within the scenario's time limit"
   end
   return Report.Error(
@@ -582,7 +582,7 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
       return Report.Verdict.Pass
     end
   end
-  if line.message == "network: operation timed out"
+  if line.message == "process: operation timed out"
     # Once the channel is closed the child only runs its after hooks.
     return failure("RUNTIME-BDD-TIMEOUT", "an after hook did not finish within the scenario's time limit", span)
   end
@@ -590,7 +590,7 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
 end
 
 def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
-  if message == "network: operation timed out"
+  if message == "process: operation timed out"
     return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
   end
   if message == "process: output exceeds 1048576 bytes" or message == "process: line exceeds 1048576 bytes"

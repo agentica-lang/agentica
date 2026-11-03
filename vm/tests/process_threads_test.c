@@ -186,7 +186,7 @@ static void test_an_exit_and_a_deadline(void) {
   waiting = call(one, "Process.wait", 2, child, agc_int(5), agc_void(), agc_void());
   assert(start(&waiting));
   wait_woken(&waiting);
-  assert(error_is(take(&waiting), "network: operation timed out"));
+  assert(error_is(take(&waiting), "process: operation timed out"));
   assert(agc_as_int(&vm, ok_of(wait_child(5000))) == 6);
   close_child();
   settle();
@@ -200,7 +200,7 @@ static void test_a_read_deadline_before_the_line(void) {
   calling reading = call(one, "Process.read_line", 2, child, agc_int(5), agc_void(), agc_void());
   assert(start(&reading));
   wait_woken(&reading);
-  assert(error_is(take(&reading), "network: operation timed out"));
+  assert(error_is(take(&reading), "process: operation timed out"));
   assert(error_is(read_line(one, 1000), "process: process is closed"));
   close_child();
   settle();
@@ -224,7 +224,7 @@ static void test_a_read_deadline_stops_the_child_before_the_task_takes_it(void) 
   uint64_t due = agc_clock_ms() + 10000;
   while (kill(pid, 0) == 0 && agc_clock_ms() < due) (void)agc_io_poll(&vm, false);
   assert(kill(pid, 0) != 0);
-  assert(error_is(take(&reading), "network: operation timed out"));
+  assert(error_is(take(&reading), "process: operation timed out"));
   assert(error_is(read_line(one, 1000), "process: process is closed"));
   close_child();
   settle();

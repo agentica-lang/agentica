@@ -95,7 +95,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   output = Process.output(p, Child.left(deadline))
   code = Process.wait(p, 5000)
   Process.close(p)
-  if read.problem == "network: operation timed out" or not output.ok?
+  if read.problem == "process: operation timed out" or not output.ok?
     return broken(
       Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not list its tests within 30 seconds", where),
       "",
@@ -287,7 +287,7 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
 end
 
 def failure(settings: Settings, p: Process, message: String, deadline: Int, span: Report.Span) -> Failure
-  if message == "network: operation timed out"
+  if message == "process: operation timed out"
     return timed_out(settings, span)
   end
   if message == "process: line exceeds 1048576 bytes"

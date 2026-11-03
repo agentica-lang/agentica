@@ -122,12 +122,14 @@ bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 
 struct uv_stream_s;
 struct uv_write_s;
-agc_value agc_stream_bad_timeout(void);
-agc_value agc_stream_timed_out(void);
+/* The area that starts a stream's timeout errors: TCP is `network:`, a process and the child channel `process:`. */
+typedef enum { AGC_STREAM_NETWORK, AGC_STREAM_PROCESS } agc_stream_area;
+agc_value agc_stream_bad_timeout(agc_stream_area area);
+agc_value agc_stream_timed_out(agc_stream_area area);
 /* The result of a finished write: Ok(Void), or the write error for a negative libuv status. */
 agc_value agc_stream_written(agc_vm *vm, int status);
 agc_resource *agc_new_lock(agc_vm *vm);
-bool agc_stream_lock(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result);
+bool agc_stream_lock(agc_vm *vm, agc_resource *lock, agc_stream_area area, int64_t *timeout, agc_value *result);
 size_t agc_inbuf_pending(const agc_inbuf *b);
 void agc_inbuf_free(agc_inbuf *b);
 bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count);

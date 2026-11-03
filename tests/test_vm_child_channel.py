@@ -50,13 +50,13 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
     assert answer["serve"]["replies"] == ["echo:one\n", "echo:two\n", "echo:\n", 300006, "echo:café\n", "bye\n", ""]
     assert answer["serve"]["stdout"] == lines("sent: ok()", "sent: ok()", "sent: ok()", "sent: ok()", "sent: ok()",
                                               "ended: process: end of input", "bye: ok()")
-    assert answer["idle"]["stdout"] == lines('first: error("network: operation timed out")',
+    assert answer["idle"]["stdout"] == lines('first: error("process: operation timed out")',
                                              'second: error("process: channel is closed")',
                                              'send: error("process: channel is closed")')
     assert answer["idle"]["waited"] is True
     bare = lines('read: error("process: no parent channel")',
                  'send: error("process: no parent channel")',
-                 'zero: error("network: timeout must be positive milliseconds")')
+                 'zero: error("process: timeout must be positive milliseconds")')
     for name in ("bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["stdout"] == bare, name
     for name in ("serve", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
@@ -79,10 +79,10 @@ def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, nod
         "close: ok()", 'send after close: error("process: channel is closed")',
         'end: error("process: end of input")', "exit: ok(0)")
     assert ask("silent") == lines(
-        'first: error("network: operation timed out")', 'second: error("process: channel is closed")',
+        'first: error("process: operation timed out")', 'second: error("process: channel is closed")',
         'send: error("process: channel is closed")', 'printed: ok("")')
     assert ask("stalled") == lines(
-        'send: error("network: operation timed out")', 'after: error("process: channel is closed")')
+        'send: error("process: operation timed out")', 'after: error("process: channel is closed")')
     assert ask("long") == lines(
         'read: error("process: line exceeds 1048576 bytes")', 'again: error("process: channel is closed")')
     assert ask("loud") == lines('read: ok("done")', 'printed: ok("noise\\n")')
