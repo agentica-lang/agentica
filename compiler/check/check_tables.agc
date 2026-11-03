@@ -104,6 +104,33 @@ export def foreign_names() -> Map[String, String]
     "List.new": "use a list literal with a type: xs: List[Int] = []",
     "Map.empty": "use a map literal with a type: m: Map[String, Int] = {}",
     "Map.new": "use a map literal with a type: m: Map[String, Int] = {}",
+    "Math.abs": "use n.abs",
+    "Math.ceil": "use x.ceil",
+    "Math.cos": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def cos(x: C.Double) -> C.Double"
+    ),
+    "Math.exp": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def exp(x: C.Double) -> C.Double"
+    ),
+    "Math.floor": "use x.floor",
+    "Math.log": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def log(x: C.Double) -> C.Double"
+    ),
+    "Math.max": "use [a, b].max.unwrap!, or n.clamp(min, max) to keep n in a range",
+    "Math.min": "use [a, b].min.unwrap!, or n.clamp(min, max) to keep n in a range",
+    "Math.pow": "use n.pow(exponent) on an Int",
+    "Math.round": "use x.round",
+    "Math.sin": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def sin(x: C.Double) -> C.Double"
+    ),
+    "Math.tan": (
+      "Math has only sqrt; declare it from C (on Linux, extern \"libm.so.6\") with " +
+      "def tan(x: C.Double) -> C.Double"
+    ),
     "Mutex.new": "keep the state in one owner task that receives messages on a Channel, and send it requests",
     "Native.bytes_at": (
       "use Native.get_bytes(p, 0, length) for Native.bytes_at(p, length): its second argument is an offset"
@@ -171,7 +198,14 @@ export def foreign_kind_methods() -> Map[String, String]
     "Bytes.inject": "Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end",
     "Bytes.map": "Bytes has no map; use b.to_a.map do |x| ... end",
     "Bytes.select": "Bytes has no select; use b.to_a.select do |x| ... end",
+    "Float.max": "use [a, b].max.unwrap!, or x.clamp(min, max) to keep x in a range",
+    "Float.min": "use [a, b].min.unwrap!, or x.clamp(min, max) to keep x in a range",
+    "Int.ceil": "an Int is already whole; ceil, floor and round are Float methods (x.ceil)",
     "Int.chr": "use String.from_code(n) for the character of a code point",
+    "Int.floor": "an Int is already whole; ceil, floor and round are Float methods (x.floor)",
+    "Int.max": "use [a, b].max.unwrap!, or n.clamp(min, max) to keep n in a range",
+    "Int.min": "use [a, b].min.unwrap!, or n.clamp(min, max) to keep n in a range",
+    "Int.round": "an Int is already whole; ceil, floor and round are Float methods (x.round)",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.count": "xs.size counts all elements; count those that pass a test with xs.select do |x| ... end.size",

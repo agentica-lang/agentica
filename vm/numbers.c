@@ -1,5 +1,5 @@
 /*
- * The Float, Time and Random builtins (agc_number_builtins). Service layer.
+ * The Int, Float, Math, Time and Random builtins (agc_number_builtins). Service layer.
  * Design: docs/vm/02-reference-behavior.md §2.2 and
  * docs/vm/05-values-execution-builtins.md §7.4.
  */
@@ -35,8 +35,9 @@ static agc_value builtin_float_from_int(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_float((double)agc_as_int(vm, args[0]));
 }
 
-static agc_value float_to_int(agc_vm *vm, agc_value *args, uint32_t span, bool bang) {
-  double x = agc_as_float(vm, args[0]);
+/* x as an Int: an ok Result, or with bang the Int itself. NaN and the infinities are RUNTIME-INVALID-NUMBER and a value
+   outside Int is RUNTIME-INTEGER-OVERFLOW: an error Result, or with bang a halt at span. */
+static agc_value float_value_to_int(agc_vm *vm, double x, uint32_t span, bool bang) {
   const char *code = "RUNTIME-INTEGER-OVERFLOW";
   const char *message = "Int result is outside the 64-bit range";
   if (isnan(x) || isinf(x)) {
@@ -54,11 +55,94 @@ static agc_value float_to_int(agc_vm *vm, agc_value *args, uint32_t span, bool b
 }
 
 static agc_value builtin_float_to_int(agc_vm *vm, agc_value *args, uint32_t span) {
-  return float_to_int(vm, args, span, false);
+  return float_value_to_int(vm, agc_as_float(vm, args[0]), span, false);
 }
 
 static agc_value builtin_float_to_int_bang(agc_vm *vm, agc_value *args, uint32_t span) {
-  return float_to_int(vm, args, span, true);
+  return float_value_to_int(vm, agc_as_float(vm, args[0]), span, true);
+}
+
+/* floor, ceil and round give an Int, as Ruby's Float#floor gives an Integer; with no bignums a result outside Int
+   halts, like to_i!. C round() takes halves away from zero, as Ruby's Float#round does. */
+static agc_value builtin_float_floor(agc_vm *vm, agc_value *args, uint32_t span) {
+  return float_value_to_int(vm, floor(agc_as_float(vm, args[0])), span, true);
+}
+
+static agc_value builtin_float_ceil(agc_vm *vm, agc_value *args, uint32_t span) {
+  return float_value_to_int(vm, ceil(agc_as_float(vm, args[0])), span, true);
+}
+
+static agc_value builtin_float_round(agc_vm *vm, agc_value *args, uint32_t span) {
+  return float_value_to_int(vm, round(agc_as_float(vm, args[0])), span, true);
+}
+
+static agc_value builtin_float_abs(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_float(fabs(agc_as_float(vm, args[0])));
+}
+
+/* Ruby's Comparable#clamp: min > max is an ArgumentError there and RUNTIME-INVALID-RANGE here, as for Random.int. A
+   NaN bound fails the same way, since it orders with nothing; a NaN x is returned as it is, as other Float operations
+   carry NaN. */
+static agc_value builtin_float_clamp(agc_vm *vm, agc_value *args, uint32_t span) {
+  double x = agc_as_float(vm, args[0]), low = agc_as_float(vm, args[1]), high = agc_as_float(vm, args[2]);
+  if (!(low <= high)) agc_fail(vm, "RUNTIME-INVALID-RANGE", "clamp needs min <= max, and no NaN bound", span);
+  if (x < low) return agc_float(low);
+  if (x > high) return agc_float(high);
+  return agc_float(x);
+}
+
+/* Ruby's Math.sqrt raises Math::DomainError below zero; here that is RUNTIME-INVALID-NUMBER at the argument, as a
+   Float division by zero halts too. -0.0 is not below zero and gives the IEEE 754 result -0.0 (CRuby gives 0.0); NaN
+   gives NaN. */
+static agc_value builtin_math_sqrt(agc_vm *vm, agc_value *args, uint32_t span) {
+  double x = agc_as_float(vm, args[0]);
+  if (x < 0) agc_fail(vm, "RUNTIME-INVALID-NUMBER", "Math.sqrt of a negative number", span + 1);
+  return agc_float(sqrt(x));
+}
+
+static _Noreturn void int_overflow(agc_vm *vm, uint32_t span) {
+  agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+}
+
+static agc_value builtin_int_abs(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t n = agc_as_int(vm, args[0]);
+  if (n == INT64_MIN) int_overflow(vm, span);
+  return agc_int(n < 0 ? -n : n);
+}
+
+/* Square and multiply. The base is squared only while bits of the exponent are left, and those bits multiply it into
+   the result, so a base that overflows means the result would too (|n| >= 2); 0, 1 and -1 never overflow. */
+static agc_value builtin_int_pow(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t base = agc_as_int(vm, args[0]), exponent = agc_as_int(vm, args[1]), result = 1;
+  if (exponent < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "pow needs an exponent >= 0", span + 2);
+  while (exponent > 0) {
+    if ((exponent & 1) && __builtin_mul_overflow(result, base, &result)) int_overflow(vm, span);
+    exponent >>= 1;
+    if (exponent > 0 && __builtin_mul_overflow(base, base, &base)) int_overflow(vm, span);
+  }
+  return agc_int(result);
+}
+
+/* Euclid on the magnitudes as uint64_t, so the least Int has one. Only gcd(least, 0) and gcd(least, least) give 2^63,
+   which is no Int. */
+static agc_value builtin_int_gcd(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t a = agc_as_int(vm, args[0]), b = agc_as_int(vm, args[1]);
+  uint64_t x = a < 0 ? (uint64_t)0 - (uint64_t)a : (uint64_t)a;
+  uint64_t y = b < 0 ? (uint64_t)0 - (uint64_t)b : (uint64_t)b;
+  while (y != 0) {
+    uint64_t rest = x % y;
+    x = y;
+    y = rest;
+  }
+  if (x > (uint64_t)INT64_MAX) int_overflow(vm, span);
+  return agc_int((int64_t)x);
+}
+
+static agc_value builtin_int_clamp(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t n = agc_as_int(vm, args[0]), low = agc_as_int(vm, args[1]), high = agc_as_int(vm, args[2]);
+  if (low > high) agc_fail(vm, "RUNTIME-INVALID-RANGE", "clamp needs min <= max", span);
+  return agc_int(n < low ? low : n > high ? high : n);
 }
 
 static int64_t int_from_bits(uint64_t bits) {
@@ -225,6 +309,16 @@ const agc_builtin agc_number_builtins[] = {
   {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Int.abs", 1, builtin_int_abs, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Int.pow", 2, builtin_int_pow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Int.gcd", 2, builtin_int_gcd, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Int.clamp", 3, builtin_int_clamp, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Float.abs", 1, builtin_float_abs, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Float.floor", 1, builtin_float_floor, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Float.ceil", 1, builtin_float_ceil, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Float.round", 1, builtin_float_round, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Float.clamp", 3, builtin_float_clamp, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Math.sqrt", 1, builtin_math_sqrt, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
 };
 
 const size_t agc_number_builtin_count = sizeof agc_number_builtins / sizeof agc_number_builtins[0];

@@ -69,6 +69,15 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "List.last", module: "list", limits: [], selector: "", bodies: {"": "last"}),
   Model.PreludeRow(name: "List.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_list"}),
   Model.PreludeRow(
+    name: "List.max",
+    module: "list",
+    limits: [
+      Model.Limit(variable: "T", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "items"),
+    ],
+    selector: "T",
+    bodies: {"Int": "max_int", "Float": "max_float", "String": "max_string"},
+  ),
+  Model.PreludeRow(
     name: "List.max_by",
     module: "list",
     limits: [
@@ -76,6 +85,15 @@ export ROWS: List[Model.PreludeRow] = [
     ],
     selector: "O",
     bodies: {"Int": "max_by_int", "Float": "max_by_float", "String": "max_by_string"},
+  ),
+  Model.PreludeRow(
+    name: "List.min",
+    module: "list",
+    limits: [
+      Model.Limit(variable: "T", allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String], what: "items"),
+    ],
+    selector: "T",
+    bodies: {"Int": "min_int", "Float": "min_float", "String": "min_string"},
   ),
   Model.PreludeRow(
     name: "List.min_by",

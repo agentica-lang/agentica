@@ -6,7 +6,7 @@ description: Work with text and numbers, search and replace text with regular ex
 
 - Use [String](/library/text-and-data/string/) to cut, search, change and convert text, and to turn text into numbers.
 - Use [Regex](/library/text-and-data/regex/) (`std/regex`) to search, extract, replace and split text with regular expressions.
-- Use [Int and Float](/library/text-and-data/numbers/) to convert between `Int`, `Float` and `String`.
+- Use [Int and Float](/library/text-and-data/numbers/) to convert between `Int`, `Float` and `String`, to round, clamp and take square roots, and to work on bits.
 - Use [JSON](/library/text-and-data/json/) to move data in and out of programs, for a known shape (structs) or not.
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a `Bytes`, and to frame messages.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.

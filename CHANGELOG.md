@@ -13,6 +13,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
+  `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
+- `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
+  an `Optional` (`none` for an empty list).
 - `agentica test` scenarios set the environment and arguments of the program
   under test (`the environment variable "X" is "y"`, `the program argument
   "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
@@ -29,6 +33,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `Math` is a builtin module name, so it can no longer be an
+  import alias or a declaration name.
 - The texts of many runtime errors changed: those that still used Racket wording
   now say what failed in plain words (`filesystem: invalid path ""`,
   `invalid UTF-8 at byte 3`, `network: TLS connect failed`). The diagnostic
