@@ -8,48 +8,35 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-03
+
 ### Added
 
-- `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
-  `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
-  `argparse` with Ruby names.
-- `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
-  (`user == other`, `xs == []`); a type that holds a function, a task, a
-  channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
-- Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
-  `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
+- `std/option_parser` reads the command line into typed values, in the style of
+  `argparse` with Ruby names (`Arg`, `Opt`, `OP.parse`, `--help`, `OP.run!`).
+- `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth.
+- Number helpers with Ruby names: `n.abs`, `a.gcd(b)`, `n.pow(e)`, `x.floor`,
+  `x.ceil`, `x.round` and `Math.sqrt(x)`.
 - `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
   an `Optional` (`none` for an empty list).
+- `xs.include?(x)` (also `member?`) tells whether a list holds a value.
 - `agentica test` scenarios set the environment and arguments of the program
-  under test (`the environment variable "X" is "y"`, `the program argument
-  "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
-  cleanup that runs after each scenario, also after a failure or a skip.
-- `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
-  `env` map of variables for the new program.
-- `File.open(path, mode) do |f| ... end` closes the file when the block ends,
-  with `ok` or `error`, and gives the block's `Result` (or the close error
-  after an `ok` block).
-- A default of a parameter or a struct field may name a module constant
-  (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
-- An `Fn` struct field is called by its name: `store.put(a, b)` is
-  `store.put.call(a, b)`; `agentica type-at` gives the field as its definition.
-- `xs.include?(x)` (also `member?`) tells whether a list holds a value,
-  compared with `==`, for any item type that has `==`.
+  under test, and `BDD.after` registers a cleanup that runs after each scenario.
+- `Process.spawn`, `spawn_captured` and `spawn_channel` take an `env` map for
+  the new program.
+- `File.open(path, mode) do |f| ... end` closes the file when the block ends.
+- A parameter or struct field default may name a module constant.
+- An `Fn` struct field is called by its name: `store.put(a, b)`.
 
 ### Changed
 
 - **Breaking:** `Math` is a builtin module name, so it can no longer be an
   import alias or a declaration name.
-- The texts of many runtime errors changed: those that still used Racket wording
-  now say what failed in plain words (`filesystem: invalid path ""`,
-  `invalid UTF-8 at byte 3`, `network: TLS connect failed`). The diagnostic
-  codes stay the same, but code that matches on the old error texts must be
-  updated.
-- A process or child channel timeout now says `process: operation timed out`,
-  and a timeout that is not positive `process: timeout must be positive
-  milliseconds`, instead of the `network:` texts.
-- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line even
-  when it fits, and an empty line after a statement that takes several lines.
+- Many runtime error texts now say what failed in plain words instead of Racket
+  wording; code that matches on the old texts must be updated.
+- A process or child channel timeout now says `process:`, not `network:`.
+- `agentica fmt` puts a pipe chain of two or more `|>` one stage per line, and
+  an empty line after a statement of several lines.
 
 ## [0.22.0] - 2026-11-02
 
@@ -1007,7 +994,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.22.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.23.0...HEAD
+[0.23.0]: https://github.com/agentica-lang/agentica/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/agentica-lang/agentica/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
 [0.20.0]: https://github.com/agentica-lang/agentica/compare/0.19.0...0.20.0
