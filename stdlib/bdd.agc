@@ -26,16 +26,21 @@ enum Program
   Running(Process)
 end
 
+# `closing` is true in the context an after hook gets: a failed check there ends the hook, not the scenario.
 struct Scenario
   settings: Settings
   state: Map[String, Json]
   services: Map[String, Fn[Json, Result[Json]]]
   step: StepLine
   program: Program
+  env: Map[String, String]
+  arguments: List[String]
+  after: List[Fn[Context, Result[Void]]]
+  closing: Bool
 end
 
-## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step and the
-## program under test.
+## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step, the
+## environment and arguments for the program under test, the after hooks and the program under test.
 export struct Context
   ## The scenario's state.
   scenario: Scenario
@@ -84,7 +89,7 @@ export def doc_string(ctx: Context) -> String
   if ctx.scenario.step.has_doc
     return ctx.scenario.step.doc
   end
-  halt("RUNTIME-BDD-CONTEXT", "this step has no Doc String")
+  halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
   return ""
 end
 
@@ -93,7 +98,7 @@ end
 export def table(ctx: Context) -> List[List[String]]
   rows: List[List[String]] = ctx.scenario.step.table
   if not ctx.scenario.step.has_table
-    halt("RUNTIME-BDD-CONTEXT", "this step has no Data Table")
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
   end
   return rows
 end
@@ -102,7 +107,7 @@ end
 export def assert(ctx: Context, condition: Bool, message: String) -> Context
   emit("assert")
   if not condition
-    halt("RUNTIME-BDD-ASSERTION", message)
+    halt(ctx, "RUNTIME-BDD-ASSERTION", message)
   end
   return ctx
 end
@@ -110,6 +115,15 @@ end
 ## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
 ## later step of the scenario runs. A skipped scenario is not a failure: the run can still pass.
 export def skip(ctx: Context, reason: String) -> Context
+  if ctx.scenario.closing
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "an after hook cannot skip the scenario")
+  end
+  # The hooks run first: the runner stops the child as soon as it reads the skip record.
+  problems = run_after(ctx)
+  if problems.size > 0
+    deliver(after_record(problems))
+    System.exit(1)
+  end
   fields: Map[String, Json] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
   deliver(record_text(fields))
   System.exit(0)
@@ -142,11 +156,40 @@ export def call(ctx: Context, name: String, request: Json) -> Result[Json]
   return found.unwrap!.call(request)
 end
 
-## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One
-## program may start per scenario.
+## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
+## later, on top of the environment `agentica test` runs in. The scenario's own environment does not change, and the
+## variable does not reach any other scenario. Setting a name again replaces its value. It must come before
+## `given_program`, and `name` must be nonempty and cannot contain `=`.
+export def given_env(ctx: Context, name: String, value: String) -> Context
+  not_started(ctx, "the environment")
+  if name == "" or name.contains?("=")
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "an environment variable name must be nonempty and cannot contain =")
+  end
+  return with_launch(ctx, ctx.scenario.env.put(name, value), ctx.scenario.arguments)
+end
+
+## Returns the context with `value` added to the command-line arguments of the program that `given_program` starts
+## later: the program reads them with `System.args`, in the order of the calls. It must come before `given_program`.
+export def given_argument(ctx: Context, value: String) -> Context
+  not_started(ctx, "the arguments")
+  return with_launch(ctx, ctx.scenario.env, ctx.scenario.arguments.push(value))
+end
+
+## Returns the context with `hook` registered to run when the scenario ends, whether it passed, failed or was skipped.
+## Hooks run in the reverse order of registration, in the child process of the scenario, before the program under test
+## is stopped. A hook gets the context at the end of the scenario and returns `error(message)` when its cleanup fails.
+## A failed hook fails a passing scenario and is added to the message of a failing one. The other hooks still run, also
+## when a hook crashes or fails a `BDD` check. Hooks do not run when the process itself ends: a crash in a step, the
+## scenario's time limit or `System.exit`.
+export def after(ctx: Context, hook: Fn[Context, Result[Void]]) -> Context
+  return with_after(ctx, ctx.scenario.after.push(hook))
+end
+
+## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. It runs
+## with the environment variables and arguments given before it. One program may start per scenario.
 export def given_program(ctx: Context, path: String) -> Context
   case ctx.scenario.program
-    Program.Running(_) -> halt("RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
+    Program.Running(_) -> halt(ctx, "RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
     Program.NotStarted -> return start(ctx, path)
   end
   return ctx
@@ -166,7 +209,7 @@ end
 export def when_eof(ctx: Context) -> Context
   p = program(ctx)
   closed = Process.close_stdin(p, 5000)
-  check(closed.ok?, closed.message)
+  check(ctx, closed.ok?, closed.message)
   return ctx
 end
 
@@ -182,7 +225,7 @@ export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
   elsif line.message == timed_out_text()
     return error("no line within #{timeout_ms} milliseconds")
   end
-  check(false, line.message)
+  check(ctx, false, line.message)
   return line
 end
 
@@ -198,7 +241,7 @@ export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Co
   left = JSON.parse(expected)
   right = JSON.parse(actual)
   if not left.ok? or not right.ok?
-    halt("RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
+    halt(ctx, "RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
     return ctx
   end
   return compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
@@ -218,27 +261,29 @@ end
 ## Waits up to `timeout_ms` milliseconds for the program to exit and checks that its exit code is `code`.
 export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
   p = program(ctx)
-  positive(timeout_ms)
+  positive(ctx, timeout_ms)
   status = Process.wait(p, timeout_ms)
-  check(status.ok?, status.message)
-  finished(p)
+  check(ctx, status.ok?, status.message)
+  finished(ctx, p)
   actual = status.unwrap!
   return compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
 end
 
 ## Checks that the output no line step has read yet is `expected`. The program must have exited.
 export def then_stdout(ctx: Context, expected: String) -> Context
-  return compare_text(ctx, finished(exited(program(ctx))).stdout, expected)
+  return compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
 end
 
 ## Checks that the whole error output is `expected`. The program must have exited.
 export def then_stderr(ctx: Context, expected: String) -> Context
-  return compare_text(ctx, finished(exited(program(ctx))).stderr, expected)
+  return compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
 end
 
 def predefined() -> List[Step]
   return [
     step("the Agentica program {string}") do |ctx, args| given_program(ctx, args[0]) end,
+    step("the environment variable {string} is {string}") do |ctx, args| given_env(ctx, args[0], args[1]) end,
+    step("the program argument {string}") do |ctx, args| given_argument(ctx, args[0]) end,
     step("I send a line:") do |ctx, args| when_line(ctx, doc_string(ctx)) end,
     step("I send the line {string}") do |ctx, args| when_line(ctx, args[0]) end,
     step("I send input:") do |ctx, args| when_input(ctx, doc_string(ctx)) end,
@@ -262,7 +307,7 @@ def predefined() -> List[Step]
 end
 
 # One step per channel line until the runner closes the channel; a failure has already ended the run with a fail
-# record.
+# record. The after hooks run when the channel closes, so a hook that fails turns a passing scenario into a failed one.
 def serve(all: List[Step]) -> Void
   init = Process.parent_read_line(idle_ms())
   if not init.ok?
@@ -270,7 +315,7 @@ def serve(all: List[Step]) -> Void
   end
   settings = JSON.decode(init.unwrap!, Settings)
   if not settings.ok?
-    halt("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
+    abort("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
   end
   empty: List[List[String]] = []
   blank = StepLine(
@@ -283,35 +328,78 @@ def serve(all: List[Step]) -> Void
     has_table: false,
     table: empty,
   )
+  no_hooks: List[Fn[Context, Result[Void]]] = []
   ctx = Context(
-    scenario: Scenario(settings: settings.unwrap!, state: {}, services: {}, step: blank, program: Program.NotStarted),
+    scenario: Scenario(
+      settings: settings.unwrap!,
+      state: {},
+      services: {},
+      step: blank,
+      program: Program.NotStarted,
+      env: {},
+      arguments: [],
+      after: no_hooks,
+      closing: false,
+    ),
   )
   line = Process.parent_read_line(idle_ms())
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
     if not found.ok?
-      halt("RUNTIME-BDD-INFRA", "invalid step line: #{found.message}")
+      halt(ctx, "RUNTIME-BDD-INFRA", "invalid step line: #{found.message}")
     end
     current = found.unwrap!
     if current.definition < 0 or current.definition >= all.size or all[current.definition].pattern != current.pattern
-      halt("RUNTIME-BDD-INFRA", "the step program built a different list of steps: #{current.pattern}")
+      halt(ctx, "RUNTIME-BDD-INFRA", "the step program built a different list of steps: #{current.pattern}")
     end
     ctx = all[current.definition].handler.call(with_step(ctx, current), current.captures)
     if Task.pending_count() > 0
-      halt("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before returning from a BDD handler")
+      halt(ctx, "RUNTIME-BDD-PENDING-TASKS", "await pending tasks before returning from a BDD handler")
     end
-    check_crash()
+    crash = Task.unobserved_crash()
+    if crash.ok?
+      halt(ctx, "RUNTIME-TASK-CRASHED", crash.unwrap!)
+    end
     probe(ctx)
     fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
     deliver(record_text(fields))
     line = Process.parent_read_line(idle_ms())
   end
+  problems = run_after(ctx)
+  if problems.size > 0
+    deliver(after_record(problems))
+    System.exit(1)
+  end
   System.exit(0)
+end
+
+# Runs the after hooks, the last registered first, each in its own task so that a crash or a failed `BDD` check in one
+# (`finish` crashes the task when the context is closing) leaves the others to run. Returns the problem of each hook
+# that failed.
+def run_after(ctx: Context) -> List[String]
+  closing = with_closing(ctx)
+  problems: List[String] = []
+  for hook in ctx.scenario.after.reverse
+    outcome = Task.await(Task.spawn do hook.call(closing) end)
+    if not outcome.ok?
+      problems = problems.push(outcome.message)
+    end
+  end
+  return problems
+end
+
+def after_record(problems: List[String]) -> String
+  fields: Map[String, Json] = {
+    "event": JSON.from("fail"),
+    "code": JSON.from("RUNTIME-BDD-AFTER"),
+    "message": JSON.from(clip("after hook failed: #{problems.join("; ")}")),
+  }
+  return record_text(fields)
 end
 
 def check_tasks() -> Void
   if Task.pending_count() > 0
-    halt("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before calling BDD.run")
+    abort("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before calling BDD.run")
   end
   check_crash()
 end
@@ -319,7 +407,7 @@ end
 def check_crash() -> Void
   crash = Task.unobserved_crash()
   if crash.ok?
-    halt("RUNTIME-TASK-CRASHED", crash.unwrap!)
+    abort("RUNTIME-TASK-CRASHED", crash.unwrap!)
   end
 end
 
@@ -328,7 +416,7 @@ def probe(ctx: Context) -> Void
     Program.Running(p) ->
       peek = Process.read_bytes(p, 0, 1000)
       if not peek.ok? and peek.message == over_text()
-        halt("RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
+        halt(ctx, "RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
       end
     Program.NotStarted -> return
   end
@@ -345,10 +433,10 @@ def start(ctx: Context, path: String) -> Context
   # Under --deny-fs this VM cannot look at the file; the agentica command below reads it and says when it is missing.
   seen = info.ok? or !info.message.start_with?("denied:")
   if !file.end_with?(".agc") or (seen and !(info.ok? and info.unwrap!.kind == "file"))
-    halt("RUNTIME-BDD-PROGRAM", "expected an existing .agc program")
+    halt(ctx, "RUNTIME-BDD-PROGRAM", "expected an existing .agc program")
   end
   if settings.agentica.size == 0
-    halt("RUNTIME-BDD-INFRA", "Agentica executable is unavailable")
+    halt(ctx, "RUNTIME-BDD-INFRA", "Agentica executable is unavailable")
   end
   flags: List[String] = []
   if settings.seeded
@@ -356,13 +444,13 @@ def start(ctx: Context, path: String) -> Context
   end
   # No --max-steps: the program runs as `agentica FILE.agc` does. A runaway program ends with its scenario, whose
   # deadline and `within N milliseconds` steps are the limits.
-  args = settings.agentica.drop(1).concat(flags).concat([file])
-  spawned = Process.spawn_captured(settings.agentica[0], args, settings.base, 30000)
+  args = settings.agentica.drop(1).concat(flags).concat([file]).concat(ctx.scenario.arguments)
+  spawned = Process.spawn_captured(settings.agentica[0], args, settings.base, 30000, ctx.scenario.env)
   if not spawned.ok?
     if spawned.message == "process: executable is unavailable"
-      halt("RUNTIME-BDD-INFRA", "Agentica executable is unavailable")
+      halt(ctx, "RUNTIME-BDD-INFRA", "Agentica executable is unavailable")
     end
-    halt("RUNTIME-BDD-IO", spawned.message)
+    halt(ctx, "RUNTIME-BDD-IO", spawned.message)
   end
   return Context(
     scenario: Scenario(
@@ -371,15 +459,27 @@ def start(ctx: Context, path: String) -> Context
       services: ctx.scenario.services,
       step: ctx.scenario.step,
       program: Program.Running(spawned.unwrap!),
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: ctx.scenario.after,
+      closing: ctx.scenario.closing,
     ),
   )
+end
+
+# Environment and arguments are read when the program starts, so a later call would silently change nothing.
+def not_started(ctx: Context, what: String) -> Void
+  case ctx.scenario.program
+    Program.Running(_) -> halt(ctx, "RUNTIME-BDD-CONTEXT", "#{what} must be set before the program starts")
+    Program.NotStarted -> return
+  end
 end
 
 def program(ctx: Context) -> Process
   found: Result[Process] = error("start a program before using its streams")
   case ctx.scenario.program
     Program.Running(p) -> found = ok(p)
-    Program.NotStarted -> halt("RUNTIME-BDD-CONTEXT", found.message)
+    Program.NotStarted -> halt(ctx, "RUNTIME-BDD-CONTEXT", found.message)
   end
   return found.unwrap!
 end
@@ -387,60 +487,60 @@ end
 def send(ctx: Context, text: String) -> Context
   sent = Process.send(program(ctx), text, 5000)
   if not sent.ok? and sent.message == "process: stdin is closed"
-    halt("RUNTIME-BDD-CONTEXT", "stdin is already closed")
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "stdin is already closed")
   end
-  check(sent.ok?, sent.message)
+  check(ctx, sent.ok?, sent.message)
   return ctx
 end
 
 def raw_line(ctx: Context, timeout_ms: Int) -> Result[String]
   p = program(ctx)
-  positive(timeout_ms)
+  positive(ctx, timeout_ms)
   return Process.read_line(p, timeout_ms)
 end
 
 def next_line(ctx: Context, timeout_ms: Int) -> String
   line = raw_line(ctx, timeout_ms)
   if not line.ok? and line.message == ended_text()
-    halt("RUNTIME-BDD-ASSERTION", "stdout ended before the expected line")
+    halt(ctx, "RUNTIME-BDD-ASSERTION", "stdout ended before the expected line")
   end
-  check(line.ok?, line.message)
+  check(ctx, line.ok?, line.message)
   return line.unwrap!
 end
 
-def exited(p: Process) -> Process
+def exited(ctx: Context, p: Process) -> Process
   if not Process.wait(p, 1).ok?
-    halt("RUNTIME-BDD-CONTEXT", "complete output requires program exit")
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "complete output requires program exit")
   end
   return p
 end
 
-def finished(p: Process) -> ProcessOutput
+def finished(ctx: Context, p: Process) -> ProcessOutput
   output = Process.output(p, 5000)
-  check(output.ok?, output.message)
+  check(ctx, output.ok?, output.message)
   if output.unwrap!.truncated
-    halt("RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
+    halt(ctx, "RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
   end
   return output.unwrap!
 end
 
-def positive(timeout_ms: Int) -> Void
+def positive(ctx: Context, timeout_ms: Int) -> Void
   if timeout_ms <= 0
-    halt("RUNTIME-BDD-TIMEOUT", "timeout must be a positive integer")
+    halt(ctx, "RUNTIME-BDD-TIMEOUT", "timeout must be a positive integer")
   end
 end
 
 # Ends the scenario child with a fail record for a failed stream operation.
-def check(fine: Bool, message: String) -> Void
+def check(ctx: Context, fine: Bool, message: String) -> Void
   if fine
     return
   end
   if message == timed_out_text()
-    halt("RUNTIME-BDD-TIMEOUT", "BDD operation timed out")
+    halt(ctx, "RUNTIME-BDD-TIMEOUT", "BDD operation timed out")
   elsif message == over_text() or message == "process: line exceeds 1048576 bytes"
-    halt("RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
+    halt(ctx, "RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
   end
-  halt("RUNTIME-BDD-IO", message)
+  halt(ctx, "RUNTIME-BDD-IO", message)
 end
 
 def compare_text(ctx: Context, actual: String, expected: String) -> Context
@@ -457,7 +557,7 @@ def compare(ctx: Context, checked: Result[Void], expected: String, actual: Strin
       "expected": JSON.from(clip(expected)),
       "actual": JSON.from(clip(actual)),
     }
-    finish(fields)
+    finish(ctx, fields)
   end
   return ctx
 end
@@ -477,6 +577,10 @@ def with_state(ctx: Context, state: Map[String, Json]) -> Context
       services: ctx.scenario.services,
       step: ctx.scenario.step,
       program: ctx.scenario.program,
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: ctx.scenario.after,
+      closing: ctx.scenario.closing,
     ),
   )
 end
@@ -489,6 +593,10 @@ def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -
       services: services,
       step: ctx.scenario.step,
       program: ctx.scenario.program,
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: ctx.scenario.after,
+      closing: ctx.scenario.closing,
     ),
   )
 end
@@ -501,17 +609,88 @@ def with_step(ctx: Context, current: StepLine) -> Context
       services: ctx.scenario.services,
       step: current,
       program: ctx.scenario.program,
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: ctx.scenario.after,
+      closing: ctx.scenario.closing,
     ),
   )
 end
 
-def halt(code: String, message: String) -> Void
-  fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from(code), "message": JSON.from(message)}
-  finish(fields)
+def with_launch(ctx: Context, env: Map[String, String], arguments: List[String]) -> Context
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: ctx.scenario.state,
+      services: ctx.scenario.services,
+      step: ctx.scenario.step,
+      program: ctx.scenario.program,
+      env: env,
+      arguments: arguments,
+      after: ctx.scenario.after,
+      closing: ctx.scenario.closing,
+    ),
+  )
 end
 
-def finish(fields: Map[String, Json]) -> Void
+def with_after(ctx: Context, after: List[Fn[Context, Result[Void]]]) -> Context
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: ctx.scenario.state,
+      services: ctx.scenario.services,
+      step: ctx.scenario.step,
+      program: ctx.scenario.program,
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: after,
+      closing: ctx.scenario.closing,
+    ),
+  )
+end
+
+def with_closing(ctx: Context) -> Context
+  return Context(
+    scenario: Scenario(
+      settings: ctx.scenario.settings,
+      state: ctx.scenario.state,
+      services: ctx.scenario.services,
+      step: ctx.scenario.step,
+      program: ctx.scenario.program,
+      env: ctx.scenario.env,
+      arguments: ctx.scenario.arguments,
+      after: ctx.scenario.after,
+      closing: true,
+    ),
+  )
+end
+
+# Fails the scenario at once, for the failures that no hook can follow: before the scenario's context exists.
+def abort(code: String, message: String) -> Void
+  fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from(code), "message": JSON.from(message)}
   deliver(record_text(fields))
+  System.exit(1)
+end
+
+def halt(ctx: Context, code: String, message: String) -> Void
+  fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from(code), "message": JSON.from(message)}
+  finish(ctx, fields)
+end
+
+# Ends the scenario with a fail record. The record goes first and the after hooks run after it, so a hook that hangs or
+# dies cannot hide the failure; the runner reads on until the child exits and adds a failed hook to the message. In a
+# hook (`closing`) it crashes the hook's task instead, which `run_after` turns into that hook's problem.
+def finish(ctx: Context, fields: Map[String, Json]) -> Void
+  if ctx.scenario.closing
+    code = JSON.string(fields["code"]).unwrap_or("")
+    gone: Result[Void] = error("#{code}: #{JSON.string(fields["message"]).unwrap_or("")}")
+    gone.unwrap!
+  end
+  deliver(record_text(fields))
+  problems = run_after(ctx)
+  if problems.size > 0
+    deliver(after_record(problems))
+  end
   System.exit(1)
 end
 

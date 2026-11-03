@@ -13,6 +13,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- `agentica test` scenarios set the environment and arguments of the program
+  under test (`the environment variable "X" is "y"`, `the program argument
+  "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
+  cleanup that runs after each scenario, also after a failure or a skip.
+- `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
+  `env` map of variables for the new program.
 
 ## [0.22.0] - 2026-11-02
 

@@ -256,6 +256,114 @@ end
     assert drawn["seed"] >= 0
 
 
+def test_a_scenario_gives_its_program_environment_variables_and_arguments_that_reach_no_other_scenario(tmp_path):
+    directory = suite(tmp_path, {
+        "show.agc": ('def main() -> Void\n'
+                     '  puts("#{System.env("BDD_GREETING").unwrap_or("unset")}|#{System.args().join(",")}")\n'
+                     '  puts(System.env("HOME").unwrap_or("no home").length > 0)\nend\n'),
+        "env.feature": (
+            "Feature: Environment\n"
+            "Scenario: set\n"
+            'Given the environment variable "BDD_GREETING" is "hello there"\n'
+            'And the environment variable "BDD_GREETING" is "hi there"\n'
+            'And the program argument "a b"\nAnd the program argument "--flag"\n'
+            'And the Agentica program "show.agc"\n'
+            'Then I receive the line "hi there|a b,--flag" within ' + ms(5000) + " milliseconds\n"
+            'And I receive the line "true" within ' + ms(5000) + " milliseconds\n"
+            "Scenario: nothing is left over\n"
+            'Given the Agentica program "show.agc"\n'
+            'Then I receive the line "unset|" within ' + ms(5000) + " milliseconds\n"
+            "Scenario: too late\n"
+            'Given the Agentica program "show.agc"\nAnd the program argument "x"\n'
+            "Scenario: an empty name\n"
+            'Given the environment variable "" is "x"\n')})
+    report = json_test(directory / "env.feature")
+    assert [item["status"] for item in report_cases(report)] == ["passed", "passed", "failed", "failed"]
+    assert codes(report) == [None, None, "RUNTIME-BDD-CONTEXT", "RUNTIME-BDD-CONTEXT"]
+
+
+AFTER_STEPS = dedent("""\
+    import BDD from "std/bdd"
+
+    def cleanup(closing: BDD.Context, log: String, name: String) -> Result[Void]
+      File.append_text(log, name + "\\n", 5000).unwrap!
+      if name == "bad"
+        return error("cleanup failed")
+      elsif name == "crash"
+        invalid = 1 / 0
+      elsif name == "check"
+        BDD.assert(closing, false, "hook check")
+      end
+      return ok()
+    end
+
+    def hook(ctx: BDD.Context, args: List[String]) -> BDD.Context
+      log = args[1]
+      name = args[0]
+      return BDD.after(ctx) do |closing| cleanup(closing, log, name) end
+    end
+
+    def folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
+      path = args[0]
+      Dir.mkdir(path, 5000).unwrap!
+      return BDD.after(ctx) do |closing| Path.remove(path, 5000) end
+    end
+
+    def main() -> Void
+      BDD.run([
+        BDD.step("the hook {string} logs to {string}", &hook),
+        BDD.step("the folder {string} exists until the scenario ends", &folder),
+        BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "the step failed") end,
+        BDD.step("the scenario passes") do |ctx, args| BDD.assert(ctx, true, "never") end,
+        BDD.step("the scenario is skipped") do |ctx, args| BDD.skip(ctx, "not here") end,
+      ])
+    end
+    """)
+
+
+def test_after_hooks_run_last_first_also_after_a_failure_or_a_skip_and_a_failing_hook_stops_no_other(tmp_path):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    gone = (tmp_path / "gone").as_posix()
+
+    def log(name):
+        return (logs / name).as_posix()
+
+    def scenario(title, *lines):
+        return "Scenario: " + title + "\n" + "".join(line + "\n" for line in lines)
+
+    directory = suite(tmp_path, {
+        "steps.agc": AFTER_STEPS,
+        "after.feature": "Feature: After\n" + scenario(
+            "passes", f'Given the hook "one" logs to "{log("passes")}"', f'And the hook "two" logs to "{log("passes")}"',
+            "Then the scenario passes"
+        ) + scenario(
+            "fails", f'Given the folder "{gone}" exists until the scenario ends',
+            f'And the hook "one" logs to "{log("fails")}"', "When the scenario fails"
+        ) + scenario(
+            "skipped", f'Given the hook "one" logs to "{log("skipped")}"', "When the scenario is skipped"
+        ) + scenario(
+            "a hook breaks a passing scenario", f'Given the hook "one" logs to "{log("breaks")}"',
+            f'And the hook "bad" logs to "{log("breaks")}"', f'And the hook "crash" logs to "{log("breaks")}"',
+            f'And the hook "check" logs to "{log("breaks")}"', "Then the scenario passes"
+        ) + scenario(
+            "a hook is added to a failure", f'Given the hook "bad" logs to "{log("both")}"', "When the scenario fails")})
+    report = json_test(directory / "after.feature")
+    cases = report_cases(report)
+    assert [item["status"] for item in cases] == ["passed", "failed", "skipped", "failed", "failed"]
+    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-AFTER", "RUNTIME-BDD-ASSERTION"]
+    assert (logs / "passes").read_text().split() == ["two", "one"]
+    assert (logs / "fails").read_text().split() == ["one"]
+    assert not (tmp_path / "gone").exists()
+    assert "the step failed" in cases[1]["error"]["message"]
+    assert (logs / "skipped").read_text().split() == ["one"]
+    assert (logs / "breaks").read_text().split() == ["check", "crash", "bad", "one"]
+    broken = cases[3]["error"]["message"]
+    assert "cleanup failed" in broken and "hook check" in broken and "division by zero" in broken
+    both = cases[4]["error"]["message"]
+    assert both.startswith("the step failed") and "cleanup failed" in both
+
+
 def test_a_program_under_test_runs_without_a_step_limit(tmp_path):
     # Each loop pass is several steps, so 400,000 passes are well over the 1,000,000 steps the program once had.
     directory = suite(tmp_path, {

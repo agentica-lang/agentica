@@ -187,10 +187,18 @@ The patterns are in
 [`library/testing/bdd.md`](../site/content/library/testing/bdd.md) ("Built-in
 steps"). Each is a handler in `std/bdd`:
 
+- **Step:** `the environment variable {string} is {string}`, `the program
+  argument {string}`
+  - **What it does and its errors:** `BDD.given_env` and `BDD.given_argument`
+    keep the pair, or the argument, in the context until the program starts. A
+    name that is empty or has `=` and any call after the program started are
+    `RUNTIME-BDD-CONTEXT`.
+
 - **Step:** `the Agentica program {string}`
   - **What it does and its errors:** `Process.spawn_captured` of `agentica
-    [--seed N] PATH` in the feature's directory, 30 s to start. A missing
-    `.agc` file is `RUNTIME-BDD-PROGRAM`; a missing `agentica` is
+    [--seed N] PATH ARGUMENT...` in the feature's directory, 30 s to start,
+    with the kept variables as its `env` (so they reach that program alone). A
+    missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a missing `agentica` is
     `RUNTIME-BDD-INFRA`.
 
 - **Step:** `I send ...`, `I close stdin`
@@ -232,8 +240,9 @@ A step program is a normal program: its `main` builds the list of steps with
 - A handler gets the scenario's context and returns the context it ends with;
   the next step gets that one. Most `BDD` calls take the context first and
   return it, and `BDD.doc_string`, `BDD.table`, `BDD.get`, `BDD.call` and
-  `BDD.read_line` return their value instead. Only `BDD.set`, `BDD.keep` and
-  `BDD.given_program` change the context. Use the one each call returns: a
+  `BDD.read_line` return their value instead. Only `BDD.set`, `BDD.keep`,
+  `BDD.after`, `BDD.given_env`, `BDD.given_argument` and `BDD.given_program`
+  change the context. Use the one each call returns: a
   handler that drops the context `BDD.given_program` returned loses the
   program under test.
 - `BDD.keep(ctx, name, service)` holds a value that is not JSON for the later
@@ -244,7 +253,22 @@ A step program is a normal program: its `main` builds the list of steps with
   through it; the closure carries the value.
   Services start empty in each scenario. Keeping a name again replaces the
   service; the old handle is not closed and lives until the scenario's child
-  VM ends (there is no close hook). A step still cannot leave a task running.
+  VM ends, or until a `BDD.after` hook closes it. A step still cannot leave a
+  task running.
+- `BDD.after(ctx, hook)` keeps a `Fn[Context, Result[Void]]` in the context.
+  The child runs the hooks, the last registered first, each in its own task
+  (`run_after` in `stdlib/bdd.agc`), when the runner closes the channel (a
+  scenario that passed), after the `fail` record of a failed step, and before
+  the `skip` record. A hook gets a context with `closing` set, in which a failed
+  `BDD` check crashes the hook's task instead of ending the child: a returned
+  `error`, a crash and a failed check each become the problem of that hook, and
+  the other hooks still run. After a pass or a skip the problems are one `fail`
+  record with `RUNTIME-BDD-AFTER`. After a failure the first record has already
+  gone, so a hook that hangs or dies cannot hide it: the same record follows,
+  and the runner (`with_hook_problems` in `stdlib/test/runner.agc`) reads on
+  until the child ends or the deadline passes and adds its message to the
+  failure's. A process that ends by itself (a crash in a step, `System.exit`, a
+  limit or the deadline) runs no hook: that state is gone with the process.
 - `BDD.read_line(ctx, timeout_ms)` is `Process.read_line` of the program under
   test as a `Result[String]`: the ended output and the timeout are errors the
   step can handle; the output limit and an I/O failure still fail the step. A
@@ -255,7 +279,10 @@ A step program is a normal program: its `main` builds the list of steps with
 - `BDD.doc_string` or `BDD.table` on a step without one is
   `RUNTIME-BDD-CONTEXT`. `BDD.get` of a missing name is
   `error("missing scenario state")`. A stream call before `BDD.given_program`,
-  or a second program in a scenario, is `RUNTIME-BDD-CONTEXT`.
+  or a second program in a scenario, is `RUNTIME-BDD-CONTEXT`. A scenario
+  starts one program: restarting it would leave the first one's unread output
+  and exit code with no step to check them, and another scenario (or an
+  outline row) is cheap.
 - Every `Then` step, including its `And` and `But`, must make at least one BDD
   assertion, and every scenario must make one. A BDD failure ends the step at
   once.
@@ -409,7 +436,8 @@ agentica test [PATH...] [--steps FILE]
 - **What happens:** `fail` record
   - **Step `i`:** failed
   - **Scenario error:** that record's code, message, expected and actual, at the
-    step
+    step; the runner then reads until the child ends (its after hooks run) and
+    adds the message of any later `fail` record to this one
 
 - **What happens:** the channel ends, and the last stderr line is a JSON
   diagnostic
@@ -432,7 +460,8 @@ agentica test [PATH...] [--steps FILE]
 
 Every step after a failed one is `not_executed`. After the last step passes, the
 runner closes the channel, waits for its end and for exit 0, and fails the
-scenario with `RUNTIME-BDD-NO-ASSERTION` when no step asserted. The runner
+scenario with `RUNTIME-BDD-NO-ASSERTION` when no step asserted, or with the
+`fail` record that an after hook sent (`RUNTIME-BDD-AFTER`). The runner
 closes each child on every path.
 
 - **Pending tasks.** `BDD.run` checks `Task.pending_count() == 0` on entry, and
@@ -533,8 +562,14 @@ builtin: see
 
 - **Code:** `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON`
   - **Meaning:** A missing Doc String or table, a stream call before a program
-    started, a second program, a step program that never calls `BDD.run`, a
-    missing `.agc` program, or a JSON expectation that is not valid JSON
+    started, a second program, an environment variable or argument set after the
+    program started, a step program that never calls `BDD.run`, a missing
+    `.agc` program, or a JSON expectation that is not valid JSON
+
+- **Code:** `RUNTIME-BDD-AFTER`
+  - **Meaning:** An after hook returned an `error`, crashed or failed a check,
+    in a scenario that had passed; in a failed one its message is added to the
+    failure's
 
 - **Code:** `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`,
   `RUNTIME-BDD-PENDING-TASKS`

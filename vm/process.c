@@ -1020,12 +1020,31 @@ static bool metrics_env(const char *entry) {
          env_prefix(entry, METRICS_FILE_ENV);
 }
 
-/* The environment of a child; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel. */
-static char **child_env(bool drop_uring, const char *channel) {
+static bool env_name_is(const char *host, const agc_string *name) {
+#ifdef _WIN32
+  return strlen(host) == name->bytes && _strnicmp(host, (const char *)name->data, name->bytes) == 0;
+#else
+  return strlen(host) == name->bytes && memcmp(host, name->data, name->bytes) == 0;
+#endif
+}
+
+/* True when the program's `env` map gives HOST_NAME a new value, so the VM's own entry is left out. */
+static bool env_overridden(agc_vm *vm, const char *host_name, const agc_value *keys, size_t count) {
+  for (size_t k = 0; k < count; k++)
+    if (env_name_is(host_name, agc_as_string(vm, keys[k]))) return true;
+  return false;
+}
+
+/* The environment of a child: the VM's own, minus the entries the VM owns and the names `extra` sets, plus the pairs of
+   `extra` (a Map[String, String] checked by env_problem, or NULL); `channel` is the value of AGENTICA_CHANNEL when the
+   child gets a channel. */
+static char **child_env(agc_vm *vm, bool drop_uring, const char *channel, const agc_map *extra) {
   uv_env_item_t *host = NULL;
   int count = 0;
   if (uv_os_environ(&host, &count) != 0) return NULL;
-  char **env = calloc(agc_size_add((size_t)count, 2), sizeof(char *));
+  const agc_value *keys = extra && extra->size ? agc_map_keys(vm, extra, 0) : NULL;
+  size_t added = keys ? extra->size : 0;
+  char **env = calloc(agc_size_add(agc_size_add((size_t)count, added), 2), sizeof(char *));
   if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
   for (int k = 0; k < count; k++) {
@@ -1035,10 +1054,23 @@ static char **child_env(bool drop_uring, const char *channel) {
     memcpy(entry, host[k].name, name);
     entry[name] = '=';
     memcpy(entry + name + 1, host[k].value, value + 1);
-    if (own_env(drop_uring, entry) || metrics_env(entry)) free(entry);
+    if (own_env(drop_uring, entry) || metrics_env(entry) || env_overridden(vm, host[k].name, keys, added)) free(entry);
     else env[kept++] = entry;
   }
   uv_os_free_environ(host, count);
+  for (size_t k = 0; k < added; k++) {
+    agc_value value;
+    const agc_string *name = agc_as_string(vm, keys[k]);
+    if (!agc_map_get(vm, extra, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
+    const agc_string *text = agc_as_string(vm, value);
+    char *entry = malloc(agc_size_add(agc_size_add(name->bytes, text->bytes), 2));
+    if (!entry) agc_out_of_memory();
+    memcpy(entry, name->data, name->bytes);
+    entry[name->bytes] = '=';
+    memcpy(entry + name->bytes + 1, text->data, text->bytes);
+    entry[name->bytes + 1 + text->bytes] = '\0';
+    env[kept++] = entry;
+  }
   if (channel) {
     size_t size = strlen(CHANNEL_PREFIX) + strlen(channel) + 1;
     env[kept] = malloc(size);
@@ -1135,6 +1167,30 @@ static int start_child(guard *g, proc *p, const launch *l) {
 
 static bool no_nul(const agc_string *s) { return !memchr(s->data, 0, s->bytes); }
 
+/* Why the program's `env` map cannot be a child's environment, or NULL. A name the VM owns (own_env, metrics_env) is
+   refused, not dropped: dropping it would run the child without a variable the program asked for. */
+static const char *env_problem(agc_vm *vm, const agc_map *env) {
+  if (!env || !env->size) return NULL;
+  const agc_value *keys = agc_map_keys(vm, env, 0);
+  for (size_t k = 0; k < env->size; k++) {
+    agc_value value;
+    const agc_string *name = agc_as_string(vm, keys[k]);
+    if (!agc_map_get(vm, env, keys[k], &value)) agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
+    if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes) || !no_nul(agc_as_string(vm, value)))
+      return "process: environment names must be nonempty and cannot contain = or NUL, and values cannot contain NUL";
+    char *entry = malloc(agc_size_add(name->bytes, 2));
+    if (!entry) agc_out_of_memory();
+    memcpy(entry, name->data, name->bytes);
+    entry[name->bytes] = '=';
+    entry[name->bytes + 1] = '\0';
+    bool owned = own_env(true, entry) || metrics_env(entry);
+    free(entry);
+    if (owned)
+      return "process: AGENTICA_CHANNEL, AGENTICA_VM_METRICS, AGENTICA_VM_METRICS_FILE and UV_USE_IO_URING cannot be set";
+  }
+  return NULL;
+}
+
 static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   *found = true;
   if (!dir || (dir->bytes == 1 && dir->data[0] == '.')) return NULL;
@@ -1181,7 +1237,8 @@ static bool begin_spawn(void *data, agc_io_job *job) {
 
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
    resolves before the child changes directory (§10.4). */
-static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel) {
+static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel,
+                             const agc_map *env) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -1194,6 +1251,8 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (dir && (dir->bytes == 0 || !no_nul(dir)))
     return agc_error_value("process: dir must be nonempty and cannot contain NUL");
   if (timeout <= 0) return agc_stream_bad_timeout();
+  const char *env_text = env_problem(vm, env);
+  if (env_text) return agc_error_value(env_text);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
@@ -1216,7 +1275,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (!l) agc_out_of_memory();
   l->g = g;
   l->argv = child_args(vm, path, list);
-  l->env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL);
+  l->env = child_env(vm, vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL, env);
   l->cwd = cwd;
   l->args = agc_list_len(list);
   l->channel = channel;
@@ -1251,19 +1310,37 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   return agc_result_value(true, agc_process_value(pr));
 }
 
+/* Each spawn has two arities. The one with the trailing `env` Map is what the catalog now lowers to; the one without it
+   stays for the bytecode of bootstrap/stage0.agcb, which was compiled before `env` existed (remove it with the next
+   refresh of stage0). */
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false);
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL);
+}
+
+static agc_value builtin_spawn_env(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]));
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL);
+}
+
+static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]));
 }
 
 static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL);
+}
+
+static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]));
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1548,6 +1625,7 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn", 4, builtin_spawn_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
@@ -1556,8 +1634,10 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_captured", 5, builtin_spawn_captured_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_channel", 5, builtin_spawn_channel_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
