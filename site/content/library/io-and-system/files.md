@@ -160,6 +160,31 @@ def main() -> Void
 end
 ```
 
+## File.open with a block
+
+```text
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) do |file| ... end -> Result[T]
+```
+
+Opens the file, calls the block with the handle, closes the handle with `File.close(file, timeout_ms)` when the block ends, and gives the block's `Result`. Use it to read or write a file through a handle; open and close a handle by hand only when it must outlive one block, such as one shared with tasks.
+
+```agentica {mode="check"}
+def main() -> Void
+  r = File.open("out.txt", "write", 1000) do |file|
+    try File.write(file, "hello\n")
+    try File.write(file, "world\n")
+    ok(2)
+  end
+
+  puts(r)
+end
+```
+
+- The block gives a `Result[T]`, and `try` works in it. `T` comes from the expected type of the call (`r: Result[List[String]] = File.open(...) do ...`), or else from the block.
+- If the open fails, the block does not run and the call gives the open error.
+- The handle is closed whether the block gives `ok` or `error`, an early `return` and a failed `try` included. After `ok(value)` the call gives `ok(value)`, or the close error if the close fails: the close writes pending data, so its error matters. After an error the call gives the block's error and drops a close error.
+- A runtime error in the block ends the task, and the handle closes with the task, as above. A handle kept after the block (returned in the `Result`) is closed: a call on it gives `error("filesystem: file handle is closed")`.
+
 ## File.write and File.flush
 
 ```text

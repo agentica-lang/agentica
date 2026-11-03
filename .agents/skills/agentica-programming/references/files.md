@@ -7,6 +7,7 @@ interpreter uses the host user's filesystem permissions. With `--deny-fs` (or
 
 ```text
 File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) -> Result[FileHandle]
+File.open(path: String, mode: String = "read", timeout_ms: Int = 30000) do |f| ... end -> Result[T]
 File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int = 30000) -> Result[Bytes]
 File.read_line(handle: FileHandle, timeout_ms: Int = 30000) -> Result[String]
 File.write(handle: FileHandle, text: String, timeout_ms: Int = 30000) -> Result[Void]
@@ -119,6 +120,35 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   macOS fails at 1024 bytes or more and accepts `file/`.
 - `File.read_text` of a pipe reads to EOF. A FIFO with no writer gives EOF;
   opening one for writing with no reader is an error.
+
+## A handle for one block
+
+`File.open(path, mode, ms) do |f| ... end` is the way to read or write through a
+handle: it opens the file, calls the block with the handle and closes it with
+`File.close(f, ms)` when the block ends. Open and close by hand only a handle
+that outlives one block (one shared with tasks).
+
+```agentica
+def read_lines(path: String) -> Result[List[String]]
+  return File.open(path, "read", 1000) do |f|
+    lines: List[String] = []
+    line = File.read_line(f)
+    while line.ok?
+      lines = lines.push(line.unwrap!)
+      line = File.read_line(f)
+    end
+    ok(lines)
+  end
+end
+```
+
+- The block gives `Result[T]` and `try` works in it; `T` comes from the
+  expected type of the call, else from the block.
+- A failed open is the call's error, and the block does not run.
+- The close runs after `ok`, `error`, an early `return` and a failed `try`.
+  After `ok(v)` the call gives `ok(v)`, or the close error (the close writes
+  pending data); after an error it gives that error and drops a close error.
+- A handle kept after the block is closed: calls on it give an error Result.
 
 ## Streaming lines
 

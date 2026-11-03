@@ -95,15 +95,32 @@ def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
 end
 
 # param allows a struct built with no arguments: a field default that builds a struct could build its own struct again
-# at each construction, without end.
+# at each construction, without end. The name of a constant is a default when the value of the constant is one (the
+# lowering writes that value in place of the name, so the default needs no read of the constant at the call).
 def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy: String) -> Result[Bool]
-  if constant?(value) or (param and empty_construct?(value))
+  if acceptable?(value, param)
     return ok(true)
   end
 
-  what = "write a literal, true, false, nil, none, [], {} or an enum variant without a payload"
+  forms = "a literal, true, false, nil, none, [], {} or an enum variant without a payload"
   if param
-    what = "write a literal, true, false, nil, none, [], {}, an enum variant without a payload or #{EMPTY_STRUCT}"
+    forms = "a literal, true, false, nil, none, [], {}, an enum variant without a payload or #{EMPTY_STRUCT}"
+  end
+
+  what = "write #{forms}"
+  case value
+    Ast.Expr.ConstRef(node) ->
+      what = "name a constant whose value is #{forms}"
+      site = cx.const_sites.get(node.name)
+      if site.some? and site.unwrap!.blanked
+        # The check cache blanks a long constant of a file it stands in for; the answer is then the one of the whole
+        # text, which the cache falls back to for a problem in that file.
+        return error(blanked_failure(cx, st, site.unwrap!))
+      elsif site.some? and acceptable?(site.unwrap!.value, param)
+        return ok(true)
+      end
+
+    _ -> what = what
   end
 
   return error(
@@ -118,6 +135,22 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy
   )
 end
 
+def blanked_failure(cx: State.Cx, st: State.St, site: State.ConstSite) -> String
+  return State.fail(
+    cx.with(file: site.file),
+    st,
+    "CHECK-DEFAULT-VALUE",
+    "the value of a long constant is not known here",
+    Ast.expr_span(site.value),
+  )
+end
+
+def acceptable?(value: Ast.Expr, param: Bool) -> Bool
+  return constant?(value) or (param and empty_construct?(value))
+end
+
+# The forms accepted here and in empty_construct? must be the kinds that `respanned` handles in `Const.in_place`
+# (lower/lower_const.agc), and the reverse.
 # A literal (a minus sign allowed before a number), an empty list or map, a variant with no payload, or none (the
 # parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool

@@ -582,7 +582,29 @@ ROWS_5: List[Model.Builtin] = [
       "Open a regular file for read, write, append or create_private with a deadline; create_private makes a new " +
       "file only the current user can use and fails when the path exists."
     ),
-    alternatives: [],
+    alternatives: [
+      Model.Builtin(
+        name: "File.open",
+        parameters: [
+          Model.Named(name: "path", type: Types.Type.String),
+          Model.Named(name: "mode", type: Types.Type.String, default: Model.Default.Text("read")),
+          Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+          Model.Named(
+            name: "f",
+            type: Types.Type.Fn([Types.Type.Opaque("FileHandle")], Types.Type.Result(Types.Type.Var("A"))),
+          ),
+        ],
+        result: Types.Type.Result(Types.Type.Var("A")),
+        rule: Model.Rule.Prelude,
+        implementation: "",
+        effects: ["filesystem"],
+        description: (
+          "Open the file, call the block with the handle, and close the handle when the block ends, with ok or " +
+          "error; gives the block's Result, or the close error after an ok block; VM only."
+        ),
+        alternatives: [],
+      ),
+    ],
   ),
   Model.Builtin(
     name: "File.read_bytes",
@@ -3740,12 +3762,19 @@ ROWS_33: List[Model.Builtin] = [
       Model.Named(name: "command", type: Types.Type.String),
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
     implementation: "Process.spawn",
     effects: ["subprocess"],
-    description: "Start an executable with literal arguments; --deny-run makes it an error.",
+    description: (
+      "Start an executable with literal arguments and extra environment entries; --deny-run makes it an error."
+    ),
     alternatives: [],
   ),
 ]
@@ -3758,12 +3787,19 @@ ROWS_34: List[Model.Builtin] = [
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
     implementation: "Process.spawn_captured",
     effects: ["subprocess"],
-    description: "Start an executable in dir with stdout and stderr kept in 1 MiB buffers; VM only.",
+    description: (
+      "Start an executable in dir with extra environment entries and stdout and stderr kept in 1 MiB buffers; VM only."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -3773,6 +3809,11 @@ ROWS_34: List[Model.Builtin] = [
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,

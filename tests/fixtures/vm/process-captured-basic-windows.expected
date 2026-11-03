@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 45,
+  "steps": 47,
   "stdout": [
     "error(\"process: executable is unavailable\")",
     "ok(0)",

@@ -254,7 +254,8 @@ is a rule:
   Help: give `b` a default, or move the parameters with a default to the end;
   only a last `Fn` parameter may stay without one, so a block can fill it
 - a default that is not a constant, such as `b: Int = make()`, `b: Int = a`, `b:
-  Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`)
+  Int = 1 + 2`, `b: List[Int] = [1]`, or the name of a constant whose value is
+  not a constant form, `b: Int = SUM` with `SUM = 1 + 2` (`CHECK-DEFAULT-VALUE`)
   Help: a default is a literal, `true`, `false`, `nil`, `none`, `[]`, `{}`, an
   enum variant without a payload or, for a parameter, a struct with no
   arguments; make the parameter required and pass the value at the call
