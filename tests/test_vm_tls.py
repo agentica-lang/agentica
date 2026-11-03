@@ -826,7 +826,7 @@ def test_https_waiters_on_a_clients_system_context_build_and_one_leaves(tmp_path
     try:
         lines = [vm.next_line() for _ in range(2)]
     except AssertionError as error:
-        raise AssertionError("%s\n%s" % (error, trace.read_text())) from None
+        raise AssertionError("%s\n%s\n%s" % (error, trace.read_text(), vm.stderr_text())) from None
     assert (lines, written) == (["ok", "ok"], True), trace.read_text()
     assert vm.wait() == 0, vm.stderr_text()
     text = trace.read_text()

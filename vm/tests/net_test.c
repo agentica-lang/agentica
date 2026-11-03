@@ -389,8 +389,9 @@ static void test_upgrade_context_names_its_context_argument(void) {
    starts the handshake on the socket it was given: the peer reads a TLS record (0x16, the ClientHello) and closes, the
    call fails, and the client keeps the context until HttpWire.drop_tls gives it back. The call's deadline covers the
    build, which reads the keychain on macOS and can take seconds on a slow runner, so nothing here is timed: the
-   deadline is far off, the loop runs until the ClientHello comes, and the peer's close ends the call. A build that
-   fails or passes the deadline wakes the task with nothing sent, so the loop checks the task is still parked. */
+   deadline is far off, the loop runs until the ClientHello comes, and the peer's close ends the call. A failed build
+   wakes the task with nothing sent and the socket open, so the loop checks the task is still parked; a passed
+   deadline closes the socket and fails at the recv below. */
 static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
   int fd = open_pair();
   agc_value client = new_client(false);
