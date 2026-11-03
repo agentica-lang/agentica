@@ -1,0 +1,57 @@
+# Comments inside pipe chains stay on their stage: before a `|>`, after a stage, after the first operand, and before
+# the first operand.
+
+def stages(users: List[User], conn: Conn) -> Void
+  # between stages
+  between = (users
+    # keep the active ones
+    |> active()
+    # then count them
+    |> count())
+  trailing = (users
+    |> active() # after the first stage
+    |> count() # after the last stage
+  )
+  start = (users # after the first operand
+    |> active()
+    |> count())
+  leading = (
+    # before the first operand
+    users
+    |> active()
+    |> count())
+  # a chain with a try stage and a stage with arguments
+  loaded = try (Orm.from(users)
+    # filter
+    |> Orm.where_eq("admin", true) # admins only
+    # run it
+    |> Orm.all(conn))
+  single = (users
+    # only stage
+    |> count())
+  puts(users
+    # inside an argument
+    |> active()
+    |> count())
+  return (users
+    # in a return
+    |> active()
+    |> count())
+end
+
+def nested(xs: List[Int]) -> Void
+  ys = xs.map do |x|
+    (x
+      # inside a block
+      |> twice()
+      |> twice())
+  end
+  zs = (xs
+    |> take(
+      # an argument that is a chain
+      xs
+        |> size()
+        # second stage of the inner chain
+        |> half()))
+  puts(ys, zs)
+end
