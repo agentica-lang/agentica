@@ -6,7 +6,7 @@ description: The Archive module, which extracts named files from TAR and ZIP arc
 
 `Archive` copies an explicit allowlist of regular files out of a TAR or ZIP archive into a new private directory. The only operations are the two extractors: there is no extract-all, no glob, no listing and no ZIP writer.
 
-```text
+```signature
 Archive.extract_tar(src: String, members: List[String], dest_dir: String, options: Archive.Options = Archive.Options()) -> Result[List[Int]]
 Archive.extract_zip(src: String, members: List[String], dest_dir: String, options: Archive.Options = Archive.Options()) -> Result[List[Int]]
 ```

@@ -141,7 +141,7 @@ Feature: Memory
 
 ## BDD.step and BDD.run
 
-```text
+```signature
 BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
 BDD.run(steps: List[BDD.Step]) -> Void
 ```
@@ -165,7 +165,7 @@ end
 
 ## BDD.assert
 
-```text
+```signature
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 ```
 
@@ -173,7 +173,7 @@ Fails the scenario with the message when the condition is `false`.
 
 ## BDD.skip
 
-```text
+```signature
 BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
 ```
 
@@ -199,7 +199,7 @@ The report shows `SKIP`, the summary counts `skipped`, and `--json` gives `"stat
 
 ## BDD.set and BDD.get
 
-```text
+```signature
 BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
 BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 ```
@@ -208,7 +208,7 @@ Keep JSON values between the steps of one scenario (each starts empty). `BDD.get
 
 ## BDD.keep and BDD.call
 
-```text
+```signature
 BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
 BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
 ```
@@ -243,7 +243,7 @@ end
 
 ## BDD.after
 
-```text
+```signature
 BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
 ```
 
@@ -276,7 +276,7 @@ end
 
 ## BDD.doc_string and BDD.table
 
-```text
+```signature
 BDD.doc_string(ctx: BDD.Context) -> String
 BDD.table(ctx: BDD.Context) -> List[List[String]]
 ```
@@ -305,7 +305,7 @@ end
 
 ## Driving the program
 
-```text
+```signature
 BDD.given_env(ctx: BDD.Context, name: String, value: String) -> BDD.Context
 BDD.given_argument(ctx: BDD.Context, value: String) -> BDD.Context
 BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context

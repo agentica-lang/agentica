@@ -10,7 +10,7 @@ A callback is a block, `&name` or a function variable. It runs once per element,
 
 ## Build and read
 
-```text
+```signature
 List.size(list: List[T]) -> Int
 List.empty?(list: List[A]) -> Bool
 List.at(list: List[T], index: Int) -> T
@@ -61,7 +61,7 @@ false
 
 ## take and drop
 
-```text
+```signature
 List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 ```
@@ -85,7 +85,7 @@ end
 
 ## sort
 
-```text
+```signature
 List.sort(list: List[T]) -> List[T]
 ```
 
@@ -105,7 +105,7 @@ end
 
 ## sort_by
 
-```text
+```signature
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
@@ -124,7 +124,7 @@ end
 
 ## map, select and reduce
 
-```text
+```signature
 List.map(list: List[A], f: Fn[A, B]) -> List[B]
 List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
@@ -148,7 +148,7 @@ end
 
 ## each and each_with_index
 
-```text
+```signature
 List.each(list: List[A], f: Fn[A, Void]) -> Void
 List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
 ```
@@ -170,7 +170,7 @@ end
 
 ## any? and all?
 
-```text
+```signature
 List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
 List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
 ```
@@ -192,7 +192,7 @@ false
 
 ## find
 
-```text
+```signature
 List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]
 ```
 
@@ -213,7 +213,7 @@ error("not found")
 
 ## flat_map
 
-```text
+```signature
 List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
 ```
 
@@ -231,7 +231,7 @@ end
 
 ## partition
 
-```text
+```signature
 List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
 ```
 
@@ -252,7 +252,7 @@ end
 
 ## take_while and drop_while
 
-```text
+```signature
 List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 ```
@@ -274,7 +274,7 @@ end
 
 ## each_slice
 
-```text
+```signature
 List.each_slice(list: List[A], size: Int) -> List[List[A]]
 ```
 
@@ -296,7 +296,7 @@ end
 
 ## group_by
 
-```text
+```signature
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
@@ -315,7 +315,7 @@ end
 
 ## tally and uniq
 
-```text
+```signature
 List.tally(list: List[K]) -> Map[K, Int]
 List.uniq(list: List[K]) -> List[K]
 ```
@@ -337,7 +337,7 @@ end
 
 ## sum
 
-```text
+```signature
 List.sum(list: List[N]) -> N
 ```
 
@@ -357,7 +357,7 @@ end
 
 ## min and max
 
-```text
+```signature
 List.min(list: List[T]) -> Optional[T]
 List.max(list: List[T]) -> Optional[T]
 ```
@@ -385,7 +385,7 @@ none
 
 ## min_by and max_by
 
-```text
+```signature
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
 ```

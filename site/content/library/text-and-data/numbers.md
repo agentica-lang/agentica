@@ -21,7 +21,7 @@ To read numbers from text, see [to_int and to_float](/library/text-and-data/stri
 
 ## Float.from_int
 
-```text
+```signature
 Float.from_int(n: Int) -> Float
 ```
 
@@ -40,7 +40,7 @@ end
 
 ## Float.to_int
 
-```text
+```signature
 Float.to_int(x: Float) -> Result[Int]
 ```
 
@@ -62,7 +62,7 @@ false
 
 ## Float.to_int!
 
-```text
+```signature
 Float.to_int!(x: Float) -> Int
 ```
 
@@ -82,7 +82,7 @@ end
 
 ## abs, pow and gcd
 
-```text
+```signature
 Int.abs(n: Int) -> Int
 Float.abs(x: Float) -> Float
 Int.pow(n: Int, exponent: Int) -> Int
@@ -121,7 +121,7 @@ end
 
 ## clamp
 
-```text
+```signature
 Int.clamp(n: Int, min: Int, max: Int) -> Int
 Float.clamp(x: Float, min: Float, max: Float) -> Float
 ```
@@ -151,7 +151,7 @@ end
 
 ## floor, ceil and round
 
-```text
+```signature
 Float.floor(x: Float) -> Int
 Float.ceil(x: Float) -> Int
 Float.round(x: Float) -> Int
@@ -181,7 +181,7 @@ end
 
 ## Math.sqrt
 
-```text
+```signature
 Math.sqrt(x: Float) -> Float
 ```
 
@@ -209,7 +209,7 @@ end
 
 ## Int.bit_and, Int.bit_or and Int.bit_xor
 
-```text
+```signature
 Int.bit_and(a: Int, b: Int) -> Int
 Int.bit_or(a: Int, b: Int) -> Int
 Int.bit_xor(a: Int, b: Int) -> Int
@@ -239,7 +239,7 @@ true
 
 ## Int.shift_left, Int.shift_right and Int.shift_right_unsigned
 
-```text
+```signature
 Int.shift_left(a: Int, count: Int) -> Int
 Int.shift_right(a: Int, count: Int) -> Int
 Int.shift_right_unsigned(a: Int, count: Int) -> Int
@@ -284,7 +284,7 @@ end
 
 ## Float.to_bits and Float.from_bits
 
-```text
+```signature
 Float.to_bits(x: Float) -> Int
 Float.from_bits(bits: Int) -> Float
 ```
@@ -317,7 +317,7 @@ true
 
 ## Float.to_bits32 and Float.from_bits32
 
-```text
+```signature
 Float.to_bits32(x: Float) -> Int
 Float.from_bits32(bits: Int) -> Float
 ```

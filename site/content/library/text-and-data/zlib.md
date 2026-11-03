@@ -10,7 +10,7 @@ There is no auto-detect, no dictionary and no metadata option. Decoders are stri
 
 ## Bytes
 
-```text
+```signature
 Zlib.deflate(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.inflate(data: Bytes, max_bytes: Int = 1048576) -> Result[Bytes]
 Zlib.gzip(data: Bytes, level: Int = 6, max_bytes: Int = 1048576) -> Result[Bytes]
@@ -56,7 +56,7 @@ ok()
 
 ## Streams
 
-```text
+```signature
 File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
 lazy.deflate(level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
 lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]

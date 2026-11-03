@@ -15,7 +15,7 @@ Network functions return a `Result` and take timeouts in milliseconds.
 
 ### TCP.listen and TCP.local_port
 
-```text
+```signature
 TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.local_port(listener: Listener) -> Int
 ```
@@ -36,7 +36,7 @@ true
 
 ### TCP.connect and TCP.accept
 
-```text
+```signature
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 ```
@@ -45,7 +45,7 @@ TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 
 ### TCP.remote_address
 
-```text
+```signature
 TCP.remote_address(socket: Socket) -> String
 ```
 
@@ -71,7 +71,7 @@ end
 
 ### TCP.send and TCP.read_line
 
-```text
+```signature
 TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 ```
@@ -112,7 +112,7 @@ ok()
 
 ### TCP.send_bytes and TCP.recv_bytes
 
-```text
+```signature
 TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
 ```
@@ -121,7 +121,7 @@ Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at 
 
 ### TCP.close and TCP.close_listener
 
-```text
+```signature
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 ```
@@ -130,7 +130,7 @@ Closing twice is fine. Close early only when it must not wait for the task to en
 
 ## TLS
 
-```text
+```signature
 TLS.alpn(socket: Socket) -> String
 TLS.client_context(options: TlsClientOptions) -> Result[TlsContext]
 TLS.server_context(options: TlsServerOptions) -> Result[TlsContext]
@@ -255,7 +255,7 @@ HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http
 
 ### HTTP.client
 
-```text
+```signature
 HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 HTTP.proxy_from_env(url: String) -> String
@@ -300,7 +300,7 @@ end
 
 ### HTTP.get, HTTP.post and HTTP.request
 
-```text
+```signature
 HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
 HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
 HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
@@ -345,7 +345,7 @@ end
 
 ### HTTP.text
 
-```text
+```signature
 HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
 ```
 
@@ -374,7 +374,7 @@ false
 
 ### HTTP.header_values
 
-```text
+```signature
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 ```
 
@@ -395,7 +395,7 @@ end
 
 ### HTTP.download
 
-```text
+```signature
 HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
 ```
 
@@ -420,7 +420,7 @@ end
 
 ### HTTP.start, HTTP.send_request, HTTP.read_body and HTTP.finish
 
-```text
+```signature
 HTTP.start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
 HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
 HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
@@ -463,7 +463,7 @@ end
 
 ### HTTP.open and HTTP.upload
 
-```text
+```signature
 HTTP.open(method: String, url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Stream]
 HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
 ```
@@ -512,7 +512,7 @@ The server is in `std/http` too. `serve` serves every kind of route on one port:
 
 ### HTTP.serve
 
-```text
+```signature
 HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
 HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
@@ -719,7 +719,7 @@ Before closing, the server drops up to 256 KiB of the peer's remaining input, so
 
 ### Request bodies
 
-```text
+```signature
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 HTTP.body_refusal(message: String) -> HTTP.Answer
 ```
@@ -777,7 +777,7 @@ end
 
 ### Streamed responses and Server-Sent Events
 
-```text
+```signature
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 
 HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
@@ -875,7 +875,7 @@ data: tick 3
 
 ### WebSockets
 
-```text
+```signature
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 ```
 
@@ -963,7 +963,7 @@ Up to 0.21.0, each kind of route had its own server form. Each old form and its 
 
 ### HTTP.wait and HTTP.close_server
 
-```text
+```signature
 HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 ```

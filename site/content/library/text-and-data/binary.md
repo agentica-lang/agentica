@@ -31,7 +31,7 @@ ok(1.5)
 
 ## Readers
 
-```text
+```signature
 Binary.read_<T>(data: Bytes, offset: Int) -> Result[Int]
 Binary.read_<F>(data: Bytes, offset: Int) -> Result[Float]
 ```
@@ -65,7 +65,7 @@ ok(-257)
 
 ## Writers
 
-```text
+```signature
 Binary.write_<T>(value: Int) -> Result[Bytes]
 Binary.write_<I64>(value: Int) -> Bytes
 Binary.write_<F>(x: Float) -> Bytes
@@ -169,7 +169,7 @@ end
 
 ## Framing
 
-```text
+```signature
 Binary.frame(payload: Bytes) -> Result[Bytes]
 Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 ```

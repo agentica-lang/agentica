@@ -49,7 +49,7 @@ true
 
 ## bytes
 
-```text
+```signature
 String.bytes(s: String) -> Bytes
 ```
 
@@ -57,7 +57,7 @@ The UTF-8 bytes of the text. `Bytes` has no `chars`: `s.bytes.to_a` is the list 
 
 ## decode
 
-```text
+```signature
 Bytes.decode(bytes: Bytes, encoding: String) -> Result[String]
 ```
 
@@ -84,7 +84,7 @@ false
 
 ## from_list
 
-```text
+```signature
 Bytes.from_list(list: List[Int]) -> Result[Bytes]
 ```
 
@@ -104,7 +104,7 @@ item 1 is 256, not a byte (0 to 255)
 
 ## to_a
 
-```text
+```signature
 Bytes.to_a(bytes: Bytes) -> List[Int]
 ```
 
@@ -126,7 +126,7 @@ end
 
 ## length and empty?
 
-```text
+```signature
 Bytes.length(bytes: Bytes) -> Int
 Bytes.empty?(bytes: Bytes) -> Bool
 ```
@@ -135,7 +135,7 @@ The number of bytes, and whether there are none. `size` is the same as `length`.
 
 ## at
 
-```text
+```signature
 Bytes.at(bytes: Bytes, index: Int) -> Int
 ```
 
@@ -156,7 +156,7 @@ end
 
 ## slice, take and drop
 
-```text
+```signature
 Bytes.slice(bytes: Bytes, start: Int, length: Int) -> Bytes
 Bytes.take(bytes: Bytes, n: Int) -> Bytes
 Bytes.drop(bytes: Bytes, n: Int) -> Bytes
@@ -204,7 +204,7 @@ end
 
 ## each and for
 
-```text
+```signature
 Bytes.each(bytes: Bytes, f: Fn[Int, Void]) -> Void
 ```
 
