@@ -22,58 +22,14 @@
 static const char bad_timeout[] = "network: timeout must be positive milliseconds";
 static const char timed_out[] = "network: operation timed out";
 
-static size_t byte_escape(const uint8_t *data, size_t len, size_t at, char out[5]) {
-  static const char named[] = "abtnvfr";
-  uint8_t b = data[at];
-  if (b == '"' || b == '\\') {
-    out[0] = '\\';
-    out[1] = (char)b;
-    return 2;
-  }
-  if (b >= 32 && b < 127) {
-    out[0] = (char)b;
-    return 1;
-  }
-  out[0] = '\\';
-  if (b >= 7 && b <= 13) {
-    out[1] = named[b - 7];
-    return 2;
-  }
-  if (b == 27) {
-    out[1] = 'e';
-    return 2;
-  }
-  bool pad = at + 1 < len && data[at + 1] >= '0' && data[at + 1] <= '7';
-  int n = snprintf(out + 1, 4, pad ? "%03o" : "%o", (unsigned)b);
-  return 1 + (size_t)n;
-}
-
+/* The error of a text read whose bytes are not UTF-8: it names the offset (from 0) of the first byte that does not
+   start a valid character. */
 agc_value agc_utf8_error(const uint8_t *data, size_t len) {
-  static const char prefix[] = "bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\n  byte string: ";
-  char form[261];
-  char message[512];
-  size_t form_len = 0;
-  size_t message_len = sizeof prefix - 1;
-  memcpy(form + form_len, "#\"", 2);
-  form_len += 2;
-  for (size_t at = 0; at < len && form_len <= 256; at++) {
-    char piece[5];
-    size_t piece_len = byte_escape(data, len, at, piece);
-    memcpy(form + form_len, piece, piece_len);
-    form_len += piece_len;
-  }
-  form[form_len++] = '"';
-  memcpy(message, prefix, message_len);
-  if (form_len > 256) {
-    memcpy(message + message_len, form, 253);
-    memcpy(message + message_len + 253, "...", 3);
-    message_len += 256;
-  } else {
-    memcpy(message + message_len, form, form_len);
-    message_len += form_len;
-  }
-  agc_string *decoded = agc_utf8_decode((const uint8_t *)message, message_len, "\xEF\xBF\xBD", false);
-  return agc_result_value(false, agc_string_value(decoded));
+  size_t at = 0;
+  for (size_t n; at < len && (n = agc_utf8_valid(data + at, len - at)) != 0;) at += n;
+  char message[64];
+  int n = snprintf(message, sizeof message, "invalid UTF-8 at byte offset %zu", at);
+  return agc_result_value(false, agc_string_value(agc_make_string(message, (size_t)n, (size_t)n)));
 }
 
 #if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
@@ -89,7 +45,7 @@ agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
 agc_value agc_stream_timed_out(void) { return agc_error_value(timed_out); }
 
 agc_value agc_stream_written(agc_vm *vm, int status) {
-  static const char write_failed[] = "error writing to stream port";
+  static const char write_failed[] = "could not write to the stream";
   return status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(status)) : agc_result_value(true, agc_void());
 }
 
@@ -219,7 +175,7 @@ static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len,
 static agc_value line_value(agc_vm *vm, agc_cut_status status, int error, const uint8_t *data, size_t len,
                             const char *too_long, const char *at_end) {
   if (status == AGC_CUT_OVER) return agc_error_value(too_long);
-  if (status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", error);
+  if (status == AGC_CUT_FAILED) return agc_system_error(vm, "could not read from the stream", error);
   if (status == AGC_CUT_END) return agc_error_value(at_end);
   size_t chars;
   if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
@@ -254,7 +210,7 @@ const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, size_t limit, size_t 
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
-  if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
+  if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "could not read from the stream", b->error);
   agc_value result = agc_result_value(true, read_value(pending_at(b), n));
   agc_inbuf_take(b, n);
   return result;
@@ -294,7 +250,7 @@ agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const c
 }
 
 agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut) {
-  if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", cut->error);
+  if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "could not read from the stream", cut->error);
   return agc_result_value(true, read_value(cut->data, cut->len));
 }
 

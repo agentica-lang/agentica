@@ -73,7 +73,7 @@ program #7 0:1:1-103:6:1
     declaration: const-decl #66 2917:59:1-2976:60:1 name="@2::BEFORE_TLS"
       value: literal #65 2930:59:14-2975:59:59 value=string:"network: data came before the TLS handshake"
     declaration: const-decl #68 2976:60:1-3023:61:1 name="@2::READ_FAILED"
-      value: literal #67 2990:60:15-3022:60:47 value=string:"error reading from stream port"
+      value: literal #67 2990:60:15-3022:60:47 value=string:"could not read from the stream"
     declaration: const-decl #70 3082:62:1-3117:63:1 name="@2::FAILED"
       value: literal #69 3091:62:10-3116:62:35 value=string:"http: connection failed"
     declaration: const-decl #73 3174:64:1-3194:65:1 name="@2::NO_BYTES"

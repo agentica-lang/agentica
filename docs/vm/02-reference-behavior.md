@@ -336,7 +336,7 @@ Every failure is an error value. The checks run in this order:
   `LOCK_NB` never blocks, so there is no `EINTR` loop. There is no unlock call
   and no waiting lock.
 - `Dir.mkdir_private` is one `mkdir` with mode 0700 (less where the umask clears
-  bits). It makes no parents; an existing path is an error (`make-directory:
+  bits). It makes no parents; an existing path is an error (`filesystem:
   cannot make directory`).
 - `Path.remove(path, timeout_ms)` never follows a link and runs in a pool job.
   It calls `unlink` first: a file or symbolic link goes, and `ENOENT` is `ok()`.
@@ -388,7 +388,7 @@ Every failure is an error value. The checks run in this order:
 - `Path.real` is `uv_fs_realpath` in a pool job with no deadline. The path must
   exist; a link loop, too many links or a non-directory in the middle fail
   (`filesystem: cannot resolve path`). An empty or NUL path gives the
-  `File.stat` contract error. A relative path starts at the working directory,
+  `filesystem: invalid path` error. A relative path starts at the working directory,
   and the result decodes per byte, as `Dir.list` names do. macOS fails an
   absolute form of 1024 bytes or more. On Windows `.` and `..` are dropped
   before a link is followed, a name under a file gives ENOENT, `/` takes the

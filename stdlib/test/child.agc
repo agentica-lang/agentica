@@ -81,7 +81,7 @@ export def gone?(message: String) -> Bool
   return (
     message == "process: end of input" or
     message == "process: channel is closed" or
-    message.starts_with?("error writing to stream port")
+    message.starts_with?("could not write to the stream")
   )
 end
 

@@ -264,7 +264,7 @@ end
 """
     lines = run_program(root, work, text, "make-directory-error", root)
     assert lines == [
-        'error("make-directory: cannot make directory\\n  path: %s/missing/x\\n  system error: '
+        'error("filesystem: cannot make directory\\n  path: %s/missing/x\\n  system error: '
         'No such file or directory; errno=2")' % root.as_posix()]
     assert not (root / "missing").exists()
 

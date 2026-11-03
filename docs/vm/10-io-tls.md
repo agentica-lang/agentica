@@ -141,14 +141,14 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
   write. A failed write is sticky.
 - **Accept.** A waiting `TCP.accept` on a TLS listener runs the server handshake
   under its own timeout, and returns the socket only when the handshake is done.
-  A failed handshake returns `port->ssl-ports: accept failed (...)`, and the
+  A failed handshake returns `network: TLS accept failed (...)`, and the
   listener stays open. A write error or a failed read during the handshake fails
   it at once with that system error, never as a timeout, and it is reported
   once.
 - **EOF (security rule).** A peer that closes without `close_notify` gives a
   plain end of input (`SSL_OP_IGNORE_UNEXPECTED_EOF`). Framing above TLS (lines,
-  HTTP lengths) must catch truncation. A TLS error after the handshake is `error
-  reading from stream port` with `EPROTO`.
+  HTTP lengths) must catch truncation. A TLS error after the handshake is
+  `could not read from the stream` with `EPROTO`.
 - **Close.** `TCP.close` and a timeout send `close_notify` with one
   `uv_try_write` when the handshake finished and no write is pending, then close
   as TCP does. At the end of the run the same single write goes to each finished
@@ -212,8 +212,8 @@ texts.
   CRLF, returns a final line without a terminator at EOF (a lone CR stays), and
   returns `network: end of input` on an empty EOF. A line over 1 MiB returns
   `network: line exceeds 1048576 bytes` and closes the socket. Invalid UTF-8
-  returns the `bytes->string/utf-8` error, and the line is consumed. A read
-  error (`ECONNRESET`) returns `error reading from stream port`, and later reads
+  returns `invalid UTF-8 at byte offset N`, and the line is consumed. A read
+  error (`ECONNRESET`) returns `could not read from the stream`, and later reads
   return it too. Bytes that arrived before the error are still returned.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
   the grammar says. `send_bytes` checks the 1 MiB limit first. `send_bytes`,
@@ -221,8 +221,8 @@ texts.
   catalog key `<name>.bytes`.
   The bytes go out with `uv_try_write`, the rest with one `uv_write`, and the
   task parks until the callback. `ok()` means every byte reached the kernel's
-  send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `error writing to
-  stream port` and leaves the socket open.
+  send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `could not write
+  to the stream` and leaves the socket open.
 - **Timeouts.** A timed-out read or write closes the socket. Waiting for the
   lock alone does not. A timed-out connect closes the half-open socket. After
   that, the next call returns `network: socket is closed` at once.
@@ -236,8 +236,7 @@ texts.
   parked. A peer sees FIN, or RST when data was left unread. A DNS lookup still
   running in the pool is not waited for.
 - **Messages.** The VM's own texts start with `network:`; connect and listen
-  failures start with `tcp-connect:` and `tcp-listen:`, with `hostname:` and
-  `port number:` lines and the system error. The size builtins charge by size
+  failures add `host:` and `port:` lines and the system error. The size builtins charge by size
   (10.2.1).
 - **Platforms.** The code is shared; libuv hides the socket types. What it does
   not hide:

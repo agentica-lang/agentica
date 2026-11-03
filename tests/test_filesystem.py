@@ -473,7 +473,7 @@ end
         assert output == "ok()\n", errors
         assert got == "327680"
     else:
-        assert re.search(r'^error\("error writing to stream port.*Broken pipe', output, re.S)
+        assert re.search(r'^error\("filesystem: cannot write the file.*Broken pipe', output, re.S)
 
 
 @no_fifo

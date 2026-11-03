@@ -3,7 +3,7 @@
   "code": null,
   "steps": 147,
   "stdout": [
-    "error(\"bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\\n  byte string: #\\\"\\\\377\\\"\")",
+    "error(\"invalid UTF-8 at byte offset 0\")",
     "ok(\"valid\")",
     "error(\"process: count must be 0..1048576\")",
     "error(\"process: count must be 0..1048576\")",

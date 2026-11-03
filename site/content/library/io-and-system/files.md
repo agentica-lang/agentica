@@ -344,7 +344,7 @@ Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
 ```
 
-Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). A relative path starts at the working directory, and `..` after a link follows the link's target. An empty path or one with NUL is the same contract error as `File.stat`. The VM puts no buffer limit on the path; the system's own limit applies to its absolute form. Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
+Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). A relative path starts at the working directory, and `..` after a link follows the link's target. An empty path or one with NUL is the same `filesystem: invalid path` error as `File.stat`. The VM puts no buffer limit on the path; the system's own limit applies to its absolute form. Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
 
 The system's own rules show through:
 

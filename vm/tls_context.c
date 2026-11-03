@@ -54,12 +54,12 @@ static void work(void *data) {
 
 static agc_value build_error(agc_vm *vm, const build *b) {
   const agc_tls_failure *f = &b->failure;
-  if (f->code == AGC_TLS_ERR_BAD_CA) return agc_tls_load_error(vm, "ssl-load-verify-source!", b->ca, f);
-  if (f->code == AGC_TLS_ERR_BAD_CERT) return agc_tls_load_error(vm, "ssl-load-certificate-chain!", b->cert, f);
+  if (f->code == AGC_TLS_ERR_BAD_CA) return agc_tls_load_error(vm, "ca_file", b->ca, f);
+  if (f->code == AGC_TLS_ERR_BAD_CERT) return agc_tls_load_error(vm, "cert_file", b->cert, f);
   if (f->code == AGC_TLS_ERR_BAD_KEY || f->code == AGC_TLS_ERR_KEY_MISMATCH)
-    return agc_tls_load_error(vm, "ssl-load-private-key!", b->key, f);
-  return agc_tls_failure_error(vm, b->server ? "ssl-make-server-context: setup failed"
-                                             : "ssl-make-client-context: setup failed", f);
+    return agc_tls_load_error(vm, "key_file", b->key, f);
+  return agc_tls_failure_error(vm, b->server ? "network: TLS server setup failed"
+                                             : "network: TLS client setup failed", f);
 }
 
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
