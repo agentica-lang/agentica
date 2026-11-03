@@ -60,7 +60,8 @@ error(message: String) -> Result[T]
   success. `r.ok?` and `r.message` need a known Result type; `message` is `""`
   for a success.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
-  structs; they have no equality, fields or indexing.
+  structs; they have no fields or indexing. `r == ok(1)` and `r == error("x")`
+  compare the tag and the payload or message.
 - Non-bang conversions (`s.to_i`) share the bang forms' syntax and 64-bit
   bounds but return an error on bad text; other runtime errors are not
   converted. `"x".to_i` is a Result, not `0`.

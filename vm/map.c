@@ -430,6 +430,22 @@ bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
   return true;
 }
 
+/* Each live key of a, newest first, with its value in a and in b, until each returns false. False when a key of a is
+   not in b or each stopped; the caller compares the sizes. The cached hash of the cell finds the key in both tables
+   without hashing it again (no charge for a String key), and a missing key ends the walk at once. */
+bool agc_map_each_pair(agc_vm *vm, const agc_map *a, const agc_map *b, agc_pair_fn each, void *ctx) {
+  seq_set dead = {NULL, NULL, 0, 0, 0, 0};
+  if (a->dead > 0) dead_begin(vm, a, &dead);
+  for (const agc_keys *cell = a->reversed; cell; cell = cell->next) {
+    if (a->dead > 0 && seq_in(&dead, cell->seq)) continue;
+    agc_value left, right;
+    if (!agc_map_get_hash(vm, a, cell->hash, cell->key, &left) ||
+        !agc_map_get_hash(vm, b, cell->hash, cell->key, &right) || !each(ctx, left, right))
+      return false;
+  }
+  return true;
+}
+
 /* Removes key from under node: the new node, node itself when the key is not
    there (*removed stays false), or NULL when nothing is left. A child left
    with one leaf and no children is pulled up into its parent as a leaf, so

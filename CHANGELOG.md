@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser` reads the command line into typed values (`Arg`, `Opt`,
   `Kind`, `OP.parse`, typed getters, `--help`, `OP.run!`), in the style of
   `argparse` with Ruby names.
+- `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
+  (`user == other`, `xs == []`); a type that holds a function, a task, a
+  channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
 - Number helpers with Ruby names: `n.abs`, `x.abs`, `n.pow(e)`, `a.gcd(b)`,
   `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
 - `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give

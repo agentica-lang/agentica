@@ -60,4 +60,5 @@ s.encode(encoding) -> Result[Bytes]
   (`get_array_of_*`, `put_array_of_*`) use `List[Int]` or `List[Float]`: they
   hold 32- and 64-bit numbers, not bytes.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
-  `Set[Bytes]` or a `Map[Bytes, _]`. `List[Bytes]` has no `==`.
+  `Set[Bytes]` or a `Map[Bytes, _]`. `==` compares a `List[Bytes]` item by
+  item.

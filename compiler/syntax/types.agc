@@ -145,7 +145,7 @@ export def args(type: Type) -> List[Type]
   end
 end
 
-## Structural equality, since an enum cannot be compared with ==.
+## Structural equality: compiler/ does not use == on enums until stage0 lowers it.
 export def same?(a: Type, b: Type) -> Bool
   if tag(a) != tag(b)
     return false

@@ -54,13 +54,24 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   takes integers only, with `a = (a / b) * b + (a % b)`. Division by zero is
   `RUNTIME-DIVISION-BY-ZERO`, for `Float` too. An integer result outside `Int`
   is an error.
-- Ordering operators take two numbers of one type. `==` and `!=` take one
-  primitive type, two `Range` values (equal when start, end and kind match), two
-  `Bytes` (equal when they have the same length and bytes), or two `Optional`
-  values of one of those (equal when both are `none`, or both are `some` with
-  equal items). An `Optional` on the left gives its type to the right side, so
-  `x == none` checks. There is no list or struct equality. `..` and `...` take
-  two `Int` values.
+- Ordering operators take two numbers of one type. `==` and `!=` take two
+  values of one type that has equality: a primitive type, `Range` (equal when
+  start, end and kind match), `Bytes` (the same length and bytes), and `List`,
+  `Map`, `Set`, `Optional`, `Result`, structs and enums whose parts have
+  equality. Lists are equal when they have the same length and equal items in
+  order; maps when they have the same keys with equal values, and sets the same
+  elements, in any order; Optionals, Results and enums when they have the same
+  variant and equal payloads (`error` compares the message, and `ok() == ok()`
+  for `Result[Void]`); structs when they have the same type and equal fields.
+  A struct or enum that holds itself (`children: List[Node]`) has equality when
+  no type of its group lacks it. Functions, tasks, channels, handles and
+  `Json` have no equality, nor does any type that holds one, nor a type
+  variable of a generic function: `CHECK-TYPE-MISMATCH`, whose message names
+  the field or variant without equality. A `Float` follows IEEE 754 at any
+  depth, so a list or struct that holds a NaN is not equal to itself. A list,
+  map, set, `Optional`, `Result`, struct or enum on the left gives its type to
+  the right side, so `x == none` and `xs == []` check. `..` and `...` take two
+  `Int` values.
 - `and`, `or` and `not` take only `Bool`. `&&`, `||` and `!` are the same
   operators. A `!` directly after a name belongs to it (`read!`); `!=` is
   inequality.
@@ -714,7 +725,7 @@ more = Map.put(stock, "kiwi", 7)
 - A repeated key in a literal keeps the last value at the first position.
   `Map.put` on an existing key keeps its position.
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new
-  map. There is no map equality and no `for` over a map; iterate `Map.keys`,
+  map. There is no `for` over a map; iterate `Map.keys`,
   which is in insertion order.
 - Lookup, `Map.key?` and `Map.put` take effectively constant time;
   `Map.keys` is O(n).
@@ -743,9 +754,9 @@ puts(seen)
   `a`; `Set.subset?(a, b)` is true when every element of `a` is in `b`.
 - `for x in set` visits the elements in order. The set is read once before the
   loop, so assigning the variable in the body does not change the loop.
-- Sets print as `Set[1, 2]` (strings in their `inspect` form). There is no `==`
-  on sets and no index (`CHECK-NOT-INDEXABLE`); `Test.eq` compares two sets in
-  any order. A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
+- Sets print as `Set[1, 2]` (strings in their `inspect` form). `==` and
+  `Test.eq` compare two sets in any order; there is no index
+  (`CHECK-NOT-INDEXABLE`). A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
   `Map` key, but it may be a field, a list item or a map value.
 - Functions are in
   [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).
@@ -757,7 +768,7 @@ puts(seen)
 - `ok(value)`, `ok()` and `error(message)` build Results. `Result.Ok(x)`,
   `Result.Ok()` and `Result.Err(m)` are the same calls.
 - `Result[T]` is builtin, not a user enum. It can nest and hold any payload. It
-  has no equality, fields or indexing.
+  has no fields or indexing; `==` compares it when `T` has equality.
 - `ok(1)` infers `Result[Int]`. An expected `Result[T]` checks the payload
   against `T`, including empty lists and maps. `error("bad")` needs an expected
   Result type from an annotation, a binding, a parameter, a field, a return or a

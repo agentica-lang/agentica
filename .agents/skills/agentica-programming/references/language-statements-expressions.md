@@ -130,10 +130,13 @@ Operators, from highest to lowest precedence:
   divisor is a runtime error, Float too (`RUNTIME-DIVISION-BY-ZERO`).
 - `< <= > >=` take two numbers of one type (Strings: `a.compare(b) < 0`).
   Comparisons do not chain: `a < b and b < c` (`PARSE-CHAINED-COMPARISON`).
-- `==` and `!=` take two values of one primitive type (Int, Float, Bool, String,
-  Nil), or two ranges. Lists, maps, sets, structs, enums, Results, Json and Fn
-  values cannot be compared: use `case` or a field (two sets are equal when
-  `a.subset?(b) and b.subset?(a)`).
+- `==` and `!=` take two values of one type: primitives, ranges, Bytes, and
+  lists, maps, sets, Optionals, Results, structs and enums made of those. They
+  compare in depth: lists in order, maps and sets in any order, structs field
+  by field, enums by variant and payload (`a == b`, `xs == []`, `r == ok(1)`).
+  Fn, Task, Channel, handles, Json and anything that holds one cannot be
+  compared (`CHECK-TYPE-MISMATCH`), nor a generic `T`. A NaN anywhere makes a
+  value unequal, even to itself.
 - `&&`, `||`, `!` take Bool and short-circuit; `and`, `or`, `not` are the same.
   `!` binds tightly: `!(a >= b)`. A `!` right after a name is part of it
   (`read!`). Operands run left to right.

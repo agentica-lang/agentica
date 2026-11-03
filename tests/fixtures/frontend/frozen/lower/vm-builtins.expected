@@ -357,6 +357,7 @@ Test.test
 Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
+Value.equal
 Zlib.crc32.bytes
 Zlib.deflate.bytes
 Zlib.gunzip.bytes
