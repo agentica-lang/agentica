@@ -71,6 +71,12 @@ What the files cannot see, or how they must run:
 - Timing margins go through `scaled()` (`tests/agentica_test.py`): it multiplies
   a value in seconds or milliseconds by `AGENTICA_TEST_TIMEOUT_SCALE`, so a slow
   runner widens every margin together.
+- Never put a system-trust context build inside a timed deadline: it reads the
+  macOS keychain and can take seconds on a slow runner. Wait for the event it
+  leads to (the ClientHello in `vm/tests/net_test.c`) instead. A test that
+  holds the build on a FIFO opens the writer end without blocking
+  (`BlockingFile.write`): the VM can end with the build still in its open, and
+  a blocking open then waits for ever.
 - A golden or test that guards a fix must fail on the code before the fix. Build
   the parent commit's binary (a worktree of the parent, then `make`) and run the
   test with `AGENTICA_VM_BINARY=/absolute/path/dist/agentica`: the product CLI

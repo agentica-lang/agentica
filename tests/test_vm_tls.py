@@ -5,16 +5,18 @@ server; fixtures/tls-peer.py (Python ssl) is a TLS 1.2 server, an HTTPS server,
 a server that requires a client certificate and a client. The certificates are
 the ones in fixtures/tls. Everything is on 127.0.0.1 or localhost with port 0.
 """
+import errno
 import json
 import os
 import queue
 import re
 import threading
+import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, cli,
-                                 compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, TEST_SCHEDULERS, UNDER_WINE, WAIT_SECONDS, Child, check_lines,
+                                 cli, compile_text, output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -247,12 +249,13 @@ def main() -> Void
   # The client names no context, so its first https connection builds one with the system trust, and
   # SSL_CERT_FILE is a FIFO: the build blocks until the test writes it. The first call starts the build and waits;
   # the two after it wait behind it. The first one's deadline comes while the build still blocks: it leaves the
-  # waiters, and the build goes on for the other two. The client has one timeout, so the two others start half of it
-  # after the first: each side of the first one's deadline has half the timeout to spare.
+  # waiters, and the build goes on for the other two. The client has one timeout, so the two others start three
+  # quarters of it after the first: before the first one's deadline they only have to join the waiters, after it the
+  # test writes the FIFO and the build, the connects, the handshakes and the requests run, so that side gets the most.
   timeout = String.to_int!(System.args()[1])
   pool = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: timeout)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
-  Task.sleep(timeout / 2)
+  Task.sleep(timeout / 4 * 3)
   calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
   puts(show(Task.await(first)))
   for call in calls
@@ -777,12 +780,29 @@ class BlockingFile:
 
         threading.Thread(target=serve, daemon=True).start()
 
-    def write(self, data):
-        if os.name != "nt":
-            with open(self.path, "wb") as pipe:
-                pipe.write(data)
-            return
-        self._data.put(data)
+    def write(self, data, reader):
+        """Hands `data` to `reader` (a Child); False when it ends, or WAIT_SECONDS pass, before it opens the path.
+
+        A blocking open of a FIFO for writing waits for a reader. The reader is the VM's build, and a VM that ends
+        first (the end of a run does not wait for the build) takes it along, so the open polls (ENXIO: no reader)."""
+        if os.name == "nt":
+            self._data.put(data)
+            return True
+        deadline = time.monotonic() + WAIT_SECONDS
+        while True:
+            try:
+                fd = os.open(self.path, os.O_WRONLY | os.O_NONBLOCK)
+                break
+            except OSError as error:
+                if error.errno != errno.ENXIO:
+                    raise
+            if reader.process.poll() is not None or time.monotonic() > deadline:
+                return False
+            time.sleep(0.01)
+        os.set_blocking(fd, True)
+        with open(fd, "wb") as pipe:
+            pipe.write(data)
+        return True
 
 
 # Under Wine the peer is a Linux Python, which can make only a Linux FIFO, and Wine reads that without blocking (an
@@ -793,16 +813,17 @@ def test_https_waiters_on_a_clients_system_context_build_and_one_leaves(tmp_path
     ca_pipe = BlockingFile(tmp_path / "ca-fifo.pem")
     trace, env = trace_env(tmp_path)
     env["SSL_CERT_FILE"] = str(ca_pipe.path)
-    # The first call times out after `timeout`; the two others then have half of theirs left.
+    # The first call times out after `timeout`; the two others then have three quarters of theirs left.
     timeout = str(scaled(2000))
     bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
     vm = adopt(start_vm(bytecode, port, timeout, env=env))
     try:
         assert vm.next_line() == "network: operation timed out"
     finally:
-        # The build holds the pipe open for reading; writing it lets the build, and the VM, finish.
-        ca_pipe.write((CERTS / "ca.pem").read_bytes())
-    assert [vm.next_line() for _ in range(2)] == ["ok", "ok"]
+        # The build holds the pipe open for reading; writing it lets the build, and the VM, finish. The VM does not
+        # wait for the build at its end: when the two others time out first, it ends and the write gives up.
+        written = ca_pipe.write((CERTS / "ca.pem").read_bytes(), vm)
+    assert ([vm.next_line() for _ in range(2)], written) == (["ok", "ok"], True), trace.read_text()
     assert vm.wait() == 0, vm.stderr_text()
     text = trace.read_text()
     # One build for the waiters.
