@@ -246,6 +246,10 @@ def alias_help(alias: String, hint: Bool) -> String
     return "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
   elsif alias == "Optional"
     return "an Optional is written some(value) or none"
+  elsif alias == "Math"
+    return "Math has only Math.sqrt; write pi as 3.141592653589793 and e as 2.718281828459045"
+  elsif RESERVED.include?(alias)
+    return "#{alias} is a builtin name, so it is no import alias, and it has no such constant or type"
   elsif hint
     return (
       "\"#{alias}\" is neither an import alias nor an enum of this file; " +

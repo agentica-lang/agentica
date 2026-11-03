@@ -152,9 +152,9 @@ flamegraph.pl app.folded > app.svg
 ## Enumerable methods
 
 `find`, `each_with_index`, `flat_map`, `partition`, `take_while`, `drop_while`,
-`each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min_by`, `max_by`, `Map.each`
-and `Map.select` are written in Agentica and run in your program, so their steps
-count against `--max-steps`. Each is one O(n) pass with no list copy per
+`each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min`, `max`, `min_by`,
+`max_by`, `Map.each` and `Map.select` are written in Agentica and run in your
+program, so their steps count against `--max-steps`. Each is one O(n) pass with no list copy per
 element, at 4 to 28 steps per element of its own (not the block's); measure
 the one you use with the profiler.
 

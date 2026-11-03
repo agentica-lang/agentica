@@ -10265,6 +10265,56 @@
       "code": "CHECK-UNKNOWN-NAME",
       "start": [2, 8],
       "help": true
+    },
+    {
+      "program": [
+        "import Math from \"./m\"",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1],
+      "help": false
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.PI)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMPORT-NAME",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Math.cos(0.0))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(5.round)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [2, 8],
+      "help": true
     }
   ],
   "Lazy steps and terminals check their types, reserve the Lazy name and point eager receivers to .lazy": [

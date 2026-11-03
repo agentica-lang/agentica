@@ -93,7 +93,8 @@ static agc_value builtin_float_clamp(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 /* Ruby's Math.sqrt raises Math::DomainError below zero; here that is RUNTIME-INVALID-NUMBER at the argument, as a
-   Float division by zero halts too. -0.0 is not below zero and gives -0.0; NaN gives NaN. */
+   Float division by zero halts too. -0.0 is not below zero and gives the IEEE 754 result -0.0 (CRuby gives 0.0); NaN
+   gives NaN. */
 static agc_value builtin_math_sqrt(agc_vm *vm, agc_value *args, uint32_t span) {
   double x = agc_as_float(vm, args[0]);
   if (x < 0) agc_fail(vm, "RUNTIME-INVALID-NUMBER", "Math.sqrt of a negative number", span + 1);
@@ -303,6 +304,11 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.from_bits", 1, builtin_float_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.abs", 1, builtin_int_abs, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.pow", 2, builtin_int_pow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.gcd", 2, builtin_int_gcd, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
@@ -313,11 +319,6 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.round", 1, builtin_float_round, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Float.clamp", 3, builtin_float_clamp, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Math.sqrt", 1, builtin_math_sqrt, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
-  {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
 };
 
 const size_t agc_number_builtin_count = sizeof agc_number_builtins / sizeof agc_number_builtins[0];
