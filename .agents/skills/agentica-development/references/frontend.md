@@ -135,7 +135,11 @@ copy).
 - Default parameters: `Param.default`, rewritten by the linker with the
   declaring module's names. `check_defaults.agc` checks order and shape;
   `defaults.agc` gives the `Shape` and which parameter an argument fills. The
-  checker and `lower_argument` share these functions. Compiler code must not use
+  checker and `lower_argument` share these functions. A default may be the name
+  of a constant (`ConstRef`) whose value is a constant form: `check_defaults.agc`
+  reads it from `Cx.const_sites`, and the lowering writes the value in place
+  (`Const.in_place`, in `fills_of` and `field_fills_of`), so a call reads no
+  global. Compiler code must not use
   defaults until `bootstrap/stage0.agcb` can compile them (the two-step refresh
   in `references/ci.md`).
 - Builtin defaults: a catalog parameter may have

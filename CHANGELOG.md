@@ -16,9 +16,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `==` and `!=` compare structs, enums, lists, maps, sets and Results in depth
   (`user == other`, `xs == []`); a type that holds a function, a task, a
   channel, a handle or a `Json` stays `CHECK-TYPE-MISMATCH`.
+- `agentica test` scenarios set the environment and arguments of the program
+  under test (`the environment variable "X" is "y"`, `the program argument
+  "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
+  cleanup that runs after each scenario, also after a failure or a skip.
+- `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
+  `env` map of variables for the new program.
 - `File.open(path, mode) do |f| ... end` closes the file when the block ends,
   with `ok` or `error`, and gives the block's `Result` (or the close error
   after an `ok` block).
+- A default of a parameter or a struct field may name a module constant
+  (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
 
 ### Changed
 

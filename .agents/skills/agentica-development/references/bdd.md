@@ -170,6 +170,15 @@ or the site).
   deadline). Every failure sends one `fail` record and exits 1. A record over
   1 MiB (`process: send exceeds`) becomes a small `RUNTIME-BDD-OUTPUT-LIMIT`
   fail record.
+- Program launch and hooks: `given_env` and `given_argument` keep a `Map` and a
+  list in `Scenario` until `start`, which passes them to
+  `Process.spawn_captured` (`env`) and after the file. `after` keeps
+  `Fn[Context, Result[Void]]` hooks; `finish` sends the fail record first and
+  then `run_after` (each hook in its own task; with `closing` set a failed
+  check crashes that task). The runner reads on after a `fail`
+  (`with_hook_problems`) to add the hooks' message. Every failing `bdd.agc`
+  helper takes `ctx` so it can run the hooks; `abort` is for the failures
+  before a context exists.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first
   error; `parse` returns `Outcome.Done(Feature)` or `Failed(Diagnostic)`; a
   `Span` is file, line and columns, no offset. Table rows and `<name>`

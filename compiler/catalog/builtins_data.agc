@@ -3762,12 +3762,19 @@ ROWS_33: List[Model.Builtin] = [
       Model.Named(name: "command", type: Types.Type.String),
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
     implementation: "Process.spawn",
     effects: ["subprocess"],
-    description: "Start an executable with literal arguments; --deny-run makes it an error.",
+    description: (
+      "Start an executable with literal arguments and extra environment entries; --deny-run makes it an error."
+    ),
     alternatives: [],
   ),
 ]
@@ -3780,12 +3787,19 @@ ROWS_34: List[Model.Builtin] = [
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
     implementation: "Process.spawn_captured",
     effects: ["subprocess"],
-    description: "Start an executable in dir with stdout and stderr kept in 1 MiB buffers; VM only.",
+    description: (
+      "Start an executable in dir with extra environment entries and stdout and stderr kept in 1 MiB buffers; VM only."
+    ),
     alternatives: [],
   ),
   Model.Builtin(
@@ -3795,6 +3809,11 @@ ROWS_34: List[Model.Builtin] = [
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,

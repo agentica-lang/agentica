@@ -4,7 +4,7 @@
 encoding; inspect prints `<Process>`.
 
 ```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000) -> Result[Process]
+Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -12,9 +12,11 @@ Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
-Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
+Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
+                       env: Map[String, String] = {}) -> Result[Process]
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
-Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000) -> Result[Process]
+Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
+                      env: Map[String, String] = {}) -> Result[Process]
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
@@ -33,7 +35,10 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   in the current directory as `./name`. A relative `PATH` entry such as `.` or
   `bin` resolves against the working directory. A command with `/` is a path,
   relative to the inherited working directory unless absolute. Not found, or a
-  directory, is "executable is unavailable". Children inherit the environment.
+  directory, is "executable is unavailable". Children inherit the
+  environment; `env` adds or replaces variables for that child only (an error
+  for an empty name, `=` or NUL in a name, NUL in a value, or
+  `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS[_FILE]`, `UV_USE_IO_URING`).
   Arguments go directly, with no shell interpolation. Empty commands, NUL in an
   argument and unavailable executables fail; so does a found file that cannot
   be executed (an error Result from `spawn`).
