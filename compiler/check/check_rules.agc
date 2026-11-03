@@ -88,6 +88,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     node.span,
     State.hint_of(old_form_help(name, node)),
   )
+
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
 

@@ -314,6 +314,7 @@ def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Voi
     locked.source.git,
     "+#{wanted}:#{PINNED}",
   ]
+
   try git(place, scratch, inside(scratch, arguments))
   return ok()
 end

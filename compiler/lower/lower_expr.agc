@@ -922,6 +922,7 @@ def lower_resolved(
         parenthesized: false,
         span: span,
       )
+
       return lower_call(cx, fx, call, want, void, true, false)
   end
 end

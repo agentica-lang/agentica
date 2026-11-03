@@ -63,6 +63,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     steps: [],
     words: [],
   )
+
   seen: Set[String] = Set.new([])
   at = 0
   while at < arguments.size

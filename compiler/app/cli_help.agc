@@ -74,6 +74,7 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
       ),
       "hints": JSON.from(hints),
     })
+
     return Reply.printed("#{JSON.encode(answer)}\n")
   end
 
