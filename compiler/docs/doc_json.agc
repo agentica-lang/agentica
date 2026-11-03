@@ -31,6 +31,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
     "doc": text_json(item.doc),
     "span": span_json(module, item.range),
   }
+
   if located
     fields = fields.put("exported", JSON.from(item.exported))
     fields = fields.put("name_span", span_json(module, item.name_range))
@@ -41,6 +42,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
       "parameters",
       JSON.array(item.parameters.map do |parameter: Model.Parameter| parameter_json(parameter) end),
     )
+
     fields = fields.put("result", JSON.from(item.result))
   elsif item.kind == "struct"
     members_json = item.fields.map do |member: Model.Field| field_json(module, member, located) end
@@ -65,12 +67,14 @@ export def help_json(module: String, item: Model.Item) -> Json
     "description": text_json(item.doc),
     "summary": text_json(item.summary),
   }
+
   if item.kind == "function"
     fields = fields.put("arity", JSON.from(item.parameters.size))
     fields = fields.put(
       "parameters",
       JSON.array(item.parameters.map do |parameter: Model.Parameter| parameter_json(parameter) end),
     )
+
     fields = fields.put("result", JSON.from(item.result))
   elsif item.kind == "struct"
     members_json = item.fields.map do |member: Model.Field| field_json(module, member, false) end
@@ -112,6 +116,7 @@ def field_json(module: String, field: Model.Field, located: Bool) -> Json
     "default": text_json(field.default),
     "doc": text_json(field.doc),
   }
+
   if located
     fields = fields.put("name_span", span_json(module, field.name_range))
   end
@@ -126,6 +131,7 @@ def variant_json(module: String, variant: Model.Variant, located: Bool) -> Json
     "payload": JSON.array(payload),
     "doc": text_json(variant.doc),
   }
+
   if located
     fields = fields.put("name_span", span_json(module, variant.name_range))
   end

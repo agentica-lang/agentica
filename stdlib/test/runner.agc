@@ -246,6 +246,7 @@ def run_entry(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], en
       source_root: entry.source_root,
       deny: deny(config),
     )
+
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
   return run_file(config, tags, patterns, entry.path)
@@ -310,6 +311,7 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
   texts = records.filter do |record| Child.event_of(record) == "step" end
     .map do |record| Child.text_of(record, "pattern") end
+
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
     Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
@@ -376,6 +378,7 @@ def run_scenario(
     end
     Report.StepResult(text: item.steps[i].text, location: item.steps[i].span, status: status)
   end
+
   return Report.ScenarioResult(
     name: item.name,
     tags: item.tags,
@@ -412,6 +415,7 @@ def run_child(
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
   }
+
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
   sent = Process.channel_send(p, "#{JSON.encode(JSON.object(fields))}\n", Child.left(deadline))
   if not sent.ok?
@@ -480,6 +484,7 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
     "has_table": JSON.from(has_table),
     "table": JSON.from(table),
   }
+
   return JSON.encode(JSON.object(fields))
 end
 
@@ -623,6 +628,7 @@ def vm_args(config: Config, steps: Int, mode: String) -> List[String]
     "--source-root",
     config.steps_root,
   ].concat(deny(config))
+
   if config.steps_bytecode == ""
     return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])
   end

@@ -32,6 +32,7 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
   line = Text.diagnostic_line(
     Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help),
   )
+
   line = (
     line +
     note(" expected=", problem.expected) +
@@ -39,6 +40,7 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
     note(" callee=", problem.callee) +
     note(" signature=", problem.signature)
   )
+
   if problem.labels.size > 0
     labels = problem.labels.map do |label: Failure.Label| "#{Text.span_text(label.span)} #{Text.quote(label.text)}" end
     line = "#{line} labels=[#{labels.join(", ")}]"

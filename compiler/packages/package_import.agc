@@ -161,6 +161,7 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
         scope.lock,
         scope.native_root,
       )
+
       return scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
   end
 end
@@ -515,6 +516,7 @@ def natives_of(
         scope.lock,
         scope.native_root,
       )
+
       return ok(found)
     _ -> return ok(NativeLibrary.Found(targets: {}, watched: [], probed: []))
   end

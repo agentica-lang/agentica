@@ -148,6 +148,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
         ),
       )
     end
+
   return Listed.Ready(listed.values)
 end
 
@@ -163,6 +164,7 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
     ".",
     30000,
   )
+
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
@@ -280,6 +282,7 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
     "the test file exited with code #{code.unwrap_or(-1)}",
     where,
   )
+
   return Ending(verdict: Report.Verdict.Fail(problem), output: shown)
 end
 
@@ -315,6 +318,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     "the test file exited during the test (exit code #{code.unwrap_or(-1)})",
     span,
   )
+
   return Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
 end
 
@@ -360,6 +364,7 @@ def record_error(record: Json) -> Report.Error
     column: Child.int_of(start, "column"),
     end_column: Child.int_of(stop, "column"),
   )
+
   original = JSON.null()
   if JSON.get(record, "stack").ok?
     original = Child.diagnostic_of(record)

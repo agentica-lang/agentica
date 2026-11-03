@@ -355,6 +355,7 @@ def call_node(
       span: Base.span_from(e, start, cursor),
     ),
   )
+
   return expr_at(node, cursor, ids)
 end
 
@@ -391,6 +392,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       span: Base.span_from(e, pos, right.pos),
     ),
   )
+
   return expr_at(node, right.pos, right.ids)
 end
 
@@ -433,6 +435,7 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
               span: call.span,
             ),
           )
+
           return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
         _ -> return none
       end
@@ -520,6 +523,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
           span: Base.span_from(e, pos, right.pos),
         ),
       )
+
       cursor = right.pos
       next_id = right.ids + 1
     end
@@ -550,6 +554,7 @@ def parse_unary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         span: Base.span_from(e, pos, operand.pos),
       ),
     )
+
     return expr_at(node, operand.pos, operand.ids)
   end
 
@@ -595,6 +600,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
           span: span,
         ),
       )
+
       return expr_at(node, block.pos, block.ids)
     Ast.Expr.MethodCall(call) ->
       node = Ast.Expr.MethodCall(
@@ -607,6 +613,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
           span: span,
         ),
       )
+
       return expr_at(node, block.pos, block.ids)
     Ast.Expr.FieldAccess(access) ->
       node = Ast.Expr.MethodCall(
@@ -619,6 +626,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
           span: span,
         ),
       )
+
       return expr_at(node, block.pos, block.ids)
     _ -> return error(Base.impossible(e, cursor))
   end
@@ -654,6 +662,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
             span: Base.span_from(e, pos, close),
           ),
         )
+
         cursor = close
         next_id = args.ids + 1
       elsif e.tokens[after_name].kind == "left-paren"
@@ -687,6 +696,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
             span: Base.span_from(e, pos, after_name),
           ),
         )
+
         cursor = after_name
         next_id += 1
       end
@@ -698,6 +708,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       target = Ast.Expr.Index(
         Ast.IndexAccess(id: index.ids, target: target, index: index.node, span: Base.span_from(e, pos, close)),
       )
+
       cursor = close
       next_id = index.ids + 1
     elsif kind == "do" and e.allow_blocks and block_target?(target)
@@ -765,6 +776,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
         span: Base.span_from(e, name_pos, cursor),
       ),
     )
+
     next_id += 1
     if e.tokens[cursor].kind == "comma"
       cursor += 1
@@ -810,6 +822,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   node = Ast.Expr.BlockLit(
     Ast.BlockLit(id: body.ids, params: params, body: body.nodes, span: Base.span_from(e, pos, close)),
   )
+
   return expr_at(node, close, body.ids)
 end
 
@@ -862,6 +875,7 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
         span: Base.span_from(e, cursor, value.pos),
       ),
     )
+
     cursor = value.pos
     next_id = value.ids + 1
     if e.tokens[cursor].kind == "comma"
@@ -896,6 +910,7 @@ def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsA
         span: Base.span_from(inner, cursor, value.pos),
       ),
     )
+
     cursor = value.pos
     next_id = value.ids + 1
     if inner.tokens[cursor].kind == "comma"
@@ -1019,6 +1034,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         node = Ast.Expr.Interpolation(
           Ast.Interpolation(id: next_id, parts: parts, span: Base.span_from(e, pos, cursor)),
         )
+
         return expr_at(node, cursor, next_id)
       end
     else
@@ -1059,9 +1075,11 @@ def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
   call = Ast.Expr.Call(
     Ast.Call(id: ids + 1, name: "", args: [text], piped: false, parenthesized: true, span: token.span),
   )
+
   unwrap = Ast.Expr.MethodCall(
     Ast.MethodCall(id: ids + 2, target: call, name: "unwrap!", name_span: token.span, args: [], span: token.span),
   )
+
   return Ast.Expr.RegexLit(Ast.RegexLit(id: ids + 3, body: body, flags: flags, call: unwrap, span: token.span))
 end
 
@@ -1149,6 +1167,7 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     node = Ast.Expr.Call(
       Ast.Call(id: ids, name: token.lexeme, args: no_args, piped: false, parenthesized: false, span: token.span),
     )
+
     return expr_at(node, paren, ids)
   end
 
@@ -1172,6 +1191,7 @@ def construct_node(
   node = Ast.Expr.Construct(
     Ast.Construct(id: ids, type_name: name, args: args, span: Base.span_from(e, start, cursor)),
   )
+
   return expr_at(node, cursor, ids)
 end
 
@@ -1193,6 +1213,7 @@ def enum_constructor_node(
       span: Base.span_from(e, start, cursor),
     ),
   )
+
   return expr_at(node, cursor, args.ids)
 end
 
@@ -1600,6 +1621,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return stmt_at(node, stop, value.ids)
 end
 
@@ -1623,6 +1645,7 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       span: span,
     ),
   )
+
   node = Ast.Stmt.Binding(
     Ast.Binding(
       id: value.ids + 1,
@@ -1633,6 +1656,7 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       span: span,
     ),
   )
+
   return stmt_at(node, stop, value.ids + 1)
 end
 
@@ -1804,6 +1828,7 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
     body: body.nodes,
     span: Base.span_from(e, pos, body.pos),
   )
+
   return ok(IfBranchAt(node: node, pos: body.pos, ids: body.ids + 1))
 end
 
@@ -1984,6 +2009,7 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
           span: Base.span_from(e, arm_start, body.pos),
         ),
       )
+
       cursor = body.pos
       next_id = body.ids + 1
     end
@@ -2063,6 +2089,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
           span: Base.span_from(e, start, after_type),
         ),
       )
+
       cursor = after_type
       next_id = param_id + 1
     end
@@ -2170,6 +2197,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, body.ids)
 end
 
@@ -2224,6 +2252,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
     symbols: Set.new([]),
     with_types: declares_types?(e, cursor),
   )
+
   nodes: List[Ast.Decl] = []
   next_id = ids
   looping = true
@@ -2404,6 +2433,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, ids)
 end
 
@@ -2469,6 +2499,7 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Optional[Str
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, ids)
 end
 
@@ -2559,6 +2590,7 @@ def parse_callback(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Re
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, result.ids)
 end
 
@@ -2931,6 +2963,7 @@ def parse_extern_function(
         doc: none,
         span: result.node.span,
       )
+
       fields = [first].concat(fields)
       next_id += 1
     end
@@ -2946,6 +2979,7 @@ def parse_extern_function(
       layout: "",
       span: span,
     )
+
     records = records.push(Ast.Decl.Struct(made))
     result_type = Ast.TypeRef(id: next_id + 1, name: record, args: [], span: result.node.span)
     next_id += 2
@@ -2977,6 +3011,7 @@ def parse_extern_function(
       span: span,
     ),
   )
+
   decl = try decl_at(node, stop, next_id)
   if callee
     symbol = ""
@@ -3155,6 +3190,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     doc: none,
     span: param.span,
   )
+
   return ok(field)
 end
 
@@ -3285,6 +3321,7 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> 
     doc: doc,
     span: Base.span_from(e, pos, stop),
   )
+
   return ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
 end
 
@@ -3316,6 +3353,7 @@ def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -
     doc: doc,
     span: Base.span_from(e, pos, stop),
   )
+
   return ok(VariantAt(node: node, pos: stop, ids: next_id + 1))
 end
 
@@ -3422,6 +3460,7 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
     layout: "",
     span: Base.span_from(e, pos, stop),
   )
+
   return ok(StructAt(node: node, pos: stop, ids: next_id))
 end
 
@@ -3488,6 +3527,7 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> R
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, next_id)
 end
 
@@ -3509,6 +3549,7 @@ def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, target.ids + 1)
 end
 
@@ -3639,6 +3680,7 @@ def parse_constant_decl(
       span: Base.span_from(e, start, stop),
     ),
   )
+
   return decl_at(node, stop, value.ids)
 end
 
@@ -3657,6 +3699,7 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
     node = Ast.Decl.Export(
       Ast.ExportDecl(id: parsed.ids, declaration: parsed.node, doc: doc, span: Base.span_from(e, pos, parsed.pos)),
     )
+
     return decl_at(node, parsed.pos, parsed.ids)
   end
 
@@ -3787,6 +3830,7 @@ def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, ids)
 end
 
@@ -3805,6 +3849,7 @@ def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, ids)
 end
 
@@ -3930,6 +3975,7 @@ def parse_reexport(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
       span: Base.span_from(e, pos, stop),
     ),
   )
+
   return decl_at(node, stop, ids)
 end
 

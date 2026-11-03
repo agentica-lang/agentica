@@ -60,6 +60,7 @@ export def take(
     bodies: moved_bodies(linked, before, old.bodies, plan.stretches),
     step_tries: moved_tries(linked, before, old.step_tries, plan.stretches),
   )
+
   return Taken(st: st, constants: plan.constants, clean: plan.clean)
 end
 
