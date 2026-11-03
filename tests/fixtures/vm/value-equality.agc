@@ -35,6 +35,18 @@ def same_user?(a: User, b: User) -> Bool
   return a == b
 end
 
+# A list of 0 to n - 1 built one append at a time, so its leaves are cut apart from those of (0...n).to_a.
+def count_up(n: Int) -> List[Int]
+  xs: List[Int] = []
+  i = 0
+  while i < n
+    xs = xs.append(i)
+    i += 1
+  end
+
+  return xs
+end
+
 def main() -> Void
   ana = User(name: "Ana", age: 30, tags: ["admin"])
   copy = User(name: "Ana", age: 30, tags: ["admin"])
@@ -64,4 +76,16 @@ def main() -> Void
   floats = [nan]
   puts("nan #{circle == circle} #{floats == floats} #{Box(item: nan) != Box(item: nan)} #{[0.0] == [-0.0]}")
   puts("bytes #{["x".bytes] == ["x".bytes]} #{Box(item: "x".bytes) == Box(item: "y".bytes)}")
+  # 100 packed Ints: three leaves of 32 and a tail of 4; set copies one leaf and shares the others.
+  ints = (0...100).to_a
+  zeroed = ints.set(40, 0)
+  puts("long ints #{ints == count_up(100)} #{ints == ints.set(99, -1)} #{ints == zeroed} #{zeroed == ints.set(40, 0)}")
+  shared = "#{ints == ints.set(40, 40)} #{count_up(100).set(70, 1) == ints} #{ints.take(65) == count_up(65)}"
+  puts("shared leaves #{shared}")
+  fs = ints.map do |i| Float.from_int(i) end
+  with_nan = fs.set(70, nan)
+  puts("long floats #{fs == fs} #{with_nan == with_nan} #{fs == with_nan} #{with_nan != fs.set(70, nan)}")
+  points = {"a": Box(item: [1]), "b": Box(item: [2]), "c": Box(item: [3])}
+  dropped = points.put("d", Box(item: [4])).delete("d").delete("b")
+  puts("map walk #{dropped == points.delete("b")} #{dropped == points} #{dropped.put("b", Box(item: [2])) == points}")
 end

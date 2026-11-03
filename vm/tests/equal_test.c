@@ -1,8 +1,7 @@
 /*
- * Deep equality (agc_equal and the builtin Value.equal of ==): 1,000,000-deep
- * lists and enums without C recursion, wide maps and lists that grow the work
- * stack while the walk allocates, IEEE 754 for a NaN at any depth, and the
- * hostile pairs.
+ * Deep equality (agc_equal, Value.equal and Optional.equal): 1,000,000-deep lists
+ * and enums without C recursion, wide and nested maps and lists that grow the
+ * stacks while the walk allocates, IEEE 754 for a NaN, and the hostile pairs.
  */
 #include "../core.h"
 #include "builtin_test.h"
@@ -96,6 +95,42 @@ static void test_wide_values(void) {
   assert(!value_equal(list_of(deep_wide, 4), list_of(other, 4)));
 }
 
+/* Maps nested depth deep, each with a deleted key (so the walk keeps a dead set) and a Json list that allocates when
+   it is compared: the walker stack grows past its inline part, and under GC_STRESS the walk collects while the
+   walkers and their dead sets are live. */
+static agc_value nested_maps(size_t depth, int64_t leaf) {
+  agc_value inner = agc_int(leaf);
+  for (size_t k = 0; k < depth; k++) {
+    agc_value json = agc_json_number((int64_t)k);
+    agc_map *m = agc_map_put(&vm, agc_new_map(), text("gone"), agc_int(0));
+    m = agc_map_put(&vm, m, text("json"), list_of(&json, 1));
+    m = agc_map_put(&vm, m, text("next"), inner);
+    inner = agc_map_value(agc_map_delete(&vm, m, text("gone")));
+  }
+  return inner;
+}
+
+static void test_nested_maps(void) {
+  assert(value_equal(nested_maps(100, 1), nested_maps(100, 1)));
+  assert(!value_equal(nested_maps(100, 1), nested_maps(100, 2)));
+  agc_map *one = agc_map_put(&vm, agc_new_map(), text("a"), list_of((agc_value[]){agc_int(1), text("x")}, 2));
+  agc_map *other = agc_map_put(&vm, agc_new_map(), text("b"), list_of((agc_value[]){agc_int(1), text("x")}, 2));
+  assert(!value_equal(agc_map_value(one), agc_map_value(other)));
+}
+
+/* Both rows of == run one function, which answers two different variants and two unit variants itself. */
+static void test_enum_rows(void) {
+  const agc_builtin *optional = agc_find_builtin((const uint8_t *)"Optional.equal", 14, 2);
+  const agc_builtin *value = agc_find_builtin((const uint8_t *)"Value.equal", 11, 2);
+  assert(optional && value && optional->fn == value->fn);
+  agc_enum *some = agc_new_enum(1, 1);
+  some->payload[0] = agc_int(1);
+  agc_value none = agc_enum_value(agc_new_enum(0, 0));
+  assert(!value_equal(agc_enum_value(some), none));
+  assert(value_equal(none, agc_enum_value(agc_new_enum(0, 0))));
+  assert(value_equal(agc_enum_value(some), agc_enum_value(some)));
+}
+
 static void test_nan(void) {
   agc_value nan = agc_float(NAN);
   agc_value floats = list_of(&nan, 1);
@@ -134,6 +169,8 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_deep_values();
   test_wide_values();
+  test_nested_maps();
+  test_enum_rows();
   test_nan();
   test_hostile_pairs();
   return 0;

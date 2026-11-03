@@ -109,6 +109,12 @@ REFUSED = [
     (main('  puts([1] == ["a"])\n'), "CHECK-TYPE-MISMATCH", '"a"'),
     (main("  puts(Box(item: 1) == Box(item: 1.5))\n"), "CHECK-TYPE-MISMATCH", "1.5"),
     (main("  puts(1 == [1])\n"), "CHECK-TYPE-MISMATCH", "=="),
+    # Only the left side gives its type: a generic unit variant on the left cannot take T from the right.
+    (
+        main("  just: Maybe[List[Int]] = Maybe.Just([1])\n  puts(Maybe.Nothing == just)\n"),
+        "CHECK-ENUM-TYPE-INFERENCE",
+        "Maybe.Nothing",
+    ),
     # Equality does not order: < stays for numbers.
     (main('  puts(User(name: "a", tags: []) < User(name: "b", tags: []))\n'), "CHECK-TYPE-MISMATCH", "<"),
 ]

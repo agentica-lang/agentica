@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 324,
+  "steps": 3698,
   "stdout": [
     "struct true false true false",
     "list true false false true",
@@ -18,6 +18,10 @@
     "enum tree true false",
     "nan false false true true",
     "bytes true false",
+    "long ints true false false true",
+    "shared leaves true false true",
+    "long floats true false false true",
+    "map walk true false true",
     ""
   ],
   "stderr": []

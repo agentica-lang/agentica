@@ -52,8 +52,7 @@ section says how the scheduler and the loop keep them.
   charges a **turn cost**: one unit per item (a sort counts n·⌈log2 n⌉) and one
   per 64 bytes it copies or scans. Constant work charges nothing. Some opcodes
   charge the same way: string concatenation, interpolation, `to_s`, `inspect`,
-  string equality (the checker allows `==` only on scalars, strings and ranges),
-  and map access with String keys. The turn cost comes from the turn only, never
+  string equality and map access with String keys. The turn cost comes from the turn only, never
   from `--max-steps` (`steps_left`). The task yields at the next instruction if
   its turn is spent. File builtins charge nothing: their work is I/O, at most 1
   MiB per call.

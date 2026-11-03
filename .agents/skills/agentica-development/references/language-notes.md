@@ -65,12 +65,13 @@ section for the area you are changing.
   the catalog rows use the generic `#f` rule. VM: `references/vm-lowering.md`.
 - `Set[T]` is `Type.Set(T)` with `T` `Int` or `String`
   (`CHECK-SET-ELEMENT-TYPE`; `Set` is a reserved type name). Printable, not
-  encodable; `==` and `Test.eq` compare it in any order. `Set` is a method module
-  (`method_modules` in `check_tables.agc`). The catalog rows carry `set-*` rules
-  because their generic types need the expected type: `Set.new([])` with none is
-  `CHECK-EMPTY-SET-TYPE`. `for x in set` lowers to `Set.to_a` into the hidden
-  list slot and then the list loop (`compiler/lower/lower_stmt.agc`). The VM
-  keeps a set as an `agc_map` with nil values under `AGC_T_SET`.
+  encodable; `==` and `Test.eq` compare it in any order. `Set` is a method
+  module (`method_modules` in `check_tables.agc`). The catalog rows carry
+  `set-*` rules because their generic types need the expected type:
+  `Set.new([])` with none is `CHECK-EMPTY-SET-TYPE`. `for x in set` lowers to
+  `Set.to_a` into the hidden list slot and then the list loop
+  (`compiler/lower/lower_stmt.agc`). The VM keeps a set as an `agc_map` with nil
+  values under `AGC_T_SET`.
 
 ## Bytes
 

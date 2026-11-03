@@ -119,8 +119,25 @@ typedef struct {
   uint64_t next_seq;
 } agc_map;
 
-/* Called by agc_map_each_pair with a value of a and the value of the same key in b; false stops the walk. */
-typedef bool (*agc_pair_fn)(void *ctx, agc_value a, agc_value b);
+/* The seqs of a map's dead key cells, from its dropped list: a cell is live unless its seq is there (a key put back
+   after a delete gets a new seq, so only its old cell is dead). Building the set costs O(dead), not O(size). When the
+   seqs are dense, a bitmap over [lo, hi) answers; when they are sparse, they are sorted from high to low and merged
+   with the walk of the key list, whose seqs fall. Private to vm/map.c; it is here only so a walk can hold one. */
+typedef struct {
+  uint64_t *seqs, *bits;
+  uint64_t lo, hi;
+  size_t n, at;
+} agc_seq_set;
+
+/* A walk over the live keys of map a, newest first, with each key's value in a and in b (agc_map_pairs_begin and
+   agc_map_pairs_next): one pair at a time, so a caller never holds every pair at once. It holds GC pointers, so it
+   lives on the C stack or in agc_alloc memory. missing is set when the walk ended at a key of a that b lacks. */
+typedef struct {
+  const agc_map *a, *b;
+  const agc_keys *cell;
+  agc_seq_set dead;
+  bool missing;
+} agc_map_pairs;
 
 typedef struct {
   uint32_t type, n;
@@ -754,7 +771,8 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
 void agc_map_each_value(const agc_map *m, void (*visit)(agc_value value, void *data), void *data);
 bool agc_map_any_value(const agc_map *m, agc_value *out);
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b);
-bool agc_map_each_pair(agc_vm *vm, const agc_map *a, const agc_map *b, agc_pair_fn each, void *ctx);
+void agc_map_pairs_begin(agc_vm *vm, agc_map_pairs *walk, const agc_map *a, const agc_map *b);
+bool agc_map_pairs_next(agc_vm *vm, agc_map_pairs *walk, agc_value *left, agc_value *right);
 agc_map *agc_map_delete(agc_vm *vm, const agc_map *m, agc_value key);
 agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key);
 
