@@ -24,11 +24,11 @@ Ask what changed and who reads about it:
   a `std/` module, its `site/content/library/` page and the programming skill
   (the AGENTS.md rule); plus a CHANGELOG entry.
 - **A design decision or contract:** the design doc (built: `docs/vm/`;
-  planned: the roadmap phase file). Write the decision and its reason, not
+  planned: the GitHub issue). Write the decision and its reason, not
   the recipe.
 - **An implementation detail:** a code comment where the code is not obvious,
   or nothing.
-- **Progress or evidence:** the PR body, the roadmap tick or the CHANGELOG.
+- **Progress or evidence:** the PR body or the CHANGELOG.
 - **Anything else:** nothing.
 
 Do not restate what code, tests or CLI help already say. If you are unsure,
@@ -63,7 +63,7 @@ docs. Do not create files under `docs/` unless the user asks for one
   the PR body may say "new" or "added".
 - No per-PR progress logs in design docs. An "As built" or status section
   that every PR rewrites causes merge conflicts; progress goes in the PR body
-  and the roadmap.
+  and the issue.
 - A CHANGELOG entry is one line about what users see, not how it was done.
 - A PR body says what changed, why, and how it was checked. It is the place
   for evidence, so docs do not need it.

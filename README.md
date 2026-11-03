@@ -8,7 +8,8 @@ bytecode, and a C VM runs it. Both are one binary, `agentica`.
 
 Contributor resources: [language specification](docs/grammar.md) · [agent
 reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/)
-· [roadmap](docs/roadmap/) · [planned syntax](docs/future/) ·
+· [roadmap (frozen)](docs/roadmap/) · [planned syntax (frozen)](docs/future/) ·
+[issues](https://github.com/agentica-lang/agentica/issues) ·
 [examples](examples/README.md)
 
 ## Install

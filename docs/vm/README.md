@@ -7,8 +7,9 @@ binary (`agentica`), the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb`
 and `vm/` keep their names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
-finds its place. The table below gives the file for each number. The checklist
-of what is built and what is pending is `docs/roadmap/07-vm.md`.
+finds its place. The table below gives the file for each number. The frozen
+checklist of what was built is `docs/roadmap/07-vm.md`; pending work is in
+GitHub issues.
 
 ## 1. Overview
 

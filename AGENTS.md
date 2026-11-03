@@ -26,8 +26,8 @@ tests/              pytest: test_<area>.py; test_spec_<area>.py are the language
                     rules through the CLI; fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/               grammar/ (the language definition, index: docs/grammar.md),
-                    future/ (planned syntax, one file per section), roadmap/
-                    (phases and the done checklist), vm/ (VM design)
+                    vm/ (VM design); future/ and roadmap/ are frozen history
+                    (2026-11-03), not where plans live: see GitHub issues
 site/content/       Hugo documentation site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agent skills; also documentation-pruning (shrinking docs)
@@ -81,7 +81,8 @@ phase 13).
 | builtin functions and `std/` modules | `site/content/library/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
 | writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` (`site/content/style.md` is its page for people) |
-| what is planned or done | `docs/roadmap/README.md` |
+| what is planned or in progress | GitHub issues: `gh issue list -R agentica-lang/agentica -l area:std -m 0.23.0` (labels `area:*`, kind, platform; a milestone per release) |
+| what shipped | `CHANGELOG.md` and the merged PR |
 
 ## Rules
 
@@ -116,8 +117,8 @@ phase 13).
 - Core grammar only (sections 4–6): user enums, structs, functions and type
   aliases (all may be generic), `case`, file modules with explicit
   imports/exports, builtin `List[T]`, `Map[K, V]`, `Result[T]`, and `try`.
-  Planned syntax stays in `docs/future/` until its phase lands. No placeholder
-  files or nodes for later phases.
+  Planned syntax is described in its GitHub issue until it lands. No
+  placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
 - Python tests use pytest (a test-only Poetry dependency) and live in
@@ -136,8 +137,11 @@ phase 13).
 - Two test tiers: fast is the default; slow cases (frozen corpus, generated
   inputs, stress) use `@slow` (unittest) or `pytest.mark.slow` and run only
   in CI. Sanitizers, gc-stress, fuzz and full sweeps are slow by nature.
-- When a phase item is done, tick it in the roadmap and update the
-  development skill.
+- Planned and pending work lives in GitHub issues of `agentica-lang/agentica`
+  (kind label, `area:*` label, a milestone per release). A PR that finishes one
+  says `Closes #N` and updates the development skill when it changes how to
+  work. Do not edit `docs/roadmap/` or `docs/future/` (frozen on 2026-11-03)
+  except to fix a broken link, and never add files there.
 - When the language changes, update `docs/grammar/`, the site page and the
   programming skill together. When a builtin or a `std/` module changes,
   update its page in `site/content/library/`, the only home of the library
@@ -151,7 +155,7 @@ phase 13).
   PR and docs); mark a breaking change `**Breaking:**`.
 - Do not create new files under `docs/` (outside Hugo's `site/content/`)
   unless the user asks for one or accepts your suggestion. Progress and
-  evidence go in the PR, the roadmap checklist or the CHANGELOG. Change docs
+  evidence go in the PR or the CHANGELOG. Change docs
   only when strictly necessary (`.agents/skills/documentation-writing/`).
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;

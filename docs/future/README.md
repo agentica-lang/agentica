@@ -1,5 +1,10 @@
 # Agentica: future grammar
 
+> **Frozen on 2026-11-03.** These proposals are kept as history and for the
+> section numbers that code and tests cite. New and pending work lives in
+> [GitHub issues](https://github.com/agentica-lang/agentica/issues) (labels,
+> milestones); finished work is in `CHANGELOG.md`.
+
 This index tracks future proposals; the current language contract is in
 [`grammar.md`](../grammar.md). Requirements and rationale stay in each linked
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax

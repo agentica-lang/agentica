@@ -39,7 +39,7 @@
 
 ### 12.2 PR plan
 
-All items are done (`docs/roadmap/07-vm.md` is the active checklist); git
+All items are done (`docs/roadmap/07-vm.md` is the frozen checklist); git
 history keeps the PR list.
 
 ### 12.3 Plan for HTTP and TlsContext

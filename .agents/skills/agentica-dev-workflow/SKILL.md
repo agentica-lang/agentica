@@ -134,9 +134,11 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   `git worktree remove --force`. Retarget any open PR based on the branch
   (`gh pr edit N --base master`) before deleting the branch locally and on
   origin.
-- Issues created for follow-ups go into the "Agentica Roadmap" project of the
-  `agentica-lang` organization (project 1) as Todo; set In Progress when work
-  starts.
+- Planning lives in GitHub issues, not in `docs/roadmap/` (frozen). A
+  follow-up becomes an issue with a kind label, an `area:*` label and the
+  milestone of its target release, and goes into the "Agentica Roadmap" project
+  of the `agentica-lang` organization (project 1) as Todo; set In Progress when
+  work starts. The PR that finishes it says `Closes #N`.
 
 ## Gotchas
 
