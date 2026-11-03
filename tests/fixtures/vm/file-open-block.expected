@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 544,
+  "stdout": [
+    "write: ok(2)",
+    "read back after the block: \"alpha\\nbeta\\n\"",
+    "two lines: ok(\"alpha+beta\")",
+    "early return: error(\"stopped at the first line\")",
+    "failed try: error(\"filesystem: end of file\")",
+    "expected type: ok([4])",
+    "handle after an ok block: error(\"filesystem: file handle is closed\")",
+    "error block: error(\"the block failed\")",
+    "written before the error: \"kept\\n\"",
+    "nested: ok(2)",
+    "copy: \"ONE\\nTWO\\n\"",
+    "append: ok() \"ONE\\nTWO\\nthree\\n\"",
+    "missing file: true",
+    "timeout: error(\"filesystem: timeout must be positive milliseconds\")",
+    ""
+  ],
+  "stderr": []
+}

@@ -19,6 +19,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   cleanup that runs after each scenario, also after a failure or a skip.
 - `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
   `env` map of variables for the new program.
+- `File.open(path, mode) do |f| ... end` closes the file when the block ends,
+  with `ok` or `error`, and gives the block's `Result` (or the close error
+  after an `ok` block).
 
 ### Changed
 

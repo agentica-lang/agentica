@@ -198,6 +198,22 @@ SINGLE_FILE = [
      main_with('  puts(JSON.decode("{}", HttpClientOptions).ok?)\n'), "CHECK-NOT-DECODABLE", "HttpClientOptions"),
     ("File.open still needs its path",
      main_with("  puts(File.open())\n"), "CHECK-ARITY", "File.open()"),
+    ("File.open with a block takes the block form, which may leave out the mode and the timeout too",
+     'def size(f: FileHandle) -> Result[Int]\n  return ok((try File.read_line(f)).size)\nend\n\n'
+     + main_with('  a = File.open("a.txt") do |f|\n    ok(try File.read_line(f))\n  end\n  puts(a)\n'
+                 '  b: Result[List[Int]] = File.open("a.txt", "write") do |_|\n    ok([])\n  end\n  puts(b)\n'
+                 '  c = File.open("a.txt", "append", 50) do |f|\n    try File.write(f, "x")\n    ok()\n  end\n'
+                 '  puts(c)\n  puts(File.open("a.txt", "read", 50, &size))\n'), None, None),
+    ("File.open with too many arguments and a block is an arity error, not a missing block target",
+     main_with('  File.open("a.txt", "read", 10, 5) do |f|\n    ok(1)\n  end\n'), "CHECK-ARITY",
+     'File.open("a.txt", "read", 10, 5) do |f|\n    ok(1)\n  end'),
+    ("the block of File.open gives a Result",
+     main_with('  puts(File.open("a.txt") do |_|\n    5\n  end)\n'), "CHECK-TYPE-MISMATCH", "5"),
+    ("the expected type of File.open with a block is the Result its block gives",
+     main_with('  r: Result[Int] = File.open("a.txt") do |_|\n    ok("s")\n  end\n  puts(r)\n'),
+     "CHECK-TYPE-MISMATCH", '"s"'),
+    ("the block of File.open gets a FileHandle",
+     main_with('  puts(File.open("a.txt") do |f|\n    ok(File.read_text(f))\n  end)\n'), "CHECK-TYPE-MISMATCH", "f"),
     ("a builtin has no function value, defaults or not",
      main_with("  f = &Zlib.crc32\n"), "CHECK-UNKNOWN-NAME", "&Zlib.crc32"),
     ("main takes no parameters, defaults included",
