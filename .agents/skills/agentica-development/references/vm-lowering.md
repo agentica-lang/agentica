@@ -34,7 +34,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `references/vm-core.md`).
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
    the diff test sweeps `--max-steps` over it.
-7. Update any rule that changed in `docs/vm/`, tick the roadmap item, and
+7. Update any rule that changed in `docs/vm/`, say `Closes #N` in the PR, and
    keep the guide that owns the change current:
    this file for lowering and bytecode, `references/vm-core.md` for the loader
    and the interpreter, `references/vm.md` for the rules every change keeps.

@@ -20,8 +20,9 @@ both linked into one binary. The repo tree is in `AGENTS.md`; this file says
 how to work and which reference to read. Load only the references your change
 needs.
 
-- The rules of `AGENTS.md` apply. Read the active phase in `docs/roadmap/`
-  first and build only what it asks.
+- The rules of `AGENTS.md` apply. Read the GitHub issue of the work first
+  (`gh issue view N -R agentica-lang/agentica`) and build only what it asks;
+  `docs/roadmap/` and `docs/future/` are frozen history.
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
   different Agentica name is only the internal builtin name, with the Ruby
   name as its alias (`method_aliases` in `check_tables.agc`); every
