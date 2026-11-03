@@ -58,6 +58,8 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 
 | Step | Does |
 |---|---|
+| `the environment variable {string} is {string}` | sets a variable for the program, before it starts |
+| `the program argument {string}` | adds a command-line argument for the program, before it starts |
 | `the Agentica program {string}` | starts the program, a path relative to the feature file |
 | `I send the line {string}` | sends the text and a new line |
 | `I send a line:` | sends the Doc String below and a new line |
@@ -71,6 +73,28 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 
 `Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work.
+
+## Environment and arguments
+
+The two steps before `the Agentica program` give the program its environment and its `System.args`:
+
+```gherkin
+Scenario Outline: Greet in a language
+  Given the environment variable "GREETING" is "<greeting>"
+  And the program argument "--name"
+  And the program argument "<name>"
+  And the Agentica program "../greet.agc"
+  Then I receive the line "<line>" within 5000 milliseconds
+
+  Examples:
+    | greeting | name | line      |
+    | Hola     | Ana  | Hola, Ana |
+```
+
+- A variable is added to the environment `agentica test` runs in; the program sees the others as they are. Setting a name again replaces its value. The variable reaches only the program of that scenario: not the runner, and no other scenario.
+- Each `the program argument` adds one argument, in order, with no splitting on spaces: `"a b"` is one argument. The program reads them with `System.args`.
+- Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`.
+- A scenario starts one program. To run it again with other values, write another scenario (an outline row is one).
 
 ## Your own steps
 
@@ -189,7 +213,7 @@ BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD
 BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
 ```
 
-Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. Keeping a name again replaces the service, and the old handle is not closed until the scenario's process ends (there is no close hook). A step cannot leave a task running, so the service does its work in the calling step.
+Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. Keeping a name again replaces the service, and the old handle is not closed until the scenario's process ends (use [BDD.after](#bddafter) to close it sooner). A step cannot leave a task running, so the service does its work in the calling step.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
@@ -214,6 +238,39 @@ def main() -> Void
     BDD.step("a connected pair", &open_pair),
     BDD.step("the pair echoes {string}", &check_echo),
   ])
+end
+```
+
+## BDD.after
+
+```text
+BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
+```
+
+Registers a cleanup that runs when the scenario ends, whether it passed, failed or was skipped. A step registers it right after it makes what needs cleaning, so the hook exists only when there is something to clean.
+
+- Hooks run in the reverse order of registration, in the process of the scenario. A hook gets the context the scenario ended with, and returns `ok()` or `error(message)`. Use that context for any `BDD` call in the hook.
+- A hook that returns an `error`, crashes or fails a `BDD` check is a failed hook, and the other hooks still run. A failed hook fails a scenario that passed, with the code `RUNTIME-BDD-AFTER` at the scenario line. For a scenario that failed, the failure stays the one reported and the message of the hook is added to it.
+- Hooks do **not** run when the process of the scenario itself ends: a step that crashes (an `.unwrap!` on an `error`, a division by zero), a step or hook that calls `System.exit`, or the 30 second limit. A scenario that fails by a crash still leaves what it made, so keep a cleanup of stale folders for that case, or make steps return `error` and check it with `BDD.assert` instead of `.unwrap!`.
+- Hooks run before the program under test is stopped, and no `BDD` call stops it first. On Windows a folder the program still holds open may not be removable by a hook.
+- A hook is kept in the context that `BDD.after` returns. A step that registers a hook and then fails on an older context (`BDD.assert(ctx, ...)` with the `ctx` from before) does not run it: pass on the context that `BDD.after` returned.
+- A hook cannot call `BDD.skip`. A hook that fails after `BDD.skip` turns the skipped scenario into a failed one (`RUNTIME-BDD-AFTER`). A hook that never ends is reported when the 30 second limit of the scenario passes.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def remove(path: String) -> Result[Void]
+  return Path.remove(path, 5000)
+end
+
+def make_folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  path = args[0]
+  Dir.mkdir(path, 5000).unwrap!
+  return BDD.after(ctx) do |closing| remove(path) end
+end
+
+def main() -> Void
+  BDD.run([BDD.step("a folder {string} for this scenario", &make_folder)])
 end
 ```
 
@@ -249,6 +306,8 @@ end
 ## Driving the program
 
 ```text
+BDD.given_env(ctx: BDD.Context, name: String, value: String) -> BDD.Context
+BDD.given_argument(ctx: BDD.Context, value: String) -> BDD.Context
 BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
 BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
 BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
@@ -262,7 +321,7 @@ BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
-The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program.
+The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program. `BDD.given_env` and `BDD.given_argument` come before `BDD.given_program` and return the context to pass to it.
 
 `BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 

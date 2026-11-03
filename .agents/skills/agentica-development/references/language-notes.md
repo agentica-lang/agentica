@@ -132,6 +132,10 @@ section for the area you are changing.
 - The parser makes `MethodCall` for `x.name(args)` (except `.call(`, which
   stays `Invoke`, and `.with(`, which is the `StructUpdate` node) and
   `FieldAccess` for `x.name`. Method names may carry `?`/`!`.
+- A `MethodCall` on a struct whose field of that name is an `Fn` is the call of
+  the field: the checker records `Resolved.FieldCall` (arguments by
+  `Methods.apply_function`, shared with `Invoke`), and `lower_field_call` emits
+  `field` then `call-value`.
 - The checker resolves methods by the receiver's static type (`check_names.agc`,
   with the tables of `check_tables.agc`). A catalog function is a method only
   when its first parameter has the receiver's type head. Resolution builds a

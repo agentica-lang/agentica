@@ -161,6 +161,27 @@ end
 
 `Fn[Void]` is a function with no parameters that gives nothing. Function values can live in lists, maps and struct fields.
 
+A function in a struct field is called with the name of the field, like a method: `counter.next(1)` is `counter.next.call(1)`. `counter.next` without parentheses still reads the function. Only a field of type `Fn` can be called this way; any other name is `CHECK-UNKNOWN-METHOD`, as structs have no methods. A field named `to_s` or `inspect` that holds a function wins over the method of that name.
+
+```agentica
+struct Counter
+  next: Fn[Int, Int]
+end
+
+def succ(n: Int) -> Int
+  return n + 1
+end
+
+def main() -> Void
+  counter = Counter(next: &succ)
+  puts(counter.next(counter.next(1)))
+end
+```
+
+```output
+3
+```
+
 [Blocks](/tour/blocks/) are the short way to write a function value at the place where you use it.
 
 ## Chain calls with |>
@@ -221,7 +242,7 @@ end
 
 A parameter can end with `= value`. A call may leave it out.
 
-- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. A struct built with no arguments, `options: Options = Options()`, is a default too when every field of `Options` has one. Anything else, `some(1)` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]`, `{}` or struct.
+- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `none`, `[]`, `{}` or a variant without a payload such as `Level.Info`. A struct built with no arguments, `options: Options = Options()`, is a default too when every field of `Options` has one. The name of a constant is a default too when its value is one of these, as in `limit: Int = LIMIT` or `Limits.LIMIT` (the value is used in place of the name, also for a caller in another module). Anything else, `some(1)` or a constant such as `SUM = 1 + 2` too, is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]`, `{}` or struct.
 - Parameters with a default go last (`CHECK-DEFAULT-ORDER`). The exception is a last `Fn` parameter, which a block fills.
 - Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 
@@ -254,6 +275,26 @@ a, b
 a-b
 a.txt after 1000 ms
 b.txt after 50 ms
+```
+
+A default can name a constant, so one value serves many functions:
+
+```agentica
+LIMIT = 2
+
+def first(words: List[String], count: Int = LIMIT) -> List[String]
+  return words.take(count)
+end
+
+def main() -> Void
+  puts(first(["a", "b", "c"]))
+  puts(first(["a", "b", "c"], 3))
+end
+```
+
+```output
+["a", "b"]
+["a", "b", "c"]
 ```
 
 ```agentica {expect="CHECK-DEFAULT-VALUE"}

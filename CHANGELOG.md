@@ -17,9 +17,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `x.floor`, `x.ceil`, `x.round` (each gives an Int) and `Math.sqrt(x)`.
 - `n.clamp(min, max)` on Int and Float, and `xs.min` and `xs.max`, which give
   an `Optional` (`none` for an empty list).
+- `agentica test` scenarios set the environment and arguments of the program
+  under test (`the environment variable "X" is "y"`, `the program argument
+  "a"`, `BDD.given_env`, `BDD.given_argument`), and `BDD.after` registers a
+  cleanup that runs after each scenario, also after a failure or a skip.
+- `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel` take an
+  `env` map of variables for the new program.
 - `File.open(path, mode) do |f| ... end` closes the file when the block ends,
   with `ok` or `error`, and gives the block's `Result` (or the close error
   after an `ok` block).
+- A default of a parameter or a struct field may name a module constant
+  (`limit: Int = LIMIT`, `Limits.LIMIT`) whose value is itself a constant form.
+- An `Fn` struct field is called by its name: `store.put(a, b)` is
+  `store.put.call(a, b)`.
 
 ### Changed
 

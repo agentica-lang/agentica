@@ -45,13 +45,15 @@ end
 
 ## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
 ## on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call.
-## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct.
+## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct. FieldCall
+## is `receiver.name(args)` where name is an Fn field of the struct: the call of the function the field holds.
 export enum Resolved
   Self(Types.Type)
   Text(Types.Type)
   Inspect(Types.Type)
   Call(String, Types.Type)
   Members(List[Model.Named])
+  FieldCall
 end
 
 ## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape). A
@@ -63,12 +65,22 @@ export struct Signature
   shape: Defaults.Shape
 end
 
+## Where a module constant is declared and what it is set to: the value is how a default that names the constant is
+## judged (CHECK-DEFAULT-VALUE), and the file is the one a problem about a blanked value is reported in. blanked is
+## true when the value is the 0 that the check cache leaves in the stub of a long constant (checker.agc, blanked?).
+export struct ConstSite
+  file: String
+  value: Ast.Expr
+  blanked: Bool
+end
+
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
 ## struct_params the type parameters of each generic struct (a plain struct has no entry); c_structs the C structs of
 ## the extern blocks (Ast.StructDecl.layout), by linked name; callbacks the Fn type that the function of each callback
 ## of the extern blocks takes (Ast.Callback), by linked name; natives the functions of the extern blocks, by linked
 ## name; field_defaults the names of the fields that have a default value, by struct; functions the program's;
-## constants the type of each module constant by linked name, which grows as the initializers are checked in order.
+## constants the type of each module constant by linked name, which grows as the initializers are checked in order;
+## const_sites where each module constant is declared and its value, by linked name.
 ## type_params are the type parameters in scope (while the fields of a generic struct, the variants of a generic enum
 ## or the signature and body of a generic function are checked). file is the file of the declaration being checked,
 ## texts the source of every file by name. expression checks an expression: the cycle between expressions and
@@ -91,6 +103,7 @@ export struct Cx
   natives: Set[String]
   functions: Map[String, Signature]
   constants: Map[String, Types.Type]
+  const_sites: Map[String, ConstSite]
   type_params: List[String]
   file: String
   texts: Map[String, String]

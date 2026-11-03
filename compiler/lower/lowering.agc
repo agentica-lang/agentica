@@ -140,6 +140,11 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     struct_decls = struct_decls.put(entry.decl.name, entry.decl)
   end
 
+  values: Map[String, Ast.Expr] = {}
+  for entry in constants
+    values = values.put(entry.constant.name, entry.constant.value)
+  end
+
   cx = Lowering.Cx(
     types: checked.types,
     resolved: checked.resolved,
@@ -151,8 +156,8 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     functions: by_name,
     bodies: checked.bodies,
     step_tries: checked.step_tries,
-    fills: fills_of(functions, index_of),
-    field_fills: field_fills_of(structs, index_of),
+    fills: fills_of(functions, index_of, values),
+    field_fills: field_fills_of(structs, index_of, values),
     reads: reads_of(plan),
     file: linked.modules[0].file,
     index: 0,
@@ -272,13 +277,22 @@ def pin_instr(instr: Ir.Instr, pinned: Source.Span) -> Ir.Instr
   return instr.with(spans: instr.spans.map do |span: Source.Span| pinned end)
 end
 
-# The functions that have default values, by name, with the file each is declared in.
-def fills_of(functions: List[Located], index_of: Map[String, Int]) -> Map[String, Lowering.Fill]
+# The functions that have default values, by name, with the file each is declared in. A default that names a constant
+# is the value of the constant, written at the place of the name (Const.in_place).
+def fills_of(
+  functions: List[Located],
+  index_of: Map[String, Int],
+  values: Map[String, Ast.Expr],
+) -> Map[String, Lowering.Fill]
   fills: Map[String, Lowering.Fill] = {}
   for entry in functions
     shape = Defaults.shape(entry.function.params)
     if Defaults.has_defaults?(shape)
-      fill = Lowering.Fill(shape: shape, params: entry.function.params, file: entry.file, index: index_of[entry.file])
+      params = entry.function.params.map do |param: Ast.Param|
+        param.with(default: param.default.map do |value: Ast.Expr| Const.in_place(value, values) end)
+      end
+
+      fill = Lowering.Fill(shape: shape, params: params, file: entry.file, index: index_of[entry.file])
       fills = fills.put(entry.function.name, fill)
     end
   end
@@ -287,13 +301,17 @@ def fills_of(functions: List[Located], index_of: Map[String, Int]) -> Map[String
 end
 
 # The structs that have fields with a default value, by name, with the file each is declared in.
-def field_fills_of(structs: List[LocatedStruct], index_of: Map[String, Int]) -> Map[String, Lowering.FieldFill]
+def field_fills_of(
+  structs: List[LocatedStruct],
+  index_of: Map[String, Int],
+  constants: Map[String, Ast.Expr],
+) -> Map[String, Lowering.FieldFill]
   fills: Map[String, Lowering.FieldFill] = {}
   for entry in structs
     values: Map[String, Ast.Expr] = {}
     for field in entry.decl.fields
       case field.default
-        some(value) -> values = values.put(field.name, value)
+        some(value) -> values = values.put(field.name, Const.in_place(value, constants))
         none -> values = values
       end
     end

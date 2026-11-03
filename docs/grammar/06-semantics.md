@@ -224,12 +224,18 @@ allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
 a builtin enum, or `Models.Level.Info` through an import alias). A parameter
 may also default to a struct built with no arguments, `options: Options =
 Options()`: each field takes its own default, and a field without one is
-`CHECK-MISSING-FIELD` at the default. Anything else (a call such as `some(1)`,
-a name, `&name`, a struct with arguments, a variant with a payload, a non-empty
-list or map, an interpolated string, an operation) is `CHECK-DEFAULT-VALUE`,
-located at the expression, with a help that says to make the parameter
-required. A default cannot read another parameter or a module
-constant.
+`CHECK-MISSING-FIELD` at the default. A default may also name a module
+constant (`limit: Int = LIMIT`): one of the same file, an imported one through
+its alias (`Limits.LIMIT`) or one imported by name, as long as the value of
+the constant is itself one of these forms (not a call, an operation, another
+constant, a non-empty list or map; a struct with no arguments only for a
+parameter). The name is the value written in its place, so the default is the
+same at every call and a caller in another module that leaves the argument out
+gets it without importing the constant. Anything else (a call such as
+`some(1)`, any other name, `&name`, a struct with arguments, a variant with a
+payload, a non-empty list or map, an interpolated string, an operation) is
+`CHECK-DEFAULT-VALUE`, located at the expression, with a help that says to make
+the parameter required. A default cannot read another parameter.
 
 The type of a default is checked against the type of its parameter like an
 initializer: `[]` and `{}` take the parameter type as their expected type, and a
@@ -361,7 +367,8 @@ a name that is not a field is `CHECK-UNKNOWN-FIELD`. A field that is given twice
 is `CHECK-DUPLICATE-FIELD`.
 
 A field default follows the rules of a parameter default (see "Default
-parameter values"): it is a constant of the same forms, except a struct built
+parameter values"): it is a constant of the same forms, or the name of a
+constant with such a value, except a struct built
 with no arguments (`CHECK-DEFAULT-VALUE`: its own defaults could build the
 struct again at each construction, without end), anything else is
 `CHECK-DEFAULT-VALUE` at the expression, and its type is checked against the
@@ -807,6 +814,16 @@ types, and `f.call(21)` invokes it. Function values can travel through lists,
 maps, parameters, returns and fields. A bare function name is not a value.
 Functions have no equality, fields, indexing or JSON encoding; `IO.inspect`
 prints `<Fn>`.
+
+A field of type `Fn` is called through the struct, without `.call`:
+`store.put(a, b)` is `store.put.call(a, b)`. The arguments are checked against
+the parameters of the field's type (`CHECK-ARITY`, `CHECK-TYPE-MISMATCH`), the
+value is the result of the function, and `store.put` without parentheses still
+reads the function. Structs have no methods, so the name of an `Fn` field
+cannot clash with one, except `to_s` and `inspect`: an `Fn` field of that name
+wins, as the field does when it is read. A field named `with` cannot hold a
+function, so `x.with(...)` is always the struct update. Calling a field of any
+other type, or a name that is no field, is `CHECK-UNKNOWN-METHOD`.
 
 ### Blocks and closures
 

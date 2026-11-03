@@ -41,6 +41,12 @@ const char *const *agc_proc_suffixes(void) {
   return none;
 }
 
+bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize) {
+  return asize == bsize && memcmp(a, b, asize) == 0;
+}
+
+bool agc_proc_env_case_blind(void) { return false; }
+
 bool agc_proc_drains(void) { return true; }
 
 int64_t agc_proc_read_now(intptr_t fd, uint8_t *buf, size_t len) {

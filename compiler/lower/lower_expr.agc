@@ -794,18 +794,50 @@ def lower_invoke(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Invoke, want: Int) 
   fx = Lowering.alloc(fx)
   base = fx.next - 1
   target = try lower_expression(cx, fx, node.target, base, false, false)
-  fx = target.fx
+  return finish_invoke(cx, target.fx, node.args, node.span, saved, base, want)
+end
+
+# `s.name(args)` for an Fn field: the field is read into the callee register, then called as `.call(args)` is.
+def lower_field_call(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.MethodCall, want: Int) -> Result[Lowering.Out]
+  fx = Lowering.step(fx, node.span)
+  saved = fx.next
+  fx = Lowering.alloc(fx)
+  base = fx.next - 1
+  source = try lower_expression(cx, fx, node.target, -1, false, false)
+  info = cx.structs[Types.name(Lowering.static_type(cx, node.target))]
+  fx = Lowering.emit_at(source.fx, "field", [base, source.slot, info.positions[node.name]], node.name_span)
+  return finish_invoke(cx, fx.with(next: base + 1), node.args, node.span, saved, base, want)
+end
+
+def field_call?(resolved: State.Resolved) -> Bool
+  case resolved
+    State.Resolved.FieldCall -> return true
+    _ -> return false
+  end
+end
+
+# The arguments go in the registers after the callee at base, then call-value; the result is moved to want, or stays
+# in base.
+def finish_invoke(
+  cx: Lowering.Cx,
+  fx: Lowering.Fx,
+  args: List[Ast.Expr],
+  span: Source.Span,
+  saved: Int,
+  base: Int,
+  want: Int,
+) -> Result[Lowering.Out]
   index = 1
-  while index <= node.args.size
+  while index <= args.size
     fx = Lowering.alloc(fx.with(next: base + index))
-    out = try lower_expression(cx, fx, node.args[index - 1], fx.next - 1, false, false)
+    out = try lower_expression(cx, fx, args[index - 1], fx.next - 1, false, false)
     fx = out.fx
     index += 1
   end
 
-  fx = Lowering.emit_at(fx, "call-value", [base, node.args.size], node.span)
+  fx = Lowering.emit_at(fx, "call-value", [base, args.size], span)
   if want >= 0
-    fx = Lowering.emit_at(fx, "move", [want, base], node.span)
+    fx = Lowering.emit_at(fx, "move", [want, base], span)
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 
@@ -861,6 +893,10 @@ def lower_method_checked(
   resolved = cx.resolved.get(node.id)
   if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
+    if field_call?(resolved.unwrap!)
+      return lower_field_call(cx, fx, node, want)
+    end
+
     return lower_resolved(cx, fx, node.target, node.args, node.span, node.id, resolved.unwrap!, want, void)
   end
 
@@ -907,6 +943,8 @@ def lower_resolved(
     State.Resolved.Text(type) -> return lower_text(cx, fx, receiver, type, span, want)
     State.Resolved.Inspect(type) -> return lower_inspect(cx, fx, receiver, type, span, want)
     State.Resolved.Members(fields) -> return Data.lower_members(cx, fx, fields, span, want)
+    State.Resolved.FieldCall ->
+      return error(Lowering.internal(cx, "a field call is lowered with its method call", span))
     State.Resolved.Call(name, type) ->
       literal = literal_text(receiver)
       if name == "String.bytes" and args.empty? and literal.some?
