@@ -1,13 +1,15 @@
 /*
  * Deep equality (agc_equal and the builtin Value.equal of ==): 1,000,000-deep
- * lists and enums without C recursion, IEEE 754 for a NaN at any depth (an
- * object holding one is not equal to itself), and the hostile pairs.
+ * lists and enums without C recursion, wide maps and lists that grow the work
+ * stack while the walk allocates, IEEE 754 for a NaN at any depth, and the
+ * hostile pairs.
  */
 #include "../core.h"
 #include "builtin_test.h"
 
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 static agc_vm vm;
@@ -54,6 +56,46 @@ static void test_deep_values(void) {
   assert(!value_equal(nested_enum(depth, 7), nested_enum(depth, 8)));
 }
 
+static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
+
+/* A map of n keys whose values are one-item lists of a Json number (each compare encodes both, so it allocates), and
+   a list of n two-field structs whose second field is a list. Under GC_STRESS the walk collects while pairs are on
+   the work stack, which has grown past its inline part. */
+static agc_value wide_map(size_t n, int64_t last) {
+  agc_map *m = agc_new_map();
+  for (size_t k = 0; k < n; k++) {
+    char key[32];
+    snprintf(key, sizeof key, "key-%zu", k);
+    agc_value json = agc_json_number(k + 1 == n ? last : (int64_t)k);
+    m = agc_map_put(&vm, m, text(key), list_of(&json, 1));
+  }
+  return agc_map_value(m);
+}
+
+static agc_value wide_list(size_t n, int64_t last) {
+  agc_value *items = agc_alloc(n * sizeof(agc_value));
+  for (size_t k = 0; k < n; k++) {
+    agc_struct *s = agc_new_struct(0, 2);
+    agc_value inner[] = {text("x"), agc_int(k + 1 == n ? last : (int64_t)k)};
+    s->fields[0] = agc_int((int64_t)k);
+    s->fields[1] = list_of(inner, 2);
+    items[k] = agc_struct_value(s);
+  }
+  return list_of(items, n);
+}
+
+static void test_wide_values(void) {
+  assert(value_equal(wide_map(1000, -1), wide_map(1000, -1)));
+  assert(!value_equal(wide_map(1000, -1), wide_map(1000, -2)));
+  assert(value_equal(wide_list(1000, -1), wide_list(1000, -1)));
+  assert(!value_equal(wide_list(1000, -1), wide_list(1000, -2)));
+  agc_value deep_wide[] = {wide_map(200, 5), nested_list(50, 1), wide_list(200, 5), text("end")};
+  agc_value other[] = {wide_map(200, 5), nested_list(50, 1), wide_list(200, 5), text("end")};
+  assert(value_equal(list_of(deep_wide, 4), list_of(other, 4)));
+  other[3] = text("End");
+  assert(!value_equal(list_of(deep_wide, 4), list_of(other, 4)));
+}
+
 static void test_nan(void) {
   agc_value nan = agc_float(NAN);
   agc_value floats = list_of(&nan, 1);
@@ -91,6 +133,7 @@ int main(void) {
   agc_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_deep_values();
+  test_wide_values();
   test_nan();
   test_hostile_pairs();
   return 0;

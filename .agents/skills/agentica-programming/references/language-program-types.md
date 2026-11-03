@@ -77,7 +77,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - `List[T]`: homogeneous, immutable, indexed from 0. `Map[K, V]`: immutable,
   keeps insertion order, `K` is `Int`, `String` or `Bytes`. `Set[T]`: distinct,
   immutable, first-insertion order, `T` is `Int`, `String` or `Bytes`
-  (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, no `==`, not JSON-encodable.
+  (`CHECK-SET-ELEMENT-TYPE`), prints `Set[1, 2]`, `==` in any order, not
+  JSON-encodable.
 - `Bytes`: immutable byte string (`references/bytes.md`); `Bytes` is a reserved
   name.
 - `Result[T]`: `ok(value)` or `error(message)` (the message is a String); one

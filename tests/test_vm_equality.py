@@ -1,6 +1,7 @@
-"""== and != on structs, lists, maps and enums on the VM, against Python's own == as the independent peer: random pairs
-of nested values (equal copies, near copies and unrelated values) give the same answers; values 100,000 levels deep
-compare without a C or VM stack overflow.
+"""== and != on structs, lists, maps, sets, Results, Optionals and enums on the VM, against Python's own == as the
+independent peer: random pairs of nested values (equal copies, near copies and unrelated values, with map keys and set
+elements written in the other order on the right) give the same answers; values 100,000 levels deep compare without a
+C or VM stack overflow.
 """
 import random
 
@@ -14,6 +15,9 @@ enum Val
   L(List[Val])
   M(Map[String, Val])
   P(Pair)
+  T(Set[String])
+  R(Result[Val])
+  O(Optional[Val])
   N
 end
 
@@ -25,7 +29,8 @@ end
 """
 
 # A Python value is a tuple whose first item names the variant, so Python's == compares the variant first and then
-# the payload: a tuple in order (List, Pair), a dict in any order (Map), as the language rule says.
+# the payload: a tuple in order (List, Pair), a dict or a frozenset in any order (Map, Set), as the language rule says.
+# A Result is ("ok", v) or ("error", message); an Optional is None or the value.
 LEAVES = [("I", 0), ("I", 1), ("I", -7), ("F", 0.0), ("F", -0.0), ("F", 1.5), ("S", ""), ("S", "a"), ("S", "é"),
           ("N",)]
 
@@ -33,7 +38,15 @@ LEAVES = [("I", 0), ("I", 1), ("I", -7), ("F", 0.0), ("F", -0.0), ("F", 1.5), ("
 def value(rng, depth):
     if depth == 0 or rng.random() < 0.3:
         return rng.choice(LEAVES)
-    kind = rng.choice("LMP")
+    kind = rng.choice("LMPTRO")
+    if kind == "T":
+        return ("T", frozenset(rng.choice("abcd") for _ in range(rng.randint(1, 3))))
+    if kind == "R":
+        if rng.random() < 0.3:
+            return ("R", ("error", rng.choice(["x", "y"])))
+        return ("R", ("ok", value(rng, depth - 1)))
+    if kind == "O":
+        return ("O", None if rng.random() < 0.3 else value(rng, depth - 1))
     if kind == "L":
         return ("L", tuple(value(rng, depth - 1) for _ in range(rng.randint(0, 3))))
     if kind == "M":
@@ -53,13 +66,18 @@ def near(rng, v):
         key = rng.choice(sorted(items))
         items[key] = near(rng, items[key])
         return ("M", dict(reversed(list(items.items()))))
+    if v[0] == "R" and v[1][0] == "ok" and rng.random() < 0.8:
+        return ("R", ("ok", near(rng, v[1][1])))
+    if v[0] == "O" and v[1] is not None and rng.random() < 0.8:
+        return ("O", near(rng, v[1]))
     if v[0] == "P" and rng.random() < 0.8:
         left, right = v[1]
         return ("P", (near(rng, left), right)) if rng.random() < 0.5 else ("P", (left, near(rng, right)))
     return v if rng.random() < 0.5 else rng.choice(LEAVES)
 
 
-def text(v):
+def text(v, flip):
+    """The Agentica literal of v; flip writes map keys and set elements in the other order."""
     kind = v[0]
     if kind == "I":
         return "Val.I(%d)" % v[1]
@@ -70,10 +88,19 @@ def text(v):
     if kind == "N":
         return "Val.N"
     if kind == "L":
-        return "Val.L([%s])" % ", ".join(text(item) for item in v[1])
+        return "Val.L([%s])" % ", ".join(text(item, flip) for item in v[1])
     if kind == "M":
-        return "Val.M({%s})" % ", ".join('"%s": %s' % (key, text(item)) for key, item in v[1].items())
-    return "Val.P(Pair(left: %s, right: %s))" % (text(v[1][0]), text(v[1][1]))
+        pairs = sorted(v[1].items(), reverse=flip)
+        return "Val.M({%s})" % ", ".join('"%s": %s' % (key, text(item, flip)) for key, item in pairs)
+    if kind == "T":
+        return "Val.T(Set.new([%s]))" % ", ".join('"%s"' % item for item in sorted(v[1], reverse=flip))
+    if kind == "R":
+        if v[1][0] == "error":
+            return 'Val.R(error("%s"))' % v[1][1]
+        return "Val.R(ok(%s))" % text(v[1][1], flip)
+    if kind == "O":
+        return "Val.O(none)" if v[1] is None else "Val.O(some(%s))" % text(v[1], flip)
+    return "Val.P(Pair(left: %s, right: %s))" % (text(v[1][0], flip), text(v[1][1], flip))
 
 
 def test_random_pairs_compare_as_python_does(tmp_path):
@@ -84,7 +111,7 @@ def test_random_pairs_compare_as_python_does(tmp_path):
         pairs.append((a, near(rng, a) if rng.random() < 0.7 else value(rng, 4)))
     lines = []
     for a, b in pairs:
-        lines.append("  a = %s\n  b = %s\n  puts(\"#{a == b} #{a != b}\")" % (text(a), text(b)))
+        lines.append("  a = %s\n  b = %s\n  puts(\"#{a == b} #{a != b}\")" % (text(a, False), text(b, True)))
     program = TYPES + "def main() -> Void\n" + "\n".join(lines) + "\nend\n"
     vm = run_vm(compile_text(program, "equality_pairs", tmp_path), env=vm_environment())
     assert vm.code == 0, vm.stderr

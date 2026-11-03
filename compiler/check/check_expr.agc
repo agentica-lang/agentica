@@ -789,7 +789,8 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
 
     help = (
       "== compares numbers, Bool, String, nil, ranges, Bytes, and lists, maps, sets, Optionals, Results, " +
-      "structs and enums of those; functions, tasks, channels, handles and Json have no equality"
+      "structs and enums of those; functions, tasks, channels, handles, C.Pointer, Json and a generic T have no " +
+      "equality"
     )
     return error(type_error(cx, sides, node, message, help))
   end

@@ -747,9 +747,9 @@ puts(seen)
   `a`; `Set.subset?(a, b)` is true when every element of `a` is in `b`.
 - `for x in set` visits the elements in order. The set is read once before the
   loop, so assigning the variable in the body does not change the loop.
-- Sets print as `Set[1, 2]` (strings in their `inspect` form). There is no `==`
-  on sets and no index (`CHECK-NOT-INDEXABLE`); `Test.eq` compares two sets in
-  any order. A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
+- Sets print as `Set[1, 2]` (strings in their `inspect` form). `==` and
+  `Test.eq` compare two sets in any order; there is no index
+  (`CHECK-NOT-INDEXABLE`). A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a
   `Map` key, but it may be a field, a list item or a map value.
 - Functions are in
   [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).

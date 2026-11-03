@@ -21,8 +21,8 @@ end
 ```
 
 - Build and match variants with the alias: `Toml.Value.Str("x")`,
-  `Toml.Value.Table(map)`, and `Toml.Value.Table(entries) ->` in a `case`. Enums
-  have no `==`: compare with `case`.
+  `Toml.Value.Table(map)`, and `Toml.Value.Table(entries) ->` in a `case`. `==`
+  compares two `Toml.Value`s in depth (a `Table` in any key order).
 - The root of `parse` is always a `Table`. A `Map` keeps the order its keys were
   written in. An `Int` is signed 64-bit (a larger literal is an error). `Float`
   can hold `inf` and `nan`; a float too big for a `Float` reads as `inf`.

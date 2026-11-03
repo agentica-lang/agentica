@@ -6,6 +6,8 @@ description: Functions for List[T]. Each one is also a method on lists.
 
 Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`, `select` is `filter`.
 
+`xs == ys` is true when the two lists have the same length and equal items in the same order, compared in depth; the item type must have equality (not `Fn`, `Task`, `Channel`, a handle or `Json`).
+
 A callback is a block, `&name` or a function variable. It runs once per element, left to right, under the caller's budget. The parameter and return types must match exactly, and a `map` callback returns data, not `Void`. Annotated block parameters let an empty list or an empty `reduce` initial value infer its type. The costs on this page leave out the callback's own work.
 
 ## Build and read

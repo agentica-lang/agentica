@@ -243,8 +243,9 @@ export def equality?(cx: State.Cx, type: ResolvedType) -> Bool
   return data_walk(cx, type, {}, true).passes
 end
 
-## Why a type that equality? refuses has no equality: the innermost struct field or enum variant on the way
-## ("field User.on_save is Fn[User, Void]"), or "" when no struct or enum is on the way (List[Fn[Int, Int]]).
+## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
+## struct field or enum variant on the way ("field User.on_save is Fn[User, Void]"), or "" when neither is on the way
+## (List[Fn[Int, Int]]).
 export def equality_gap(cx: State.Cx, type: ResolvedType) -> String
   return data_walk(cx, type, {}, true).why
 end
@@ -1127,7 +1128,12 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   elsif Types.is?(type, "Json")
     return Walk(passes: !equal, seen: seen, why: "")
   elsif Types.is?(type, "Var")
-    return Walk(passes: cx.prelude, seen: seen, why: "")
+    why = ""
+    if !cx.prelude
+      why = "the type variable #{Types.name(type)} of a generic function could be a function"
+    end
+
+    return Walk(passes: cx.prelude, seen: seen, why: why)
   elsif Types.is?(type, "List")
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Map")
