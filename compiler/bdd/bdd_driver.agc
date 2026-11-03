@@ -174,6 +174,7 @@ def prepare_and_run(
     test_timeout_ms: options.test_timeout_ms,
     report_path: "#{directory}/report.txt",
   )
+
   try write_text("#{directory}/config.jsonl", Runner.config_text(config, entries, options.tags))
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran

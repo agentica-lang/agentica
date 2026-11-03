@@ -47,6 +47,7 @@ export def match_json(match: Model.Symbol) -> Json
     "span": DocJson.span_json(match.module, match.range),
     "name_span": DocJson.span_json(match.module, match.name_range),
   }
+
   if match.kind == "field"
     return JSON.object(fields.put("type", JSON.from(match.type)).put("struct", JSON.from(match.owner)))
   elsif match.kind == "variant"

@@ -113,6 +113,7 @@ def module_reply(path: String, module: DocModel.Module, as_json: Bool) -> Reply.
       "doc": DocJson.text_json(text_of(module.doc)),
       "items": JSON.array(items),
     })
+
     return Reply.printed("#{JSON.encode(answer)}\n")
   end
 

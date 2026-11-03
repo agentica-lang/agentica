@@ -26,7 +26,7 @@ export def check_builtin_call(
   expected: T.Type,
   entry: Model.Builtin,
 ) -> Result[State.Out]
-  selected = Builtins.form_for(entry, node.args.size)
+  selected = Builtins.form_for_call(entry, node.args.size, Ast.block_call?(node))
   if !selected.ok?
     # A block after the last argument of a builtin that takes none (each_slice) is a block with no target.
     try block_without_target(cx, st, node, entry)
@@ -88,6 +88,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     node.span,
     State.hint_of(old_form_help(name, node)),
   )
+
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
 
@@ -123,7 +124,7 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
   end
 
   last = node.args[node.args.size - 1]
-  without = Builtins.form_for(entry, node.args.size - 1)
+  without = Builtins.form_without_block(entry, node.args.size - 1)
   case last
     Ast.Expr.BlockLit(block) ->
       if without.ok?

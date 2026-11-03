@@ -27,6 +27,7 @@ export def json(found: Model.TypeAt) -> Json
     "definition": definition_json(found.definition),
     "help": found.help,
   }
+
   if found.partial
     return JSON.object(DiagnosticJson.partial(shape.put("type", typed(found.type)), found.diagnostics))
   end

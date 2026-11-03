@@ -86,6 +86,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     escaper: [],
     escaper_at: opener.span,
   )
+
   for line in body.lines
     case line_built(opener.span, body.indent, line, built)
       Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
@@ -112,6 +113,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     name("first", at),
     word("EOF", "", at),
   ]
+
   return Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
@@ -134,6 +136,7 @@ def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
     word("pipe", "|", at),
     word("NL", "\n", at),
   ]
+
   if built.escaper.size > 0
     here = built.escaper_at
     bound = [
@@ -147,6 +150,7 @@ def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
       word("right-bracket", "]", here),
       word("assign", "=", here),
     ]
+
     head = appended(appended(head, bound), built.escaper).push(word("NL", "\n", here))
   end
 
@@ -288,6 +292,7 @@ def unterminated_tag(line: Tokens.EagLine, open_at: Int) -> Diag.Diagnostic
     line: line.start.line,
     column: line.text.length + 1,
   )
+
   return Diag.fail(
     UNTERMINATED_TAG,
     "a tag has no end on its line",
@@ -456,6 +461,7 @@ def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, c
       head,
       [name(Ast.EAG_ESCAPER, here), word("dot", ".", here), name("call", here), word("left-paren", "(", here)],
     )
+
     tail = [closed, word("right-paren", ")", here), word("right-paren", ")", here)]
   end
 
@@ -471,6 +477,7 @@ def tag_span(line: Tokens.EagLine, part: Part) -> Source.Span
     line: start.line,
     column: start.column + part.text.length,
   )
+
   return Source.Span(start: start, stop: stop)
 end
 

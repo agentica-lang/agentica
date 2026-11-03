@@ -764,6 +764,7 @@ def test(session: Session, words: List[String]) -> Int
     "--test-timeout-ms",
     "30000",
   ]
+
   if options.seed != ""
     driver = driver.concat(["--seed", options.seed])
   end

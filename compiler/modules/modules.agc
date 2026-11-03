@@ -317,6 +317,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     held: {},
     stubbed: false,
   )
+
   entered = try enter(settings, walk.with(root_dir: root_dir, build: build), first, taken.fresh)
   return run(settings, entered)
 end
@@ -625,6 +626,7 @@ def bind_name(
     frame.aliases.has_key?(entry.local) or
     named.has_key?(entry.local)
   )
+
   if taken or BARE_NAMES.include?(entry.local) or RESERVED.include?(entry.local)
     return error(
       Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp),
@@ -693,6 +695,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     held: held(entry),
     stubbed: taken.stubbed,
   )
+
   return enter(settings, walk, parsed, taken.fresh)
 end
 
@@ -754,6 +757,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     clean: false,
     constants: {},
   )
+
   frame = Frame(
     module: module,
     aliases: {},
@@ -763,6 +767,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     next: 0,
     pending: "",
   )
+
   return ok(
     walk.with(
       stack: walk.stack.push(frame),

@@ -476,7 +476,7 @@ end
 
 ## Pipes
 
-Use a pipe for three or more steps on one value. Start with the value, and put one step per line inside parentheses:
+Use a pipe for two or more `|>` steps on one value. Start with the value, and put one step per line inside parentheses (`agentica fmt` does it, and puts an empty line after any statement that takes several lines):
 
 ```agentica {mode="check"}
 # good

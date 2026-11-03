@@ -75,6 +75,7 @@ export def pack(found: Problem) -> String
     found.signature,
     found.labels.size.to_s,
   ]
+
   for label in found.labels
     fields = fields.concat([span_text(label.span), label.text])
   end

@@ -1,0 +1,59 @@
+# The layout of pipe chains and of the empty line after a statement that takes several lines.
+
+def pipes(users: List[User], conn: Conn) -> Void
+  admins = try (Orm.from(users)
+    |> Orm.where_eq("admin", Db.Value.Bool(true))
+    |> Orm.all(conn))
+  for user in admins
+    puts(user)
+  end
+  single = users |> count()
+  total = users |> count() |> double()
+  total += 1
+  # The comments around a chain keep their place.
+  noted = (users
+    |> count()
+    |> double()) # after the chain
+  # alone after the chain
+  puts(noted)
+  return users |> count() |> double()
+end
+
+def wrapped(first_argument_value: String, second_argument_value: String, third_argument_value: String) -> Void
+  result = some_function_name(first_argument_value, second_argument_value, third_argument_value, fourth_value_of_the_call, fifth_value)
+  values = [first_value_in_the_list, second_value_in_the_list, third_value_in_the_list, fourth_value_of_the_list, fifth_value]
+  # A comment above a wrapped statement stays above it.
+  point = Point(x: compute_the_first_coordinate(xs, name), y: compute_the_second_coordinate(xs, name, total), third: 100000)
+  # The comment of the statement that follows.
+  short = 1
+  other = 2
+  if short > other
+    chain = short |> double() |> double()
+  else
+    chain = short |> double() |> double()
+  end
+
+  after = 3
+  puts(after)
+  return point.with(x: 1)
+end
+
+def nested(xs: List[Int], ok: Bool) -> Void
+  # A chain inside a larger expression, an argument, a one-line block or an arm keeps the fit rule.
+  same = xs |> twice() |> twice() == 4
+  puts(xs |> twice() |> twice())
+  ys = xs.map do |x| x |> twice() |> twice() end
+  case ok
+    true -> xs |> twice() |> twice()
+    _ -> puts(1)
+  end
+  return xs |> twice() |> twice()
+end
+
+def wide(xs: List[Int]) -> Void
+  short = xs |> twice() |> twice() # short
+  # A trailing comment too wide for the line goes after the statement, under its empty line.
+  wide = xs |> twice() |> twice() # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of its own after the statement
+  next = 1
+  last = xs |> twice() |> twice() # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of its own after the statement
+end

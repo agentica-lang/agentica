@@ -193,6 +193,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
           tags: pending,
           span: where,
         )
+
         has_current = true
         pending = []
         mode = "scenario"
@@ -220,6 +221,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         argument: Argument.NoArgument,
         span: at_keyword(where, src.raws[cursor]),
       )
+
       if mode == "background"
         background = background.push(step)
       else
@@ -329,6 +331,7 @@ def read_lines(file: String, text: String) -> Source
     end
     part
   end
+
   return Source(file: file, raws: raws, texts: raws.map do |raw| raw.strip end)
 end
 
@@ -544,6 +547,7 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
     end
     rest_of(value, blanks)
   end
+
   return Outcome.Done(Doc(text: content.join("\n"), next: cursor + 1))
 end
 

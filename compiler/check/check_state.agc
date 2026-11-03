@@ -252,6 +252,7 @@ export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, sp
     span,
     hint_of(Help.conversion(expected, actual)),
   )
+
   return Failure.pack(base.with(expected: Types.to_text(expected), actual: Types.to_text(actual)))
 end
 

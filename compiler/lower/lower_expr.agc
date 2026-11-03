@@ -7,7 +7,6 @@
 
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
-import {PRELUDE} from "../catalog/builtins"
 import State from "../check/check_state"
 import ConstWalk from "../check/const_walk"
 import Defaults from "../check/defaults"
@@ -115,10 +114,10 @@ export def lower_call(
 ) -> Result[Lowering.Out]
   span = node.span
   count = node.args.size
-  form = Builtins.ref(node.name, count)
+  form = Builtins.call_ref(node.name, count, Ast.block_call?(node))
   key = ""
   target = node.name
-  prelude = form.ok? and PRELUDE.has_key?(node.name)
+  prelude = form.ok? and Builtins.prelude_form?(form.unwrap!)
   if prelude
     # A builtin written in the prelude is an ordinary call of its function (the checker chose which), and never a tail
     # call: the VM reports a runtime error of the callee at the frame of this call.
@@ -923,6 +922,7 @@ def lower_resolved(
         parenthesized: false,
         span: span,
       )
+
       return lower_call(cx, fx, call, want, void, true, false)
   end
 end
