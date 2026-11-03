@@ -9,17 +9,21 @@
 ##
 ## Words the parser understands:
 ##
-## - `--port 3000`, `--port=3000`, `-p 3000` and `-p3000`; a flag is `--verbose` or `-v`, and short flags may
-##   be joined (`-vq`). A value is the next word whatever it holds, so `--offset -1` works.
+## - `--port 3000`, `--port=3000`, `-p 3000`, `-p3000` and `-p=3000`; a flag is `--verbose` or `-v`, and short flags
+##   may be joined (`-vq`). As in argparse, the next word is a value only if it does not look like an option: a
+##   negative number (`-1`, `-2.5`) and a lone `-` are values, any other word that starts with `-` is not, and the
+##   option is missing its value. `--name=--x` and `-n--x` give the literal. A negative number is also an argument.
 ## - `--` ends the options; every later word is a positional argument, as is a lone `-`.
 ## - `--help` or `-h` asks for the usage text: `parse` then returns an error for which `help?` is true.
 ## - An option given twice keeps its last value.
 ##
 ## Every error of `parse` is `"program: message"` plus a hint line (`Try 'program --help' for more information`),
-## ready to print; the message names the option or argument. A mistake in the specification itself (a duplicate
-## name, a default that is not an Int) is an error too, from `parse`, without the hint. A getter called with a
-## name that was not declared, with the wrong kind, or for a value that may be absent halts the program
-## (`RUNTIME-UNWRAP-ERROR`, whose stack names the line of the call): that is a bug of the program, not of the user.
+## and the message names the option or argument. Print an error with `message(error)`, not as it is: for a help
+## request (`help?` is true) the raw text starts with a marker line that `message` leaves out. A mistake in the
+## specification itself (a duplicate name, a default that is not an Int) is an error too, from `parse`, without the
+## hint. A getter called with a name that was not declared, with the wrong kind, or for a value that may be absent
+## halts the program (`RUNTIME-UNWRAP-ERROR`, whose stack names the line of the call): that is a bug of the
+## program, not of the user.
 
 # The first line of the error that stands for a request of help; what follows it is the usage text.
 HELP_MARK = "option_parser: help\n"
@@ -66,7 +70,7 @@ end
 ## The converted values of a command line, read by the getters. Treat it as opaque: `kinds` says which names were
 ## declared and with what kind, the other maps hold the values that are present.
 export struct Parsed
-  kinds: Map[String, String]
+  kinds: Map[String, Kind]
   strings: Map[String, String]
   ints: Map[String, Int]
   floats: Map[String, Float]
@@ -124,6 +128,16 @@ export def help?(message: String) -> Bool
   return message.start_with?(HELP_MARK)
 end
 
+## Returns the text to print for an error of `parse`: the usage text when `help?` is true, without the marker line,
+## and the message itself otherwise. A program that prints errors itself uses this and never prints the raw message
+## of a help request.
+export def message(error_text: String) -> String
+  if help?(error_text)
+    return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length)
+  end
+  return error_text
+end
+
 ## Returns the help text: the usage line, the description and a row for every argument and option.
 export def usage(parser: Parser) -> String
   slots = slots_unchecked(parser)
@@ -158,7 +172,7 @@ end
 export def run![T](result: Result[T]) -> T
   case result
     ok(value) -> return value
-    error(message) -> finish(message)
+    error(text) -> finish(text)
   end
   return result.unwrap!
 end
@@ -166,58 +180,59 @@ end
 ## Returns the value of a String option or argument. The option needs a default (or be an argument); otherwise use
 ## `optional_string`.
 export def string(parsed: Parsed, name: String) -> String
-  require(parsed, name, "string", parsed.strings.key?(name))
+  require(parsed, name, Kind.String, parsed.strings.key?(name))
   return parsed.strings[name]
 end
 
 ## Returns the value of an Int option or argument; see `string`.
 export def int(parsed: Parsed, name: String) -> Int
-  require(parsed, name, "int", parsed.ints.key?(name))
+  require(parsed, name, Kind.Int, parsed.ints.key?(name))
   return parsed.ints[name]
 end
 
 ## Returns the value of a Float option or argument; see `string`.
 export def float(parsed: Parsed, name: String) -> Float
-  require(parsed, name, "float", parsed.floats.key?(name))
+  require(parsed, name, Kind.Float, parsed.floats.key?(name))
   return parsed.floats[name]
 end
 
 ## Returns true when the flag was given, false otherwise.
 export def flag(parsed: Parsed, name: String) -> Bool
-  require(parsed, name, "flag", true)
+  require(parsed, name, Kind.Flag, true)
   return parsed.flags[name]
 end
 
 ## Returns the value of a String option, or `none` when it was not given and has no default.
 export def optional_string(parsed: Parsed, name: String) -> Optional[String]
-  require(parsed, name, "string", true)
+  require(parsed, name, Kind.String, true)
   return parsed.strings.get(name)
 end
 
 ## Returns the value of an Int option, or `none` when it was not given and has no default.
 export def optional_int(parsed: Parsed, name: String) -> Optional[Int]
-  require(parsed, name, "int", true)
+  require(parsed, name, Kind.Int, true)
   return parsed.ints.get(name)
 end
 
 ## Returns the value of a Float option, or `none` when it was not given and has no default.
 export def optional_float(parsed: Parsed, name: String) -> Optional[Float]
-  require(parsed, name, "float", true)
+  require(parsed, name, Kind.Float, true)
   return parsed.floats.get(name)
 end
 
 # Halts with a bug of the program: an undeclared name, the wrong getter for a kind, or a plain getter for a value
 # that may be absent. `present` is whether the value exists.
-def require(parsed: Parsed, name: String, kind: String, present: Bool) -> Void
+def require(parsed: Parsed, name: String, kind: Kind, present: Bool) -> Void
   declared = parsed.kinds.get(name)
   if declared.none?
     bug("no option or argument is named '#{name}'")
   end
-  if declared.unwrap! != kind
-    bug("'#{name}' is declared as #{declared.unwrap!} but read as #{kind}")
+  # Enums have no ==, so the kinds are compared by name.
+  if kind_name(declared.unwrap!) != kind_name(kind)
+    bug("'#{name}' is declared as #{kind_name(declared.unwrap!)} but read as #{kind_name(kind)}")
   end
   if !present
-    bug("'#{name}' has no default and was not given: read it with optional_#{kind}")
+    bug("'#{name}' has no default and was not given: read it with optional_#{kind_name(kind)}")
   end
 end
 
@@ -228,12 +243,12 @@ def bug(message: String) -> Void
 end
 
 # The one place that ends the program.
-def finish(message: String) -> Void
-  if help?(message)
-    puts(message.slice(HELP_MARK.length, message.length - HELP_MARK.length))
+def finish(error_text: String) -> Void
+  if help?(error_text)
+    puts(message(error_text))
     System.exit(0)
   end
-  IO.warn(message)
+  IO.warn(error_text)
   System.exit(2)
 end
 
@@ -246,12 +261,12 @@ def kind_name(kind: Kind) -> String
   end
 end
 
-def kind_noun(kind: Kind) -> String
+def flag_kind?(kind: Kind) -> Bool
   case kind
-    Kind.Int -> return "an Int"
-    Kind.Float -> return "a Float"
-    Kind.String -> return "a String"
-    Kind.Flag -> return "a Flag"
+    Kind.Flag -> return true
+    Kind.Int -> return false
+    Kind.Float -> return false
+    Kind.String -> return false
   end
 end
 
@@ -267,7 +282,7 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       help: arg.help,
       metavar: arg.metavar,
       positional: true,
-      flag: false,
+      flag: flag_kind?(arg.kind),
     )
   end
   options = parser.opts.map do |opt|
@@ -280,7 +295,7 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       help: opt.help,
       metavar: opt.metavar,
       positional: false,
-      flag: kind_name(opt.kind) == "flag",
+      flag: flag_kind?(opt.kind),
     )
   end
   return positionals.concat(options)
@@ -289,6 +304,9 @@ end
 # The slots, once the specification is checked: names and short names are well formed, free and different, and
 # every default is valid for its kind and choices.
 def slots_of(parser: Parser) -> Result[List[Slot]]
+  if parser.program.empty?
+    return error("option_parser: invalid specification: the program name is empty")
+  end
   slots = slots_unchecked(parser)
   names = Set.new(["help"])
   shorts = Set.new(["h"])
@@ -302,16 +320,27 @@ def slots_of(parser: Parser) -> Result[List[Slot]]
 end
 
 def check_names(parser: Parser, slot: Slot, names: Set[String], shorts: Set[String]) -> Result[Void]
-  if slot.name.empty? or slot.name.start_with?("-") or slot.name.include?("=") or slot.name.include?(" ")
+  if slot.name.empty? or slot.name.start_with?("-") or slot.name.include?("=") or spaced?(slot.name)
     return bad_spec(parser, "'#{slot.name}' is not a valid name")
   end
   if names.include?(slot.name)
     return bad_spec(parser, "the name #{label(slot)} is used twice or is reserved")
   end
-  if !slot.short.empty? and (slot.short.length != 1 or slot.short == "-" or shorts.include?(slot.short))
+  if !slot.short.empty? and (!letter?(slot.short) or shorts.include?(slot.short))
     return bad_spec(parser, "the short name '#{slot.short}' of #{label(slot)} is not one free character")
   end
   return ok()
+end
+
+# Whether the text has a space or a control character.
+def spaced?(text: String) -> Bool
+  return text.split("").any? do |character| character.code <= 32 or character.code == 127 end
+end
+
+# One character that is not a space, a control character, "-", "=" or a digit: a digit would read as a negative
+# number, and "=" as the end of the name.
+def letter?(text: String) -> Bool
+  return text.length == 1 and !spaced?(text) and text != "-" and text != "=" and !digits?(text)
 end
 
 def check_slot(parser: Parser, slot: Slot) -> Result[Void]
@@ -347,7 +376,7 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
   ended = false
   while i < args.size
     word = args[i]
-    if ended or word == "-" or !word.start_with?("-")
+    if ended or value_word?(word)
       words = words.push(word)
       i = i + 1
     elsif word == "--"
@@ -396,7 +425,7 @@ def read_long(reader: Reader, values: Map[String, String], i: Int) -> Result[Ste
     text = body.slice(equals.unwrap! + 1, body.length - equals.unwrap! - 1)
     return ok(Step(values: values.put(name, text), next: i + 1, help: false))
   end
-  if i + 1 >= reader.args.size
+  if i + 1 >= reader.args.size or !value_word?(reader.args[i + 1])
     return failure(reader.parser, "option --#{name} needs a value")
   end
   return ok(Step(values: values.put(name, reader.args[i + 1]), next: i + 2, help: false))
@@ -416,14 +445,42 @@ def read_short(reader: Reader, values: Map[String, String], i: Int) -> Result[St
       found = found.put(slot.name, "true")
       j = j + 1
     elsif j + 1 < letters.size
-      return ok(Step(values: found.put(slot.name, letters.drop(j + 1).join("")), next: i + 1, help: false))
-    elsif i + 1 < reader.args.size
+      return ok(Step(values: found.put(slot.name, joined_value(letters, j + 1)), next: i + 1, help: false))
+    elsif i + 1 < reader.args.size and value_word?(reader.args[i + 1])
       return ok(Step(values: found.put(slot.name, reader.args[i + 1]), next: i + 2, help: false))
     else
       return failure(reader.parser, "option --#{slot.name} needs a value")
     end
   end
   return ok(Step(values: found, next: i + 1, help: false))
+end
+
+# The rest of a joined short option from letters[from]: `-p3000` and `-p=3000` both give 3000, as in argparse.
+def joined_value(letters: List[String], from: Int) -> String
+  rest = letters.drop(from).join("")
+  if rest.start_with?("=")
+    return rest.slice(1, rest.length - 1)
+  end
+  return rest
+end
+
+# Whether a word is an argument or the value of an option, not an option: it does not start with "-", or it is "-" or
+# a negative number (`-1`, `-2.5`, `-.5`), as in argparse. Any other word that starts with "-" is an option, so
+# `--port --verbose` is a missing value; `--port=--x` and `-p--x` give the literal.
+def value_word?(word: String) -> Bool
+  if !word.start_with?("-") or word == "-"
+    return true
+  end
+  parts = word.slice(1, word.length - 1).split(".")
+  if parts.size == 1
+    return digits?(parts[0])
+  end
+  return parts.size == 2 and (parts[0].empty? or digits?(parts[0])) and digits?(parts[1])
+end
+
+# Whether the text is one or more of the digits 0 to 9.
+def digits?(text: String) -> Bool
+  return !text.empty? and text.split("").all? do |character| "0123456789".include?(character) end
 end
 
 # The option with this long name, or with this short name when `short` is true.
@@ -455,7 +512,7 @@ def build(parser: Parser, slots: List[Slot], scan: Scan) -> Result[Parsed]
   end
   parsed = empty_parsed()
   for slot in slots
-    parsed = parsed.with(kinds: parsed.kinds.put(slot.name, kind_name(slot.kind)))
+    parsed = parsed.with(kinds: parsed.kinds.put(slot.name, slot.kind))
     if slot.flag
       parsed = parsed.with(flags: parsed.flags.put(slot.name, values.key?(slot.name)))
     elsif values.key?(slot.name)

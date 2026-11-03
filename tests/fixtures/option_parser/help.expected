@@ -8,5 +8,6 @@ Arguments:
 Options:
   -p, --port PORT  port (default: 8080)
   -v, --verbose    more output
-      --user USER  user name
+  -q, --quiet      less output
+  -u, --user USER  user name
   -h, --help       show this help

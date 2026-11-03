@@ -11,6 +11,7 @@ def parser() -> OP.Parser
       Opt(name: "ratio", kind: K.Float, help: "scale"),
       Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
       Opt(name: "quiet", short: "q", kind: K.Flag),
+      Opt(name: "label", short: "l"),
       Opt(name: "user", kind: K.String, choices: ["ana", "bob"], help: "user name"),
       Opt(name: "mode", short: "m", default: "fast", choices: ["fast", "slow"]),
     ],
@@ -35,6 +36,8 @@ def main() -> Void
         ["--port=3000", "f", "-v"],
         ["-p3000", "-vq", "f"],
         ["-v", "--port", "3000", "--", "f"],
+        ["-p=3000", "-v", "f"],
+        ["-vp3000", "f"],
       ]
       for args in forms
         p = try OP.parse(parser(), args)
@@ -50,7 +53,15 @@ def main() -> Void
       try Test.eq(OP.flag(p, "quiet"), true)
       try Test.eq(OP.string(p, "user"), "ana")
       try Test.eq(OP.string(p, "mode"), "slow")
-      Test.eq(OP.string(p, "file"), "-x")
+      try Test.eq(OP.string(p, "file"), "-x")
+      negative = try OP.parse(parser(), ["-p", "-1", "--ratio", "-2.5", "-5"])
+      try Test.eq(OP.int(negative, "port"), -1)
+      try Test.eq(OP.float(negative, "ratio"), -2.5)
+      try Test.eq(OP.string(negative, "file"), "-5")
+      literal = try OP.parse(parser(), ["--label=--x", "f"])
+      try Test.eq(OP.string(literal, "label"), "--x")
+      joined = try OP.parse(parser(), ["-l--y", "f"])
+      Test.eq(OP.string(joined, "label"), "--y")
     end,
     Test.test("defaults fill the options that are not given and the others are none") do
       p = try OP.parse(parser(), ["f"])
@@ -68,13 +79,17 @@ def main() -> Void
       try fails(["-x", "f"], "unknown option -x")
       try fails(["f", "--port"], "option --port needs a value")
       try fails(["f", "-p"], "option --port needs a value")
+      try fails(["--port", "--verbose", "f"], "option --port needs a value")
+      try fails(["--user", "-v", "f"], "option --user needs a value")
       try fails(["--port", "abc", "f"], "invalid value for --port: 'abc' is not an Int")
       try fails(["--ratio", "x", "f"], "invalid value for --ratio: 'x' is not a Float")
       try fails(["--user", "cy", "f"], "invalid value for --user: 'cy' is not one of ana, bob")
       try fails(["--verbose=1", "f"], "option --verbose does not take a value")
       try fails([], "missing argument <file>")
       try fails(["f", "g"], "unexpected argument 'g'")
-      Test.assert(!OP.help?(OP.parse(parser(), ["--bogus"]).message), "an error is not a request for help")
+      failed = OP.parse(parser(), ["--bogus"]).message
+      try Test.assert(!OP.help?(failed), "an error is not a request for help")
+      Test.eq(OP.message(failed), failed)
     end,
     Test.test("a wrong specification is an error of parse, with the option named") do
       cases = [
@@ -82,8 +97,13 @@ def main() -> Void
         OP.new("tool", "", [], [Opt(name: "a", short: "p"), Opt(name: "b", short: "p")]),
         OP.new("tool", "", [Arg(name: "a"), Arg(name: "a")]),
         OP.new("tool", "", [], [Opt(name: "mode", choices: ["a"], default: "b")]),
+        OP.new("tool", "", [Arg(name: "file", kind: K.Flag)]),
+        OP.new("tool", "", [], [Opt(name: "eq", short: "=")]),
+        OP.new("tool", "", [], [Opt(name: "one", short: "1")]),
+        OP.new("tool", "", [], [Opt(name: "a b")]),
+        OP.new("", "", [], []),
       ]
-      names = ["--port", "--b", "<a>", "--mode"]
+      names = ["--port", "--b", "<a>", "--mode", "<file>", "--eq", "--one", "a b", "program name"]
       for index in 0...cases.size
         failed = OP.parse(cases[index], [])
         try Test.assert(!failed.ok?, "the specification #{index} is refused")
@@ -106,6 +126,7 @@ def main() -> Void
         "      --ratio RATIO  scale",
         "  -v, --verbose      more output",
         "  -q, --quiet",
+        "  -l, --label LABEL",
         "      --user USER    user name (choices: ana, bob)",
         "  -m, --mode MODE    (default: fast) (choices: fast, slow)",
         "  -h, --help         show this help",
@@ -114,7 +135,7 @@ def main() -> Void
       for args in [["--help"], ["f", "-h"], ["-vh"]]
         help = OP.parse(parser(), args)
         try Test.assert(OP.help?(help.message), "#{args} asks for help")
-        try Test.assert(help.message.end_with?(expected), "the help text follows the mark")
+        try Test.eq(OP.message(help.message), expected)
       end
       after = try OP.parse(parser(), ["--", "-h"])
       Test.eq(OP.string(after, "file"), "-h")

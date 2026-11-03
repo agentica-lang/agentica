@@ -19,6 +19,7 @@ OP.optional_float(parsed: Parsed, name: String) -> Optional[Float]
 OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
+OP.message(error_text: String) -> String
 ```
 
 ```agentica {mode="check"}
@@ -67,11 +68,12 @@ Opt(name: String, short: String = "", kind: Kind = Kind.String, default: String 
     help: String = "", metavar: String = "")
 ```
 
-`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag`, and every argument is required. `short` is one character. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`--port PORT`; `<file>` for an argument).
+`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag` (an error of `parse`), and every argument is required. `short` is one character: not a digit, `-`, `=` or a space. A name has no space or control character, and `program` is not empty. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`--port PORT`; `<file>` for an argument).
 
 ## The command line
 
-- `--port 3000`, `--port=3000`, `-p 3000` and `-p3000` give a value to an option. A value is the next word whatever it holds, so `--offset -1` works.
+- `--port 3000`, `--port=3000`, `-p 3000`, `-p3000` and `-p=3000` give a value to an option. As in argparse, the next word is taken as the value only if it does not look like an option: a word that does not start with `-`, a lone `-` and a negative number (`-1`, `-2.5`) are values. Any other word that starts with `-` is not, so `--port --verbose` is an error (`option --port needs a value`). `--name=--x` and `-n--x` give the literal `--x`.
+- A negative number is also an argument: `tool -5` gives the argument `-5`. Any other word that starts with `-` is an option (use `--` before it).
 - `-v` and `--verbose` set a flag, and short flags may be joined: `-vq`. The last letter of a joined group may take a value (`-vp3000`).
 - `--` ends the options: every later word is an argument, as is a lone `-`.
 - An option given twice keeps its last value.
@@ -115,7 +117,7 @@ A getter called with a name that was not declared, with the getter of another ki
 
 ## Errors
 
-`parse` returns an `error` for a mistake of the command line. The text is ready to print: `tool: ` and a message that names the option or the argument, then a line `Try 'tool --help' for more information`. The messages are:
+`parse` returns an `error` for a mistake of the command line. The text is `tool: ` and a message that names the option or the argument, then a line `Try 'tool --help' for more information`. A program that prints the error itself prints `OP.message(error_text)`: it is the text as it is, except for a request of help (below), where it leaves out a marker line that the raw text starts with. The messages are:
 
 - `unknown option --bogus` (or `-x`)
 - `option --port needs a value`
@@ -180,5 +182,7 @@ Options:
       --user USER  user name (choices: ana, bob)
   -h, --help       show this help
 ```
+
+A program that handles the `error` itself tests `OP.help?(message)` first, or just prints `OP.message(message)`, which gives the help text for a request of help and the message otherwise.
 
 `OP.run!(result)` is the one function of the module that ends the program, and it is the usual last step. It returns the value of an `ok`. For the help it prints `OP.usage` to standard output and exits with 0; for any other `error` it prints the message to standard error and exits with 2. The name ends in `!` as the halting functions do, because it does not return when the result is an error. A program that wants another behavior reads `parse` itself and calls `System.exit`.

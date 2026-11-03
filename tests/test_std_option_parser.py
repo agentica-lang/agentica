@@ -29,13 +29,14 @@ def peer():
     parser.add_argument("file")
     parser.add_argument("-p", "--port", type=int, default=8080)
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--user")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("-u", "--user")
     return parser
 
 
 def peer_line(args):
     got = peer().parse_args(args)
-    return f"file={got.file} port={got.port} verbose={str(got.verbose).lower()} user={got.user or 'none'}"
+    return f"file={got.file} port={got.port} verbose={str(got.verbose).lower()} quiet={str(got.quiet).lower()} user={got.user or 'none'}"
 
 
 VALID = [
@@ -51,6 +52,15 @@ VALID = [
     ["-p", "-5", "f"],
     ["--", "-f"],
     ["-v", "--", "f"],
+    ["-vq", "f"],
+    ["-vqp3000", "f"],
+    ["-qvp", "3000", "f"],
+    ["-p=3000", "f"],
+    ["--port=-1", "f"],
+    ["-5"],
+    ["--user=--x", "f"],
+    ["-u--x", "f"],
+    ["-u=ana", "f"],
 ]
 
 
@@ -68,6 +78,9 @@ WRONG = [
     (["f", "--port"], "option --port needs a value"),
     (["--port", "abc", "f"], "invalid value for --port: 'abc' is not an Int"),
     (["--verbose=1", "f"], "option --verbose does not take a value"),
+    (["--port", "--verbose", "f"], "option --port needs a value"),
+    (["f", "-u", "-v"], "option --user needs a value"),
+    (["-p", "-x", "f"], "option --port needs a value"),
     ([], "missing argument <file>"),
     (["f", "g"], "unexpected argument 'g'"),
 ]
