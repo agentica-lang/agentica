@@ -11,6 +11,11 @@
 ## goes on its own line after its line. A `Fill` packs its items greedily, breaking only the separators that must
 ## break.
 ##
+## A `Measure` wraps a statement and notes, when it ends (`Measured`), whether the statement took more than one line;
+## the `GapLine` between two items of a body then writes an empty line after it, under which go the comments below the
+## statement. A `Trailing` comment of such a statement goes after its last line, never above it, so that the text
+## formats to itself.
+##
 ## The printer keeps an explicit stack and never recurses, and an indent is written only before text, so no line ends
 ## in spaces.
 
@@ -52,6 +57,10 @@ export enum Doc
   ## The end of a `Measure`, which holds the line the statement started on: the printer's own piece, never built by a
   ## layout.
   Measured(Int)
+  ## A comment after a statement that a `Measure` just ended: like `LineSuffix`, except that on a statement of several
+  ## lines a comment that does not fit after the last line goes on its own line after the statement, not above that
+  ## line, where it would sit inside the brackets of the statement.
+  Trailing(String)
   ## A line break, then an empty line when the last `Measure` took more than one line. A comment `Below` the line goes
   ## under the empty line, where the next pass reads it as the next item's.
   GapLine
@@ -120,6 +129,18 @@ export def render(doc: Doc, width: Int) -> String
       Doc.Comment(text) -> out = comment(out, text, indent, width)
       Doc.After(lines) -> out = out.with(afters: out.afters.push(lines))
       Doc.Below(text) -> out = out.with(belows: out.belows.push(text))
+      Doc.Trailing(text) ->
+        written = out.line.length
+        for suffix in out.suffixes
+          written += suffix.length
+        end
+
+        if out.measured and out.line != "" and written + text.length > width
+          out = out.with(belows: out.belows.push(text.strip))
+        else
+          out = out.with(suffixes: out.suffixes.push(text))
+        end
+
       Doc.Measure(parts) ->
         stack = stack.push(Command(indent: indent, flat: flat, doc: Doc.Measured(out.lines.size)))
         stack = push_all(stack, indent, flat, parts)
@@ -235,6 +256,7 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
         end
 
       Doc.LineSuffix(_) -> left = left
+      Doc.Trailing(_) -> left = left
       Doc.BreakParent ->
         if flat
           return false
@@ -303,11 +325,17 @@ def newline(out: Output, indent: Int, width: Int) -> Output
     lines = lines.concat(body)
   end
 
+  # The comments below the last line of a measured statement come after an empty line, as the next pass reads them
+  # as the next item's, and as `GapLine` writes them.
+  if out.measured and out.belows.size > 0
+    lines = lines.push("")
+  end
+
   for below in out.belows
     lines = lines.concat(wrap(below, width - margin.length).map do |part: String| margin + part end)
   end
 
-  return Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [], measured: out.measured)
+  return Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [], measured: false)
 end
 
 def indent_of(line: String) -> String

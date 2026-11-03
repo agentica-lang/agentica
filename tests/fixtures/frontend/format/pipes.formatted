@@ -75,3 +75,46 @@ def wrapped(first_argument_value: String, second_argument_value: String, third_a
   puts(after)
   return point.with(x: 1)
 end
+
+def nested(xs: List[Int], ok: Bool) -> Void
+  # A chain inside a larger expression, an argument, a one-line block or an arm keeps the fit rule.
+  same = xs |> twice() |> twice() == 4
+  puts(xs |> twice() |> twice())
+  ys = xs.map do |x| x |> twice() |> twice() end
+  case ok
+    true -> xs |> twice() |> twice()
+    _ -> puts(1)
+  end
+  return (
+    xs
+    |> twice()
+    |> twice()
+  )
+end
+
+def wide(xs: List[Int]) -> Void
+  short = (
+    xs
+    |> twice()
+    |> twice()
+  ) # short
+
+  # A trailing comment too wide for the line goes after the statement, under its empty line.
+  wide = (
+    xs
+    |> twice()
+    |> twice()
+  )
+
+  # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of
+  # its own after the statement
+  next = 1
+  last = (
+    xs
+    |> twice()
+    |> twice()
+  )
+
+  # the comment of this statement is too wide to stay after the closing bracket of it, so it goes down onto a line of
+  # its own after the statement
+end

@@ -9,7 +9,8 @@
 ##
 ## Between two items of a body (a declaration, a statement, a field, a variant, a `case` arm or a comment) a blank
 ## line stays when the source had one right before the second item, at most one. One is added after a simple statement
-## that takes several lines (`sequence`). A pipe chain of two or more `|>` always breaks, one stage per line.
+## that takes several lines (`sequence`). A pipe chain of two or more `|>` that is the whole value of a statement
+## always breaks, one stage per line.
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -217,6 +218,8 @@ def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc,
   for comment in c.trailing.get(key, [])
     if comment.own_line
       below = below.push(comment_item(comment))
+    elsif spread
+      suffixes = suffixes.push(Docs.Doc.Trailing(" " + comment.text))
     else
       suffixes = suffixes.push(Docs.Doc.LineSuffix(" " + comment.text))
     end
@@ -512,7 +515,7 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
   for stmt in stmts
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
-    doc = statement_doc(c, stmt)
+    doc = statement_doc(c, stmt, true)
     if simple?(stmt)
       doc = Docs.Doc.Measure([doc])
     end
@@ -523,16 +526,18 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
   return items
 end
 
-def statement_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
+# A statement. `forced` says that it is an item of a body, where a pipe chain of two or more `|>` that is the whole
+# value of the statement always breaks; the body of a one-line `do` block or of a `case` arm keeps the fit rule.
+def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
   case stmt
-    Ast.Stmt.Binding(node) -> return binding_doc(c, node)
+    Ast.Stmt.Binding(node) -> return binding_doc(c, node, forced)
     Ast.Stmt.Return(node) ->
       case node.value
-        some(value) -> return Docs.Doc.Concat([text("return "), expr_doc(c, value, false)])
+        some(value) -> return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
         none -> return text("return")
       end
 
-    Ast.Stmt.Expression(node) -> return expr_doc(c, node.value, false)
+    Ast.Stmt.Expression(node) -> return value_doc(c, node.value, forced)
     Ast.Stmt.If(node) -> return if_doc(c, node)
     Ast.Stmt.While(node) ->
       key = Comments.key_of("WhileStmt", node.span)
@@ -557,7 +562,7 @@ end
 
 # `name = value`, `name: Type = value`, or a compound assignment such as `name += value`, which the parser keeps as
 # `name = name + value`: the token after the name tells them apart.
-def binding_doc(c: Context, node: Ast.Binding) -> Docs.Doc
+def binding_doc(c: Context, node: Ast.Binding, forced: Bool) -> Docs.Doc
   at = token_index(c, node.name_span.start.offset) + 1
   if at < c.tokens.size and c.tokens[at].kind.ends_with?("-assign")
     case node.value
@@ -570,8 +575,13 @@ def binding_doc(c: Context, node: Ast.Binding) -> Docs.Doc
 
   case node.type
     some(type) ->
-      return Docs.Doc.Concat([text("#{node.name}: "), type_doc(c, type), text(" = "), expr_doc(c, node.value, false)])
-    none -> return Docs.Doc.Concat([text("#{node.name} = "), expr_doc(c, node.value, false)])
+      return Docs.Doc.Concat([
+        text("#{node.name}: "),
+        type_doc(c, type),
+        text(" = "),
+        value_doc(c, node.value, forced),
+      ])
+    none -> return Docs.Doc.Concat([text("#{node.name} = "), value_doc(c, node.value, forced)])
   end
 end
 
@@ -735,7 +745,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
     found = around(c, key)
     if found.before.size == 0 and c.trailing.get(key, []).all? do |comment: Tokens.Comment| !comment.own_line end
       suffixes = c.trailing.get(key, []).map do |comment: Tokens.Comment| Docs.Doc.LineSuffix(" " + comment.text) end
-      line = Docs.Doc.Group([text(head), Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)])])
+      line = Docs.Doc.Group([text(head), Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt, false)])])
       return Docs.Doc.Concat(above.push(line).concat(suffixes).concat(dangling_end(c, arm_key)))
     end
   end
@@ -778,7 +788,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     Ast.Expr.Name(node) -> return text(node.name)
     Ast.Expr.Call(node) ->
       if node.piped
-        return pipe_doc(c, expr, bracketed)
+        return pipe_doc(c, expr, bracketed, false)
       end
 
       return call_doc(c, node)
@@ -811,7 +821,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     Ast.Expr.BlockLit(node) -> return block_doc(c, node)
     Ast.Expr.Try(node) ->
       if piped?(node.operand)
-        return pipe_doc(c, expr, bracketed)
+        return pipe_doc(c, expr, bracketed, false)
       end
 
       return Docs.Doc.Concat([text("try "), operand(c, node.operand, UNARY_LEVEL)])
@@ -893,6 +903,16 @@ def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.
   return wrapped([doc], false)
 end
 
+# The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`.
+def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
+  if forced and (piped?(expr) or piped_try?(expr))
+    key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
+    return commented(c, key, pipe_doc(c, expr, false, true))
+  end
+
+  return expr_doc(c, expr, false)
+end
+
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
 # postfix or primary expression's.
 def level(expr: Ast.Expr) -> Int
@@ -912,6 +932,13 @@ def level(expr: Ast.Expr) -> Int
       return UNARY_LEVEL
     Ast.Expr.Unary(_) -> return UNARY_LEVEL
     _ -> return POSTFIX_LEVEL
+  end
+end
+
+def piped_try?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Try(node) -> return piped?(node.operand)
+    _ -> return false
   end
 end
 
@@ -1046,10 +1073,9 @@ def binary_doc(c: Context, node: Ast.Binary, bracketed: Bool) -> Docs.Doc
   return wrapped([first].concat(parts), bracketed)
 end
 
-# A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it.
-# A chain
-# of two or more `|>` always breaks.
-def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
+# A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it. With
+# `forced` (the whole value of a statement), a chain of two or more `|>` breaks even when it fits.
+def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.Doc
   stages: List[Docs.Doc] = []
   current = expr
   looping = true
@@ -1091,9 +1117,9 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     end
   end
 
-  # Two or more stages are one per line even when they fit; a single stage stays on its line when it fits.
+  # A single stage stays on its line when it fits.
   parts: List[Docs.Doc] = [operand(c, current, PIPE_LEVEL)]
-  if stages.size >= 2
+  if forced and stages.size >= 2
     parts = parts.push(Docs.Doc.BreakParent)
   end
 
@@ -1360,7 +1386,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0
       return Docs.Doc.Group([
         text(head),
-        Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt)]),
+        Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt, false)]),
         Docs.Doc.Line,
         text("end"),
       ])
