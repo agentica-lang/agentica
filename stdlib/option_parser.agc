@@ -158,6 +158,7 @@ export def usage(parser: Parser) -> String
     positional: false,
     flag: true,
   )
+
   width = slots.push(help_slot).reduce(0) do |widest, slot| wider(widest, head(slot).length) end
   if !positionals.empty?
     lines = lines.push("").push("Arguments:").concat(positionals.map do |slot| row(slot, width) end)
@@ -285,6 +286,7 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       flag: flag_kind?(arg.kind),
     )
   end
+
   options = parser.opts.map do |opt|
     Slot(
       name: opt.name,
@@ -298,6 +300,7 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       flag: flag_kind?(opt.kind),
     )
   end
+
   return positionals.concat(options)
 end
 
@@ -488,6 +491,7 @@ def find_slot(reader: Reader, name: String, short: Bool) -> Result[Slot]
   found = reader.slots.find do |slot|
     !slot.positional and ((short and slot.short == name) or (!short and slot.name == name))
   end
+
   if found.ok?
     return found
   end
