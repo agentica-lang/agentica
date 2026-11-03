@@ -73,6 +73,8 @@ def show(value):
     """Format values as Agentica's to_s does for the cases used by these peers."""
     if isinstance(value, str):
         return '"%s"' % value
+    if isinstance(value, bool):
+        return str(value).lower()
     if isinstance(value, float):
         return "+nan.0" if value != value else repr(value)
     if isinstance(value, dict):
@@ -125,6 +127,12 @@ def peer_lines(numbers, words, floats, names):
     for number in floats:
         total += number
     lines.append(show(total))
+    # any(==) and not `in`: `in` takes identity first, so it would find a NaN that == never finds.
+    lines.append(show(any(n == 5 for n in numbers)))
+    lines.append(show(any(w == "a" for w in words)))
+    lines.append(show(any(x == 1.5 for x in floats)))
+    lines.append(show(any(x == float("nan") for x in floats)))
+    lines.append(show(any(n > 5 for n in numbers)))
     # Python's string order is Unicode code-point order, as are compare and sort.
     for keys in (numbers, floats, names):
         lines.append(show(pick(keys, lambda a, b: a < b)))
@@ -158,6 +166,11 @@ def main() -> Void
   puts(words.uniq.to_s)
   puts(numbers.sum.to_s)
   puts(floats.sum.to_s)
+  puts(numbers.include?(5).to_s)
+  puts(words.member?("a").to_s)
+  puts(floats.include?(1.5).to_s)
+  puts(floats.include?(nan).to_s)
+  puts(numbers.map do |n| n > 5 end.include?(true).to_s)
 {minmax}
 end
 """.format(

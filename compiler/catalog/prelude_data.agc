@@ -66,6 +66,19 @@ export ROWS: List[Model.PreludeRow] = [
     selector: "",
     bodies: {"": "group_by"},
   ),
+  Model.PreludeRow(
+    name: "List.include?",
+    module: "list",
+    limits: [
+      Model.Limit(
+        variable: "T",
+        allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String, Types.Type.Bool],
+        what: "items",
+      ),
+    ],
+    selector: "T",
+    bodies: {"Int": "include_int", "Float": "include_float", "String": "include_string", "Bool": "include_bool"},
+  ),
   Model.PreludeRow(name: "List.last", module: "list", limits: [], selector: "", bodies: {"": "last"}),
   Model.PreludeRow(name: "List.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_list"}),
   Model.PreludeRow(

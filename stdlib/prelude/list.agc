@@ -121,6 +121,44 @@ def uniq(list: List[K]) -> List[K]
   return found
 end
 
+# One body per item type: a type variable has no ==, so each type the row allows gets its own loop. A Float follows
+# IEEE 754, so a NaN is never a member, not even of a list that holds it.
+def include_int(list: List[Int], value: Int) -> Bool
+  for item in list
+    if item == value
+      return true
+    end
+  end
+  return false
+end
+
+def include_float(list: List[Float], value: Float) -> Bool
+  for item in list
+    if item == value
+      return true
+    end
+  end
+  return false
+end
+
+def include_string(list: List[String], value: String) -> Bool
+  for item in list
+    if item == value
+      return true
+    end
+  end
+  return false
+end
+
+def include_bool(list: List[Bool], value: Bool) -> Bool
+  for item in list
+    if item == value
+      return true
+    end
+  end
+  return false
+end
+
 def sum_int(list: List[Int]) -> Int
   total = 0
   for item in list

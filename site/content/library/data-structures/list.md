@@ -335,6 +335,26 @@ end
 ["b", "a"]
 ```
 
+## include?
+
+```text
+List.include?(list: List[T], value: T) -> Bool
+```
+
+True when an item `==` the value; `member?` is the same method. Items are `Int`, `Float`, `String` or `Bool` (any other item type is `CHECK-TYPE-MISMATCH` at the list, and a value of another type is one at the value). It stops at the first match and is O(n). A `Float` follows IEEE 754, so `NaN` is never a member and `-0.0` matches `0.0`. For many lookups in one list, build a `Set` first.
+
+```agentica
+def main() -> Void
+  puts(["pear", "fig"].include?("fig"))
+  puts([3, 1, 2].member?(9))
+end
+```
+
+```output
+true
+false
+```
+
 ## sum
 
 ```text

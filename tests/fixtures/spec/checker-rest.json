@@ -9813,6 +9813,7 @@
         "  end",
         "  u: Map[String, Int] = t.filter do |k, v| v > 0 end",
         "  w: Int = String.compare(\"a\", \"b\")",
+        "  x: Bool = xs.include?(2) and [\"a\"].member?(\"a\") and [1.5].include?(1.5) and [true].include?(true)",
         "end",
         "",
         ""
@@ -9979,6 +9980,38 @@
         8
       ],
       "covers": "[[1]]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([[1]].include?([1]))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[[1]]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1].include?(\"a\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        21
+      ],
+      "covers": "\"a\"",
       "help": true
     },
     {
