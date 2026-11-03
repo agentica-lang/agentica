@@ -189,7 +189,12 @@ pair; Windows uses a pipe per direction (below).
   Windows). So a parent that spawns without the pipe never passes an inherited
   marker on, and a grandchild sees neither the marker nor descriptor 3 unless
   its own parent opened a channel for it. `System.env` hides the same entries
-  from the program (`own_env` in `vm/process.c` decides for both).
+  from the program (`own_env` in `vm/process.c` decides for both). The `env`
+  Map of a spawn adds to that copy, replacing a variable of the same name
+  (ignoring ASCII case on Windows, where two names that differ only in case are
+  an error); it cannot name an entry the VM owns, which is an
+  error and not a silent drop. The natives of each spawn have two arities, with
+  and without `env`: the shorter one is for the bytecode of `stage0.agcb`.
   `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are also removed from a
   child's environment (`metrics_env`, matched with their `=`), so a child VM or
   a BDD runner never fights for the metrics port or file

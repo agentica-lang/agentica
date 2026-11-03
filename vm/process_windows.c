@@ -71,6 +71,12 @@ bool agc_proc_suffix_ok(const char *path) {
 
 const char *const *agc_proc_suffixes(void) { return runnable; }
 
+bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize) {
+  return asize == bsize && _strnicmp(a, b, asize) == 0;
+}
+
+bool agc_proc_env_case_blind(void) { return true; }
+
 bool agc_proc_drains(void) { return false; }
 
 int64_t agc_proc_read_now(intptr_t fd, uint8_t *buf, size_t len) {

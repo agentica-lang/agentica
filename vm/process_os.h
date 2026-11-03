@@ -32,6 +32,13 @@ bool agc_proc_suffix_ok(const char *path);
    suffix_ok accepts. Empty on systems where every name may run. */
 const char *const *agc_proc_suffixes(void);
 
+/* True when the names of two environment variables are the same variable: byte for byte on POSIX; on Windows ignoring
+   ASCII case (non-ASCII letters must match exactly, which is what libuv's own case folding of ASCII names assumes). */
+bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize);
+
+/* True where two names that differ only in case are one variable (Windows), so a map may not hold both. */
+bool agc_proc_env_case_blind(void);
+
 /* True where agc_proc_read_now can read a pipe that libuv watches. On Windows libuv's overlapped read owns the pipe,
    so nothing is read beside it. */
 bool agc_proc_drains(void);

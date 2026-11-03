@@ -27,6 +27,8 @@ include a final empty line to keep a trailing newline. Data Tables decode `\|`,
 Predefined step patterns (the keyword is irrelevant for matching):
 
 ```text
+the environment variable {string} is {string}      env of the program, before it starts (a name again replaces)
+the program argument {string}                      one more System.args entry, in order, before it starts
 the Agentica program {string}                      candidate .agc path, relative to the feature
 I send a line:                                     Doc String, then LF and flush
 I send the line {string}                           quoted text, then LF and flush
@@ -81,6 +83,9 @@ BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
 BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
 BDD.read_line(ctx: BDD.Context, timeout_ms: Int) -> Result[String]
+BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
+BDD.given_env(ctx: BDD.Context, name: String, value: String) -> BDD.Context
+BDD.given_argument(ctx: BDD.Context, value: String) -> BDD.Context
 BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
 BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
 BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
@@ -98,14 +103,29 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   `BDD.call` and `BDD.read_line` take it and return their value (`started =
   BDD.given_program(ctx, "../app.agc")`, then `BDD.when_line(started, "hi")`).
   A handler returns the context it ends with; the next step gets it. Only
-  `set`, `keep` and `given_program` change it, but any BDD call can end a
+  `set`, `keep`, `after`, `given_env`, `given_argument` and `given_program`
+  change it, but any BDD call can end a
   handler or block. `BDD.Context` can be named, not built.
 - State that is not JSON (an open connection) goes in a service: `BDD.keep(ctx,
   "db", service)` with a block `do |request| ... end` that captures the value
   and answers a JSON request with a `Result[Json]`; a later step runs it with
   `BDD.call(ctx, "db", request)` (an error for a missing name). Services start
   empty in each scenario. Keeping a name again replaces the service; the old
-  handle lives until the scenario ends (no close hook).
+  handle lives until the scenario ends (or close it in a `BDD.after` hook).
+- `BDD.after(ctx, hook)` registers a cleanup that runs when the scenario ends,
+  also after a failure or `BDD.skip`, last registered first, in the scenario's
+  child before its program is stopped. Register it in the step that makes the
+  thing to clean. The hook gets the final context (use it for `BDD` calls) and
+  returns `ok()` or `error(message)`; a hook that returns an error, crashes or
+  fails a `BDD` check fails a passing scenario (`RUNTIME-BDD-AFTER`) or is added
+  to the message of a failing one, and the other hooks still run. No hook runs
+  when the child itself ends: a step that crashes (`.unwrap!` on an error),
+  `System.exit`, the 30 s limit. Hooks run before the program under test stops
+  (Windows may not remove a folder it still holds). A hook lives in the context
+  `BDD.after` returns: a failure on an older context does not run it.
+- `BDD.given_env` and `BDD.given_argument` (or the steps) come before
+  `BDD.given_program` (`RUNTIME-BDD-CONTEXT` after): the variable and arguments
+  reach only that scenario's program. A scenario starts one program.
 - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
   `Result[String]` (an error at the end of the output or a timeout). A timeout stops
   the program: later reads, sends and exit checks fail with `RUNTIME-BDD-IO`,
@@ -183,8 +203,10 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 - `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`: an operation or the
   scenario passed its deadline, or got a bad timeout; a step called
   `System.exit` or its child ended without a diagnostic.
+- `RUNTIME-BDD-AFTER`: an after hook failed.
 - `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON`: a missing
   Doc String or table, a stream call before a program started, a second program,
+  an environment variable or argument set after the program started,
   a step program that never calls `BDD.run`; a missing `.agc` program; a JSON
   expectation that is not valid JSON.
 - `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS`: a

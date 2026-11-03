@@ -509,7 +509,8 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
         )
       end
       if event == "fail"
-        return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
+        failure = with_hook_problems(p, record_error(record, span), deadline)
+        return StepEnd(verdict: Report.Verdict.Fail(failure), asserts: asserts)
       end
       if event == "skip"
         return StepEnd(verdict: Report.Verdict.Skipped(Child.text_of(record, "reason")), asserts: asserts)
@@ -533,6 +534,33 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
   return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
 end
 
+# After a failed step the child runs its after hooks (`BDD.after`) and then exits. What the hooks report arrives as
+# more fail records: they are added to the message, so the step's own failure stays the one shown. The wait ends with
+# the child, or at the scenario's deadline.
+def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Report.Error
+  message = failure.message
+  line = Process.channel_read_line(p, Child.left(deadline))
+  while line.ok?
+    record = Child.record_of(line.unwrap!)
+    if Child.event_of(record) == "fail"
+      message = "#{message}; #{Child.text_of(record, "message")}"
+    end
+    line = Process.channel_read_line(p, Child.left(deadline))
+  end
+  if line.message == "network: operation timed out"
+    message = "#{message}; an after hook did not finish within the scenario's time limit"
+  end
+  return Report.Error(
+    code: failure.code,
+    message: message,
+    span: failure.span,
+    end_line: failure.end_line,
+    expected: failure.expected,
+    actual: failure.actual,
+    original: failure.original,
+  )
+end
+
 # After the last step the runner closes the channel and the child exits 0 when it reads the end; anything else fails
 # the scenario.
 def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
@@ -553,6 +581,10 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
     if code.ok? and code.unwrap! == 0
       return Report.Verdict.Pass
     end
+  end
+  if line.message == "network: operation timed out"
+    # Once the channel is closed the child only runs its after hooks.
+    return failure("RUNTIME-BDD-TIMEOUT", "an after hook did not finish within the scenario's time limit", span)
   end
   return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
