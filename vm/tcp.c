@@ -135,7 +135,7 @@ typedef struct {
 
 static const char socket_closed[] = "network: socket is closed";
 static const char listener_closed[] = "network: listener is closed";
-static const char write_failed[] = "error writing to stream port";
+static const char write_failed[] = "could not write to the stream";
 
 /* The TLS client context of an HttpClient (#394): built once, on a pool thread, when the first https connection of the
    client needs it, then used by every later connection, so the CA file is read once per client. Counts (`refs`): the
@@ -284,13 +284,13 @@ static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
-/* The value of the head cut, built on a scheduler from the request alone. std/http matches on "error reading from
-   stream port" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
+/* The value of the head cut, built on a scheduler from the request alone. std/http matches on "could not read from
+   the stream" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
 static agc_value head_value(agc_vm *vm, const request *q) {
   if (q->cut.len && q->kind == REQ_RESPONSE)
     return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);
   if (q->cut.len) return agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered);
-  if (q->cut.error) return agc_system_error(vm, "error reading from stream port", q->cut.error);
+  if (q->cut.error) return agc_system_error(vm, "could not read from the stream", q->cut.error);
   return agc_error_value("network: end of input");
 }
 
@@ -576,7 +576,7 @@ static agc_value net_error(agc_vm *vm, const net *n, const char *what, int err) 
   const char *host = n->host ? n->host : "";
   size_t size = agc_size_add(strlen(host), strlen(what) + 64);
   char *head = agc_alloc_atomic(size);
-  int len = snprintf(head, size, "%s\n  hostname: %s\n  port number: %" PRId64, what, host, n->port);
+  int len = snprintf(head, size, "%s\n  host: %s\n  port: %" PRId64, what, host, n->port);
   if (len < 0) len = 0;
   /* getaddrinfo failures (UV_EAI_*, -3000 down to -3014 on every system) have no errno: libuv names them. */
   if (err > UV_EAI_ADDRFAMILY || err < UV_EAI_PROTOCOL) return agc_system_error(vm, head, agc_net_errno(err));
@@ -600,7 +600,7 @@ agc_value agc_tls_failure_error(agc_vm *vm, const char *head, const agc_tls_fail
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f) {
   size_t size = agc_size_add(strlen(what), agc_size_add(strlen(path), 32));
   char *head = agc_alloc_atomic(size);
-  snprintf(head, size, "%s: load failed from: \"%s\"", what, path);
+  snprintf(head, size, "network: cannot load %s \"%s\"", what, path);
   return agc_tls_failure_error(vm, head, f);
 }
 
@@ -608,19 +608,19 @@ agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, con
    HttpClient can fail here before the handshake: that is a setup failure. */
 static agc_value secure_error(agc_vm *vm, const net *n) {
   const agc_tls_failure *f = &n->failure;
-  if (n->parent) return agc_tls_failure_error(vm, "port->ssl-ports: accept failed", f);
-  if (n->setup_failed) return agc_tls_failure_error(vm, "ssl-make-client-context: setup failed", f);
-  return agc_tls_failure_error(vm, "ssl-connect: connect failed", f);
+  if (n->parent) return agc_tls_failure_error(vm, "network: TLS accept failed", f);
+  if (n->setup_failed) return agc_tls_failure_error(vm, "network: TLS client setup failed", f);
+  return agc_tls_failure_error(vm, "network: TLS connect failed", f);
 }
 
 static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
-  if (n->listener) return net_error(vm, n, found ? "tcp-listen: listen failed" : "tcp-listen: host not found", err);
-  return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", err);
+  if (n->listener) return net_error(vm, n, found ? "network: listen failed" : "network: host not found", err);
+  return net_error(vm, n, found ? "network: connection failed" : "network: host not found", err);
 }
 
 /* std/http matches the UPGRADE_UNREAD text (BEFORE_TLS in stdlib/http.agc) to name the proxy of a CONNECT tunnel. */
 static agc_value upgrade_error(agc_vm *vm, const request *q) {
-  if (q->tls_failed) return agc_tls_failure_error(vm, "tls-upgrade: handshake failed", &q->n->failure);
+  if (q->tls_failed) return agc_tls_failure_error(vm, "network: TLS handshake failed", &q->n->failure);
   if (q->open_error == UPGRADE_UNREAD) return agc_error_value("network: data came before the TLS handshake");
   if (q->open_error == UPGRADE_ENDED) return agc_error_value("network: end of input");
   if (q->open_error == UPGRADE_SENDING) return agc_error_value("network: a send on the socket is in progress");
@@ -1215,12 +1215,12 @@ static agc_value adopt(agc_vm *vm, request *q, const net *l) {
 }
 
 static agc_value accept_done(agc_vm *vm, request *q, const net *l) {
-  if (q->accept_rc) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->accept_rc));
+  if (q->accept_rc) return agc_system_error(vm, "network: accept failed", agc_net_errno(q->accept_rc));
   if (q->closed) return agc_error_value(listener_closed);
   if (q->child && q->opened) return adopt(vm, q, l);
-  if (q->child && q->tls_failed) return agc_tls_failure_error(vm, "port->ssl-ports: accept failed", &q->child->failure);
+  if (q->child && q->tls_failed) return agc_tls_failure_error(vm, "network: TLS accept failed", &q->child->failure);
   if (q->child) return agc_error_value(socket_closed);
-  if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->error));
+  if (q->error) return agc_system_error(vm, "network: accept failed", agc_net_errno(q->error));
   return agc_error_value(listener_closed);
 }
 

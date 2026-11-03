@@ -643,6 +643,13 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   return n + 1;
 }
 
+/* The offset (from 0) of the first byte that does not start a valid character, or len when all of it is valid. */
+size_t agc_utf8_bad_at(const uint8_t *s, size_t len) {
+  size_t at = 0;
+  for (size_t n; at < len && (n = agc_utf8_valid(s + at, len - at)) != 0;) at += n;
+  return at;
+}
+
 /* The characters of valid UTF-8: every byte but the continuation bytes (10xxxxxx). A word of eight ASCII bytes is
  * eight characters. */
 size_t agc_utf8_count(const uint8_t *s, size_t len) {

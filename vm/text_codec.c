@@ -211,9 +211,7 @@ static agc_value decode_utf8(agc_vm *vm, const uint8_t *data, size_t len) {
   size_t chars;
   if (agc_utf8_chars(data, len, &chars))
     return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
-  size_t at = 0, n;
-  while ((n = agc_utf8_valid(data + at, len - at)) != 0) at += n;
-  return failure_at("invalid", CODEC_UTF8, "byte", at);
+  return failure_at("invalid", CODEC_UTF8, "byte", agc_utf8_bad_at(data, len));
 }
 
 /* bytes.decode(encoding): the String of the bytes read in that encoding. */

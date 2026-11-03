@@ -202,8 +202,8 @@ def test_failures_keep_bounds_and_leave_what_the_policy_says(tmp_path, ports):
         "ERR http: truncated HTTP body",
         "ERR http: invalid chunk size",
         "ERR network: operation timed out",
-        ("prefix", "ERR open-output-file: error opening file"),
-        ("prefix", "ERR open-output-file: error opening file"),
+        ("prefix", "ERR filesystem: cannot open file for writing"),
+        ("prefix", "ERR filesystem: cannot open file for writing"),
         "200 7",
     ], "download errors")
     assert (directory / "pre.bin").read_bytes() == b"keep"
