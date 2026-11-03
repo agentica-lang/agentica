@@ -299,6 +299,19 @@ export def record_resolved(st: St, id: Int, resolved: Resolved) -> St
   return st.with(resolved: st.resolved.put(id, resolved))
 end
 
+## Whether the node `id` was resolved to a call of an `Fn` field (`store.put(a, b)`).
+export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
+  found = resolved.get(id)
+  if found.none?
+    return false
+  end
+
+  case found.unwrap!
+    Resolved.FieldCall -> return true
+    _ -> return false
+  end
+end
+
 ## The binding of a name, or none when the name is not in scope.
 export def lookup(st: St, name: String) -> Optional[Binding]
   return st.vars.get(name)

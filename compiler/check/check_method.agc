@@ -315,10 +315,16 @@ end
 def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   fields = CheckTypes.fields_of(cx, target)
   field = Calls.find_field(fields, name)
-  if cx.functions.has_key?(name)
+  if field.ok?
+    # A field that a function shares its name with is the likelier mistake, so it comes first.
+    hint = "#{name} is a field of type #{T.to_text(field.unwrap!.type)}, not a function; call only an Fn field"
+    if cx.functions.has_key?(name)
+      return hint + "; or call #{name}(...) with the struct as an argument"
+    end
+
+    return hint
+  elsif cx.functions.has_key?(name)
     return "structs have no methods; call #{name}(...) with the struct as an argument"
-  elsif field.ok?
-    return "#{name} is a field of type #{T.to_text(field.unwrap!.type)}, not a function; call only an Fn field"
   elsif name == "with"
     # No did-you-mean here: a field close to "with" is not a typo of it.
     return "with needs the fields to change, as in .with(field: value); #{Help.field_list(fields)}"

@@ -388,10 +388,11 @@ are no user methods. A struct field of type `Fn` is called by its name:
 `store.put(a, b)` means `store.put.call(a, b)`. Parentheses are required for
 every call. They may be dropped only for builtin methods, and for module
 functions without arguments, builtin or reached through an import alias:
-`s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper` calls `helper`; write
-`&Util.helper` for the function value. `&name` references a declared top-level
-function without captures. A bare `Enum.Variant` of an enum in the same file is
-that nullary variant, and `M.Enum.Variant` through an import alias is one too.
+`s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper`
+calls `helper`; write `&Util.helper` for the function value. `&name` references
+a declared top-level function without captures. A bare `Enum.Variant` of an enum
+in the same file is that nullary variant, and `M.Enum.Variant` through an import
+alias is one too.
 
 A struct update `value.with(name: expr, ...)` is the one postfix form with named
 arguments, and it needs at least one. `with` is not a reserved word: it has this

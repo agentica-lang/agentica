@@ -52,10 +52,10 @@ section says how the scheduler and the loop keep them.
   charges a **turn cost**: one unit per item (a sort counts n·⌈log2 n⌉) and one
   per 64 bytes it copies or scans. Constant work charges nothing. Some opcodes
   charge the same way: string concatenation, interpolation, `to_s`, `inspect`,
-  string equality and map access with String keys. The turn cost comes from the turn only, never
-  from `--max-steps` (`steps_left`). The task yields at the next instruction if
-  its turn is spent. File builtins charge nothing: their work is I/O, at most 1
-  MiB per call.
+  string equality and map access with String keys. The turn cost comes from the
+  turn only, never from `--max-steps` (`steps_left`). The task yields at the
+  next instruction if its turn is spent. File builtins charge nothing: their
+  work is I/O, at most 1 MiB per call.
 - **Test switches** (tests only; `rg AGENTICA_VM_TEST_ vm tests mk` lists them).
   `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge. It changes only
   when tasks switch, never output, step counts or diagnostics, so

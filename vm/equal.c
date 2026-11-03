@@ -125,7 +125,10 @@ static bool scalar_equal(agc_vm *vm, agc_value a, agc_value b) {
 
 /* A pair inside a container: two scalars are compared here, so a difference stops the walk before any later pair is
    pushed; a pair of containers goes on the stack. False when the pair differs. Each scalar pair costs one unit, as
-   a pair taken from the stack does in expand. */
+   a pair taken from the stack does in expand. For a walker (a long list or a map) the walk is depth-first in key
+   order, one pair at a time (visit_items, for the fields of a struct and short lists, compares the scalars first), so
+   a container pair is walked whole before the next pair of its walker: a scalar difference at a later key of a map
+   does not end the compare before a large container at an earlier key is walked. */
 static bool visit(agc_vm *vm, work_stack *s, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (!scalar_tag(a.tag)) {

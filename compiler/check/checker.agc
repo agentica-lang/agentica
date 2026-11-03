@@ -165,7 +165,8 @@ def start(linked: Linker.Linked) -> State.Cx
     for decl in module.declarations
       case decl
         Ast.Decl.Constant(node) ->
-          site = State.ConstSite(file: module.file, value: node.value, blanked: blanked?(module.stubbed, node))
+          cut = blanked?(module.stubbed, module.text, node)
+          site = State.ConstSite(file: module.file, value: node.value, blanked: cut)
           sites = sites.put(node.name, site)
         _ -> sites = sites
       end
@@ -199,7 +200,7 @@ end
 # (check_cache.agc: the stub holds `(0`, blanks and `)` over a value of ELIDE_FROM characters or more). The text of the
 # value is not looked at: the whole text may have a 0 at the same place. A short 0 that the cache did not cut, with a
 # long comment after it, can read as cut; the answer is then the one of the whole text, which is the right one.
-def blanked?(stubbed: Bool, node: Ast.ConstDecl) -> Bool
+def blanked?(stubbed: Bool, text: String, node: Ast.ConstDecl) -> Bool
   if !stubbed
     return false
   end
@@ -208,13 +209,33 @@ def blanked?(stubbed: Bool, node: Ast.ConstDecl) -> Bool
     Ast.Expr.Literal(lit) ->
       case lit.value
         Ast.LitValue.Whole(number) ->
-          # The `0` is one character after the start of the value, which the `(` of the stub opens.
-          return number == 0 and node.span.stop.offset - (lit.span.start.offset - 1) >= CheckCache.ELIDE_FROM
+          # The length the cache measured (value_cut) runs from the `(` of the stub.
+          length = node.span.stop.offset - stub_open(text, lit.span.start.offset)
+          return number == 0 and length >= CheckCache.ELIDE_FROM
         _ -> return false
       end
 
     _ -> return false
   end
+end
+
+# The offset where the value of a stub starts, given the offset of its `0`. The stub has the offsets of the text, which
+# is what `text` holds. The `0` follows the `(` at the start of the value, or, when the first line of the value is too
+# short for both (a lone `[`, `{` or `(`, check_cache.agc, zero_line), it is on a later line with only blanks and line
+# breaks between. The start is then the opener in the text before those blanks. Anything else before the blanks (a `=`
+# followed by many blanks, then a real 0) is not the start of a value that was cut, so the `0` is one character after
+# it, as in the common case.
+def stub_open(text: String, zero: Int) -> Int
+  at = zero
+  while at > 0 and " \t\r\n".contains?(text.slice(at - 1, 1))
+    at -= 1
+  end
+
+  if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
+    return at - 1
+  end
+
+  return zero - 1
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends

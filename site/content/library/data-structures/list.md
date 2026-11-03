@@ -339,7 +339,7 @@ end
 List.include?(list: List[T], value: T) -> Bool
 ```
 
-True when an item `==` the value; `member?` is the same method. Items are any type that has `==` (numbers, `Bool`, `String`, ranges, `Bytes`, and lists, maps, sets, Optionals, Results, structs and enums of those); a list of functions, `Json` or handles is `CHECK-TYPE-MISMATCH` at the list, and a value of another type is one at the value. It stops at the first match and is O(n). A `Float` follows IEEE 754, so `NaN` is never a member and `-0.0` matches `0.0`. For many lookups in one list, build a `Set` first.
+True when an item `==` the value; `member?` is the same method. Items are any type that has `==` (numbers, `Bool`, `String`, `nil`, ranges, `Bytes`, and lists, maps, sets, Optionals, Results, structs and enums of those); a list of functions, `Json` or handles is `CHECK-TYPE-MISMATCH` at the list, and a value of another type is one at the value. It stops at the first match and is O(n). A `Float` follows IEEE 754, so `NaN` is never a member and `-0.0` matches `0.0`. For many lookups in one list, build a `Set` first.
 
 ```agentica
 def main() -> Void

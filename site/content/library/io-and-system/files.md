@@ -180,7 +180,8 @@ def main() -> Void
 end
 ```
 
-- The block gives a `Result[T]`, and `try` works in it. `T` comes from the expected type of the call (`r: Result[List[String]] = File.open(...) do ...`), or else from the block.
+- The block gives a `Result[T]`, and `try` works in it. `T` comes from the expected type of the call (`r: Result[List[String]] = File.open(...) do ...`), or else from the block. A block that never gives `ok` (it only gives `error(...)`) fixes no `T`, and the `error(...)` in the block is `CHECK-RESULT-TYPE` until the variable has a type: `r: Result[Int] = File.open(...) do ... end`.
+- `timeout_ms` limits the open and the close, each on its own; it does not limit the block, so the whole call can take longer than `timeout_ms`. Calls inside the block take their own timeouts.
 - If the open fails, the block does not run and the call gives the open error.
 - The handle is closed whether the block gives `ok` or `error`, an early `return` and a failed `try` included. After `ok(value)` the call gives `ok(value)`, or the close error if the close fails: the close writes pending data, so its error matters. After an error the call gives the block's error and drops a close error.
 - A runtime error in the block ends the task, and the handle closes with the task, as above. A handle kept after the block (returned in the `Result`) is closed: a call on it gives `error("filesystem: file handle is closed")`.

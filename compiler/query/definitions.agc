@@ -6,6 +6,7 @@
 ## the `##` doc and the signature of its declaration, read from the file as the parser gave it
 ## (`LinkedModule.parsed`), because the linker drops the doc of an `export`.
 
+import State from "../check/check_state"
 import Model from "../docs/doc_model"
 import Signature from "../docs/signature"
 import Linker from "../modules/linker"
@@ -46,8 +47,14 @@ struct Described
 end
 
 ## The definition of what `expr` names, or `none`. `types` is `Checked.types`: the struct of a field access is the type
-## of its target.
-export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr: Ast.Expr) -> Optional[Definition]
+## of its target. `resolved` is `Checked.resolved`: a method call that the checker resolved to a call of an `Fn` field
+## names that field; any other method call is a builtin and has no definition.
+export def of_expr(
+  modules: List[Linker.LinkedModule],
+  types: List[T.Type],
+  resolved: Map[Int, State.Resolved],
+  expr: Ast.Expr,
+) -> Optional[Definition]
   case expr
     Ast.Expr.Call(node) -> return top_level(modules, node.name)
     Ast.Expr.FunctionRef(node) -> return top_level(modules, node.name)
@@ -58,6 +65,12 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
     Ast.Expr.ConstRef(node) -> return top_level(modules, node.name)
     Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)
     Ast.Expr.FieldAccess(node) -> return field(find(modules, T.name(target_type(types, node.target))), node.name)
+    Ast.Expr.MethodCall(node) ->
+      if State.field_call?(resolved, node.id)
+        return field(find(modules, T.name(target_type(types, node.target))), node.name)
+      end
+
+      return none
     _ -> return none
   end
 end
