@@ -69,15 +69,9 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(
     name: "List.include?",
     module: "list",
-    limits: [
-      Model.Limit(
-        variable: "T",
-        allowed: [Types.Type.Int, Types.Type.Float, Types.Type.String, Types.Type.Bool],
-        what: "items",
-      ),
-    ],
+    limits: [Model.Limit(variable: "T", allowed: [], what: "items", equality: true)],
     selector: "T",
-    bodies: {"Int": "include_int", "Float": "include_float", "String": "include_string", "Bool": "include_bool"},
+    bodies: {"": "include", "Int": "include_int", "Float": "include_float", "String": "include_string"},
   ),
   Model.PreludeRow(name: "List.last", module: "list", limits: [], selector: "", bodies: {"": "last"}),
   Model.PreludeRow(name: "List.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_list"}),

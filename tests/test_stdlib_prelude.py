@@ -133,6 +133,7 @@ def peer_lines(numbers, words, floats, names):
     lines.append(show(any(x == 1.5 for x in floats)))
     lines.append(show(any(x == float("nan") for x in floats)))
     lines.append(show(any(n > 5 for n in numbers)))
+    lines.append(show(any([n, -n] == [5, -5] for n in numbers)))
     # Python's string order is Unicode code-point order, as are compare and sort.
     for keys in (numbers, floats, names):
         lines.append(show(pick(keys, lambda a, b: a < b)))
@@ -171,6 +172,7 @@ def main() -> Void
   puts(floats.include?(1.5).to_s)
   puts(floats.include?(nan).to_s)
   puts(numbers.map do |n| n > 5 end.include?(true).to_s)
+  puts(numbers.map do |n| [n, -n] end.member?([5, -5]).to_s)
 {minmax}
 end
 """.format(

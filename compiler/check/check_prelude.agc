@@ -146,7 +146,9 @@ def check_limits(
       return error(State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call))
     end
 
-    if !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end
+    if limit.equality
+      try check_equality(cx, bound, form, limit, found.unwrap!, call)
+    elsif !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end
       names = limit.allowed.map do |allowed: T.Type| T.to_text(allowed) end
       options = names.take(names.size - 1).join(", ") + " or " + names[names.size - 1]
       return error(
@@ -165,14 +167,52 @@ def check_limits(
   return ok(true)
 end
 
+# CHECK-TYPE-MISMATCH at the argument that bound an equality variable to a type that == does not compare.
+def check_equality(
+  cx: State.Cx,
+  bound: Bound,
+  form: Model.Builtin,
+  limit: Model.Limit,
+  found: T.Type,
+  call: Source.Span,
+) -> Result[Bool]
+  if CheckTypes.equality?(cx, found)
+    return ok(true)
+  end
+
+  message = "#{form.name} needs #{limit.what} with equality, found #{T.to_text(found)}"
+  why = CheckTypes.equality_gap(cx, found)
+  if why != ""
+    message += ": #{why}"
+  end
+
+  return error(
+    State.fail_help(
+      cx,
+      bound.st,
+      "CHECK-TYPE-MISMATCH",
+      message,
+      bound.spans[limit.variable],
+      "#{form.name} compares with ==: numbers, Bool, String, nil, ranges, Bytes, and lists, maps, sets, Optionals, " +
+      "Results, structs and enums of those",
+    ),
+  )
+end
+
 # The function of the prelude that runs, as "file::function": the one the row names for the type of its selector
-# variable, or the only one.
+# variable, else the one under "" (a row may name a faster body for a few types and a general one for the rest), or the
+# only one.
 def body_of(row: Model.PreludeRow, types: Map[String, T.Type]) -> String
   if row.selector == ""
     return "#{row.module}::#{row.bodies[""]}"
   end
 
-  return "#{row.module}::#{row.bodies[T.tag(types[row.selector])]}"
+  tag = T.tag(types[row.selector])
+  if !row.bodies.has_key?(tag)
+    return "#{row.module}::#{row.bodies[""]}"
+  end
+
+  return "#{row.module}::#{row.bodies[tag]}"
 end
 
 # The type variables written in a type.

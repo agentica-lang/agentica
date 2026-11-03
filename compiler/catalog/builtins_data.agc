@@ -2376,7 +2376,7 @@ ROWS_22: List[Model.Builtin] = [
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
-    description: "Check whether an Int, Float, String or Bool is in the list, comparing with ==; O(n).",
+    description: "Check whether a value is in the list, comparing with ==; items need equality; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

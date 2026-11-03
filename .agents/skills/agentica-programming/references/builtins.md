@@ -139,7 +139,7 @@ List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int or
 List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; first-appearance order
 List.uniq(list: List[K]) -> List[K]                      # K is Int or String; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
-List.include?(list: List[T], value: T) -> Bool           # T Int, Float, String or Bool, by ==; also member?
+List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
