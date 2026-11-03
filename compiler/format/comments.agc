@@ -77,6 +77,13 @@ struct Marks
   stops: List[Int]
 end
 
+## A stage of a pipe chain: the piped call (`x |> f(a)` is the call `f(x, a)`, whose first argument is the rest of the
+## chain), and whether the stage is written `|> try f(a)`.
+export struct PipeStage
+  call: Ast.Call
+  tried: Bool
+end
+
 ## How a comment sits on its node: above it (`Leading`), after it (`Trailing`), or inside a node that has no child at
 ## that place (`Dangling`), such as an empty body or list.
 export enum Role
@@ -196,6 +203,31 @@ export def expr_kind(expr: Ast.Expr) -> String
   end
 end
 
+## The stage that `expr` ends a chain with: a piped call, or a `try` of one. None for any other expression. The layout
+## and the comment attachment both walk a chain through this, so their stages and keys cannot differ.
+export def pipe_stage(expr: Ast.Expr) -> Optional[PipeStage]
+  case expr
+    Ast.Expr.Call(node) ->
+      if node.piped
+        return some(PipeStage(call: node, tried: false))
+      end
+
+    Ast.Expr.Try(node) ->
+      case node.operand
+        Ast.Expr.Call(call) ->
+          if call.piped
+            return some(PipeStage(call: call, tried: true))
+          end
+
+        _ -> return none
+      end
+
+    _ -> return none
+  end
+
+  return none
+end
+
 def marks_of(tokens: List[Tokens.Token]) -> Marks
   kept = tokens.select do |token: Tokens.Token| token.kind != "NL" and token.kind != "EOF" end
   starts = kept.map do |token: Tokens.Token| token.span.start.offset end
@@ -256,38 +288,20 @@ def chain_start(expr: Ast.Expr) -> Source.Position
   looping = true
   while looping
     looping = false
-    case current
-      Ast.Expr.Call(node) ->
-        if node.piped
-          current = node.args[0]
-          looping = true
+    case pipe_stage(current)
+      some(stage) ->
+        current = stage.call.args[0]
+        looping = true
+        here = Ast.expr_span(current).start
+        if here.offset < start.offset
+          start = here
         end
 
-      Ast.Expr.Try(node) ->
-        if piped_call?(node.operand)
-          current = node.operand
-          looping = true
-        end
-
-      _ -> looping = false
-    end
-
-    if looping
-      here = Ast.expr_span(current).start
-      if here.offset < start.offset
-        start = here
-      end
+      none -> looping = false
     end
   end
 
   return start
-end
-
-def piped_call?(expr: Ast.Expr) -> Bool
-  case expr
-    Ast.Expr.Call(node) -> return node.piped
-    _ -> return false
-  end
 end
 
 # A node the parser made without text of its own has an empty span; it gets no comment.
@@ -398,6 +412,12 @@ def place(outline: Outline, marks: Marks, comment: Tokens.Comment) -> Attached
     end
 
     return by_order(comment, enclosing, following, preceding, Role.Leading, Role.Trailing)
+  end
+
+  # After the `(` of a statement's value, on the same line: like the comment alone on a line there, it leads the
+  # statement.
+  if prior == "left-paren" and value_follows?(outline, enclosing, following)
+    return Attached(comment: comment, node: enclosing, role: Role.Leading, keyword: "")
   end
 
   return by_order(comment, enclosing, preceding, following, Role.Trailing, Role.Leading)

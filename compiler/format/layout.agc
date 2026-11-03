@@ -66,13 +66,15 @@ export struct Extern
   after: List[Tokens.Comment]
 end
 
-# One item of a body: its first and last source lines and its document, and whether it is a simple statement whose
-# document is measured (it owes an empty line after it when it took several lines).
+# One item of a body: its first and last source lines and its document, whether it is a simple statement whose
+# document is measured (it owes an empty line after it when it took several lines), and whether it is a comment that
+# closes its body (it does not take the empty line that is owed, as no item follows to be told apart from it).
 struct Item
   first: Int
   last: Int
   doc: Docs.Doc
   spread: Bool
+  closing: Bool
 end
 
 # The comments of a node before it and after it, as documents to put around it.
@@ -160,7 +162,7 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
 
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
     line = placed.comment.span.start.line
-    items = items.push(Item(first: line, last: line, doc: Docs.Doc.Comment(placed.comment.text), spread: false))
+    items = items.push(comment_item(placed.comment))
   end
 
   return sequence(c, items)
@@ -182,7 +184,7 @@ def sequence(c: Context, items: List[Item]) -> Docs.Doc
     if at > 0
       if blank_before?(c, item.first, items[at - 1].last)
         parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.HardLine])
-      elsif owed
+      elsif owed and not item.closing
         parts = parts.push(Docs.Doc.GapLine)
       else
         parts = parts.push(Docs.Doc.HardLine)
@@ -217,21 +219,25 @@ def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc,
   below: List[Item] = []
   for comment in c.trailing.get(key, [])
     if comment.own_line
-      below = below.push(comment_item(comment))
-    elsif spread
-      suffixes = suffixes.push(Docs.Doc.Trailing(" " + comment.text))
+      below = below.push(closing_item(comment))
     else
       suffixes = suffixes.push(Docs.Doc.LineSuffix(" " + comment.text))
     end
   end
 
-  items = items.push(Item(first: first, last: last, doc: Docs.Doc.Concat([doc].concat(suffixes)), spread: spread))
+  shown = Docs.Doc.Concat([doc].concat(suffixes))
+  items = items.push(Item(first: first, last: last, doc: shown, spread: spread, closing: false))
   return items.concat(below)
 end
 
 def comment_item(comment: Tokens.Comment) -> Item
   line = comment.span.start.line
-  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false)
+  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false, closing: false)
+end
+
+# A comment alone at the end of its body.
+def closing_item(comment: Tokens.Comment) -> Item
+  return comment_item(comment).with(closing: true)
 end
 
 # The comments of a node inside an expression: the leading ones on their own lines before it, a comment after code at
@@ -265,7 +271,7 @@ end
 
 # The dangling comments of a node, each on its own line, as the items of an empty body.
 def dangling_items(c: Context, key: String) -> List[Item]
-  return c.dangling.get(key, []).map do |placed: Comments.Attached| comment_item(placed.comment) end
+  return c.dangling.get(key, []).map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # A body two spaces deeper, from the line after its header; nothing for an empty body.
@@ -490,7 +496,8 @@ def extern_items(c: Context, block: Extern) -> List[Item]
   end
 
   # The block keeps its own indent: it starts at the left margin, as every declaration does.
-  items = items.push(Item(first: block.first, last: block.last, doc: Docs.Doc.Concat(lines), spread: false))
+  shown = Docs.Doc.Concat(lines)
+  items = items.push(Item(first: block.first, last: block.last, doc: shown, spread: false, closing: false))
   suffixes: List[Item] = []
   for comment in block.after
     if comment.span.start.line == block.last
@@ -661,7 +668,7 @@ end
 # The dangling comments that go at the end of the last body: before `end`, or with no keyword.
 def end_items(dangling: List[Comments.Attached]) -> List[Item]
   kept = dangling.select do |placed: Comments.Attached| placed.keyword == "end" or placed.keyword == "" end
-  return kept.map do |placed: Comments.Attached| comment_item(placed.comment) end
+  return kept.map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # The offset of the `else` of an `if`: its `else` token, outside the blocks nested in it.
@@ -1082,41 +1089,25 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
   while looping
     looping = false
     key = Comments.key_of(Comments.expr_kind(current), Ast.expr_span(current))
-    case current
-      Ast.Expr.Call(node) ->
-        if node.piped
-          stage_key = Comments.key_of("PipeStage", node.span)
-          shown = call_doc_keyed(c, node.with(args: node.args.drop(1), parenthesized: true), stage_key)
-          stage = commented(c, stage_key, Docs.Doc.Concat([text("|> "), shown]))
-          if stages.size > 0
-            stage = commented(c, key, stage)
-          end
-
-          stages = List.concat([stage], stages)
-          current = node.args[0]
-          looping = true
+    case Comments.pipe_stage(current)
+      some(stage) ->
+        stage_key = Comments.key_of("PipeStage", stage.call.span)
+        shown = call_doc_keyed(c, stage.call.with(args: stage.call.args.drop(1), parenthesized: true), stage_key)
+        mark = "|> "
+        if stage.tried
+          mark = "|> try "
         end
 
-      Ast.Expr.Try(node) ->
-        case node.operand
-          Ast.Expr.Call(call) ->
-            if call.piped
-              stage_key = Comments.key_of("PipeStage", call.span)
-              shown = call_doc_keyed(c, call.with(args: call.args.drop(1), parenthesized: true), stage_key)
-              stage = commented(c, stage_key, Docs.Doc.Concat([text("|> try "), shown]))
-              if stages.size > 0
-                stage = commented(c, key, stage)
-              end
-
-              stages = List.concat([stage], stages)
-              current = call.args[0]
-              looping = true
-            end
-
-          _ -> looping = false
+        piece = commented(c, stage_key, Docs.Doc.Concat([text(mark), shown]))
+        if stages.size > 0
+          piece = commented(c, key, piece)
         end
 
-      _ -> looping = false
+        stages = List.concat([piece], stages)
+        current = stage.call.args[0]
+        looping = true
+
+      none -> looping = false
     end
   end
 
