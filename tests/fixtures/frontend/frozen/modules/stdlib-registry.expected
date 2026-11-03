@@ -15,6 +15,7 @@ std/logger.agc
 std/mime.agc
 std/option_parser.agc
 std/prelude/bytes.agc
+std/prelude/file.agc
 std/prelude/lazy.agc
 std/prelude/list.agc
 std/prelude/map.agc

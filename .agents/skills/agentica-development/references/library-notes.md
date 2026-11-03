@@ -178,6 +178,14 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   handle, as for `File.open`. `buffer_bytes` outside 1,024 to 16,777,216 is
   `RUNTIME-INVALID-COUNT` at the argument, before the file opens; a timeout of
   zero or less is an error Result.
+- File.open with a block is the block form of the `File.open` row: an
+  alternative with the same parameters and a last `Fn`, `Rule.Prelude`, body
+  `open` in `stdlib/prelude/file.agc` (open, call the block, `File.close`; no
+  VM code). `Builtins.form_for_call` picks it when the last argument is a
+  block, in the checker and the lowering; it is the one alternative a builtin
+  with defaults may have (`default_problem`). A block whose `Result` item is
+  open gets the expected type of the call, else `Slot.InferResult`
+  (`check_prelude.agc`, `block_result`).
 - File.foreach and ch.lazy are the I/O sources of `Lazy` (`vm/lazy.c`,
   `LAZY_FILE` and `LAZY_CHANNEL`): prelude rows like the other sources. The
   terminal drives the line reader of `File.each_line` (`agc_lines_*` in
