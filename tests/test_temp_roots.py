@@ -1,11 +1,15 @@
 """The temporary roots of the test runs stay bounded: one run kept per root, and stale roots swept."""
 
 import os
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+import pytest
+
+from tests import temp_roots
 from tests.agentica_test import ROOT
 from tests.temp_roots import STALE_AFTER_SECONDS, SWEEP_PREFIX, sweep_stale_roots
 
@@ -43,16 +47,97 @@ def test_sweep_removes_only_stale_roots(tmp_path):
     sweep_stale_roots(tmp_path / "missing", current, now=NOW)
 
 
-# Run by test_sessions_that_start_together_keep_their_roots: wait for the shared start time, then take a root as a
-# session does, and report whether the root is there afterwards.
+def test_sweep_puts_back_a_root_a_session_touched_before_the_move(tmp_path, monkeypatch):
+    """A session that touches its stale root between the sweep's check and its rename does not lose the root."""
+    owner = tmp_path / "agc-0"
+    owner.mkdir()
+    root = make_root(owner, "bbbbbb", OLD)
+    rename = os.rename
+
+    def touch_then_rename(source, target):
+        os.utime(source)
+        rename(source, target)
+
+    monkeypatch.setattr(temp_roots.os, "rename", touch_then_rename)
+    sweep_stale_roots(owner, None, now=time.time() + 1)
+
+    assert (root / "pytest-0" / "file0").read_text() == "x"
+    assert [entry.name for entry in owner.iterdir()] == ["bbbbbb"]
+
+
+def test_sweep_survives_a_root_recreated_before_the_put_back(tmp_path, monkeypatch):
+    """When the session already made a new root, the put back fails: the new root stays and nothing raises."""
+    owner = tmp_path / "agc-0"
+    owner.mkdir()
+    root = make_root(owner, "bbbbbb", OLD)
+    rename = os.rename
+    calls = []
+
+    def touch_then_rename(source, target):
+        calls.append(source)
+        if len(calls) == 1:
+            os.utime(source)
+        else:
+            (root / "pytest-0").mkdir(parents=True)
+            (root / "new").write_text("new")
+        rename(source, target)
+
+    monkeypatch.setattr(temp_roots.os, "rename", touch_then_rename)
+    sweep_stale_roots(owner, None, now=time.time() + 1)
+
+    assert len(calls) == 2
+    assert (root / "new").read_text() == "new"
+    assert [entry.name for entry in owner.iterdir()] == ["bbbbbb"]
+
+
+@pytest.mark.parametrize("step", ["mkdir", "utime"])
+def test_touch_root_retries_when_a_sweep_removes_the_root(tmp_path, monkeypatch, step):
+    """The folder is removed between mkdir and utime (a sweep moved it), or after mkdir saw it exist: both retry."""
+    root = tmp_path / "bbbbbb"
+    root.mkdir()
+    real = getattr(os, step)
+    calls = []
+
+    def sabotage(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            shutil.rmtree(root)
+            if step == "mkdir":
+                raise FileExistsError(str(root))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(temp_roots.os, step, sabotage)
+    temp_roots._touch_root(root)
+
+    assert root.is_dir()
+    assert time.time() - root.stat().st_mtime < 60
+
+
+def test_touch_root_gives_up_with_a_clear_error(tmp_path, monkeypatch):
+    root = tmp_path / "bbbbbb"
+
+    def always_gone(path):
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(temp_roots.os, "utime", always_gone)
+    with pytest.raises(RuntimeError, match="removed"):
+        temp_roots._touch_root(root)
+
+
+# Run by test_sessions_that_start_together_keep_their_roots: say it is ready, wait for the shared start time the parent
+# sets once every racer is ready, then take a root as a session does.
 RACER = """
 import os, sys, time
 from types import SimpleNamespace
 from pathlib import Path
 from tests.temp_roots import assign_root
 
-start, name = float(sys.argv[1]), sys.argv[2]
+gate, name = Path(sys.argv[1]), sys.argv[2]
 config = SimpleNamespace(option=SimpleNamespace(basetemp=None), rootpath=Path(name), args=[name])
+(gate / ("ready-" + name)).write_text("")
+while not (gate / "go").exists():
+    time.sleep(0.001)
+start = float((gate / "go").read_text())
 while time.time() < start:
     pass
 assign_root(config)
@@ -75,12 +160,18 @@ def test_sessions_that_start_together_keep_their_roots(tmp_path):
     names = [f"module{number}" for number in range(8)]
 
     def start_all():
-        start = time.time() + 0.6
-        children = [subprocess.Popen([sys.executable, "-c", RACER, str(start), name], env=env,
+        gate = tmp_path / "gate"
+        gate.mkdir()
+        children = [subprocess.Popen([sys.executable, "-c", RACER, str(gate), name], env=env,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) for name in names]
+        deadline = time.time() + 60
+        while len(list(gate.glob("ready-*"))) < len(names) and time.time() < deadline:
+            time.sleep(0.01)
+        (gate / "go").write_text(str(time.time() + 0.1))
         for child in children:
             output = child.communicate(timeout=120)[0]
             assert child.returncode == 0, output
+        shutil.rmtree(gate)
 
     start_all()
     owners = list(temp.glob("agc*"))

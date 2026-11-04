@@ -21,10 +21,13 @@ STALE_AFTER_SECONDS = 24 * 60 * 60
 # SWEEP_PREFIX name, which the sweep also finishes when the process that moved it died.
 ROOT_NAME = re.compile(r"[0-9a-f]{6}")
 SWEEP_PREFIX = ".sweep-"
+TOUCH_TRIES = 50
 
 
 def _make_writable_and_retry(function, path, excinfo):
-    """rmtree's onexc: a read-only entry (Windows, or a test that chmod-ed) is made writable and removed again."""
+    """rmtree's onexc: a read-only entry that cannot be removed is made writable and removed again.
+
+    It does not recover an entry whose read-only parent folder blocks the removal; that stays for the next sweep."""
     if not isinstance(excinfo, PermissionError):
         return
     try:
@@ -54,7 +57,7 @@ def sweep_stale_roots(owner: Path, keep: Path | None = None, now: float | None =
     Safe against sessions that start at the same time, in this and other processes: a session touches its root when
     it starts (assign_root), so a root in use is never old. The sweep looks at the age again right before it acts and
     moves a stale root aside with one rename before it removes it, so a session never finds a root half removed: the
-    root either is whole or is gone, and the session that lost its root creates it again (assign_root retries). If a
+    root is whole or briefly absent, and the session that lost its root creates it again (assign_root retries). If a
     session touched the root between the check and the rename, the sweep sees it on the moved folder and puts it back.
     The age is wall-clock time: a clock set forward makes roots look stale, and the sessions that lose their root
     simply create it again; a clock set back keeps roots longer. Failures are ignored: the sweep is housekeeping and
@@ -103,16 +106,23 @@ def _remove_tree_quietly(path: Path) -> None:
 
 
 def _touch_root(root: Path) -> None:
-    """Create ROOT if missing and set its modification time to now; a sweep that removes it meanwhile is retried."""
-    for _ in range(5):
+    """Create ROOT if missing and set its modification time to now.
+
+    A sweep may move the root away between the two steps (the folder exists for mkdir, then is gone for utime, or
+    the other way round), so the pair is retried until the root is there and touched. Only a sweep moves a root, and
+    it moves one at most once a root is stale, so a few tries are enough; many more mean something else removes it.
+    """
+    for _ in range(TOUCH_TRIES):
         try:
-            root.mkdir(mode=0o700, exist_ok=True)
+            os.mkdir(root, 0o700)
+        except FileExistsError:
+            pass
+        try:
             os.utime(root)
             return
         except FileNotFoundError:
             continue
-    root.mkdir(mode=0o700, exist_ok=True)
-    os.utime(root)
+    raise RuntimeError(f"the temporary root {root} was removed {TOUCH_TRIES} times while it was being created")
 
 
 def assign_root(config: pytest.Config) -> None:
@@ -134,6 +144,8 @@ def assign_root(config: pytest.Config) -> None:
     key = "\0".join([str(config.rootpath), *sorted(map(str, config.args))])
     root = Path(tempfile.gettempdir()) / owner / hashlib.sha256(key.encode()).hexdigest()[:6]
     root.parent.mkdir(mode=0o700, exist_ok=True)
-    sweep_stale_roots(root.parent, root)
+    # On a shared temp folder another user could have made the owner folder: sweep only a folder of ours.
+    if not hasattr(os, "getuid") or root.parent.stat().st_uid == os.getuid():
+        sweep_stale_roots(root.parent, root)
     _touch_root(root)
     os.environ["PYTEST_DEBUG_TEMPROOT"] = str(root)
