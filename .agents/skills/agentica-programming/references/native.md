@@ -276,7 +276,7 @@ end
   `CHECK-TYPE-MISMATCH`; an `Fn` value or an extern `def` is
   `CHECK-NATIVE-CALLBACK` and a block is refused (context goes through C's
   `void *` user data). `cb` is a resource (`Native.close`; C must not call it
-  after, except in a native call that ran it before, where it gives zero). A
+  after, except in a native call that called it before, where it gives zero). A
   callback is never a result or `out`; a parameter
   `cmp: Optional[Name]` takes `none` for NULL. `fn` runs in the calling task
   while C waits: no wait inside it (`Task.sleep`, channels, a `compute def`, a

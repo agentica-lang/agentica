@@ -175,13 +175,14 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
    state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
    call raises the failure when C returns: the outcome that the callback's run kept (`kept`, in GC memory, made only
    then), or CODE and MESSAGE when its value could not go back to C. A run that stopped for a cancel or the end of the
-   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. The callbacks that ran in the
-   call are listed once each: `ran` (the first, the common case) and `more` (the others, in malloc memory, made only
-   then), and each counts the call in its `callers` until C returns (release_ran), since C may call it again until
+   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. The callbacks that C called in
+   the call are listed once each: `ran` (the first, the common case) and `more` (the others, in malloc memory, made
+   only then), and each counts the call in its `callers` until C returns (release_ran), since C may call it again until
    then, also once it is closed. The registry keeps each listed callback alive, as a closed one is not freed while it
-   is listed. */
+   is listed. `id` numbers the call once it lists one (agc_ffi_cache.sites), 0 before. */
 typedef struct native_site {
   agc_vm *vm;
+  uint64_t id;
   uint32_t span;
   bool failed, refused;
   const char *code, *message;
@@ -195,14 +196,17 @@ static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoi
 
 /* What a callback runs (Native.callback): the function value, the C types of its signature and its resource. In GC
    memory, kept alive by the resource (agc_c_resource.callback) while C may call it. `callers` counts the native calls
-   that ran it and whose C has not returned yet (native_site.ran), on any scheduler: a closed callback is freed only
-   once it is 0 and no call holds it (`jobs`), so no call's C can still reach its code. Changes under rt->sync. */
+   whose C called it, while its code existed, and has not returned yet (native_site.ran), on any scheduler: a closed
+   callback is freed only once it is 0 and no call holds it (`jobs`), so no call's C can still reach its code.
+   `listed_by` is the id of the last call that listed it (native_site.id), so a call that C keeps calling it from finds
+   it listed without a search. Both change under rt->sync. */
 typedef struct {
   agc_c_resource *res;
   agc_value fn;
   agc_c_type result;
   agc_c_type params[AGC_FFI_MAX_PARAMS];
   uint32_t count, callers;
+  uint64_t listed_by;
 } callback_data;
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
@@ -267,12 +271,13 @@ typedef struct {
    `callbacks` is set once the run has made a callback: from then on a fast call holds its resources, as a compute
    call does, since a callback lets rt->sync go while it runs, and it, or another task, may close them while C uses
    them. It changes under rt->sync, as Native.callback is a shared builtin too. `walk` numbers the walks up from held
-   resources (agc_c_resource.seen), under rt->sync. */
+   resources (agc_c_resource.seen) and `sites` the native calls that list a callback (native_site.id), under
+   rt->sync. */
 typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
   bool callbacks;
-  uint64_t walk;
+  uint64_t walk, sites;
 } agc_ffi_cache;
 
 static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
@@ -1238,10 +1243,19 @@ static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *
   return from;
 }
 
-/* Counts the native call of SITE in the `callers` of the callback RES, once per call: C runs it now and may run it
-   again until it returns. */
-static void site_ran(native_site *site, agc_c_resource *res) {
+/* Counts the native call of SITE in the `callers` of the callback RES, once per call: C calls it now and may call it
+   again until it returns. A callback stamped with this call's id is listed already; one stamped by another call (a
+   nested one, or one on another scheduler) is searched for, in `more` only when this call has called two or more. */
+static void site_ran(agc_vm *vm, native_site *site, agc_c_resource *res) {
+  callback_data *cb = res->callback;
+  if (!site->id) site->id = ++ffi_cache(vm)->sites;
+  if (cb->listed_by == site->id) return;
+  cb->listed_by = site->id;
   if (site->ran == res) return;
+  if (site->more) {
+    for (size_t k = 0; k < site->more->count; k++)
+      if (site->more->items[k] == res) return;
+  }
   if (!site->ran) {
     site->ran = res;
   } else {
@@ -1250,11 +1264,9 @@ static void site_ran(native_site *site, agc_c_resource *res) {
       if (!site->more) agc_out_of_memory();
       list_init(site->more);
     }
-    for (size_t k = 0; k < site->more->count; k++)
-      if (site->more->items[k] == res) return;
     list_push(site->more, res);
   }
-  ((callback_data *)res->callback)->callers++;
+  cb->callers++;
 }
 
 /* C has returned from the native call of SITE: it no longer runs a callback that it ran, and one closed meanwhile is
@@ -2550,26 +2562,28 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
 /* What C runs when it calls a callback (agc_ffi_handler): the function runs in the task of the native call on this
    thread (native_site), and its value goes back to C. C gets zero when no call can run it, the callback is closed or
    one of the call's callbacks has failed already. The native call holds rt->sync here (a shared builtin), which the
-   run lets go and takes again. The call counts in the callback's `callers` (site_ran) before the run, so a close
-   meanwhile, by the callback or by another task, leaves the free to the end of the last native call that ran it:
-   libffi's frames of the run are on the stack until C returns, and C may call it again until then. */
+   run lets go and takes again. The call counts in the callback's `callers` (site_ran) first, also when the callback
+   gives zero (closed, or after a failure), so a close meanwhile, by the callback or by another task, leaves the free
+   to the end of the last native call whose C called it: libffi's frames of the run are on the stack until C returns,
+   and C may call it again until then. The native call holds rt->sync here even when the run cannot let it go. */
 static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
   const callback_data *cb = data;
   native_site *site = current_site;
-  if (!site || site->failed) return;
+  if (!site) return;
   if (!site->vm) {
     site->refused = true;
     return;
   }
   agc_vm *vm = site->vm;
   agc_c_resource *res = cb->res;
+  site_ran(vm, site, res);
+  if (site->failed) return;
   /* The run lets rt->sync go, which only the native call's own hold may be (a shared VM holds it once there). */
   if ((vm->rt->shared && vm->sync_depth != 1) || res->closed) return;
   agc_value values[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < cb->count; k++) values[k] = callback_argument(cb->params[k], &args[k]);
   agc_value got;
   agc_outcome failed;
-  site_ran(site, res);
   bool ran = agc_task_run_nested(vm, cb->fn, values, cb->count, site->span, &got, &failed);
   if (!ran) {
     site->failed = true;
