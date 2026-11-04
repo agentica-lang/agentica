@@ -747,10 +747,10 @@ end
 
 def main() -> Void
   _writer = Task.spawn(&hold_stream, 0)
-  IO.read_bytes(1)
+  _ = IO.read_bytes(1)
   {buffer}({free_stream_id})
   puts("done")
-  File.write_text("{main_marker}", "after puts", 2000)
+  _ = File.write_text("{main_marker}", "after puts", 2000)
   {ending}
 end
 '''.format(library=literal(library), hold_signature=hold_signature, hold_call=hold_call, buffer=buffer,
@@ -1574,6 +1574,184 @@ end
     assert result.stdout.split("\n") == ["0", awaited, "1", "0", ""]
 
 
+CHILD_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  resource Child, free: peer_child_free
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_child_open(res: Res) -> Child
+  compute def child_open_pool(res: Res) -> Child = "peer_child_open"
+  def peer_child_open_out(res: Res, out child: Child) -> C.Int32
+  def peer_child_of(child: Child) -> Child
+  def peer_child_next(ctx: Res, child: Child) -> Child
+  compute def peer_child_value(child: Child) -> C.Int32
+  compute def peer_child_hold(child: Child, limit_ms: C.Int32) -> C.Int32
+  def peer_child_frees() -> C.Int32
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+def hold_child(child: Child) -> Result[Int]
+  return ok(peer_child_hold(child, 20_000))
+end
+
+# Starts a compute call on CHILD in another task, runs BEFORE and closes RES while it runs, and prints whether RES is
+# closed, the frees of RES before the call returns, the call's result, the frees after it and the frees while busy.
+def close_during_hold(res: Res, child: Child, before: Fn[Void]) -> Void
+  holder = Task.spawn(&hold_child, child)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  before.call()
+  Native.close(res)
+  puts(Native.closed?(res))
+  puts(peer_res_frees())
+  peer_set_flag()
+  puts(Task.await(holder))
+  n = 0
+  while peer_res_frees() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(peer_res_frees())
+  puts(peer_res_busy_frees())
+end
+
+"""
+
+
+# A compute call on a resource also holds what that resource comes from, the resources of the call that made it
+# (#1080: mysql_stmt_execute on a Stmt while another task closes its Handle). The close marks the parent closed at once,
+# and its free runs only when the call on the child returns, whether a fast call, a compute call or an out parameter made
+# the child. A resource closed during the call holds what it comes from in turn: with a child of a child, closing the
+# middle one, then the first, frees both when the call returns. The children are freed at the end of main.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("make, before", [
+    ("peer_child_open(res).unwrap!", ""),
+    ("child_open_pool(res).unwrap!", ""),
+    ("peer_child_open_out(res).child", ""),
+    ("peer_child_of(middle).unwrap!", "Native.close(middle)"),
+])
+def test_a_compute_call_on_a_child_keeps_its_parent_until_it_returns(tmp_path, peer, schedulers, make, before):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  %s
+  close_during_hold(res, %s) do
+    %s
+  end
+  puts(peer_child_frees())
+end
+""" % ("middle = peer_child_open(res).unwrap!" if before else "", make, before)
+    result = agentica("--schedulers", schedulers, program(tmp_path, CHILD_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", "1" if before else "0", ""]
+
+
+# A long chain of children, as libgit2's git_commit_parent walks commits (x = next(x)) or a cursor walks rows (x =
+# next(ctx, x)), each closed once used or all kept open, with a compute call on each new child: the cost of a call does
+# not grow with the length of the chain (a cost that did would take many times the bound here). When each child is
+# closed once used, the call on the last one still keeps the first resource until it returns. An open chain is
+# closed from its last child, each child before what it comes from.
+@NATIVE_CALLS
+@pytest.mark.parametrize("make", ["peer_child_of(c)", "peer_child_next(res, c)"])
+@pytest.mark.parametrize("close", ["Native.close(c)", ""])
+def test_a_long_chain_of_children_keeps_its_root_at_linear_cost(tmp_path, peer, make, close):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  c = peer_child_open(res).unwrap!
+  sum = 0
+  for _k in 1..30_000
+    next = %s.unwrap!
+    %s
+    c = next
+    sum += peer_child_value(c)
+  end
+  puts(sum)
+  %s
+end
+""" % (make, close, "close_during_hold(res, c) do end" if close else "Native.close(c)\n  puts(peer_res_frees())")
+    started = time.monotonic()
+    result = agentica("--schedulers", "1", program(tmp_path, CHILD_EXTERN.format(library=literal(peer)) + main),
+                      timeout=scaled(120))
+    elapsed = time.monotonic() - started
+    assert (result.code, result.stderr) == (0, "")
+    tail = ["true", "0", "ok(9)", "1", "0"] if close else ["0"]
+    assert result.stdout.split("\n") == ["270000"] + tail + [""]
+    assert elapsed < scaled(10.0)
+
+
+CALLBACK_CHILD = """extern "{library}"
+  resource Child, free: peer_child_free
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_store_fn(fn: Step) -> Void
+  def peer_call_stored_then(fn: Step) -> C.Int32
+  def cb_child_open(fn: Step) -> Child = "peer_child_open"
+  compute def peer_child_touch(child: Child) -> C.Int32
+  def peer_child_frees() -> C.Int32
+  def peer_bump() -> Void
+  def peer_bumps() -> C.Int32
+  def peer_flag() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+def first(x: Int) -> Int
+  peer_bump()
+  _turns = 0
+  while peer_flag() == 0
+    _turns = _turns + 1
+  end
+
+  return x
+end
+
+# Makes no native call, so nothing frees the closed first callback before C returns, and runs long enough for the
+# other task to close it and to end a compute call that holds it.
+def second(x: Int) -> Int
+  start = Time.monotonic_ms()
+  _turns = 0
+  while Time.monotonic_ms() - start < 1500
+    _turns = _turns + 1
+  end
+
+  return x
+end
+
+def main() -> Void
+  a = Native.callback(Step, &first)
+  child = cb_child_open(a).unwrap!
+  peer_store_fn(a)
+  closer = Task.spawn do
+    while peer_bumps() == 0
+      Task.sleep(1)
+    end
+
+    Native.close(a)
+    peer_set_flag()
+    Task.sleep(300)
+    peer_child_touch(child)
+  end
+  puts(peer_call_stored_then(Native.callback(Step, &second)))
+  puts(Task.await(closer))
+  puts(Native.closed?(a))
+end
+"""
+
+
+# A callback closed while it runs is freed once C has returned from the native call that ran it, also when a compute
+# call on a child made from it holds it meanwhile and ends first (the closure was freed twice).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["2", "4"])
+def test_a_closed_callback_that_a_child_holds_is_freed_once(tmp_path, peer, schedulers):
+    result = agentica("--schedulers", schedulers, program(tmp_path, CALLBACK_CHILD.format(library=literal(peer))),
+                      timeout=scaled(30))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "12\n1\ntrue\n"
+
+
 # The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
 @NATIVE_CALLS
 def test_a_dropped_compute_result_frees_its_resource(tmp_path, peer):
@@ -1643,7 +1821,7 @@ def main() -> Void
   end
   peer_set_flag()
   for task in holders
-    Task.await(task)
+    _ = Task.await(task)
   end
   Native.close(res)
   Task.sleep(50)
@@ -2261,7 +2439,9 @@ end
     ("open(slot(api(), OPEN), 1, Native.memory_pointer(8))", "RUNTIME-NATIVE-BOUNDS"),
 ])
 def test_a_null_function_pointer_is_refused(tmp_path, peer, call, code):
-    main = "def main() -> Void\n  %s\n  puts(peer_api_releases())\nend\n" % call
+    # `open` gives a Result, which a statement must not drop.
+    drop = "_ = " if call.startswith("open(") else ""
+    main = "def main() -> Void\n  %s%s\n  puts(peer_api_releases())\nend\n" % (drop, call)
     refused_at_extern(tmp_path, peer, API_EXTERN, main, call, code)
 
 

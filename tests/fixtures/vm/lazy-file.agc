@@ -40,7 +40,7 @@ end
 def park(path: String, gate: Channel[Int]) -> Result[Void]
   return lines(path).map do |line| line end.each do |line|
     puts("  parked on #{line}")
-    gate.recv(60000)
+    _ = gate.recv(60000)
     ok()
   end
 end

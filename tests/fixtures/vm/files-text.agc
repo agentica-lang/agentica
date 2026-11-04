@@ -23,7 +23,7 @@ def main() -> Void
   IO.inspect(Dir.mkdir(at(dir, "a//b/./d/"), 60000))
   IO.inspect(Dir.mkdir(notes, 60000))
   for name in ["zeta", "Alpha", "émile", "_x", "10", "9"]
-    File.write_text(at(dir, name), name, 60000)
+    _ = File.write_text(at(dir, name), name, 60000)
   end
   IO.inspect(Dir.list(dir, 60000))
   IO.inspect(Dir.list(at(dir, "a"), 60000))

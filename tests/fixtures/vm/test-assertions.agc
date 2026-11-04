@@ -57,8 +57,8 @@ def main() -> Void
       Test.assert(2 < 1, "two is not below one")
     end,
     Test.test("an ignored failure still fails") do
-      Test.eq("a", "b")
-      Test.eq(1, 3)
+      _ = Test.eq("a", "b")
+      _ = Test.eq(1, 3)
       ok()
     end,
     Test.test("the block returns an error") do
@@ -81,7 +81,7 @@ def main() -> Void
       ok()
     end,
     Test.test("an assertion in a spawned task") do
-      Task.await(Task.spawn(&check_in_task, 3))
+      _ = Task.await(Task.spawn(&check_in_task, 3))
       ok()
     end,
     Test.test("Test.run inside a test") do

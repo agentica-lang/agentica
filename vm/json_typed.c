@@ -7,16 +7,19 @@
 
 #include <string.h>
 
-/* One open container of the decode: a List, a Map, a struct, or a JsonField.Value or an Optional some whose T is not
-   a scalar (n is 1 and value holds the decoded T until the frame closes). */
+/* One open container of the decode: a List, a Map, a struct, an enum variant with payloads, or a JsonField.Value or an
+   Optional some whose T is not a scalar (n is 1 and value holds the decoded T until the frame closes). An enum frame
+   walks the "values" array of the variant: items are its items, payload_types their types and tagged the enum being built. */
 typedef struct {
   const agc_json *node;
   const agc_list *items;
   const agc_struct_def *def;
+  const uint32_t *payload_types;
   uint32_t kind, arg;
   size_t next, n;
   agc_list_builder list;
   agc_struct *record;
+  agc_enum *tagged;
   agc_map *map;
   agc_value value;
 } decode_frame;
@@ -29,7 +32,9 @@ static agc_string *buffer_string(const agc_json_buffer *b) {
   return agc_make_string(b->data, b->len, agc_utf8_count((const uint8_t *)b->data, b->len));
 }
 
-static agc_value decode_error(const decode_frame *stack, size_t depth, const char *expected) {
+/* The error Result "path: expected what". The path is the keys and indexes of the open frames; field, when not NULL,
+   is a key of the object being decoded (the "tag" or "values" of an enum) that comes last. */
+static agc_value decode_error_in(const decode_frame *stack, size_t depth, const char *field, const char *expected) {
   agc_json_buffer b;
   b.cap = 64;
   b.len = 0;
@@ -42,6 +47,10 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
       agc_json_put(&b, key->data, key->bytes);
     } else if (f->kind == AGC_TYPE_JSON_FIELD || f->kind == AGC_TYPE_OPTIONAL) {
       continue; /* JsonField.Value and some add no step to the path */
+    } else if (f->kind == AGC_TYPE_ENUM) {
+      char index[48];
+      int n = snprintf(index, sizeof index, "%svalues[%zu]", b.len ? "." : "", f->next);
+      agc_json_put(&b, index, (size_t)n);
     } else if (f->kind == AGC_TYPE_LIST) {
       char index[32];
       int n = snprintf(index, sizeof index, "[%zu]", f->next);
@@ -51,10 +60,18 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
       agc_json_put(&b, key->data, key->bytes);
     }
   }
+  if (field) {
+    if (b.len) agc_json_put(&b, ".", 1);
+    agc_json_put(&b, field, strlen(field));
+  }
   if (!b.len) agc_json_put(&b, "$", 1);
   agc_json_put(&b, ": expected ", 11);
   agc_json_put(&b, expected, strlen(expected));
   return agc_result_value(false, agc_string_value(buffer_string(&b)));
+}
+
+static agc_value decode_error(const decode_frame *stack, size_t depth, const char *expected) {
+  return decode_error_in(stack, depth, NULL, expected);
 }
 
 /* The next child of a List, Map or struct frame and the kind and operand of its type. A missing key is false, except
@@ -63,6 +80,9 @@ static bool next_child(const agc_program *p, const decode_frame *f, agc_value *i
   uint32_t index = f->arg;
   if (f->kind == AGC_TYPE_LIST) {
     *item = agc_list_get(f->items, f->next);
+  } else if (f->kind == AGC_TYPE_ENUM) {
+    *item = agc_list_get(f->items, f->next);
+    index = f->payload_types[f->next];
   } else if (f->kind == AGC_TYPE_MAP) {
     *item = f->node->members[f->next].value;
   } else {
@@ -97,6 +117,8 @@ static void store_child(agc_vm *vm, decode_frame *f, agc_value v) {
     f->map = agc_map_put(vm, f->map, agc_string_value(f->node->members[f->next].key), v);
   else if (f->kind == AGC_TYPE_JSON_FIELD || f->kind == AGC_TYPE_OPTIONAL)
     f->value = v;
+  else if (f->kind == AGC_TYPE_ENUM)
+    f->tagged->payload[f->next] = v;
   else
     f->record->fields[f->next] = v;
 }
@@ -106,6 +128,7 @@ static agc_value frame_value(const agc_program *p, decode_frame *f) {
   if (f->kind == AGC_TYPE_MAP) return agc_map_value(f->map);
   if (f->kind == AGC_TYPE_JSON_FIELD) return json_field_value(p, AGC_JSON_FIELD_VALUE, f->value);
   if (f->kind == AGC_TYPE_OPTIONAL) return agc_optional_make(p, true, f->value);
+  if (f->kind == AGC_TYPE_ENUM) return agc_enum_value(f->tagged);
   return agc_struct_value(f->record);
 }
 
@@ -132,11 +155,15 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   f->next = 0;
   f->items = NULL;
   f->def = NULL;
+  f->payload_types = NULL;
   f->list = (agc_list_builder){0};
   f->record = NULL;
+  f->tagged = NULL;
   f->map = NULL;
   f->value = agc_void();
-  if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
+  if (kind == AGC_TYPE_ENUM) {
+    f->n = 0; /* the caller fills in the variant (decode_variant) */
+  } else if (kind == AGC_TYPE_JSON_FIELD || kind == AGC_TYPE_OPTIONAL) {
     f->n = 1;
   } else if (kind == AGC_TYPE_LIST) {
     f->items = agc_as_list(vm, node->scalar);
@@ -152,12 +179,95 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   }
 }
 
-agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
+/* How many variant names the "expected one of" error lists; a wider enum ends the list with "...". */
+#define MAX_LISTED_VARIANTS 20
+
+/* The enum value of a JSON object {"tag": "Variant", "values": [...]} (docs/vm/02-reference-behavior.md §2.7): "tag"
+   names a variant and "values" is an array of its payload items, which a variant with no payload may leave out. A
+   variant with no payload is the shared value, left in *v with f->tagged NULL. Otherwise f is opened as an enum frame
+   (f->tagged set) for the caller to push. False means a failure, and *error is the error Result; depth frames of
+   stack are open, which gives its path. */
+static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode_frame *f, agc_value *v,
+                           agc_value *error, const decode_frame *stack, size_t depth) {
+  const agc_program *p = vm->rt->program;
+  const agc_enum_def *def = &p->enums[index];
+  f->tagged = NULL; /* the slot may hold a frame that closed before */
+  const agc_json_member *tag = agc_json_find(j, agc_json_ascii("tag", 3));
+  if (!tag) {
+    *error = decode_error_in(stack, depth, "tag", "required field");
+    return false;
+  }
+  const agc_json *name = agc_as_json(vm, tag->value);
+  if (name->kind != AGC_JSON_STRING) {
+    *error = decode_error_in(stack, depth, "tag", "String");
+    return false;
+  }
+  const agc_string *text = agc_as_string(vm, name->scalar);
+  const agc_variant_def *found = NULL;
+  size_t offset = 0; /* the payload types of the variants before the one found */
+  for (uint32_t k = 0; k < def->count && !found; k++) {
+    const agc_variant_def *candidate = &p->variants[def->first + k];
+    if (candidate->name->bytes == text->bytes && memcmp(candidate->name->data, text->data, text->bytes) == 0)
+      found = candidate;
+    else
+      offset += candidate->arity;
+  }
+  if (!found) {
+    agc_json_buffer b;
+    b.cap = 64;
+    b.len = 0;
+    b.data = agc_alloc_atomic(b.cap);
+    agc_json_put(&b, "one of ", 7);
+    for (uint32_t k = 0; k < def->count && k < MAX_LISTED_VARIANTS; k++) {
+      const agc_string *candidate = p->variants[def->first + k].name;
+      if (k) agc_json_put(&b, ", ", 2);
+      agc_json_put(&b, candidate->data, candidate->bytes);
+    }
+    if (def->count > MAX_LISTED_VARIANTS) agc_json_put(&b, ", ...", 5);
+    agc_json_put(&b, "", 1);
+    *error = decode_error_in(stack, depth, "tag", b.data);
+    return false;
+  }
+  uint32_t id = (uint32_t)(found - p->variants);
+  const agc_json_member *values = agc_json_find(j, agc_json_ascii("values", 6));
+  const agc_list *items = NULL;
+  size_t n = 0;
+  if (values) {
+    const agc_json *array = agc_as_json(vm, values->value);
+    if (array->kind != AGC_JSON_ARRAY) {
+      *error = decode_error_in(stack, depth, "values", "array");
+      return false;
+    }
+    items = agc_as_list(vm, array->scalar);
+    n = agc_list_len(items);
+  } else if (found->arity) {
+    *error = decode_error_in(stack, depth, "values", "required field");
+    return false;
+  }
+  if (n != found->arity) {
+    char expected[48];
+    snprintf(expected, sizeof expected, "array of %u items", (unsigned)found->arity);
+    *error = decode_error_in(stack, depth, "values", expected);
+    return false;
+  }
+  if (!found->arity) {
+    *v = agc_enum_value(found->shared);
+    return true;
+  }
+  open_frame(vm, f, j, AGC_TYPE_ENUM, index);
+  f->items = items;
+  f->payload_types = def->payload_types + offset;
+  f->n = found->arity;
+  f->tagged = agc_new_enum(id, found->arity);
+  return true;
+}
+
+agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32_t type) {
   const agc_program *p = vm->rt->program;
   size_t depth = 0, capacity = 16;
   decode_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(decode_frame)));
   agc_value item = root;
-  uint32_t kind = AGC_TYPE_STRUCT, arg = type;
+  uint32_t kind = root_kind, arg = type;
   for (;;) {
     agc_value v;
     double x;
@@ -192,6 +302,16 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
     } else if (kind == AGC_TYPE_STRING) {
       if (j->kind != AGC_JSON_STRING) return decode_error(stack, depth, "String");
       v = j->scalar;
+    } else if (kind == AGC_TYPE_ENUM) {
+      if (j->kind != AGC_JSON_OBJECT) return decode_error(stack, depth, "object");
+      stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
+      agc_value error;
+      if (!decode_variant(vm, j, arg, &stack[depth], &v, &error, stack, depth)) return error;
+      if (stack[depth].tagged) {
+        depth++;
+        if (!next_child(p, &stack[depth - 1], &item, &kind, &arg)) return decode_error(stack, depth, "required field");
+        continue;
+      }
     } else {
       bool list = kind == AGC_TYPE_LIST;
       if (j->kind != (list ? AGC_JSON_ARRAY : AGC_JSON_OBJECT))
@@ -269,6 +389,7 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
   if (t->kind == AGC_TYPE_BOOL) return typed("boolean");
   if (t->kind == AGC_TYPE_STRING) return typed("string");
   if (t->kind == AGC_TYPE_STRUCT) return reference(p->structs[t->arg].json_name);
+  if (t->kind == AGC_TYPE_ENUM) return reference(p->enums[t->arg].json_name);
   if (t->kind == AGC_TYPE_JSON_FIELD || t->kind == AGC_TYPE_OPTIONAL) {
     agc_list_builder choices;
     agc_list_builder_sized(&choices, 2);
@@ -323,14 +444,17 @@ static agc_value struct_schema(const agc_program *p, const agc_struct_def *def, 
   return object_of(n, keys, values);
 }
 
+/* The structs and enums to describe in $defs are numbered together: a struct by its index and an enum by
+   struct_count plus its index. */
 static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen, uint32_t *queue, size_t *count) {
   while (!needed[t]) {
     needed[t] = true;
     const agc_type *type = &p->types[t];
-    if (type->kind == AGC_TYPE_STRUCT) {
-      if (!seen[type->arg]) {
-        seen[type->arg] = true;
-        queue[(*count)++] = type->arg;
+    if (type->kind == AGC_TYPE_STRUCT || type->kind == AGC_TYPE_ENUM) {
+      uint32_t id = type->kind == AGC_TYPE_STRUCT ? type->arg : p->struct_count + type->arg;
+      if (!seen[id]) {
+        seen[id] = true;
+        queue[(*count)++] = id;
       }
       return;
     }
@@ -339,18 +463,86 @@ static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen
   }
 }
 
-agc_value agc_json_schema(agc_vm *vm, uint32_t type) {
+static agc_value tag_schema(agc_string *name) {
+  static const char *const keys[] = {"enum"};
+  agc_list_builder names;
+  agc_list_builder_sized(&names, 1);
+  agc_list_builder_push(&names, agc_json_leaf(AGC_JSON_STRING, agc_string_value(name)));
+  agc_value values[] = {agc_json_array(agc_list_builder_finish(&names))};
+  return object_of(1, keys, values);
+}
+
+/* The object of one variant: "tag" is the name alone, and "values" an array of exactly the payload items
+   (prefixItems is for 2020-12 validators, minItems and maxItems for all). A variant with no payload may leave "values"
+   out, as the decoder accepts. */
+static agc_value variant_schema(const agc_variant_def *v, const uint32_t *payload_types, const agc_value *schemas) {
+  const char *keys[4] = {"type"};
+  agc_value values[4] = {json_text("array")};
+  size_t n = 1;
+  if (v->arity) {
+    agc_list_builder items;
+    agc_list_builder_sized(&items, v->arity);
+    for (uint32_t k = 0; k < v->arity; k++) agc_list_builder_push(&items, schemas[payload_types[k]]);
+    keys[n] = "minItems";
+    values[n++] = agc_json_number(v->arity);
+    keys[n] = "prefixItems";
+    values[n++] = agc_json_array(agc_list_builder_finish(&items));
+  }
+  keys[n] = "maxItems";
+  values[n++] = agc_json_number(v->arity);
+  static const char *const property_keys[] = {"tag", "values"};
+  agc_value property_values[] = {tag_schema(v->name), object_of(n, keys, values)};
+  agc_list_builder required;
+  agc_list_builder_sized(&required, v->arity ? 2 : 1);
+  agc_list_builder_push(&required, json_text("tag"));
+  if (v->arity) agc_list_builder_push(&required, json_text("values"));
+  static const char *const variant_keys[] = {"type", "properties", "required"};
+  agc_value variant_values[] = {json_text("object"), object_of(2, property_keys, property_values),
+                                agc_json_array(agc_list_builder_finish(&required))};
+  return object_of(3, variant_keys, variant_values);
+}
+
+/* An enum as the tagged objects its decoder reads: a oneOf with one schema for each variant. */
+static agc_value enum_schema(const agc_program *p, const agc_enum_def *def, const agc_value *schemas, agc_value defs) {
+  agc_list_builder choices;
+  agc_list_builder_sized(&choices, def->count);
+  const uint32_t *payload_types = def->payload_types;
+  for (uint32_t k = 0; k < def->count; k++) {
+    const agc_variant_def *v = &p->variants[def->first + k];
+    agc_list_builder_push(&choices, variant_schema(v, payload_types, schemas));
+    payload_types += v->arity;
+  }
+  const char *keys[2] = {"oneOf"};
+  agc_value values[2] = {agc_json_array(agc_list_builder_finish(&choices))};
+  size_t n = 1;
+  if (!agc_is(defs, AGC_T_VOID)) {
+    keys[n] = "$defs";
+    values[n++] = defs;
+  }
+  return object_of(n, keys, values);
+}
+
+agc_value agc_json_schema(agc_vm *vm, uint32_t kind, uint32_t index) {
   const agc_program *p = vm->rt->program;
+  uint32_t total = p->struct_count + p->enum_count;
   bool *needed = agc_alloc_atomic(p->type_count);
   memset(needed, 0, p->type_count);
-  bool *seen = agc_alloc_atomic(p->struct_count);
-  memset(seen, 0, p->struct_count);
-  uint32_t *queue = agc_alloc_atomic(agc_size_mul(p->struct_count, sizeof(uint32_t)));
+  bool *seen = agc_alloc_atomic(total);
+  memset(seen, 0, total);
+  uint32_t *queue = agc_alloc_atomic(agc_size_mul(total, sizeof(uint32_t)));
   size_t count = 0;
-  uint32_t current = type;
+  uint32_t root = kind == AGC_TYPE_STRUCT ? index : p->struct_count + index;
+  uint32_t current = root;
   for (size_t head = 0;; current = queue[head++]) {
-    const agc_struct_def *def = &p->structs[current];
-    for (uint32_t k = 0; k < def->count; k++) mark_type(p, def->field_types[k], needed, seen, queue, &count);
+    if (current < p->struct_count) {
+      const agc_struct_def *def = &p->structs[current];
+      for (uint32_t k = 0; k < def->count; k++) mark_type(p, def->field_types[k], needed, seen, queue, &count);
+    } else {
+      const agc_enum_def *def = &p->enums[current - p->struct_count];
+      uint32_t items = 0;
+      for (uint32_t k = 0; k < def->count; k++) items += p->variants[def->first + k].arity;
+      for (uint32_t j = 0; j < items; j++) mark_type(p, def->payload_types[j], needed, seen, queue, &count);
+    }
     if (head == count) break;
   }
   agc_value *schemas = agc_alloc(agc_size_mul(p->type_count, sizeof(agc_value)));
@@ -360,10 +552,17 @@ agc_value agc_json_schema(agc_vm *vm, uint32_t type) {
   if (count) {
     agc_json_member *members = agc_alloc(agc_size_mul(count, sizeof(agc_json_member)));
     for (size_t i = 0; i < count; i++) {
-      members[i].key = p->structs[queue[i]].json_name;
-      members[i].value = struct_schema(p, &p->structs[queue[i]], schemas, agc_void());
+      uint32_t id = queue[i];
+      if (id < p->struct_count) {
+        members[i].key = p->structs[id].json_name;
+        members[i].value = struct_schema(p, &p->structs[id], schemas, agc_void());
+      } else {
+        members[i].key = p->enums[id - p->struct_count].json_name;
+        members[i].value = enum_schema(p, &p->enums[id - p->struct_count], schemas, agc_void());
+      }
     }
     defs = agc_json_object(members, count);
   }
-  return struct_schema(p, &p->structs[type], schemas, defs);
+  if (kind == AGC_TYPE_ENUM) return enum_schema(p, &p->enums[index], schemas, defs);
+  return struct_schema(p, &p->structs[index], schemas, defs);
 }

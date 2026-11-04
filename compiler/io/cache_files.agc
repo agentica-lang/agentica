@@ -114,9 +114,9 @@ export def own_user() -> Result[Int]
     made_at = Paths.join(place, "agentica-id-#{name}")
     made = File.open(made_at, "create_private", IO_TIMEOUT_MS)
     if made.ok?
-      File.close(made.unwrap!, IO_TIMEOUT_MS)
+      _ = File.close(made.unwrap!, IO_TIMEOUT_MS)
       info = File.lstat(made_at, IO_TIMEOUT_MS)
-      Path.remove(made_at, IO_TIMEOUT_MS)
+      _ = Path.remove(made_at, IO_TIMEOUT_MS)
       if info.ok?
         return ok(info.unwrap!.user_id)
       end
@@ -136,7 +136,7 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
 
   above = Paths.directory_of(path)
   if above != ""
-    Dir.mkdir(above, IO_TIMEOUT_MS)
+    _ = Dir.mkdir(above, IO_TIMEOUT_MS)
   end
 
   try Dir.mkdir_private(path, IO_TIMEOUT_MS)
@@ -150,7 +150,7 @@ export def write_private(path: String, data: Bytes) -> Result[Void]
   while rest.size > 0
     written = File.write_bytes(out, rest.take(PIECE), IO_TIMEOUT_MS)
     if !written.ok?
-      File.close(out, IO_TIMEOUT_MS)
+      _ = File.close(out, IO_TIMEOUT_MS)
       return written
     end
 
@@ -207,7 +207,7 @@ end
 export def remove_file(path: String) -> Void
   info = File.lstat(path, IO_TIMEOUT_MS)
   if info.ok? and info.unwrap!.kind != "directory"
-    Path.remove(path, IO_TIMEOUT_MS)
+    _ = Path.remove(path, IO_TIMEOUT_MS)
   end
 end
 
@@ -224,7 +224,7 @@ export def sweep(folder: String) -> Void
       path = Paths.join(folder, name)
       info = File.lstat(path, IO_TIMEOUT_MS)
       if info.ok? and info.unwrap!.kind == "file" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
-        Path.remove(path, IO_TIMEOUT_MS)
+        _ = Path.remove(path, IO_TIMEOUT_MS)
       end
     end
   end

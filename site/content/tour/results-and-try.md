@@ -121,6 +121,48 @@ ok()
 error("age must not be negative")
 ```
 
+## A Result must be used
+
+A call whose `Result` is dropped would lose its error, so it is `CHECK-UNUSED-RESULT`. It holds for any call, yours or a builtin, and for `Result[Void]` too.
+
+```agentica {expect="CHECK-UNUSED-RESULT"}
+def check_age(age: Int) -> Result[Void]
+  if age < 0
+    return error("age must not be negative")
+  end
+
+  return ok()
+end
+
+def main() -> Void
+  check_age(-1)
+end
+```
+
+Handle it with `try`, a `case` or `unwrap!`. To drop it on purpose, write `_ =` in front of the call:
+
+```agentica
+def check_age(age: Int) -> Result[Void]
+  if age < 0
+    return error("age must not be negative")
+  end
+
+  return ok()
+end
+
+def main() -> Void
+  _ = check_age(-1)
+  case check_age(30)
+    ok(_) -> puts("fine")
+    error(message) -> puts(message)
+  end
+end
+```
+
+```output
+fine
+```
+
 ## Error needs a type
 
 `error("...")` alone does not say which `Result` it is. Give it a type, for example with an annotation:

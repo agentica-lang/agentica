@@ -33,8 +33,10 @@ interpolating one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
 Values are immutable: a method never changes its receiver, so `xs.push(2)`
 returns a new list. A builtin without effects whose non-Void result is dropped
 is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Builtins with effects,
-functions ending in `!`, and builtins that take a function are exempt. A
-negative literal receiver needs parentheses: `(-5).to_s`.
+functions ending in `!`, and builtins that take a function are exempt, except
+that a dropped `Result` is `CHECK-UNUSED-RESULT` for any call (see "Result and
+propagation" in the semantics). A negative literal receiver needs parentheses:
+`(-5).to_s`.
 
 ### Minimal builtin functions
 
@@ -75,16 +77,28 @@ text they read and write are in the
 the checker enforces:
 
 - `JSON.decode(source, T)`, `JSON.schema(T)` and `JSON.codec(T)` take a named
-  struct type, not a value; bare type names are valid only for these three.
-  Fields may be Int, Float, Bool, String, lists, String-keyed maps, nested or
-  recursive structs, and `Optional` and `JsonField` of those; any other nested
-  type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`.
+  struct or enum type, not a value; bare type names are valid only for these
+  three. Fields and payloads may be Int, Float, Bool, String, lists, String-keyed
+  maps, nested or recursive structs and enums, and `Optional` of those (and
+  `JsonField`, for a struct field); any other nested type, a generic struct or
+  enum instance included, is `CHECK-NOT-DECODABLE`.
 - `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
-  `null`), Json, lists, String-keyed maps, `Optional` and structs of those,
-  whose fields may also be `JsonField`. An instance of a generic struct counts
-  by its fields after substitution (`Box[List[Int]]`). Results, other enums and
+  `null`), Json, lists, String-keyed maps, `Optional`, structs and user enums of
+  those, whose struct fields may also be `JsonField`. An instance of a generic
+  struct or enum counts by its fields or payloads after substitution
+  (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`LogLevel`) and
   Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
   annotation.
+- A user enum is a tagged object: `{"tag": "Rect", "values": [1.0, 2.0]}`. `tag`
+  is the variant name (without the enum name) and `values` the payloads in
+  order. `JSON.encode` and `JSON.from` always write both keys, `tag` first;
+  `JSON.decode` accepts a missing `values` for a variant with no payload and
+  ignores extra keys, as for structs. Errors name the same paths as for struct
+  fields (`shapes[0].values[1]`), for an unknown `tag`, a missing or wrong `tag`
+  or `values`, a wrong number of values or a wrong value type.
+  `JSON.schema` describes it as a `oneOf` with one object per variant, and enums
+  go in `$defs` like structs. A `JsonField` in a payload is
+  `CHECK-JSON-FIELD-PLACE`.
 - `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
   returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
   cannot call `decode` on its type parameter. A codec follows the
@@ -106,8 +120,8 @@ trip) is in the library page.
   `JsonField[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`:
   use `Optional[T]` when a missing key and `null` mean the same, and
   `JsonField[T]` when they differ.
-- `JSON.decode`, `JSON.schema` and `JSON.codec` take a struct name, so a
-  top-level `Optional` is decoded as a field of a struct.
+- `JSON.decode`, `JSON.schema` and `JSON.codec` take a struct or enum name, so
+  a top-level `Optional` is decoded as a field of a struct.
 
 #### Optional and nullable fields (`JsonField`)
 

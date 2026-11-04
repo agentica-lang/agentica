@@ -120,7 +120,10 @@ end
   once (a second close does nothing); a call with a closed resource is
   `RUNTIME-NATIVE-CLOSED`. The owner's end frees what it did not close;
   `Task.spawn_owning(&f, db)` hands it on. A `compute def` call keeps its
-  resource until it returns (a close or cancel meanwhile defers the free). The
+  resource until it returns (a close or cancel meanwhile defers the free), and
+  what it comes from (the resources of the call that made it: a statement keeps
+  its database; further up only through resources closed meanwhile, so close a
+  connection before its environment). The
   end of the run (`main` returns, `System.exit`, a crash of `main`, the step
   limit, the first stop signal) drops compute calls not started, stops children,
   writes files, waits for running calls that hold a resource, then frees every

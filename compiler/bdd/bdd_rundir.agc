@@ -88,7 +88,7 @@ export def claim(temporary: String) -> Result[Run]
   current = try make_private(temporary, prefix)
   claimed = lock_and_name(temporary, current)
   if !claimed.ok?
-    Path.remove(current, IO_TIMEOUT)
+    _ = Path.remove(current, IO_TIMEOUT)
   end
 
   return claimed
@@ -147,11 +147,11 @@ end
 # takes the same folder; Windows cannot remove a folder with an open file in it, so the lock is closed first there.
 def discard(path: String, lock: FileHandle) -> Void
   if windows?()
-    File.close(lock, IO_TIMEOUT)
-    Path.remove(path, IO_TIMEOUT)
+    _ = File.close(lock, IO_TIMEOUT)
+    _ = Path.remove(path, IO_TIMEOUT)
   else
-    Path.remove(path, IO_TIMEOUT)
-    File.close(lock, IO_TIMEOUT)
+    _ = Path.remove(path, IO_TIMEOUT)
+    _ = File.close(lock, IO_TIMEOUT)
   end
 end
 
@@ -191,7 +191,7 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
   lock = try take_lock(current)
   renamed = Path.rename(current, final, IO_TIMEOUT)
   if !renamed.ok?
-    File.close(lock, IO_TIMEOUT)
+    _ = File.close(lock, IO_TIMEOUT)
     return error("cannot name the run directory #{final}: #{renamed.message}")
   end
 
@@ -207,7 +207,7 @@ def take_lock(directory: String) -> Result[FileHandle]
     return ok(lock)
   end
 
-  File.close(lock, IO_TIMEOUT)
+  _ = File.close(lock, IO_TIMEOUT)
   return error("cannot lock #{directory}")
 end
 
@@ -274,6 +274,6 @@ def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
     return ok(lock)
   end
 
-  File.close(lock, IO_TIMEOUT)
+  _ = File.close(lock, IO_TIMEOUT)
   return error("the run is alive")
 end

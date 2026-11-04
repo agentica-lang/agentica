@@ -40,7 +40,7 @@ def main() -> Void
   puts(outcome.ok?)
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 

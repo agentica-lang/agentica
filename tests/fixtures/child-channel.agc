@@ -33,14 +33,14 @@ def pinned() -> Void
   done("send", Process.parent_send("x\n", 100))
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 
 def piped() -> Void
   show("read", Process.parent_read_line(3000))
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 
 def spawn_shell(script: String, channel: Bool) -> Void
@@ -62,7 +62,7 @@ end
 
 def ask(peer_program: String, peer: String, mode: String) -> Void
   p = Process.spawn_channel(peer_program, [peer, "child", mode], ".", 5000).unwrap!
-  Process.close_stdin(p, 1000)
+  _ = Process.close_stdin(p, 1000)
   if mode == "echo"
     done("send", Process.channel_send(p, "hello\n", 2000))
     show("read", Process.channel_read_line(p, 2000))

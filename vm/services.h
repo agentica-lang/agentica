@@ -73,8 +73,9 @@ const char *agc_json_version(void);
 agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *text, size_t len, agc_value *out);
 const char *agc_json_status_message(agc_json_status status);
 bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out);
-agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type);
-agc_value agc_json_schema(agc_vm *vm, uint32_t type);
+/* A decodable type is a struct or an enum of the program: kind is AGC_TYPE_STRUCT or AGC_TYPE_ENUM and index its place. */
+agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t kind, uint32_t index);
+agc_value agc_json_schema(agc_vm *vm, uint32_t kind, uint32_t index);
 
 void agc_processes_stop(agc_vm *vm);
 void agc_files_init(agc_vm *vm);

@@ -157,12 +157,13 @@ def scenario(name: String) -> Ir.Program
     for index in 0...65536
       variants = variants.push(Ir.VariantDef(name: "V#{index}", size: 0))
     end
-    return program([], [Ir.EnumDef(name: "E", variants: variants)], [], 0)
+    return program([], [Ir.EnumDef(name: "E", variants: variants, decodable: false, types: [])], [], 0)
   elsif name == "fields-over"
     fields = List.repeat("x", 65536)
     return program([plain("Big", fields)], [], [], 0)
   elsif name == "payload-over"
-    return program([], [Ir.EnumDef(name: "E", variants: [Ir.VariantDef(name: "V", size: 65536)])], [], 0)
+    variants = [Ir.VariantDef(name: "V", size: 65536)]
+    return program([], [Ir.EnumDef(name: "E", variants: variants, decodable: false, types: [])], [], 0)
   elsif name == "registers-ok"
     return with_body(65535, [instr("return", [0], 1, 31)])
   elsif name == "registers-over"

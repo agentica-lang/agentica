@@ -47,7 +47,7 @@ end
 
 ## What is fixed while the program is lowered. types and resolved are those of the checker. user_types maps a struct or
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
-## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; layouts the layout code of each
+## variants the id of "Enum.Variant"; json_types the structs JSON.decode may build; layouts the layout code of each
 ## C struct of an extern block ("{N:CODES}", lower_native.agc) and the signature of each callback ("CODES NAME",
 ## Native.callback_signature), by name; functions the index of each
 ## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call
@@ -63,7 +63,7 @@ export struct Cx
   user_types: Map[String, String]
   structs: Map[String, StructInfo]
   variants: Map[String, Int]
-  json_structs: Set[String]
+  json_types: Set[String]
   layouts: Map[String, String]
   functions: Map[String, Int]
   bodies: Map[Int, String]

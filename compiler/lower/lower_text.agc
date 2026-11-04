@@ -20,7 +20,8 @@ import Lowering from "lowering"
 ##
 ## `program SPAN entry=N globals=N`, then `source N "path" chars=N` for each file (the path relative to the folder of
 ## the root file), `struct sN "Name" ["field",...]` with ` types=[...]` when JSON can build it, `enum "Name"
-## vN="Variant"/SIZE ...`, and each function as `fnN "name" params=P captures=C slots=S [entry] @ SPAN` followed by its
+## vN="Variant"/SIZE ...` (with ` types=[...]`, the payload types, when JSON can build it), and each function as
+## `fnN "name" params=P captures=C slots=S [entry] @ SPAN` followed by its
 ## instructions: a label as `  LN:` and an instruction as `    op ARGS @ SPAN ...`. A span is
 ## FILE:LINE:COLUMN-LINE:COLUMN, with the index of its source. A register is `rN`, a function `fnN`, a struct `sN`, a
 ## variant `vN`, a global `gN`, a label `LN`; a `const` shows its value as `void`, `nil`, `true`, `false`, `int:N`,
@@ -99,7 +100,13 @@ def program_lines(program: Ir.Program) -> List[String]
       id += 1
     end
 
-    lines = lines.push("enum #{Text.quote(entry.name)}#{names}")
+    line = "enum #{Text.quote(entry.name)}#{names}"
+    if entry.decodable
+      types = entry.types.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
+      line = "#{line} types=[#{types}]"
+    end
+
+    lines = lines.push(line)
   end
 
   index = 0

@@ -335,7 +335,7 @@ def main() -> Void
     Task.spawn(&consumer, ch)
   end
   for p in producers
-    Task.await(p)
+    _ = Task.await(p)
   end
   total = 0
   for c in consumers
@@ -883,7 +883,7 @@ def main() -> Void
       error(_) -> break
     end
   end
-  File.close(input, 10000)
+  _ = File.close(input, 10000)
   puts(count)
   case File.read_text(System.args()[1], 10000)
     ok(text) -> puts(text.size)
@@ -1563,7 +1563,7 @@ def main() -> Void
       ok()
     end,
     Test.test("an assertion in a spawned task") do
-      Task.await(Task.spawn(&check_in_task, 3))
+      _ = Task.await(Task.spawn(&check_in_task, 3))
       ok()
     end,
     Test.test("the crashes were observed") do
@@ -1847,7 +1847,7 @@ def main() -> Void
     writer = Task.spawn(&write_late, Late(socket: far, delay: 14 + k % 12))
     reader = Task.spawn(&race, near)
     outcome = Task.await(reader)
-    Task.await(writer)
+    _ = Task.await(writer)
     seen = seen.put(outcome, seen.get(outcome, 0) + 1)
     TCP.close(near)
     TCP.close(far)
@@ -2014,21 +2014,21 @@ def main() -> Void
     listener = TCP.listen("127.0.0.1", 0).unwrap!
     port = TCP.local_port(listener)
     waiting = TCP.connect("127.0.0.1", port, 5000).unwrap!
-    Task.await(Task.spawn_owning(&own_listener, listener))
+    _ = Task.await(Task.spawn_owning(&own_listener, listener))
     seen = tally(seen, "accept", accepted(TCP.accept(listener, 1)))
     TCP.close(waiting)
 
     server = TCP.listen("127.0.0.1", 0).unwrap!
     near = TCP.connect("127.0.0.1", TCP.local_port(server), 5000).unwrap!
     far = TCP.accept(server, 5000).unwrap!
-    Task.await(Task.spawn_owning(&own_socket, far))
+    _ = Task.await(Task.spawn_owning(&own_socket, far))
     seen = tally(seen, "send", "#{TCP.send(far, "x\n", 1000)}")
     seen = tally(seen, "peer", "#{TCP.read_line(near, 5000)}")
     TCP.close(near)
     TCP.close_listener(server)
 
     child = Process.spawn(python, ["-c", "import time; time.sleep(60)"], 5000).unwrap!
-    Task.await(Task.spawn_owning(&own_process, child))
+    _ = Task.await(Task.spawn_owning(&own_process, child))
     seen = tally(seen, "wait", "#{Process.wait(child, 1000)}")
     round = round + 1
   end
@@ -2046,9 +2046,9 @@ end
 def main() -> Void
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   port = TCP.local_port(listener)
-  Task.await(Task.spawn_owning(&own, listener))
+  _ = Task.await(Task.spawn_owning(&own, listener))
   puts("#{port}")
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -2223,7 +2223,7 @@ def main() -> Void
         Task.sleep(2)
         Task.cancel(owner)
       end
-      Task.await(owner)
+      _ = Task.await(owner)
       key = "#{kind}: #{accepted(TCP.accept(listener, 1))}"
       seen = seen.put(key, seen.get(key, 0) + 1)
       TCP.close(waiting)
@@ -2244,7 +2244,7 @@ def main() -> Void
       if kind.ends_with?("cancel")
         Task.cancel(owner)
       end
-      Task.await(owner)
+      _ = Task.await(owner)
       key = "#{kind}: #{sent(inner.send(1, 1))}"
       seen = seen.put(key, seen.get(key, 0) + 1)
       round = round + 1
@@ -2389,7 +2389,7 @@ NET_CLOSE_AT_END = r"""def churn(path: String) -> Int
   count = 0
   while true
     file = File.open(path, "read", 5000).unwrap!
-    File.close(file, 5000)
+    _ = File.close(file, 5000)
     count = count + 1
   end
   return count
@@ -2402,7 +2402,7 @@ def main() -> Void
   Task.spawn(&churn, "#{dir}/ca.pem")
   TCP.send(socket, "hello\n", 5000).unwrap!
   TCP.read_line(socket, 5000).unwrap!
-  TCP.read_line(socket, 5000)
+  _ = TCP.read_line(socket, 5000)
   TCP.close(socket)
 end
 """

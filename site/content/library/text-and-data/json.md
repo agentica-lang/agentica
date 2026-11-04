@@ -6,7 +6,7 @@ description: Encode values as JSON, decode JSON into structs, and read dynamic J
 
 Two ways to work with JSON:
 
-- For a known shape, declare a struct. `JSON.encode` writes it and `JSON.decode` reads it back, with type checks.
+- For a known shape, declare a struct, or an [enum](#enums) for a choice between shapes. `JSON.encode` writes it and `JSON.decode` reads it back, with type checks.
 - For data whose shape changes, use the `Json` type and the `JSON` functions to build and read it.
 
 `Json`, `JSON` and `JsonField` are reserved names. A `Json` value has no constructor, equality, fields or indexing. It prints as JSON text with `puts`, `to_s`, interpolation and `JSON.encode`; `inspect` and `IO.inspect` show `<Json>`, also inside a list. A parsed object writes its keys sorted (see `JSON.parse`). A built object's key order is not fixed, while structs and maps keep theirs. Functions whose first parameter is a `Json` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
@@ -17,7 +17,7 @@ Two ways to work with JSON:
 JSON.encode(value: T) -> String
 ```
 
-Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, structs and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct counts by its fields after substitution (`Box[List[Int]]`). `Result` values, other enums and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
+Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `LogLevel` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
 A parsed object writes its keys sorted by UTF-8 bytes, so `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in whitespace, key order or repeated keys give the same text, while `1` and `1.0` stay different.
 
@@ -48,7 +48,7 @@ JSON.decode(s: String, type: T) -> Result[T]
 JSON.decode(json: Json, type: T) -> Result[T]
 ```
 
-Reads JSON into a struct. The first argument is JSON text or a `Json` value, the second the struct's name: a named struct type, not a value. A bare type name is valid only for `decode`, `schema` and `codec`. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs, and `Optional` and `JsonField` of those; any other nested type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. Decoded maps are in sorted key order. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
+Reads JSON into a struct or an [enum](#enums). The first argument is JSON text or a `Json` value, the second the type's name: a named struct or enum type, not a value. A bare type name is valid only for `decode`, `schema` and `codec`. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs and enums, and `Optional` and `JsonField` of those; any other nested type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. Decoded maps are in sorted key order. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
 
 ```agentica
 struct User
@@ -98,7 +98,7 @@ error("y: expected required field")
 JSON.schema(type: T) -> Json
 ```
 
-Describes a struct as a JSON Schema: an object schema with `properties` and `required`. `required` lists every field that is not a `JsonField` or an `Optional`, and is left out when no field is required (an empty struct too). `Int` bounds are signed 64-bit, lists use `items`, `String`-keyed maps use `additionalProperties`, and nested and recursive structs use `$defs` and `$ref`. Extra keys stay allowed.
+Describes a struct as a JSON Schema: an object schema with `properties` and `required`. An enum is described by a `oneOf` (see [enums](#enums)). `required` lists every field that is not a `JsonField` or an `Optional`, and is left out when no field is required (an empty struct too). `Int` bounds are signed 64-bit, lists use `items`, `String`-keyed maps use `additionalProperties`, and nested and recursive structs and enums use `$defs` and `$ref`. Extra keys stay allowed.
 
 ```agentica
 struct Point
@@ -126,7 +126,7 @@ codec.encode(value: T) -> String
 codec.from(value: T) -> Json
 ```
 
-A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]` or a generic struct of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
+A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]`, or a generic struct or enum of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
 
 ```agentica
 def to_json[T](value: T) -> String
@@ -144,7 +144,7 @@ end
 {"ok":true}
 ```
 
-`JSON.decode` needs the type at run time, so a generic function cannot call it on `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`.
+`JSON.decode` needs the type at run time, so a generic function cannot call it on `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct and enum names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`.
 
 ```agentica
 struct User
@@ -263,6 +263,60 @@ name: set to Ana
 ```
 
 The variants are always qualified (`JsonField.Value(x)`), and `Absent` and `Null` need an expected type, which a struct field gives. A `case` needs the three arms or a `_` arm, which is how a program treats absent and null alike. `JsonField` may only be the direct type of a struct field in a JSON type; anywhere else in one is `CHECK-JSON-FIELD-PLACE`. The checker rules for `JsonField` and the other reserved names are in the [builtins reference](/reference/builtins/).
+
+## Enums
+
+A user enum is written as an object with the variant's name under `tag` and its payload items, in order, under `values`:
+
+```agentica
+enum Shape
+  Circle(Float)
+  Rect(Float, Float)
+  Empty
+end
+
+struct Drawing
+  shapes: List[Shape]
+end
+
+def main() -> Void
+  drawing = Drawing(shapes: [Shape.Circle(2.0), Shape.Rect(1.0, 3.0), Shape.Empty])
+  text = JSON.encode(drawing)
+  puts(text)
+  puts(JSON.decode(text, Drawing).unwrap! == drawing)
+end
+```
+
+```output
+{"shapes":[{"tag":"Circle","values":[2.0]},{"tag":"Rect","values":[1.0,3.0]},{"tag":"Empty","values":[]}]}
+true
+```
+
+- `JSON.encode` and `JSON.from` write both keys, `tag` first in the text; a variant with no payload writes `"values":[]`. They take any user enum whose payloads can be written, generic instances such as `Maybe[Int]` included.
+- `JSON.decode(text, Shape)` and a struct field of type `Shape` read the same form. `values` may be left out for a variant with no payload, and extra keys are ignored, as for structs. Only a non-generic enum can be decoded, and only when its payloads can: an enum with a payload that `decode` refuses is `CHECK-NOT-DECODABLE`, as a generic instance such as `Maybe[Int]` anywhere in the target.
+- An error gives the path as for a struct, with `values[i]` for a payload item, for an unknown or missing `tag`, a missing or wrong `values`, a wrong number of items or a wrong item.
+- `JSON.schema(Shape)` gives a `oneOf` with an object for each variant: `tag` is `{"enum": ["Rect"]}`, and `values` is an array with `minItems` and `maxItems` set to the number of payload items and `prefixItems` with one schema each. A variant with no payload gets `"maxItems": 0` and only `tag` is required. An enum reached from a struct goes in `$defs`.
+- A `JsonField` in a payload is `CHECK-JSON-FIELD-PLACE`: it belongs to a struct field.
+
+```agentica
+enum Shape
+  Circle(Float)
+  Rect(Float, Float)
+  Empty
+end
+
+def main() -> Void
+  puts(JSON.decode("{\"tag\": \"Empty\"}", Shape))
+  puts(JSON.decode("{\"tag\": \"Rect\", \"values\": [1.0]}", Shape))
+  puts(JSON.decode("{\"tag\": \"Oval\"}", Shape))
+end
+```
+
+```output
+ok(Shape.Empty)
+error("values: expected array of 2 items")
+error("tag: expected one of Circle, Rect, Empty")
+```
 
 ## JSON.parse
 

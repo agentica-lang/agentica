@@ -17,11 +17,11 @@ end
 def emit(source: Source) -> Void
   i = 1
   while i <= source.count
-    source.events.send(Event.Item(source.name, i * 10), 5000)
+    _ = source.events.send(Event.Item(source.name, i * 10), 5000)
     i += 1
   end
   if source.count == 0
-    source.events.send(Event.Failed("#{source.name} has nothing"), 5000)
+    _ = source.events.send(Event.Failed("#{source.name} has nothing"), 5000)
   end
 end
 

@@ -78,7 +78,7 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
     return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "")
   end
   p = spawned.unwrap!
-  Process.close_stdin(p, 5000)
+  _ = Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
   read = Child.read_records(p, deadline)
   if read.problem == "process: output exceeds 1048576 bytes"
@@ -169,7 +169,7 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
   p = spawned.unwrap!
-  Process.close_stdin(p, 5000)
+  _ = Process.close_stdin(p, 5000)
   empty: Map[Int, UnitTest] = {}
   queue = chosen.reduce(empty) do |acc: Map[Int, UnitTest], item: UnitTest| acc.put(acc.size, item) end
   results: Map[Int, Report.ScenarioResult] = {}
@@ -254,7 +254,7 @@ def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span)
 end
 
 def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
-  Process.channel_close(p, 5000)
+  _ = Process.channel_close(p, 5000)
   output = Process.output(p, settings.timeout_ms)
   if not output.ok?
     return Ending(
@@ -323,7 +323,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
 end
 
 def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
-  Process.channel_close(p, Child.left(deadline))
+  _ = Process.channel_close(p, Child.left(deadline))
   output = Process.output(p, Child.brief(deadline))
   if not output.ok?
     return Failure(

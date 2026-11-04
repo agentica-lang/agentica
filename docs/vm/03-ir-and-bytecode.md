@@ -513,14 +513,14 @@ header and the entry.
 - **Section:** Types
   - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
     Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct, 7 JsonField, 8
-    Optional) and, for 4 to 8, a `u32` operand: the item, value, `JsonField` or
-    `Optional` payload type index (smaller than the entry's own) or the struct
-    index. A file with a kind 7 entry has the `JsonField` enum (Absent, Null,
-    Value, with arities 0, 0 and 1) in its Enums section, at most once; one with
-    a kind 8 entry has the `Optional` enum (None, Some, with arities 0 and 1),
-    at most once. Then a `u32` count of decodable structs, each a `u32` struct
-    index (increasing), the `str` linked name and one `u32` type index per
-    field.
+    Optional, 9 Enum) and, for 4 to 9, a `u32` operand: the item, value,
+    `JsonField` or `Optional` payload type index (smaller than the entry's own),
+    the struct index or the enum index. A file with a kind 7 entry has the
+    `JsonField` enum (Absent, Null, Value, with arities 0, 0 and 1) in its Enums
+    section, at most once; one with a kind 8 entry has the `Optional` enum
+    (None, Some, with arities 0 and 1), at most once. Then a `u32` count of
+    decodable structs, each a `u32` struct index (increasing), the `str` linked
+    name and one `u32` type index per field.
 
 - **Section:** Enums
   - **Entry:** `str` display name, `u32` variant count, each `str` name and
@@ -550,14 +550,26 @@ header and the entry.
   - **Entry:** `u32` index of the entry function: `main`, or `<start>` in a file
     with module constants, which sets the slots and tail-calls `main`
 
+- **Section:** Decodable enums (optional, last)
+  - **Entry:** a file may end after the Entry without this section, and the
+    writer leaves it out unless a program uses a type name as a value
+    (`JSON.decode(text, T)`) and an enum is reachable from such a name or from a
+    struct that `JSON.decode` can build, so it is not in the bytes of other
+    programs. It is a `u32` count (at least 1), then for each enum a `u32` enum
+    index (increasing), the `str` linked name and one `u32` type index for each
+    payload item of its variants, in order (the variant arities in the Enums
+    section give how many). A file with a type of kind 9 has the record of that
+    enum. Fewer than 4 bytes after the Entry are trailing bytes.
+
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. A linked program has one entry per file a span points
   into: the entry file first, then the others in the order the lowerer meets
   them. Each keeps the name the front end gave it (`std/` modules by their
   `std/...` key), so a diagnostic in imported code names that file.
-- Only struct entries can make cycles in the Types section, and they go through
-  the decodable struct records. `compiler/bytecode/bytecode_types.agc` interns
-  each distinct type once, children first. A program without a JSON type
+- Only struct and enum entries can make cycles in the Types section, and they
+  go through the decodable struct records and the Decodable enums section.
+  `compiler/bytecode/bytecode_types.agc` interns each distinct type once,
+  children first. A program without a JSON type
   argument writes two zero counts.
 - The Globals section holds only a count because a slot has no bytes of its
   own to read. The loader allocates the slots as zeroed memory inside the
@@ -571,10 +583,10 @@ header and the entry.
   (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8 are
   reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not bump
   it: an older VM rejects the file as an unknown opcode. Type kinds 7
-  (`JsonField`) and 8 (`Optional`) did not either: the layout of an entry is
-  unchanged, and an older VM rejects the file as an unknown type kind. Constant
-  kind 7 (Bytes) did not either, for the same reason: an older VM rejects the
-  file as an unknown constant kind. A call
+  (`JsonField`), 8 (`Optional`) and 9 (`Enum`, with its last section) did not
+  either: the layout of an entry is unchanged, and an older VM rejects the file
+  as an unknown type kind. Constant kind 7 (Bytes) did not either, for the same
+  reason: an older VM rejects the file as an unknown constant kind. A call
   `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a file
   and the call fails at run time with a wrong value type.
 - The C loader is the only reader of this format and has no compatibility

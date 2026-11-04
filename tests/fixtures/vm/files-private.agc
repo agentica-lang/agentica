@@ -57,9 +57,9 @@ def main() -> Void
   IO.inspect(Path.remove(file, 0))
 
   tree = at(dir, "tree")
-  Dir.mkdir(at(tree, "a/b/c"), 60000)
-  File.write_text(at(tree, "a/b/c/f.txt"), "f", 60000)
-  File.write_text(at(tree, "top.txt"), "t", 60000)
+  _ = Dir.mkdir(at(tree, "a/b/c"), 60000)
+  _ = File.write_text(at(tree, "a/b/c/f.txt"), "f", 60000)
+  _ = File.write_text(at(tree, "top.txt"), "t", 60000)
   IO.inspect(Path.remove(at(dir, "missing"), 60000))
   IO.inspect(Path.remove(tree, 0))
   IO.inspect(File.lstat(at(tree, "a/b/c/f.txt"), 60000).ok?)
@@ -71,8 +71,8 @@ def main() -> Void
 
   from = at(dir, "from.txt")
   taken = at(dir, "taken.txt")
-  File.write_text(from, "from", 60000)
-  File.write_text(taken, "taken", 60000)
+  _ = File.write_text(from, "from", 60000)
+  _ = File.write_text(taken, "taken", 60000)
   IO.inspect(Path.rename(from, taken, 60000))
   IO.inspect(Path.rename(at(dir, "missing"), at(dir, "other"), 60000))
   IO.inspect(Path.rename(from, at(dir, "no/parent"), 60000))

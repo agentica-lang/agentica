@@ -61,10 +61,13 @@ export struct VariantDef
   size: Int
 end
 
-## An enum of the table. The variants of all enums are numbered one after the other in table order.
+## An enum of the table. The variants of all enums are numbered one after the other in table order. decodable says that
+## JSON.decode may build it, and types then lists the payload types of all its variants, one variant after the other.
 export struct EnumDef
   name: String
   variants: List[VariantDef]
+  decodable: Bool
+  types: List[Types.Type]
 end
 
 ## A source file of the program, in the order the spans refer to it: the canonical path (std/NAME.agc for a standard

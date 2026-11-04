@@ -20,7 +20,7 @@ def main() -> Void
   show("find", numbers.find do |n| n > 4 end.to_s)
   show("find none", numbers.find do |n| n > 40 end.to_s)
   show("find empty", empty.find do |n| n > 0 end.to_s)
-  numbers.find do |n|
+  _ = numbers.find do |n|
     puts("visit find #{n}")
     n > 3
   end

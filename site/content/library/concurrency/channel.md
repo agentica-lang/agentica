@@ -78,8 +78,8 @@ Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, 
 ```agentica
 def main() -> Void
   jobs: Channel[Int] = Channel.new(4)
-  jobs.send(10, 0)
-  jobs.send(20, 0)
+  _ = jobs.send(10, 0)
+  _ = jobs.send(20, 0)
   puts(jobs.recv(0).unwrap!)
   puts(jobs.recv(0).unwrap!)
   puts(jobs.recv(0).message)
@@ -106,7 +106,7 @@ Closing again does nothing. Waiting senders get the closed error, and so do woke
 ```agentica
 def main() -> Void
   jobs: Channel[Int] = Channel.new(4)
-  jobs.send(1, 0)
+  _ = jobs.send(1, 0)
   jobs.close
   puts(jobs.send(2, 0).message)
   puts(jobs.recv(0).unwrap!)
@@ -131,7 +131,7 @@ Channel.closed?(channel: Channel[T]) -> Bool
 ```agentica
 def main() -> Void
   jobs: Channel[Int] = Channel.new(4)
-  jobs.send(1, 0)
+  _ = jobs.send(1, 0)
   jobs.close
   puts(jobs.closed?)
   puts(jobs.empty?)
@@ -266,12 +266,12 @@ end
 def emit(source: Source) -> Void
   i = 1
   while i <= source.count
-    source.events.send(Event.Item(source.name, i * 10), 1000)
+    _ = source.events.send(Event.Item(source.name, i * 10), 1000)
     i += 1
   end
 
   if source.count == 0
-    source.events.send(Event.Failed("#{source.name} has nothing"), 1000)
+    _ = source.events.send(Event.Failed("#{source.name} has nothing"), 1000)
   end
 end
 
@@ -338,9 +338,9 @@ def count(inbox: Channel[Int]) -> Int
 end
 
 def send_three(inbox: Channel[Int]) -> Void
-  inbox.send(1, 1000)
-  inbox.send(2, 1000)
-  inbox.send(3, 1000)
+  _ = inbox.send(1, 1000)
+  _ = inbox.send(2, 1000)
+  _ = inbox.send(3, 1000)
 end
 
 def main() -> Void
@@ -388,7 +388,7 @@ end
 def main() -> Void
   inbox: Channel[Task[Result[Int]]] = Channel.new(1)
   task = Task.spawn(&follow, inbox)
-  inbox.send(task, 1000)
+  _ = inbox.send(task, 1000)
   puts(Task.await(task).message.starts_with?("task crashed: RUNTIME-TASK-AWAIT-CYCLE"))
 end
 ```

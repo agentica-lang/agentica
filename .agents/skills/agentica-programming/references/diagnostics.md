@@ -198,12 +198,13 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
 - `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
-  struct or has unsupported field types.
+  struct or enum or has unsupported field or payload types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
-  or Int-keyed maps.
+  (a `Result`, a builtin enum) or Int-keyed maps.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
   not the direct type of a struct field (a list item, a map value, an
-  `Optional` item, a nested `JsonField`, or the whole `JSON.encode` argument).
+  `Optional` item, an enum payload, a nested `JsonField`, or the whole
+  `JSON.encode` argument).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
@@ -211,6 +212,12 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
 - `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
   (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone).
+- `CHECK-UNUSED-RESULT`: a `Result` is dropped, as a statement or the last
+  statement of a `Void` block, from any call: yours, a builtin
+  (`File.close`, `Channel.send`, `"3".to_i`), `Task.await`, `.call`
+  (`Result[Void]` too). Use `try` where it is allowed, a `case` on `ok(_)` and
+  `error(message)`, or `.unwrap!`; `_ = f(...)` drops it on purpose.
+  `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
 - `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
   Int|`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or

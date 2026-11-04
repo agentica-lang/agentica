@@ -297,15 +297,16 @@ typedef struct {
 
 struct agc_ffi_call;
 
-/* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned,
-   the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
-   entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
-   it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
-   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer or
-   Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
-   free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared `free: C.Function` has its own
-   free function at `free_at`, the address that the call which made it got (`free` is then a call prepared without a
-   symbol); NULL for the others.
+/* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned, the
+   prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry entry,
+   whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use it now,
+   directly or through a resource that comes from it (`up`), and the closed resources that come from it whose free waits
+   for such a call (`carries`). A close marks it `closed` and takes it off its owner; the free runs then, or at the end
+   of the last of those calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer
+   (Native.memory_pointer or Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of
+   `size` bytes, freed with free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared
+   `free: C.Function` has its own free function at `free_at`, the address that the call which made it got (`free` is
+   then a call prepared without a symbol); NULL for the others.
    A resource declared `free_ref:` (`by_ref`) gives its free function the address of `pointer`, where C may
    write NULL.
    A view of a buffer (Native.offset) is a buffer too, with `parent` set to the owned buffer whose memory it shows:
@@ -313,9 +314,22 @@ struct agc_ffi_call;
    `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others.
    A callback (Native.callback) has `callback` set to its data in GC memory, which this keeps alive while C may call
    it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
-   and `free` is NULL. NULL for the others. Changes under rt->sync. */
+   and `free` is NULL. NULL for the others.
+   `up` is what a resource of an extern function comes from, the resource or owned buffer that the call which made it
+   held (a database under its statement), less any that another of those comes from; `ups` (`up_count` entries, GC
+   memory) holds them instead when there were two or more, and `up` is then NULL. A call that holds the resource holds
+   what it comes from that is still open, one level up. A resource closed while held (`carries`) holds its own in
+   turn until its free, so a close of one of them during a compute call on the resource frees it at the end of that
+   call. A link that points at a freed resource with at most one parent of its own is moved to that parent when it is
+   read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
+   (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
+  struct agc_c_resource *up;
+  struct agc_c_resource **ups;
+  size_t up_count;
+  uint64_t seen;
+  bool carries;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;
@@ -399,10 +413,12 @@ typedef struct {
 } agc_function;
 
 /* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T), and
-   AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map. */
+   AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
+   AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
+   variants (agc_enum_def.payload_types). */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
-  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL
+  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM
 } agc_type_kind;
 
 /* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
@@ -428,9 +444,14 @@ typedef struct {
   uint32_t *fields;
 } agc_update_def;
 
+/* json_name is set when JSON.decode may build the enum (the Decodable enums section, docs/vm/03-ir-and-bytecode.md
+   4.6), else NULL; payload_types then holds one type index for each payload item of its variants, in order (the
+   variant arities add up to its length). The variants are kept small: a file may have 65,535 of them. */
 typedef struct {
   agc_string *name;
   uint32_t first, count;
+  agc_string *json_name;
+  uint32_t *payload_types;
 } agc_enum_def;
 
 typedef struct {

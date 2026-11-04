@@ -296,7 +296,8 @@ negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is
 - Values never change, so a method never changes its receiver: assign the
   result (`xs = xs.push(4)`, `m = m.put("k", 1)`). A builtin without effects
   whose non-Void result is ignored is `CHECK-UNUSED-VALUE`; `!`-suffixed
-  functions and builtins that take a function are exempt.
+  functions and builtins that take a function are exempt. An ignored `Result`
+  is `CHECK-UNUSED-RESULT` for any call: `try` it, `case` it or `_ = f(...)`.
 - A `?` or `!` suffix belongs to a function name, even with a space before `(`.
   `a!=b` is `a != b`. Variables, parameters and fields cannot take those
   suffixes. By convention `?` means Bool and `!` halts on failure.

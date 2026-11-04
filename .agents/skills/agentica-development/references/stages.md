@@ -372,9 +372,10 @@ One hand-edited catalog (`builtins_data.agc`; lookups in `builtins.agc`). It
 serves the checker, lowering and help; the shared type printer and
 `did_you_mean` (`suggest.agc`) keep them consistent. Effects are informational,
 except that a builtin with no effects whose result is unused is
-`CHECK-UNUSED-VALUE`: the `Test` assertions carry the effect `test`, so they may
-stand as statements. `Test.eq` uses the rule `TestEq`: both arguments have one
-data type (the types with `to_s`, the §25.4 equality set plus `Json`).
+`CHECK-UNUSED-VALUE`: the `Test` assertions carry the effect `test`, so they are
+not that error (they still return a `Result`, so a dropped one is
+`CHECK-UNUSED-RESULT`). `Test.eq` uses the rule `TestEq`: both arguments have
+one data type (the types with `to_s`, the §25.4 equality set plus `Json`).
 `TestCase` is opaque and `Test` is reserved.
 
 - Every implementation key must be in `VM_BUILTINS` of

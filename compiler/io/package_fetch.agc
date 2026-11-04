@@ -193,12 +193,12 @@ def remove_temp(temp: String) -> Void
     spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], ".", FS_TIMEOUT_MS)
     if spawned.ok?
       child = spawned.unwrap!
-      Process.wait(child, FS_TIMEOUT_MS)
+      _ = Process.wait(child, FS_TIMEOUT_MS)
       Process.close(child)
     end
   end
 
-  Path.remove(temp, FS_TIMEOUT_MS)
+  _ = Path.remove(temp, FS_TIMEOUT_MS)
 end
 
 # A new folder that only this process uses: mkdir_private fails when the name exists, so two installs never share one.
@@ -371,7 +371,7 @@ def write_file(place: Place, path: String, data: Bytes) -> Result[Void]
   handle = opened.unwrap!
   wrote = File.write_bytes(handle, data, FS_TIMEOUT_MS)
   if !wrote.ok?
-    File.close(handle, FS_TIMEOUT_MS)
+    _ = File.close(handle, FS_TIMEOUT_MS)
     return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", wrote.message))
   end
 

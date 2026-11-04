@@ -382,7 +382,7 @@ end
 UPLOAD_HELPERS = """\
 def produce(producer: Producer) -> Void
   for piece in producer.pieces
-    producer.into.send(piece, 5000)
+    _ = producer.into.send(piece, 5000)
   end
   if producer.close
     producer.into.close
@@ -600,7 +600,7 @@ end
 
 def ticks(feed: Feed) -> Void
   for n in 1..4
-    feed.body.send("data: #{n}\\n\\n".bytes, 5000)
+    _ = feed.body.send("data: #{n}\\n\\n".bytes, 5000)
     Task.sleep(TICK_MS)
   end
   feed.body.close
@@ -608,40 +608,40 @@ end
 
 # Four bytes that are not UTF-8, in two pieces, then text.
 def binary(feed: Feed) -> Void
-  feed.body.send(Bytes.from_list([255, 0]).unwrap!, 5000)
-  feed.body.send(Bytes.from_list([128, 254]).unwrap!, 5000)
-  feed.body.send("end".bytes, 5000)
+  _ = feed.body.send(Bytes.from_list([255, 0]).unwrap!, 5000)
+  _ = feed.body.send(Bytes.from_list([128, 254]).unwrap!, 5000)
+  _ = feed.body.send("end".bytes, 5000)
   feed.body.close
 end
 
 # Pieces for the routes that give a length: the server sends them as they are, with Content-Length and no chunks.
 def sized(feed: Feed) -> Void
-  feed.body.send("abc".bytes, 5000)
+  _ = feed.body.send("abc".bytes, 5000)
   Task.sleep(TICK_MS)
-  feed.body.send("defgh".bytes, 5000)
+  _ = feed.body.send("defgh".bytes, 5000)
   feed.body.close
 end
 
 def three(feed: Feed) -> Void
   # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
   Task.sleep(TICK_MS)
-  feed.body.send("abc".bytes, 5000)
+  _ = feed.body.send("abc".bytes, 5000)
   feed.body.close
 end
 
 def five_and_more(feed: Feed) -> Void
   # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
   Task.sleep(TICK_MS)
-  feed.body.send("abc".bytes, 5000)
-  feed.body.send("defgh".bytes, 5000)
+  _ = feed.body.send("abc".bytes, 5000)
+  _ = feed.body.send("defgh".bytes, 5000)
   feed.body.close
 end
 
 def exact_and_more(feed: Feed) -> Void
   # Not ready when the server looks, so it streams: a body that is closed already is sent whole, or is a 500.
   Task.sleep(TICK_MS)
-  feed.body.send("abcde".bytes, 5000)
-  feed.body.send("f".bytes, 5000)
+  _ = feed.body.send("abcde".bytes, 5000)
+  _ = feed.body.send("f".bytes, 5000)
   feed.body.close
 end
 
@@ -649,7 +649,7 @@ end
 # in between, so the server must end the stream at the length and not wait for the close.
 def late_close(feed: Feed) -> Void
   Task.sleep(TICK_MS)
-  feed.body.send("abcde".bytes, 5000)
+  _ = feed.body.send("abcde".bytes, 5000)
   Task.sleep(400)
   feed.body.close
 end
@@ -663,7 +663,7 @@ def endless(feed: Feed) -> Void
   while Result.ok?(feed.body.send("data: again\\n\\n".bytes, 5000))
     Task.sleep(20)
   end
-  feed.said.send("stopped", 5000)
+  _ = feed.said.send("stopped", 5000)
 end
 
 def stream(feed: Feed, job: Fn[Feed, Void]) -> Result[HTTP.StreamResponse]
@@ -712,8 +712,8 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     if request.path == "/sized-queued"
       # The piece past the length is already in the channel when the handler returns, and the producer never closes.
       queued: Channel[Bytes] = Channel.new(4)
-      queued.send("abcde".bytes, 5000)
-      queued.send("f".bytes, 5000)
+      _ = queued.send("abcde".bytes, 5000)
+      _ = queued.send("f".bytes, 5000)
       return ok(HTTP.StreamResponse(status: 200, headers: [], body: queued, length: some(5)))
     end
     if request.path == "/sized-zero"
@@ -1403,7 +1403,7 @@ def main() -> Void
   ports = servers.map do |server| HTTP.local_port(server).to_s end
   puts(ports.join(" "))
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
   servers.each do |server| HTTP.close_server(server) end
 end
 """

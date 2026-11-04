@@ -266,11 +266,19 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   return status == AGC_JSON_PARSED ? ok(out) : failure(agc_json_status_message(status));
 }
 
-static uint32_t decodable_struct(agc_vm *vm, agc_value name, uint32_t span) {
+/* The struct or enum that JSON.decode and JSON.schema name by its linked name: structs first, then enums. */
+static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32_t *kind) {
   const agc_string *text = agc_as_string(vm, name);
   const agc_program *p = vm->rt->program;
+  *kind = AGC_TYPE_STRUCT;
   for (uint32_t i = 0; i < p->struct_count; i++) {
     const agc_string *json_name = p->structs[i].json_name;
+    if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
+      return i;
+  }
+  *kind = AGC_TYPE_ENUM;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    const agc_string *json_name = p->enums[i].json_name;
     if (json_name && json_name->bytes == text->bytes && memcmp(json_name->data, text->data, text->bytes) == 0)
       return i;
   }
@@ -279,17 +287,20 @@ static uint32_t decodable_struct(agc_vm *vm, agc_value name, uint32_t span) {
 
 /* JSON.decode(source, Type): the source is JSON text or a Json value, which is decoded in place without text. */
 static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
-  uint32_t type = decodable_struct(vm, args[1], span + 2);
-  if (agc_is(args[0], AGC_T_JSON)) return agc_json_decode(vm, args[0], type);
+  uint32_t kind;
+  uint32_t type = decodable_type(vm, args[1], span + 2, &kind);
+  if (agc_is(args[0], AGC_T_JSON)) return agc_json_decode(vm, args[0], kind, type);
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value root;
   agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &root);
   if (status != AGC_JSON_PARSED) return failure(agc_json_status_message(status));
-  return agc_json_decode(vm, root, type);
+  return agc_json_decode(vm, root, kind, type);
 }
 
 static agc_value builtin_schema(agc_vm *vm, agc_value *args, uint32_t span) {
-  return agc_json_schema(vm, decodable_struct(vm, args[0], span + 1));
+  uint32_t kind;
+  uint32_t type = decodable_type(vm, args[0], span + 1, &kind);
+  return agc_json_schema(vm, kind, type);
 }
 
 static agc_value builtin_encode(agc_vm *vm, agc_value *args, uint32_t span) {

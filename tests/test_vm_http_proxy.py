@@ -44,8 +44,8 @@ def names_proxy(message: String, down: String) -> Bool
 end
 
 def chunks(into: Channel[Bytes]) -> Void
-  into.send("0123456".bytes, 2000)
-  into.send("789abcdef".bytes, 2000)
+  _ = into.send("0123456".bytes, 2000)
+  _ = into.send("789abcdef".bytes, 2000)
   into.close
 end
 
@@ -198,7 +198,7 @@ def shown(r: Result[HttpClient]) -> Void
 end
 
 def chunks(into: Channel[Bytes]) -> Void
-  into.send("0123456".bytes, 2000)
+  _ = into.send("0123456".bytes, 2000)
   into.close
 end
 
@@ -535,7 +535,7 @@ def show(r: Result[HttpResponse]) -> Void
 end
 
 def chunks(into: Channel[Bytes]) -> Void
-  into.send("0123456".bytes, 2000)
+  _ = into.send("0123456".bytes, 2000)
   into.close
 end
 

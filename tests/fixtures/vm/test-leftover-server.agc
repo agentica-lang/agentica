@@ -9,7 +9,7 @@ def main() -> Void
   Test.run([
     Test.test("a server left listening is reported") do
       server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle)).unwrap!
-      ports.send(HTTP.local_port(server), 5000)
+      _ = ports.send(HTTP.local_port(server), 5000)
       ok()
     end,
     Test.test("the next test finds its port closed") do

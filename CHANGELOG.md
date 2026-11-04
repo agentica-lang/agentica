@@ -27,6 +27,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `==` or `!=` refused because a struct field has no equality
   (`CHECK-TYPE-MISMATCH`) also marks that field in its declaration (a note,
   when the struct is in the same file).
+- `JSON.encode`, `JSON.from`, `JSON.decode`, `JSON.schema` and `JSON.codec`
+  take user enums, written as `{"tag": "Rect", "values": [1.0, 2.0]}`. Only
+  non-generic enums can be decoded.
 
 ### Changed
 
@@ -56,6 +59,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   or a pattern slot. A function parameter is never reported, and `count += 1`
   alone is no read. The query commands (`type-at`, `refs`, `symbol`) do not
   report it in the file they are asked about.
+- **Breaking:** a `Result` that is dropped, from any call (yours, a builtin,
+  `Task.await`; `Result[Void]` too), is an error (`CHECK-UNUSED-RESULT`). Use
+  `try`, a `case` or `.unwrap!`, or write `_ = f()` to drop it on purpose. A
+  pure builtin that gives a `Result` (`s.to_i`) is this error instead of
+  `CHECK-UNUSED-VALUE`.
 
 ### Fixed
 
@@ -77,6 +85,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `error("process: the channel is in use")` until that line is out.
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
+- A `compute def` call on a resource also keeps the resources that the call
+  which made it took (a `Stmt` keeps its `Handle`): `Native.close` of the
+  `Handle` during the call frees it when the call returns, not while C uses it.
 
 ## [0.23.0] - 2026-11-03
 
