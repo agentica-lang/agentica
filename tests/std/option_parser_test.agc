@@ -20,6 +20,19 @@ def parser() -> OP.Parser
   )
 end
 
+# An Int argument with a min, an option with only a max and one with a negative min.
+def limited() -> OP.Parser
+  return OP.new(
+    "tool",
+    "",
+    [Arg(name: "count", kind: K.Int, min: some(1))],
+    [
+      Opt(name: "cap", kind: K.Int, max: some(9)),
+      Opt(name: "offset", kind: K.Int, min: some(-10)),
+    ],
+  )
+end
+
 # The message names the option and says what is wrong, and the command line is the one that fails.
 def fails(args: List[String], part: String) -> Result[Void]
   parsed = OP.parse(parser(), args)
@@ -104,6 +117,25 @@ def main() -> Void
       p = try OP.parse(parser(), ["--port", "-7", "f"])
       Test.eq(OP.int(p, "port"), -7)
     end,
+    Test.test("limits on an argument, a max alone and a negative min") do
+      refused = OP.parse(limited(), ["0"])
+      try Test.assert(!refused.ok?, "0 is below the minimum of the argument")
+      try Test.assert(refused.message.include?("for <count>: '0' is below the minimum 1"), refused.message)
+      cap = OP.parse(limited(), ["--cap", "10", "1"])
+      try Test.assert(cap.message.include?("invalid value for --cap: '10' is above the maximum 9"), cap.message)
+      low = OP.parse(limited(), ["--offset", "-11", "1"])
+      try Test.assert(low.message.include?("invalid value for --offset: '-11' is below the minimum -10"), low.message)
+      p = try OP.parse(limited(), ["--cap", "-100", "--offset=-10", "1"])
+      try Test.eq(OP.int(p, "cap"), -100)
+      try Test.eq(OP.int(p, "offset"), -10)
+      Test.eq(OP.int(p, "count"), 1)
+    end,
+    Test.test("a number too big for an Int says so, and a word is still not an Int") do
+      try fails(["--port", "99999999999999999999", "f"], "for --port: '99999999999999999999' does not fit an Int")
+      try fails(["--port=-99999999999999999999", "f"], "'-99999999999999999999' does not fit an Int")
+      try fails(["--port", "1x", "f"], "'1x' is not an Int")
+      Test.assert(!OP.parse(parser(), ["--port", "-", "f"]).ok?, "a lone minus is refused")
+    end,
     Test.test("a wrong specification is an error of parse, with the option named") do
       cases = [
         OP.new("tool", "", [], [Opt(name: "port", kind: K.Int, default: "x")]),
@@ -119,7 +151,21 @@ def main() -> Void
         OP.new("tool", "", [], [Opt(name: "a b")]),
         OP.new("", "", [], []),
       ]
-      names = ["--port", "--b", "<a>", "--mode", "above its max", "min or max", "--jobs", "<file>", "--eq", "--one", "a b", "program name"]
+      # What each specification above must name in its error, in the same order.
+      names = [
+        "--port",
+        "--b",
+        "<a>",
+        "--mode",
+        "above its max",
+        "min or max",
+        "--jobs",
+        "<file>",
+        "--eq",
+        "--one",
+        "a b",
+        "program name",
+      ]
       for index in 0...cases.size
         failed = OP.parse(cases[index], [])
         try Test.assert(!failed.ok?, "the specification #{index} is refused")
@@ -138,14 +184,14 @@ def main() -> Void
         "  <file>                file to serve",
         "",
         "Options:",
-        "  -p, --port INT        port [default: 8080]",
-        "      --ratio FLOAT     scale",
+        "  -p, --port PORT       port [default: 8080]",
+        "      --ratio RATIO     scale",
         "  -v, --verbose         more output",
         "  -q, --quiet",
         "  -l, --label LABEL",
         "      --user ana|bob    user name",
         "  -m, --mode fast|slow  [default: fast]",
-        "      --jobs INT        jobs (a few) [min: 1, max: 64]",
+        "      --jobs JOBS       jobs (a few) [min: 1, max: 64]",
         "      --level N         [choices: 1, 2]",
         "  -h, --help            show this help",
       ].join("\n")

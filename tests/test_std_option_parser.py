@@ -137,6 +137,7 @@ def test_int_limits_accept_their_edges_and_on_off_is_a_choice(limits, args, line
 @pytest.mark.parametrize("args,message", [
     (["--port", "65536"], "invalid value for --port: '65536' is above the maximum 65535"),
     (["-p", "-1"], "invalid value for --port: '-1' is below the minimum 0"),
+    (["--port", "99999999999999999999"], "invalid value for --port: '99999999999999999999' does not fit an Int"),
     (["--threads", "0"], "invalid value for --threads: '0' is below the minimum 1"),
     (["--stats", "maybe"], "invalid value for --stats: 'maybe' is not one of on, off"),
 ])

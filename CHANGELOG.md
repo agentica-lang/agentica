@@ -16,9 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** the help of `std/option_parser` writes its notes in square
-  brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows
-  `INT` and `FLOAT` for those kinds and `a|b` for choices as the default value
-  name (`--port INT`, `--stats on|off`).
+  brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows the
+  choices as the value name (`--stats on|off`).
 - **Breaking:** an import alias that its file never uses is an error
   (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
   without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands

@@ -75,7 +75,7 @@ Opt(name: String, short: String = "", kind: Kind = Kind.String, default: String 
     help: String = "", metavar: String = "", min: Optional[Int] = none, max: Optional[Int] = none)
 ```
 
-`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag` (an error of `parse`), and every argument is required. `short` is one character: not a digit, `-`, `=` or a space. A name has no space or control character, and `program` is not empty. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`<file>` for an argument); an option without one shows its choices as `on|off`, else `INT` or `FLOAT` for those kinds, else its name in capitals (`--user USER`; set `metavar: "DIR"` for a path). `min` and `max` limit an `Int` option or argument (`some(0)`, `some(65535)`; `none` is no limit) and they also apply to its `default`; on any other kind, or with `min` above `max`, they are an error of the specification.
+`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag` (an error of `parse`), and every argument is required. `short` is one character: not a digit, `-`, `=` or a space. A name has no space or control character, and `program` is not empty. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`<file>` for an argument); an option without one shows its choices as `on|off`, else its name in capitals (`--user USER`; set `metavar: "DIR"` for a path). `min` and `max` limit an `Int` option or argument (`some(0)`, `some(65535)`; `none` is no limit) and they also apply to its `default`; on any other kind, or with `min` above `max`, they are an error of the specification.
 
 ## The command line
 
@@ -135,7 +135,7 @@ A getter called with a name that was not declared, with the getter of another ki
 - `unknown option --bogus` (or `-x`)
 - `option --port needs a value`
 - `option --verbose does not take a value`
-- `invalid value for --port: 'abc' is not an Int` (or `a Float`)
+- `invalid value for --port: 'abc' is not an Int` (or `a Float`; `'99999999999999999999' does not fit an Int` for a number too big)
 - `invalid value for --user: 'cy' is not one of ana, bob`
 - `invalid value for --port: '70000' is above the maximum 65535` (or `below the minimum`)
 - `missing argument <file>`
@@ -198,7 +198,7 @@ Arguments:
   <file>              file to serve
 
 Options:
-  -p, --port INT      port [default: 8080] [min: 0, max: 65535]
+  -p, --port PORT     port [default: 8080] [min: 0, max: 65535]
   -v, --verbose       more output
       --user ana|bob  user name
       --dir DIR       model folder (a path)

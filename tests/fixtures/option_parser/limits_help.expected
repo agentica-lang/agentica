@@ -3,9 +3,9 @@ Usage: serve [options]
 Serves a model
 
 Options:
-  -p, --port INT      port [default: 8080] [min: 0, max: 65535]
-      --threads INT   worker threads (at least one) [default: 1] [min: 1]
-      --ctx INT       context size [default: 0]
-      --stats on|off  print statistics [default: off]
-      --dir DIR       model folder
-  -h, --help          show this help
+  -p, --port PORT        port [default: 8080] [min: 0, max: 65535]
+      --threads THREADS  worker threads (at least one) [default: 1] [min: 1]
+      --ctx CTX          context size [default: 0]
+      --stats on|off     print statistics [default: off]
+      --dir DIR          model folder
+  -h, --help             show this help

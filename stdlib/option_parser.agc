@@ -56,8 +56,8 @@ end
 ## An option. `name` is the long name (`--port`), `short` one character (`-p`) or "". `default` is a String
 ## converted by `kind` (it applies when the option is not given; "" means no default, and a `Flag` has none).
 ## `choices` are compared as text. `metavar` is the value name shown in the help (default: the choices as `a|b`,
-## else `INT` or `FLOAT` for those kinds, else `name` in capitals). `min` and `max` limit an `Int` option (`none`: no
-## limit); they also apply to the default.
+## else `name` in capitals). `min` and `max` limit an `Int` option (`none`: no limit); they also apply to the
+## default.
 export struct Opt
   name: String
   short: String = ""
@@ -580,6 +580,14 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
     Kind.Int ->
       number = text.to_i
       if !number.ok?
+        # Digits that to_i refuses are a number too big for an Int, which is not the same mistake as a word.
+        digits = text
+        if text.start_with?("-")
+          digits = text.slice(1, text.length - 1)
+        end
+        if digits?(digits)
+          return error("'#{text}' does not fit an Int")
+        end
         return error("'#{text}' is not an Int")
       end
       if slot.min.some? and number.unwrap! < slot.min.unwrap!
@@ -638,7 +646,7 @@ def head(slot: Slot) -> String
   return "#{names} #{value_name(slot)}"
 end
 
-# The value name of an option: the metavar, else the choices (`on|off`), else the kind for a number, else the name.
+# The value name of an option: the metavar, else the choices (`on|off`), else the name in capitals.
 def value_name(slot: Slot) -> String
   if !slot.metavar.empty?
     return slot.metavar
@@ -646,12 +654,7 @@ def value_name(slot: Slot) -> String
   if !slot.choices.empty?
     return slot.choices.join("|")
   end
-  case slot.kind
-    Kind.Int -> return "INT"
-    Kind.Float -> return "FLOAT"
-    Kind.String -> return slot.name.upcase
-    Kind.Flag -> return slot.name.upcase
-  end
+  return slot.name.upcase
 end
 
 # The notes after the help text, each in brackets so that parentheses in the help text itself read well.
