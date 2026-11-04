@@ -45,7 +45,7 @@ end
 def main() -> Void
   socket = TCP.connect("127.0.0.1", 1, 10).unwrap!
   t: Task[Result[String]] = Task.spawn_owning(&serve, socket)
-  Task.await(t)
+  _ = Task.await(t)
   Task.spawn_owning(&edit, File.open("x", "read", 10).unwrap!)
   Task.spawn_owning(&watch, Process.spawn("x", [], 10).unwrap!)
   ch: Channel[Int] = Channel.new(4)

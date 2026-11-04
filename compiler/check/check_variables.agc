@@ -5,9 +5,7 @@ import Ast from "../syntax/ast"
 import Walk from "../syntax/ast_walk"
 import T from "../syntax/types"
 import State from "check_state"
-
-# The longest text of a value that a help copies; a longer or multi-line one is written as `...`.
-MAX_VALUE_TEXT = 60
+import Unused from "check_unused"
 
 ## CHECK-UNUSED-VARIABLE for the name that starts first in the source among those that nothing read, in a file that is
 ## not lenient. The scope of every name is the function (or constant) that introduced it, which is why the state holds
@@ -76,15 +74,7 @@ def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep
   end
 
   if T.is?(local.type, "Result") and local.value.some?
-    attempt = ""
-    if local.tryable
-      attempt = "try #{text}, "
-    end
-
-    return (
-      "handle the Result: #{attempt}a case on ok(_) and error(message), or .unwrap!; " +
-      "or discard it with _ = #{text}, or #{keep}"
-    )
+    return "#{Unused.handle_result_help(text, local.tryable)}, or #{keep}"
   end
 
   if st.writes.include?(key)
@@ -146,17 +136,10 @@ def call?(value: Optional[Ast.Expr]) -> Bool
   end
 end
 
-# The source text of the value, or `...` when it is long or spans lines.
+# The source text of the value, or `...` when there is none.
 def value_text(cx: State.Cx, value: Optional[Ast.Expr]) -> String
   case value
-    some(found) ->
-      span = Ast.expr_span(found)
-      text = cx.texts.get(cx.file).unwrap_or("").slice(span.start.offset, span.stop.offset - span.start.offset)
-      if text.length > MAX_VALUE_TEXT or text.contains?("\n")
-        return "..."
-      end
-
-      return text
+    some(found) -> return Unused.value_text(cx, found)
     none -> return "..."
   end
 end

@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-RESULT 74:6:3-80:6:9 "the Result of save is not used, so its error is lost" "handle the Result: try save(), a case on ok(_) and error(message), or .unwrap!; or discard it with _ = save()" signature="run() -> Result[Void]" file="unused-result-try.agc"

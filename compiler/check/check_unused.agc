@@ -1,5 +1,5 @@
-## CHECK-UNUSED-VALUE: a value that is dropped, and could only have been used
-## for itself, is an error.
+## CHECK-UNUSED-RESULT: a Result that is dropped loses its error. CHECK-UNUSED-VALUE: a value that is dropped, and
+## could only have been used for itself, is an error.
 
 import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
@@ -7,8 +7,13 @@ import Ast from "../syntax/ast"
 import T from "../syntax/types"
 import State from "check_state"
 
-## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a
-## data value, a .with. Anything else, and any Void value, is fine.
+# The longest text of a value that a help copies; a longer or multi-line one is written as `...`.
+MAX_VALUE_TEXT = 60
+
+## CHECK-UNUSED-RESULT when the dropped value is a Result, from any call (a Result[Void] too); it runs first, so a pure
+## builtin that gives a Result, such as s.to_i, is this error and not CHECK-UNUSED-VALUE. Then CHECK-UNUSED-VALUE when
+## the value could only have been used for itself: a pure builtin, a to_s on a data value, a .with. Anything else, and
+## any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
   if T.is?(type, "Void")
     return ok(true)
@@ -16,6 +21,20 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
 
   resolved = resolution(st, value)
   name = call_name(value, resolved)
+  # IO.inspect prints its argument and gives it back, so a Result it returns was already shown, and nothing is lost.
+  if T.is?(type, "Result") and name != "IO.inspect"
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNUSED-RESULT",
+        "the Result of #{unused_subject(name)} is not used, so its error is lost",
+        Ast.expr_span(value),
+        handle_result_help(value_text(cx, value), State.try_allowed?(st)),
+      ),
+    )
+  end
+
   entry = ENTRIES.get(name)
   if unused_result?(value, resolved, entry)
     return error(
@@ -31,6 +50,31 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
   end
 
   return ok(true)
+end
+
+## How to handle a Result that is not used: `try` where it is allowed, a `case`, `.unwrap!`, or the discard `_ =`. The
+## help of CHECK-UNUSED-RESULT and of CHECK-UNUSED-VARIABLE share it; `text` is the source of the call.
+export def handle_result_help(text: String, tryable: Bool) -> String
+  attempt = ""
+  if tryable
+    attempt = "try #{text}, "
+  end
+
+  return (
+    "handle the Result: #{attempt}a case on ok(_) and error(message), or .unwrap!; " +
+    "or discard it with _ = #{text}"
+  )
+end
+
+## The source text of the expression, or `...` when it is long or spans lines.
+export def value_text(cx: State.Cx, value: Ast.Expr) -> String
+  span = Ast.expr_span(value)
+  text = cx.texts.get(cx.file).unwrap_or("").slice(span.start.offset, span.stop.offset - span.start.offset)
+  if text.length > MAX_VALUE_TEXT or text.contains?("\n")
+    return "..."
+  end
+
+  return text
 end
 
 # What a method call or field access resolved to; `none` for any other expression.
@@ -109,9 +153,14 @@ def takes_function?(entry: Model.Builtin) -> Bool
   return entry.parameters.any? do |parameter: Model.Named| T.is?(parameter.type, "Fn") end
 end
 
+# The name of the call for a message. The linker names a call into another module `@3::save`: only `save` is shown.
 def unused_subject(name: String) -> String
   if name == ""
     return "this expression"
+  end
+
+  if name.starts_with?("@") and name.contains?("::")
+    return name.split("::").last
   end
 
   return name

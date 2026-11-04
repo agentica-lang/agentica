@@ -14,9 +14,9 @@ def main() -> Void
   dir: String = System.args()[0]
   base = Result.unwrap!(Path.real(dir))
   deep = at(dir, "a/b/c")
-  Dir.mkdir(deep, 60000)
+  _ = Dir.mkdir(deep, 60000)
   file = at(deep, "f.txt")
-  File.write_text(file, "data", 60000)
+  _ = File.write_text(file, "data", 60000)
   show(base, Path.real(at(dir, "a/missing/..")))
   show(base, Path.real(at(file, "x")))
   show(base, Path.real("/"))

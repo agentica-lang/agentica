@@ -269,7 +269,7 @@ def test_the_filesystem_calls_leave_out_the_timeout_and_file_open_the_mode(new_d
   IO.inspect(File.read_line(file))
   IO.inspect(File.write(file, "x").ok?)
   IO.inspect(File.close(file))
-  File.each_line(path) do |line|
+  _ = File.each_line(path) do |line|
     IO.inspect(line)
     ok()
   end
@@ -315,10 +315,10 @@ end
 
 def main() -> Void
   out = File.open(System.args()[0], "create_private", 1000).unwrap!
-  File.write_bytes(out, "0123456789".bytes, 1000)
+  _ = File.write_bytes(out, "0123456789".bytes, 1000)
   Task.spawn(&digest, System.args()[1])
   Task.sleep(100)
-  File.close(out, 1)
+  _ = File.close(out, 1)
 end
 """, [path, big], env=vm_environment({"UV_THREADPOOL_SIZE": "1"}))
     assert path.read_bytes() == b"0123456789"

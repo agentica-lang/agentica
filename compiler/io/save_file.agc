@@ -11,7 +11,7 @@ export def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
   while rest.size > 0
     written = File.write_bytes(out, rest.take(PIECE), timeout_ms)
     if !written.ok?
-      File.close(out, timeout_ms)
+      _ = File.close(out, timeout_ms)
       return written
     end
 
@@ -37,7 +37,7 @@ export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) 
   end
 
   if !placed.ok?
-    Path.remove(fresh, timeout_ms)
+    _ = Path.remove(fresh, timeout_ms)
   end
 
   return placed

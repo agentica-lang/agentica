@@ -13,16 +13,16 @@ def race(label: String, derive: Fn[Result[Bytes]]) -> Void
   log: Channel[String] = Channel.new(4)
   started: Channel[Bool] = Channel.new(1)
   task = Task.spawn do
-    log.send("start", 0)
-    started.send(true, 0)
+    _ = log.send("start", 0)
+    _ = started.send(true, 0)
     key = derive.call()
-    log.send("done", 0)
+    _ = log.send("done", 0)
     key
   end
-  started.recv(60000)
-  log.send("tick", 0)
+  _ = started.recv(60000)
+  _ = log.send("tick", 0)
   Task.sleep(0)
-  log.send("tick", 0)
+  _ = log.send("tick", 0)
   key = Digest.hexencode(Task.await(task).unwrap!)
   words = [log.recv(0).unwrap!, log.recv(0).unwrap!, log.recv(0).unwrap!, log.recv(0).unwrap!]
   puts("#{label}: #{words.join(" ")} #{key}")
@@ -31,10 +31,10 @@ end
 def cancel_one() -> Void
   started: Channel[Bool] = Channel.new(1)
   task = Task.spawn do
-    started.send(true, 0)
+    _ = started.send(true, 0)
     KDF.scrypt("password".bytes, "NaCl".bytes, 1024, 8, 1, 32)
   end
-  started.recv(60000)
+  _ = started.recv(60000)
   Task.cancel(task)
   puts("cancelled: #{Task.await(task)}")
 end
@@ -42,15 +42,15 @@ end
 def cancel_queued() -> Void
   started: Channel[Bool] = Channel.new(1)
   ahead = Task.spawn do
-    started.send(true, 0)
+    _ = started.send(true, 0)
     KDF.scrypt("password".bytes, "NaCl".bytes, 16384, 8, 1, 32)
   end
-  started.recv(60000)
+  _ = started.recv(60000)
   queued = Task.spawn do
-    started.send(true, 0)
+    _ = started.send(true, 0)
     KDF.pbkdf2_hmac_sha256("password".bytes, "NaCl".bytes, 1, 32)
   end
-  started.recv(60000)
+  _ = started.recv(60000)
   Task.cancel(queued)
   puts("queued: #{Task.await(queued)}")
   puts("ahead: #{Digest.hexencode(Task.await(ahead).unwrap!)}")

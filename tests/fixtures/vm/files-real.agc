@@ -15,9 +15,9 @@ def main() -> Void
   base = Result.unwrap!(Path.real(dir))
   nul = String.from_code(0)
   deep = at(dir, "a/b/c")
-  Dir.mkdir(deep, 60000)
+  _ = Dir.mkdir(deep, 60000)
   file = at(deep, "f.txt")
-  File.write_text(file, "data", 60000)
+  _ = File.write_text(file, "data", 60000)
   show(base, Path.real(dir))
   show(base, Path.real(dir + "/"))
   show(base, Path.real(deep))
@@ -55,7 +55,7 @@ def main() -> Void
     k += 1
   end
   IO.inspect(Path.real(long).ok?)
-  Dir.mkdir(long, 60000)
+  _ = Dir.mkdir(long, 60000)
   IO.inspect(Result.unwrap!(Path.real(long)).length - base.length == long.length - dir.length)
   IO.inspect(Path.real(long + "/" + name.slice(0, 60) + "/" + long).ok?)
 end

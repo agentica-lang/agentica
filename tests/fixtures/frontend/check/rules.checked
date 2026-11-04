@@ -1,4 +1,4 @@
-program #200 0:1:1-1269:54:1
+program #200 0:1:1-1273:54:1
   module "rules.agc"
     declaration: struct-decl #4 0:1:1-50:5:1 name="Reading"
       field: field-decl #1 17:2:3-31:3:1 name="label"
@@ -37,7 +37,7 @@ program #200 0:1:1-1269:54:1
           arg: binary #33 227:16:13-232:16:18 op=multiply op-span=229:16:15-230:16:16 type=Int
             left: name-ref #31 227:16:13-228:16:14 name="n" type=Int
             right: literal #32 231:16:17-232:16:18 value=int:2 type=Int
-    declaration: function-decl #199 239:19:1-1269:54:1 name="main"
+    declaration: function-decl #199 239:19:1-1273:54:1 name="main"
       result: type-ref #37 253:19:15-257:19:19 name="Void"
       body: binding #48 260:20:3-304:21:1 name="scores"
         type: type-ref #40 268:20:11-284:20:27 name="Map"
@@ -156,48 +156,48 @@ program #200 0:1:1-1269:54:1
           arg: type-ref #149 985:43:20-988:43:23 name="Int"
         value: call #152 992:43:27-1006:43:41 name="Channel.new" piped=false type=Channel(Int)
           arg: literal #151 1004:43:39-1005:43:40 value=int:2 type=Int
-      body: expr-stmt #158 1009:44:3-1039:45:1
-        value: call #157 1009:44:3-1038:44:32 name="Channel.send" piped=false type=Result(Void)
-          arg: name-ref #154 1022:44:16-1029:44:23 name="channel" type=Channel(Int)
-          arg: literal #155 1031:44:25-1032:44:26 value=int:1 type=Int
-          arg: literal #156 1034:44:28-1037:44:31 value=int:100 type=Int
-      body: binding #162 1041:45:3-1073:46:1 name="got"
-        value: call #161 1047:45:9-1072:45:34 name="Channel.recv" piped=false type=Result(Int)
-          arg: name-ref #159 1060:45:22-1067:45:29 name="channel" type=Channel(Int)
-          arg: literal #160 1069:45:31-1071:45:33 value=int:10 type=Int
-      body: expr-stmt #166 1075:46:3-1093:47:1
-        value: call #165 1075:46:3-1092:46:20 name="puts" piped=false type=Void
-          arg: field-access #164 1080:46:8-1091:46:19 name="message" type=String resolved=call("Result.message", Result(Int))
-            target: name-ref #163 1080:46:8-1083:46:11 name="got" type=Result(Int)
-      body: expr-stmt #169 1095:47:3-1109:48:1
-        value: field-access #168 1095:47:3-1108:47:16 name="close" type=Void resolved=call("Channel.close", Channel(Int))
-          target: name-ref #167 1095:47:3-1102:47:10 name="channel" type=Channel(Int)
-      body: expr-stmt #173 1111:48:3-1133:49:1
-        value: call #172 1111:48:3-1132:48:24 name="puts" piped=false type=Void
-          arg: field-access #171 1116:48:8-1131:48:23 name="closed?" type=Bool resolved=call("Channel.closed?", Channel(Int))
-            target: name-ref #170 1116:48:8-1123:48:15 name="channel" type=Channel(Int)
-      body: expr-stmt #178 1135:49:3-1163:50:1
-        value: call #177 1135:49:3-1162:49:30 name="puts" piped=false type=Void
-          arg: call #176 1140:49:8-1161:49:29 name="IO.inspect" piped=false type=Int
-            arg: field-access #175 1151:49:19-1160:49:28 name="size" type=Int resolved=call("List.size", List(String))
-              target: name-ref #174 1151:49:19-1155:49:23 name="keys" type=List(String)
-      body: expr-stmt #188 1165:50:3-1204:51:1
-        value: call #187 1165:50:3-1203:50:41 name="puts" piped=false type=Void
-          arg: binary #186 1170:50:8-1202:50:40 op=plus op-span=1194:50:32-1195:50:33 type=String
-            left: binary #183 1170:50:8-1193:50:31 op=plus op-span=1179:50:17-1180:50:18 type=String
-              left: field-access #180 1170:50:8-1178:50:16 name="to_s" type=String resolved=self(String)
-                target: literal #179 1170:50:8-1173:50:11 value=string:"a" type=String
-              right: field-access #182 1181:50:19-1193:50:31 name="inspect" type=String resolved=inspect(List(String))
-                target: name-ref #181 1181:50:19-1185:50:23 name="keys" type=List(String)
-            right: field-access #185 1196:50:34-1202:50:40 name="to_s" type=String resolved=call("String.from_int", Int)
-              target: literal #184 1196:50:34-1197:50:35 value=int:1 type=Int
-      body: expr-stmt #193 1206:51:3-1233:52:1
-        value: call #192 1206:51:3-1232:51:29 name="puts" piped=false type=Void
-          arg: call #191 1211:51:8-1231:51:28 name="Test.ok?" piped=false type=Result(Void)
-            arg: call #190 1220:51:17-1230:51:27 name="parse" piped=false type=Result(Int)
-              arg: literal #189 1226:51:23-1229:51:26 value=string:"1" type=String
-      body: expr-stmt #198 1235:52:3-1265:53:1
-        value: call #197 1235:52:3-1264:52:32 name="puts" piped=false type=Void
-          arg: call #196 1240:52:8-1263:52:31 name="Test.error?" piped=false type=Result(Void)
-            arg: call #195 1252:52:20-1262:52:30 name="parse" piped=false type=Result(Int)
-              arg: literal #194 1258:52:26-1261:52:29 value=string:"x" type=String
+      body: binding #158 1009:44:3-1043:45:1 name="_"
+        value: call #157 1013:44:7-1042:44:36 name="Channel.send" piped=false type=Result(Void)
+          arg: name-ref #154 1026:44:20-1033:44:27 name="channel" type=Channel(Int)
+          arg: literal #155 1035:44:29-1036:44:30 value=int:1 type=Int
+          arg: literal #156 1038:44:32-1041:44:35 value=int:100 type=Int
+      body: binding #162 1045:45:3-1077:46:1 name="got"
+        value: call #161 1051:45:9-1076:45:34 name="Channel.recv" piped=false type=Result(Int)
+          arg: name-ref #159 1064:45:22-1071:45:29 name="channel" type=Channel(Int)
+          arg: literal #160 1073:45:31-1075:45:33 value=int:10 type=Int
+      body: expr-stmt #166 1079:46:3-1097:47:1
+        value: call #165 1079:46:3-1096:46:20 name="puts" piped=false type=Void
+          arg: field-access #164 1084:46:8-1095:46:19 name="message" type=String resolved=call("Result.message", Result(Int))
+            target: name-ref #163 1084:46:8-1087:46:11 name="got" type=Result(Int)
+      body: expr-stmt #169 1099:47:3-1113:48:1
+        value: field-access #168 1099:47:3-1112:47:16 name="close" type=Void resolved=call("Channel.close", Channel(Int))
+          target: name-ref #167 1099:47:3-1106:47:10 name="channel" type=Channel(Int)
+      body: expr-stmt #173 1115:48:3-1137:49:1
+        value: call #172 1115:48:3-1136:48:24 name="puts" piped=false type=Void
+          arg: field-access #171 1120:48:8-1135:48:23 name="closed?" type=Bool resolved=call("Channel.closed?", Channel(Int))
+            target: name-ref #170 1120:48:8-1127:48:15 name="channel" type=Channel(Int)
+      body: expr-stmt #178 1139:49:3-1167:50:1
+        value: call #177 1139:49:3-1166:49:30 name="puts" piped=false type=Void
+          arg: call #176 1144:49:8-1165:49:29 name="IO.inspect" piped=false type=Int
+            arg: field-access #175 1155:49:19-1164:49:28 name="size" type=Int resolved=call("List.size", List(String))
+              target: name-ref #174 1155:49:19-1159:49:23 name="keys" type=List(String)
+      body: expr-stmt #188 1169:50:3-1208:51:1
+        value: call #187 1169:50:3-1207:50:41 name="puts" piped=false type=Void
+          arg: binary #186 1174:50:8-1206:50:40 op=plus op-span=1198:50:32-1199:50:33 type=String
+            left: binary #183 1174:50:8-1197:50:31 op=plus op-span=1183:50:17-1184:50:18 type=String
+              left: field-access #180 1174:50:8-1182:50:16 name="to_s" type=String resolved=self(String)
+                target: literal #179 1174:50:8-1177:50:11 value=string:"a" type=String
+              right: field-access #182 1185:50:19-1197:50:31 name="inspect" type=String resolved=inspect(List(String))
+                target: name-ref #181 1185:50:19-1189:50:23 name="keys" type=List(String)
+            right: field-access #185 1200:50:34-1206:50:40 name="to_s" type=String resolved=call("String.from_int", Int)
+              target: literal #184 1200:50:34-1201:50:35 value=int:1 type=Int
+      body: expr-stmt #193 1210:51:3-1237:52:1
+        value: call #192 1210:51:3-1236:51:29 name="puts" piped=false type=Void
+          arg: call #191 1215:51:8-1235:51:28 name="Test.ok?" piped=false type=Result(Void)
+            arg: call #190 1224:51:17-1234:51:27 name="parse" piped=false type=Result(Int)
+              arg: literal #189 1230:51:23-1233:51:26 value=string:"1" type=String
+      body: expr-stmt #198 1239:52:3-1269:53:1
+        value: call #197 1239:52:3-1268:52:32 name="puts" piped=false type=Void
+          arg: call #196 1244:52:8-1267:52:31 name="Test.error?" piped=false type=Result(Void)
+            arg: call #195 1256:52:20-1266:52:30 name="parse" piped=false type=Result(Int)
+              arg: literal #194 1262:52:26-1265:52:29 value=string:"x" type=String

@@ -20,7 +20,7 @@ export def hex() -> Result[String]
   while bytes.size < 16
     got = File.read_bytes(source, 16 - bytes.size, IO_TIMEOUT_MS)
     if !got.ok? or got.unwrap!.size == 0
-      File.close(source, IO_TIMEOUT_MS)
+      _ = File.close(source, IO_TIMEOUT_MS)
       return error("cannot read /dev/urandom")
     end
 

@@ -28,7 +28,7 @@ export def run(arguments: List[String], dir: String) -> Ran
   end
 
   child = spawned.unwrap!
-  Process.close_stdin(child, CLOSE_TIMEOUT_MS)
+  _ = Process.close_stdin(child, CLOSE_TIMEOUT_MS)
   ran = finish(child)
   Process.close(child)
   return ran

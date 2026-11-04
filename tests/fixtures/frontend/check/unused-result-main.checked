@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-RESULT 73:6:3-80:6:10 "the Result of load is not used, so its error is lost" "handle the Result: a case on ok(_) and error(message), or .unwrap!; or discard it with _ = load(1)" signature="main() -> Void" file="unused-result-main.agc"

@@ -110,7 +110,7 @@ export def put(
   done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
   # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
   # only the empty parent is left.
-  Path.remove(parent, FS_TIMEOUT_MS)
+  _ = Path.remove(parent, FS_TIMEOUT_MS)
   return done
 end
 
@@ -163,7 +163,7 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
       path = Paths.join(deps, entry.name)
       info = File.lstat(path, FS_TIMEOUT_MS)
       if info.ok? and now - info.unwrap!.modified_seconds > LEFTOVER_SECONDS
-        Path.remove(path, FS_TIMEOUT_MS)
+        _ = Path.remove(path, FS_TIMEOUT_MS)
       end
     end
   end
@@ -362,7 +362,7 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
 
   if replacing
     # The new copy stands; an old one that cannot be removed is only a spare hidden folder.
-    Path.remove(backup, FS_TIMEOUT_MS)
+    _ = Path.remove(backup, FS_TIMEOUT_MS)
   end
 
   return ok()
@@ -391,7 +391,7 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
   end
 
   # An old folder that cannot be removed is only a spare hidden folder.
-  Path.remove(backup, FS_TIMEOUT_MS)
+  _ = Path.remove(backup, FS_TIMEOUT_MS)
   return ok()
 end
 

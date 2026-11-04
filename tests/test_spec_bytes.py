@@ -52,7 +52,7 @@ CLEAN = [
         MAIN + '  m: Map[Bytes, Int] = {"a".bytes: 1}\n'
         '  s = Set.new(["a".bytes])\n'
         '  puts(m["a".bytes] + s.size)\n'
-        '  Test.eq("a".bytes, "a".bytes)\nend\n',
+        '  _ = Test.eq("a".bytes, "a".bytes)\nend\n',
         None,
         None,
     ),

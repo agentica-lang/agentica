@@ -6,7 +6,7 @@ def main() -> Void
   inbox: Channel[Int] = Channel.new(1)
   task = Task.spawn(&divide, inbox)
   IO.inspect(Task.await(task, 20))
-  inbox.send(0, 1000)
+  _ = inbox.send(0, 1000)
   Task.sleep(50)
   puts("the caller is unaffected")
   puts(Task.unobserved_crash().ok?)

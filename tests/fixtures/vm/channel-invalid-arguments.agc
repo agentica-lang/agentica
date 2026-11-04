@@ -5,13 +5,13 @@ end
 
 def send_in(ms: Int) -> Result[Int]
   ch: Channel[Int] = Channel.new(1)
-  ch.send(1, ms)
+  _ = ch.send(1, ms)
   return ok(ms)
 end
 
 def recv_in(ms: Int) -> Result[Int]
   ch: Channel[Int] = Channel.new(1)
-  ch.recv(ms)
+  _ = ch.recv(ms)
   return ok(ms)
 end
 

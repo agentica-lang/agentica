@@ -84,7 +84,7 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
   end
 
   child = spawned.unwrap!
-  Process.close_stdin(child, IO_TIMEOUT)
+  _ = Process.close_stdin(child, IO_TIMEOUT)
   code = wait_for(child)
   output = Process.output(child, START_TIMEOUT)
   Process.close(child)

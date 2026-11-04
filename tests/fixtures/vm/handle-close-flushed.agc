@@ -20,7 +20,7 @@ end
 def write_and_send(job: Job) -> Void
   file = Result.unwrap!(File.open(job.path, "write", 5000))
   Result.unwrap!(File.write(file, "sent #{job.n}\n", 5000))
-  job.files.send(file, 5000)
+  _ = job.files.send(file, 5000)
 end
 
 def saw(path: String, expected: String) -> Bool

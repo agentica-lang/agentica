@@ -17,7 +17,7 @@ def main() -> Void
   show("first", Task.await(task, 20))
   puts("the caller goes on")
   IO.inspect(Task.await(task, 20))
-  inbox.send(21, 1000)
+  _ = inbox.send(21, 1000)
   show("second", Task.await(task, 10000))
   show("settled", Task.await(task, 1))
   IO.inspect(Task.await(task, 1))

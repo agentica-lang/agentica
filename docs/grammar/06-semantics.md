@@ -814,6 +814,15 @@ puts(seen)
   Only a function that returns `Result[...]` may use it (`CHECK-TRY-CONTEXT`
   otherwise). An expected type `T` gives the operand `Result[T]`; the return
   type alone does not. A success still needs an explicit `return ok(...)`.
+- A `Result[T]` that is dropped, as an expression statement or as the last
+  statement of a `Void` block, is `CHECK-UNUSED-RESULT` at the expression. It
+  does not matter who made it (a user function, a builtin with or without
+  effects, `Task.await`, `.call`) or what `T` is (`Result[Void]` too). It is
+  checked before `CHECK-UNUSED-VALUE`, so a pure builtin that gives a Result,
+  such as `s.to_i`, is this error. Handle the Result with `try`, a `case`,
+  `.unwrap!`, or drop it on purpose with `_ = f()`. `IO.inspect(r)` gives back
+  what it printed, so it is exempt. A dropped `Task[Result[T]]`
+  (`Task.spawn(&save)`) is not a Result and stays valid.
 
 ```ruby
 def read_age(text: String) -> Result[Int]

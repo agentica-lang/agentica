@@ -59,6 +59,10 @@ error(message: String) -> Result[T]
   or the default's type and evaluates both arguments, left to right, even on
   success. `r.ok?` and `r.message` need a known Result type; `message` is `""`
   for a success.
+- A `Result` that is dropped (a statement `f(x)`, `File.close(f, 1000)`,
+  `"3".to_i`; `Result[Void]` too) is `CHECK-UNUSED-RESULT`: `try f(x)` in a
+  function that returns a Result, a `case`, `.unwrap!`, or `_ = f(x)` to drop it
+  on purpose. `IO.inspect(r)` is exempt.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
   structs; they have no fields or indexing. `r == ok(1)` and `r == error("x")`
   compare the tag and the payload or message.

@@ -1,7 +1,7 @@
 def echo(socket: Socket) -> Void
   line = TCP.read_line(socket, 30000)
   if Result.ok?(line)
-    TCP.send(socket, Result.unwrap!(line) + "\n", 30000)
+    _ = TCP.send(socket, Result.unwrap!(line) + "\n", 30000)
   end
   TCP.close(socket)
 end

@@ -32,7 +32,7 @@ def read_as(path: String, shown: Bool) -> SourceFile.Read
 
   handle = opened.unwrap!
   result = read_chunks(handle, shown)
-  File.close(handle, IO_TIMEOUT_MS)
+  _ = File.close(handle, IO_TIMEOUT_MS)
   return result
 end
 

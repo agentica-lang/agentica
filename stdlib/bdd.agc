@@ -774,7 +774,7 @@ def deliver(text: String) -> Void
         "message": JSON.from("handler output exceeds 1 MiB"),
       }
 
-      Process.parent_send(record_text(fields), send_ms())
+      _ = Process.parent_send(record_text(fields), send_ms())
     else
       IO.warn("BDD could not send a record to the runner: #{sent.message}")
     end
