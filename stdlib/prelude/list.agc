@@ -260,9 +260,9 @@ end
 # min_by and max_by: the first element wins a tie, so a later key must be strictly better. A NaN key never wins, unless
 # every key is NaN, and then the first element stays (candidate == candidate is false for NaN). Strings compare by
 # String.compare, the order of sort.
-def min_by_int(list: List[A], key: Fn[A, Int]) -> Result[A]
+def min_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -276,12 +276,12 @@ def min_by_int(list: List[A], key: Fn[A, Int]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
-def min_by_float(list: List[A], key: Fn[A, Float]) -> Result[A]
+def min_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -295,12 +295,12 @@ def min_by_float(list: List[A], key: Fn[A, Float]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
-def min_by_string(list: List[A], key: Fn[A, String]) -> Result[A]
+def min_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -314,12 +314,12 @@ def min_by_string(list: List[A], key: Fn[A, String]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
-def max_by_int(list: List[A], key: Fn[A, Int]) -> Result[A]
+def max_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -333,12 +333,12 @@ def max_by_int(list: List[A], key: Fn[A, Int]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
-def max_by_float(list: List[A], key: Fn[A, Float]) -> Result[A]
+def max_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -352,12 +352,12 @@ def max_by_float(list: List[A], key: Fn[A, Float]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
-def max_by_string(list: List[A], key: Fn[A, String]) -> Result[A]
+def max_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
   if list.size == 0
-    return error("the list is empty")
+    return none
   end
   best = list[0]
   best_key = key.call(best)
@@ -371,7 +371,7 @@ def max_by_string(list: List[A], key: Fn[A, String]) -> Result[A]
     end
     index += 1
   end
-  return ok(best)
+  return some(best)
 end
 
 def empty(list: List[A]) -> Bool

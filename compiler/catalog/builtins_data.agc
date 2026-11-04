@@ -2428,13 +2428,13 @@ ROWS_22: List[Model.Builtin] = [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
       Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("O"))),
     ],
-    result: Types.Type.Result(Types.Type.Var("A")),
+    result: Types.Type.Optional(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
     description: (
-      "The element with the greatest Int, Float or String key, the first on ties; error(\"the " +
-      "list is empty\") for an empty list; O(n)."
+      "The element with the greatest Int, Float or String key, the first on ties, or none for an empty " +
+      "list; O(n)."
     ),
     alternatives: [],
   ),
@@ -2454,13 +2454,13 @@ ROWS_22: List[Model.Builtin] = [
       Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
       Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("O"))),
     ],
-    result: Types.Type.Result(Types.Type.Var("A")),
+    result: Types.Type.Optional(Types.Type.Var("A")),
     rule: Model.Rule.Prelude,
     implementation: "",
     effects: [],
     description: (
-      "The element with the least Int, Float or String key, the first on ties; error(\"the list " +
-      "is empty\") for an empty list; O(n)."
+      "The element with the least Int, Float or String key, the first on ties, or none for an empty " +
+      "list; O(n)."
     ),
     alternatives: [],
   ),

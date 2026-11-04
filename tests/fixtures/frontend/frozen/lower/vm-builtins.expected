@@ -306,6 +306,7 @@ String.from_int
 String.index_of.optional
 String.join
 String.length
+String.multiply
 String.replace
 String.reverse
 String.slice

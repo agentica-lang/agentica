@@ -8,7 +8,7 @@ programs are valid and how they run.
 - `Int`: Signed 64-bit integer; overflow is a runtime error
 - `Float`: IEEE 754 binary64
 - `Bool`: Only `true` and `false`; there is no truthiness
-- `String`: Unicode text; concatenation with `+`
+- `String`: Unicode text; concatenation with `+`, repetition with `* Int`
 - `Bytes`: Immutable byte string, one byte for each item (`0..255`); no literal
   (§6, "Bytes")
 - `Nil`: A single data value, `nil`
@@ -50,7 +50,9 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
 ### Operators
 
 - `+`, `-`, `*` and `/` take two operands of one numeric type; `+` also
-  concatenates `String`s and `Bytes`. Integer `/` truncates toward zero, and `%`
+  concatenates `String`s and `Bytes`, and `s * n` repeats a `String` `n`
+  (an `Int`) times; a negative `n`, or a result over 256 MiB, is
+  `RUNTIME-INVALID-COUNT`. Integer `/` truncates toward zero, and `%`
   takes integers only, with `a = (a / b) * b + (a % b)`. Division by zero is
   `RUNTIME-DIVISION-BY-ZERO`, for `Float` too. An integer result outside `Int`
   is an error.
@@ -558,7 +560,7 @@ def first_or[T](xs: List[T], fallback: T) -> T
   return xs[0]
 end
 
-def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   # ...
 end
 

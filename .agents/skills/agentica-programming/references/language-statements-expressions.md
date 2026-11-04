@@ -137,7 +137,9 @@ Operators, from highest to lowest precedence:
 | 10 | `..` `...` (ranges, no chaining) |
 
 - `+ - * /` take two numbers of one type; no implicit conversion (`2 * 1.5` is
-  `CHECK-TYPE-MISMATCH`: use `n.to_f` or `x.to_i!`). `+` also joins two Strings.
+  `CHECK-TYPE-MISMATCH`: use `n.to_f` or `x.to_i!`). `+` also joins two Strings,
+  and `s * n` repeats a String (`"ab" * 3` is `"ababab"`; the Int comes second;
+  a negative `n` or a result over 256 MiB is `RUNTIME-INVALID-COUNT`).
 - `/` on Int truncates toward zero (`7 / 2` is `3`); `%` takes two Ints. A zero
   divisor is a runtime error, Float too (`RUNTIME-DIVISION-BY-ZERO`).
 - `< <= > >=` take two numbers of one type (Strings: `a.compare(b) < 0`).

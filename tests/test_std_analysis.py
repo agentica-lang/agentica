@@ -397,6 +397,18 @@ def test_a_style_rule_is_kept_with_the_root_and_a_manifest_that_changes_it_is_se
     assert counted(out, "roots", "checks") == [(1, 2), (1, 2), (1, 2)]
 
 
+def test_a_refresh_that_cached_an_unused_variable_failure_is_checked_again_by_a_query_about_the_file(driver, project):
+    """The refresh checks as `check` does and keeps the failure; a query about the file does not refuse the variable."""
+    draft = "def f(n: Int) -> Int\n  later = n\n  return n + 1\nend\n"
+    write_files(project, {"draft.agc": draft})
+    at = position("draft.agc", draft, "n + 1")
+    out, err = library(driver, project, "refresh", "draft.agc", "check", "draft.agc", "type-at", *at)
+    # The check reads the failure the refresh kept; the query must not (its error would be a second line here), and
+    # answers as the command line does.
+    assert [json.loads(line)["code"] for line in err.splitlines()] == ["CHECK-UNUSED-VARIABLE"]
+    assert out == command_line(project, "type-at", ":".join(at))[0] != ""
+
+
 def test_two_spellings_of_one_file_keep_their_own_name_in_a_cached_diagnostic(driver, project):
     """real.agc and its link have one key; a root cached under one spelling must not answer for the other."""
     (project / "link.agc").symlink_to(project / "type_error.agc")

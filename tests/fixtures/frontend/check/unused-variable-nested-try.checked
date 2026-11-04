@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-VARIABLE 74:6:3-99:7:1 "the variable \"total\" is never read" "discard it with _ = (try load()) + 1 to keep its try, or name it _total if it is unused on purpose" signature="run() -> Result[Void]" file="unused-variable-nested-try.agc"

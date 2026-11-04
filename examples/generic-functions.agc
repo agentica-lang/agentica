@@ -13,10 +13,10 @@ def first_or[T](xs: List[T], fallback: T) -> T
   return xs[0]
 end
 
-## The item with the largest key, or an error when xs is empty.
-def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+## The item with the largest key, or none when xs is empty.
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   if xs.length == 0
-    return error("empty list")
+    return none
   end
 
   best = xs[0]
@@ -29,7 +29,7 @@ def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
     end
   end
 
-  return ok(best)
+  return some(best)
 end
 
 ## Runs body on the first item of the pool, or fails when the pool is empty.

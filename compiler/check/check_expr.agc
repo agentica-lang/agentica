@@ -259,7 +259,7 @@ end
 # give a Result), and an operand that is a Result. In the block of a Lazy method any `try` works: its error ends the
 # pipeline and is the terminal's result, so it is recorded for the lowering (try-step).
 def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -> Result[State.Out]
-  if !st.step and !result_context?(st)
+  if !State.try_allowed?(st)
     return error(
       State.fail_help(
         cx,
@@ -288,14 +288,6 @@ def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -
   end
 
   return ok(State.Out(st: after, type: T.item(out.type)))
-end
-
-def result_context?(st: State.St) -> Bool
-  case st.result
-    State.Slot.Known(type) -> return T.is?(type, "Result")
-    State.Slot.InferResult -> return true
-    State.Slot.Infer -> return false
-  end
 end
 
 def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> Result[State.Out]
@@ -621,7 +613,12 @@ def binary_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
       try same_types(cx, sides, node, true)
       return plus_type(cx, sides, node)
     "minus" -> return arithmetic_type(cx, sides, node)
-    "multiply" -> return arithmetic_type(cx, sides, node)
+    "multiply" ->
+      if T.is?(sides.left, "String") or T.is?(sides.right, "String")
+        return repeat_type(cx, sides, node)
+      end
+
+      return arithmetic_type(cx, sides, node)
     "divide" -> return arithmetic_type(cx, sides, node)
     "modulo" -> return modulo_type(cx, sides, node)
     "less" -> return comparison_type(cx, sides, node)
@@ -708,6 +705,18 @@ def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
       "",
     ),
   )
+end
+
+# `s * n` repeats a String n times, as Ruby's String#*: a String first and an Int count second, never two Strings.
+def repeat_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
+  if T.is?(sides.left, "String") and T.is?(sides.right, "Int")
+    return ok(T.Type.String)
+  end
+
+  left = T.to_text(sides.left)
+  right = T.to_text(sides.right)
+  message = "\"*\" repeats a String by an Int count, found #{left} * #{right}"
+  return error(type_error(cx, sides, node, message, "write the String first and an Int count second: \"ab\" * 3"))
 end
 
 def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
