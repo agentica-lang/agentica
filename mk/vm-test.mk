@@ -87,12 +87,9 @@ LIBFUZZ_DIR := build/vm/libfuzz
 vm-libfuzz:
 	$(MAKE) $(LIBFUZZ_DIR)/agentica-vm-libfuzz LIBFUZZ=1
 
-# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time, and the seeds of tests/fixtures/fuzz/,
-# without FUZZ_SEED_SKIP: a fixture whose inputs under ASan come near LIBFUZZ_TIMEOUT, which fails the run. kdf runs
-# the RFC 7914 scrypt vectors (n = 16384, r = 8) in about 3 s, but a mutant with other parameters inside the work caps
-# of KDF.scrypt runs past 30 s on a busy CI runner.
-FUZZ_SEED_SKIP := tests/fixtures/vm/kdf.agc
-FUZZ_SEEDS = $(filter-out $(FUZZ_SEED_SKIP),$(wildcard tests/fixtures/vm/*.agc tests/fixtures/fuzz/*.agc))
+# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time, and the seeds of tests/fixtures/fuzz/.
+# The fuzz driver derives no KDF key (vm/crypto.c refuses the job under rt->no_files), so kdf is a seed too.
+FUZZ_SEEDS = $(wildcard tests/fixtures/vm/*.agc tests/fixtures/fuzz/*.agc)
 FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' $(FUZZ_SEEDS) | xargs -P $(JOBS) -I{} sh -c \
   'dist/agentica$(EXE) compile "$$1" -o "$(LIBFUZZ_DIR)/seeds/$$(basename "$$1" .agc).agcb"' sh {}
 

@@ -1,8 +1,9 @@
 /*
  * The digest adapter over OpenSSL's EVP interface (digests, HMAC, Triple DES
- * CBC, AES-256-GCM, CMAC, PBKDF2 and scrypt), RAND_bytes and CRYPTO_memcmp,
- * the same library that tls_openssl.c links (system OpenSSL 3 or the vendored
- * one). Adapter layer, behind digest.h. Design: docs/vm/15-layers.md §15.1.
+ * CBC, AES-256-GCM, CMAC, PBKDF2 and scrypt), RAND_bytes, CRYPTO_memcmp and
+ * OPENSSL_cleanse, the same library that tls_openssl.c links (system OpenSSL 3
+ * or the vendored one). Adapter layer, behind digest.h. Design:
+ * docs/vm/15-layers.md §15.1.
  */
 #include "digest.h"
 
@@ -327,4 +328,8 @@ bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned
     OSSL_PARAM_construct_end(),
   };
   return kdf_derive(OSSL_KDF_NAME_SCRYPT, params, out, out_n);
+}
+
+void agc_wipe(void *data, size_t n) {
+  if (n) OPENSSL_cleanse(data, n);
 }

@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 277,
+  "stdout": [
+    "scrypt: start tick tick done a8430d7e581f9ca03c952df506ac66c757899d67a21d71c0f1900bd778ac1d14",
+    "cancelled: error(\"task: cancelled\")",
+    "queued: error(\"task: cancelled\")",
+    "ahead: a8430d7e581f9ca03c952df506ac66c757899d67a21d71c0f1900bd778ac1d14",
+    "pbkdf2: start tick tick done aaeb928c73ddbf754779466d0f966aab1c90e189928f0240d7f8e79189cc4893",
+    ""
+  ],
+  "stderr": []
+}

@@ -51,7 +51,10 @@ joins the pool, and the pool would wait for a FIFO that never writes.
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
   never takes a libuv pool thread. What the end of the run does with compute
-  calls is in §14.4 (steps 0 and 3).
+  calls is in §14.4 (steps 0 and 3). The key derivations of `KDF` run there
+  too, as jobs of their own kind (`kdf_io` in `vm/crypto.c`, work capped before
+  the job starts): a cancel skips a queued one and drops the key of a running
+  one, and §14.4 neither stops nor waits for them.
 
 Known exceptions (the mechanisms are in §10.2.2):
 

@@ -1875,11 +1875,11 @@ void agc_io_flush_files(agc_vm *vm) {
   finish_flushes(vm);
 }
 
-void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg) {
+void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *data, void *arg), void *arg) {
   snapshot shot = registry_snapshot(vm);
   for (size_t k = 0; k < shot.count; k++) {
     const job *j = job_of(shot.items[k]);
-    if (j && j->compute && j->data) fn(j->data, arg);
+    if (j && j->compute && j->kind == kind && j->data) fn(j->data, arg);
   }
 }
 
@@ -2199,8 +2199,9 @@ void agc_io_goodbye(agc_vm *vm) { (void)vm; }
 
 void agc_io_flush_files(agc_vm *vm) { (void)vm; }
 
-void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg) {
+void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *data, void *arg), void *arg) {
   (void)vm;
+  (void)kind;
   (void)fn;
   (void)arg;
 }

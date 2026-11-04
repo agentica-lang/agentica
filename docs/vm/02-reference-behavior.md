@@ -144,12 +144,14 @@ in a PR that rewrites the goldens.
   wrong tag the adapter wipes it and the builtin gives an error `Result`.
   `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` check their parameters first,
   their work included (`PBKDF2_MAX_WORK` and `SCRYPT_MAX_WORK` in
-  `vm/crypto.c`: one call cannot be stopped by `--max-steps` or a signal),
-  then call `EVP_KDF_derive` (`PBKDF2` with `pkcs5` set, so no SP 800-132
-  floors; `SCRYPT` with `maxmem` at the same 1025 MiB cap), and charge turn
-  cost for the iterations or the memory passes besides `AGC_COST_SIZE`. A
-  library failure is `RUNTIME-INTERNAL` at the call. All four run without the
-  shared lock.
+  `vm/crypto.c`: a started call cannot be stopped, and it holds a compute pool
+  thread), then park the task on a compute job (`kdf_io`, `agc_io_compute`;
+  refused with `RUNTIME-NATIVE-CALLBACK` inside a callback of native code) that
+  calls `EVP_KDF_derive` on malloc'd copies of the password and the salt
+  (`PBKDF2` with `pkcs5` set, so no SP 800-132 floors; `SCRYPT` with `maxmem`
+  at the same 1025 MiB cap). The `done` half copies the key into the result and
+  wipes the password and key copies. A library failure is `RUNTIME-INTERNAL` at
+  the call. All four run without the shared lock.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;
