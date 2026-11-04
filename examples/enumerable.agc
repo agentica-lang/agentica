@@ -15,7 +15,7 @@ def main() -> Void
     Order(customer: "eve", items: 5, total: 12.5),
   ]
 
-  # find, min_by and max_by give a Result: an empty list has no answer.
+  # find gives a Result, min_by and max_by an Optional: an empty list has no answer.
   big = orders.find do |order| order.items > 4 end
   puts("big order: #{big.unwrap!.customer}")
   puts(orders.find do |order| order.items > 9 end.message)

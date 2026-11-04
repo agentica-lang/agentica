@@ -521,6 +521,31 @@ static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_string_value(result);
 }
 
+/* s * n, Ruby's String#*: n copies of s. A negative n is an error, as Ruby's ArgumentError, and so is a result over
+   REPEAT_MAX_BYTES, so a large count fails at the count instead of asking the GC for gigabytes. The copy doubles what
+   is written, so it takes log2(n) memcpy calls. */
+#define REPEAT_MAX_BYTES AGC_MAX_FILE_BYTES
+_Static_assert(REPEAT_MAX_BYTES == 268435456, "the error of builtin_multiply names the limit");
+
+static agc_value builtin_multiply(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *s = agc_as_string(vm, args[0]);
+  int64_t count = agc_as_int(vm, args[1]);
+  if (count < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be nonnegative", span + 2);
+  if (count == 0 || s->bytes == 0) return agc_string_value(vm->rt->empty_string);
+  if (count == 1) return args[0];
+  if ((uint64_t)count > REPEAT_MAX_BYTES / s->bytes)
+    agc_fail(vm, "RUNTIME-INVALID-COUNT", "the repeated string would be over 268435456 bytes", span + 2);
+  size_t bytes = s->bytes * (size_t)count;
+  agc_string *result = agc_new_string(bytes, s->chars * (size_t)count);
+  memcpy(result->data, s->data, s->bytes);
+  for (size_t written = s->bytes; written < bytes;) {
+    size_t step = written < bytes - written ? written : bytes - written;
+    memcpy(result->data + written, result->data, step);
+    written += step;
+  }
+  return agc_string_value(result);
+}
+
 /* In plain_leaves (vm/jit/jit.c): it must never agc_fail once its argument tag and its one character are checked. */
 static agc_value builtin_code(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]);
@@ -611,6 +636,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.multiply", 2, builtin_multiply, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},

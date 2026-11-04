@@ -318,11 +318,11 @@ builtin List.map forms=1
 builtin List.max forms=1
   List.max(list: List[T]) -> Optional[T] shape=(List(Var(T))) -> Optional(Var(T)) rule=Prelude impl="" effects=[] desc="The greatest Int, Float or String, or none for an empty list; a NaN is skipped; O(n)."
 builtin List.max_by forms=1
-  List.max_by(list: List[A], key: Fn[A, O]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the greatest Int, Float or String key, the first on ties; error(\"the list is empty\") for an empty list; O(n)."
+  List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Optional(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the greatest Int, Float or String key, the first on ties, or none for an empty list; O(n)."
 builtin List.min forms=1
   List.min(list: List[T]) -> Optional[T] shape=(List(Var(T))) -> Optional(Var(T)) rule=Prelude impl="" effects=[] desc="The least Int, Float or String, or none for an empty list; a NaN is skipped; O(n)."
 builtin List.min_by forms=1
-  List.min_by(list: List[A], key: Fn[A, O]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the least Int, Float or String key, the first on ties; error(\"the list is empty\") for an empty list; O(n)."
+  List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Optional(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the least Int, Float or String key, the first on ties, or none for an empty list; O(n)."
 builtin List.partition forms=1
   List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Two lists, [accepted, rejected], each in order; f is called once per element; O(n)."
 builtin List.reduce forms=1

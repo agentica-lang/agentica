@@ -1,0 +1,15 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INVALID-COUNT",
+  "steps": 58,
+  "stdout": [
+    "ababab",
+    "é€é€",
+    "0",
+    "true",
+    "----========",
+    "3000",
+    ""
+  ],
+  "stderr": []
+}

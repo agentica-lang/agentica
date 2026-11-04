@@ -99,7 +99,7 @@ Two or more text lines are needed (`LEX-HEREDOC-ONE-LINE`; write one line as `"t
 
 ## Joining strings
 
-`+` joins two strings. Both sides must be strings.
+`+` joins two strings. Both sides must be strings. `*` repeats a string: `"ab" * 3` is `"ababab"`.
 
 ```agentica
 def main() -> Void
