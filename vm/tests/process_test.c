@@ -587,6 +587,37 @@ static void wait_for_mark(const char *path, const char *expected) {
   assert(!"the leaf never saw its parent go");
 }
 
+/* A call of NAME in a callback of native code (agc_test_fails catches its failure at vm.fail, where a failure outside
+   a turn goes), which fails with CODE or, with "nothing", returns. */
+static void in_callback(const char *name, agc_value *args, const char *code) {
+  vm.in_turn = false;
+  task->callbacks = 1;
+  agc_test_fails(&vm, name, first_builtin(name), args, code);
+  task->callbacks = 0;
+  vm.in_turn = true;
+}
+
+/* Process.close in a callback at N = 1 (#1064). A plain child that runs would park until it is reaped: the close is
+   refused while the child keeps its resource, and a close outside the callback then stops it. A child that was
+   reaped (Process.wait ran its exit callback) does not park, so its close works inside the callback. */
+static void callback_close_tests(const char *self) {
+  agc_value words[] = {text("--wait")};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_int(5000)};
+  agc_value handle[] = {ok(call("Process.spawn", args)), agc_int(5000)};
+  in_callback("Process.close", handle, "RUNTIME-NATIVE-CALLBACK");
+  assert(agc_as_process(&vm, handle[0])->state->native);
+  call("Process.close", handle);
+  assert(!agc_as_process(&vm, handle[0])->state->native);
+  assert(!agc_as_result(&vm, call("Process.wait", handle))->ok);
+
+  words[0] = text("--exit");
+  args[1] = agc_list_value(agc_list_from_array(words, 1));
+  handle[0] = ok(call("Process.spawn", args));
+  assert(agc_as_int(&vm, ok(call("Process.wait", handle))) == 3);
+  in_callback("Process.close", handle, "nothing");
+  assert(!agc_as_process(&vm, handle[0])->state->native);
+}
+
 /* A child that is given something other than its channel takes nothing: the marker of the other system, a marker
    with no descriptors, and (where there are two) the descriptors the wrong way round. A valid channel is the control. */
 static void refusal_tests(const char *self) {
@@ -690,6 +721,7 @@ int main(int argc, char **argv) {
   equal(ok(call("Process.read_available", args)), "hello\r\n\xC3\xB1\xF0\x9F\x99\x82\n");
   call("Process.close", args);
   byte_key_tests(self);
+  callback_close_tests(self);
   /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail.
      Only Windows exercises the ESRCH path here (TerminateProcess on an exited process gives UV_ESRCH); on POSIX the
      zombie still accepts the signal. */
