@@ -581,6 +581,7 @@ static void load_tables(reader *r, agc_program *p) {
    order. A file without it has no type of kind enum. */
 static void load_json_enums(reader *r, agc_program *p) {
   uint32_t count = read_count(r, 8, "decodable enum");
+  if (count == 0) reject(r, "empty decodable enums section"); /* the writer leaves the section out instead */
   agc_string **names = load_alloc(r, agc_size_mul(count, sizeof(agc_string *)), false);
   for (uint32_t i = 0, last = 0; i < count; i++) {
     uint32_t index = read_u32(r);
@@ -761,7 +762,8 @@ static void load(reader *r, agc_program *p) {
   if (p->entry >= p->function_count) reject(r, "entry out of range");
   if (p->functions[p->entry].params != 0) reject(r, "entry takes parameters");
   if (p->functions[p->entry].captures != 0) reject(r, "entry has captures");
-  if (left(r) != 0) load_json_enums(r, p);
+  /* A count needs 4 bytes: fewer left are stray bytes, not a section. */
+  if (left(r) >= 4) load_json_enums(r, p);
   if (left(r) != 0) reject(r, "trailing bytes");
   for (uint32_t i = 0; i < p->type_count; i++)
     if (p->types[i].kind == AGC_TYPE_ENUM && !p->enums[p->types[i].arg].json_name)

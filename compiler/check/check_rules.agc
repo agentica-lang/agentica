@@ -350,7 +350,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
     target = site.args[1]
   end
 
-  type = try json_struct(cx, current, target)
+  type = try json_type(cx, current, target)
   if decode
     return ok(State.Out(st: current, type: T.Type.Result(type)))
   end
@@ -360,7 +360,7 @@ end
 
 # JSON.codec(Type): the codec of the struct or enum, with the type argument JSON.decode takes.
 def check_json_codec(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  type = try json_struct(cx, st, site.args[0])
+  type = try json_type(cx, st, site.args[0])
   return ok(State.Out(st: st, type: T.Type.Codec(type)))
 end
 
@@ -392,7 +392,7 @@ def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[
 end
 
 # The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded.
-def json_struct(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
+def json_type(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
   case target
     Ast.Expr.TypeName(node) -> return json_target(cx, st, node)
     _ ->

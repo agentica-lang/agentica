@@ -9,12 +9,11 @@
 
 /* One open container of the decode: a List, a Map, a struct, an enum variant with payloads, or a JsonField.Value or an
    Optional some whose T is not a scalar (n is 1 and value holds the decoded T until the frame closes). An enum frame
-   walks the "values" array of the variant: items are its items, vdef the variant and tagged the enum being built. */
+   walks the "values" array of the variant: items are its items, payload_types their types and tagged the enum being built. */
 typedef struct {
   const agc_json *node;
   const agc_list *items;
   const agc_struct_def *def;
-  const agc_variant_def *vdef;
   const uint32_t *payload_types;
   uint32_t kind, arg;
   size_t next, n;
@@ -156,7 +155,6 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   f->next = 0;
   f->items = NULL;
   f->def = NULL;
-  f->vdef = NULL;
   f->payload_types = NULL;
   f->list = (agc_list_builder){0};
   f->record = NULL;
@@ -181,6 +179,9 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   }
 }
 
+/* How many variant names the "expected one of" error lists; a wider enum ends the list with "...". */
+#define MAX_LISTED_VARIANTS 20
+
 /* The enum value of a JSON object {"tag": "Variant", "values": [...]} (docs/vm/02-reference-behavior.md §2.7): "tag"
    names a variant and "values" is an array of its payload items, which a variant with no payload may leave out. A
    variant with no payload is the shared value, left in *v with f->tagged NULL. Otherwise f is opened as an enum frame
@@ -203,10 +204,13 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
   }
   const agc_string *text = agc_as_string(vm, name->scalar);
   const agc_variant_def *found = NULL;
+  size_t offset = 0; /* the payload types of the variants before the one found */
   for (uint32_t k = 0; k < def->count && !found; k++) {
     const agc_variant_def *candidate = &p->variants[def->first + k];
     if (candidate->name->bytes == text->bytes && memcmp(candidate->name->data, text->data, text->bytes) == 0)
       found = candidate;
+    else
+      offset += candidate->arity;
   }
   if (!found) {
     agc_json_buffer b;
@@ -214,18 +218,17 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
     b.len = 0;
     b.data = agc_alloc_atomic(b.cap);
     agc_json_put(&b, "one of ", 7);
-    for (uint32_t k = 0; k < def->count; k++) {
+    for (uint32_t k = 0; k < def->count && k < MAX_LISTED_VARIANTS; k++) {
       const agc_string *candidate = p->variants[def->first + k].name;
       if (k) agc_json_put(&b, ", ", 2);
       agc_json_put(&b, candidate->data, candidate->bytes);
     }
+    if (def->count > MAX_LISTED_VARIANTS) agc_json_put(&b, ", ...", 5);
     agc_json_put(&b, "", 1);
     *error = decode_error_in(stack, depth, "tag", b.data);
     return false;
   }
   uint32_t id = (uint32_t)(found - p->variants);
-  size_t offset = 0; /* the payload types of the variants before this one */
-  for (uint32_t k = def->first; k < id; k++) offset += p->variants[k].arity;
   const agc_json_member *values = agc_json_find(j, agc_json_ascii("values", 6));
   const agc_list *items = NULL;
   size_t n = 0;
@@ -253,7 +256,6 @@ static bool decode_variant(agc_vm *vm, const agc_json *j, uint32_t index, decode
   }
   open_frame(vm, f, j, AGC_TYPE_ENUM, index);
   f->items = items;
-  f->vdef = found;
   f->payload_types = def->payload_types + offset;
   f->n = found->arity;
   f->tagged = agc_new_enum(id, found->arity);

@@ -394,8 +394,7 @@ static bool loads_tables(uint32_t arity, const char *reason) {
 }
 
 /* The front end that the binary carries may name another Agentica version (the stages of a bootstrap do); only the
- * format version and the rest of the file are checked. A user program never loads this way. A stray byte after the
- * entry starts a Decodable enums section, which it cannot complete. */
+ * format version and the rest of the file are checked. A user program never loads this way. */
 static void front_end_tests(void) {
   char error[160] = "";
   agc_program *p;
@@ -412,7 +411,7 @@ static void front_end_tests(void) {
   s = base();
   s.trailing = true;
   b = build(s);
-  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "truncated file"));
+  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "trailing bytes"));
   free(b.data);
 }
 
@@ -1236,6 +1235,14 @@ static void json_enum_tests(void) {
   big.data[1] = 0xff;
   assert(!loads_enums(0, &big, "decodable enum count exceeds the file"));
 
+  /* The section is never empty, and fewer than the 4 bytes of a count are stray bytes. */
+  buffer empty = enum_tail(0, "E", 0, 0, false);
+  empty.len = 0;
+  u32(&empty, 0);
+  assert(!loads_enums(0, &empty, "empty decodable enums section"));
+  buffer three = enum_tail(0, "E", 0, 0, false);
+  three.len = 3;
+  assert(!loads_enums(0, &three, "trailing bytes"));
   buffer t = enum_tables(0);
   spec s = base();
   s.tables = &t;
@@ -1261,6 +1268,8 @@ static void json_enum_tests(void) {
   free(same.data);
   free(cut.data);
   free(big.data);
+  free(empty.data);
+  free(three.data);
 }
 
 int main(void) {
@@ -1302,7 +1311,7 @@ int main(void) {
   front_end_tests();
   s = base();
   s.trailing = true;
-  assert(!loads(s, "truncated file"));
+  assert(!loads(s, "trailing bytes"));
   s = base();
   s.entry = 1;
   assert(!loads(s, "entry out of range"));

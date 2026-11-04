@@ -6,7 +6,7 @@ import AstWalk from "../syntax/ast_walk"
 
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
-## value, an enum constructor, a pattern), and type_value says that it uses a type name as a value (JSON.decode(Person,
+## value, an enum constructor, a pattern), and type_names the linked names it uses as a value (JSON.decode(Person,
 ## ...)). covered are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and check_list build their type, a
 ## List, Optional or Result, around a type with the names of the type recorded at x's id, so lowering.agc's top_names
 ## reads only its top. regexes are the regex literals of a function body: each one reads the constant
@@ -15,7 +15,7 @@ export struct Scan
   consts: List[String]
   calls: List[String]
   written: List[String]
-  type_value: Bool
+  type_names: List[String]
   covered: List[Int]
   regexes: List[Ast.RegexLit]
 end
@@ -63,7 +63,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
 end
 
 def empty() -> Scan
-  return Scan(consts: [], calls: [], written: [], type_value: false, covered: [], regexes: [])
+  return Scan(consts: [], calls: [], written: [], type_names: [], covered: [], regexes: [])
 end
 
 def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
@@ -118,7 +118,9 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
     Ast.Expr.Call(node) ->
       return found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
     Ast.Expr.FunctionRef(node) -> return found.with(calls: found.calls.push(node.name))
-    Ast.Expr.TypeName(node) -> return found.with(written: named(found.written, node.name, watched), type_value: true)
+    Ast.Expr.TypeName(node) ->
+      written = named(found.written, node.name, watched)
+      return found.with(written: written, type_names: found.type_names.push(node.name))
     Ast.Expr.EnumConstructor(node) -> return found.with(written: named(found.written, node.enum_name, watched))
     Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
     Ast.Expr.ListLit(node) ->

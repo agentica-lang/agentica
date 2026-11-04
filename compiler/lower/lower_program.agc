@@ -35,9 +35,10 @@ export struct Tables
 end
 
 ## Builds the tables. decls are all the declarations of the program in order. used are the watched type names that the
-## program writes or whose types some expression has (a builtin record or enum is in the tables only then). type_value
-## says that a function uses a type name as a value, which is when the user structs that JSON can build are looked for.
-export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> Tables
+## program writes or whose types some expression has (a builtin record or enum is in the tables only then). type_names
+## are the types that functions use as a value, which is when the user structs and enums that JSON can build are looked
+## for.
+export def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String]) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
   for decl in decls
@@ -49,7 +50,7 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
   end
 
   builtin_types = builtin_decodable()
-  decodable = user_decodable(struct_decls, enum_decls, builtin_types, type_value)
+  decodable = user_decodable(struct_decls, enum_decls, builtin_types, type_names)
   wanted = used
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
     # JSON.decode builds JsonField values, so the enum is in the table even when no expression names it.
@@ -206,13 +207,16 @@ end
 # its variants one after the other. Every type is an Int, Float, Bool or String, or a List, a Map from String or an
 # Optional of such a type or of a struct or enum that can be built itself. Only looked for when some function uses a
 # type name as a value. A generic enum is left out: JSON.decode takes a bare name, and the checker refuses an instance.
+# Every struct that can be built is kept, but an enum only when it is one of type_names or a struct or another
+# kept enum
+# has it in a field or payload, since the type table of such a struct names it.
 def user_decodable(
   structs: List[Ast.StructDecl],
   enums: List[Ast.EnumDecl],
   builtin: Map[String, List[Types.Type]],
-  type_value: Bool,
+  type_names: List[String],
 ) -> Map[String, List[Types.Type]]
-  if !type_value
+  if type_names.size == 0
     return {}
   end
 
@@ -279,7 +283,47 @@ def user_decodable(
     table = kept
   end
 
-  return table
+  return with_reachable_enums(table, kinds, type_names)
+end
+
+# The table with the structs and the enums that a struct or a name of type_names reaches: an enum nothing JSON
+# can build
+# mentions is left out, so a program that decodes a Person does not carry every enum it declares.
+def with_reachable_enums(
+  table: Map[String, List[Types.Type]],
+  kinds: Map[String, String],
+  type_names: List[String],
+) -> Map[String, List[Types.Type]]
+  pending = type_names.filter do |name: String| table.has_key?(name) end
+  for name in table.keys
+    if kinds.get(name, "") == "Struct"
+      pending = pending.push(name)
+    end
+  end
+
+  reached: Set[String] = Set.new(pending)
+  at = 0
+  while at < pending.size
+    for type in table[pending[at]]
+      for name in struct_names_in(type)
+        if !reached.include?(name)
+          reached = reached.add(name)
+          pending = pending.push(name)
+        end
+      end
+    end
+
+    at += 1
+  end
+
+  kept: Map[String, List[Types.Type]] = {}
+  for name in table.keys
+    if reached.include?(name)
+      kept = kept.put(name, table[name])
+    end
+  end
+
+  return kept
 end
 
 # True when every struct a list of field types names is in the table.

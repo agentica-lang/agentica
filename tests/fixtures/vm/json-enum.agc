@@ -21,6 +21,31 @@ enum Maybe[T]
   Nothing
 end
 
+enum Wide
+  V00
+  V01
+  V02
+  V03
+  V04
+  V05
+  V06
+  V07
+  V08
+  V09
+  V10
+  V11
+  V12
+  V13
+  V14
+  V15
+  V16
+  V17
+  V18
+  V19
+  V20
+  V21
+end
+
 def to_json[T](value: T) -> String
   return JSON.encode(value)
 end
@@ -85,6 +110,8 @@ def main() -> Void
   puts(JSON.decode("{\"name\":\"d\",\"main\":{\"tag\":\"Empty\"},\"shapes\":[],\"by_name\":{\"k\":{\"tag\":\"Circle\"}}}", Drawing))
   puts(JSON.decode("{\"name\":\"d\",\"main\":{\"tag\":\"Empty\"},\"shapes\":[{\"tag\":\"Rect\",\"values\":[1,true]}],\"by_name\":{}}", Drawing))
   puts(JSON.decode("{\"name\":\"d\",\"main\":{\"tag\":\"Empty\"},\"shapes\":[],\"by_name\":{},\"spare\":5}", Drawing))
+
+  puts(JSON.decode("{\"tag\":\"Nope\"}", Wide))
 
   puts(JSON.schema(Shape))
   puts(JSON.schema(Drawing).get("$defs").unwrap!.get("Shape").unwrap!.get("oneOf").unwrap!.list.unwrap!.size)

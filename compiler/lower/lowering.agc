@@ -57,12 +57,12 @@ struct Table
 end
 
 # What the scans of all the bodies give: one per function and constant, the watched type names written anywhere, with
-# whether a function uses a type name as a value, and the ids of the covered expressions (Scans.Scan).
+# the type names that functions use as a value, and the ids of the covered expressions (Scans.Scan).
 struct Scanned
   function_scans: List[Scans.Scan]
   constant_scans: List[Scans.Scan]
   written: List[String]
-  type_value: Bool
+  type_names: List[String]
   covered: Set[Int]
 end
 
@@ -117,7 +117,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     used = used.add("Optional")
   end
 
-  tables = Program.build(decls, used, scanned.type_value)
+  tables = Program.build(decls, used, scanned.type_names)
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
@@ -354,15 +354,13 @@ def scan_all(
   constant_scans: List[Scans.Scan] = []
   written: List[String] = []
   covered: List[Int] = []
-  type_value = false
+  type_names: List[String] = []
   for decl in functions
     scan = Scans.scan_body(decl.body, watched)
     function_scans = function_scans.push(scan)
     written = written.concat(scan.written).concat(Scans.written_signature(decl, watched))
     covered = covered.concat(scan.covered)
-    if scan.type_value
-      type_value = true
-    end
+    type_names = type_names.concat(scan.type_names)
   end
 
   for decl in constants
@@ -384,7 +382,7 @@ def scan_all(
     function_scans: function_scans,
     constant_scans: constant_scans,
     written: written,
-    type_value: type_value,
+    type_names: type_names,
     covered: Set.new(covered),
   )
 end
