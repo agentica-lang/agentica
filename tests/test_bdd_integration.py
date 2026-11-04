@@ -326,10 +326,14 @@ def test_stdout_and_stderr_includes_check_a_substring_after_the_program_exits(tm
             "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
             "And stdout includes:\n" + doc("gamma")
             + 'Scenario: the program still runs\nGiven the Agentica program "wait.agc"\n'
-            "Then stderr includes:\n" + doc("x"))})
+            "Then stderr includes:\n" + doc("x")
+            + 'Scenario: an empty text\nGiven the Agentica program "log.agc"\n'
+            "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
+            'And stdout includes:\n  """\n  """\n')})
     report = json_test(directory / "log.feature")
-    assert [item["status"] for item in report_cases(report)] == ["passed", "failed", "failed", "failed"]
-    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-CONTEXT"]
+    assert [item["status"] for item in report_cases(report)] == ["passed", "failed", "failed", "failed", "failed"]
+    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-CONTEXT",
+                             "RUNTIME-BDD-CONTEXT"]
     results = report_cases(report)
     assert details(results[1]) == ['text including "warn: three"', '"warn: one\\nwarn: two\\n"']
     assert details(results[2]) == ['text including "gamma"', '"alpha beta\\n"']
@@ -362,6 +366,7 @@ def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_
                   pid = JSON.string(BDD.get(ctx, "pid").unwrap!).unwrap!
                   BDD.then_line(ctx, pid, {ms(5000)})
                 end,
+                BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "on purpose") end,
                 BDD.step("the peer still runs") do |ctx, args|
                   running = JSON.bool(BDD.call(ctx, "peer", JSON.null()).unwrap!).unwrap!
                   BDD.assert(ctx, running, "the peer ended")
@@ -372,7 +377,8 @@ def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_
         "peer.feature": (
             "Feature: Peer\nScenario: the program and its peer\nGiven a peer program\n"
             'And the Agentica program "app.agc"\nThen the program printed the pid of the peer\n'
-            "And the peer still runs\n")}
+            "And the peer still runs\n"),
+        "failing.feature": "Feature: Failing\nScenario: a failed scenario\nGiven a peer program\nThen the scenario fails\n"}
     suite(tmp_path, files)
     pids = []
     try:
@@ -380,6 +386,11 @@ def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_
         assert [item["status"] for item in report_cases(report)] == ["passed"], str(report)
         pids.append(peer_pid.read_text())
         assert wait_until(lambda: not process_alive(pids[0])), "the peer outlived its scenario"
+        failed = json_test(directory / "failing.feature", "--steps", directory / "steps.agc")
+        assert [item["status"] for item in report_cases(failed)] == ["failed"], str(failed)
+        pids.append(peer_pid.read_text())
+        assert pids[1] != pids[0]
+        assert wait_until(lambda: not process_alive(pids[1])), "the peer outlived its failed scenario"
     finally:
         for pid in pids:
             kill_process(pid)

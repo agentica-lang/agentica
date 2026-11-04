@@ -265,7 +265,7 @@ Scenario: The program talks to the peer
   Then the peer received "hello"
 ```
 
-The peer's handle lives in the closure of the service, so a later step reads from it through `BDD.call`, and the read has a timeout so a silent peer fails the step.
+The peer's handle lives in the closure of the service, so a later step reads from it through `BDD.call`, and the read has a timeout so a silent peer fails the step. A read that times out kills the peer, as it does a program under test (see [Process](/library/io-and-system/process/)), so make it the last use. Start the peer in the step handler itself: a program belongs to the task that started it, so one started in a `Task.spawn` stops when that task ends, and a step may not leave a task running.
 
 ## BDD.after
 
@@ -350,7 +350,7 @@ The built-in steps as functions, to combine in your own steps. Pass on the conte
 
 `BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 
-`stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `String.contains?` does, so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
+`stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `String.contains?` does (an empty text is `RUNTIME-BDD-CONTEXT`), so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
 
 A failed `then_*` check reports `expected` and `actual` in the inspect form, as `Test.eq` does: a line or output in quotes, an exit code as a number, a JSON line as its sorted-key text. An undefined or ambiguous step's `actual` is the step text in quotes. Text over 64 Ki characters is cut and ends with `...` and the count left out. A front-end error of the step program keeps the raw type names (`Int`, `String`), so its `--json` form depends on the code.
 

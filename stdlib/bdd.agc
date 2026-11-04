@@ -583,9 +583,14 @@ def compare_text(ctx: Context, actual: String, expected: String) -> Context
   return compare(ctx, Test.eq(actual, expected), expected.inspect, actual.inspect)
 end
 
-# The failure shows the whole stream as `actual`, so a log scenario sees what the substring missed.
+# The failure shows the whole stream as `actual`, so a log scenario sees what the substring missed. Every text includes
+# the empty one, so it would check nothing: it is refused.
 def compare_includes(ctx: Context, actual: String, expected: String) -> Context
-  return compare(ctx, Test.eq(actual.contains?(expected), true), "text including #{expected.inspect}", actual.inspect)
+  if expected == ""
+    halt(ctx, "RUNTIME-BDD-CONTEXT", "the text an includes step looks for must not be empty")
+  end
+  checked = Test.assert(actual.contains?(expected), "the output does not include the text")
+  return compare(ctx, checked, "text including #{expected.inspect}", actual.inspect)
 end
 
 def compare(ctx: Context, checked: Result[Void], expected: String, actual: String) -> Context
