@@ -72,3 +72,13 @@ def test_string_repeat_bad_count(tmp_path, count):
     found = json.loads(result.stderr)
     assert found["code"] == "RUNTIME-INVALID-COUNT"
     assert covered(source, found["range"]) == "n"
+
+
+@pytest.mark.slow
+def test_string_repeat_at_the_cap(tmp_path):
+    # Exactly 256 MiB, the most a repeat makes, succeeds. Slow: it allocates the whole String.
+    path = tmp_path / "cap.agc"
+    path.write_text(MAIN + '  puts(("a" * 268435456).bytesize)\nend\n', encoding="utf-8")
+    result = run(cli() + [str(path)])
+    assert result.code == 0, result.stderr
+    assert result.stdout == "268435456\n"

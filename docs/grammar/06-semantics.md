@@ -560,7 +560,7 @@ def first_or[T](xs: List[T], fallback: T) -> T
   return xs[0]
 end
 
-def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   # ...
 end
 
