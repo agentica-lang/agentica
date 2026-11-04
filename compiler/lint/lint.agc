@@ -81,13 +81,14 @@ def scan_decl(file: String, decl: Ast.Decl) -> Scan
     Ast.Decl.Export(node) -> return scan_decl(file, node.declaration)
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
-      return scan(file, roots, string_names(node, roots))
-    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Set.new([]))
+      return scan(file, roots, function_locals(node, roots))
+    Ast.Decl.Constant(node) ->
+      return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(strings: Set.new([]), outer: Set.new([])))
     _ -> return Scan(found: [], mentions: [])
   end
 end
 
-def scan(file: String, roots: List[Walk.Node], strings: Set[String]) -> Scan
+def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
   work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, in_loop: false, chained: false) end
@@ -95,7 +96,7 @@ def scan(file: String, roots: List[Walk.Node], strings: Set[String]) -> Scan
   while at < work.size
     item = work[at]
     at += 1
-    for suggestion in suggestions(file, item, strings)
+    for suggestion in suggestions(file, item, locals)
       found = found.push(suggestion)
     end
 
@@ -111,10 +112,10 @@ def scan(file: String, roots: List[Walk.Node], strings: Set[String]) -> Scan
   return Scan(found: found, mentions: mentions)
 end
 
-def suggestions(file: String, item: Item, strings: Set[String]) -> List[Problems.Problem]
+def suggestions(file: String, item: Item, locals: Stmts.Locals) -> List[Problems.Problem]
   case item.node
     Walk.Node.Expr(expr) -> return Exprs.suggestions(file, expr, item.chained)
-    Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.in_loop, strings)
+    Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.in_loop, locals)
   end
 end
 
@@ -162,36 +163,42 @@ def first_is_chained?(item: Item) -> Bool
   end
 end
 
-# The names of a function that hold a String: its String parameters, and the variables set to a literal text or
-# declared String.
-def string_names(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Set[String]
-  names: Set[String] = Set.new([])
+# The names of a function that matter to the String rule (Stmts.Locals): the String ones, and those bound outside every
+# loop. The parameters are bound before any loop. The walk gives each binding its place, as the main walk does.
+def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Stmts.Locals
+  strings: Set[String] = Set.new([])
+  outer: Set[String] = Set.new([])
   for param in decl.params
+    outer = outer.add(param.name)
     if param.type.name == "String"
-      names = names.add(param.name)
+      strings = strings.add(param.name)
     end
   end
 
-  work = roots
+  work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, in_loop: false, chained: false) end
   at = 0
   while at < work.size
-    node = work[at]
+    item = work[at]
     at += 1
-    case node
+    case item.node
       Walk.Node.Stmt(Ast.Stmt.Binding(binding)) ->
         if string_binding?(binding)
-          names = names.add(binding.name)
+          strings = strings.add(binding.name)
         end
 
-      _ -> names = names
+        if !item.in_loop
+          outer = outer.add(binding.name)
+        end
+
+      _ -> outer = outer
     end
 
-    for child in Walk.children(node)
+    for child in children(item)
       work = work.push(child)
     end
   end
 
-  return names
+  return Stmts.Locals(strings: strings, outer: outer)
 end
 
 def string_binding?(binding: Ast.Binding) -> Bool

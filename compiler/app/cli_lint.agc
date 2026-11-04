@@ -11,6 +11,7 @@ import Diag from "../diagnostics/diagnostic"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Problems from "../diagnostics/problem"
 import Lint from "../lint/lint"
+import CliCheck from "cli_check"
 
 # The usage line of `lint`, given as the help of QUERY-USAGE.
 USAGE = "usage: agentica lint [PATH...] [--json] [--strict]"
@@ -83,15 +84,28 @@ export def suggestions_text(found: List[Problems.Problem]) -> String
   return "#{lines.join("\n")}\n"
 end
 
-## The last line of a run: that every file is fine, or how many suggestions the files hold.
+## The last line of a run: that every file is fine, how many suggestions the files hold, or, when a file did not parse
+## or could not be read, that the run failed (the suggestions of the other files follow after a `;`).
 export def summary_text(entries: List[Entry]) -> String
   total = suggestions(entries)
-  if total == 0
-    return "lint ok: #{files_text(entries.size)}\n"
+  unparsed = entries.select do |entry: Entry| unparsed?(entry) end.size
+  unreadable = entries.select do |entry: Entry| unreadable?(entry) end.size
+  holding = entries.select do |entry: Entry| suggested?(entry) end.size
+  if unparsed + unreadable == 0
+    if total == 0
+      return "lint ok: #{CliCheck.files_text(entries.size)}\n"
+    end
+
+    return "lint: #{suggestions_count(total)} in #{holding} of #{CliCheck.files_text(entries.size)}\n"
   end
 
-  holding = entries.select do |entry: Entry| suggested?(entry) end.size
-  return "lint: #{total} #{plural(total, "suggestion")} in #{holding} of #{files_text(entries.size)}\n"
+  failed = unparsed + unreadable
+  line = "lint failed: #{failed} of #{CliCheck.files_text(entries.size)} could not be #{failure(unparsed, unreadable)}"
+  if total > 0
+    line = "#{line}; #{suggestions_count(total)} in #{CliCheck.files_text(holding)}"
+  end
+
+  return "#{line}\n"
 end
 
 ## The JSON document of a run: `ok` (no suggestion and no diagnostic), the number of files `checked` and of
@@ -157,8 +171,19 @@ def clean?(entry: Entry) -> Bool
   end
 end
 
-def files_text(count: Int) -> String
-  return "#{count} #{plural(count, "file")}"
+def suggestions_count(total: Int) -> String
+  return "#{total} #{plural(total, "suggestion")}"
+end
+
+# What went wrong with the files that failed: they did not parse, could not be read, or both.
+def failure(unparsed: Int, unreadable: Int) -> String
+  if unreadable == 0
+    return "parsed"
+  elsif unparsed == 0
+    return "read"
+  end
+
+  return "parsed or read"
 end
 
 def plural(count: Int, word: String) -> String

@@ -404,9 +404,9 @@ def lint_entry(file: String) -> CliLint.Entry
   end
 end
 
-# The answer of a run of `lint`. The JSON form is one document on stdout; the others print the suggestions and
-# the count
-# on stdout, and the diagnostics of the files that did not parse or read on stderr, in the order of the files.
+# The answer of a run of `lint`. The JSON form is one document on stdout; the others print the suggestions and the
+# last line (the count, or `lint failed` when a file did not parse or read) on stdout, and the diagnostics of the files
+# that did not parse or read on stderr, in the order of the files.
 def lint_report(session: Session, entries: List[CliLint.Entry], strict: Bool) -> Int
   if session.options.style == "json"
     print(CliLint.json_text(entries))
@@ -425,7 +425,13 @@ def show_lint_entry(session: Session, entry: CliLint.Entry) -> Void
   case entry
     CliLint.Entry.Clean(_) -> return
     CliLint.Entry.Suggested(_, found) -> print(CliLint.suggestions_text(found))
-    CliLint.Entry.Unparsed(file, problem) -> IO.warn(render(session, problem, file))
+    CliLint.Entry.Unparsed(file, problem) ->
+      text = render(session, problem, file)
+      if session.options.style == "ai"
+        text = CliCheck.headed(file, text)
+      end
+
+      IO.warn(text)
     CliLint.Entry.Unreadable(file) -> IO.warn("agentica: cannot read #{file}")
   end
 end

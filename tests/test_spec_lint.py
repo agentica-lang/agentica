@@ -41,7 +41,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
 
   return out
 end
-''' + "".join(f'\nexport def make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(10))
+''' + "".join(f'\nexport def make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(20))
 
 # The good form of each rule, and the near misses that must stay quiet: a pipe of two steps, a String built outside a
 # loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code and a qualified
@@ -87,6 +87,26 @@ export def label(flag: Bool, text: String, n: Int) -> String
 
   value = Db.Value.Text("a")
   return "#{joined}#{greeting}#{note}#{shout}"
+end
+
+# Near misses: a String made fresh in the body of a loop, `if not` with no else, and a Bool compared with a name.
+def near_misses(flag: Bool, done: Bool, text: String) -> Int
+  total = ""
+  for i in 0...3
+    fresh = ""
+    fresh = fresh + text
+    total = total.concat(fresh)
+  end
+
+  if not flag
+    total = "a"
+  end
+
+  if flag == done
+    total = "b"
+  end
+
+  return total.length
 end
 
 # A note that is not a doc.
@@ -135,6 +155,19 @@ def test_every_rule_reports_its_code_at_its_place(tmp_path):
     }
 
 
+def test_a_local_enum_variant_is_not_a_qualified_name_to_import(tmp_path):
+    local = "import Db from \"db\"\n\nenum Answer\n  SignedOut\nend\n\ndef f() -> Answer\n" + "  Answer.SignedOut\n" * 25 + "end\n"
+    assert suggested(tmp_path / "local.agc", local) == {}
+    imported = local.replace("Answer.SignedOut", "Db.Value", 25)
+    found = suggested(tmp_path / "imported.agc", imported)
+    assert found == {"LINT-REPEATED-QUALIFIED-NAME": [where(imported, "Db.Value", nth=1)]}
+
+
+def test_a_qualified_name_below_twenty_mentions_is_quiet(tmp_path):
+    text = "import Db from \"db\"\n\ndef f() -> Db.Value\n" + "  Db.Value.Null\n" * 18 + "end\n"
+    assert suggested(tmp_path / "few.agc", text) == {}
+
+
 def test_suggestions_come_in_source_order_with_a_span(tmp_path):
     (tmp_path / "bad.agc").write_text(BAD, encoding="utf-8")
     document = report(lint_json("bad.agc", cwd=tmp_path), 0)
@@ -175,6 +208,13 @@ def test_a_folder_and_no_path_lint_every_file(tmp_path):
     assert report(lint_json("src", cwd=tmp_path), 0)["checked"] == 1
 
 
+def test_a_loop_that_grows_a_string_of_its_own_is_quiet_but_one_before_the_loop_is_not(tmp_path):
+    fresh = 'def f(text: String) -> String\n  for i in 0...3\n    s = ""\n    s = s + text\n  end\n\n  return text\nend\n'
+    assert suggested(tmp_path / "fresh.agc", fresh) == {}
+    outer = 'def f(text: String) -> String\n  s = ""\n  for i in 0...3\n    s += text\n  end\n\n  return s\nend\n'
+    assert suggested(tmp_path / "outer.agc", outer) == {"LINT-STRING-APPEND-IN-LOOP": [where(outer, "s += text")]}
+
+
 def test_a_file_that_does_not_parse_is_a_diagnostic_and_the_others_still_lint(tmp_path):
     (tmp_path / "a.agc").write_text(BAD, encoding="utf-8")
     (tmp_path / "broken.agc").write_text("x = 1\n", encoding="utf-8")
@@ -184,6 +224,17 @@ def test_a_file_that_does_not_parse_is_a_diagnostic_and_the_others_still_lint(tm
     assert entries["a.agc"]["suggestions"]
     text = lint(".", cwd=tmp_path)
     assert text.code == 1 and "PARSE-TOP-LEVEL-STATEMENT" in text.stderr and "LINT-BOOL-COMPARE" in text.stdout
+    suggestions = document["suggestions"]
+    assert text.stdout.splitlines()[-1] == f"lint failed: 1 of 2 files could not be parsed; {suggestions} suggestions in 1 file"
+
+
+def test_the_last_line_says_that_a_file_failed(tmp_path):
+    (tmp_path / "good.agc").write_text(GOOD, encoding="utf-8")
+    (tmp_path / "broken.agc").write_text("x = 1\n", encoding="utf-8")
+    failed = lint(".", cwd=tmp_path)
+    assert (failed.code, failed.stdout) == (1, "lint failed: 1 of 2 files could not be parsed\n")
+    ai = run(cli() + ["--ai", "lint", "broken.agc"], env=vm_environment(), cwd=tmp_path)
+    assert ai.code == 1 and ai.stderr.startswith("broken.agc:") and "check failed: 1 error" not in ai.stderr
 
 
 @pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="host-only: root reads any file")

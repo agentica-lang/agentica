@@ -6,21 +6,29 @@ import Ast from "../syntax/ast"
 import Rules from "rules"
 import Shape from "shape"
 
+## The names of a function that matter to the String rule: `strings` hold a String, and `outer` are bound outside
+## every loop (a parameter, or a variable set before the loop). A String made fresh inside the body of a loop is short,
+## so only an outer name can grow without end.
+export struct Locals
+  strings: Set[String]
+  outer: Set[String]
+end
+
 ## The suggestions for `stmt`. `in_loop` is true below a `for` or `while` of the same function body (a block starts
-## again: its locals do not live across calls). `strings` are the names of the function that hold a String.
-export def suggestions(file: String, stmt: Ast.Stmt, in_loop: Bool, strings: Set[String]) -> List[Problems.Problem]
+## again: its locals do not live across calls). `locals` are the names of the function.
+export def suggestions(file: String, stmt: Ast.Stmt, in_loop: Bool, locals: Locals) -> List[Problems.Problem]
   case stmt
-    Ast.Stmt.Binding(node) -> return appended(file, node, in_loop, strings)
+    Ast.Stmt.Binding(node) -> return appended(file, node, in_loop, locals)
     Ast.Stmt.If(node) -> return branches(file, node)
     _ -> return []
   end
 end
 
-# `s = s + piece` (and `s += piece`, which the parser writes the same way) in a loop, where s is a String. The names
-# come from the function, so `s = s + part` is found when s was set to a literal or declared String, and a literal or
-# `to_s` piece shows a String by itself, as only a String adds to a String.
-def appended(file: String, node: Ast.Binding, in_loop: Bool, strings: Set[String]) -> List[Problems.Problem]
-  if !in_loop
+# `s = s + piece` (and `s += piece`, which the parser writes the same way) in a loop, where s is a String bound before
+# the loop. The names come from the function, so `s = s + part` is found when s was set to a literal or declared
+# String, and a literal or `to_s` piece shows a String by itself, as only a String adds to a String.
+def appended(file: String, node: Ast.Binding, in_loop: Bool, locals: Locals) -> List[Problems.Problem]
+  if !in_loop or !locals.outer.include?(node.name)
     return []
   end
 
@@ -30,7 +38,8 @@ def appended(file: String, node: Ast.Binding, in_loop: Bool, strings: Set[String
   end
 
   pieces = operands.drop(1)
-  if strings.include?(node.name) or pieces.any? do |piece: Ast.Expr| Shape.text?(piece) or Shape.to_s?(piece) end
+  texts = pieces.any? do |piece: Ast.Expr| Shape.text?(piece) or Shape.to_s?(piece) end
+  if locals.strings.include?(node.name) or texts
     return [Rules.at(file, Rules.STRING_APPEND, node.span)]
   end
 

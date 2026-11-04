@@ -59,12 +59,12 @@ src/orders.agc:12:5 LINT-STRING-APPEND-IN-LOOP this loop grows a String with +, 
 lint: 1 suggestion in 1 of 12 files
 ```
 
-`lint` suggests changes from the [style guide](/style/). It only parses each file, so the imports need not exist and it reads no types. A suggestion is not an error: what is always a mistake (an unused import, unreachable code) stays an error of `check`. Each line is `file:line:column CODE message`, with the way to write it on the next line. Exit codes: `0` with or without suggestions, `1` with `--strict` and any suggestion (for CI) or when a file does not parse (its first diagnostic is printed), `2` for a bad call or an unreadable file. `--json` prints one object: `ok`, `checked`, `suggestions` and `files`, an entry for each file with its `suggestions` (each has `code`, `message`, `help`, `file` and `range`, as a diagnostic does) or its `diagnostic`. The rules, in the order of the guide:
+`lint` suggests changes from the [style guide](/style/). It only parses each file, so the imports need not exist and it reads no types. A suggestion is not an error: what is always a mistake (an unused import, unreachable code) stays an error of `check`. Each line is `file:line:column CODE message`, with the way to write it on the next line. Exit codes: `0` with or without suggestions, `1` with `--strict` and any suggestion (for CI) or when a file does not parse (its first diagnostic is printed, and the last line says `lint failed: 1 of 2 files could not be parsed`), `2` for a bad call or an unreadable file. `--json` prints one object: `ok`, `checked`, `suggestions` and `files`, an entry for each file with its `suggestions` (each has `code`, `message`, `help`, `file` and `range`, as a diagnostic does) or its `diagnostic`; the files that did not parse or read are those with a `diagnostic`. The rules, in the order of the guide:
 
 | Code | Suggests |
 |---|---|
 | `LINT-PRIVATE-DOC` | no `##` doc on a private function, struct or enum |
-| `LINT-REPEATED-QUALIFIED-NAME` | `import {Value} from "db"` for a name such as `Db.Value` that a file writes ten times or more |
+| `LINT-REPEATED-QUALIFIED-NAME` | `import {Value} from "db"` for a name such as `Db.Value` that a file writes twenty times or more |
 | `LINT-IF-CHAIN` | `case` for an `if` chain of three or more branches that test one variable against literals |
 | `LINT-NEGATED-ELSE` | the positive case first, not `if not x` with an `else` |
 | `LINT-BOOL-COMPARE` | `if done`, not `if done == true` |

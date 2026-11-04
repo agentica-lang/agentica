@@ -61,6 +61,15 @@ export def failed_text(failed: Int, total: Int) -> String
   return "check failed: #{failed} of #{files_text(total)}\n"
 end
 
+## `1 file` or `3 files`.
+export def files_text(count: Int) -> String
+  if count == 1
+    return "1 file"
+  end
+
+  return "#{count} files"
+end
+
 ## The JSON document of a run: `ok`, the number of files `checked` and `failed`, and `files`, an entry for each file in
 ## the order it was checked with its `file`, `ok` and, when it did not pass, its `diagnostic`. A file that cannot be
 ## read has the QUERY-USAGE diagnostic of `Core.unreadable`.
@@ -105,12 +114,4 @@ def passed?(entry: Entry) -> Bool
     Entry.Unreadable(_) -> return false
     Entry.Failed(_, _) -> return false
   end
-end
-
-def files_text(count: Int) -> String
-  if count == 1
-    return "1 file"
-  end
-
-  return "#{count} files"
 end

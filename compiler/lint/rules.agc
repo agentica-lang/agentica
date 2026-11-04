@@ -24,7 +24,7 @@ export BOOL_COMPARE = Rule(
 export SINGLE_PIPE = Rule(
   code: "LINT-SINGLE-PIPE",
   message: "a pipe with one step is a plain call",
-  help: "write `shout(text)` instead of `text |> shout()`; a pipe is for two or more steps",
+  help: "a plain call, or the `.` form for a builtin: `shout(text)`, not `text |> shout()`",
 )
 
 ## Text is built with interpolation.
