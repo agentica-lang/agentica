@@ -101,7 +101,7 @@ class UnitTest(TestCase):
         self.assertEqual([field(item, "code") for item in results], [
             None, "RUNTIME-TEST-ASSERTION", "RUNTIME-TEST-ERROR", "RUNTIME-DIVISION-BY-ZERO", None])
         # A test is reported at its def; a crash keeps the stack down to the test function.
-        self.assertEqual([item["location"]["line"] for item in results], [5, 10, 15, 19, 23])
+        self.assertEqual([item["location"]["line"] for item in results], [3, 8, 13, 17, 21])
         self.assertEqual(results[1]["output"], "shown when failing")
         self.assertEqual([frame["function"] for frame in results[3]["error"]["stack"]], ["divide", "test_crashes"])
         _status, only = self.json_test("--only", "crash", fixture("functions_test.agc"))

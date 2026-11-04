@@ -13,11 +13,13 @@ import Failure from "link_failure"
 TEST_PREFIX = "test_"
 
 ## The tree of the test file `file` with the `main` that runs its tests, or the same tree when it has no test
-## function (a run of a file with neither is CHECK-MAIN later). CHECK-TEST-SIGNATURE for a test function that takes
-## parameters, is generic or does not return `Result[Void]`, CHECK-TEST-NAME for one named just `test_`, and
-## CHECK-TEST-MAIN, at `main`, for a file that declares `main` too. The new nodes take ids from the id of the Program
-## on and the Program the next one, so the ids stay in post-order with no gap, and the next file is numbered after
-## them.
+## function (a run of a file with neither is CHECK-MAIN later). A file that declares `main` and test functions is
+## CHECK-TEST-MAIN, at `main`, before any test function is looked at: with a `main`, a `test_*` function may be a
+## helper of the `Test.run` form, and the problem is the mix. Without one, CHECK-TEST-NAME for a function named just
+## `test_` and CHECK-TEST-SIGNATURE for one that takes parameters, is generic or does not return `Result[Void]`, which
+## must be written so (the check reads the written type: an alias of it is not one). The new nodes take ids from the id
+## of the Program on and the Program the next one, so the ids stay in post-order with no gap, and the next file is
+## numbered after them.
 export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
   tests: List[Ast.FunctionDecl] = []
   main: Optional[Ast.FunctionDecl] = none
@@ -28,7 +30,6 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
           if function.name == "main"
             main = some(function)
           elsif function.name.starts_with?(TEST_PREFIX)
-            try check_test(file, function)
             tests = tests.push(function)
           end
         end
@@ -41,6 +42,16 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
     return ok(program)
   end
 
+  try no_main(file, main)
+  for test in tests
+    try check_test(file, test)
+  end
+
+  return ok(with_main(program, tests))
+end
+
+# CHECK-TEST-MAIN at a `main` of a file with test functions.
+def no_main(file: String, main: Optional[Ast.FunctionDecl]) -> Result[Void]
   case main
     some(declared) ->
       return error(
@@ -52,7 +63,7 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
           "remove main: agentica test runs the test_ functions",
         ),
       )
-    none -> return ok(with_main(program, tests))
+    none -> return ok()
   end
 end
 

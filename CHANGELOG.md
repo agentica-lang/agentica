@@ -10,10 +10,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `agentica test`: a `*_test.agc` file may have no `main`; its top-level
-  `test_*` functions are its tests, named after the function
-  (`test_parses_port` is `parses port`). New codes `CHECK-TEST-SIGNATURE`,
-  `CHECK-TEST-NAME` and `CHECK-TEST-MAIN`.
 - `std/bdd`: the steps `stdout includes:` and `stderr includes:` (and
   `BDD.then_stdout_includes`, `BDD.then_stderr_includes`) check a substring
   of the output after the program exits. The BDD page shows how a scenario
@@ -24,6 +20,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `agentica test`: a `*_test.agc` file may have no `main`; its
+  top-level `test_*` functions are its tests, named after the function
+  (`test_parses_port` is `parses port`). A test file with both `main` and
+  `test_*` functions is `CHECK-TEST-MAIN`; also new: `CHECK-TEST-SIGNATURE`
+  and `CHECK-TEST-NAME`.
 - **Breaking:** the help of `std/option_parser` writes its notes in square
   brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows the
   choices as the value name (`--stats on|off`).

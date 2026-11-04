@@ -51,7 +51,8 @@ end
 ## style rule blank_line_after_end, and held the types of its constants (as type_code.agc writes them), stubbed whether
 ## program is the parse of the stub of that entry rather than of the text, tree the tree digest of this walk, and clean
 ## whether the two are the same and the entry types every constant, so the bodies and constants need no check:
-## constants then has the type of each constant by its linked name.
+## constants then has the type of each constant by its linked name. tested says that the file was read as the root of a
+## test file (Settings.test_file), so its tree may hold the `main` of its test functions (test_main.agc).
 export struct Module
   key: String
   file: String
@@ -75,6 +76,7 @@ export struct Module
   tree: String
   clean: Bool
   constants: Map[String, T.Type]
+  tested: Bool
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
@@ -89,12 +91,14 @@ export struct Loaded
   stubs: Int
 end
 
-## A file parsed by an earlier walk: its text, the first id of its tree and the tree. It can stand for the file in a
-## later walk while the file has this text.
+## A file parsed by an earlier walk: its text, the first id of its tree, the tree, and whether it was read as the root
+## of a test file (Module.tested). It can stand for the file in a later walk while the file has this text and is read
+## the same way.
 export struct Kept
   text: String
   first_id: Int
   program: Ast.Program
+  tested: Bool
 end
 
 ## The files that a walk may take instead of parsing, by key, and top, an id above every id of those files (the ranges
@@ -149,6 +153,7 @@ struct Parsed
   styled: Bool
   held: Map[String, String]
   stubbed: Bool
+  tested: Bool
 end
 
 struct Collected
@@ -297,8 +302,8 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     )
   end
 
-  taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
-  # A kept tree (Parses) was made by an earlier walk with the same settings, so it already has its `main`.
+  taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text, settings.test_file)
+  # A kept tree (Parses) of a test file was read as one (`take`), so it already has its `main`.
   if settings.test_file and taken.fresh
     tested = try TestMain.add_main(file, taken.program)
     taken = taken.with(program: tested)
@@ -323,15 +328,17 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     styled: false,
     held: {},
     stubbed: false,
+    tested: settings.test_file,
   )
 
   entered = try enter(settings, walk.with(root_dir: root_dir, build: build), first, taken.fresh)
   return run(settings, entered)
 end
 
-# The tree of the file `key` with `text`: the kept one when its text is the same, and else the parse from `next_id`.
-def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text: String) -> Result[Taken]
-  if kept.has_key?(key) and kept[key].text == text
+# The tree of the file `key` with `text`: the kept one when its text is the same and it was read the same way
+# (`tested`: as the root of a test file), and else the parse from `next_id`.
+def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text: String, tested: Bool) -> Result[Taken]
+  if kept.has_key?(key) and kept[key].text == text and kept[key].tested == tested
     return ok(Taken(program: kept[key].program, first_id: kept[key].first_id, fresh: false, stubbed: false))
   end
 
@@ -355,7 +362,7 @@ def take_cached(walk: Walk, key: String, text: String, entry: Optional[CheckCach
     none -> entry = entry
   end
 
-  return take(walk.kept, walk.next_id, key, key, text)
+  return take(walk.kept, walk.next_id, key, key, text, false)
 end
 
 def start_span() -> Source.Span
@@ -701,6 +708,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     styled: styled(entry),
     held: held(entry),
     stubbed: taken.stubbed,
+    tested: false,
   )
 
   return enter(settings, walk, parsed, taken.fresh)
@@ -763,6 +771,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     tree: "",
     clean: false,
     constants: {},
+    tested: parsed.tested,
   )
 
   frame = Frame(

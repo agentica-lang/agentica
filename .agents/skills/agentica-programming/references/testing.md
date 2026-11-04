@@ -46,8 +46,8 @@ end
 A `*_test.agc` file may instead have no `main`: its top-level `test_*`
 functions are its tests, in source order, each named after the function
 without `test_`, `_` as spaces (`test_parses_port` is `parses port`). Each
-takes no parameters and returns `Result[Void]`; a function body needs its
-`return`.
+takes no parameters and returns `Result[Void]`, written so (not a type alias);
+a function body needs its `return`.
 
 ```ruby
 def test_parses_port() -> Result[Void]
@@ -56,9 +56,11 @@ def test_parses_port() -> Result[Void]
 end
 ```
 
-`CHECK-TEST-SIGNATURE`: a test function with parameters, type parameters or
-another result; `CHECK-TEST-NAME`: one named just `test_`; `CHECK-TEST-MAIN`: a
-test file with both `main` and `test_*` functions. `agentica check` checks these
+`CHECK-TEST-MAIN`: a test file with both `main` and `test_*` functions (any
+`test_*` function, a helper of the `Test.run` form too: rename it). Without
+`main`: `CHECK-TEST-SIGNATURE` for a test function with parameters, type
+parameters or another result; `CHECK-TEST-NAME` for one named just `test_`.
+`agentica check` checks these
 for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
 
 - `Test.eq(actual, expected)`: actual first (the expected type comes from the

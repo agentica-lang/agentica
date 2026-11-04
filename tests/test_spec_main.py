@@ -91,6 +91,12 @@ def test_a_test_function_takes_nothing_and_returns_result_void(tmp_path, text):
     assert (problem["code"], start_of(problem)) == ("CHECK-TEST-SIGNATURE", (5, 1))
 
 
+def test_a_test_function_writes_result_void_and_not_an_alias_of_it(tmp_path):
+    text = "type Outcome = Result[Void]\n\ndef test_aliased() -> Outcome\n  return ok()\nend\n"
+    problem = problem_of(check(sample_test_file(tmp_path, text)))
+    assert (problem["code"], start_of(problem)) == ("CHECK-TEST-SIGNATURE", (3, 1))
+
+
 def test_a_test_function_needs_a_name_after_the_prefix(tmp_path):
     problem = problem_of(check(sample_test_file(tmp_path, TEST_PASSING + "\ndef test_() -> Result[Void]\n  return ok()\nend\n")))
     assert (problem["code"], start_of(problem)) == ("CHECK-TEST-NAME", (5, 1))
@@ -98,6 +104,10 @@ def test_a_test_function_needs_a_name_after_the_prefix(tmp_path):
 
 def test_a_test_file_with_test_functions_must_not_declare_main(tmp_path):
     problem = problem_of(check(sample_test_file(tmp_path, TEST_PASSING + MAIN)))
+    assert (problem["code"], start_of(problem)) == ("CHECK-TEST-MAIN", (5, 1))
+    # With a `main`, a `test_*` helper of the `Test.run` form is not checked as a test: the mix is the problem.
+    helper = "def test_helper(x: Int) -> Int\n  return x\nend\n"
+    problem = problem_of(check(sample_test_file(tmp_path, helper + MAIN)))
     assert (problem["code"], start_of(problem)) == ("CHECK-TEST-MAIN", (5, 1))
 
 

@@ -50,7 +50,7 @@ def test_rejects_zero() -> Result[Void]
 end
 ```
 
-A test function takes no parameters and returns `Result[Void]`; anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.
+A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests; with the `main` form, name helpers without the `test_` prefix. Without `main`, a test function takes no parameters and its result is written `Result[Void]` (a type alias of it does not count); anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.
 
 `Test` and `TestCase` are reserved names. `IO.inspect` of a `TestCase` shows `<TestCase>`.
 
