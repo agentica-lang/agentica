@@ -18,9 +18,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- In a `Scenario Outline`, a `<...>` that is not an `Examples` column and has a
-  space, `=`, a quote or `/` (HTML such as `<input type="checkbox">`) stays as
-  written; a mistyped column name is still `PARSE-GHERKIN-PARAMETER`.
+- In a `Scenario Outline`, a `<...>` that is not an `Examples` column and holds
+  `=`, a quote or `/` (HTML such as `<input type="checkbox">`) stays as written;
+  any other unknown `<...>`, such as a mistyped column, is still
+  `PARSE-GHERKIN-PARAMETER`.
 - `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the compute pool, so other
   tasks keep running while a key is derived.
 - A queued KDF call of a cancelled task is skipped.

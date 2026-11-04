@@ -263,14 +263,17 @@ def test_an_outline_keeps_html_that_is_not_a_column_and_still_rejects_a_misspell
     directory = bdd.suite({
         "steps.agc": steps,
         "html.feature": "Feature: Html\n\n  Scenario Outline: row <id>\n%s\n  Examples:\n    | id |\n    | 1 |\n    | 2 |\n" % row,
+        "spaced.feature": ("Feature: Spaced\n\n  Scenario Outline: row\n%s\n  Examples:\n    | first name | id |\n"
+                           "    | Ana | 1 |\n" % row.replace("<id>", "<first nam>")),
         "typo.feature": "Feature: Typo\n\n  Scenario Outline: row\n%s\n  Examples:\n    | id |\n    | 1 |\n" % row.replace("<id>", "<idd>")})
     status, report = bdd.json_test(joined(directory, "html.feature"), "--steps", joined(directory, "steps.agc"))
     assert status == 0
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [
         ("row 1", "passed"), ("row 2", "passed")]
-    status, report = bdd.json_test(joined(directory, "typo.feature"), "--steps", joined(directory, "steps.agc"))
-    assert status == 1
-    assert file_error(report)["code"] == "PARSE-GHERKIN-PARAMETER"
+    for name in ("typo", "spaced"):
+        status, report = bdd.json_test(joined(directory, name + ".feature"), "--steps", joined(directory, "steps.agc"))
+        assert status == 1, name
+        assert file_error(report)["code"] == "PARSE-GHERKIN-PARAMETER", name
 
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
