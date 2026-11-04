@@ -117,12 +117,25 @@ typedef struct {
   made_kind *made;
 } ffi_entry;
 
-/* What the resources that one call makes come from (agc_c_resource.from): `count` resources and owned buffers in GC
-   memory, shared by every resource of the call. */
+/* What the resources that one call makes come from (agc_c_resource.up): the one resource or owned buffer that the call
+   held in `up`, or the `count` of two or more in `ups` (GC memory, shared by every resource of the call). */
 typedef struct {
-  agc_c_resource **items;
+  agc_c_resource *up;
+  agc_c_resource **ups;
   size_t count;
 } made_from;
+
+/* A list of resources of one call: what it holds (origins) or what is open above that (find_above). The first
+   RES_INLINE entries are on the C stack, more in malloc memory. It lives only during one call's hold, release or
+   origins, and each entry stays reachable apart from it: a held resource through the registry or the call's
+   arguments, one above it through `up` (a walk never moves a link past an entry). So the malloc part may hold GC
+   pointers. */
+#define RES_INLINE 8
+typedef struct {
+  agc_c_resource **items;
+  size_t count, cap;
+  agc_c_resource *inline_items[RES_INLINE];
+} res_list;
 
 /* One compute call, in malloc memory: the C arguments copied on the scheduler (each C.String and C.Bytes a malloc'd
    copy), the resource of each resource argument and the owned buffer of each C.Pointer one (NULL for the others),
@@ -248,13 +261,15 @@ typedef struct {
    call does, since a callback lets rt->sync go while it runs, and it, or another task, may close them while C uses
    them. `dying` holds the callbacks closed while they ran, whose last run has ended: libffi's frames of that run were
    still on the stack, so the free waits until C has returned from the native call (free_dying); the registry keeps
-   each one alive. Both change under rt->sync, as Native.callback is a shared builtin too. */
+   each one alive. Both change under rt->sync, as Native.callback is a shared builtin too. `walk` numbers the walks
+   up from held resources (agc_c_resource.seen), under rt->sync. */
 typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
   bool callbacks;
   agc_c_resource **dying;
   size_t dying_count, dying_cap;
+  uint64_t walk;
 } agc_ffi_cache;
 
 static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
@@ -999,16 +1014,17 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
-   pointer when BY_REF), coming from FROM, and owned by the calling task (none for a detached compute call, whose result is dropped and so
-   freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is closed already and was
-   never registered: no close, owner's end or end of the run frees it, and a call that takes it is
-   RUNTIME-NATIVE-CLOSED. */
+   pointer when BY_REF), coming from FROM, and owned by the calling task (none for a detached compute call, whose
+   result is dropped and so freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is
+   closed already and was never registered: no close, owner's end or end of the run frees it, and a call that takes it
+   is RUNTIME-NATIVE-CLOSED. */
 static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
                                void *pointer, const made_from *from) {
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->parent = NULL;
-  res->from = from->items;
-  res->from_count = from->count;
+  res->up = from->up;
+  res->ups = from->ups;
+  res->up_count = from->ups ? from->count : 0;
   res->pointer = pointer;
   res->free = free_call;
   res->free_at = free_at;
@@ -1047,46 +1063,127 @@ static void let_go_of(agc_vm *vm, agc_c_resource *res) {
   if (--res->jobs == 0 && res->closed && !res->freed) free_resource(vm, res);
 }
 
-/* The calls that held these resources, and what each comes from, are over: a resource closed meanwhile is freed by the
-   last of them. A resource is let go before what it comes from, so a statement closed with its database during the
-   call is freed first. */
+static void list_init(res_list *l) {
+  l->items = l->inline_items;
+  l->count = 0;
+  l->cap = RES_INLINE;
+}
+
+static void list_push(res_list *l, agc_c_resource *res) {
+  if (l->count == l->cap) {
+    size_t cap = agc_size_mul(l->cap, 2);
+    agc_c_resource **items = malloc(agc_size_mul(cap, sizeof *items));
+    if (!items) agc_out_of_memory();
+    memcpy(items, l->items, l->count * sizeof *items);
+    if (l->items != l->inline_items) free(l->items);
+    l->items = items;
+    l->cap = cap;
+  }
+  l->items[l->count++] = res;
+}
+
+static void list_free(res_list *l) {
+  if (l->items != l->inline_items) free(l->items);
+}
+
+static size_t up_count(const agc_c_resource *res) { return res->ups ? res->up_count : res->up != NULL; }
+static agc_c_resource **up_slot(agc_c_resource *res, size_t j) { return res->ups ? &res->ups[j] : &res->up; }
+
+/* What the link at SLOT stands for in a walk: a resource that is open, a freed one with two or more parents (walked
+   through), or NULL. A freed one with one parent or none is passed over, and SLOT moves to what it pointed at, so
+   the next walk skips it in one step and a chain of resources each closed once used (x = next(x)) keeps only its
+   open links. Moving past a freed resource keeps every open one above reachable. */
+static agc_c_resource *settle(agc_c_resource **slot) {
+  agc_c_resource *res = *slot;
+  while (res && res->freed && !res->ups) res = res->up;
+  *slot = res;
+  return res;
+}
+
+static uint64_t next_walk(agc_vm *vm) { return ++ffi_cache(vm)->walk; }
+
+/* Adds to ABOVE what is still open above the resources of HELD (E->holds entries), each once: what the calls that
+   made them held, and so on up. The walk is bounded by the open resources above HELD (and the freed ones with two or
+   more parents among them). Freed is final and a held resource cannot be freed (`jobs`), so a walk at the end of a
+   call finds what the walk at its start found. */
+static void find_above(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *held, res_list *above) {
+  uint64_t walk = 0;
+  res_list todo;
+  list_init(&todo);
+  for (uint32_t k = 0; k < e->holds; k++)
+    if (held[k] && (held[k]->up || held[k]->ups)) list_push(&todo, held[k]);
+  while (todo.count) {
+    agc_c_resource *res = todo.items[--todo.count];
+    size_t n = up_count(res);
+    for (size_t j = 0; j < n; j++) {
+      agc_c_resource *p = settle(up_slot(res, j));
+      if (!walk) walk = next_walk(vm);
+      if (!p || p->seen == walk) continue;
+      p->seen = walk;
+      if (!p->freed) list_push(above, p);
+      list_push(&todo, p);
+    }
+  }
+  list_free(&todo);
+}
+
+/* Counts the call in the `jobs` of each resource of HELD and of what is open above them (release_held undoes it). */
+static void hold(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *held) {
+  res_list above;
+  list_init(&above);
+  find_above(vm, e, held, &above);
+  for (uint32_t k = 0; k < e->holds; k++)
+    if (held[k]) held[k]->jobs++;
+  for (size_t k = 0; k < above.count; k++) above.items[k]->jobs++;
+  list_free(&above);
+}
+
+static int newest_resource_first(const void *a, const void *b) {
+  uint64_t x = (*(agc_c_resource *const *)a)->state->id, y = (*(agc_c_resource *const *)b)->state->id;
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+
+/* The calls that held these resources, and what is open above them, are over: a resource closed meanwhile is freed by
+   the last of them. The walk comes before any free, so it finds what hold counted. The held ones are let go first,
+   then the ones above, newest first, so a statement closed with its database during the call is freed first. */
 static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) {
   agc_sync_assert(vm);
-  for (uint32_t k = 0; k < e->holds; k++) {
-    agc_c_resource *res = held[k];
-    if (!res) continue;
-    let_go_of(vm, res);
-    for (size_t j = 0; j < res->from_count; j++) let_go_of(vm, res->from[j]);
-  }
+  res_list above;
+  list_init(&above);
+  find_above(vm, e, held, &above);
+  for (uint32_t k = 0; k < e->holds; k++)
+    if (held[k]) let_go_of(vm, held[k]);
+  if (above.count > 1) qsort(above.items, above.count, sizeof *above.items, newest_resource_first);
+  for (size_t k = 0; k < above.count; k++) let_go_of(vm, above.items[k]);
+  list_free(&above);
 }
 
 /* Whether a call of E makes a resource, as its result or an out parameter. */
 static bool makes_resources(const ffi_entry *e) { return e->resource || e->made; }
 
-static void add_once(agc_c_resource **items, size_t *n, agc_c_resource *res) {
-  for (size_t k = 0; k < *n; k++)
-    if (items[k] == res) return;
-  items[(*n)++] = res;
-}
-
-/* What the resources that a call makes come from: what it holds (HELD, E->holds entries) and what each of those comes
-   from, once each, in that order. Each set is complete when it is made, so a hold reads one level and walks no chain.
-   Its size is the number of resources above the new one, which only a program that runs native code can grow (and
-   --deny-native refuses). Under rt->sync, before the release of HELD, which keeps every entry alive across the
-   allocation. */
-static made_from origins(const ffi_entry *e, agc_c_resource *const *held) {
-  size_t cap = 0;
-  for (uint32_t k = 0; k < e->holds; k++)
-    if (held[k]) cap = agc_size_add(cap, agc_size_add(1, held[k]->from_count));
-  if (!cap) return (made_from){NULL, 0};
-  agc_c_resource **items = agc_alloc(agc_size_mul(cap, sizeof *items));
-  size_t n = 0;
+/* What the resources that a call makes come from: the distinct resources and owned buffers that it holds (HELD,
+   E->holds entries). One, the common case, needs no allocation. The links of each are settled first, so the new
+   resource never keeps a freed one alive. Under rt->sync, before the release of HELD, which keeps each one alive
+   across the allocation. */
+static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *held) {
+  res_list distinct;
+  list_init(&distinct);
+  uint64_t walk = next_walk(vm);
   for (uint32_t k = 0; k < e->holds; k++) {
-    if (!held[k]) continue;
-    add_once(items, &n, held[k]);
-    for (size_t j = 0; j < held[k]->from_count; j++) add_once(items, &n, held[k]->from[j]);
+    agc_c_resource *res = held[k];
+    if (!res || res->seen == walk) continue;
+    res->seen = walk;
+    for (size_t j = 0, n = up_count(res); j < n; j++) (void)settle(up_slot(res, j));
+    list_push(&distinct, res);
   }
-  return (made_from){items, n};
+  made_from from = {distinct.count ? distinct.items[0] : NULL, NULL, distinct.count};
+  if (distinct.count > 1) {
+    from.ups = agc_alloc(agc_size_mul(distinct.count, sizeof *from.ups));
+    memcpy(from.ups, distinct.items, distinct.count * sizeof *from.ups);
+    from.up = NULL;
+  }
+  list_free(&distinct);
+  return from;
 }
 
 /* Frees the callbacks of `dying`, once C has returned from a native call: none of them runs any more. */
@@ -1493,7 +1590,7 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   compute_call *c = data;
   const ffi_entry *e = c->entry;
   /* Before the release, which may free and unregister a held resource that nothing else keeps alive. */
-  made_from from = c->ran && makes_resources(e) ? origins(e, c->held) : (made_from){NULL, 0};
+  made_from from = c->ran && makes_resources(e) ? origins(vm, e, c->held) : (made_from){NULL, NULL, 0};
   release_held(vm, e, c->held);
   agc_value v = agc_void();
   /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
@@ -1545,15 +1642,6 @@ static void find_held(agc_vm *vm, const ffi_entry *e, const agc_list *values, ag
   for (uint32_t k = 0; k < e->count; k++) {
     held[k] = held_by(vm, e, values, k);
     if (e->structs[k]) struct_held(vm, e->structs[k], agc_list_get(values, e->arg[k]), held, &holds);
-  }
-}
-
-/* Counts the call in the `jobs` of each resource of HELD and of what each comes from (release_held undoes it). */
-static void hold(const ffi_entry *e, agc_c_resource *const *held) {
-  for (uint32_t k = 0; k < e->holds; k++) {
-    if (!held[k]) continue;
-    held[k]->jobs++;
-    for (size_t j = 0; j < held[k]->from_count; j++) held[k]->from[j]->jobs++;
   }
 }
 
@@ -1618,7 +1706,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
       if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
     find_held(vm, e, values, c->held);
-    hold(e, c->held);
+    hold(vm, e, c->held);
     if (e->result_struct) c->out.p = c->structs + used;
     agc_io_compute(vm, &compute_io, c);
     return agc_void();
@@ -1653,16 +1741,16 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
       if (!held) agc_out_of_memory();
     }
     find_held(vm, e, values, held);
-    if (holding) hold(e, held);
+    if (holding) hold(vm, e, held);
   }
   native_site site = {.vm = vm, .span = span, .outer = current_site};
   current_site = &site;
   agc_ffi_invoke(e->call, fn, in, &out);
   current_site = site.outer;
-  made_from from = {NULL, 0};
+  made_from from = {NULL, NULL, 0};
   if (held) {
     /* Before the release, as in compute_done. The values of the arguments keep what HELD points at alive. */
-    if (makes && !site.failed) from = origins(e, held);
+    if (makes && !site.failed) from = origins(vm, e, held);
     if (holding) release_held(vm, e, held);
     if (held != stack_held) free(held);
   }

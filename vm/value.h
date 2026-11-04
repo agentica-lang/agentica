@@ -300,7 +300,7 @@ struct agc_ffi_call;
 /* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned,
    the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
    entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
-   it now, directly or through a resource that comes from it (`from`). A close marks it `closed` and takes it off its
+   it now, directly or through a resource that comes from it (`up`). A close marks it `closed` and takes it off its
    owner; the free runs then, or at the end of the last of those calls, so C never sees the pointer freed while a pool
    thread uses it. An owned buffer (Native.memory_pointer or
    Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
@@ -315,14 +315,19 @@ struct agc_ffi_call;
    A callback (Native.callback) has `callback` set to its data in GC memory, which this keeps alive while C may call
    it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
    and `free` is NULL. NULL for the others.
-   `from` (`from_count` entries, GC memory) is what a resource of an extern function comes from: what the call that
-   made it held, and what each of those comes from, once each (a database under its statement). A call that holds the
-   resource holds these too, so a close of one of them during a compute call on the resource frees it at the end of
-   that call. NULL for the others. Changes under rt->sync. */
+   `up` is what a resource of an extern function comes from, the resource or owned buffer that the call which made it
+   held (a database under its statement); `ups` (`up_count` entries, GC memory) holds them instead when there were two
+   or more, and `up` is then NULL. A call that holds the resource holds what is still open above it too, so a close of
+   one of them during a compute call on the resource frees it at the end of that call. An entry that points at a freed
+   resource with at most one parent of its own is moved to that parent when a walk meets it, so a chain keeps no freed
+   links.
+   `seen` marks a resource in such a walk (agc_ffi_cache.walk). NULL and 0 for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
-  struct agc_c_resource **from;
-  size_t from_count;
+  struct agc_c_resource *up;
+  struct agc_c_resource **ups;
+  size_t up_count;
+  uint64_t seen;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;

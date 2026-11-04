@@ -1590,14 +1590,14 @@ CHILD_EXTERN = """extern "{library}"
   def peer_set_flag() -> Void
 end
 
-def hold_child(res: Res) -> Result[Int]
-  child = %s
+def hold_child(child: Child) -> Result[Int]
   return ok(peer_child_hold(child, 20_000))
 end
 
-def main() -> Void
-  res = peer_res_open(9).unwrap!
-  holder = Task.spawn(&hold_child, res)
+# Starts a compute call on CHILD in another task, closes RES while it runs, and prints whether RES is closed, the
+# frees of RES before the call returns, the call's result, the frees after it and the frees while busy.
+def close_during_hold(res: Res, child: Child) -> Void
+  holder = Task.spawn(&hold_child, child)
   n = 0
   while peer_res_holding() == 0 and n < 2000
     Task.sleep(1)
@@ -1615,28 +1615,58 @@ def main() -> Void
   end
   puts(peer_res_frees())
   puts(peer_res_busy_frees())
-  puts(peer_child_frees())
 end
+
 """
 
 
 # A compute call on a resource also holds what that resource comes from, the resources of the call that made it
 # (#1080: mysql_stmt_execute on a Stmt while another task closes its Handle). The close marks the parent closed at once,
 # and its free runs only when the call on the child returns, whether a fast call, a compute call or an out parameter made
-# the child, and through a child of a child too. The child is freed at the end of its task.
+# the child, and through a child of a child too. The children are freed at the end of main.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-@pytest.mark.parametrize("make, children", [
-    ("peer_child_open(res).unwrap!", 1),
-    ("child_open_pool(res).unwrap!", 1),
-    ("peer_child_open_out(res).child", 1),
-    ("peer_child_of(peer_child_open(res).unwrap!).unwrap!", 2),
+@pytest.mark.parametrize("make", [
+    "peer_child_open(res).unwrap!",
+    "child_open_pool(res).unwrap!",
+    "peer_child_open_out(res).child",
+    "peer_child_of(peer_child_open(res).unwrap!).unwrap!",
 ])
-def test_a_compute_call_on_a_child_keeps_its_parent_until_it_returns(tmp_path, peer, schedulers, make, children):
-    source = CHILD_EXTERN.format(library=literal(peer)).replace("%s", make)
-    result = agentica("--schedulers", schedulers, program(tmp_path, source))
+def test_a_compute_call_on_a_child_keeps_its_parent_until_it_returns(tmp_path, peer, schedulers, make):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  close_during_hold(res, %s)
+  puts(peer_child_frees())
+end
+""" % make
+    result = agentica("--schedulers", schedulers, program(tmp_path, CHILD_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", str(children), ""]
+    assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", "0", ""]
+
+
+# A long chain of children (x = next(x), as libgit2's git_commit_parent walks commits), each closed once used or all
+# kept open, costs time and memory in proportion to its length: the call on the last child still keeps the first
+# resource until it returns. A cost that grew with the square of the length would take minutes here.
+@NATIVE_CALLS
+@pytest.mark.parametrize("close", ["Native.close(c)", ""])
+def test_a_long_chain_of_children_keeps_its_root_at_linear_cost(tmp_path, peer, close):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  c = peer_child_open(res).unwrap!
+  for _k in 1..20_000
+    next = peer_child_of(c).unwrap!
+    %s
+    c = next
+  end
+  close_during_hold(res, c)
+end
+""" % close
+    started = time.monotonic()
+    result = agentica("--schedulers", "1", program(tmp_path, CHILD_EXTERN.format(library=literal(peer)) + main))
+    elapsed = time.monotonic() - started
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", ""]
+    assert elapsed < scaled(15.0)
 
 
 # The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
