@@ -1,16 +1,21 @@
 /*
  * Process and child channel builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9),
  * in orders set by the calls: a close behind a read's START, a read cancelled from another thread, an exit and a
- * deadline (both orders), a read's deadline and its pause, a wait cancelled past its deadline, and the channel.
- * vm-tsan runs it.
+ * deadline (both orders), a read's deadline and its pause, a wait cancelled past its deadline, the channel, and a
+ * spawn in a callback of native code. vm-tsan runs it.
  */
 #include "../core.h"
 #include "io_harness.h"
 #include "test_support.h"
 
+#include <setjmp.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#if defined(__GLIBC__) && !defined(AGC_NO_GC)
+#include <malloc.h>
+#define MALLOC_COUNT 1
+#endif
 
 #if defined(__linux__) || defined(__APPLE__)
 #define on_thread agc_test_on_thread
@@ -269,6 +274,41 @@ static void test_the_channel_through_posted_steps(void) {
   close_child();
   settle();
 }
+
+/* The code of the failure of a call of B, or "nothing" when it returns. No local lives across the setjmp. */
+static const char *fail_code(const agc_builtin *b, agc_value *args) {
+  if (setjmp(vm.fail) != 0) return vm.outcome->code;
+  (void)b->fn(&vm, args, 0);
+  return "nothing";
+}
+
+/* Spawns in a callback of native code, on the scheduler thread, where a spawn parks: each fails with
+   RUNTIME-NATIVE-CALLBACK (caught at vm.fail, where a failure outside a turn goes), after the launch it made is freed
+   and before the child exists (#1064). With glibc's count of the bytes malloc has out (values live on the GC heap,
+   which is not malloc's), a thousand refusals grow it by less than 64 bytes each, where a launch is kilobytes. */
+static void spawn_in_callback(void *arg) {
+  (void)arg;
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)"Process.spawn", strlen("Process.spawn"), 3);
+  assert(b);
+  agc_value args[] = {text("sh"), sh("exit 0"), agc_int(5000)};
+  vm.task = one;
+  vm.in_turn = false;
+  one->callbacks = 1;
+  assert(strcmp(fail_code(b, args), "RUNTIME-NATIVE-CALLBACK") == 0);
+#if MALLOC_COUNT
+  size_t before = mallinfo2().uordblks;
+  for (int k = 0; k < 1000; k++) assert(strcmp(fail_code(b, args), "RUNTIME-NATIVE-CALLBACK") == 0);
+  assert(mallinfo2().uordblks < before + (size_t)64 * 1000);
+#endif
+  one->callbacks = 0;
+  vm.in_turn = true;
+}
+
+static void test_a_spawn_in_a_callback(void) {
+  assert(agc_io_share(&vm, false));
+  on_thread(spawn_in_callback, NULL);
+  settle();
+}
 #endif
 
 int main(void) {
@@ -285,6 +325,7 @@ int main(void) {
   test_a_read_deadline_stops_the_child_before_the_task_takes_it();
   test_a_wait_cancelled_past_its_deadline();
   test_the_channel_through_posted_steps();
+  test_a_spawn_in_a_callback();
 #endif
   puts("process threads tests passed");
   return 0;

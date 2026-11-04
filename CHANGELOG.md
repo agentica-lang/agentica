@@ -43,6 +43,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A file, process, socket, stdin, HTTP server or `Native.wait_*` call inside a
   native callback no longer leaks memory when it fails with
   `RUNTIME-NATIVE-CALLBACK`.
+- With one scheduler, a `Process.parent_send` that a native callback starts and
+  that is refused while its line is still being written no longer corrupts the
+  channel or crashes the program: a later send gives
+  `error("process: the channel is in use")` until that line is out.
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
 
