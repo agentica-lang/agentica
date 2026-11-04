@@ -13,8 +13,8 @@ OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
 OP.message(error_text: String) -> String
-Arg(name, help = "", kind = Kind.String, choices = [], metavar = "")
-Opt(name, short = "", kind = Kind.String, default = "", choices = [], help = "", metavar = "")
+Arg(name, help = "", kind = Kind.String, choices = [], metavar = "", min = none, max = none)
+Opt(name, short = "", kind = Kind.String, default = "", choices = [], help = "", metavar = "", min = none, max = none)
 Kind: Int, Float, String, Flag
 ```
 
@@ -32,6 +32,12 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
 - Arguments and options are two lists (a list holds one type). Arguments are
   required, in order. `default` is a String converted by `kind`; `""` means
   none. A Flag has no default or choices. `choices` compare as text.
+- `min: some(1), max: some(65535)` limit an Int option or argument (and its
+  default); a value outside is `invalid value for --port: '0' is below the
+  minimum 1`. On another kind, or with `min` above `max`, they are a wrong
+  specification.
+- On/off: no Bool kind; use `Opt(name: "stats", choices: ["on", "off"],
+  default: "off")` and `OP.string(p, "stats") == "on"`. A Flag takes no value.
 - Words: `--port 3000`, `--port=3000`, `-p 3000`, `-p3000`, `-p=3000`, joined
   short flags `-vq`, `--` ends the options. As in argparse, the next word is a
   value only if it does not start with `-`, or is `-` or a negative number
@@ -48,7 +54,9 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   specification (duplicate name, bad default, an `Arg` of kind `Flag`, a short
   name that is a digit, `-` or `=`) is an error of `parse` too.
 - `--help` or `-h`: `parse` returns an error for which `OP.help?` is true; the
-  text is `OP.usage(parser)`. Print an error you handle yourself with
+  text is `OP.usage(parser)`: value names `INT`, `FLOAT`, `a|b` for choices,
+  else the name in capitals (set `metavar` for `DIR`); notes are
+  `[default: X] [min: 0, max: 9]`. Print an error you handle yourself with
   `OP.message(error)` (it leaves out the marker line of a help request).
   `OP.run!(load())` prints the help and exits 0, or
   prints any other error to stderr and exits 2, or returns the value; call it

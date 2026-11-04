@@ -16,6 +16,10 @@
 ## - `--` ends the options; every later word is a positional argument, as is a lone `-`.
 ## - `--help` or `-h` asks for the usage text: `parse` then returns an error for which `help?` is true.
 ## - An option given twice keeps its last value.
+## - An `Int` option or argument may have a range: `min` and `max` (each `some(n)` or `none`). A value outside it is
+##   refused as any other bad value is, and the help shows it (`[min: 0, max: 65535]`).
+## - On and off is a `String` option with `choices: ["on", "off"]`, read with `OP.string(p, "stats") == "on"`: there
+##   is no Bool kind, because a `Flag` takes no value and a value that is one of two words is what `choices` says.
 ##
 ## Every error of `parse` is `"program: message"` plus a hint line (`Try 'program --help' for more information`),
 ## and the message names the option or argument. Print an error with `message(error)`, not as it is: for a help
@@ -37,18 +41,23 @@ export enum Kind
 end
 
 ## A positional argument. All are required, in the order of the list given to `new`. `metavar` is the name shown in
-## the usage line (default: `name`). `choices` are compared as text.
+## the usage line (default: `name`). `choices` are compared as text. `min` and `max` limit an `Int` argument
+## (`none`: no limit).
 export struct Arg
   name: String
   help: String = ""
   kind: Kind = Kind.String
   choices: List[String] = []
   metavar: String = ""
+  min: Optional[Int] = none
+  max: Optional[Int] = none
 end
 
 ## An option. `name` is the long name (`--port`), `short` one character (`-p`) or "". `default` is a String
 ## converted by `kind` (it applies when the option is not given; "" means no default, and a `Flag` has none).
-## `choices` are compared as text. `metavar` is the value name shown in the help (default: `name` in capitals).
+## `choices` are compared as text. `metavar` is the value name shown in the help (default: the choices as `a|b`,
+## else `INT` or `FLOAT` for those kinds, else `name` in capitals). `min` and `max` limit an `Int` option (`none`: no
+## limit); they also apply to the default.
 export struct Opt
   name: String
   short: String = ""
@@ -57,6 +66,8 @@ export struct Opt
   choices: List[String] = []
   help: String = ""
   metavar: String = ""
+  min: Optional[Int] = none
+  max: Optional[Int] = none
 end
 
 ## The interface of a program, built by `new`.
@@ -86,6 +97,8 @@ struct Slot
   choices: List[String]
   help: String
   metavar: String
+  min: Optional[Int]
+  max: Optional[Int]
   positional: Bool
   flag: Bool
 end
@@ -155,6 +168,8 @@ export def usage(parser: Parser) -> String
     choices: [],
     help: "show this help",
     metavar: "",
+    min: none,
+    max: none,
     positional: false,
     flag: true,
   )
@@ -262,6 +277,15 @@ def kind_name(kind: Kind) -> String
   end
 end
 
+def int_kind?(kind: Kind) -> Bool
+  case kind
+    Kind.Int -> return true
+    Kind.Float -> return false
+    Kind.String -> return false
+    Kind.Flag -> return false
+  end
+end
+
 def flag_kind?(kind: Kind) -> Bool
   case kind
     Kind.Flag -> return true
@@ -282,6 +306,8 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       choices: arg.choices,
       help: arg.help,
       metavar: arg.metavar,
+      min: arg.min,
+      max: arg.max,
       positional: true,
       flag: flag_kind?(arg.kind),
     )
@@ -296,6 +322,8 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       choices: opt.choices,
       help: opt.help,
       metavar: opt.metavar,
+      min: opt.min,
+      max: opt.max,
       positional: false,
       flag: flag_kind?(opt.kind),
     )
@@ -352,6 +380,12 @@ def check_slot(parser: Parser, slot: Slot) -> Result[Void]
   end
   if slot.flag and (!slot.default.empty? or !slot.choices.empty?)
     return bad_spec(parser, "the flag #{label(slot)} has no default or choices")
+  end
+  if (slot.min.some? or slot.max.some?) and !int_kind?(slot.kind)
+    return bad_spec(parser, "#{label(slot)} has min or max but is not an Int")
+  end
+  if slot.min.some? and slot.max.some? and slot.min.unwrap! > slot.max.unwrap!
+    return bad_spec(parser, "the min of #{label(slot)} is above its max")
   end
   if slot.default.empty? or slot.flag
     return ok()
@@ -548,6 +582,12 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
       if !number.ok?
         return error("'#{text}' is not an Int")
       end
+      if slot.min.some? and number.unwrap! < slot.min.unwrap!
+        return error("'#{text}' is below the minimum #{slot.min.unwrap!}")
+      end
+      if slot.max.some? and number.unwrap! > slot.max.unwrap!
+        return error("'#{text}' is above the maximum #{slot.max.unwrap!}")
+      end
       return ok(parsed.with(ints: parsed.ints.put(slot.name, number.unwrap!)))
     Kind.Float ->
       number = text.to_f
@@ -598,11 +638,43 @@ def head(slot: Slot) -> String
   return "#{names} #{value_name(slot)}"
 end
 
+# The value name of an option: the metavar, else the choices (`on|off`), else the kind for a number, else the name.
 def value_name(slot: Slot) -> String
-  if slot.metavar.empty?
-    return slot.name.upcase
+  if !slot.metavar.empty?
+    return slot.metavar
   end
-  return slot.metavar
+  if !slot.choices.empty?
+    return slot.choices.join("|")
+  end
+  case slot.kind
+    Kind.Int -> return "INT"
+    Kind.Float -> return "FLOAT"
+    Kind.String -> return slot.name.upcase
+    Kind.Flag -> return slot.name.upcase
+  end
+end
+
+# The notes after the help text, each in brackets so that parentheses in the help text itself read well.
+def notes(slot: Slot) -> List[String]
+  found: List[String] = []
+  if !slot.default.empty?
+    found = found.push("[default: #{slot.default}]")
+  end
+  # The choices are already the value name of an option without a metavar.
+  if !slot.choices.empty? and (slot.positional or !slot.metavar.empty?)
+    found = found.push("[choices: #{slot.choices.join(", ")}]")
+  end
+  limits: List[String] = []
+  if slot.min.some?
+    limits = limits.push("min: #{slot.min.unwrap!}")
+  end
+  if slot.max.some?
+    limits = limits.push("max: #{slot.max.unwrap!}")
+  end
+  if !limits.empty?
+    found = found.push("[#{limits.join(", ")}]")
+  end
+  return found
 end
 
 def wider(a: Int, b: Int) -> Int
@@ -613,13 +685,7 @@ def wider(a: Int, b: Int) -> Int
 end
 
 def row(slot: Slot, width: Int) -> String
-  text = slot.help
-  if !slot.default.empty?
-    text = "#{text} (default: #{slot.default})".strip
-  end
-  if !slot.choices.empty?
-    text = "#{text} (choices: #{slot.choices.join(", ")})".strip
-  end
+  text = [slot.help].concat(notes(slot)).select do |part| !part.empty? end.join(" ")
   line = "  #{head(slot)}"
   if text.empty?
     return line

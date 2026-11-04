@@ -8,8 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
+  (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
+
 ### Changed
 
+- **Breaking:** the help of `std/option_parser` writes its notes in square
+  brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows
+  `INT` and `FLOAT` for those kinds and `a|b` for choices as the default value
+  name (`--port INT`, `--stats on|off`).
 - **Breaking:** an import alias that its file never uses is an error
   (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
   without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands
