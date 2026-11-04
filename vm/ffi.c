@@ -251,6 +251,9 @@ typedef struct agc_ffi_cache {
 } agc_ffi_cache;
 
 static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
+/* The kind of a compute call, defined after its halves: the end of the run walks only the jobs of this kind
+   (agc_io_compute_each), since the compute pool runs other kinds too (vm/crypto.c's KDF jobs). */
+static const agc_io_kind compute_io;
 
 static uint64_t text_hash(const char *data, size_t len) {
   uint64_t h = 1469598103934665603ULL;
@@ -891,7 +894,7 @@ static void abandon_queued(void *data, void *arg) {
   (void)atomic_compare_exchange_strong(&c->phase, &queued, CALL_ABANDONED);
 }
 
-void agc_ffi_stop_queued(agc_vm *vm) { agc_io_compute_each(vm, abandon_queued, NULL); }
+void agc_ffi_stop_queued(agc_vm *vm) { agc_io_compute_each(vm, &compute_io, abandon_queued, NULL); }
 
 static void add_running_holds(void *data, void *arg) {
   const compute_call *c = data;
@@ -912,7 +915,7 @@ static void add_running_holds(void *data, void *arg) {
    is done with its pointers, so neither counts. */
 static held_set running_holds(agc_vm *vm) {
   held_set set = {NULL, 0, 0};
-  agc_io_compute_each(vm, add_running_holds, &set);
+  agc_io_compute_each(vm, &compute_io, add_running_holds, &set);
   return set;
 }
 

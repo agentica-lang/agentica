@@ -27,9 +27,8 @@ joins the pool, and the pool would wait for a FIFO that never writes.
 
 - **Regular files** (and directories) use the libuv thread pool, since a read or
   write on them ends in bounded time. The other bounded pool work is DNS
-  (`getaddrinfo`), the TLS setup jobs that load CA, certificate and key files
-  (§10.2.2, pool size), and the key derivations of `KDF`, whose work
-  `vm/crypto.c` caps before the job starts.
+  (`getaddrinfo`) and the TLS setup jobs that load CA, certificate and key files
+  (§10.2.2, pool size).
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits
@@ -52,7 +51,10 @@ joins the pool, and the pool would wait for a FIFO that never writes.
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
   never takes a libuv pool thread. What the end of the run does with compute
-  calls is in §14.4 (steps 0 and 3).
+  calls is in §14.4 (steps 0 and 3). The key derivations of `KDF` run there
+  too, as jobs of their own kind (`kdf_io` in `vm/crypto.c`, work capped before
+  the job starts): a cancel skips a queued one and drops the key of a running
+  one, and §14.4 neither stops nor waits for them.
 
 Known exceptions (the mechanisms are in §10.2.2):
 

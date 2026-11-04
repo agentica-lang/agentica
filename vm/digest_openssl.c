@@ -2,7 +2,8 @@
  * The digest adapter over OpenSSL's EVP interface (digests, HMAC, Triple DES
  * CBC, AES-256-GCM, CMAC, PBKDF2 and scrypt), RAND_bytes, CRYPTO_memcmp and
  * OPENSSL_cleanse, the same library that tls_openssl.c links (system OpenSSL 3
- * or the vendored one). Adapter layer, behind digest.h. Design: docs/vm/15-layers.md §15.1.
+ * or the vendored one). Adapter layer, behind digest.h. Design:
+ * docs/vm/15-layers.md §15.1.
  */
 #include "digest.h"
 

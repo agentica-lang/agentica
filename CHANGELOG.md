@@ -10,8 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the thread pool, so other
-  tasks keep running while a key is derived.
+- `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the compute pool, so other
+  tasks keep running while a key is derived; a queued call of a cancelled task
+  is skipped, and a call inside a native callback is `RUNTIME-NATIVE-CALLBACK`.
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
 

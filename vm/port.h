@@ -675,11 +675,12 @@ void agc_unregister(agc_vm *vm, agc_resource *r);
    entries, in no order). */
 agc_resource **agc_registry_copy(agc_vm *vm, size_t *count);
 /* For the end of the run (docs/vm/14-core-invariants.md §14.4), on the I/O thread once the schedulers have joined.
-   compute_each calls FN(DATA, ARG) for the data of each compute call whose job still holds it (agc_io_compute).
+   compute_each calls FN(DATA, ARG) for the data of each compute call of KIND whose job still holds it (agc_io_compute;
+   other kinds, such as the KDF jobs of vm/crypto.c, hold other data).
    wait_for drives the loop until READY(VM, ARG) or BY (agc_clock_ms); true when READY. run_aside runs FN(DATA) on a
    thread of its own and waits for it until BY: true when it ended; else the thread is left to the exit, with DATA,
    and FN may still run. */
-void agc_io_compute_each(agc_vm *vm, void (*fn)(void *data, void *arg), void *arg);
+void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *data, void *arg), void *arg);
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by);
 bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);

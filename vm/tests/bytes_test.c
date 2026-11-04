@@ -380,7 +380,7 @@ static void test_crypto_keys(void) {
 
 /* AES-256-GCM and the KDFs on empty Bytes and on Bytes with a NUL and a 0xFF: empty data and auth_data are valid,
    a key, IV or decrypt input of a wrong size and a bad iteration count or length are error Results. A KDF with good
-   arguments is a pool job, which this VM without a task cannot park on: tests/fixtures/vm/kdf.agc and
+   arguments is a compute job, which this VM without a task cannot park on: tests/fixtures/vm/kdf.agc and
    tests/test_vm_crypto.py derive keys. */
 static void test_gcm_and_kdf_keys(void) {
   char key_text[32], iv_text[12];

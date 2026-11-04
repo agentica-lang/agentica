@@ -2,7 +2,7 @@
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
  * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
  * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
- * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, a pool job), and
+ * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, compute jobs), and
  * the Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. All
  * but the text forms come from the OpenSSL adapter (digest.h). Service layer.
  * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648
@@ -30,7 +30,7 @@ typedef struct {
   uint64_t n, r, p;    /* scrypt */
 } kdf_params;
 
-/* One key derivation on the libuv pool. The password, the salt and the key are malloc'd, so the pool thread touches
+/* One key derivation on the compute pool. The password, the salt and the key are malloc'd, so the pool thread touches
    no GC memory; the done half copies the key into a Bytes. Only the pool work writes `key` and `derived`; the done
    half (or `drop`, for a job dropped unfinished) owns the rest and wipes the password and the key before it frees
    them. */
@@ -534,10 +534,10 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
 /* The most memory scrypt may take, 128 * r * (n + p + 2) bytes of native memory outside the GC: the default cap of
    OpenSSL 3's scrypt provider (1025 MiB), which n = 2^20 with r = 8 (RFC 7914 §12, the last vector) fits. */
 #define SCRYPT_MAX_MEMORY ((uint64_t)1025 * 1024 * 1024)
-/* A KDF runs to its end on a libuv pool thread, where neither --max-steps, a cancel nor a signal stops it, and it
-   holds that thread, which file calls share, meanwhile (docs/vm/14-core-invariants.md §14.1 keeps pool work bounded).
-   So its work is capped before the call, so the worst valid call takes tens of seconds at most on one core: about 80
-   and 32 times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block;
+/* A KDF runs on the compute pool (docs/vm/14-core-invariants.md §14.1), where neither --max-steps, a cancel nor a
+   signal stops it once it started, and it holds one of that pool's threads (one per scheduler, shared with the
+   `compute def` calls) meanwhile. So its work is capped before the call, so the worst valid call takes tens of seconds
+   at most on one core: about 80 and 32 times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block;
    scrypt with n = 2^17, r = 8, p = 1).
    PBKDF2's work is iterations * ceil(length / 32). scrypt's is r * p * (n + 16): each of the p lanes mixes n blocks of
    128 * r bytes, and PBKDF2 makes and reads each lane's block too, which costs about as much as 16 more blocks (a
@@ -569,9 +569,10 @@ static void kdf_work(void *data) {
   k->derived = kdf_compute(&k->kdf, k->password, k->password_n, k->salt, k->salt_n, k->key, k->key_n);
 }
 
-/* On the scheduler that resumes the task, or between turns for a cancelled task, whose value is dropped. A library
-   failure fails the task (RUNTIME-INTERNAL), as when the call ran on the scheduler; a dropped value has no task to
-   fail, so it gives Void. vm->in_turn tells the two apart, as compute_done in vm/ffi.c does. */
+/* On the scheduler that resumes the task, or between turns for a cancelled task, whose value is dropped (its work was
+   skipped if it was still queued, so `derived` is false). A library failure fails the task (RUNTIME-INTERNAL), as when
+   the call ran on the scheduler; a dropped value has no task to fail, so it gives Void. vm->in_turn tells the two
+   apart, as compute_done in vm/ffi.c does. */
 static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   kdf_job *k = data;
@@ -589,17 +590,10 @@ static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-/* No deadline: the job is never expired, and a detached one runs to its end and is dropped by kdf_done. */
-static agc_value kdf_expired(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_error_value("KDF: operation timed out");
-}
-
 static void kdf_drop(void *data) { kdf_free(data); }
 
-static const agc_io_kind kdf_io = {kdf_work, kdf_done, kdf_expired, kdf_drop, false, "kdf", NULL, false, NULL};
+/* A compute job has no deadline, so no `expired` half. */
+static const agc_io_kind kdf_io = {kdf_work, kdf_done, NULL, kdf_drop, false, "kdf", NULL, false, NULL};
 
 /* A malloc'd copy of the n bytes at data (NULL for none). */
 static uint8_t *kdf_copy(const uint8_t *data, size_t n) {
@@ -611,9 +605,9 @@ static uint8_t *kdf_copy(const uint8_t *data, size_t n) {
 }
 
 /* The shared start of the KDF builtins: checks the password, salt and length (args 0, 1 and the last, at length_at),
-   then derives the key on the libuv pool with copies of the inputs, so the task parks and the other tasks of its
-   scheduler run meanwhile; the job's done half gives the call's value. The fuzz driver (rt->no_files) starts no pool
-   job, so it gets no further than the checks. */
+   then derives the key on the compute pool with copies of the inputs, so the task parks and the other tasks of its
+   scheduler run meanwhile; the job's done half gives the call's value. The fuzz driver (rt->no_files) starts no job,
+   so it gets no further than the checks. */
 static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const kdf_params *kdf, uint32_t span) {
   size_t password_n, salt_n;
   const uint8_t *password = agc_bytes_data(vm, args[0], &password_n);
@@ -626,6 +620,11 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
     return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
+  /* The call parks, which a callback of native code cannot (agc_task_parking), and a loop that cannot start fails in
+     agc_io_loop: both are refused here, before the copies of the password exist, as vm/ffi.c does for a compute call. */
+  if (vm->task->callbacks)
+    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a KDF call", span);
+  (void)agc_io_loop(vm);
   kdf_job *k = calloc(1, sizeof *k);
   if (!k) agc_out_of_memory();
   k->kdf = *kdf;
@@ -637,7 +636,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   k->password_n = password_n;
   k->salt = kdf_copy(salt, salt_n);
   k->salt_n = salt_n;
-  agc_io_start(vm, &kdf_io, k, agc_void(), -1);
+  agc_io_compute(vm, &kdf_io, k);
   return agc_void();
 }
 
