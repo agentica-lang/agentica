@@ -292,7 +292,7 @@ end
 def make_folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
   path = args[0]
   Dir.mkdir(path, 5000).unwrap!
-  return BDD.after(ctx) do |closing| remove(path) end
+  return BDD.after(ctx) do |_| remove(path) end
 end
 
 def main() -> Void

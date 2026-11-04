@@ -62,7 +62,7 @@ def main() -> Void
   end
   puts(Result.unwrap!(File.try_lock(file, 5000)))
   if args[1] == "spawn"
-    child = Result.unwrap!(Process.spawn_captured("sleep", ["60"], ".", 5000))
+    _child = Result.unwrap!(Process.spawn_captured("sleep", ["60"], ".", 5000))
     Result.unwrap!(File.close(file, 5000))
     puts("closed")
   end

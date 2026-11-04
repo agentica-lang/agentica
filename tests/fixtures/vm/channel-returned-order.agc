@@ -16,7 +16,7 @@ def receiver(ch: Channel[Int]) -> Result[Int]
 end
 
 def parent(ctx: Ctx) -> Result[Int]
-  r = Task.spawn(&receiver, ctx.ch)
+  _r = Task.spawn(&receiver, ctx.ch)
   Task.await(ctx.gate)
   zero = 0
   return ok(1 / zero)

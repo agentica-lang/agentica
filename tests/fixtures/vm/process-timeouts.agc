@@ -26,7 +26,7 @@ def main() -> Void
   IO.inspect(Process.read_line(r, 5000))
   Process.close(r)
   s = Result.unwrap!(Process.spawn("cat", [], 5000))
-  t = Task.spawn(&hold, s)
+  _t = Task.spawn(&hold, s)
   Task.sleep(20)
   puts("done")
 end

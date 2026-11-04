@@ -97,7 +97,7 @@ def main() -> Void
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   server = Task.spawn(&echo_once, listener)
   socket = TCP.connect("127.0.0.1", TCP.local_port(listener), 2000).unwrap!
-  sent = TCP.send(socket, "hello\n", 2000)
+  _ = TCP.send(socket, "hello\n", 2000)
   puts(TCP.read_line(socket, 2000))
   puts(Task.await(server))
   TCP.close(socket)
@@ -223,7 +223,7 @@ end
 def main() -> Void
   context = TLS.client_context(TlsClientOptions()).unwrap!
   socket = TLS.connect("example.com", 443, context, 5000).unwrap!
-  sent = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
+  _ = TCP.send(socket, "HEAD / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", 5000)
   puts(TCP.read_line(socket, 5000))
   TCP.close(socket)
 end

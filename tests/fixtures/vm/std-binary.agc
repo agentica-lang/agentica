@@ -68,7 +68,7 @@ def writers() -> List[IntWriter]
 end
 
 def pairs() -> List[Pair]
-  small = [0, 1, 127]
+  _small = [0, 1, 127]
   return [
     Pair(name: "u8", size: 1, write: &Binary.write_u8, read: &Binary.read_u8, values: [0, 1, 127, 128, 255]),
     Pair(name: "i8", size: 1, write: &Binary.write_i8, read: &Binary.read_i8, values: [-128, -1, 0, 1, 127]),

@@ -202,7 +202,7 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   fx = made.fx
   dst = made.slot
   start = fx.next
-  for field in info.fields
+  for _ in info.fields
     fx = State.alloc(fx)
   end
 
@@ -286,7 +286,7 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   out = try cx.expression.call(cx, fx, node.target, window, false, false)
   fx = out.fx
   positions = node.args.map do |arg: Ast.NamedArg| info.positions[arg.name] end.sort
-  for position in positions
+  for _ in positions
     fx = State.alloc(fx)
   end
 

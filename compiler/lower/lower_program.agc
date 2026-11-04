@@ -256,11 +256,11 @@ end
 # The struct a field type is made of, under any List, Map, Optional or JsonField around it.
 def struct_names_in(type: Types.Type) -> List[String]
   case type
-    Types.Type.Struct(name, args) -> return [name]
+    Types.Type.Struct(name, _) -> return [name]
     Types.Type.List(item) -> return struct_names_in(item)
     Types.Type.Optional(item) -> return struct_names_in(item)
-    Types.Type.Map(key, value) -> return struct_names_in(value)
-    Types.Type.Enum(name, args) -> return struct_names_in(args[0])
+    Types.Type.Map(_, value) -> return struct_names_in(value)
+    Types.Type.Enum(_, args) -> return struct_names_in(args[0])
     _ -> return []
   end
 end
@@ -273,10 +273,10 @@ end
 # True when an Optional sits in a field type, under any List, Map or JsonField around it.
 def optional_in?(type: Types.Type) -> Bool
   case type
-    Types.Type.Optional(item) -> return true
+    Types.Type.Optional(_) -> return true
     Types.Type.List(item) -> return optional_in?(item)
-    Types.Type.Map(key, value) -> return optional_in?(value)
-    Types.Type.Enum(name, args) -> return optional_in?(args[0])
+    Types.Type.Map(_, value) -> return optional_in?(value)
+    Types.Type.Enum(_, args) -> return optional_in?(args[0])
     _ -> return false
   end
 end

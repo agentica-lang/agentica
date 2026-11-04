@@ -199,7 +199,7 @@ def rewrite_stmt(cx: Resolve.Context, stmt: Ast.Stmt) -> Result[Ast.Stmt]
       iterable = try rewrite_expr(cx, node.iterable)
       body = try rewrite_stmts(cx, node.body)
       return ok(Ast.Stmt.For(node.with(iterable: iterable, body: body)))
-    Ast.Stmt.Control(node) -> return ok(stmt)
+    Ast.Stmt.Control(_) -> return ok(stmt)
     Ast.Stmt.Case(node) -> return rewrite_case(cx, node)
   end
 end
@@ -279,8 +279,8 @@ end
 
 def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
   case expr
-    Ast.Expr.Literal(node) -> return ok(expr)
-    Ast.Expr.Name(node) -> return ok(expr)
+    Ast.Expr.Literal(_) -> return ok(expr)
+    Ast.Expr.Name(_) -> return ok(expr)
     Ast.Expr.TypeName(node) -> return rewrite_type_name(cx, node)
     Ast.Expr.Call(node) -> return rewrite_call(cx, node)
     Ast.Expr.EnumConstructor(node) ->
@@ -526,7 +526,7 @@ def rewrite_interpolation(cx: Resolve.Context, node: Ast.Interpolation) -> Resul
   parts: List[Ast.Part] = []
   for part in node.parts
     case part
-      Ast.Part.Text(text) -> parts = parts.push(part)
+      Ast.Part.Text(_) -> parts = parts.push(part)
       Ast.Part.Code(code) -> parts = parts.push(Ast.Part.Code(try rewrite_expr(cx, code)))
     end
   end

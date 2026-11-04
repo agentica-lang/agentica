@@ -1,9 +1,9 @@
 def main() -> Void
   puts("start")
   [1, 2, 3].each do |x: Int|
-    k = x
+    _k = x
     while true
-      k += 1
+      _k += 1
     end
   end
   puts("done")

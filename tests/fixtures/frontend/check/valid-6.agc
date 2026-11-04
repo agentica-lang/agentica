@@ -13,18 +13,18 @@ end
 
 
 def main() -> Void
-  inferred = ok(1)
-  r: Result[Int] = error("bad")
-  r = ok(2)
-  r = error("again")
-  nested: Result[Result[Bool]] = ok(ok(false))
-  box = Box(value: error("bad"))
+  _inferred = ok(1)
+  _r: Result[Int] = error("bad")
+  _r = ok(2)
+  _r = error("again")
+  _nested: Result[Result[Bool]] = ok(ok(false))
+  _box = Box(value: error("bad"))
   consume(ok({}))
-  xs: List[Result[Int]] = [error("bad"), ok(1)]
-  map: Map[String, Result[Int]] = {"k": error("bad")}
-  inferred_list = [ok(1), error("bad")]
-  a: Int = Result.unwrap!(error("bad"))
-  b = Result.unwrap_or(error("bad"), 7)
-  c: List[Int] = Result.unwrap_or(ok([]), [])
+  _xs: List[Result[Int]] = [error("bad"), ok(1)]
+  _map: Map[String, Result[Int]] = {"k": error("bad")}
+  _inferred_list = [ok(1), error("bad")]
+  _a: Int = Result.unwrap!(error("bad"))
+  _b = Result.unwrap_or(error("bad"), 7)
+  _c: List[Int] = Result.unwrap_or(ok([]), [])
 end
 

@@ -27,10 +27,10 @@ def bad(acc: String, n: Int) -> Int
 end
 
 def main() -> Void
-  a = List.map([], &text)
-  b = List.filter([], &keep)
-  c = List.reduce([], "", &join)
-  d = List.reduce([1], "", &join)
-  e = List.reduce([1], [], &collect)
+  _a = List.map([], &text)
+  _b = List.filter([], &keep)
+  _c = List.reduce([], "", &join)
+  _d = List.reduce([1], "", &join)
+  _e = List.reduce([1], [], &collect)
 end
 

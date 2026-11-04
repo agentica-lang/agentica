@@ -65,6 +65,6 @@ def main() -> Void
   IO.inspect(HTTP.wait(server))
   case fetch(base + "/after" + tail)
     ok(response) -> puts("after close: #{response.status}")
-    error(message) -> puts("after close: refused")
+    error(_) -> puts("after close: refused")
   end
 end

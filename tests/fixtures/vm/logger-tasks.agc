@@ -27,21 +27,21 @@ def crasher(id: Int) -> Result[Void]
 end
 
 def main() -> Void
-  gone = Logger.detach("console")
-  attached = Logger.attach("lines", LogLevel.Info, &show)
+  _ = Logger.detach("console")
+  _ = Logger.attach("lines", LogLevel.Info, &show)
   tasks = [Task.spawn(&worker, 10), Task.spawn(&worker, 11), Task.spawn(&worker, 12)]
   for task in tasks
     puts(Task.await(task))
   end
 
-  detached = Logger.detach("lines")
+  _ = Logger.detach("lines")
   quiet = [Task.spawn(&quiet_worker, 20), Task.spawn(&quiet_worker, 21)]
   for task in quiet
     puts(Task.await(task))
   end
 
-  again = Logger.attach("lines", LogLevel.Info, &show)
-  boom = Logger.attach("boom", LogLevel.Error) do |event|
+  _ = Logger.attach("lines", LogLevel.Info, &show)
+  _ = Logger.attach("boom", LogLevel.Error) do |event|
     IO.warn("boom handler for #{event.message}")
     n = event.task - event.task
     IO.warn("#{1 / n}")
@@ -50,6 +50,6 @@ def main() -> Void
   puts(Task.await(crashed).ok?)
   Logger.info("main goes on")
   puts(Logger.handlers())
-  done = Logger.detach("boom")
+  _ = Logger.detach("boom")
   Logger.err("main logs an error")
 end

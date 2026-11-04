@@ -129,7 +129,7 @@ end
 
 def deep(levels: Int) -> Types.Type
   type = Types.Type.Int
-  for level in 0...levels
+  for _ in 0...levels
     type = Types.Type.List(type)
   end
   return type

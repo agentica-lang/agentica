@@ -1,8 +1,8 @@
 def main() -> Void
   puts("start")
-  n = 0
+  _n = 0
   while true
-    n += 1
+    _n += 1
   end
   puts("done")
 end

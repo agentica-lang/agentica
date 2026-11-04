@@ -204,12 +204,12 @@ def run_command(lib: Library, line: String) -> Library
 end
 
 def main() -> Void
-  lib = new_library()
+  _lib = new_library()
   while !IO.eof?()
     line = IO.gets!().strip
     if line == ""
       next
     end
-    lib = run_command(lib, line)
+    _lib = run_command(_lib, line)
   end
 end

@@ -64,12 +64,12 @@ end
 ## The kind of the declaration inside an export, or of the declaration itself.
 export def kind_of(decl: Ast.Decl) -> Kind
   case unwrap(decl)
-    Ast.Decl.Function(node) -> return Kind.Function
-    Ast.Decl.Struct(node) -> return Kind.Struct
-    Ast.Decl.Enum(node) -> return Kind.Enum
-    Ast.Decl.TypeAlias(node) -> return Kind.TypeAlias
-    Ast.Decl.Resource(node) -> return Kind.Resource
-    Ast.Decl.Constant(node) -> return Kind.Constant
+    Ast.Decl.Function(_) -> return Kind.Function
+    Ast.Decl.Struct(_) -> return Kind.Struct
+    Ast.Decl.Enum(_) -> return Kind.Enum
+    Ast.Decl.TypeAlias(_) -> return Kind.TypeAlias
+    Ast.Decl.Resource(_) -> return Kind.Resource
+    Ast.Decl.Constant(_) -> return Kind.Constant
     _ -> return Kind.Import
   end
 end
@@ -133,7 +133,7 @@ end
 ## True for an export, or a constant written with export.
 export def exported?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Export(node) -> return true
+    Ast.Decl.Export(_) -> return true
     Ast.Decl.Constant(node) -> return node.exported
     _ -> return false
   end
@@ -226,19 +226,19 @@ end
 
 def rank(decl: Ast.Decl) -> Int
   case decl
-    Ast.Decl.Import(node) -> return 0
-    Ast.Decl.Reexport(node) -> return 0
-    Ast.Decl.Constant(node) -> return 1
-    Ast.Decl.Struct(node) -> return 2
-    Ast.Decl.Enum(node) -> return 2
-    Ast.Decl.TypeAlias(node) -> return 2
-    Ast.Decl.Resource(node) -> return 2
+    Ast.Decl.Import(_) -> return 0
+    Ast.Decl.Reexport(_) -> return 0
+    Ast.Decl.Constant(_) -> return 1
+    Ast.Decl.Struct(_) -> return 2
+    Ast.Decl.Enum(_) -> return 2
+    Ast.Decl.TypeAlias(_) -> return 2
+    Ast.Decl.Resource(_) -> return 2
     Ast.Decl.Export(node) ->
       case node.declaration
-        Ast.Decl.Struct(inner) -> return 2
-        Ast.Decl.Enum(inner) -> return 2
-        Ast.Decl.TypeAlias(inner) -> return 2
-        Ast.Decl.Resource(inner) -> return 2
+        Ast.Decl.Struct(_) -> return 2
+        Ast.Decl.Enum(_) -> return 2
+        Ast.Decl.TypeAlias(_) -> return 2
+        Ast.Decl.Resource(_) -> return 2
         Ast.Decl.Function(inner) -> return function_rank(inner, 3)
         _ -> return 3
       end

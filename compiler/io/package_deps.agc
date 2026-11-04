@@ -257,7 +257,7 @@ end
 # A new folder that only this process uses: mkdir_private fails when the name exists, so two commands never share one.
 def make_stage(deps: String) -> Result[String]
   failure = "no free name"
-  for attempt in 0...TEMP_TRIES
+  for _ in 0...TEMP_TRIES
     name = Paths.join(deps, ".tmp-#{unique()}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
     if made.ok?

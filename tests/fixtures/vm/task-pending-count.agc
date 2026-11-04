@@ -26,11 +26,11 @@ def main() -> Void
   puts(Task.await(second))
   puts(Task.pending_count())
   puts(Task.await(Task.spawn(&count, 0)))
-  unawaited = Task.spawn(&idle, 2)
+  _unawaited = Task.spawn(&idle, 2)
   Task.sleep(0)
   Task.sleep(0)
   puts(Task.pending_count())
-  sleeper = Task.spawn(&nap, 60000)
+  _sleeper = Task.spawn(&nap, 60000)
   Task.sleep(0)
   puts(Task.pending_count())
 end

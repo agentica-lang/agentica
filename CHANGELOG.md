@@ -32,6 +32,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   or `case` whose every branch ends in one, is an error
   (`CHECK-UNREACHABLE-CODE`); remove it or move it before. The query commands
   report it too.
+- **Breaking:** a variable, `for` variable, block parameter or `case` pattern
+  name that is never read is an error (`CHECK-UNUSED-VARIABLE`), unless its name
+  starts with `_` (`_count`); write `_` for a loop variable, a block parameter
+  or a pattern slot. A function parameter is never reported, and `count += 1`
+  alone is no read. The query commands (`type-at`, `refs`, `symbol`) do not
+  report it in the file they are asked about.
 
 ### Fixed
 

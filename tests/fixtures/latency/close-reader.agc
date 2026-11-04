@@ -3,7 +3,7 @@ def reader(input: FileHandle) -> Int
   running = true
   while running
     case File.read_line(input, 60000)
-      ok(line) -> count = count + 1
+      ok(_) -> count = count + 1
       error(message) -> running = message != "filesystem: file handle is closed"
     end
   end

@@ -1,5 +1,5 @@
 def make(capacity: Int) -> Result[Int]
-  ch: Channel[Int] = Channel.new(capacity)
+  _ch: Channel[Int] = Channel.new(capacity)
   return ok(capacity)
 end
 

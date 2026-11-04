@@ -576,7 +576,7 @@ OUTS = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n' \
 # of one is the checker's usual code.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  opened: DbOpen = db_open(\"x\")\n  Native.close(opened.db)\n  puts(opened.result + opened.code)\n"
-     "  filled = db_fill()\n  x: Float = filled.x\n  puts(filled.n + 1)\n  puts(filled.on)\n"
+     "  filled = db_fill()\n  _x: Float = filled.x\n  puts(filled.n + 1)\n  puts(filled.on)\n"
      "  puts(Native.null?(filled.p))", None, None, None),
     ("  puts(db_open(\"x\", 1))", "CHECK-ARITY", (8, 8), (8, 23)),
     ("  puts(db_open(\"x\").missing)", "CHECK-UNKNOWN-FIELD", (8, 8), (8, 28)),
@@ -649,8 +649,8 @@ end
 def main() -> Void
   api = get_api(Native.get_pointer(ort_get_api_base(), 0), 16)
   made = create_session(Native.get_pointer(api, 8), "model.onnx", Native.get_pointer(api, 16))
-  status: C.Pointer = run(Native.get_pointer(api, 24), made.session, 1.5)
-  opened: Result[Session] = open_session("other.onnx", Native.get_pointer(api, 16))
+  _status: C.Pointer = run(Native.get_pointer(api, 24), made.session, 1.5)
+  _opened: Result[Session] = open_session("other.onnx", Native.get_pointer(api, 16))
   puts(printf_at(Native.get_pointer(api, 32), "%d", 1) + 1)
 end
 """
@@ -766,7 +766,7 @@ end
 # take and return it by value, also through a function pointer, in a compute def and as the result of a record.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  params = llama_model_default_params().with(n_gpu_layers: 99)\n"
-     "  model: Result[Model] = llama_model_load_from_file(\"m.gguf\", params)\n"
+     "  _model: Result[Model] = llama_model_load_from_file(\"m.gguf\", params)\n"
      "  o = outer_twice(Native.null(), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
      "  made = make_outer()\n  n: Int = made.result.inner.n + made.n\n"
      "  p = ModelParams(use_mmap: true, progress: Native.null())\n  puts(o.inner.x + (p.n_gpu_layers + n).to_f)",
@@ -905,6 +905,7 @@ end
 def main() -> Void
   db = sqlite3_open(":memory:").db
 %s
+  _ = db
 end
 """
 

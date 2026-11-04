@@ -10,7 +10,7 @@ end
 
 def echo(p: Pair) -> Int
   total = 0
-  for n in 0...p.rounds
+  for _ in 0...p.rounds
     case p.a.recv(1000)
       ok(v) ->
         _ = p.b.send(v + 1, 1000)

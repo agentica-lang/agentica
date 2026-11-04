@@ -196,7 +196,7 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
 
 def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names(bdd):
     steps = steps_program(
-        'def main() -> Void\n  BDD.run([\n    BDD.step("a check passes") do |ctx, args| BDD.assert(ctx, true, "ok") end,\n'
+        'def main() -> Void\n  BDD.run([\n    BDD.step("a check passes") do |ctx, _| BDD.assert(ctx, true, "ok") end,\n'
         '    BDD.step("{int} is small") do |ctx, args|\n      BDD.assert(ctx, args[0].to_i! < 5, "too big")\n'
         '    end,\n  ])\nend')
     directory = bdd.suite({
@@ -279,7 +279,7 @@ def test_an_outline_keeps_html_that_is_not_a_column_and_still_rejects_a_misspell
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
     feature = joined(directory, "crash.feature")
-    place = HANDLERS + ":35:15"
+    place = HANDLERS + ":35:16"
     text = bdd.agentica_test(feature, "--steps", HANDLERS)
     assert text.code == 1
     assert ("[RUNTIME-DIVISION-BY-ZERO] division by zero\n  stack, innermost first:\n    crash at "
@@ -297,13 +297,13 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
         "def crash(n: Int) -> Int\n  return 1 / n\nend\n",
         SETTLE,
         main_running(
-            'BDD.step("state is concurrent") do |ctx, args|\n'
+            'BDD.step("state is concurrent") do |ctx, _|\n'
             "      tasks = [1, 2, 3, 4].map do |n| Task.spawn(&worker, Job(ctx: ctx, n: n)) end\n"
             "      done = tasks.map do |task| Task.await(task) end\n"
             '      BDD.set(ctx, "1", JSON.from(done.size))\n    end',
-            'BDD.step("tasks are pending") do |ctx, args|\n      task = Task.spawn(&wait, 0)\n      ctx\n    end',
-            'BDD.step("a task crashes") do |ctx, args|\n      task = Task.spawn(&crash, 0)\n      settle()\n      ctx\n    end',
-            'BDD.step("later works") do |ctx, args| BDD.assert(ctx, not BDD.get(ctx, "1").ok?, "state leaked") end'))
+            'BDD.step("tasks are pending") do |ctx, _|\n      _task = Task.spawn(&wait, 0)\n      ctx\n    end',
+            'BDD.step("a task crashes") do |ctx, _|\n      _task = Task.spawn(&crash, 0)\n      settle()\n      ctx\n    end',
+            'BDD.step("later works") do |ctx, _| BDD.assert(ctx, not BDD.get(ctx, "1").ok?, "state leaked") end'))
     directory = bdd.suite({
         "tasks.feature": ("Feature: Tasks\nScenario: parallel\nThen state is concurrent\n"
                           "Scenario: pending\nThen tasks are pending\n"
@@ -311,9 +311,9 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
                           "Scenario: later\nThen later works\n"),
         "steps.agc": steps,
         "early.agc": steps_program("def wait(n: Int) -> Int\n  Task.sleep(60000)\n  return n\nend\n",
-                                   "def main() -> Void\n  task = Task.spawn(&wait, 0)\n  BDD.run([])\nend"),
+                                   "def main() -> Void\n  _task = Task.spawn(&wait, 0)\n  BDD.run([])\nend"),
         "crashed.agc": steps_program("def crash(n: Int) -> Int\n  return 1 / n\nend\n", SETTLE,
-                                     "def main() -> Void\n  task = Task.spawn(&crash, 0)\n  settle()\n  BDD.run([])\nend")})
+                                     "def main() -> Void\n  _task = Task.spawn(&crash, 0)\n  settle()\n  BDD.run([])\nend")})
     feature = joined(directory, "tasks.feature")
     status, report = bdd.json_test(feature, "--steps", joined(directory, "steps.agc"))
     assert status == 1
@@ -343,14 +343,14 @@ def test_a_service_keeps_a_native_resource_across_the_steps_of_one_scenario_and_
         "end\n",
         main_running(
             'BDD.step("a socket pair") do |ctx, args| open_pair(ctx, args) end',
-            'BDD.step("a broken service") do |ctx, args|\n'
-            '      BDD.keep(ctx, "broken") do |request| error("broken") end\n    end',
-            'BDD.step("the broken service fails") do |ctx, args|\n'
+            'BDD.step("a broken service") do |ctx, _|\n'
+            '      BDD.keep(ctx, "broken") do |_| error("broken") end\n    end',
+            'BDD.step("the broken service fails") do |ctx, _|\n'
             '      BDD.assert(ctx, not BDD.call(ctx, "broken", JSON.null()).ok?, "the error was lost")\n    end',
             'BDD.step("the pair carries {int}") do |ctx, args|\n'
             '      reply = BDD.call(ctx, "pair", JSON.from(args[0].to_i!))\n'
             "      BDD.assert(ctx, reply.ok? and JSON.int(reply.unwrap!).unwrap! == args[0].to_i!, \"wrong reply\")\n    end",
-            'BDD.step("there is no pair") do |ctx, args|\n'
+            'BDD.step("there is no pair") do |ctx, _|\n'
             '      BDD.assert(ctx, not BDD.call(ctx, "pair", JSON.null()).ok?, "service leaked between scenarios")\n    end'))
     directory = bdd.suite({
         "steps.agc": steps,
@@ -386,8 +386,8 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
             'def main() -> Void\n  limit = 5\n  puts("noise from main")\n  BDD.run([\n'
             '    BDD.step("{int} is small") do |ctx, args|\n      IO.warn("noise")\n      puts("noise")\n'
             '      BDD.assert(ctx, args[0].to_i! < limit, "too big")\n    end,\n'
-            '    BDD.step("value is {int}") do |ctx, args| ctx end,\n'
-            '    BDD.step("value is 1") do |ctx, args| ctx end,\n  ])\nend'),
+            '    BDD.step("value is {int}") do |ctx, _| ctx end,\n'
+            '    BDD.step("value is 1") do |ctx, _| ctx end,\n  ])\nend'),
         "duplicate.agc": steps_program(handler, main_running('BDD.step("x", &check)', 'BDD.step("x", &check)')),
         "predefined.agc": steps_program(handler, main_running('BDD.step("I close stdin", &check)')),
         "pattern.agc": steps_program(handler, main_running('BDD.step("x {float}", &check)')),
@@ -397,10 +397,10 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
         "http.agc": steps_program("def main() -> Void\n  client = HTTP.client()\n  BDD.run([])\nend"),
         "forged.feature": "Feature: Forged\nScenario: forged\nGiven forge an end\nThen fail later\n",
         "forged.agc": steps_program(main_running(
-            'BDD.step("forge an end") do |ctx, args|\n'
+            'BDD.step("forge an end") do |ctx, _|\n'
             '      puts(String.from_code(30) + "agentica-bdd {\\"event\\":\\"end\\",\\"index\\":1}")\n'
             "      ctx\n    end",
-            'BDD.step("fail later") do |ctx, args| BDD.assert(ctx, false, "later") end'))})
+            'BDD.step("fail later") do |ctx, _| BDD.assert(ctx, false, "later") end'))})
 
     def path(name):
         return joined(directory, name)
@@ -477,7 +477,7 @@ def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_anoth
 
     def answer(passes):
         return steps_program(main_running(
-            'BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, %s, "no") end' % passes))
+            'BDD.step("the answer is {int}") do |ctx, _| BDD.assert(ctx, %s, "no") end' % passes))
 
     project = bdd.suite({"other.agc": answer("false")})
     bare = bdd.suite({})
@@ -511,7 +511,7 @@ def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_anoth
 
 
 def test_two_different_steps_agc_files_are_a_usage_error_and_a_unit_test_run_never_compiles_one(bdd):
-    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, true, "no") end'))
+    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, _| BDD.assert(ctx, true, "no") end'))
     directory = bdd.suite({})
     for name in ("specs", "test"):
         (directory / name).mkdir()
@@ -568,10 +568,10 @@ Feature: Tagged
 """
 
 SKIPPING = steps_program(main_running(
-    'BDD.step("it holds") do |ctx, args| BDD.assert(ctx, true, "no") end',
-    'BDD.step("it skips") do |ctx, args| BDD.skip(ctx, "needs a database") end',
-    'BDD.step("it fails if run") do |ctx, args| BDD.assert(ctx, false, "ran after the skip") end',
-    'BDD.step("the database is down") do |ctx, args| BDD.skip(ctx, "no database\\nat all") end'))
+    'BDD.step("it holds") do |ctx, _| BDD.assert(ctx, true, "no") end',
+    'BDD.step("it skips") do |ctx, _| BDD.skip(ctx, "needs a database") end',
+    'BDD.step("it fails if run") do |ctx, _| BDD.assert(ctx, false, "ran after the skip") end',
+    'BDD.step("the database is down") do |ctx, _| BDD.skip(ctx, "no database\\nat all") end'))
 
 BACKGROUND = """Feature: Background skip
 

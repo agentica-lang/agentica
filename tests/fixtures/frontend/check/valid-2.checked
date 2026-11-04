@@ -1,134 +1,134 @@
-program #132 0:1:1-845:24:1
+program #132 0:1:1-863:24:1
   module "valid-2.agc"
-    declaration: function-decl #131 0:1:1-844:23:1 name="main"
+    declaration: function-decl #131 0:1:1-862:23:1 name="main"
       result: type-ref #0 14:1:15-18:1:19 name="Void"
-      body: binding #7 21:2:3-63:3:1 name="xs"
-        type: type-ref #3 25:2:7-40:2:22 name="List"
-          arg: type-ref #2 30:2:12-39:2:21 name="List"
-            arg: type-ref #1 35:2:17-38:2:20 name="Int"
-        value: call #6 43:2:25-62:2:44 name="List.append" piped=false type=List(List(Int))
-          arg: list-lit #4 55:2:37-57:2:39 type=List(List(Int))
-          arg: list-lit #5 59:2:41-61:2:43 type=List(Int)
-      body: binding #14 65:3:3-106:4:1 name="ys"
-        type: type-ref #10 69:3:7-84:3:22 name="List"
-          arg: type-ref #9 74:3:12-83:3:21 name="List"
-            arg: type-ref #8 79:3:17-82:3:20 name="Int"
-        value: call #13 87:3:25-105:3:43 name="List.repeat" piped=false type=List(List(Int))
-          arg: list-lit #11 99:3:37-101:3:39 type=List(Int)
-          arg: literal #12 103:3:41-104:3:42 value=int:2 type=Int
-      body: binding #19 108:4:3-141:5:1 name="zs"
-        type: type-ref #16 112:4:7-121:4:16 name="List"
-          arg: type-ref #15 117:4:12-120:4:15 name="Int"
-        value: call #18 124:4:19-140:4:35 name="List.reverse" piped=false type=List(Int)
-          arg: list-lit #17 137:4:32-139:4:34 type=List(Int)
-      body: binding #27 143:5:3-196:6:1 name="rs"
-        type: type-ref #22 147:5:7-164:5:24 name="List"
-          arg: type-ref #21 152:5:12-163:5:23 name="Result"
-            arg: type-ref #20 159:5:19-162:5:22 name="Int"
-        value: call #26 167:5:27-195:5:55 name="List.repeat" piped=false type=List(Result(Int))
-          arg: call #24 179:5:39-191:5:51 name="error" piped=false type=Result(Int)
-            arg: literal #23 185:5:45-190:5:50 value=string:"bad" type=String
-          arg: literal #25 193:5:53-194:5:54 value=int:0 type=Int
-      body: binding #32 198:6:3-223:7:1 name="a"
-        value: call #31 202:6:7-222:6:27 name="List.concat" piped=false type=List(Int)
-          arg: list-lit #28 214:6:19-216:6:21 type=List(Int)
-          arg: list-lit #30 218:6:23-221:6:26 type=List(Int)
-            element: literal #29 219:6:24-220:6:25 value=int:1 type=Int
-      body: binding #40 225:7:3-268:8:1 name="b"
-        type: type-ref #35 228:7:6-243:7:21 name="List"
-          arg: type-ref #34 233:7:11-242:7:20 name="List"
-            arg: type-ref #33 238:7:16-241:7:19 name="Int"
-        value: call #39 246:7:24-267:7:45 name="List.concat" piped=false type=List(List(Int))
-          arg: list-lit #36 258:7:36-260:7:38 type=List(List(Int))
-          arg: list-lit #38 262:7:40-266:7:44 type=List(List(Int))
-            element: list-lit #37 263:7:41-265:7:43 type=List(Int)
-      body: binding #46 270:8:3-305:9:1 name="c"
-        type: type-ref #42 273:8:6-282:8:15 name="List"
-          arg: type-ref #41 278:8:11-281:8:14 name="Int"
-        value: call #45 285:8:18-304:8:37 name="List.concat" piped=false type=List(Int)
-          arg: list-lit #43 297:8:30-299:8:32 type=List(Int)
-          arg: list-lit #44 301:8:34-303:8:36 type=List(Int)
-      body: binding #52 307:9:3-339:10:1 name="d"
-        type: type-ref #48 310:9:6-319:9:15 name="List"
-          arg: type-ref #47 315:9:11-318:9:14 name="Int"
-        value: call #51 322:9:18-338:9:34 name="List.take" piped=false type=List(Int)
-          arg: list-lit #49 332:9:28-334:9:30 type=List(Int)
-          arg: literal #50 336:9:32-337:9:33 value=int:0 type=Int
-      body: binding #58 341:10:3-373:11:1 name="e"
-        type: type-ref #54 344:10:6-353:10:15 name="List"
-          arg: type-ref #53 349:10:11-352:10:14 name="Int"
-        value: call #57 356:10:18-372:10:34 name="List.drop" piped=false type=List(Int)
-          arg: list-lit #55 366:10:28-368:10:30 type=List(Int)
-          arg: literal #56 370:10:32-371:10:33 value=int:2 type=Int
-      body: binding #66 375:11:3-419:12:1 name="f"
-        type: type-ref #60 378:11:6-389:11:17 name="Result"
-          arg: type-ref #59 385:11:13-388:11:16 name="Int"
-        value: call #65 392:11:20-418:11:46 name="List.at" piped=false type=Result(Int)
-          arg: list-lit #63 400:11:28-414:11:42 type=List(Result(Int))
-            element: call #62 401:11:29-413:11:41 name="error" piped=false type=Result(Int)
-              arg: literal #61 407:11:35-412:11:40 value=string:"bad" type=String
-          arg: literal #64 416:11:44-417:11:45 value=int:0 type=Int
-      body: binding #70 421:12:3-449:13:1 name="filled"
-        value: call #69 430:12:12-448:12:30 name="List.append" piped=false type=List(Int)
-          arg: list-lit #67 442:12:24-444:12:26 type=List(Int)
-          arg: literal #68 446:12:28-447:12:29 value=int:1 type=Int
-      body: binding #78 451:13:3-499:14:1 name="replaced"
-        type: type-ref #73 461:13:13-476:13:28 name="List"
-          arg: type-ref #72 466:13:18-475:13:27 name="List"
-            arg: type-ref #71 471:13:23-474:13:26 name="Int"
-        value: call #77 479:13:31-498:13:50 name="List.set" piped=false type=List(List(Int))
-          arg: name-ref #74 488:13:40-490:13:42 name="ys" type=List(List(Int))
-          arg: literal #75 492:13:44-493:13:45 value=int:0 type=Int
-          arg: list-lit #76 495:13:47-497:13:49 type=List(Int)
-      body: binding #84 501:14:3-532:15:1 name="m"
-        type: type-ref #82 504:14:6-526:14:28 name="Map"
-          arg: type-ref #79 508:14:10-514:14:16 name="String"
-          arg: type-ref #81 516:14:18-525:14:27 name="List"
-            arg: type-ref #80 521:14:23-524:14:26 name="Int"
-        value: map-lit #83 529:14:31-531:14:33 type=Map(String, List(Int))
-      body: binding #91 534:15:3-575:16:1 name="r"
-        type: type-ref #87 537:15:6-556:15:25 name="Optional"
-          arg: type-ref #86 546:15:15-555:15:24 name="List"
-            arg: type-ref #85 551:15:20-554:15:23 name="Int"
-        value: call #90 559:15:28-574:15:43 name="Map.get" piped=false type=Optional(List(Int))
-          arg: name-ref #88 567:15:36-568:15:37 name="m" type=Map(String, List(Int))
-          arg: literal #89 570:15:39-573:15:42 value=string:"x" type=String
-      body: binding #98 577:16:3-616:17:1 name="value"
-        type: type-ref #93 584:16:10-593:16:19 name="List"
-          arg: type-ref #92 589:16:15-592:16:18 name="Int"
-        value: call #97 596:16:22-615:16:41 name="Map.get" piped=false type=List(Int)
-          arg: name-ref #94 604:16:30-605:16:31 name="m" type=Map(String, List(Int))
-          arg: literal #95 607:16:33-610:16:36 value=string:"x" type=String
-          arg: list-lit #96 612:16:38-614:16:40 type=List(Int)
-      body: binding #103 618:17:3-649:18:1 name="inferred"
-        value: call #102 629:17:14-648:17:33 name="Map.get" piped=false type=Int
-          arg: map-lit #99 637:17:22-639:17:24 type=Map(String, Int)
-          arg: literal #100 641:17:26-644:17:29 value=string:"x" type=String
-          arg: literal #101 646:17:31-647:17:32 value=int:1 type=Int
-      body: binding #109 651:18:3-693:19:1 name="missing"
-        type: type-ref #105 660:18:12-673:18:25 name="Optional"
-          arg: type-ref #104 669:18:21-672:18:24 name="Int"
-        value: call #108 676:18:28-692:18:44 name="Map.get" piped=false type=Optional(Int)
-          arg: map-lit #106 684:18:36-686:18:38 type=Map(String, Int)
-          arg: literal #107 688:18:40-691:18:43 value=string:"x" type=String
-      body: binding #117 695:19:3-748:20:1 name="nested"
-        type: type-ref #111 703:19:11-714:19:22 name="Result"
-          arg: type-ref #110 710:19:18-713:19:21 name="Int"
-        value: call #116 717:19:25-747:19:55 name="Map.get" piped=false type=Result(Int)
-          arg: map-lit #112 725:19:33-727:19:35 type=Map(String, Result(Int))
-          arg: literal #113 729:19:37-732:19:40 value=string:"x" type=String
-          arg: call #115 734:19:42-746:19:54 name="error" piped=false type=Result(Int)
-            arg: literal #114 740:19:48-745:19:53 value=string:"bad" type=String
-      body: binding #124 750:20:3-798:21:1 name="deleted"
-        type: type-ref #120 759:20:12-775:20:28 name="Map"
-          arg: type-ref #118 763:20:16-769:20:22 name="String"
-          arg: type-ref #119 771:20:24-774:20:27 name="Int"
-        value: call #123 778:20:31-797:20:50 name="Map.delete" piped=false type=Map(String, Int)
-          arg: map-lit #121 789:20:42-791:20:44 type=Map(String, Int)
-          arg: literal #122 793:20:46-796:20:49 value=string:"x" type=String
-      body: binding #130 800:21:3-840:22:1 name="values"
-        type: type-ref #127 808:21:11-823:21:26 name="List"
-          arg: type-ref #126 813:21:16-822:21:25 name="List"
-            arg: type-ref #125 818:21:21-821:21:24 name="Int"
-        value: call #129 826:21:29-839:21:42 name="Map.values" piped=false type=List(List(Int))
-          arg: name-ref #128 837:21:40-838:21:41 name="m" type=Map(String, List(Int))
+      body: binding #7 21:2:3-64:3:1 name="_xs"
+        type: type-ref #3 26:2:8-41:2:23 name="List"
+          arg: type-ref #2 31:2:13-40:2:22 name="List"
+            arg: type-ref #1 36:2:18-39:2:21 name="Int"
+        value: call #6 44:2:26-63:2:45 name="List.append" piped=false type=List(List(Int))
+          arg: list-lit #4 56:2:38-58:2:40 type=List(List(Int))
+          arg: list-lit #5 60:2:42-62:2:44 type=List(Int)
+      body: binding #14 66:3:3-107:4:1 name="ys"
+        type: type-ref #10 70:3:7-85:3:22 name="List"
+          arg: type-ref #9 75:3:12-84:3:21 name="List"
+            arg: type-ref #8 80:3:17-83:3:20 name="Int"
+        value: call #13 88:3:25-106:3:43 name="List.repeat" piped=false type=List(List(Int))
+          arg: list-lit #11 100:3:37-102:3:39 type=List(Int)
+          arg: literal #12 104:3:41-105:3:42 value=int:2 type=Int
+      body: binding #19 109:4:3-143:5:1 name="_zs"
+        type: type-ref #16 114:4:8-123:4:17 name="List"
+          arg: type-ref #15 119:4:13-122:4:16 name="Int"
+        value: call #18 126:4:20-142:4:36 name="List.reverse" piped=false type=List(Int)
+          arg: list-lit #17 139:4:33-141:4:35 type=List(Int)
+      body: binding #27 145:5:3-199:6:1 name="_rs"
+        type: type-ref #22 150:5:8-167:5:25 name="List"
+          arg: type-ref #21 155:5:13-166:5:24 name="Result"
+            arg: type-ref #20 162:5:20-165:5:23 name="Int"
+        value: call #26 170:5:28-198:5:56 name="List.repeat" piped=false type=List(Result(Int))
+          arg: call #24 182:5:40-194:5:52 name="error" piped=false type=Result(Int)
+            arg: literal #23 188:5:46-193:5:51 value=string:"bad" type=String
+          arg: literal #25 196:5:54-197:5:55 value=int:0 type=Int
+      body: binding #32 201:6:3-227:7:1 name="_a"
+        value: call #31 206:6:8-226:6:28 name="List.concat" piped=false type=List(Int)
+          arg: list-lit #28 218:6:20-220:6:22 type=List(Int)
+          arg: list-lit #30 222:6:24-225:6:27 type=List(Int)
+            element: literal #29 223:6:25-224:6:26 value=int:1 type=Int
+      body: binding #40 229:7:3-273:8:1 name="_b"
+        type: type-ref #35 233:7:7-248:7:22 name="List"
+          arg: type-ref #34 238:7:12-247:7:21 name="List"
+            arg: type-ref #33 243:7:17-246:7:20 name="Int"
+        value: call #39 251:7:25-272:7:46 name="List.concat" piped=false type=List(List(Int))
+          arg: list-lit #36 263:7:37-265:7:39 type=List(List(Int))
+          arg: list-lit #38 267:7:41-271:7:45 type=List(List(Int))
+            element: list-lit #37 268:7:42-270:7:44 type=List(Int)
+      body: binding #46 275:8:3-311:9:1 name="_c"
+        type: type-ref #42 279:8:7-288:8:16 name="List"
+          arg: type-ref #41 284:8:12-287:8:15 name="Int"
+        value: call #45 291:8:19-310:8:38 name="List.concat" piped=false type=List(Int)
+          arg: list-lit #43 303:8:31-305:8:33 type=List(Int)
+          arg: list-lit #44 307:8:35-309:8:37 type=List(Int)
+      body: binding #52 313:9:3-346:10:1 name="_d"
+        type: type-ref #48 317:9:7-326:9:16 name="List"
+          arg: type-ref #47 322:9:12-325:9:15 name="Int"
+        value: call #51 329:9:19-345:9:35 name="List.take" piped=false type=List(Int)
+          arg: list-lit #49 339:9:29-341:9:31 type=List(Int)
+          arg: literal #50 343:9:33-344:9:34 value=int:0 type=Int
+      body: binding #58 348:10:3-381:11:1 name="_e"
+        type: type-ref #54 352:10:7-361:10:16 name="List"
+          arg: type-ref #53 357:10:12-360:10:15 name="Int"
+        value: call #57 364:10:19-380:10:35 name="List.drop" piped=false type=List(Int)
+          arg: list-lit #55 374:10:29-376:10:31 type=List(Int)
+          arg: literal #56 378:10:33-379:10:34 value=int:2 type=Int
+      body: binding #66 383:11:3-428:12:1 name="_f"
+        type: type-ref #60 387:11:7-398:11:18 name="Result"
+          arg: type-ref #59 394:11:14-397:11:17 name="Int"
+        value: call #65 401:11:21-427:11:47 name="List.at" piped=false type=Result(Int)
+          arg: list-lit #63 409:11:29-423:11:43 type=List(Result(Int))
+            element: call #62 410:11:30-422:11:42 name="error" piped=false type=Result(Int)
+              arg: literal #61 416:11:36-421:11:41 value=string:"bad" type=String
+          arg: literal #64 425:11:45-426:11:46 value=int:0 type=Int
+      body: binding #70 430:12:3-459:13:1 name="_filled"
+        value: call #69 440:12:13-458:12:31 name="List.append" piped=false type=List(Int)
+          arg: list-lit #67 452:12:25-454:12:27 type=List(Int)
+          arg: literal #68 456:12:29-457:12:30 value=int:1 type=Int
+      body: binding #78 461:13:3-510:14:1 name="_replaced"
+        type: type-ref #73 472:13:14-487:13:29 name="List"
+          arg: type-ref #72 477:13:19-486:13:28 name="List"
+            arg: type-ref #71 482:13:24-485:13:27 name="Int"
+        value: call #77 490:13:32-509:13:51 name="List.set" piped=false type=List(List(Int))
+          arg: name-ref #74 499:13:41-501:13:43 name="ys" type=List(List(Int))
+          arg: literal #75 503:13:45-504:13:46 value=int:0 type=Int
+          arg: list-lit #76 506:13:48-508:13:50 type=List(Int)
+      body: binding #84 512:14:3-543:15:1 name="m"
+        type: type-ref #82 515:14:6-537:14:28 name="Map"
+          arg: type-ref #79 519:14:10-525:14:16 name="String"
+          arg: type-ref #81 527:14:18-536:14:27 name="List"
+            arg: type-ref #80 532:14:23-535:14:26 name="Int"
+        value: map-lit #83 540:14:31-542:14:33 type=Map(String, List(Int))
+      body: binding #91 545:15:3-587:16:1 name="_r"
+        type: type-ref #87 549:15:7-568:15:26 name="Optional"
+          arg: type-ref #86 558:15:16-567:15:25 name="List"
+            arg: type-ref #85 563:15:21-566:15:24 name="Int"
+        value: call #90 571:15:29-586:15:44 name="Map.get" piped=false type=Optional(List(Int))
+          arg: name-ref #88 579:15:37-580:15:38 name="m" type=Map(String, List(Int))
+          arg: literal #89 582:15:40-585:15:43 value=string:"x" type=String
+      body: binding #98 589:16:3-629:17:1 name="_value"
+        type: type-ref #93 597:16:11-606:16:20 name="List"
+          arg: type-ref #92 602:16:16-605:16:19 name="Int"
+        value: call #97 609:16:23-628:16:42 name="Map.get" piped=false type=List(Int)
+          arg: name-ref #94 617:16:31-618:16:32 name="m" type=Map(String, List(Int))
+          arg: literal #95 620:16:34-623:16:37 value=string:"x" type=String
+          arg: list-lit #96 625:16:39-627:16:41 type=List(Int)
+      body: binding #103 631:17:3-663:18:1 name="_inferred"
+        value: call #102 643:17:15-662:17:34 name="Map.get" piped=false type=Int
+          arg: map-lit #99 651:17:23-653:17:25 type=Map(String, Int)
+          arg: literal #100 655:17:27-658:17:30 value=string:"x" type=String
+          arg: literal #101 660:17:32-661:17:33 value=int:1 type=Int
+      body: binding #109 665:18:3-708:19:1 name="_missing"
+        type: type-ref #105 675:18:13-688:18:26 name="Optional"
+          arg: type-ref #104 684:18:22-687:18:25 name="Int"
+        value: call #108 691:18:29-707:18:45 name="Map.get" piped=false type=Optional(Int)
+          arg: map-lit #106 699:18:37-701:18:39 type=Map(String, Int)
+          arg: literal #107 703:18:41-706:18:44 value=string:"x" type=String
+      body: binding #117 710:19:3-764:20:1 name="_nested"
+        type: type-ref #111 719:19:12-730:19:23 name="Result"
+          arg: type-ref #110 726:19:19-729:19:22 name="Int"
+        value: call #116 733:19:26-763:19:56 name="Map.get" piped=false type=Result(Int)
+          arg: map-lit #112 741:19:34-743:19:36 type=Map(String, Result(Int))
+          arg: literal #113 745:19:38-748:19:41 value=string:"x" type=String
+          arg: call #115 750:19:43-762:19:55 name="error" piped=false type=Result(Int)
+            arg: literal #114 756:19:49-761:19:54 value=string:"bad" type=String
+      body: binding #124 766:20:3-815:21:1 name="_deleted"
+        type: type-ref #120 776:20:13-792:20:29 name="Map"
+          arg: type-ref #118 780:20:17-786:20:23 name="String"
+          arg: type-ref #119 788:20:25-791:20:28 name="Int"
+        value: call #123 795:20:32-814:20:51 name="Map.delete" piped=false type=Map(String, Int)
+          arg: map-lit #121 806:20:43-808:20:45 type=Map(String, Int)
+          arg: literal #122 810:20:47-813:20:50 value=string:"x" type=String
+      body: binding #130 817:21:3-858:22:1 name="_values"
+        type: type-ref #127 826:21:12-841:21:27 name="List"
+          arg: type-ref #126 831:21:17-840:21:26 name="List"
+            arg: type-ref #125 836:21:22-839:21:25 name="Int"
+        value: call #129 844:21:30-857:21:43 name="Map.values" piped=false type=List(List(Int))
+          arg: name-ref #128 855:21:41-856:21:42 name="m" type=Map(String, List(Int))

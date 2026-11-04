@@ -206,7 +206,7 @@ end
 def make_temp(cache: String) -> Result[String]
   try Dir.mkdir(cache, FS_TIMEOUT_MS)
   failure = "no free name"
-  for attempt in 0...TEMP_TRIES
+  for _ in 0...TEMP_TRIES
     name = Paths.join(cache, ".tmp-#{System.pid()}-#{Random.int(0, 999_999_999)}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
     if made.ok?

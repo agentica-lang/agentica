@@ -88,7 +88,7 @@ def test_nested_values_lower_in_a_linear_number_of_steps(stage, kind):
 
     def program(depth):
         typed = ": " + repeat(annotation, depth) + "Int" + repeat("]", depth) if annotation else ""
-        return checked_body("  y%s = %sx%s\n  puts(\"ok\")\n" % (typed, repeat(opening, depth), repeat(closing, depth)))
+        return checked_body("  _y%s = %sx%s\n  puts(\"ok\")\n" % (typed, repeat(opening, depth), repeat(closing, depth)))
 
     half, full = lowering_steps(stage, program(450)), lowering_steps(stage, program(900))
     assert full < 2.5 * half, (half, full)

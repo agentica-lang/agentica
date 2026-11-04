@@ -269,7 +269,7 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   index = 1
   while index < node.args.size
     case node.args[index]
-      Ast.Expr.BlockLit(found) -> block = true
+      Ast.Expr.BlockLit(_) -> block = true
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
 
@@ -290,12 +290,12 @@ end
 
 def simple_receiver?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.Name(found) -> return true
-    Ast.Expr.Literal(found) -> return true
-    Ast.Expr.Call(found) -> return true
-    Ast.Expr.MethodCall(found) -> return true
-    Ast.Expr.FieldAccess(found) -> return true
-    Ast.Expr.Index(found) -> return true
+    Ast.Expr.Name(_) -> return true
+    Ast.Expr.Literal(_) -> return true
+    Ast.Expr.Call(_) -> return true
+    Ast.Expr.MethodCall(_) -> return true
+    Ast.Expr.FieldAccess(_) -> return true
+    Ast.Expr.Index(_) -> return true
     _ -> return false
   end
 end
@@ -434,7 +434,7 @@ end
 
 def block_literal?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.BlockLit(found) -> return true
+    Ast.Expr.BlockLit(_) -> return true
     _ -> return false
   end
 end

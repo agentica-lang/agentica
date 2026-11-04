@@ -198,7 +198,7 @@ def test_no_function_calls_slow_builtin_in_loop_or_block():
 def test_check_finds_slow_calls():
     text = """\
 def f(list: List[Int]) -> Int
-  for x in list
+  for _ in list
     list = list.drop(1)
   end
   return 0

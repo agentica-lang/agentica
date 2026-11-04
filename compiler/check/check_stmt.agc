@@ -10,6 +10,7 @@ import Flow from "check_flow"
 import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
+import Variables from "check_variables"
 
 ## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms
@@ -122,7 +123,10 @@ def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> R
   end
 
   signature = cx.functions[node.name]
-  here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
+  here = State.forget_locals(
+    st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature)),
+  )
+
   checked = try DefaultChecks.check_types(cx, here, node, signature.params)
   inner = State.enter(checked)
   index = 0
@@ -147,6 +151,7 @@ def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> R
     )
   end
 
+  try Variables.check(cx, inner)
   return ok(State.leave(inner, here))
 end
 
@@ -184,7 +189,18 @@ def check_block_run(
   index = 0
   while index < types.size
     param = block.params[index]
-    inside = try State.introduce(cx, inside, param.name, types[index], param.span, false)
+    inside = try State.introduce_local(
+      cx,
+      inside,
+      param.name,
+      types[index],
+      param.span,
+      false,
+      State.Origin.BlockParameter,
+      param.span,
+      none,
+    )
+
     inside = State.record_bound(inside, param.id, [types[index]])
     index += 1
   end
@@ -254,8 +270,7 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
 
   help = "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there"
   case st.capture
-    some(capture) ->
-      help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
+    some(_) -> help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
     none -> help = help
   end
 
@@ -288,7 +303,18 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
     type = out.type
   end
 
-  introduced = try State.introduce(cx, out.st, node.name, type, node.span, false)
+  introduced = try State.introduce_local(
+    cx,
+    out.st,
+    node.name,
+    type,
+    node.span,
+    false,
+    State.Origin.Variable,
+    node.span,
+    some(node.value),
+  )
+
   return ok(State.record_bound(introduced, node.id, [type]))
 end
 
@@ -314,7 +340,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
   end
 
   case node.type
-    some(annotation) ->
+    some(_) ->
       return error(
         State.fail(
           cx,
@@ -340,8 +366,8 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
     )
   end
 
-  out = try State.expr(cx, st, node.value, existing.type)
-  return ok(out.st)
+  out = try State.expr(cx, State.assigning(st, existing), node.value, existing.type)
+  return ok(State.assigned(out.st, existing))
 end
 
 def check_return(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
@@ -451,7 +477,18 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
     element = T.item(type)
   end
 
-  inner = try State.introduce(cx, State.enter(iterable.st), node.variable, element, node.span, true)
+  inner = try State.introduce_local(
+    cx,
+    State.enter(iterable.st),
+    node.variable,
+    element,
+    node.span,
+    true,
+    State.Origin.ForVariable,
+    node.variable_span,
+    some(node.iterable),
+  )
+
   inner = State.record_bound(inner, node.id, [element])
   inner = try in_loop(cx, inner, node.body)
   return ok(State.leave(inner, iterable.st))
@@ -488,7 +525,7 @@ end
 # A guarded arm covers nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
 def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, arms: Arms) -> Result[ArmDone]
   case arm.pattern
-    Ast.Pattern.Wildcard(pattern) ->
+    Ast.Pattern.Wildcard(_) ->
       body = try arm_body(cx, st, arm)
       return ok(ArmDone(st: body, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm))))
     Ast.Pattern.Literal(pattern) -> return check_literal_arm(cx, st, arm, pattern, value_type, arms)
@@ -574,7 +611,7 @@ end
 
 def nested?(slot: Ast.Slot) -> Bool
   case slot
-    Ast.Slot.Nested(inner) -> return true
+    Ast.Slot.Nested(_) -> return true
     _ -> return false
   end
 end
@@ -598,14 +635,24 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
   index = 0
   while index < types.size
     case pattern.slots[index]
-      Ast.Slot.Bind(name, _) ->
+      Ast.Slot.Bind(name, name_span) ->
         if T.is?(types[index], "Void")
           return error(
             State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),
           )
         end
 
-        current = try State.introduce(cx, current, name, types[index], pattern.span, false)
+        current = try State.introduce_local(
+          cx,
+          current,
+          name,
+          types[index],
+          pattern.span,
+          false,
+          State.Origin.PatternBinding,
+          name_span,
+          none,
+        )
       Ast.Slot.Skip -> current = current
       Ast.Slot.Nested(inner) -> current = try check_nested(cx, current, inner, types[index])
     end
@@ -629,7 +676,7 @@ def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -
       end
 
       return bind_pattern(cx, st, pattern, payload.unwrap!)
-    Ast.Pattern.Wildcard(pattern) -> return ok(st)
+    Ast.Pattern.Wildcard(_) -> return ok(st)
   end
 end
 
@@ -798,11 +845,11 @@ end
 # The type of a literal.
 def literal_type(value: Ast.LitValue) -> T.Type
   case value
-    Ast.LitValue.Whole(number) -> return T.Type.Int
-    Ast.LitValue.Huge(digits) -> return T.Type.Int
-    Ast.LitValue.Real(number) -> return T.Type.Float
-    Ast.LitValue.Text(text) -> return T.Type.String
-    Ast.LitValue.Flag(flag) -> return T.Type.Bool
+    Ast.LitValue.Whole(_) -> return T.Type.Int
+    Ast.LitValue.Huge(_) -> return T.Type.Int
+    Ast.LitValue.Real(_) -> return T.Type.Float
+    Ast.LitValue.Text(_) -> return T.Type.String
+    Ast.LitValue.Flag(_) -> return T.Type.Bool
     Ast.LitValue.Nothing -> return T.Type.Nil
   end
 end

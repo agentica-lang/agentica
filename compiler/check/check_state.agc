@@ -19,10 +19,32 @@ MAX_REPEAT = 1_048_576
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
 ## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
+## slot is the key of the name in `St.locals` (the offset where it is introduced) when CHECK-UNUSED-VARIABLE watches
+## it, and -1 for a parameter of a function, which is never watched.
 export struct Binding
   type: Types.Type
   immutable: Bool
   level: Int
+  slot: Int
+end
+
+## How a watched name was introduced: an assignment, a `for` variable, the parameter of a block or a name of a `case`
+## pattern. The help of CHECK-UNUSED-VARIABLE depends on it.
+export enum Origin
+  Variable
+  ForVariable
+  BlockParameter
+  PatternBinding
+end
+
+## A name that has to be read before the function ends (CHECK-UNUSED-VARIABLE): where it is introduced (`span`), how,
+## its type, and the value it is set to (the iterable of a `for`), none for a parameter or a pattern name.
+export struct Local
+  name: String
+  span: Source.Span
+  origin: Origin
+  type: Types.Type
+  value: Optional[Ast.Expr]
 end
 
 ## The result type of the function or block being checked. Infer is a block whose result is not known yet: the first
@@ -89,7 +111,8 @@ end
 ## variables are opaque types, and a Map key or Set element may be one. json_needs holds, by linked name, what each
 ## generic function needs of its type arguments for the JSON.encode and JSON.from calls of its body and of the generic
 ## functions it calls (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional,
-## JsonField or Map key of one, that must be encodable once the variables are bound.
+## JsonField or Map key of one, that must be encodable once the variables are bound. lenient is the files in which a
+## name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -110,6 +133,7 @@ export struct Cx
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
   prelude: Bool
   json_needs: Map[String, List[Types.Type]]
+  lenient: Set[String]
 end
 
 ## What the body of a generic function does with JSON that its callers must know: Need is a JSON.encode or JSON.from
@@ -132,7 +156,10 @@ end
 ## for the queries (`agentica type-at`), and the lowering never reads it. probe is true while a block is checked only
 ## to learn its result type (Stmt.check_block_in): an error(...) with no expected type then has the type
 ## Result[Unknown] and does not fix the result of the block, and nothing checked in that run is kept. json_uses holds
-## the JsonUse of the body in order; only the run that computes Cx.json_needs reads it.
+## the JsonUse of the body in order; only the run that computes Cx.json_needs reads it. locals are the names that the
+## function introduced and must read (by the offset of their span), reads the ones a read has reached, writes the ones
+## that an assignment set again, and assigning the ones whose assignment is being checked, where a read of the name
+## itself is no use of it (check_variables.agc).
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -150,6 +177,10 @@ export struct St
   bound: Map[Int, List[Types.Type]]
   probe: Bool
   json_uses: List[JsonUse]
+  locals: Map[Int, Local]
+  reads: Set[Int]
+  writes: Set[Int]
+  assigning: Set[Int]
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -193,6 +224,9 @@ end
 ## The state at the start of a function: no names, no types.
 export def fresh() -> St
   no_tries: Set[Int] = Set.new([])
+  no_reads: Set[Int] = Set.new([])
+  no_writes: Set[Int] = Set.new([])
+  no_assigning: Set[Int] = Set.new([])
   return St(
     types: [],
     resolved: {},
@@ -210,6 +244,10 @@ export def fresh() -> St
     bound: {},
     probe: false,
     json_uses: [],
+    locals: {},
+    reads: no_reads,
+    writes: no_writes,
+    assigning: no_assigning,
   )
 end
 
@@ -328,41 +366,67 @@ export def leave(st: St, before: St) -> St
 end
 
 ## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor
-## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read.
+## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read. The name
+## is not watched by CHECK-UNUSED-VARIABLE (a parameter of a function).
 export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
-  if name == "_"
-    return ok(st)
+  return introduce_slot(cx, st, name, type, span, immutable, -1)
+end
+
+## `introduce` for a name that CHECK-UNUSED-VARIABLE watches: it must be read before the function ends, unless it
+## starts with `_`. `span` is where a clash is reported; `shown` is where the name is introduced, which an unused
+## name is reported at, and its offset is the name's key. `value` is what the name is set to, if anything.
+export def introduce_local(
+  cx: Cx,
+  st: St,
+  name: String,
+  type: Types.Type,
+  span: Source.Span,
+  immutable: Bool,
+  origin: Origin,
+  shown: Source.Span,
+  value: Optional[Ast.Expr],
+) -> Result[St]
+  if name.starts_with?("_")
+    return introduce_slot(cx, st, name, type, span, immutable, -1)
   end
 
-  try reserve_local(cx, st, name, span)
-  existing = st.vars.get(name)
-  if existing.some?
-    if existing.unwrap!.immutable
-      return error(
-        fail_help(
-          cx,
-          st,
-          "CHECK-SHADOWED-NAME",
-          "\"#{name}\" is already visible; Agentica does not allow shadowing",
-          span,
-          "choose another name",
-        ),
-      )
-    end
+  key = shown.start.offset
+  introduced = try introduce_slot(cx, st, name, type, span, immutable, key)
+  local = Local(name: name, span: shown, origin: origin, type: type, value: value)
+  return ok(introduced.with(locals: introduced.locals.put(key, local)))
+end
 
-    return error(
-      fail_help(
-        cx,
-        st,
-        "CHECK-SHADOWED-NAME",
-        "\"#{name}\" is already visible; Agentica does not allow shadowing",
-        span,
-        "assign to it with \"#{name} = value\" instead of introducing it again, or choose another name",
-      ),
-    )
+## The state after the name of `binding` was read, unless it is the name that is being assigned.
+export def read(st: St, binding: Binding) -> St
+  if binding.slot < 0 or st.reads.include?(binding.slot) or st.assigning.include?(binding.slot)
+    return st
   end
 
-  return ok(st.with(vars: st.vars.put(name, Binding(type: type, immutable: immutable, level: st.depth))))
+  return st.with(reads: st.reads.add(binding.slot))
+end
+
+## The state at the start of the assignment to `binding`: it is set again, and a read of it in the value is no use.
+export def assigning(st: St, binding: Binding) -> St
+  if binding.slot < 0
+    return st
+  end
+
+  return st.with(writes: st.writes.add(binding.slot), assigning: st.assigning.add(binding.slot))
+end
+
+## The state at the end of the assignment to `binding`.
+export def assigned(st: St, binding: Binding) -> St
+  if binding.slot < 0
+    return st
+  end
+
+  return st.with(assigning: st.assigning.delete(binding.slot))
+end
+
+## The state with no name to watch: the start of a function or of a constant.
+export def forget_locals(st: St) -> St
+  no_reads: Set[Int] = Set.new([])
+  return st.with(locals: {}, reads: no_reads, writes: no_reads, assigning: no_reads)
 end
 
 ## CHECK-REDEFINED-NAME for ok, error, some and none, which are builtin constructors.
@@ -406,4 +470,49 @@ export def hint_of(text: String) -> Diag.Help
   end
 
   return Diag.Help.Hint(text)
+end
+
+def introduce_slot(
+  cx: Cx,
+  st: St,
+  name: String,
+  type: Types.Type,
+  span: Source.Span,
+  immutable: Bool,
+  slot: Int,
+) -> Result[St]
+  if name == "_"
+    return ok(st)
+  end
+
+  try reserve_local(cx, st, name, span)
+  existing = st.vars.get(name)
+  if existing.some?
+    if existing.unwrap!.immutable
+      return error(
+        fail_help(
+          cx,
+          st,
+          "CHECK-SHADOWED-NAME",
+          "\"#{name}\" is already visible; Agentica does not allow shadowing",
+          span,
+          "choose another name",
+        ),
+      )
+    end
+
+    return error(
+      fail_help(
+        cx,
+        st,
+        "CHECK-SHADOWED-NAME",
+        "\"#{name}\" is already visible; Agentica does not allow shadowing",
+        span,
+        "assign to it with \"#{name} = value\" instead of introducing it again, or choose another name",
+      ),
+    )
+  end
+
+  binding = Binding(type: type, immutable: immutable, level: st.depth, slot: slot)
+  return ok(st.with(vars: st.vars.put(name, binding)))
 end

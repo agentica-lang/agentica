@@ -28,11 +28,11 @@ def main() -> Void
       Test.eq(divide(5), 2)
     end,
     Test.test("leaves a task") do
-      task = Task.spawn(&later, 60000)
+      _task = Task.spawn(&later, 60000)
       ok()
     end,
     Test.test("loses a crash") do
-      task = Task.spawn(&divide, 0)
+      _task = Task.spawn(&divide, 0)
       Task.sleep(10)
       ok()
     end,

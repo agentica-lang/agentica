@@ -5,7 +5,7 @@ def leave(n: Int) -> Int
 end
 
 def main() -> Void
-  t = Task.spawn(&leave, 3)
+  _t = Task.spawn(&leave, 3)
   Task.sleep(5000)
   puts("never")
 end

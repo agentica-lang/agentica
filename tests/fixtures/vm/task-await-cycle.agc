@@ -5,7 +5,7 @@ end
 
 def hidden(inbox: Channel[Task[Result[Int]]]) -> Result[Int]
   target = inbox.recv(5000).unwrap!
-  results = [1, 2].map do |n|
+  results = [1, 2].map do |_|
     Task.await(target)
   end
   return results.at(0)

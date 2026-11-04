@@ -255,7 +255,7 @@ end
 ## True when the type has a type variable inside.
 export def has_variables?(type: ResolvedType) -> Bool
   case type
-    Types.Type.Var(name) -> return true
+    Types.Type.Var(_) -> return true
     Types.Type.Result(item) -> return has_variables?(item)
     Types.Type.Optional(item) -> return has_variables?(item)
     Types.Type.Task(item) -> return has_variables?(item)
@@ -268,8 +268,8 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.ATS(key, value) -> return has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
       return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
-    Types.Type.Struct(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
-    Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
+    Types.Type.Struct(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
+    Types.Type.Enum(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     _ -> return false
   end
 end
@@ -1383,8 +1383,8 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Map(key, value) -> return [key, value]
     Types.Type.ATS(key, value) -> return [key, value]
     Types.Type.Fn(params, result) -> return params.concat([result])
-    Types.Type.Struct(name, args) -> return args
-    Types.Type.Enum(name, args) -> return args
+    Types.Type.Struct(_, args) -> return args
+    Types.Type.Enum(_, args) -> return args
     _ -> return []
   end
 end

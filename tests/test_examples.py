@@ -454,7 +454,7 @@ SYNONYMS = [
     ("xs.select do |x| x > 1 end", "xs.filter do |x| x > 1 end"),
     ("xs.inject(10) do |a, x| a + x end", "xs.reduce(10) do |a, x| a + x end"),
     ("xs.detect do |x| x > 1 end", "xs.find do |x| x > 1 end"),
-    ("m.select do |k, v| v > 1 end", "m.filter do |k, v| v > 1 end"),
+    ("m.select do |_, v| v > 1 end", "m.filter do |_, v| v > 1 end"),
     ("m.key?(\"a\")", "m.has_key?(\"a\")"),
     ("m.include?(\"a\")", "m.has_key?(\"a\")"),
     ("m.member?(\"z\")", "m.has_key?(\"z\")"),
@@ -470,7 +470,7 @@ def test_a_ruby_synonym_runs_like_its_base_name(program):
         outputs = []
         for expression in (synonym, base):
             source = ("def main() -> Void\n  xs = [1, 2, 3]\n  m = {\"a\": 1, \"b\": 2}\n"
-                      "  puts(%s)\nend\n\n" % expression)
+                      "  _ = xs\n  _ = m\n  puts(%s)\nend\n\n" % expression)
             outputs.append(run_text_io(program, source))
         assert outputs[0] == outputs[1] and outputs[0][1] is None, synonym
 
@@ -566,13 +566,13 @@ def test_help_lists_the_subcommands_the_core_rules_and_the_builtin_namespaces():
 def test_new_diagnostics_retain_their_codes_across_the_three_printers(program):
     path = program("")
     for body, code in [
-            ("  x = List.repeat(1, -1)", "RUNTIME-INVALID-COUNT"),
+            ("  _x = List.repeat(1, -1)", "RUNTIME-INVALID-COUNT"),
             ('  r = error("bad")', "CHECK-RESULT-TYPE"),
             ("  r = try ok(1)", "CHECK-TRY-CONTEXT"),
             ("  x = JSON.encode({1: true})", "CHECK-NOT-ENCODABLE"),
             ("  large = 1.0\n  i = 0\n  while i < 40\n    large = large * 1000000000.0\n    i = i + 1\n  end\n"
-             "  x = JSON.encode(large)", "RUNTIME-JSON-ENCODE"),
-            ('  r: Result[Int] = error("bad")\n  x = Result.unwrap!(r)', "RUNTIME-UNWRAP-ERROR")]:
+             "  _x = JSON.encode(large)", "RUNTIME-JSON-ENCODE"),
+            ('  r: Result[Int] = error("bad")\n  _x = Result.unwrap!(r)', "RUNTIME-UNWRAP-ERROR")]:
         path.write_text("def main() -> Void\n%s\nend\n\n" % body, encoding="utf-8")
         for style in ("plain", "--ai", "--json"):
             result = cli_run(*([] if style == "plain" else [style]), path)
@@ -628,7 +628,7 @@ def test_cli_exit_codes(program):
     assert json.loads(as_json.stderr)["code"] == "CHECK-TYPE-MISMATCH"
     assert as_json.stdout == ""
     assert cli_run("--json", "check", hello) == (0, '{"ok":true}\n', "")
-    failed = cli_run(program("def main() -> Void\n  x = 1 / 0\nend\n\n"))
+    failed = cli_run(program("def main() -> Void\n  _x = 1 / 0\nend\n\n"))
     assert failed.code == 1
     assert re.search(r"error\[RUNTIME-DIVISION-BY-ZERO\]", failed.stderr)
     assert cli_run(program("def main() -> Void\n  System.exit(3)\nend\n\n")).code == 3

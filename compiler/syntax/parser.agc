@@ -563,9 +563,9 @@ end
 
 def block_target?(target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Call(call) -> return true
-    Ast.Expr.MethodCall(call) -> return true
-    Ast.Expr.FieldAccess(access) -> return true
+    Ast.Expr.Call(_) -> return true
+    Ast.Expr.MethodCall(_) -> return true
+    Ast.Expr.FieldAccess(_) -> return true
     _ -> return false
   end
 end
@@ -737,7 +737,7 @@ end
 
 def name_target?(target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Name(reference) -> return true
+    Ast.Expr.Name(_) -> return true
     _ -> return false
   end
 end
@@ -1629,7 +1629,7 @@ end
 # of the binary node.
 def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   # A name ending in ? or ! is not a variable, so `foo? += 1` fails here.
-  after_name = try Base.expect(e, pos, "name", "a name", false)
+  try Base.expect(e, pos, "name", "a name", false)
   operator = e.tokens[pos + 1]
   target = Ast.Expr.Name(Ast.NameRef(id: ids, name: e.tokens[pos].lexeme, span: e.tokens[pos].span))
   value = try parse_expression(e, pos + 2, ids + 1)
@@ -1662,7 +1662,7 @@ end
 
 def assignment_message(node: Ast.Expr) -> String
   case node
-    Ast.Expr.Index(access) ->
+    Ast.Expr.Index(_) ->
       return (
         "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, " +
         "Map.put(map, key, value))"
@@ -2828,7 +2828,7 @@ def parse_extern_function(
   index = 0
   for param in params.nodes
     case param.default
-      some(value) ->
+      some(_) ->
         return error(
           Base.bail_span(
             "PARSE-EXTERN-DEFAULT",
@@ -4067,7 +4067,7 @@ end
 
 def constant?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Constant(node) -> return true
+    Ast.Decl.Constant(_) -> return true
     _ -> return false
   end
 end

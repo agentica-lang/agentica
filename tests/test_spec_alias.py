@@ -249,7 +249,7 @@ def test_generic_alias_is_the_expanded_type_and_chains(agentica_check):
         + "  plain: List[List[Int]] = m\n"
         + "  grid: Grid = [[1.5]]\n"
         + "  nested: Matrix[Matrix[Int]] = [[[[1]]]]\n"
-        + "  tree = Tree.Leaf(plain)\n"
+        + "  _tree = Tree.Leaf(plain)\n"
         + "  puts(plain.size + grid.size + nested.size)\n"
         + "end\n\n"
     )
@@ -486,7 +486,7 @@ def test_alias_in_a_generic_enum_without_a_name_clash_checks_clean(agentica_chec
         "type Items = List[Int]\n\n"
         "enum E[T]\n  V(Items, T)\nend\n\n"
         "def main() -> Void\n"
-        "  e: E[String] = E.V([1], \"a\")\n"
+        "  _e: E[String] = E.V([1], \"a\")\n"
         "end\n\n"
     )
     assert agentica_check(text) is None
@@ -497,7 +497,7 @@ def test_alias_parameter_named_like_the_enum_parameter_is_not_a_capture(agentica
         "type Box[T] = List[T]\n\n"
         "enum E[T]\n  V(Box[T])\nend\n\n"
         "def main() -> Void\n"
-        "  e: E[Int] = E.V([1])\n"
+        "  _e: E[Int] = E.V([1])\n"
         "end\n\n"
     )
     assert agentica_check(text) is None

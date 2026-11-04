@@ -29,7 +29,7 @@ def declared(*lines: str, header: str = BOX) -> str:
 
 
 RULES = {
-    "construction infers T from the value": (declared("b = Box(value: 1)", "x: Int = b.value"), None, None),
+    "construction infers T from the value": (declared("b = Box(value: 1)", "_x: Int = b.value"), None, None),
     "T comes from a type annotation for an empty list": (
         declared("b: Box[List[Int]] = Box(value: [])", "puts(b.value.size)"), None, None),
     "T comes from a parameter, a return type and a field": (

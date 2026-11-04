@@ -39,7 +39,7 @@ def relative(from: List[String], to: List[String]) -> String
   end
 
   names: List[String] = []
-  for index in shared...from.size
+  for _ in shared...from.size
     names = names.push("..")
   end
 

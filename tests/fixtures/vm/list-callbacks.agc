@@ -30,7 +30,7 @@ def main() -> Void
     print("#{x};")
   end
   puts("")
-  no_items.each do |x|
+  no_items.each do |_|
     puts("never")
   end
   puts(xs.any? do |x|
@@ -41,8 +41,8 @@ def main() -> Void
     puts("all #{x}")
     x < 8
   end)
-  puts(no_items.any? do |x| true end)
-  puts(no_items.all? do |x| false end)
+  puts(no_items.any? do |_| true end)
+  puts(no_items.all? do |_| false end)
   items = [Item(name: "c", rank: 2, score: 0.5), Item(name: "a", rank: 1, score: -0.0), Item(name: "b", rank: 2, score: 0.0),
            Item(name: "é", rank: 1, score: 0.0 / 1.0), Item(name: "Z", rank: 3, score: -1.5), Item(name: "ab", rank: 0, score: 2.5)]
   ranked = items.sort_by do |it|

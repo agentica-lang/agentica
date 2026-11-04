@@ -37,6 +37,6 @@ def main() -> Void
   IO.inspect(HTTP.wait(server))
   case fetch(base + "/after?0")
     ok(response) -> puts("after: #{response.status}")
-    error(message) -> puts("after: refused")
+    error(_) -> puts("after: refused")
   end
 end

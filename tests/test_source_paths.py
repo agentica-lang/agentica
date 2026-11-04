@@ -21,7 +21,7 @@ import Logger from "std/logger"
 def main() -> Void
   puts(Util.twice(2).to_s)
   puts(Shared.name())
-  attached = Logger.attach("boom", LogLevel.Info, &Util.boom)
+  _ = Logger.attach("boom", LogLevel.Info, &Util.boom)
   Logger.info("go")
 end
 """

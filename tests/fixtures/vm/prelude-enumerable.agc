@@ -45,7 +45,7 @@ def main() -> Void
   numbers.each_with_index do |n, index|
     puts("#{index}=#{n}")
   end
-  empty.each_with_index do |n, index|
+  empty.each_with_index do |_, index|
     puts("never #{index}")
   end
 
@@ -101,18 +101,18 @@ def main() -> Void
   show("max_by nan", keys.max_by do |key| key end.unwrap!.to_s)
   show("min_by first nan", [nan, 1.0].min_by do |key| key end.unwrap!.to_s)
   show("max_by only nan", [nan, nan].max_by do |key| key end.unwrap!.to_s)
-  show("min_by nan struct", items.min_by do |item| nan end.unwrap!.name)
+  show("min_by nan struct", items.min_by do |_| nan end.unwrap!.name)
 
   table = {"a": 1, "b": 2, "c": 3}
   table.each do |key, value|
     puts("#{key}->#{value}")
   end
-  show("filter", table.filter do |key, value| value != 2 end.to_s)
-  show("filter none", table.filter do |key, value| value > 9 end.to_s)
-  show("filter keys", table.filter do |key, value| key != "a" end.to_s)
+  show("filter", table.filter do |_, value| value != 2 end.to_s)
+  show("filter none", table.filter do |_, value| value > 9 end.to_s)
+  show("filter keys", table.filter do |key, _| key != "a" end.to_s)
   no_items: Map[String, Int] = {}
-  show("filter empty", no_items.filter do |key, value| true end.to_s)
-  no_items.each do |key, value|
+  show("filter empty", no_items.filter do |_, _| true end.to_s)
+  no_items.each do |key, _|
     puts("never #{key}")
   end
 

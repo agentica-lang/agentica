@@ -45,7 +45,7 @@ SOCKET_BUFFER = 1 << 20
 ROWS_PROGRAM = """\
 def main() -> Void
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   n = 0
@@ -93,7 +93,7 @@ end
 
 def main() -> Void
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   Task.spawn(&flood, filler)
@@ -116,7 +116,7 @@ end
 def main() -> Void
   t = Task.spawn(&ticker, 40)
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   n = 0
@@ -132,7 +132,7 @@ end
 TWO_WRITERS_PROGRAM = """\
 def writer(tag: String) -> Int
   filler = "x"
-  for i in 0..12
+  for _ in 0..12
     filler = filler + filler
   end
   n = 0
@@ -165,7 +165,7 @@ end
 def main() -> Void
   s = Task.spawn(&shorts, 200)
   big = "z"
-  for i in 0..17
+  for _ in 0..17
     big = big + big
   end
   puts(big)
@@ -193,7 +193,7 @@ end
 
 def main() -> Void
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   Task.await(Task.spawn(&parent, filler))
@@ -208,7 +208,7 @@ end
 
 def main() -> Void
   big = "e"
-  for i in 0..%d
+  for _ in 0..%d
     big = big + big
   end
   value = Result.unwrap!(parse(big))
@@ -230,7 +230,7 @@ end
 
 def main() -> Void
   big = "z"
-  for i in 0..18
+  for _ in 0..18
     big = big + big
   end
   Task.spawn(&printer, big)
@@ -275,7 +275,7 @@ end
 def main() -> Void
   Task.spawn(&crasher, 200)
   filler = "w"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   n = 0
@@ -290,7 +290,7 @@ end
 ALTERNATE_PROGRAM = """\
 def main() -> Void
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   n = 0
@@ -314,7 +314,7 @@ end
 FLUSH_PROGRAM = """\
 def main() -> Void
   filler = "x"
-  for i in 0..9
+  for _ in 0..9
     filler = filler + filler
   end
   n = 0
@@ -510,7 +510,7 @@ def test_a_socket_as_stdout_read_only_after_the_exit_gets_the_rows_of_a_later_tu
 
 # A line of 128 KiB and one byte, longer than the 64 KiB ring, after some rows: it goes out in pieces through the FIFO of
 # prints, and each piece must reach the socket without waiting for the poller's writable.
-BIG_LINE_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  big = \"y\"\n  for i in 0..16\n"
+BIG_LINE_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  big = \"y\"\n  for _ in 0..16\n"
                                         "    big = big + big\n  end\n  puts(big)\n")
 
 
@@ -875,7 +875,8 @@ def test_a_child_moves_on_while_the_program_keeps_warning_records_that_fill_the_
 @not_wine_child
 def test_a_reader_that_leaves_once_only_child_bytes_are_pending_keeps_the_exit_code_0(tmp_path):
     # The warn is written while the child streams; the reader leaves later, at 3 MB, so only the child's bytes are lost.
-    program = STREAMING_PROGRAM.replace('  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
+    program = STREAMING_PROGRAM.replace("  start = Time.monotonic_ms()\n", "").replace(
+        '  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
         "IO.inspect(Process.wait(child, 60000))", "Process.wait(child, 60000)")
     summary, out, _ = run_case(tmp_path, "streaming-gone", program, peer=["--merge", "--chunk", "8192", "--pause",
                                                                           "0.002", "--close-after", "3000000"])

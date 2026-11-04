@@ -11,6 +11,14 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
 - `_` binds nothing: `_ = f()` drops a result; it can be a `for` variable, a
   parameter or a pattern slot, repeated freely. Reading `_` is
   `CHECK-UNKNOWN-NAME`; `_: Int = x` is `PARSE-UNEXPECTED-TOKEN`.
+- A name that is never read is `CHECK-UNUSED-VARIABLE`: a variable, a `for`
+  variable, a block parameter or a pattern name; not a function parameter. Start
+  the name with `_` (`_count`) to keep it, or write `_` for a `for` variable
+  (`for _ in 0...n`), a block parameter (`|_, i|`) or a pattern slot
+  (`error(_)`). Updating is no read: `count += 1`, `x = x + 1` and
+  `xs = xs.push(v)` leave the name unused unless something else reads it. The
+  error is at the first unused name in the source, after the function's other
+  errors. A `Result` assigned and never read: handle it or write `_ = f(...)`.
 - `x += e` (also `-=`, `*=`, `/=`, `%=`) is `x = x op e`; `x` must exist.
 - A name created in a block is not visible after its `end`. A new variable
   cannot reuse a visible name (no shadowing: `CHECK-SHADOWED-NAME`).

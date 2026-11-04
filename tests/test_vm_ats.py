@@ -90,7 +90,7 @@ import BDD from "std/bdd"
 def main() -> Void
   hits: ATS[String, Int] = ATS.new()
   BDD.run([
-    BDD.step("I count a visit") do |ctx: BDD.Context, args: List[String]|
+    BDD.step("I count a visit") do |ctx: BDD.Context, _args: List[String]|
       hits.add("home", 1)
       ctx
     end,

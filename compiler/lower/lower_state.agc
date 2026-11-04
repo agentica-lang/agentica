@@ -221,9 +221,9 @@ end
 export def vm_type?(cx: Cx, type: Types.Type) -> Bool
   case type
     Types.Type.List(item) -> return vm_type?(cx, item)
-    Types.Type.Map(key, value) -> return vm_type?(cx, value)
-    Types.Type.ATS(key, value) -> return vm_type?(cx, value)
-    Types.Type.Set(item) -> return true
+    Types.Type.Map(_, value) -> return vm_type?(cx, value)
+    Types.Type.ATS(_, value) -> return vm_type?(cx, value)
+    Types.Type.Set(_) -> return true
     Types.Type.Result(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
     # An Optional is a value of the builtin enum Optional (Program.OPTIONAL).
     Types.Type.Optional(item) -> return cx.user_types.get("Optional", "") == "Enum" and vm_type?(cx, item)
@@ -232,12 +232,12 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Lazy(item) -> return vm_type?(cx, item)
     # A codec is the name of its struct at run time (JSON.codec).
     Types.Type.Codec(_) -> return true
-    Types.Type.Struct(name, args) -> return cx.user_types.get(name, "") == "Struct"
-    Types.Type.Enum(name, args) -> return cx.user_types.get(name, "") == "Enum"
+    Types.Type.Struct(name, _) -> return cx.user_types.get(name, "") == "Struct"
+    Types.Type.Enum(name, _) -> return cx.user_types.get(name, "") == "Enum"
     Types.Type.Fn(params, result) -> return fn_type?(cx, params, result)
     # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, TestCase, C.Pointer) or a resource of
     # an extern block (cx.resources): the VM has them all.
-    Types.Type.Opaque(name) -> return true
+    Types.Type.Opaque(_) -> return true
     Types.Type.Int -> return true
     Types.Type.Float -> return true
     Types.Type.Bool -> return true
@@ -251,7 +251,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     # field of a generic struct (`items: List[T] = []`), which the checker types with the variable. No other variable
     # reaches the lowering: a use of a generic struct, enum or function has its arguments put in, and a builtin
     # signature is instantiated at each call.
-    Types.Type.Var(name) -> return true
+    Types.Type.Var(_) -> return true
     _ -> return false
   end
 end

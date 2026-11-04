@@ -36,7 +36,7 @@ export def references(root: Ast.Expr) -> List[Ast.ConstRef]
     at += 1
     case node
       Node.Expr(expr) -> found = push_read(found, expr)
-      Node.Stmt(stmt) -> found = found
+      Node.Stmt(_) -> found = found
     end
 
     for child in children(node)
@@ -103,7 +103,7 @@ def interpolated(parts: List[Ast.Part]) -> List[Node]
   for part in parts
     case part
       Ast.Part.Code(code) -> out = out.push(Node.Expr(code))
-      Ast.Part.Text(text) -> out = out
+      Ast.Part.Text(_) -> out = out
     end
   end
 
@@ -119,7 +119,7 @@ def stmt_children(stmt: Ast.Stmt) -> List[Node]
     Ast.Stmt.While(node) -> return [Node.Expr(node.condition)].concat(stmts(node.body))
     Ast.Stmt.For(node) -> return [Node.Expr(node.iterable)].concat(stmts(node.body))
     Ast.Stmt.Case(node) -> return case_children(node)
-    Ast.Stmt.Control(node) -> return []
+    Ast.Stmt.Control(_) -> return []
   end
 end
 

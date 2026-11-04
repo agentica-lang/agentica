@@ -4,9 +4,9 @@ def leave(n: Int) -> Int
 end
 
 def main() -> Void
-  t = Task.spawn(&leave, 3)
-  x = 0
+  _t = Task.spawn(&leave, 3)
+  _x = 0
   while true
-    x = (x + 1) % 1000
+    _x = (_x + 1) % 1000
   end
 end

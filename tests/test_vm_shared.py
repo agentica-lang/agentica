@@ -53,7 +53,7 @@ end
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   client = Result.unwrap!(TCP.connect("127.0.0.1", TCP.local_port(listener), 5000))
-  server = Result.unwrap!(TCP.accept(listener, 5000))
+  _server = Result.unwrap!(TCP.accept(listener, 5000))
   holder = Task.spawn(&reader, client)
   Task.sleep(0)
   waiter = Task.spawn(&impatient, client)
@@ -81,7 +81,7 @@ end
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   client = Result.unwrap!(TCP.connect("127.0.0.1", TCP.local_port(listener), 5000))
-  server = Result.unwrap!(TCP.accept(listener, 5000))
+  _server = Result.unwrap!(TCP.accept(listener, 5000))
   holder = Task.spawn(&reader, client)
   Task.sleep(0)
   puts(Task.await(Task.spawn(&parent, client)))

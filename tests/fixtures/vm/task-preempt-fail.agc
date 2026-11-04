@@ -4,10 +4,10 @@ end
 
 def main() -> Void
   t = Task.spawn(&boom, 0)
-  x = 0
+  _x = 0
   i = 0
   while i < 300
-    x = (x + 1) % 1000
+    _x = (_x + 1) % 1000
     i += 1
   end
   puts(Task.unobserved_crash().ok?)

@@ -181,7 +181,7 @@ export def given_env(ctx: Context, name: String, value: String) -> Context
     halt(ctx, "RUNTIME-BDD-CONTEXT", "the environment variable #{name} belongs to the VM and cannot be set")
   end
   # Where names ignore case the old spelling goes first: the child would get both and could see either.
-  env = ctx.scenario.env.filter do |key, old| !same_env_name?(key, name) end
+  env = ctx.scenario.env.filter do |key, _| !same_env_name?(key, name) end
   return with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
 end
 
@@ -312,10 +312,10 @@ def predefined() -> List[Step]
     step("the Agentica program {string}") do |ctx, args| given_program(ctx, args[0]) end,
     step("the environment variable {string} is {string}") do |ctx, args| given_env(ctx, args[0], args[1]) end,
     step("the program argument {string}") do |ctx, args| given_argument(ctx, args[0]) end,
-    step("I send a line:") do |ctx, args| when_line(ctx, doc_string(ctx)) end,
+    step("I send a line:") do |ctx, _| when_line(ctx, doc_string(ctx)) end,
     step("I send the line {string}") do |ctx, args| when_line(ctx, args[0]) end,
-    step("I send input:") do |ctx, args| when_input(ctx, doc_string(ctx)) end,
-    step("I close stdin") do |ctx, args| when_eof(ctx) end,
+    step("I send input:") do |ctx, _| when_input(ctx, doc_string(ctx)) end,
+    step("I close stdin") do |ctx, _| when_eof(ctx) end,
     step("I receive a line within {int} milliseconds:") do |ctx, args|
       then_line(ctx, doc_string(ctx), args[0].to_i!)
     end,
@@ -325,14 +325,14 @@ def predefined() -> List[Step]
     step("I receive a JSON line within {int} milliseconds:") do |ctx, args|
       then_json_line(ctx, doc_string(ctx), args[0].to_i!)
     end,
-    step("stdin remains open") do |ctx, args| then_stdin_open(ctx) end,
+    step("stdin remains open") do |ctx, _| then_stdin_open(ctx) end,
     step("the program exits with code {int} within {int} milliseconds") do |ctx, args|
       then_exit(ctx, args[0].to_i!, args[1].to_i!)
     end,
-    step("stdout is:") do |ctx, args| then_stdout(ctx, doc_string(ctx)) end,
-    step("stderr is:") do |ctx, args| then_stderr(ctx, doc_string(ctx)) end,
-    step("stdout includes:") do |ctx, args| then_stdout_includes(ctx, doc_string(ctx)) end,
-    step("stderr includes:") do |ctx, args| then_stderr_includes(ctx, doc_string(ctx)) end,
+    step("stdout is:") do |ctx, _| then_stdout(ctx, doc_string(ctx)) end,
+    step("stderr is:") do |ctx, _| then_stderr(ctx, doc_string(ctx)) end,
+    step("stdout includes:") do |ctx, _| then_stdout_includes(ctx, doc_string(ctx)) end,
+    step("stderr includes:") do |ctx, _| then_stderr_includes(ctx, doc_string(ctx)) end,
   ]
 end
 
