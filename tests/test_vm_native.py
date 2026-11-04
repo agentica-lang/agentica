@@ -15,6 +15,7 @@ import platform
 import re
 import signal
 import subprocess
+import sys
 import textwrap
 import threading
 import time
@@ -3075,10 +3076,83 @@ def derives(x: Int) -> Int
   return x + key.unwrap!.length
 end
 
+def contexts(x: Int) -> Int
+  if TLS.client_context(TlsClientOptions()).ok?
+    return x
+  end
+
+  return 0
+end
+
+def reads(x: Int) -> Int
+  if File.read_text("missing.txt").ok?
+    return x
+  end
+
+  return 0
+end
+
+def listens(x: Int) -> Int
+  if TCP.listen("127.0.0.1", 0).ok?
+    return x
+  end
+
+  return 0
+end
+
+def polls(x: Int) -> Int
+  if Native.wait_readable(0, 1000).ok?
+    return x
+  end
+
+  return 0
+end
+
+def reads_stdin(x: Int) -> Int
+  if gets().ok?
+    return x
+  end
+
+  return 0
+end
+
+def spawns(x: Int) -> Int
+  puts(Process.spawn("no-such-executable-1060", [], 1000).ok?)
+  return x
+end
+
+def runs(x: Int) -> Int
+  puts(Process.spawn(System.args()[1], ["-c", "pass"], 1000).ok?)
+  return x
+end
+
+def stops(x: Int) -> Int
+  child = Process.spawn(System.args()[1], ["-c", "import time; time.sleep(60)"], 1000).unwrap!
+  puts("spawned")
+  Process.close(child)
+  return x
+end
+
+def stops_captured(x: Int) -> Int
+  child = Process.spawn_captured(System.args()[1], ["-c", "import time; time.sleep(60)"], ".", 1000).unwrap!
+  Process.close(child)
+  puts("closed")
+  return x
+end
+
 def main() -> Void
   case System.args().first()
     "divide" -> puts(peer_call_twice(Native.callback(Step, &divide), 1))
     "kdf" -> puts(peer_call_twice(Native.callback(Step, &derives), 1))
+    "tls" -> puts(peer_call_twice(Native.callback(Step, &contexts), 1))
+    "file" -> puts(peer_call_twice(Native.callback(Step, &reads), 1))
+    "tcp" -> puts(peer_call_twice(Native.callback(Step, &listens), 1))
+    "poll" -> puts(peer_call_twice(Native.callback(Step, &polls), 1))
+    "stdin" -> puts(peer_call_twice(Native.callback(Step, &reads_stdin), 1))
+    "spawn" -> puts(peer_call_twice(Native.callback(Step, &spawns), 1))
+    "run" -> puts(peer_call_twice(Native.callback(Step, &runs), 1))
+    "close" -> puts(peer_call_twice(Native.callback(Step, &stops), 1))
+    "captured" -> puts(peer_call_twice(Native.callback(Step, &stops_captured), 1))
     "wait" -> puts(peer_call_twice(Native.callback(Step, &waits), 1))
     "huge" -> puts(peer_call_twice(Native.callback(Step, &huge), 1))
     "exit" -> puts(peer_call_twice(Native.callback(Step, &leaves), 1))
@@ -3093,25 +3167,103 @@ end
 # and from every later callback of the call, which run nothing (one "divide" line for two calls). A wait in a callback
 # is RUNTIME-NATIVE-CALLBACK at the wait, a result outside its C type RUNTIME-INTEGER-OVERFLOW at the extern def,
 # --max-steps counts the callback's steps, and an exit in a callback ends the run. A compute def runs C on the pool,
-# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call parks, so in a callback it is
-# RUNTIME-NATIVE-CALLBACK at the call.
+# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call, a TLS context build, a file call, a TCP
+# listen, a wait for a descriptor and a read of stdin park, so in a callback each is RUNTIME-NATIVE-CALLBACK at the
+# call. A spawn that fails before its child exists gives its error, also with several schedulers, where a spawn parks:
+# a spawn of a real program there is RUNTIME-NATIVE-CALLBACK at the spawn. At one scheduler a spawn runs in place; the
+# close of a plain child that runs would park until it is reaped, so it is RUNTIME-NATIVE-CALLBACK at the close (the
+# child keeps its handle, which the end of the run closes: vm/tests/process_test.c checks it), while the close of a
+# captured child only signals and works. The children are this Python (sys.executable, the second argument), so the
+# cases run on every system.
 @NATIVE_CALLS
 @pytest.mark.parametrize("mode, flags, status, code, start, out", [
     ("divide", [], 1, "RUNTIME-DIVISION-BY-ZERO", (9, 13), "divide 1\n"),
     ("wait", [], 1, "RUNTIME-NATIVE-CALLBACK", (13, 3), ""),
     ("kdf", [], 1, "RUNTIME-NATIVE-CALLBACK", (36, 9), ""),
+    ("tls", [], 1, "RUNTIME-NATIVE-CALLBACK", (41, 6), ""),
+    ("file", [], 1, "RUNTIME-NATIVE-CALLBACK", (49, 6), ""),
+    ("tcp", [], 1, "RUNTIME-NATIVE-CALLBACK", (57, 6), ""),
+    ("poll", [], 1, "RUNTIME-NATIVE-CALLBACK", (65, 6), ""),
+    ("stdin", [], 1, "RUNTIME-NATIVE-CALLBACK", (73, 6), ""),
+    ("spawn", ["--schedulers", "2"], 0, None, None, "false\nfalse\n1002\n"),
+    ("run", ["--schedulers", "2"], 1, "RUNTIME-NATIVE-CALLBACK", (86, 8), ""),
+    ("close", ["--schedulers", "1"], 1, "RUNTIME-NATIVE-CALLBACK", (93, 3), "spawned\n"),
+    ("captured", ["--schedulers", "1"], 0, None, None, "closed\nclosed\n1002\n"),
     ("huge", [], 1, "RUNTIME-INTEGER-OVERFLOW", (3, 3), ""),
     ("steps", ["--max-steps", "100000"], 1, "RUNTIME-STEP-LIMIT", (29, 21), ""),
     ("pool", [], 1, "RUNTIME-NATIVE-CALLBACK", (4, 3), ""),
     ("exit", [], 3, None, None, ""),
 ])
 def test_native_callback_failures_end_the_native_call(tmp_path, peer, mode, flags, status, code, start, out):
-    result = agentica("--json", *flags, program(tmp_path, CALLBACK_FAILURES % literal(peer)), mode)
+    result = agentica("--json", *flags, program(tmp_path, CALLBACK_FAILURES % literal(peer)), mode, sys.executable)
     assert result.stdout == out
     if code is None:
         assert (result.code, result.stderr) == (status, "")
     else:
         assert diagnostic(result, status) == (code, start)
+
+
+CALLBACK_PARENT_SEND = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_call_twice(fn: Step, x: C.Int32) -> C.Int32
+end
+
+def fills(x: Int) -> Int
+  sent = Process.parent_send(List.repeat("a", 1_000_000).join("") + "\\n", 30000)
+  return x
+end
+
+def fill(x: Int) -> Result[Int]
+  return ok(peer_call_twice(Native.callback(Step, &fills), x))
+end
+
+def child() -> Void
+  puts(Task.await(Task.spawn(&fill, 1)).ok?)
+  sent = Process.parent_send("after\\n", 30000)
+  puts(sent)
+  IO.flush()
+  tries = 0
+  while !sent.ok? && tries < 3000
+    Task.sleep(10)
+    sent = Process.parent_send("after\\n", 30000)
+    tries = tries + 1
+  end
+
+  puts(sent)
+end
+
+def parent(binary: String, me: String) -> Void
+  p = Process.spawn_channel(binary, ["--schedulers", "1", me, "child"], ".", 30000).unwrap!
+  puts(Process.read_line(p, 30000).unwrap!)
+  puts(Process.read_line(p, 30000).unwrap!)
+  puts(Process.channel_read_line(p, 30000).unwrap!.size)
+  puts(Process.channel_read_line(p, 30000).unwrap!)
+  puts(Process.read_line(p, 30000).unwrap!)
+  puts(Process.wait(p, 30000).unwrap!)
+  Process.close(p)
+end
+
+def main() -> Void
+  args = System.args()
+  if args.size == 1
+    child()
+  else
+    parent(args[0], args[1])
+  end
+end
+"""
+
+
+# At one scheduler a send on the parent channel in a callback starts its write before the park is refused, and the
+# write goes on with no request. A later send from another task, while the parent does not read, is "in use" and does
+# not start a second write on the same libuv request (#1064: it corrupted the stream and the run). Once the parent
+# reads, the line of the callback arrives whole and the later send goes out after it.
+@NATIVE_CALLS
+def test_a_parent_send_refused_in_a_callback_keeps_its_write(tmp_path, peer):
+    source = program(tmp_path, CALLBACK_PARENT_SEND % literal(peer))
+    result = agentica(source, cli()[0], source)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == 'false\nerror("process: the channel is in use")\n1000000\nafter\nok()\n0\n'
 
 
 CALLBACK_PUTS = """extern "%s"

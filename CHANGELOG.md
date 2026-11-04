@@ -8,8 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
+  (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
+  A number too big for an `Int` says it does not fit one.
+
 ### Changed
 
+- **Breaking:** the help of `std/option_parser` writes its notes in square
+  brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows the
+  choices as the value name (`--stats on|off`).
 - **Breaking:** an import alias that its file never uses is an error
   (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
   without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands
@@ -28,10 +37,22 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- In a `Scenario Outline`, a `<...>` that is not an `Examples` column and holds
+  `=`, a quote or `/` (HTML such as `<input type="checkbox">`) stays as written;
+  any other unknown `<...>`, such as a mistyped column, is still
+  `PARSE-GHERKIN-PARAMETER`.
 - `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the compute pool, so other
   tasks keep running while a key is derived.
 - A queued KDF call of a cancelled task is skipped.
+- No queued KDF call starts once `main` has returned.
 - **Breaking:** a KDF call inside a native callback is `RUNTIME-NATIVE-CALLBACK`.
+- A file, process, socket, stdin, HTTP server or `Native.wait_*` call inside a
+  native callback no longer leaks memory when it fails with
+  `RUNTIME-NATIVE-CALLBACK`.
+- With one scheduler, a `Process.parent_send` that a native callback starts and
+  that is refused while its line is still being written no longer corrupts the
+  channel or crashes the program: a later send gives
+  `error("process: the channel is in use")` until that line is out.
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
 

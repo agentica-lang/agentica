@@ -19,6 +19,13 @@
 #endif
 #include <string.h>
 #include <uv.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
+#if defined(__GLIBC__) && !defined(AGC_NO_GC)
+#include <malloc.h>
+#define MALLOC_COUNT 1
+#endif
 
 static agc_vm vm;
 static agc_task *task;
@@ -61,14 +68,16 @@ static agc_value string(const char *text) {
   return agc_string_value(agc_make_string(text, strlen(text), 0));
 }
 
-static agc_value call(const char *name, agc_value *args) {
+static const agc_builtin *find(const char *name) {
   const agc_builtin *builtin = NULL;
   for (size_t k = 0; k < agc_file_builtin_count; k++)
     if (strcmp(agc_file_builtins[k].name, name) == 0) builtin = &agc_file_builtins[k];
   for (size_t k = 0; k < agc_zlib_builtin_count; k++)
     if (strcmp(agc_zlib_builtins[k].name, name) == 0) builtin = &agc_zlib_builtins[k];
-  return agc_test_call(&vm, task, builtin, args);
+  return builtin;
 }
+
+static agc_value call(const char *name, agc_value *args) { return agc_test_call(&vm, task, find(name), args); }
 
 static agc_value ok(agc_value result) {
   const agc_result *r = agc_as_result(&vm, result);
@@ -156,6 +165,62 @@ static void check_sha256(agc_value path, const unsigned char expected[32]) {
   size_t len;
   const uint8_t *bytes = agc_bytes_data(&vm, ok(call("File.sha256.bytes", args)), &len);
   assert(len == 32 && memcmp(bytes, expected, 32) == 0);
+}
+
+/* Calls of NAME in a callback of native code, each RUNTIME-NATIVE-CALLBACK. The refusal comes before the call's op is
+   allocated, or frees it (#1060): with glibc's count of the bytes malloc has out (values live on the GC heap, which is
+   not malloc's), a thousand refusals grow it by less than a byte each, where an op is a few hundred. */
+static void refused_in_callback(const char *name, agc_value *args) {
+  const agc_builtin *builtin = find(name);
+  agc_test_fails(&vm, name, builtin, args, "RUNTIME-NATIVE-CALLBACK");
+#if MALLOC_COUNT
+  size_t before = mallinfo2().uordblks;
+  for (int k = 0; k < 1000; k++) agc_test_fails(&vm, name, builtin, args, "RUNTIME-NATIVE-CALLBACK");
+  assert(mallinfo2().uordblks < before + 1000);
+#endif
+}
+
+/* A file call that must wait, in a callback of native code: a call on a path, an open, a read of a regular file and,
+   on POSIX, a read of a FIFO with a writer and no data, whose non-blocking try comes first. */
+static void test_callback_refusals(const char *directory) {
+  char path[4300];
+  assert(snprintf(path, sizeof path, "%s/callback.txt", directory) > 0);
+  write_test_file(path, (const uint8_t *)"line\n", 5);
+  agc_value open_args[] = {string(path), string("read"), agc_int(5000)};
+  agc_value handle = ok(call("File.open", open_args));
+#ifndef _WIN32
+  char fifo[4300];
+  assert(snprintf(fifo, sizeof fifo, "%s/callback-fifo", directory) > 0);
+  assert(mkfifo(fifo, 0600) == 0);
+  agc_value fifo_args[] = {string(fifo), string("read"), agc_int(5000)};
+  agc_value fifo_handle = ok(call("File.open", fifo_args));
+  int writer = open(fifo, O_WRONLY | O_NONBLOCK);
+  assert(writer >= 0);
+#endif
+  /* agc_test_fails catches the failure at vm.fail, where a failure outside a turn goes. */
+  vm.in_turn = false;
+  vm.task = task;
+  task->callbacks = 1;
+  agc_value path_args[] = {open_args[0], agc_int(5000)};
+  refused_in_callback("File.read_text", path_args);
+  refused_in_callback("File.open", open_args);
+  agc_value read_args[] = {handle, agc_int(5000)};
+  refused_in_callback("File.read_line", read_args);
+#ifndef _WIN32
+  read_args[0] = fifo_handle;
+  refused_in_callback("File.read_line", read_args);
+#endif
+  task->callbacks = 0;
+  vm.in_turn = true;
+  read_args[0] = handle;
+  ok(call("File.close", read_args));
+  assert(agc_fs_unlink(path) == 0);
+#ifndef _WIN32
+  read_args[0] = fifo_handle;
+  ok(call("File.close", read_args));
+  assert(close(writer) == 0);
+  assert(agc_fs_unlink(fifo) == 0);
+#endif
 }
 
 /* File.write_bytes and File.read_bytes on Bytes: a file reads back the same, chunk by chunk, and a write over 1 MiB
@@ -433,6 +498,7 @@ int main(void) {
 #endif
   test_sha256(directory);
   test_byte_keys(directory);
+  test_callback_refusals(directory);
   int fd = agc_fs_open(path, AGC_FS_READ);
   uint8_t data[257];
   assert(fd >= 0 && agc_fs_read(fd, data, sizeof data) == 256);

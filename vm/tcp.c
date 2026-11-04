@@ -510,7 +510,9 @@ static agc_resource *own(agc_vm *vm, net *n, bool counted) {
   return r;
 }
 
-static request *new_request(net *n, req_kind kind) {
+/* Every request parks its task (park), so a callback of native code is refused before it exists. */
+static request *new_request(agc_vm *vm, net *n, req_kind kind) {
+  agc_task_check_wait(vm);
   request *q = calloc(1, sizeof(request));
   if (!q) agc_out_of_memory();
   q->kind = kind;
@@ -1343,7 +1345,7 @@ static bool begin_open(void *data, agc_io_job *job) {
 }
 
 static agc_value start_open(agc_vm *vm, net *n, agc_value value, int64_t timeout) {
-  park(vm, new_request(n, n->listener ? REQ_LISTEN : REQ_CONNECT), value, timeout, begin_open);
+  park(vm, new_request(vm, n, n->listener ? REQ_LISTEN : REQ_CONNECT), value, timeout, begin_open);
   return agc_void();
 }
 
@@ -1551,7 +1553,7 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
   n->shared = shared;
   if (context) n->config = agc_tls_config_ref(context->config);
   agc_socket *tls_socket = new_socket(vm, n, true);
-  request *q = new_request(n, REQ_CONNECT);
+  request *q = new_request(vm, n, REQ_CONNECT);
   q->child = let_go(vm, sk->state);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tls_upgrade socket=%" PRIu64 " from=%" PRIu64, tls_socket->state->id,
             sk->state->id);
@@ -1604,7 +1606,7 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[1]);
   if (!n || n->closed) return agc_error_value(listener_closed);
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
-  park(vm, new_request(n, REQ_ACCEPT), args[0], timeout, begin_accept);
+  park(vm, new_request(vm, n, REQ_ACCEPT), args[0], timeout, begin_accept);
   return agc_void();
 }
 
@@ -1675,7 +1677,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
     rest_len = 0;
     if (read_ready(n, want)) return take(vm, n, want);
   }
-  request *q = new_request(n, kind);
+  request *q = new_request(vm, n, kind);
   q->count = want->count;
   q->limit = want->limit;
   q->head_only = want->head_only;
@@ -1828,7 +1830,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
     if (rc == 0) return ok_value(agc_void());
   }
-  request *q = new_request(n, REQ_SEND);
+  request *q = new_request(vm, n, REQ_SEND);
   q->count = (size_t)agc_value_units(args[1]);
   if (!here) {
     q->sends = true;

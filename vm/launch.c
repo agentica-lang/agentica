@@ -199,6 +199,9 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
    what native code still owns, then the exit. Nothing else is drained: the sockets are closed in goodbye
    (agc_io_goodbye), and the OS frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
+  /* With several schedulers agc_run_over has set it already; at one, nothing has. From here no queued compute job
+     starts (run_compute in vm/loop.c). */
+  atomic_store_explicit(&vm->rt->over, true, memory_order_release);
   agc_ffi_stop_queued(vm);
   agc_processes_stop(vm);
   agc_io_children_stopped();

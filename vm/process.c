@@ -470,8 +470,10 @@ static void close_child(agc_vm *vm, agc_resource *r, agc_task *ender) {
   if (p) agc_loop_call(p->io, close_step, p);
 }
 
-/* POSTED when the START step will not run at once (several schedulers): the request then carries its result. */
+/* POSTED when the START step will not run at once (several schedulers): the request then carries its result. Every
+   request parks its task (start_request), so a callback of native code is refused before it exists. */
 static request *new_request(agc_vm *vm, proc *p, req_kind kind) {
+  agc_task_check_wait(vm);
   request *q = calloc(1, sizeof(request));
   if (!q) agc_out_of_memory();
   q->kind = kind;
@@ -1317,6 +1319,14 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     free_launch(l);
     return agc_system_error(vm, "process: cannot run the executable", agc_net_errno(UV_ENOMEM));
   }
+  /* With several schedulers the spawn parks (start_request below), which a callback of native code cannot: the errors
+     above still come back as a Result, and the launch is freed before the refusal, before the child exists. The loop
+     is made first, since agc_io_here reads it. agc_task_parking never returns inside a callback. */
+  (void)agc_io_loop(vm);
+  if (vm->task->callbacks && !agc_io_here(vm)) {
+    free_launch(l);
+    agc_task_parking(vm);
+  }
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
@@ -1456,6 +1466,9 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
   if (!p) return result;
   if (agc_io_here(vm)) {
     if (p->in_closed) return agc_error_value("process: stdin is closed");
+    /* In a callback of native code, a write that does not end at once stays in flight with no writer when new_request
+       refuses below. Unlike the parent channel (`sending` in duplex.c), no later send can reach it: a callback reaches
+       only a child it spawned, and the refusal fails its task, whose end closes the child and so cancels the write. */
     p->write_status = 0;
     int rc = agc_stream_write((uv_stream_t *)&p->in, &p->write_req, &p->write_data, data, len, wrote);
     if (rc <= 0) return agc_stream_written(vm, rc);
@@ -1559,7 +1572,13 @@ static bool begin_close(void *data, agc_io_job *job) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  proc *p = unregister_child(vm, agc_as_process(vm, args[0])->state);
+  agc_resource *r = agc_as_process(vm, args[0])->state;
+  /* The close parks with several schedulers, and at N = 1 while a plain child still runs (reaped_on_close, read here
+     before shut): a callback of native code is refused while the child still has its resource. The read after shut
+     differs only when the SIGKILL fails (the Windows EACCES race of signal_child): that close is refused, not parked. */
+  const proc *child = r->native;
+  if (child && (!agc_io_here(vm) || reaped_on_close(child))) agc_task_check_wait(vm);
+  proc *p = unregister_child(vm, r);
   if (!p) return agc_void();
   if (!agc_io_here(vm)) {
     request *q = new_request(vm, p, REQ_CLOSE);

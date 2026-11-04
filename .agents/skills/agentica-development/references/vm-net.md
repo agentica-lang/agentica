@@ -100,7 +100,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `process: no parent channel`. `process: the channel is in use` comes only
     when a request in that direction is already pending, so a test's call
     never shares a buffer with `Test.run`'s retry request (those park with
-    `task->retry` and no timeout).
+    `task->retry` and no timeout), or while a send that a native callback
+    started and was refused for still writes (`sending`).
 
 ## Processes
 

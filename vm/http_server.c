@@ -178,6 +178,7 @@ static const agc_io_kind wait_io = {NULL,          waited, wait_expired, waiter_
                                     waiter_cancel, true,   NULL};
 
 static void park(agc_vm *vm, server *s, bool accepting) {
+  agc_task_check_wait(vm);
   waiter *w = calloc(1, sizeof(waiter));
   if (!w) agc_out_of_memory();
   w->s = s;

@@ -275,8 +275,11 @@ void agc_input_close(agc_vm *vm) {
   in->poll_fd = -1;
 }
 
+/* The task parks on the read in flight or on its own (begin_read), so a callback of native code is refused before the
+   request exists and before the read is marked in flight. */
 static int start_read(agc_vm *vm, agc_input *in) {
   size_t room;
+  agc_task_check_wait(vm);
   if (!begin_read(vm, in, &room)) return FILL_WAIT;
   read_request *q = calloc(1, sizeof(read_request) + room);
   if (!q) agc_out_of_memory();
@@ -301,6 +304,7 @@ static int start_read(agc_vm *vm, agc_input *in) {
 /* The reader's thread waits for input, the task waits on the loop for the job (§14.1). */
 static int start_read(agc_vm *vm, agc_input *in) {
   size_t room;
+  agc_task_check_wait(vm);
   if (!begin_read(vm, in, &room)) return FILL_WAIT;
   if (!in->reader) in->reader = agc_stdin_new(in->fd);
   agc_io_job *job = agc_io_start(vm, &reader_io, in->reader, agc_void(), -1);

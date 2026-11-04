@@ -151,10 +151,9 @@ List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run i
 - `find` to `max_by` are written in Agentica: O(n), 4 to 28 steps per element
   (`performance.md`); a runtime error in one is reported at your call.
 - `reject` is `CHECK-UNKNOWN-METHOD` (use `xs.select do |x| !cond end`). A List
-  has no `contains?` or `include?`: use `xs.any? do |x| x == v end` or a Set. A
-  range has none of these: `(1..5).to_a.map do ... end`. A block after
-  `each_slice` is `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ...
-  end`.
+  has `include?` (also `member?`), not `contains?`. A range has no `map` or
+  `select`: `(1..5).to_a.map do ... end`. A block after `each_slice` is
+  `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn`
   variable or a block with typed parameters (`do |x: Int|`) types empty lists
   and empty reduce starts. `List.repeat(x, 0)` is an empty list of the inferred

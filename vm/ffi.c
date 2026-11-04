@@ -1433,9 +1433,10 @@ static void compute_work(void *data) {
 /* On the scheduler that resumes the task, with rt->sync held (the kind is `locked`): the held resources are let go and
    the result becomes a value there. For a cancelled task it runs too and the value is dropped (the detached end of the
    job), a resource result with it; a call whose work was skipped (cancelled while it waited) has no result, so it
-   gives Void, which the detached end drops. A job dropped without this half (its pool work could not start, or the
-   run is over) keeps its holds: the task fails, and a resource that the job held is never freed, a leak and never a
-   use after free. */
+   gives Void, which the detached end drops. A call skipped because the run was over (run_compute in vm/loop.c, or
+   ABANDONED) has none either, and its task is never woken (drain in vm/loop.c), so no task takes that Void. A job
+   dropped without this half (its pool work could not start, or the run is over) keeps its holds: the task fails, and
+   a resource that the job held is never freed, a leak and never a use after free. */
 static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   compute_call *c = data;
@@ -1517,11 +1518,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     else if (!e->out[k])
       check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
   }
-  /* A compute call parks, which a callback cannot (agc_task_parking): refused before the copies exist. */
-  if (e->compute && vm->task->callbacks)
-    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a compute call", span);
-  /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
-  if (e->compute) (void)agc_io_loop(vm);
+  if (e->compute) agc_task_check_park(vm, "a callback of native code cannot wait for a compute call", span);
   check_open(vm, e, values, NULL, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
   copy_byte_arguments(vm, e, values, bytes);
@@ -2203,6 +2200,7 @@ static agc_value native_wait_on(agc_vm *vm, agc_value *args, uint32_t span, bool
   int64_t timeout = agc_as_int(vm, args[1]);
   if (timeout <= 0) return agc_error_value("native: timeout must be positive milliseconds");
   if (fd < 0 || fd > INT_MAX) return agc_error_value("native: invalid descriptor");
+  agc_task_check_wait(vm);
   native_wait *w = malloc(sizeof *w);
   if (!w) agc_out_of_memory();
   *w = (native_wait){vm, NULL, NULL, (int)fd, 0, writing};

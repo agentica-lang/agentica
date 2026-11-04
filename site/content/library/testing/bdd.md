@@ -72,7 +72,7 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 
-`Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work.
+`Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work. A `<...>` in an outline is replaced when it names an `Examples` column; any other `<...>` is `PARSE-GHERKIN-PARAMETER` unless it holds `=`, a quote or `/`, as `<input type="text">` and `<br/>` do, and then it stays as written (a bare tag such as `<br>` or `<p>` still fails: write `<br/>`, or put the tag in a column).
 
 ## Environment and arguments
 

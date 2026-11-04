@@ -236,6 +236,12 @@ static void start_reading(agc_duplex *d) {
     d->reading = true;
 }
 
+/* A write is in flight while its copy is kept (agc_stream_write; wrote frees it), and it may have no writer: at N = 1
+   a send in a callback of native code starts its write before new_request refuses the park, and the write goes on
+   without a request. So the slot is taken while either holds, and no later send starts a second uv_write on the busy
+   write_req. */
+static bool sending(const agc_duplex *d) { return d->writer || d->write_data; }
+
 static void wrote(uv_write_t *req, int status) {
   agc_duplex *d = OWNER(req, write_req);
   free(d->write_data);
@@ -244,7 +250,9 @@ static void wrote(uv_write_t *req, int status) {
   if (d->writer) ready(d->writer);
 }
 
+/* Every request parks its task (start_request), so a callback of native code is refused before it exists. */
 static request *new_request(agc_vm *vm, agc_duplex *d, dx_kind kind, bool retry) {
+  agc_task_check_wait(vm);
   request *q = calloc(1, sizeof(request));
   if (!q) agc_out_of_memory();
   q->d = d;
@@ -413,9 +421,9 @@ static bool begin_send(void *data, agc_io_job *job) {
     d->writer = q;
     return true;
   }
-  if (d->closed || d->writer || d->write_closed) {
-    q->busy = !d->closed && d->writer;
-    q->write_closed = !d->closed && !d->writer;
+  if (d->closed || sending(d) || d->write_closed) {
+    q->busy = !d->closed && sending(d);
+    q->write_closed = !d->closed && !q->busy;
     (void)finish(q);
     return true;
   }
@@ -445,7 +453,7 @@ static bool begin_shut(void *data, agc_io_job *job) {
   return true;
 }
 
-static bool usable(const agc_duplex *d, const request *pending, agc_value *result) {
+static bool usable(const agc_duplex *d, bool pending, agc_value *result) {
   if (d->closed) {
     *result = agc_error_value(closed_text);
     return false;
@@ -461,7 +469,7 @@ agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, in
   agc_value result;
   if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, &timeout, &result)) return result;
   if (agc_io_here(vm)) {
-    if (!usable(d, d->reader, &result)) return result;
+    if (!usable(d, d->reader != NULL, &result)) return result;
     if (agc_inbuf_ready(&d->in, true, 0)) return take_line(vm, d);
     if (d->overflow) return agc_error_value(d->overflow);
   }
@@ -484,7 +492,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
   if (!agc_stream_lock(vm, lock, AGC_STREAM_PROCESS, &timeout, &result)) return result;
   if (agc_io_here(vm)) {
-    int rc = usable(d, d->writer, &result) ? 1 : -1;
+    int rc = usable(d, sending(d), &result) ? 1 : -1;
     if (rc > 0 && d->write_closed) {
       result = agc_error_value(closed_text);
       rc = -1;
@@ -619,7 +627,7 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
     start_request(vm, q, agc_void(), -1, begin_send);
     vm->task->retry = true;
     return false;
-  } else if (d && !d->writer && !d->write_closed) {
+  } else if (d && !sending(d) && !d->write_closed) {
     d->write_status = 0;
     int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                               text->bytes, wrote);
