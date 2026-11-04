@@ -67,10 +67,11 @@ def alias_names(imports: List[Ast.ImportDecl]) -> Set[String]
 end
 
 def message(name: String, count: Int) -> String
-  return "#{name} is written #{count} times in this file"
+  return "#{name} is built or matched #{count} times in this file"
 end
 
-# `import {Value} from "db"` for `Db.Value`, with the path of the import that binds `Db`.
+# `import {Value} from "db"` for `Db.Value`, with the path of the import that binds `Db`; when the file already imports
+# the name from that path, the help says to write it as it is bound.
 def help(name: String, imports: List[Ast.ImportDecl]) -> String
   parts = name.split(".")
   local = parts[parts.size - 1]
@@ -78,6 +79,14 @@ def help(name: String, imports: List[Ast.ImportDecl]) -> String
   for item in imports
     if item.alias == some(parts[0])
       path = item.path
+    end
+  end
+
+  for item in imports
+    for imported in item.names
+      if item.path == path and imported.name == local
+        return "`#{imported.local}` is already imported from \"#{path}\": write it in place of `#{name}`"
+      end
     end
   end
 

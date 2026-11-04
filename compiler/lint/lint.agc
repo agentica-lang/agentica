@@ -22,7 +22,7 @@ import Shape from "shape"
 # A node and what the walk knows of its place.
 struct Item
   node: Walk.Node
-  in_loop: Bool
+  path: List[Int]
   chained: Bool
 end
 
@@ -82,8 +82,7 @@ def scan_decl(file: String, decl: Ast.Decl) -> Scan
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
       return scan(file, roots, function_locals(node, roots))
-    Ast.Decl.Constant(node) ->
-      return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(strings: Set.new([]), outer: Set.new([])))
+    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}))
     _ -> return Scan(found: [], mentions: [])
   end
 end
@@ -91,7 +90,7 @@ end
 def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
-  work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, in_loop: false, chained: false) end
+  work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, path: [], chained: false) end
   at = 0
   while at < work.size
     item = work[at]
@@ -115,7 +114,7 @@ end
 def suggestions(file: String, item: Item, locals: Stmts.Locals) -> List[Problems.Problem]
   case item.node
     Walk.Node.Expr(expr) -> return Exprs.suggestions(file, expr, item.chained)
-    Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.in_loop, locals)
+    Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.path, locals)
   end
 end
 
@@ -126,10 +125,10 @@ def children(item: Item) -> List[Item]
     return []
   end
 
-  looped = in_loop(item)
+  looped = path_below(item)
   out: List[Item] = []
   for kid in Walk.children(item.node)
-    out = out.push(Item(node: kid, in_loop: looped, chained: out.size == 0 and first_is_chained?(item)))
+    out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and first_is_chained?(item)))
   end
 
   return out
@@ -142,13 +141,13 @@ def template?(node: Walk.Node) -> Bool
   end
 end
 
-# Whether the children of the item are below a loop: a `for` or `while` starts one, a block starts again.
-def in_loop(item: Item) -> Bool
+# The loops that the children of the item sit in: a `for` or `while` adds its id, a block starts again.
+def path_below(item: Item) -> List[Int]
   case item.node
-    Walk.Node.Stmt(Ast.Stmt.For(_)) -> return true
-    Walk.Node.Stmt(Ast.Stmt.While(_)) -> return true
-    Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> return false
-    _ -> return item.in_loop
+    Walk.Node.Stmt(Ast.Stmt.For(loop)) -> return item.path.push(loop.id)
+    Walk.Node.Stmt(Ast.Stmt.While(loop)) -> return item.path.push(loop.id)
+    Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> return []
+    _ -> return item.path
   end
 end
 
@@ -163,34 +162,26 @@ def first_is_chained?(item: Item) -> Bool
   end
 end
 
-# The names of a function that matter to the String rule (Stmts.Locals): the String ones, and those bound outside every
-# loop. The parameters are bound before any loop. The walk gives each binding its place, as the main walk does.
+# Where each name of a function was set (Stmts.Origin): the parameters first, then every binding with the loops around
+# it. The walk gives each binding its place, as the main walk does.
 def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Stmts.Locals
-  strings: Set[String] = Set.new([])
-  outer: Set[String] = Set.new([])
+  origins: Map[String, List[Stmts.Origin]] = {}
   for param in decl.params
-    outer = outer.add(param.name)
-    if param.type.name == "String"
-      strings = strings.add(param.name)
-    end
+    origin = Stmts.Origin(offset: -1, path: [], string: param.type.name == "String")
+    origins = origins.put(param.name, origins.get(param.name, []).push(origin))
   end
 
-  work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, in_loop: false, chained: false) end
+  work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, path: [], chained: false) end
   at = 0
   while at < work.size
     item = work[at]
     at += 1
     case item.node
       Walk.Node.Stmt(Ast.Stmt.Binding(binding)) ->
-        if string_binding?(binding)
-          strings = strings.add(binding.name)
-        end
+        origin = Stmts.Origin(offset: binding.span.start.offset, path: item.path, string: string_binding?(binding))
+        origins = origins.put(binding.name, origins.get(binding.name, []).push(origin))
 
-        if !item.in_loop
-          outer = outer.add(binding.name)
-        end
-
-      _ -> outer = outer
+      _ -> origins = origins
     end
 
     for child in children(item)
@@ -198,7 +189,7 @@ def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Stmts.Loc
     end
   end
 
-  return Stmts.Locals(strings: strings, outer: outer)
+  return Stmts.Locals(origins: origins)
 end
 
 def string_binding?(binding: Ast.Binding) -> Bool

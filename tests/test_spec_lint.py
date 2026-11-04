@@ -163,9 +163,25 @@ def test_a_local_enum_variant_is_not_a_qualified_name_to_import(tmp_path):
     assert found == {"LINT-REPEATED-QUALIFIED-NAME": [where(imported, "Db.Value", nth=1)]}
 
 
-def test_a_qualified_name_below_twenty_mentions_is_quiet(tmp_path):
-    text = "import Db from \"db\"\n\ndef f() -> Db.Value\n" + "  Db.Value.Null\n" * 18 + "end\n"
-    assert suggested(tmp_path / "few.agc", text) == {}
+def test_a_qualified_name_counts_from_twenty_mentions(tmp_path):
+    def text(count):
+        return 'import Db from "db"\n\ndef f() -> Int\n' + "  Db.Value.Null\n" * count + "  return 1\nend\n"
+
+    assert suggested(tmp_path / "nineteen.agc", text(19)) == {}
+    twenty = text(20)
+    assert suggested(tmp_path / "twenty.agc", twenty) == {"LINT-REPEATED-QUALIFIED-NAME": [where(twenty, "Db.Value")]}
+
+
+def test_the_help_of_a_name_that_is_imported_already_is_not_the_import_line(tmp_path):
+    body = "def f() -> Int\n" + "  Db.Value.Null\n" * 20 + "  return 1\nend\n"
+    helps = {}
+    for name, header in {"plain": 'import Db from "db"\n', "both": 'import Db from "db"\nimport {Value} from "db"\n'}.items():
+        path = tmp_path / f"{name}.agc"
+        path.write_text(header + "\n" + body, encoding="utf-8")
+        found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+        helps[name] = [suggestion["help"] for suggestion in found if suggestion["code"] == "LINT-REPEATED-QUALIFIED-NAME"]
+
+    assert len(helps["plain"]) == len(helps["both"]) == 1 and helps["plain"] != helps["both"]
 
 
 def test_suggestions_come_in_source_order_with_a_span(tmp_path):
@@ -208,11 +224,28 @@ def test_a_folder_and_no_path_lint_every_file(tmp_path):
     assert report(lint_json("src", cwd=tmp_path), 0)["checked"] == 1
 
 
-def test_a_loop_that_grows_a_string_of_its_own_is_quiet_but_one_before_the_loop_is_not(tmp_path):
-    fresh = 'def f(text: String) -> String\n  for i in 0...3\n    s = ""\n    s = s + text\n  end\n\n  return text\nend\n'
-    assert suggested(tmp_path / "fresh.agc", fresh) == {}
-    outer = 'def f(text: String) -> String\n  s = ""\n  for i in 0...3\n    s += text\n  end\n\n  return s\nend\n'
-    assert suggested(tmp_path / "outer.agc", outer) == {"LINT-STRING-APPEND-IN-LOOP": [where(outer, "s += text")]}
+GROWN = "def f(text: String) -> String\n{body}\n  return text\nend\n"
+
+
+@pytest.mark.parametrize(
+    "name, body, grown",
+    [
+        ("fresh_in_the_only_loop", '  for i in 0...3\n    s = ""\n    s = s + text\n  end', None),
+        ("before_the_loop", '  s = ""\n  for i in 0...3\n    s += text\n  end', "s += text"),
+        (
+            "fresh_in_the_outer_body",
+            '  for i in 0...3\n    s = ""\n    for j in 0...3\n      s = s + text\n    end\n  end',
+            "s = s + text",
+        ),
+        ("set_again_in_the_body", '  s = ""\n  for i in 0...3\n    s = ""\n    s = s + text\n  end', None),
+        ("bound_after_the_loop", '  for i in 0...3\n    s = s + "x"\n  end\n  s = ""', None),
+        ("a_parameter", '  for i in 0...3\n    text += "x"\n  end', 'text += "x"'),
+    ],
+)
+def test_a_string_grows_in_a_loop_only_when_it_was_set_outside_that_loop(tmp_path, name, body, grown):
+    source = GROWN.format(body=body)
+    expected = {"LINT-STRING-APPEND-IN-LOOP": [where(source, grown)]} if grown else {}
+    assert suggested(tmp_path / f"{name}.agc", source) == expected
 
 
 def test_a_file_that_does_not_parse_is_a_diagnostic_and_the_others_still_lint(tmp_path):
@@ -244,6 +277,12 @@ def test_an_unreadable_file_is_status_two(tmp_path):
     with unreadable(path):
         document = report(lint_json("locked.agc", cwd=tmp_path), 2)
     assert document["files"][0]["diagnostic"]["code"] == "QUERY-USAGE"
+    with unreadable(path):
+        text = lint("locked.agc", cwd=tmp_path)
+        assert (text.code, text.stdout) == (2, "lint failed: 1 of 1 file could not be read\n")
+        (tmp_path / "broken.agc").write_text("x = 1\n", encoding="utf-8")
+        both = lint(".", cwd=tmp_path)
+    assert (both.code, both.stdout) == (2, "lint failed: 2 of 2 files could not be parsed or read\n")
 
 
 @pytest.mark.parametrize("words", [["absent.agc"], ["--bogus"], ["--stdin", "a.agc"], ["empty"]])

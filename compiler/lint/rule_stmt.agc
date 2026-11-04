@@ -6,44 +6,75 @@ import Ast from "../syntax/ast"
 import Rules from "rules"
 import Shape from "shape"
 
-## The names of a function that matter to the String rule: `strings` hold a String, and `outer` are bound outside
-## every loop (a parameter, or a variable set before the loop). A String made fresh inside the body of a loop is short,
-## so only an outer name can grow without end.
-export struct Locals
-  strings: Set[String]
-  outer: Set[String]
+## Where a name of a function was set: the source `offset` of the binding, the `path` of the loops it sits in (the ids
+## of the enclosing `for` and `while`, outermost first; a parameter has the empty path and comes first) and whether
+## it holds a String.
+export struct Origin
+  offset: Int
+  path: List[Int]
+  string: Bool
 end
 
-## The suggestions for `stmt`. `in_loop` is true below a `for` or `while` of the same function body (a block starts
-## again: its locals do not live across calls). `locals` are the names of the function.
-export def suggestions(file: String, stmt: Ast.Stmt, in_loop: Bool, locals: Locals) -> List[Problems.Problem]
+## The origins of every name of a function, for the String rule.
+export struct Locals
+  origins: Map[String, List[Origin]]
+end
+
+## The suggestions for `stmt`. `path` is the loops that the statement sits in, of the same function body (a block
+## starts again: its locals do not live across calls). `locals` are the names of the function.
+export def suggestions(file: String, stmt: Ast.Stmt, path: List[Int], locals: Locals) -> List[Problems.Problem]
   case stmt
-    Ast.Stmt.Binding(node) -> return appended(file, node, in_loop, locals)
+    Ast.Stmt.Binding(node) -> return appended(file, node, path, locals)
     Ast.Stmt.If(node) -> return branches(file, node)
     _ -> return []
   end
 end
 
-# `s = s + piece` (and `s += piece`, which the parser writes the same way) in a loop, where s is a String bound before
-# the loop. The names come from the function, so `s = s + part` is found when s was set to a literal or declared
-# String, and a literal or `to_s` piece shows a String by itself, as only a String adds to a String.
-def appended(file: String, node: Ast.Binding, in_loop: Bool, locals: Locals) -> List[Problems.Problem]
-  if !in_loop or !locals.outer.include?(node.name)
-    return []
-  end
-
+# `s = s + piece` (and `s += piece`, which the parser writes the same way) in a loop, where s is a String that was set
+# outside that loop: the nearest earlier binding of s is in fewer loops than this one, so the String lives across the
+# passes and grows. A String made fresh in the body of the only loop is short. A literal or `to_s` piece shows a String
+# by itself, as only a String adds to a String.
+def appended(file: String, node: Ast.Binding, path: List[Int], locals: Locals) -> List[Problems.Problem]
   operands = Shape.plus_operands(node.value)
-  if operands.size < 2 or Shape.read_name(operands[0]) != some(node.name)
+  if path.size == 0 or operands.size < 2 or Shape.read_name(operands[0]) != some(node.name)
     return []
   end
 
-  pieces = operands.drop(1)
-  texts = pieces.any? do |piece: Ast.Expr| Shape.text?(piece) or Shape.to_s?(piece) end
-  if locals.strings.include?(node.name) or texts
-    return [Rules.at(file, Rules.STRING_APPEND, node.span)]
+  case nearest(locals.origins.get(node.name, []), node.span.start.offset)
+    none -> return []
+    some(origin) ->
+      pieces = operands.drop(1)
+      texts = pieces.any? do |piece: Ast.Expr| Shape.text?(piece) or Shape.to_s?(piece) end
+      if outside?(origin.path, path) and (origin.string or texts)
+        return [Rules.at(file, Rules.STRING_APPEND, node.span)]
+      end
+
+      return []
+  end
+end
+
+# The binding with the greatest offset below `before`.
+def nearest(origins: List[Origin], before: Int) -> Optional[Origin]
+  best: Optional[Origin] = none
+  for origin in origins
+    if origin.offset < before
+      case best
+        some(held) ->
+          if held.offset < origin.offset
+            best = some(origin)
+          end
+
+        none -> best = some(origin)
+      end
+    end
   end
 
-  return []
+  return best
+end
+
+# Whether `inner` starts with all of `outer` and has more loops.
+def outside?(outer: List[Int], inner: List[Int]) -> Bool
+  return outer.size < inner.size and inner.take(outer.size) == outer
 end
 
 def branches(file: String, node: Ast.IfStmt) -> List[Problems.Problem]
