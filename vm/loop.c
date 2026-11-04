@@ -914,10 +914,11 @@ static void drain(agc_vm *vm) {
     if (!atomic_load(&j->ended) && j->res->native == j) {
       agc_resource *r = j->res;
       if (!atomic_load(&j->detached)) {
-        /* Once the run is over no task is woken: it would take a value after main returned, in the turn that a
-           scheduler may still run before agc_runq_end, and a job that run_compute skipped has none. Its task stays
-           parked with its job, as at any end of the run. The pool thread that skipped the work read rt->over before
-           it posted the end that put the job here, so this load sees it. */
+        /* Once the run is over no task is woken, whatever the job's kind (file, socket, process, compute): it would
+           take a value after main returned, in the turn that a scheduler may still run before agc_runq_end, and a
+           compute job that run_compute skipped has none. Its task stays parked with its job, as at any end of the
+           run. The pool thread that skipped the work read rt->over before it posted the end that put the job here,
+           so this load sees it. */
         bool over = atomic_load_explicit(&vm->rt->over, memory_order_acquire);
         agc_task *t = over ? NULL : atomic_exchange(&r->task, NULL);
         if (t) agc_task_wake(vm, t, "job");

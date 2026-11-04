@@ -337,6 +337,16 @@ static op *new_op(agc_vm *vm, op_kind kind) {
   return o;
 }
 
+/* The op of a call that start() parks on, unless ST is polled: the non-blocking try of a polled descriptor comes first,
+   and start() refuses it there. A park that is certain is refused in a callback of native code before the op exists,
+   so no op leaks. */
+static op *call_op(agc_vm *vm, op_kind kind, file_state *st) {
+  if (!st || !st->poller) agc_task_check_wait(vm);
+  op *o = new_op(vm, kind);
+  o->st = st;
+  return o;
+}
+
 static file_state *new_state(bool readable, bool writable) {
   file_state *st = calloc(1, sizeof(file_state));
   if (!st) agc_out_of_memory();
@@ -1597,6 +1607,12 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
     return agc_void();
   }
   if (step(o)) return done(vm, o, context);
+  /* The call must wait for the descriptor, which a callback of native code cannot: the op goes first, as done would
+     let it go. */
+  if (vm->task->callbacks) {
+    drop(o);
+    agc_task_check_wait(vm);
+  }
   agc_io_start_then(vm, &poll_io, o, context, timeout, begin_wait);
   return agc_void();
 }
@@ -1605,7 +1621,7 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
 static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64_t timeout) {
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return bad_path(path);
-  op *o = new_op(vm, kind);
+  op *o = call_op(vm, kind, NULL);
   o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
 }
@@ -1623,7 +1639,7 @@ static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind 
   if (content->bytes > LIMIT) return error_of("filesystem: text exceeds 1048576 bytes");
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return bad_path(path);
-  op *o = new_op(vm, kind);
+  op *o = call_op(vm, kind, NULL);
   o->in = malloc(content->bytes ? content->bytes : 1);
   if (!o->in) agc_out_of_memory();
   if (content->bytes) memcpy(o->in, content->data, content->bytes);
@@ -1688,7 +1704,7 @@ static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(from)) return bad_path(from);
   if (!path_string(to)) return bad_path(to);
-  op *o = new_op(vm, OP_RENAME);
+  op *o = call_op(vm, OP_RENAME, NULL);
   o->path = agc_host_path(vm, from);
   o->to = agc_host_path(vm, to);
   return start(vm, o, agc_void(), timeout);
@@ -1704,7 +1720,7 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
   if (len > REPLACE_LIMIT) return error_of("filesystem: data exceeds 16777216 bytes");
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return bad_path(path);
-  op *o = new_op(vm, OP_REPLACE);
+  op *o = call_op(vm, OP_REPLACE, NULL);
   o->in = malloc(len ? len : 1);
   if (!o->in) agc_out_of_memory();
   if (len) memcpy(o->in, data, len);
@@ -1714,7 +1730,7 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static op *open_op(agc_vm *vm, op_kind kind, const agc_string *path) {
-  op *o = new_op(vm, kind);
+  op *o = call_op(vm, kind, NULL);
   o->path = agc_host_path(vm, path);
   o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
   o->owns_st = true;
@@ -1722,8 +1738,7 @@ static op *open_op(agc_vm *vm, op_kind kind, const agc_string *path) {
 }
 
 static agc_value close_handle(agc_vm *vm, agc_resource *r, agc_value handle, int64_t timeout) {
-  op *o = new_op(vm, OP_CLOSE);
-  o->st = r->native;
+  op *o = call_op(vm, OP_CLOSE, r->native);
   o->owns_st = true;
   r->native = NULL;
   forget_file(vm, r);
@@ -1805,8 +1820,7 @@ static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t coun
   if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, true, &failure);
   if (!st) return failure;
-  op *o = new_op(vm, kind);
-  o->st = st;
+  op *o = call_op(vm, kind, st);
   o->count = count;
   return start(vm, o, handle, timeout);
 }
@@ -1827,8 +1841,7 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
 /* The buffered output, then `len` bytes of data and an LF when `newline`, in one write job. */
 static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len, bool newline,
                            int64_t timeout) {
-  op *o = new_op(vm, OP_WRITE);
-  o->st = st;
+  op *o = call_op(vm, OP_WRITE, st);
   o->in_len = agc_size_add(agc_size_add(st->end, len), newline ? 1 : 0);
   o->in = malloc(o->in_len ? o->in_len : 1);
   if (!o->in) agc_out_of_memory();
@@ -1902,8 +1915,7 @@ static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
   /* A pipe or FIFO waits on the loop, which this one-shot job does not; any other kind that is not a regular file
      (a device that never waits) is refused in the job, after fstat. */
   if (st->poller) return error_of(not_lockable);
-  op *o = new_op(vm, OP_TRY_LOCK);
-  o->st = st;
+  op *o = call_op(vm, OP_TRY_LOCK, st);
   return start(vm, o, args[0], timeout);
 }
 
@@ -2027,8 +2039,7 @@ agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, 
                                     : scan_line(st, st->scan, r->limit, r->limit, st->eof);
         if (found.kind == LINE_MORE) {
           st->scan = found.scanned;
-          op *o = new_op(vm, OP_READ_BLOCK);
-          o->st = st;
+          op *o = call_op(vm, OP_READ_BLOCK, st);
           o->count = r->limit;
           r->phase = LINES_READ;
           last = start(vm, o, r->handle, r->timeout);
@@ -2227,7 +2238,7 @@ static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   const agc_string *path = agc_as_string(vm, args[0]);
   if (!path_string(path)) return bad_path(path);
-  op *o = new_op(vm, OP_REAL);
+  op *o = call_op(vm, OP_REAL, NULL);
   o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), NO_DEADLINE);
 }

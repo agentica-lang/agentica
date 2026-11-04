@@ -2200,6 +2200,7 @@ static agc_value native_wait_on(agc_vm *vm, agc_value *args, uint32_t span, bool
   int64_t timeout = agc_as_int(vm, args[1]);
   if (timeout <= 0) return agc_error_value("native: timeout must be positive milliseconds");
   if (fd < 0 || fd > INT_MAX) return agc_error_value("native: invalid descriptor");
+  agc_task_check_wait(vm);
   native_wait *w = malloc(sizeof *w);
   if (!w) agc_out_of_memory();
   *w = (native_wait){vm, NULL, NULL, (int)fd, 0, writing};

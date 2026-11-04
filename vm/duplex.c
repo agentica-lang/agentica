@@ -244,7 +244,9 @@ static void wrote(uv_write_t *req, int status) {
   if (d->writer) ready(d->writer);
 }
 
+/* Every request parks its task (start_request), so a callback of native code is refused before it exists. */
 static request *new_request(agc_vm *vm, agc_duplex *d, dx_kind kind, bool retry) {
+  agc_task_check_wait(vm);
   request *q = calloc(1, sizeof(request));
   if (!q) agc_out_of_memory();
   q->d = d;

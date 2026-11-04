@@ -701,6 +701,10 @@ void agc_task_parking(agc_vm *vm);
    context): what would fail the park fails here, before the copies exist, so none leaks. A callback of native code
    cannot park (RUNTIME-NATIVE-CALLBACK with MESSAGE at SPAN), and the loop is made, which fails when it cannot start. */
 void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span);
+/* The same check for a builtin whose park is certain once it allocates its op (a file call, a process or socket
+   request, a read of stdin): called before the allocation, with the refusal of agc_task_parking (its message, at the
+   running instruction's span). */
+void agc_task_check_wait(agc_vm *vm);
 void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);

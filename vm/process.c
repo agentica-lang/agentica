@@ -470,8 +470,10 @@ static void close_child(agc_vm *vm, agc_resource *r, agc_task *ender) {
   if (p) agc_loop_call(p->io, close_step, p);
 }
 
-/* POSTED when the START step will not run at once (several schedulers): the request then carries its result. */
+/* POSTED when the START step will not run at once (several schedulers): the request then carries its result. Every
+   request parks its task (start_request), so a callback of native code is refused before it exists. */
 static request *new_request(agc_vm *vm, proc *p, req_kind kind) {
+  agc_task_check_wait(vm);
   request *q = calloc(1, sizeof(request));
   if (!q) agc_out_of_memory();
   q->kind = kind;
@@ -1286,6 +1288,10 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
+  /* With several schedulers the spawn parks (start_request below), so a callback of native code is refused before the
+     path, the launch and the child exist. The loop goes first, since agc_io_here reads it. */
+  (void)agc_io_loop(vm);
+  if (!agc_io_here(vm)) agc_task_check_wait(vm);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
