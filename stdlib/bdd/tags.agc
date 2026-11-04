@@ -4,7 +4,7 @@
 ## `and`, and `and` tighter than `or`; a `not` before a `not` cancels it. There are no parentheses. Words are
 ## separated by any white space, no-break spaces included.
 
-## One tag, or its negation.
+# One tag, or its negation.
 struct Literal
   tag: String
   negated: Bool

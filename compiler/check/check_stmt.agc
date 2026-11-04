@@ -12,7 +12,7 @@ import Types from "check_types"
 import Unused from "check_unused"
 import Variables from "check_variables"
 
-## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
+# What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms
   covered: List[String]
   literals: List[Ast.LitValue]
