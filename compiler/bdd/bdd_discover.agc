@@ -28,13 +28,18 @@ end
 
 ## The kind of a path by its name: "tests" for `_test.agc`, "feature" for `.feature`, else "".
 export def kind_of(path: String) -> String
-  if path.ends_with?("_test.agc")
+  if test_file?(path)
     return "tests"
   elsif path.ends_with?(".feature")
     return "feature"
   end
 
   return ""
+end
+
+## True for the name of a unit test file, `*_test.agc`.
+export def test_file?(path: String) -> Bool
+  return path.ends_with?("_test.agc")
 end
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each

@@ -28,6 +28,7 @@ MAIN = 'import Util from "util"\n\ndef main() -> Void\n  puts(Util.word())\nend\
 UTIL = 'export def word() -> String\n  return "%s"\nend\n'
 PASSING = 'def main() -> Void\n  Test.run([Test.test("fine") do\n    ok()\n  end])\nend\n'
 FAILING = 'def main() -> Void\n  Test.run([Test.test("fine") do\n    error("changed")\n  end])\nend\n'
+TEST_FUNCTIONS = 'def test_fine() -> Result[Void]\n  return ok()\nend\n'
 
 
 def environment(**extra):
@@ -221,6 +222,23 @@ def test_agentica_test_reads_and_keeps_the_entry_of_a_test_file(tmp_path):
     assert third.code == 0, third.stdout + third.stderr
     assert stamp(entry) == kept
     assert json.loads(third.stdout)["files"]
+
+
+def test_a_test_file_compiled_for_agentica_test_has_its_own_entry(tmp_path):
+    # `agentica test` adds the `main` of the test functions; a run of the same file must not get that program.
+    folder = tmp_path / "specs"
+    folder.mkdir()
+    (folder / "one_test.agc").write_text(TEST_FUNCTIONS, encoding="utf-8")
+    cache = tmp_path / "cache"
+    tested = agentica(tmp_path, "--json", "test", folder, AGENTICA_BUILD_DIR=str(cache))
+    assert tested.code == 0, tested.stdout + tested.stderr
+    only_entry(cache / "bytecode")
+    ran = agentica(tmp_path, "--json", folder / "one_test.agc", AGENTICA_BUILD_DIR=str(cache))
+    assert ran.code == 1
+    assert json.loads(ran.stderr.strip().split("\n")[-1])["code"] == "CHECK-MAIN"
+    (folder / "one_test.agc").write_text(PASSING, encoding="utf-8")
+    agentica(tmp_path, folder / "one_test.agc", AGENTICA_BUILD_DIR=str(cache))
+    assert len(entries(cache / "bytecode")) == 2
 
 
 POSIX_ONLY = host_only(not POSIX_PYTHON, "file modes and owners bind a POSIX system")

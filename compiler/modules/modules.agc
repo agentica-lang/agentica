@@ -29,6 +29,7 @@ import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import Resolve from "resolve_import"
+import TestMain from "test_main"
 import TypeCode from "type_code"
 import Workspace from "workspace"
 
@@ -297,6 +298,12 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   end
 
   taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
+  # A kept tree (Parses) was made by an earlier walk with the same settings, so it already has its `main`.
+  if settings.test_file and taken.fresh
+    tested = try TestMain.add_main(file, taken.program)
+    taken = taken.with(program: tested)
+  end
+
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
   base = Packages.scope_of(project).with(os: settings.env.os, native_root: PackageCache.root(settings.env))

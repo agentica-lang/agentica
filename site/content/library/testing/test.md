@@ -28,6 +28,30 @@ def main() -> Void
 end
 ```
 
+A `*_test.agc` file may also have no `main`. Then its top-level functions whose names start with `test_` are its tests, in source order, as if `main` passed `Test.test("name", &test_name)` for each to `Test.run`. A test is named after its function, without `test_` and with each `_` a space, and is reported at its `def`. The rest of the file is helper functions, types and imports.
+
+```agentica {mode="check"}
+def parse_port(text: String) -> Result[Int]
+  n = try text.strip.to_i
+  if n < 1 or n > 65535
+    return error("port out of range: #{n}")
+  end
+
+  return ok(n)
+end
+
+def test_parses_a_port() -> Result[Void]
+  try Test.eq(parse_port("8080"), ok(8080))
+  return Test.eq(parse_port(" 80 "), ok(80))
+end
+
+def test_rejects_zero() -> Result[Void]
+  return Test.error?(parse_port("0"))
+end
+```
+
+A test function takes no parameters and returns `Result[Void]`; anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.
+
 `Test` and `TestCase` are reserved names. `IO.inspect` of a `TestCase` shows `<TestCase>`.
 
 ## Test.test

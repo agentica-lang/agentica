@@ -230,7 +230,8 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
 - An executable declares exactly one `main() -> Void` with no parameters and no
   type parameters. A run and `agentica compile` report `CHECK-MAIN` without it;
   `agentica check` does not need a `main`, but one that is declared must have
-  this signature.
+  this signature. Under `agentica test` a `*_test.agc` file with no `main` gets
+  one that runs its `test_*` functions (`06c-tasks-and-tests.md`).
 
 ### Default parameter values
 

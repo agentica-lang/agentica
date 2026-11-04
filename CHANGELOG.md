@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica test`: a `*_test.agc` file may have no `main`; its top-level
+  `test_*` functions are its tests, named after the function
+  (`test_parses_port` is `parses port`). New codes `CHECK-TEST-SIGNATURE`,
+  `CHECK-TEST-NAME` and `CHECK-TEST-MAIN`.
 - `std/bdd`: the steps `stdout includes:` and `stderr includes:` (and
   `BDD.then_stdout_includes`, `BDD.then_stderr_includes`) check a substring
   of the output after the program exits. The BDD page shows how a scenario
