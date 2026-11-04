@@ -10,12 +10,12 @@ def first_or[T](xs: List[T], fallback: T) -> T
   return xs[0]
 end
 
-def max_by[T](xs: List[T], key: Fn[T, Int]) -> Result[T]
+def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   if xs.length == 0
-    return error("empty list")
+    return none
   end
 
-  return ok(xs[0])
+  return some(xs[0])
 end
 
 def wrap[T, R](x: T, body: Fn[T, Result[R]]) -> Result[Box[R]]

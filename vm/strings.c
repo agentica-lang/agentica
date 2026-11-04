@@ -524,7 +524,7 @@ static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
 /* s * n, Ruby's String#*: n copies of s. A negative n is an error, as Ruby's ArgumentError, and so is a result over
    REPEAT_MAX_BYTES, so a large count fails at the count instead of asking the GC for gigabytes. The copy doubles what
    is written, so it takes log2(n) memcpy calls. */
-#define REPEAT_MAX_BYTES AGC_MAX_FILE_BYTES
+#define REPEAT_MAX_BYTES ((size_t)256 * 1024 * 1024)
 _Static_assert(REPEAT_MAX_BYTES == 268435456, "the error of builtin_multiply names the limit");
 
 static agc_value builtin_multiply(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -636,7 +636,6 @@ const agc_builtin agc_string_builtins[] = {
   {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, true},
   {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
-  {"String.multiply", 2, builtin_multiply, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
@@ -644,6 +643,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
   {"String.from_bytes.bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
+  {"String.multiply", 2, builtin_multiply, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, true},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];
