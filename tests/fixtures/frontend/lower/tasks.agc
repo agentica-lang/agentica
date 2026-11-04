@@ -23,7 +23,7 @@ def main() -> Void
   r = Task.spawn(&risky, 0)
   puts(Task.await(r).ok?)
   ch: Channel[Int] = Channel.new(2)
-  ch.send(1, 100)
+  _ = ch.send(1, 100)
   puts(ch.recv(100).unwrap!)
   Task.sleep(0)
   puts(Task.pending_count())

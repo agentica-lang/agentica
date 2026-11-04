@@ -6,14 +6,14 @@ end
 def relay(pair: Pair) -> Result[Int]
   case pair.mine.recv(20)
     ok(n) ->
-      pair.theirs.send(n, 20)
+      _ = pair.theirs.send(n, 20)
       return ok(n)
     error(e) -> return error("recv: #{e}")
   end
 end
 
 def fill(pair: Pair) -> Result[Int]
-  pair.mine.send(1, 20)
+  _ = pair.mine.send(1, 20)
   case pair.mine.send(2, 20)
     ok(_) -> return ok(0)
     error(e) -> return error("send: #{e}")

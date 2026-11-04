@@ -482,8 +482,8 @@ The two forms for a body that goes through a channel, so that another task can u
 import HTTP from "std/http"
 
 def produce(into: Channel[Bytes]) -> Void
-  into.send("line 1\n".bytes, 1000)
-  into.send("line 2\n".bytes, 1000)
+  _ = into.send("line 1\n".bytes, 1000)
+  _ = into.send("line 2\n".bytes, 1000)
   into.close
 end
 
@@ -692,8 +692,8 @@ def main() -> Void
     body: "".bytes,
   )
 
-  app.call(open)
-  app.call(signed)
+  _ = app.call(open)
+  _ = app.call(signed)
 end
 ```
 
@@ -768,8 +768,8 @@ def count(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 
 def feed(into: Channel[Bytes]) -> Void
-  into.send("hello ".bytes, 1000)
-  into.send("world".bytes, 1000)
+  _ = into.send("hello ".bytes, 1000)
+  _ = into.send("world".bytes, 1000)
   into.close
 end
 
@@ -957,7 +957,7 @@ end
 
 def main() -> Void
   server = HTTP.serve("127.0.0.1", 8080, &route).unwrap!
-  HTTP.wait(server)
+  _ = HTTP.wait(server)
 end
 ```
 

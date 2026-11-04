@@ -44,7 +44,7 @@ def serve(listener: Listener) -> List[String]
       case request_line(socket)
         ok(line) ->
           log = List.append(log, "conn #{id}: #{line}")
-          TCP.send(socket, answer(line), 5000)
+          _ = TCP.send(socket, answer(line), 5000)
         error(_) -> open = false
       end
     end

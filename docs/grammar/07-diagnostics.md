@@ -16,8 +16,8 @@ When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
 There are no warnings: a program that the compiler accepts has nothing to
 report, and what would be a warning in another language is an error with its
-own code (for example `CHECK-UNUSED-IMPORT`, `CHECK-UNREACHABLE-CODE` and
-`CHECK-UNUSED-VARIABLE`).
+own code (for example `CHECK-UNUSED-IMPORT`, `CHECK-UNREACHABLE-CODE`,
+`CHECK-UNUSED-VARIABLE` and `CHECK-UNUSED-RESULT`).
 
 A compile-time diagnostic names the first file as you typed it and an imported
 file by its absolute path. A runtime diagnostic and the frames of its stack name
@@ -286,6 +286,10 @@ is a rule:
   never read (`CHECK-UNUSED-VARIABLE`)
   Help: remove it, or name it `_count` if it is unused on purpose; `for _ in
   0...n`, `|_, i|`, `error(_)`; for a `Result`, handle it or write `_ = f(...)`
+- a call whose `Result` is dropped (`save()`, `File.close(f, 1000)`,
+  `"3".to_i`) (`CHECK-UNUSED-RESULT`)
+  Help: handle the Result: `try save()` where `try` is allowed, a `case` on
+  `ok(_)` and `error(message)`, or `.unwrap!`; or discard it with `_ = save()`
 - a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`)
   Help: a loop is not a return; each branch or arm must return, or return after
   it

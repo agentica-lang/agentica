@@ -119,7 +119,7 @@ ok()
 error("expected [1, 3]; actual [1, 2]")
 ```
 
-A failed assertion counts against the test it runs in (its own task, or a task spawned inside it), even when its result is not used, so `Test.eq(a, b)` as a statement still fails the test. Outside a test, an assertion only returns its result.
+A failed assertion counts against the test it runs in (its own task, or a task spawned inside it), even when its result is not used, so `_ = Test.eq(a, b)` still fails the test. A dropped Result is `CHECK-UNUSED-RESULT`: `try` an assertion that is followed by another statement, and leave it as the last statement of a test block. Outside a test, an assertion only returns its result.
 
 ## Test.ok?
 

@@ -41,7 +41,7 @@ def main() -> Void
   plain: Channel[Int] = Channel.new(4)
   report("plain spawn", Task.await(Task.spawn(&quick, plain)))
   puts(plain.closed?)
-  plain.send(2, 100)
+  _ = plain.send(2, 100)
   puts(plain.recv(100).unwrap!)
   puts(plain.recv(100).unwrap!)
   case plain.recv(100)

@@ -322,7 +322,7 @@ end
 def plain_server(listener: Listener) -> Void
   socket = Result.unwrap!(TCP.accept(listener, 5000))
   Result.unwrap!(TCP.send(socket, "hello\\n", 5000))
-  TCP.recv_bytes(socket, 4096, 5000)
+  _ = TCP.recv_bytes(socket, 4096, 5000)
   TCP.close(socket)
 end
 

@@ -177,7 +177,7 @@ end
 def prepare(plan: Plan) -> Result[Void]
   made = try CacheFiles.private_folder(plan.build, plan.user)
   if made and plan.beside
-    CacheFiles.write_private(Paths.join(plan.build, ".gitignore"), "*\n".bytes)
+    _ = CacheFiles.write_private(Paths.join(plan.build, ".gitignore"), "*\n".bytes)
   end
 
   try CacheFiles.private_folder(plan.folder, plan.user)

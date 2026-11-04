@@ -52,7 +52,7 @@ def main() -> Void
   puts(Result.unwrap!(File.try_lock(file, 5000)))
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -93,13 +93,13 @@ def locked_child(context: LockContext) -> Result[Void]
   if System.args().length > 1
     return File.each_line(context.path, 1024, 5000) do |line|
       Result.unwrap!(context.ready.send(line.length > 0, 5000))
-      context.parked.recv(60000)
+      _ = context.parked.recv(60000)
       return ok()
     end
   end
   file = Result.unwrap!(File.open(context.path, "read", 5000))
   Result.unwrap!(context.ready.send(Result.unwrap!(File.try_lock(file, 5000)), 5000))
-  context.parked.recv(60000)
+  _ = context.parked.recv(60000)
   return ok()
 end
 
@@ -129,7 +129,7 @@ def main() -> Void
   if System.args().length > 1
     puts("ready")
     IO.flush()
-    IO.gets()
+    _ = IO.gets()
     return
   end
   file = Result.unwrap!(File.open(context.path, "read", 5000))
@@ -150,7 +150,7 @@ def main() -> Void
   puts(result.ok?)
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 

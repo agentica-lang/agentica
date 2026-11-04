@@ -4,7 +4,7 @@ end
 
 def parent(handles: Channel[Task[Void]]) -> Result[Int]
   child = Task.spawn(&linger, 60000)
-  handles.send(child, 5000)
+  _ = handles.send(child, 5000)
   zero = 0
   return ok(1 / zero)
 end

@@ -15,9 +15,9 @@ def linger(ms: Int) -> Int
 end
 
 def parent(link: Link) -> Result[Int]
-  link.results.send(Task.spawn(&linger_result, 60000), 5000)
-  link.plains.send(Task.spawn(&linger, 60000), 5000)
-  link.go.recv(5000)
+  _ = link.results.send(Task.spawn(&linger_result, 60000), 5000)
+  _ = link.plains.send(Task.spawn(&linger, 60000), 5000)
+  _ = link.go.recv(5000)
   zero = 0
   return ok(1 / zero)
 end
@@ -37,7 +37,7 @@ def main() -> Void
   IO.inspect(Task.await(results, 20))
   IO.inspect(Task.await(plain, 20))
   watcher = Task.spawn(&watch, plain)
-  link.go.send(1, 1000)
+  _ = link.go.send(1, 1000)
   IO.inspect(Task.await(owner))
   IO.inspect(Task.await(watcher))
   IO.inspect(Task.await(results, 20))

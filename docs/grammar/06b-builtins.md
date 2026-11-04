@@ -33,8 +33,10 @@ interpolating one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
 Values are immutable: a method never changes its receiver, so `xs.push(2)`
 returns a new list. A builtin without effects whose non-Void result is dropped
 is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Builtins with effects,
-functions ending in `!`, and builtins that take a function are exempt. A
-negative literal receiver needs parentheses: `(-5).to_s`.
+functions ending in `!`, and builtins that take a function are exempt, except
+that a dropped `Result` is `CHECK-UNUSED-RESULT` for any call (see "Result and
+propagation" in the semantics). A negative literal receiver needs parentheses:
+`(-5).to_s`.
 
 ### Minimal builtin functions
 

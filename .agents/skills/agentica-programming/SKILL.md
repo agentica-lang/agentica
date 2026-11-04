@@ -45,7 +45,9 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `CHECK-UNUSED-VARIABLE`, which also covers `|ctx, args|` in BDD steps and
   `for i in`) and a statement after `return`, `break` or `next`
   (`CHECK-UNREACHABLE-CODE`) are errors: delete them, or for a name that is
-  unused on purpose write `_` or `_name`. A missing `end` is
+  unused on purpose write `_` or `_name`. A dropped `Result` from any call
+  (`File.close(f, 1000)`, `ch.send(x, 0)`, `Task.await(t)`) is
+  `CHECK-UNUSED-RESULT`: `try` it, `case` it or write `_ = f(...)`. A missing `end` is
   `PARSE-UNCLOSED-BLOCK` at the end of the file, or `PARSE-UNEXPECTED-TOKEN` at
   the next `def`: count the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,

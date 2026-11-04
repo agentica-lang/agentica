@@ -41,7 +41,7 @@ def main() -> Void
   named: List[Result[Int]] = Task.map([3], 1, 100, &twice)
   puts(named)
   channel: Channel[Int] = Channel.new(2)
-  Channel.send(channel, 1, 100)
+  _ = Channel.send(channel, 1, 100)
   got = Channel.recv(channel, 10)
   puts(got.message)
   channel.close

@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-RESULT 97:7:5-105:7:13 "the Result of fetch is not used, so its error is lost" "handle the Result: a case on ok(_) and error(message), or .unwrap!; or discard it with _ = fetch(n)" signature="main() -> Void" file="unused-result-block.agc"

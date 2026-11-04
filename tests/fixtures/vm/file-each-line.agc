@@ -51,7 +51,7 @@ def main() -> Void
   dump("unicode", put(dir, "unicode.txt", "λx\n𝔸\n日本\n"), 1024)
   dump("the largest buffer", put(dir, "big-buffer.txt", "x\ny\n"), 16777216)
   puts("a block with no named function")
-  File.each_line(at(dir, "small.txt"), 1024, 60000) do |line|
+  _ = File.each_line(at(dir, "small.txt"), 1024, 60000) do |line|
     puts("  #{line.upcase}")
     ok()
   end

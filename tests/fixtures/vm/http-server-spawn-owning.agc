@@ -11,7 +11,7 @@ end
 def start(servers: Channel[HttpServer]) -> Task[Result[Void]]
   options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
-  servers.send(server, 5000)
+  _ = servers.send(server, 5000)
   return Task.spawn_owning(&keep, server)
 end
 

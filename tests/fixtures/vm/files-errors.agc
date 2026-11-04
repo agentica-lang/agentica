@@ -6,7 +6,7 @@ def main() -> Void
   dir: String = System.args()[0]
   nul = String.from_code(0)
   file = at(dir, "file.txt")
-  File.write_text(file, "data", 60000)
+  _ = File.write_text(file, "data", 60000)
   missing = at(dir, "missing")
   IO.inspect(File.read_text(missing, 60000))
   IO.inspect(File.read_text(dir, 60000))
@@ -57,6 +57,6 @@ def main() -> Void
   IO.inspect(File.write_bytes(w, String.join(List.repeat("x", 1048577), "").bytes, 60000))
   IO.inspect(File.write(w, "x", 0))
   IO.inspect(File.write_bytes(w, "a".bytes, -1))
-  File.close(w, 60000)
+  _ = File.close(w, 60000)
   IO.inspect(File.close(w, 0))
 end

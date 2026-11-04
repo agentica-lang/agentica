@@ -28,7 +28,7 @@ def serve(listener: Listener) -> List[String]
         if line == "GET /slow HTTP/1.1"
           Task.sleep(600)
         end
-        TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
+        _ = TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
       error(_) -> open = false
     end
   end

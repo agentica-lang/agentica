@@ -45,7 +45,7 @@ def main() -> Void
   puts("first stops before the failure: #{nums.map do |n| try number(n) end.first(2)}")
   ch: Channel[Int] = Channel.new(8)
   for n in [1, 2, 3, 4]
-    ch.send(n, 1000)
+    _ = ch.send(n, 1000)
   end
   ch.close
   puts("channel: #{ch.lazy(0).map do |n| try number(n) end.to_a}")

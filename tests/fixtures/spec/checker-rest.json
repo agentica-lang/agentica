@@ -411,7 +411,7 @@
         "def main() -> Void",
         "  t = Test.test(\"box\") do",
         "    n = try \"1\".to_i",
-        "    Test.eq(n, 1)",
+        "    try Test.eq(n, 1)",
         "    try Test.eq(Box(items: [n], tags: {}), Box(items: [1], tags: {}))",
         "    try Test.eq([JSON.null()], [JSON.null()])",
         "    try Test.ok?(\"2\".to_i)",
@@ -2428,7 +2428,7 @@
         "def main() -> Void",
         "  out = File.open(\"a.bin\", \"write\").unwrap!",
         "  wrote: Result[Void] = File.write_bytes(out, \"ab\".bytes)",
-        "  File.close(out)",
+        "  _ = File.close(out)",
         "  input = File.open(\"a.bin\").unwrap!",
         "  got: Result[Bytes] = File.read_bytes(input, 4)",
         "  digest: Result[Bytes] = File.sha256(\"a.bin\")",
@@ -2927,7 +2927,7 @@
         "def main() -> Void",
         "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!",
         "  t: Task[Result[String]] = Task.spawn_owning(&serve, socket)",
-        "  Task.await(t)",
+        "  _ = Task.await(t)",
         "  Task.spawn_owning(&edit, File.open(\"x\", \"read\", 10).unwrap!)",
         "  Task.spawn_owning(&watch, Process.spawn(\"x\", [], 10).unwrap!)",
         "  ch: Channel[Int] = Channel.new(4)",
@@ -11856,7 +11856,7 @@
         "  Std.source(\"queue.agc\")",
         "end"
       ],
-      "code": "CHECK-UNUSED-VALUE",
+      "code": "CHECK-UNUSED-RESULT",
       "start": [2, 3],
       "covers": "Std.source(\"queue.agc\")"
     },
@@ -13460,6 +13460,142 @@
       "code": "CHECK-UNUSED-VARIABLE",
       "start": [1, 23],
       "covers": "v"
+    }
+  ],
+  "a Result that is dropped, from any call, is CHECK-UNUSED-RESULT; _ =, try, a case or a name handles it": [
+    {
+      "program": [
+        "def save() -> Result[Void]",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  save()",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [6, 3],
+      "covers": "save()",
+      "help": true
+    },
+    {
+      "program": [
+        "def load(n: Int) -> Result[Int]",
+        "  return ok(n)",
+        "end",
+        "",
+        "def run() -> Result[Void]",
+        "  load(1)",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(run().ok?)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [6, 3],
+      "covers": "load(1)",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  File.close(File.open(\"x\", \"read\", 1000).unwrap!, 1000)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [2, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  \"3\".to_i",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [2, 3],
+      "covers": "\"3\".to_i",
+      "help": true
+    },
+    {
+      "program": [
+        "def fetch(n: Int) -> Result[Int]",
+        "  return ok(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  [1, 2].each do |n|",
+        "    fetch(n)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [7, 5],
+      "covers": "fetch(n)",
+      "help": true
+    },
+    {
+      "program": [
+        "def work() -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  task = Task.spawn(&work)",
+        "  Task.await(task)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-RESULT",
+      "start": [7, 3],
+      "covers": "Task.await(task)",
+      "help": true
+    },
+    {
+      "program": [
+        "def save() -> Result[Void]",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  _ = save()",
+        "  x = save()",
+        "  puts(x.ok?)",
+        "  puts(IO.inspect(save()).ok?)",
+        "  IO.inspect(save())",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def save() -> Result[Void]",
+        "  return ok()",
+        "end",
+        "",
+        "def run() -> Result[Void]",
+        "  try save()",
+        "  case save()",
+        "    ok(_) -> puts(\"saved\")",
+        "    error(message) -> puts(message)",
+        "  end",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(run().ok?)",
+        "end",
+        ""
+      ],
+      "code": null
     }
   ]
 }

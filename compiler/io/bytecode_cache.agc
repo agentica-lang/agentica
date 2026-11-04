@@ -299,7 +299,7 @@ def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
   try CacheFiles.private_kind(entry.file, "file", user)
   handle = try File.open(entry.file, "read", CacheFiles.IO_TIMEOUT_MS)
   read = read_whole(handle, entry, settings)
-  File.close(handle, CacheFiles.IO_TIMEOUT_MS)
+  _ = File.close(handle, CacheFiles.IO_TIMEOUT_MS)
   return read
 end
 
@@ -500,7 +500,7 @@ def prepare_folder(entry: Entry) -> Result[Void]
   user = try CacheFiles.own_user()
   made = try CacheFiles.private_folder(entry.build, user)
   if made and entry.beside
-    CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), "*\n".bytes)
+    _ = CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), "*\n".bytes)
   end
 
   try CacheFiles.private_folder(entry.folder, user)
