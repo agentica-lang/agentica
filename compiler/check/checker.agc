@@ -177,6 +177,7 @@ def start(linked: Linker.Linked) -> State.Cx
     help: Help.tables(),
     structs: RECORDS,
     struct_params: {},
+    field_sites: {},
     field_defaults: record_defaults(),
     enums: ENUMS,
     aliases: {},
