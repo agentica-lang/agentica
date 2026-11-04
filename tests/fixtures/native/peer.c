@@ -939,6 +939,13 @@ int32_t peer_res_after(void *res, peer_int_fn fn) {
 /* Calls the stored callback, then FN, as a library that runs a callback it was given earlier before one it gets now. */
 int32_t peer_call_stored_then(peer_int_fn fn) { return stored_fn(1) * 10 + fn(2); }
 
+/* Calls the stored callback, then FN, then the stored one again, as a library that keeps a callback it has run. */
+int32_t peer_call_stored_around(peer_int_fn fn) {
+  int32_t a = stored_fn(1);
+  int32_t b = fn(2);
+  return a * 100 + b * 10 + stored_fn(3);
+}
+
 int32_t peer_flag(void) { return atomic_load(&flag); }
 
 typedef struct {

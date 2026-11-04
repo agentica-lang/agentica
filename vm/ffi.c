@@ -175,26 +175,38 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
    state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
    call raises the failure when C returns: the outcome that the callback's run kept (`kept`, in GC memory, made only
    then), or CODE and MESSAGE when its value could not go back to C. A run that stopped for a cancel or the end of the
-   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. */
+   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. The callbacks that C called in
+   the call are listed once each: `ran` (the first, the common case) and `more` (the others, in malloc memory, made
+   only then), and each counts the call in its `callers` until C returns (release_ran), since C may call it again until
+   then, also once it is closed. The registry keeps each listed callback alive, as a closed one is not freed while it
+   is listed. `id` numbers the call once it lists one (agc_ffi_cache.sites), 0 before. */
 typedef struct native_site {
   agc_vm *vm;
+  uint64_t id;
   uint32_t span;
-  bool failed, refused, called;
+  bool failed, refused;
   const char *code, *message;
   agc_outcome *kept;
+  agc_c_resource *ran;
+  res_list *more;
   struct native_site *outer;
 } native_site;
 
 static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /* What a callback runs (Native.callback): the function value, the C types of its signature and its resource. In GC
-   memory, kept alive by the resource (agc_c_resource.callback) while C may call it. */
+   memory, kept alive by the resource (agc_c_resource.callback) while C may call it. `callers` counts the native calls
+   whose C called it, while its code existed, and has not returned yet (native_site.ran), on any scheduler: a closed
+   callback is freed only once it is 0 and no call holds it (`jobs`), so no call's C can still reach its code.
+   `listed_by` is the id of the last call that listed it (native_site.id), so a call that C keeps calling it from finds
+   it listed without a search. Both change under rt->sync. */
 typedef struct {
   agc_c_resource *res;
   agc_value fn;
   agc_c_type result;
   agc_c_type params[AGC_FFI_MAX_PARAMS];
-  uint32_t count;
+  uint32_t count, callers;
+  uint64_t listed_by;
 } callback_data;
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
@@ -258,17 +270,14 @@ typedef struct {
    rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries.
    `callbacks` is set once the run has made a callback: from then on a fast call holds its resources, as a compute
    call does, since a callback lets rt->sync go while it runs, and it, or another task, may close them while C uses
-   them. `dying` holds the callbacks closed while they ran, whose last run has ended: libffi's frames of that run were
-   still on the stack, so the free waits until C has returned from the native call (free_dying); the registry keeps
-   each one alive. Both change under rt->sync, as Native.callback is a shared builtin too. `walk` numbers the walks
-   up from held resources (agc_c_resource.seen), under rt->sync. */
+   them. It changes under rt->sync, as Native.callback is a shared builtin too. `walk` numbers the walks up from held
+   resources (agc_c_resource.seen) and `sites` the native calls that list a callback (native_site.id), under
+   rt->sync. */
 typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
   bool callbacks;
-  agc_c_resource **dying;
-  size_t dying_count, dying_cap;
-  uint64_t walk;
+  uint64_t walk, sites;
 } agc_ffi_cache;
 
 static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
@@ -899,12 +908,19 @@ static agc_c_resource **up_slot(agc_c_resource *res, size_t j) { return res->ups
 /* What the link at SLOT stands for: a resource that is open, a freed one with two or more parents, or NULL. A freed
    one with one parent or none is passed over, and SLOT moves to what it pointed at, so later reads skip it in one
    step and a chain of resources each closed once used (x = next(x)) keeps only its open links. Moving past a freed
-   resource keeps every open one above it in reach. */
+   resource keeps every open one above it in reach. Each freed one passed over is moved to the same end too (path
+   compression), so a chain closed in one batch is walked once, not once per resource below it: with y made from
+   each x of the chain, a call on every y would otherwise walk the whole freed chain above it. A freed resource holds
+   nothing, so moving its link changes no hold. */
 static agc_c_resource *settle(agc_c_resource **slot) {
-  agc_c_resource *res = *slot;
-  while (res && res->freed && !res->ups) res = res->up;
-  *slot = res;
-  return res;
+  agc_c_resource *top = *slot;
+  while (top && top->freed && !top->ups) top = top->up;
+  for (agc_c_resource *res = *slot, *next; res != top; res = next) {
+    next = res->up;
+    res->up = top;
+  }
+  *slot = top;
+  return top;
 }
 
 /* Settles every link of RES. A sole link that ends at a freed resource with two or more parents takes those over
@@ -940,39 +956,31 @@ static void push_parents(agc_c_resource *res, res_list *todo) {
   }
 }
 
-/* Queues the free of a callback that was closed while it ran, now that its last run is over (agc_ffi_cache.dying). */
-static void dying_add(agc_ffi_cache *c, agc_c_resource *res) {
-  if (c->dying_count == c->dying_cap) {
-    c->dying_cap = c->dying_cap ? agc_size_mul(c->dying_cap, 2) : 8;
-    c->dying = realloc(c->dying, agc_size_mul(c->dying_cap, sizeof *c->dying));
-    if (!c->dying) agc_out_of_memory();
-  }
-  c->dying[c->dying_count++] = res;
+/* Whether no native call can reach RES any more: none holds it, and for a callback none that ran it is still in C
+   (callback_data.callers). */
+static bool unreached(const agc_c_resource *res) {
+  return !res->jobs && (!res->callback || !((const callback_data *)res->callback)->callers);
 }
 
-/* Drops one hold of RES. The last one frees it if it was closed meanwhile: a callback once C has returned from the
-   native call (dying_add, as a callback that ran does), anything else now, and one that carried holds for what it
-   comes from (close_resource) pushes them on TODO. */
+/* Drops one hold of RES. The last one frees it if it was closed meanwhile, unless a callback that a native call still
+   in C has run (then the end of that call frees it: release_ran), and one that carried holds for what it comes from
+   (close_resource) pushes them on TODO. */
 static void drop_hold(agc_vm *vm, agc_c_resource *res, res_list *todo) {
-  if (--res->jobs || !res->closed || res->freed) return;
-  if (res->callback) {
-    dying_add(vm->rt->ffi, res);
-    return;
-  }
+  if (--res->jobs || !res->closed || res->freed || !unreached(res)) return;
   free_resource(vm, res);
   if (res->carries) push_parents(res, todo);
 }
 
 /* Native.close and the end of the owning task (§14.5): the resource is closed and leaves its owner at once, and is
-   freed now, or by the end of the last call that holds it (release_held). Until then it holds what it comes from in
-   turn (`carries`), for those calls: so a database closed while a call runs on a statement made from a closed
-   connection waits too. A closed resource is left alone. */
+   freed now, or by the end of the last call that holds it (release_held) or, for a callback, that ran it
+   (release_ran). Until then it holds what it comes from in turn (`carries`), for those calls: so a database closed
+   while a call runs on a statement made from a closed connection waits too. A closed resource is left alone. */
 static void close_resource(agc_vm *vm, agc_c_resource *res) {
   agc_sync_assert(vm);
   if (res->closed) return;
   res->closed = true;
   agc_disown(res->state);
-  if (!res->jobs) {
+  if (unreached(res)) {
     free_resource(vm, res);
     return;
   }
@@ -1235,16 +1243,48 @@ static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *
   return from;
 }
 
-/* Frees the callbacks of `dying`, once C has returned from a native call: none of them runs any more. One that a
-   call holds meanwhile (as what a resource comes from) is left to the end of that call (drop_hold), and one freed
-   already (listed twice) is skipped. */
-static void free_dying(agc_vm *vm, agc_ffi_cache *c) {
+/* Counts the native call of SITE in the `callers` of the callback RES, once per call: C calls it now and may call it
+   again until it returns. A callback stamped with this call's id is listed already; one stamped by another call (a
+   nested one, or one on another scheduler) is searched for, in `more` only when this call has called two or more. */
+static void site_ran(agc_vm *vm, native_site *site, agc_c_resource *res) {
   agc_sync_assert(vm);
-  for (size_t k = 0; k < c->dying_count; k++) {
-    agc_c_resource *res = c->dying[k];
-    if (!res->freed && !res->jobs) free_resource(vm, res);
+  callback_data *cb = res->callback;
+  if (!site->id) site->id = ++ffi_cache(vm)->sites;
+  if (cb->listed_by == site->id) return;
+  cb->listed_by = site->id;
+  if (site->ran == res) return;
+  if (site->more) {
+    for (size_t k = 0; k < site->more->count; k++)
+      if (site->more->items[k] == res) return;
   }
-  c->dying_count = 0;
+  if (!site->ran) {
+    site->ran = res;
+  } else {
+    if (!site->more) {
+      site->more = malloc(sizeof *site->more);
+      if (!site->more) agc_out_of_memory();
+      list_init(site->more);
+    }
+    list_push(site->more, res);
+  }
+  cb->callers++;
+}
+
+/* C has returned from the native call of SITE: it no longer runs a callback that it ran, and one closed meanwhile is
+   freed once no other call can reach it. A callback has no resource it comes from (Native.callback makes none), so
+   its free lets go of nothing more. */
+static void callback_left(agc_vm *vm, agc_c_resource *res) {
+  ((callback_data *)res->callback)->callers--;
+  if (res->closed && !res->freed && unreached(res)) free_resource(vm, res);
+}
+
+static void release_ran(agc_vm *vm, native_site *site) {
+  agc_sync_assert(vm);
+  callback_left(vm, site->ran);
+  if (!site->more) return;
+  for (size_t k = 0; k < site->more->count; k++) callback_left(vm, site->more->items[k]);
+  list_free(site->more);
+  free(site->more);
 }
 
 /* The owned buffer that V is, or NULL when V is a plain C.Pointer: both are a C.Pointer to the program. Anything else
@@ -1808,8 +1848,10 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     if (holding) release_held(vm, e, held);
     if (held != stack_held) free(held);
   }
-  if (c->dying_count) free_dying(vm, c);
-  if (site.called) agc_task_clear_nested(vm->task);
+  if (site.ran) {
+    release_ran(vm, &site);
+    agc_task_clear_nested(vm->task);
+  }
   free_copies(e, in);
   if (site.failed) {
     /* The call fails as the callback did, or stops with it: what it made is freed and no value is made. */
@@ -2521,28 +2563,29 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
 /* What C runs when it calls a callback (agc_ffi_handler): the function runs in the task of the native call on this
    thread (native_site), and its value goes back to C. C gets zero when no call can run it, the callback is closed or
    one of the call's callbacks has failed already. The native call holds rt->sync here (a shared builtin), which the
-   run lets go and takes again. The run counts in the resource's `jobs`, so a close meanwhile, by the callback or by
-   another task, leaves the closure to the end of the last run, and its free to the native call (dying_add). */
+   run lets go and takes again. The call counts in the callback's `callers` (site_ran) first, also when the callback
+   gives zero (closed, or after a failure), so a close meanwhile, by the callback or by another task, leaves the free
+   to the end of the last native call whose C called it: libffi's frames of the run are on the stack until C returns,
+   and C may call it again until then. The native call holds rt->sync here even when the run cannot let it go. */
 static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
   const callback_data *cb = data;
   native_site *site = current_site;
-  if (!site || site->failed) return;
+  if (!site) return;
   if (!site->vm) {
     site->refused = true;
     return;
   }
   agc_vm *vm = site->vm;
   agc_c_resource *res = cb->res;
+  site_ran(vm, site, res);
+  if (site->failed) return;
   /* The run lets rt->sync go, which only the native call's own hold may be (a shared VM holds it once there). */
   if ((vm->rt->shared && vm->sync_depth != 1) || res->closed) return;
   agc_value values[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < cb->count; k++) values[k] = callback_argument(cb->params[k], &args[k]);
   agc_value got;
   agc_outcome failed;
-  res->jobs++;
-  site->called = true;
   bool ran = agc_task_run_nested(vm, cb->fn, values, cb->count, site->span, &got, &failed);
-  if (--res->jobs == 0 && res->closed && !res->freed) dying_add(vm->rt->ffi, res);
   if (!ran) {
     site->failed = true;
     site->kept = agc_alloc(sizeof *site->kept);

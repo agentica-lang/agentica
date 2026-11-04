@@ -1651,16 +1651,50 @@ end
     assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", "1" if before else "0", ""]
 
 
+# The batch case of the next test: a chain made link by link (MAKE), a side child of each link, the whole chain
+# closed, then a compute call on each side child.
+BATCH_CHAIN = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  c = peer_child_open(res).unwrap!
+  xs = [c]
+  sides = [peer_child_of(c).unwrap!]
+  for _k in 1..29_999
+    c = %s.unwrap!
+    xs = xs.push(c)
+    sides = sides.push(peer_child_of(c).unwrap!)
+  end
+  for x in xs
+    Native.close(x)
+  end
+  sum = 0
+  for side in sides
+    sum += peer_child_value(side)
+  end
+  puts(sum)
+  puts(peer_res_frees())
+end
+"""
+
+
 # A long chain of children, as libgit2's git_commit_parent walks commits (x = next(x)) or a cursor walks rows (x =
 # next(ctx, x)), each closed once used or all kept open, with a compute call on each new child: the cost of a call does
 # not grow with the length of the chain (a cost that did would take many times the bound here). When each child is
 # closed once used, the call on the last one still keeps the first resource until it returns. An open chain is
-# closed from its last child, each child before what it comes from.
+# closed from its last child, each child before what it comes from. A chain closed in one batch, with a side child
+# of each link, then a compute call on each side child, walks the freed chain once, not once per side child.
 @NATIVE_CALLS
-@pytest.mark.parametrize("make", ["peer_child_of(c)", "peer_child_next(res, c)"])
-@pytest.mark.parametrize("close", ["Native.close(c)", ""])
+@pytest.mark.parametrize("make, close", [
+    ("peer_child_of(c)", "Native.close(c)"),
+    ("peer_child_of(c)", ""),
+    ("peer_child_next(res, c)", "Native.close(c)"),
+    ("peer_child_next(res, c)", ""),
+    ("peer_child_of(c)", "batch"),
+])
 def test_a_long_chain_of_children_keeps_its_root_at_linear_cost(tmp_path, peer, make, close):
-    main = """def main() -> Void
+    if close == "batch":
+        main = BATCH_CHAIN % make
+    else:
+        main = """def main() -> Void
   res = peer_res_open(9).unwrap!
   c = peer_child_open(res).unwrap!
   sum = 0
@@ -1679,7 +1713,7 @@ end
                       timeout=scaled(120))
     elapsed = time.monotonic() - started
     assert (result.code, result.stderr) == (0, "")
-    tail = ["true", "0", "ok(9)", "1", "0"] if close else ["0"]
+    tail = ["true", "0", "ok(9)", "1", "0"] if close and close != "batch" else ["0"]
     assert result.stdout.split("\n") == ["270000"] + tail + [""]
     assert elapsed < scaled(10.0)
 
@@ -1750,6 +1784,139 @@ def test_a_closed_callback_that_a_child_holds_is_freed_once(tmp_path, peer, sche
                       timeout=scaled(30))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout == "12\n1\ntrue\n"
+
+
+CALLBACK_REACH_EXTERN = """extern "{library}"
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_store_fn(fn: Step) -> Void
+  def peer_call_stored_around(fn: Step) -> C.Int32
+  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32
+  def peer_bump() -> Void
+  def peer_bumps() -> C.Int32
+  def peer_flag() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+# Waits, outside C, until peer_bump has run N times in all.
+def wait_bumps(n: Int) -> Void
+  while peer_bumps() < n
+    Task.sleep(1)
+  end
+end
+
+# Spins inside a callback until peer_bump has run N times in all.
+def spin_bumps(n: Int) -> Void
+  _turns = 0
+  while peer_bumps() < n
+    _turns = _turns + 1
+  end
+end
+"""
+
+CALLBACK_REACH = CALLBACK_REACH_EXTERN + """
+def first(x: Int) -> Int
+  peer_bump()
+  _turns = 0
+  while WAIT and peer_flag() == 0
+    _turns = _turns + 1
+  end
+
+  return x
+end
+
+# Runs until the closer and the caller below have each called peer_bump.
+def second(x: Int) -> Int
+  peer_bump()
+  spin_bumps(4)
+  return x
+end
+
+def main() -> Void
+  a = Native.callback(Step, &first)
+  peer_store_fn(a)
+  closer = Task.spawn do
+    wait_bumps(CLOSE_AT)
+    Native.close(a)
+    peer_set_flag()
+    peer_bump()
+    Native.closed?(a)
+  end
+  caller = Task.spawn do
+    wait_bumps(3)
+    sum = peer_add(1, 2)
+    peer_bump()
+    sum
+  end
+  puts(peer_call_stored_around(Native.callback(Step, &second)))
+  puts(Task.await(closer))
+  puts(Task.await(caller))
+end
+"""
+
+
+# A callback that a native call has run stays callable until that call returns, though another task closes it
+# meanwhile, while it runs (WHEN "running") or after (WHEN "after"), and a third task makes a native call before C
+# calls it again: C then gets zero from it. On master, that call freed the closure, and C called freed code.
+@NATIVE_CALLS
+@pytest.mark.parametrize("when", ["running", "after"])
+def test_a_closed_callback_stays_until_every_call_that_ran_it_returns(tmp_path, peer, when):
+    text = CALLBACK_REACH.replace("WAIT", "true" if when == "running" else "false")
+    text = text.replace("CLOSE_AT", "1" if when == "running" else "2")
+    result = agentica("--schedulers", "2", program(tmp_path, text.format(library=literal(peer))), timeout=scaled(30))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "120\ntrue\n3\n"
+
+
+CALLBACK_LATE = CALLBACK_REACH_EXTERN + """
+def first(x: Int) -> Int
+  peer_bump()
+  return x
+end
+
+# Runs in main's call until the late call is inside its own callback.
+def second(x: Int) -> Int
+  peer_bump()
+  spin_bumps(4)
+  return x
+end
+
+# Runs in the late call until main's call has returned.
+def third(x: Int) -> Int
+  peer_bump()
+  spin_bumps(5)
+  return x
+end
+
+def main() -> Void
+  a = Native.callback(Step, &first)
+  peer_store_fn(a)
+  closer = Task.spawn do
+    wait_bumps(2)
+    Native.close(a)
+    peer_bump()
+    Native.closed?(a)
+  end
+  late = Task.spawn do
+    wait_bumps(3)
+    peer_call_stored_around(Native.callback(Step, &third))
+  end
+  puts(peer_call_stored_around(Native.callback(Step, &second)))
+  peer_bump()
+  puts(Task.await(closer))
+  puts(Task.await(late))
+end
+"""
+
+
+# A native call whose C first reaches a callback after its close (it got the pointer earlier) keeps it too: main's call
+# ran it and returns while the late call is still in C, and that call then calls it again and gets zero. Counting only
+# the calls that ran it freed the closure when main's call returned.
+@NATIVE_CALLS
+def test_a_call_that_reaches_a_closed_callback_keeps_it_until_it_returns(tmp_path, peer):
+    source = program(tmp_path, CALLBACK_LATE.format(library=literal(peer)))
+    result = agentica("--schedulers", "2", source, timeout=scaled(30))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "120\ntrue\n20\n"
 
 
 # The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
